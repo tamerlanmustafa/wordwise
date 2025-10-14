@@ -18,20 +18,10 @@ git clone <repository-url>
 cd wordwise
 ```
 
-### 2. Set Up Environment Variables
+### 2. Start All Services
 
 ```bash
-# Backend
-cp backend/env.example backend/.env
-
-# Frontend
-cp frontend/env.local.example frontend/.env.local
-```
-
-### 3. Start All Services
-
-```bash
-docker-compose -f docker/docker-compose.yml up -d
+docker compose up -d
 ```
 
 This will start:
@@ -40,16 +30,16 @@ This will start:
 - Backend API (port 8000)
 - Frontend (port 3000)
 
-### 4. Access the Application
+### 3. Access the Application
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
 
-### 5. Run Database Migrations
+### 4. Run Database Migrations
 
 ```bash
-docker-compose -f docker/docker-compose.yml exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
 
 ## Local Development Setup
@@ -174,10 +164,10 @@ Make sure PostgreSQL is running and accessible:
 
 ```bash
 # Check if PostgreSQL is running
-docker-compose -f docker/docker-compose.yml ps postgres
+docker compose ps postgres
 
 # Check database connection
-docker-compose -f docker/docker-compose.yml exec backend psql -h postgres -U wordwise_user -d wordwise_db
+docker compose exec backend psql -h postgres -U wordwise_user -d wordwise_db
 ```
 
 ### NLTK Data Not Found
@@ -200,10 +190,10 @@ python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk
 
 ```bash
 # Stop all services
-docker-compose -f docker/docker-compose.yml down
+docker compose down
 
 # Stop and remove volumes (WARNING: This will delete all data)
-docker-compose -f docker/docker-compose.yml down -v
+docker compose down -v
 ```
 
 ## Getting Help
@@ -212,8 +202,8 @@ If you encounter any issues:
 
 1. Check the logs:
    ```bash
-   docker-compose -f docker/docker-compose.yml logs backend
-   docker-compose -f docker/docker-compose.yml logs frontend
+   docker compose logs backend
+   docker compose logs frontend
    ```
 
 2. Check the API documentation: http://localhost:8000/docs

@@ -38,8 +38,6 @@ WordWise is an innovative language learning platform that helps users learn Engl
 
 ### Prerequisites
 - Docker and Docker Compose
-- Node.js 18+ (for local frontend development)
-- Python 3.11+ (for local backend development)
 
 ### Using Docker (Recommended)
 
@@ -49,21 +47,36 @@ git clone <repository-url>
 cd wordwise
 ```
 
-2. Create environment files:
+2. Start all services:
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.local.example frontend/.env.local
+docker compose up -d
 ```
 
-3. Start all services:
-```bash
-docker-compose up -d
-```
-
-4. Access the application:
+3. Access the application:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
+
+4. Run database migrations:
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+### Common Docker Commands
+
+```bash
+# Start services
+docker compose up -d
+
+# Stop services
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Restart a service
+docker compose restart backend
+```
 
 ### Local Development
 
@@ -147,7 +160,6 @@ wordwise/
 │   └── package.json      # Node dependencies
 ├── shared/               # Shared types and constants
 ├── docker/               # Docker configuration
-├── scripts/              # Utility scripts
 └── docs/                 # Documentation
 ```
 

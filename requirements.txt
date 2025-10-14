@@ -17,7 +17,7 @@ python-multipart==0.0.6
 # NLP & Text Processing
 nltk==3.8.1
 spacy==3.7.2
-wordfreq==3.0.4
+wordfreq==3.1.1
 textblob==0.17.1
 
 # HTTP Client
@@ -27,9 +27,6 @@ requests==2.31.0
 # Utilities
 python-dotenv==1.0.0
 python-dateutil==2.8.2
-
-# CORS
-python-cors==1.7.0
 
 # Testing
 pytest==7.4.3
