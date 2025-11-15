@@ -38,6 +38,7 @@ WordWise is an innovative language learning platform that helps users learn Engl
 
 ### Prerequisites
 - Docker and Docker Compose
+- **WSL Users**: If you're using Windows Subsystem for Linux, see the [WSL Setup Guide](docs/SETUP.md#wsl-windows-subsystem-for-linux-setup) for important Node.js installation instructions.
 
 ### Using Docker (Recommended)
 

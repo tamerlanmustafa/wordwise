@@ -9,6 +9,76 @@ This guide will help you set up the WordWise development environment.
 - Python 3.11+ (for local backend development)
 - Git
 
+## WSL (Windows Subsystem for Linux) Setup
+
+If you're using WSL, you need to install Node.js directly in your WSL environment, not rely on Windows Node.js installation.
+
+### Installing Node.js in WSL
+
+**Option 1: Using nvm (Recommended)**
+
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Reload your shell configuration
+source ~/.bashrc  # or source ~/.zshrc if using zsh
+
+# Install Node.js
+nvm install 18
+nvm use 18
+nvm alias default 18
+
+# Verify installation
+node --version
+npm --version
+```
+
+**Option 2: Using apt**
+
+```bash
+# Update package list
+sudo apt update
+
+# Install Node.js and npm
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify installation
+node --version
+npm --version
+```
+
+### Installing Claude CLI in WSL
+
+After Node.js is installed in WSL:
+
+```bash
+# Install Claude CLI globally
+npm install -g @anthropic-ai/claude-cli
+
+# Verify installation
+claude --version
+```
+
+### Common WSL Issues
+
+**Issue: "node: not found" when running npm packages**
+
+This happens when you have npm packages installed on Windows but are trying to run them from WSL. Solution: Install Node.js and the packages directly in WSL as shown above.
+
+**Issue: Permission errors with npm global packages**
+
+```bash
+# Set up npm global directory in your home folder
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+
+# Add to your PATH (add this to ~/.bashrc or ~/.zshrc)
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ## Quick Start with Docker (Recommended)
 
 ### 1. Clone the Repository
