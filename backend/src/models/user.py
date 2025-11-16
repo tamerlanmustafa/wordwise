@@ -18,6 +18,7 @@ class OAuthProvider(str, enum.Enum):
     """OAuth provider types"""
     EMAIL = "email"  # Traditional email/password
     GOOGLE = "google"  # Google OAuth
+    FACEBOOK = "facebook"  # Facebook OAuth
 
 
 class User(Base):
@@ -31,13 +32,20 @@ class User(Base):
     password_hash = Column(String, nullable=True)
 
     # OAuth fields
-    oauth_provider = Column(Enum(OAuthProvider), default=OAuthProvider.EMAIL, nullable=False)
+    oauth_provider = Column(
+        Enum(OAuthProvider, values_callable=lambda x: [e.value for e in x]),
+        default=OAuthProvider.EMAIL,
+        nullable=False
+    )
     google_id = Column(String, unique=True, nullable=True, index=True)
     profile_picture_url = Column(String, nullable=True)
 
     # User preferences
     language_preference = Column(String, default="en")
-    proficiency_level = Column(Enum(ProficiencyLevel), default=ProficiencyLevel.A1)
+    proficiency_level = Column(
+        Enum(ProficiencyLevel, values_callable=lambda x: [e.value for e in x]),
+        default=ProficiencyLevel.A1
+    )
 
     # Status fields
     is_active = Column(Boolean, default=True)

@@ -31,6 +31,23 @@ services:
       timeout: 5s
       retries: 5
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: wordwise_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@wordwise.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -79,5 +96,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  pgadmin_data:
 
 

@@ -1,23 +1,28 @@
 import React from 'react';
-import { cn } from '@/utils/cn';
+import { Card as MuiCard, CardContent } from '@mui/material';
+import type { CardProps as MuiCardProps } from '@mui/material';
 
-interface CardProps {
+interface CardProps extends MuiCardProps {
   children: React.ReactNode;
-  className?: string;
   hover?: boolean;
 }
 
-const Card: React.FC<CardProps> = ({ children, className, hover = false }) => {
+const Card: React.FC<CardProps> = ({ children, hover = false, sx, ...props }) => {
   return (
-    <div
-      className={cn(
-        'bg-white rounded-lg shadow-md p-6',
-        hover && 'transition-shadow duration-200 hover:shadow-lg',
-        className
-      )}
+    <MuiCard
+      sx={{
+        transition: hover ? 'box-shadow 0.2s' : undefined,
+        '&:hover': hover ? {
+          boxShadow: 3,
+        } : undefined,
+        ...sx,
+      }}
+      {...props}
     >
-      {children}
-    </div>
+      <CardContent>
+        {children}
+      </CardContent>
+    </MuiCard>
   );
 };
 
