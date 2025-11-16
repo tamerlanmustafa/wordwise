@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx eslint@8:*)",
+      "Bash(chmod:*)",
+      "Bash(source ../.venv/bin/activate:*)",
+      "Bash(python -c:*)",
+      "Bash(python3 -m venv:*)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(PGPASSWORD=wordwise_password psql:*)",
+      "Bash(alembic downgrade:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
