@@ -1,20 +1,30 @@
 /**
- * Google OAuth Login Button Component
+ * Google OAuth Button Component
  *
  * Displays Google's branded "Sign in with Google" button
- * and handles the OAuth flow.
+ * and handles the OAuth flow for both login and signup.
  */
 
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import { Box, CircularProgress } from '@mui/material';
+import { apiService } from '@/services/api';
+import type { GoogleAuthResponse } from '@/types';
 
-interface GoogleLoginButtonProps {
+interface GoogleOAuthButtonProps {
+  mode: 'login' | 'signup';
   onSuccess?: (user: any) => void;
   onError?: (error: string) => void;
+  redirectTo?: string;
 }
 
-export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps) {
+export function GoogleOAuthButton({
+  mode,
+  onSuccess,
+  onError,
+  redirectTo = '/movies'
+}: GoogleOAuthButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,26 +32,17 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
     setIsLoading(true);
 
     try {
-      // Send the Google ID token to your backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/google/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id_token: credentialResponse.credential,
-        }),
-      });
+      const idToken = credentialResponse.credential;
+      let data: GoogleAuthResponse;
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Google login failed');
+      // Call the appropriate endpoint based on mode
+      if (mode === 'signup') {
+        data = await apiService.googleSignup(idToken);
+      } else {
+        data = await apiService.googleLogin(idToken);
       }
 
-      const data = await response.json();
-
-      // Store the JWT token
-      localStorage.setItem('access_token', data.access_token);
+      // Store user data in localStorage
       localStorage.setItem('user', JSON.stringify(data.user));
 
       // Call success callback
@@ -49,13 +50,16 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
         onSuccess(data.user);
       }
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Redirect to specified page
+      router.push(redirectTo);
 
-    } catch (error) {
-      console.error('Google login error:', error);
+    } catch (error: any) {
+      console.error(`Google ${mode} error:`, error);
+      const errorMessage = error.response?.data?.detail ||
+                          error.message ||
+                          `Google ${mode} failed`;
       if (onError) {
-        onError(error instanceof Error ? error.message : 'Google login failed');
+        onError(errorMessage);
       }
     } finally {
       setIsLoading(false);
@@ -63,29 +67,40 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
   };
 
   const handleGoogleError = () => {
-    console.error('Google login failed');
+    console.error(`Google ${mode} failed`);
     if (onError) {
-      onError('Google login was unsuccessful');
+      onError(`Google ${mode} was unsuccessful`);
     }
   };
 
+  const buttonText = mode === 'signup' ? 'signup_with' : 'signin_with';
+
   return (
-    <div className="w-full">
+    <Box sx={{ width: '100%' }}>
       {isLoading ? (
-        <div className="flex justify-center items-center py-3">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-        </div>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 1.5 }}>
+          <CircularProgress size={24} />
+        </Box>
       ) : (
         <GoogleLogin
           onSuccess={handleGoogleSuccess}
           onError={handleGoogleError}
-          useOneTap
+          useOneTap={mode === 'login'}
           size="large"
-          width="100%"
+          width={300}
+          text={buttonText}
         />
       )}
-    </div>
+    </Box>
   );
+}
+
+/**
+ * Legacy component for backward compatibility
+ * @deprecated Use GoogleOAuthButton with mode="login" instead
+ */
+export function GoogleLoginButton(props: Omit<GoogleOAuthButtonProps, 'mode'>) {
+  return <GoogleOAuthButton {...props} mode="login" />;
 } 
 
 /**
@@ -97,8 +112,10 @@ export function GoogleOAuthWrapper({ children }: { children: React.ReactNode }) 
 
   if (!clientId) {
     console.error('Google Client ID is not configured');
-    return <div>Google Sign-In is not configured</div>;
+    return <Box sx={{ p: 2, textAlign: 'center', color: 'error.main' }}>Google Sign-In is not configured</Box>;
   }
+
+ 
 
   return (
     <GoogleOAuthProvider clientId={clientId}>

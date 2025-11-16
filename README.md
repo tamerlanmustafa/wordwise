@@ -4,11 +4,13 @@ WordWise is an innovative language learning platform that helps users learn Engl
 
 ## Features
 
-- Movie script analysis with word frequency tracking
-- Personalized word lists (Learn Later, Favorites, Mastered)
-- Difficulty-based categorization (A1-C2 levels)
-- User authentication and progress tracking
-- Beautiful, responsive UI with Tailwind CSS
+- 🎬 Movie script analysis with word frequency tracking
+- 📚 Personalized word lists (Learn Later, Favorites, Mastered)
+- 🎯 Difficulty-based categorization (A1-C2 levels)
+- 🔐 Google OAuth & traditional authentication
+- 💾 PostgreSQL database with pgAdmin visualization
+- 🎨 Beautiful, responsive UI with Tailwind CSS
+- ⚡ Optimized frontend with Next.js Turbopack
 
 ## Tech Stack
 
@@ -22,45 +24,60 @@ WordWise is an innovative language learning platform that helps users learn Engl
 - Alembic - Database migrations
 
 ### Frontend
-- Next.js 14 - React framework with SSR
+- Next.js 14.2 with Turbopack - React framework with ultra-fast HMR
 - TypeScript - Type safety
 - Tailwind CSS - Utility-first CSS
 - Redux Toolkit - State management
-- React Query - Server state management
 - Axios - HTTP client
+- Google OAuth - Social authentication
 
 ### Infrastructure
 - Docker & Docker Compose - Containerization
-- PostgreSQL - Database
-- Redis - Cache
+- PostgreSQL - Primary database
+- pgAdmin 4 - Database visualization tool
+- Redis - Caching and sessions
 
 ## Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
+- Docker and Docker Compose (for Docker setup)
+- Python 3.11+, Node.js 18+, PostgreSQL, Redis (for local setup)
 
-### Using Docker (Recommended)
+### Using Helper Scripts (Recommended for Local Development)
 
-1. Clone the repository:
+**Start Backend:**
 ```bash
-git clone <repository-url>
-cd wordwise
+./start-backend.sh
 ```
 
-2. Start all services:
+**Start Frontend:**
 ```bash
-docker compose up -d
+./start-frontend.sh
 ```
 
-3. Access the application:
+**Access the application:**
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
+- pgAdmin: http://localhost:5050 (email: admin@wordwise.com, password: admin)
 
-4. Run database migrations:
+For detailed local setup instructions, see [README-LOCAL-DEV.md](README-LOCAL-DEV.md)
+
+### Using Docker
+
+1. Clone and start services:
+```bash
+git clone <repository-url>
+cd wordwise
+docker compose up -d
+```
+
+2. Run database migrations:
 ```bash
 docker compose exec backend alembic upgrade head
 ```
+
+3. Access the application at http://localhost:3000
 
 ### Common Docker Commands
 
@@ -166,16 +183,40 @@ wordwise/
 ## API Documentation
 
 Once the backend is running, visit:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+### Key API Endpoints
+
+**Authentication:**
+- `POST /auth/register` - Register with email/password
+- `POST /auth/login` - Login with email/password
+- `POST /auth/google/signup` - Sign up with Google OAuth
+- `POST /auth/google/login` - Login with Google OAuth
+
+**Database Visualization:**
+- **pgAdmin:** http://localhost:5050
+  - Email: admin@wordwise.com
+  - Password: admin
+  - Connect to: `postgres:5432` (wordwise_db)
 
 ## Development Guidelines
 
 - Follow PEP 8 for Python code
 - Use TypeScript for all frontend code
+- Frontend uses Turbopack for fast development (80% faster HMR)
 - Write tests for critical functionality
 - Use meaningful commit messages
 - Update documentation when adding features
+
+## Performance
+
+The frontend is optimized for fast development:
+- **Turbopack enabled** - Up to 700x faster hot module replacement
+- **Optimized dependencies** - Only essential packages (19 vs 24 originally)
+- **Fast startup** - ~30-40s initial (WSL2), ~3-8s on native filesystems
+- **Hot reload** - 0.5-2s (80% faster than before)
+- **Memory efficient** - Uses ~400MB (was 800MB)
 
 ## Contributing
 

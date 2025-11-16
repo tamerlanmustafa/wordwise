@@ -77,6 +77,20 @@ class ApiService {
     return response.data;
   }
 
+  async googleLogin(idToken: string) {
+    const response = await this.client.post('/auth/google/login', { id_token: idToken });
+    const { access_token } = response.data;
+    this.setToken(access_token);
+    return response.data;
+  }
+
+  async googleSignup(idToken: string) {
+    const response = await this.client.post('/auth/google/signup', { id_token: idToken });
+    const { access_token } = response.data;
+    this.setToken(access_token);
+    return response.data;
+  }
+
   // Movie endpoints
   async getMovies(params?: any) {
     const response = await this.client.get('/movies/', { params });
