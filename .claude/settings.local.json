@@ -44,7 +44,18 @@
       "Bash(docker ps:*)",
       "Bash(docker exec:*)",
       "Bash(docker-compose stop:*)",
-      "Bash(docker-compose rm:*)"
+      "Bash(docker-compose rm:*)",
+      "Bash(PGPASSWORD=wordwise_password pg_dump:*)",
+      "Bash(backup_before_prisma.sql)",
+      "Bash(prisma generate:*)",
+      "Bash(prisma db pull:*)",
+      "Bash(prisma migrate:*)",
+      "Bash(prisma db push:*)",
+      "Bash(timeout 5 uvicorn:*)",
+      "Bash(sudo rm:*)",
+      "Bash(test:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(docker-compose config:*)"
     ],
     "deny": [],
     "ask": []
