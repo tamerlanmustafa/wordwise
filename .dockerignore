@@ -45,5 +45,23 @@ htmlcov/
 
 # Documentation
 docs/
+*.md
+!README.md
+CHANGELOG*.md
+MIGRATION*.md
+PHASE*.md
+QUICK*.md
+
+# Database backups
+*.sql
+backup*.sql
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Build artifacts
+dist/
 
 

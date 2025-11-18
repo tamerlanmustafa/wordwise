@@ -1,28 +1,37 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from .config import get_settings
+"""
+Database connection using Prisma Client Python.
+Replaces SQLAlchemy session management.
+"""
 
-settings = get_settings()
+from prisma import Prisma
 
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+# Global Prisma client instance
+prisma = Prisma()
 
 
-def get_db():
-    """Dependency for getting database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def connect_db():
+    """Connect to database on startup"""
+    if not prisma.is_connected():
+        await prisma.connect()
+    print("✅ Connected to database via Prisma")
 
 
+async def disconnect_db():
+    """Disconnect from database on shutdown"""
+    if prisma.is_connected():
+        await prisma.disconnect()
+    print("❌ Disconnected from database")
+
+
+async def get_db() -> Prisma:
+    """
+    Dependency injection for database client.
+    Replaces SQLAlchemy's get_db() session.
+
+    Usage:
+        @app.get("/users")
+        async def get_users(db: Prisma = Depends(get_db)):
+            users = await db.user.find_many()
+            return users
+    """
+    return prisma

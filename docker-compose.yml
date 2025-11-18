@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: wordwise_postgres
@@ -17,7 +18,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
+  # Redis Cache (Optional - keep if needed for caching)
   redis:
     image: redis:7-alpine
     container_name: wordwise_redis
@@ -30,28 +33,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: wordwise_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@wordwise.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
 
+  # Backend (FastAPI + Prisma)
   backend:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
+      target: development  # Use 'production' for prod builds
     container_name: wordwise_backend
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
@@ -61,11 +50,13 @@ services:
     environment:
       - DATABASE_URL=postgresql://wordwise_user:wordwise_password@postgres:5432/wordwise_db
       - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET_KEY=your-secret-key-change-this-in-production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-this-in-production}
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRATION_HOURS=24
       - DEBUG=True
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,26 +67,56 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
+  # Frontend (React + Vite)
   frontend:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+      target: development  # Use 'production' for prod builds with nginx
     container_name: wordwise_frontend
-    command: npm run dev
+    command: npm run dev -- --host 0.0.0.0
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend-new:/app
+      - /app/node_modules  # Anonymous volume for node_modules
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     depends_on:
       - backend
+    restart: unless-stopped
+
+  # pgAdmin (Optional - Comment out if using desktop app)
+  # Uncomment to use web-based pgAdmin
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: wordwise_pgadmin
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@wordwise.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #     PGADMIN_CONFIG_SERVER_MODE: 'False'
+  #     PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+  #   ports:
+  #     - "5050:80"
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
-  pgadmin_data:
+    driver: local
+  # pgadmin_data:  # Uncomment if using pgAdmin
+  #   driver: local
 
-
+networks:
+  default:
+    name: wordwise_network

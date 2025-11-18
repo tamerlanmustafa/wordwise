@@ -1,27 +1,11 @@
 """
-Google OAuth 2.0 authentication routes.
-
-Handles Google Sign-In flow:
-1. Client sends Google ID token
-2. Server verifies token with Google
-3. Create or update user in database
-4. Return JWT access token
+Google OAuth 2.0 authentication routes using Prisma.
 """
 
-# python -m venv .venv
-# source .venv/bin/activate
-# pip install --upgrade pip
-# pip install fastapi uvicorn[standard] sqlalchemy
-# add other project deps if needed, e.g.:
-# pip install python-jose[cryptography] passlib[bcrypt] python-dotenv psycopg2-binary
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import timedelta
-from fastapi import APIRouter
-from fastapi import HTTPException
-from fastapi import status
-from fastapi import Depends
+from prisma import Prisma
 from ..database import get_db
-from ..models.user import User, OAuthProvider
 from ..schemas.oauth import (
     GoogleLoginRequest,
     GoogleLoginResponse,
@@ -29,7 +13,7 @@ from ..schemas.oauth import (
     GoogleSignupResponse,
     UserInfo
 )
-from ..utils.google_auth import verify_google_token, GoogleAuthError, generate_username_from_email
+from ..utils.google_auth import verify_google_token, generate_username_from_email
 from ..utils.auth import create_access_token
 from ..config import get_settings
 
@@ -38,18 +22,7 @@ settings = get_settings()
 
 
 def _verify_and_get_google_user_info(id_token: str) -> dict:
-    """
-    Verify Google ID token and extract user info.
-
-    Args:
-        id_token: Google ID token from client
-
-    Returns:
-        Dictionary with user info from Google
-
-    Raises:
-        HTTPException: If token is invalid or email not verified
-    """
+    """Verify Google ID token and extract user info."""
     google_user_info = verify_google_token(id_token, settings.google_client_id)
 
     if not google_user_info:
@@ -67,39 +40,33 @@ def _verify_and_get_google_user_info(id_token: str) -> dict:
     return google_user_info
 
 
-def _create_or_update_user(google_user_info: dict, db: Session, allow_new: bool = True) -> tuple[User, bool]:
-    """
-    Create or update user based on Google info.
-
-    Args:
-        google_user_info: User info from Google
-        db: Database session
-        allow_new: Whether to create new users (False for login-only)
-
-    Returns:
-        Tuple of (User object, is_new_user boolean)
-
-    Raises:
-        HTTPException: If user doesn't exist and allow_new is False
-    """
+async def _create_or_update_user(google_user_info: dict, db: Prisma, allow_new: bool = True):
+    """Create or update user based on Google info using Prisma."""
     google_id = google_user_info['google_id']
     email = google_user_info['email']
     is_new_user = False
 
     # Check if user exists by Google ID
-    user = db.query(User).filter(User.google_id == google_id).first()
+    user = await db.user.find_first(
+        where={"googleId": google_id}
+    )
 
     # If not found by Google ID, check by email
     if not user:
-        user = db.query(User).filter(User.email == email).first()
+        user = await db.user.find_unique(
+            where={"email": email}
+        )
 
         if user:
             # Existing user logging in with Google for the first time
-            user.google_id = google_id
-            user.oauth_provider = OAuthProvider.GOOGLE
-            user.profile_picture_url = google_user_info.get('picture')
-            db.commit()
-            db.refresh(user)
+            user = await db.user.update(
+                where={"id": user.id},
+                data={
+                    "googleId": google_id,
+                    "oauthProvider": "google",
+                    "profilePictureUrl": google_user_info.get('picture')
+                }
+            )
         else:
             # New user
             if not allow_new:
@@ -113,69 +80,47 @@ def _create_or_update_user(google_user_info: dict, db: Session, allow_new: bool 
             # Ensure username is unique
             base_username = username
             counter = 1
-            while db.query(User).filter(User.username == username).first():
+            while await db.user.find_unique(where={"username": username}):
                 username = f"{base_username}{counter}"
                 counter += 1
 
-            # Create new user
-            user = User(
-                email=email,
-                username=username,
-                google_id=google_id,
-                oauth_provider=OAuthProvider.GOOGLE,
-                profile_picture_url=google_user_info.get('picture'),
-                password_hash=None,
-                is_active=True
+            # Create new user with Prisma
+            user = await db.user.create(
+                data={
+                    "email": email,
+                    "username": username,
+                    "googleId": google_id,
+                    "oauthProvider": "google",
+                    "profilePictureUrl": google_user_info.get('picture'),
+                    "isActive": True
+                }
             )
-
-            db.add(user)
-            db.commit()
-            db.refresh(user)
             is_new_user = True
     else:
         # Existing Google user - update profile picture if changed
-        if user.profile_picture_url != google_user_info.get('picture'):
-            user.profile_picture_url = google_user_info.get('picture')
-            db.commit()
-            db.refresh(user)
+        if user.profilePictureUrl != google_user_info.get('picture'):
+            user = await db.user.update(
+                where={"id": user.id},
+                data={"profilePictureUrl": google_user_info.get('picture')}
+            )
 
     return user, is_new_user
 
 
-def _create_user_response(user: User) -> UserInfo:
-    """Create UserInfo response object from User model."""
+def _create_user_response(user) -> UserInfo:
+    """Create UserInfo response object from Prisma User model."""
     return UserInfo(
         id=user.id,
         email=user.email,
         username=user.username,
-        oauth_provider=user.oauth_provider.value,
-        profile_picture_url=user.profile_picture_url
+        oauth_provider=user.oauthProvider,
+        profile_picture_url=user.profilePictureUrl
     )
 
 
 @router.post("/signup", response_model=GoogleSignupResponse, status_code=status.HTTP_201_CREATED)
-async def google_signup(request: GoogleSignupRequest, db: Session = Depends(get_db)):
-    """
-    Sign up a new user with Google OAuth 2.0.
-
-    Flow:
-    1. Verify Google ID token
-    2. Check if user already exists
-    3. Create new user account
-    4. Generate JWT access token
-    5. Return token and user info
-
-    Args:
-        request: Contains the Google ID token
-        db: Database session
-
-    Returns:
-        Access token and user information with is_new_user flag
-
-    Raises:
-        HTTPException 401: If token verification fails
-        HTTPException 400: If email not verified or user already exists
-    """
+async def google_signup(request: GoogleSignupRequest, db: Prisma = Depends(get_db)):
+    """Sign up a new user with Google OAuth 2.0 using Prisma."""
     try:
         # Verify Google ID token
         google_user_info = _verify_and_get_google_user_info(request.id_token)
@@ -184,10 +129,13 @@ async def google_signup(request: GoogleSignupRequest, db: Session = Depends(get_
         google_id = google_user_info['google_id']
         email = google_user_info['email']
 
-        existing_user = (
-            db.query(User)
-            .filter((User.google_id == google_id) | (User.email == email))
-            .first()
+        existing_user = await db.user.find_first(
+            where={
+                "OR": [
+                    {"googleId": google_id},
+                    {"email": email}
+                ]
+            }
         )
 
         if existing_user:
@@ -197,7 +145,7 @@ async def google_signup(request: GoogleSignupRequest, db: Session = Depends(get_
             )
 
         # Create new user
-        user, is_new_user = _create_or_update_user(google_user_info, db, allow_new=True)
+        user, is_new_user = await _create_or_update_user(google_user_info, db, allow_new=True)
 
         # Generate JWT access token
         access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
@@ -213,11 +161,6 @@ async def google_signup(request: GoogleSignupRequest, db: Session = Depends(get_
             is_new_user=is_new_user
         )
 
-    except GoogleAuthError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
     except HTTPException:
         raise
     except Exception as e:
@@ -228,38 +171,14 @@ async def google_signup(request: GoogleSignupRequest, db: Session = Depends(get_
 
 
 @router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
-async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db)):
-    """
-    Authenticate user with Google OAuth 2.0.
-
-    This endpoint handles both existing users and new signups for convenience.
-    For explicit signup flow, use the /signup endpoint instead.
-
-    Flow:
-    1. Verify Google ID token
-    2. Check if user exists (by google_id or email)
-    3. Create new user if doesn't exist (auto-signup)
-    4. Update existing user info if exists
-    5. Generate JWT access token
-    6. Return token and user info
-
-    Args:
-        request: Contains the Google ID token
-        db: Database session
-
-    Returns:
-        Access token and user information
-
-    Raises:
-        HTTPException 401: If token verification fails
-        HTTPException 400: If email not verified
-    """
+async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)):
+    """Authenticate user with Google OAuth 2.0 using Prisma."""
     try:
         # Verify Google ID token
         google_user_info = _verify_and_get_google_user_info(request.id_token)
 
         # Create or update user (allows new users)
-        user, _ = _create_or_update_user(google_user_info, db, allow_new=True)
+        user, _ = await _create_or_update_user(google_user_info, db, allow_new=True)
 
         # Generate JWT access token
         access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
@@ -274,11 +193,6 @@ async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db
             user=_create_user_response(user)
         )
 
-    except GoogleAuthError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
     except HTTPException:
         raise
     except Exception as e:
