@@ -35,7 +35,16 @@
       "Bash(else echo \"✗ .env.local not found\")",
       "Bash(cat:*)",
       "Bash(curl:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(if [ -f .gitignore ])",
+      "Bash(then grep -q \"tsconfig.tsbuildinfo\" .gitignore)",
+      "Bash(.gitignore)",
+      "Bash(else echo \"# TypeScript\ntsconfig.tsbuildinfo\")",
+      "Bash(docker-compose up:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose stop:*)",
+      "Bash(docker-compose rm:*)"
     ],
     "deny": [],
     "ask": []
