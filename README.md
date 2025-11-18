@@ -199,6 +199,12 @@ Once the backend is running, visit:
   - Email: admin@wordwise.com
   - Password: admin
   - Connect to: `postgres:5432` (wordwise_db)
+  Host name/address: localhost
+Port: 5432
+Maintenance database: wordwise_db
+Username: wordwise_user
+Password: wordwise_password
+☑ Save password
 
 ## Development Guidelines
 

@@ -1,0 +1,143 @@
+// Prisma Schema for WordWise
+// Database: PostgreSQL (AWS RDS + Local)
+
+generator client {
+  provider             = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum OAuthProvider {
+  email
+  google
+  facebook
+}
+
+enum ProficiencyLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+enum WordDifficulty {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+enum ListType {
+  learn_later
+  favorites
+  mastered
+}
+
+// Models
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  username  String   @unique
+
+  // Password - nullable for OAuth users
+  passwordHash String? @map("password_hash")
+
+  // OAuth fields
+  oauthProvider     OAuthProvider @default(email) @map("oauth_provider")
+  googleId          String?       @unique @map("google_id")
+  profilePictureUrl String?       @map("profile_picture_url")
+
+  // User preferences
+  languagePreference String            @default("en") @map("language_preference")
+  proficiencyLevel   ProficiencyLevel  @default(A1) @map("proficiency_level")
+
+  // Status fields
+  isActive Boolean @default(true) @map("is_active")
+  isAdmin  Boolean @default(false) @map("is_admin")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  wordLists UserWordList[]
+
+  @@map("users")
+}
+
+model Movie {
+  id              Int            @id @default(autoincrement())
+  title           String
+  year            Int
+  genre           String?
+  description     String?
+  difficultyLevel WordDifficulty @map("difficulty_level")
+  wordCount       Int            @default(0) @map("word_count")
+  scriptUrl       String?        @map("script_url")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  words Word[]
+
+  @@map("movies")
+}
+
+model Word {
+  id         Int            @id @default(autoincrement())
+  word       String
+  definition String?
+  difficulty WordDifficulty
+  movieId    Int            @map("movie_id")
+
+  // Context from movie
+  context   String?
+  timestamp String? // e.g., "01:23:45" for when word appears
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  movie         Movie          @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  userWordLists UserWordList[]
+
+  @@unique([word, movieId])
+  @@index([difficulty])
+  @@index([movieId])
+  @@map("words")
+}
+
+model UserWordList {
+  id       Int      @id @default(autoincrement())
+  userId   Int      @map("user_id")
+  wordId   Int      @map("word_id")
+  listType ListType @map("list_type")
+
+  // Progress tracking
+  timesReviewed Int      @default(0) @map("times_reviewed")
+  lastReviewed  DateTime? @map("last_reviewed")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word Word @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wordId, listType])
+  @@index([userId])
+  @@index([wordId])
+  @@map("user_word_lists")
+}
