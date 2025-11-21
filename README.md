@@ -7,150 +7,106 @@ WordWise is an innovative language learning platform that helps users learn Engl
 - 🎬 Movie script analysis with word frequency tracking
 - 📚 Personalized word lists (Learn Later, Favorites, Mastered)
 - 🎯 Difficulty-based categorization (A1-C2 levels)
-- 🔐 Google OAuth & traditional authentication
-- 💾 PostgreSQL database with pgAdmin visualization
-- 🎨 Beautiful, responsive UI with Tailwind CSS
-- ⚡ Optimized frontend with Next.js Turbopack
+- 🔐 Google OAuth authentication
+- 💾 PostgreSQL database with Prisma ORM
+- 🎨 Beautiful, responsive UI with Material-UI
 
 ## Tech Stack
 
 ### Backend
 - Python 3.11+
 - FastAPI - Modern, fast web framework
-- SQLAlchemy - ORM for database operations
+- Prisma - Type-safe database ORM
 - PostgreSQL - Primary database
 - Redis - Caching and session management
 - NLTK & spaCy - Natural language processing
-- Alembic - Database migrations
 
 ### Frontend
-- Next.js 14.2 with Turbopack - React framework with ultra-fast HMR
+- React 19 - UI library
+- Vite 7 - Build tool and dev server
 - TypeScript - Type safety
-- Tailwind CSS - Utility-first CSS
+- Material-UI - Component library
 - Redux Toolkit - State management
 - Axios - HTTP client
-- Google OAuth - Social authentication
+- React Router - Client-side routing
 
 ### Infrastructure
 - Docker & Docker Compose - Containerization
-- PostgreSQL - Primary database
-- pgAdmin 4 - Database visualization tool
-- Redis - Caching and sessions
+- PostgreSQL 15 - Primary database
+- Redis 7 - Caching and sessions
 
 ## Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose (for Docker setup)
-- Python 3.11+, Node.js 18+, PostgreSQL, Redis (for local setup)
+- Docker and Docker Compose
 
-### Using Helper Scripts (Recommended for Local Development)
-
-**Start Backend:**
-```bash
-./start-backend.sh
-```
-
-**Start Frontend:**
-```bash
-./start-frontend.sh
-```
-
-**Access the application:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- pgAdmin: http://localhost:5050 (email: admin@wordwise.com, password: admin)
-
-For detailed local setup instructions, see [README-LOCAL-DEV.md](README-LOCAL-DEV.md)
-
-### Using Docker
+### Using Docker (Recommended)
 
 1. Clone and start services:
 ```bash
 git clone <repository-url>
 cd wordwise
-docker compose up -d
+docker-compose up -d
 ```
 
-2. Run database migrations:
-```bash
-docker compose exec backend alembic upgrade head
-```
-
-3. Access the application at http://localhost:3000
+2. Access the application:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Documentation: http://localhost:8000/docs
 
 ### Common Docker Commands
 
 ```bash
 # Start services
-docker compose up -d
+docker-compose up -d
 
 # Stop services
-docker compose down
+docker-compose down
 
 # View logs
-docker compose logs -f
+docker-compose logs -f
 
 # Restart a service
-docker compose restart backend
+docker-compose restart backend
+
+# Rebuild after changes
+docker-compose up -d --build
 ```
 
-### Local Development
+### Local Development (Without Docker)
 
-#### Backend Setup
+#### Backend
 
-1. Navigate to backend directory:
 ```bash
 cd backend
-```
 
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
+# Install dependencies (no virtual environment needed)
 pip install -r requirements.txt
-```
 
-4. Set up environment variables:
-```bash
+# Set up environment variables
 cp .env.example .env
 # Edit .env with your configuration
+
+# Generate Prisma client
+prisma generate
+
+# Start the server
+uvicorn src.main:app --reload --port 8000
 ```
 
-5. Run database migrations:
-```bash
-alembic upgrade head
-```
+#### Frontend
 
-6. Start the server:
-```bash
-uvicorn src.main:app --reload
-```
-
-#### Frontend Setup
-
-1. Navigate to frontend directory:
 ```bash
 cd frontend
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
-```
 
-3. Set up environment variables:
-```bash
-cp .env.local.example .env.local
-# Edit .env.local with your configuration
-```
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
 
-4. Start the development server:
-```bash
+# Start dev server
 npm run dev
 ```
 
@@ -158,26 +114,31 @@ npm run dev
 
 ```
 wordwise/
-├── backend/              # Python/FastAPI backend
+├── backend/
+│   ├── prisma/
+│   │   └── schema.prisma    # Database schema
 │   ├── src/
-│   │   ├── models/       # Database models
-│   │   ├── routes/       # API routes
-│   │   ├── services/     # Business logic
-│   │   ├── middleware/   # Custom middleware
-│   │   └── utils/        # Utility functions
-│   ├── alembic/          # Database migrations
-│   └── requirements.txt  # Python dependencies
-├── frontend/             # Next.js frontend
+│   │   ├── routes/          # API routes
+│   │   ├── services/        # Business logic
+│   │   ├── middleware/      # Custom middleware
+│   │   ├── database.py      # Prisma connection
+│   │   └── main.py          # FastAPI app
+│   └── requirements.txt
+├── frontend/
 │   ├── src/
-│   │   ├── pages/        # Next.js pages
-│   │   ├── components/   # React components
-│   │   ├── services/     # API services
-│   │   ├── store/        # Redux store
-│   │   └── hooks/        # Custom hooks
-│   └── package.json      # Node dependencies
-├── shared/               # Shared types and constants
-├── docker/               # Docker configuration
-└── docs/                 # Documentation
+│   │   ├── pages/           # React pages
+│   │   ├── components/      # React components
+│   │   ├── services/        # API services
+│   │   ├── store/           # Redux store
+│   │   ├── App.tsx          # Router configuration
+│   │   └── main.tsx         # Entry point
+│   ├── vite.config.ts
+│   └── package.json
+├── docker/
+│   ├── Dockerfile.backend   # Backend Docker image
+│   ├── Dockerfile.frontend  # Frontend Docker image
+│   └── nginx.conf           # Production nginx config
+└── docker-compose.yml
 ```
 
 ## API Documentation
@@ -189,40 +150,52 @@ Once the backend is running, visit:
 ### Key API Endpoints
 
 **Authentication:**
-- `POST /auth/register` - Register with email/password
-- `POST /auth/login` - Login with email/password
-- `POST /auth/google/signup` - Sign up with Google OAuth
 - `POST /auth/google/login` - Login with Google OAuth
+- `POST /auth/google/signup` - Sign up with Google OAuth
+- `GET /health` - Health check endpoint
 
-**Database Visualization:**
-- **pgAdmin:** http://localhost:5050
-  - Email: admin@wordwise.com
-  - Password: admin
-  - Connect to: `postgres:5432` (wordwise_db)
-  Host name/address: localhost
-Port: 5432
-Maintenance database: wordwise_db
-Username: wordwise_user
-Password: wordwise_password
-☑ Save password
+## Database
+
+### Prisma Commands
+
+```bash
+# Generate Prisma client (in Docker)
+docker exec wordwise_backend prisma generate
+
+# Sync schema with database
+docker exec wordwise_backend prisma db push
+
+# Open Prisma Studio (database GUI)
+docker exec wordwise_backend prisma studio
+
+# Create migration
+docker exec wordwise_backend prisma migrate dev --name migration_name
+```
+
+### Direct Database Access
+
+```bash
+# Access PostgreSQL via Docker
+docker exec -it wordwise_postgres psql -U wordwise_user -d wordwise_db
+
+# Example query
+docker exec wordwise_postgres psql -U wordwise_user -d wordwise_db -c "SELECT * FROM users;"
+```
 
 ## Development Guidelines
 
 - Follow PEP 8 for Python code
 - Use TypeScript for all frontend code
-- Frontend uses Turbopack for fast development (80% faster HMR)
+- All development happens in Docker containers
 - Write tests for critical functionality
 - Use meaningful commit messages
-- Update documentation when adding features
 
 ## Performance
 
-The frontend is optimized for fast development:
-- **Turbopack enabled** - Up to 700x faster hot module replacement
-- **Optimized dependencies** - Only essential packages (19 vs 24 originally)
-- **Fast startup** - ~30-40s initial (WSL2), ~3-8s on native filesystems
-- **Hot reload** - 0.5-2s (80% faster than before)
-- **Memory efficient** - Uses ~400MB (was 800MB)
+- **Vite dev server:** 10x faster than Next.js
+- **Docker builds:** 60-87% faster with multi-stage caching
+- **Image sizes:** 75-94% smaller with optimized builds
+- **Hot reload:** Instant with Vite HMR
 
 ## Contributing
 

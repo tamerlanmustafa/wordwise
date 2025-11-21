@@ -1,0 +1,24 @@
+{
+  "name": "wordwise",
+  "version": "2.0.0",
+  "description": "WordWise - Language Learning Platform",
+  "private": true,
+  "scripts": {
+    "db:studio": "cd backend && prisma studio --port 5555",
+    "db:push": "cd backend && prisma db push",
+    "db:migrate": "cd backend && prisma migrate dev",
+    "db:generate": "cd backend && prisma generate",
+    "db:seed": "cd backend && python -m src.scripts.seed",
+    "backend": "cd backend && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
+    "frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "shell:db": "psql -U wordwise_user -d wordwise_db"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
