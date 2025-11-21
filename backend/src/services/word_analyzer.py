@@ -1,5 +1,6 @@
 from typing import List, Dict, Tuple
 from collections import Counter
+import nltk
 import wordfreq
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
@@ -9,13 +10,11 @@ from nltk import pos_tag
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
-    import nltk
     nltk.download('punkt')
 
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
-    import nltk
     nltk.download('stopwords')
 
 try:

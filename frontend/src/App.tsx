@@ -1,9 +1,28 @@
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import MovieSearchPage from './pages/MovieSearchPage';
+
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+  },
+});
+
 function App() {
   return (
-    <div>
-      <h1>salajjhkhm</h1>
-    </div>
-  )
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <MovieSearchPage />
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;

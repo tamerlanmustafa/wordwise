@@ -36,3 +36,10 @@ class MovieListResponse(BaseModel):
     page_size: int
 
 
+class ScriptSearchResponse(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    writer: Optional[str] = None
+    link: str
+
+

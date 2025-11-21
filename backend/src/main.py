@@ -3,7 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .config import get_settings
 from .database import connect_db, disconnect_db
-from .routes import auth_router, movies_router, users_router, oauth_router 
+from .routes import auth_router, movies_router, users_router, oauth_router
+from .services import fetch_movie_script
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s:%(name)s:%(message)s'
+)
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 

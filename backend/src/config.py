@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     oxford_app_id: str = ""
     google_translate_api_key: str = ""
 
+    # STANDS4 Scripts API
+    user_id: str = ""
+    token: str = ""
+    scripts_url: str = "https://www.stands4.com/services/v2/scripts.php"
+
     class Config:
         env_file = ".env"
         case_sensitive = False
