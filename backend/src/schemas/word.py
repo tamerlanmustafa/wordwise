@@ -1,12 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
-from ..models.word import DifficultyLevel
+from prisma.enums import difficultylevel
 
 
 class WordCreate(BaseModel):
     word: str
     definition: Optional[str] = None
-    difficulty_level: Optional[DifficultyLevel] = DifficultyLevel.A1
+    difficulty_level: Optional[difficultylevel] = difficultylevel.BEGINNER
     frequency: Optional[float] = 0.0
     part_of_speech: Optional[str] = None
     example_sentence: Optional[str] = None
@@ -17,12 +17,12 @@ class WordResponse(BaseModel):
     id: int
     word: str
     definition: Optional[str]
-    difficulty_level: DifficultyLevel
-    frequency: float
+    difficulty_level: Optional[difficultylevel]
+    frequency: Optional[float]
     part_of_speech: Optional[str]
     example_sentence: Optional[str]
     translation: Optional[str]
-    
+
     class Config:
         from_attributes = True
 

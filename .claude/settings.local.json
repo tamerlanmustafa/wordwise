@@ -55,7 +55,22 @@
       "Bash(sudo rm:*)",
       "Bash(test:*)",
       "Bash(timeout 5 python:*)",
-      "Bash(docker-compose config:*)"
+      "Bash(docker-compose config:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(netstat:*)",
+      "Bash(ss -tnp:*)",
+      "Bash(rm:*)",
+      "Bash(psql:*)",
+      "Bash(sudo -u postgres psql:*)",
+      "Bash(python -m venv:*)",
+      "Bash(prisma py fetch)",
+      "Bash(python -m prisma:*)",
+      "Bash(pip3 install:*)",
+      "Bash(timeout 5 python3:*)",
+      "Bash(timeout 3 python3:*)"
     ],
     "deny": [],
     "ask": []
