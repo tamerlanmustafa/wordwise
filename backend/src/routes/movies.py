@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
-from typing import Optional
+from typing import Optional, List
 from ..database import get_db
-from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
+from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse, ScriptSearchResponse
 from ..middleware.auth import get_current_active_user
+from ..services import STANDS4ScriptsClient
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
@@ -74,5 +75,33 @@ async def create_movie(
     )
 
     return new_movie
+
+
+@router.get("/scripts/search", response_model=List[ScriptSearchResponse])
+async def search_scripts(
+    query: str = Query(..., min_length=1, description="Movie title to search for")
+):
+    """Search for movie scripts using STANDS4 API"""
+    if not query or len(query.strip()) == 0:
+        return []
+
+    try:
+        client = STANDS4ScriptsClient()
+        results = await client.search_script(query)
+
+        return [
+            ScriptSearchResponse(
+                title=result.title,
+                subtitle=result.subtitle,
+                writer=result.writer,
+                link=result.link
+            )
+            for result in results
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search scripts: {str(e)}"
+        )
 
 
