@@ -6,8 +6,7 @@ import {
   ListItemText,
   Typography,
   Chip,
-  Paper,
-  Stack
+  Paper
 } from '@mui/material';
 import MovieIcon from '@mui/icons-material/Movie';
 import type { MovieSearchResult } from '../services/scriptService';

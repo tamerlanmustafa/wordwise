@@ -9,8 +9,11 @@ export interface ScriptSearchResult {
 
 export interface WordFrequency {
   word: string;
+  lemma: string;
   count: number;
   frequency: number;
+  confidence: number;
+  frequency_rank?: number | null;
 }
 
 export interface DifficultyCategory {
