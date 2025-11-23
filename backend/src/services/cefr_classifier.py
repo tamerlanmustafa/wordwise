@@ -6,7 +6,6 @@ This classifier assigns CEFR levels (A1-C2) to English words using a hybrid appr
 2. Frequency-Based Backoff (wordfreq library)
 3. Embedding-Based Classifier (DISABLED BY DEFAULT for speed)
 4. Lemmatization (spaCy)
-5. POS-sensitive mapping
 
 CRITICAL OPTIMIZATIONS:
 - Aggressive lemma-level caching (process each lemma only once)
@@ -14,6 +13,7 @@ CRITICAL OPTIMIZATIONS:
 - Deduplication before classification
 - Batch processing with nlp.pipe()
 - NO logging inside loops
+- NO POS tagging (disabled for maximum speed)
 - Embedding classifier DISABLED by default (20-100ms per word!)
 """
 
@@ -25,7 +25,6 @@ import json
 import spacy
 from pathlib import Path
 import re
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class WordClassification:
     """Result of classifying a single word"""
     word: str
     lemma: str
-    pos: str  # Part of speech
+    pos: str  # Kept for API compatibility but always empty
     cefr_level: CEFRLevel
     confidence: float  # 0.0 to 1.0
     source: ClassificationSource
@@ -110,7 +109,7 @@ def is_valid_token(token: str) -> bool:
 
 class HybridCEFRClassifier:
     """
-    OPTIMIZED CEFR classifier with aggressive caching and batch processing
+    OPTIMIZED CEFR classifier with aggressive caching and NO POS tagging
     """
 
     def __init__(
@@ -130,15 +129,15 @@ class HybridCEFRClassifier:
         self.data_dir = Path(data_dir)
         self.use_embedding_classifier = use_embedding_classifier
 
-        # Load spaCy in LIGHTWEIGHT mode (disable expensive components)
-        logger.info(f"Loading spaCy model: {spacy_model} (lightweight mode)")
+        # Load spaCy in LIGHTWEIGHT mode (disable ALL expensive components including POS tagger)
+        logger.info(f"Loading spaCy model: {spacy_model} (lightweight mode, no POS)")
         self.nlp = spacy.load(
             spacy_model,
-            disable=["ner", "parser", "attribute_ruler"]
+            disable=["ner", "parser", "attribute_ruler", "tagger"]
         )
 
         # OPTIMIZATION: Caches for lemmatization and classification
-        self._lemma_cache: Dict[str, Tuple[str, str]] = {}  # word -> (lemma, pos)
+        self._lemma_cache: Dict[str, str] = {}  # word -> lemma (no POS!)
         self._cefr_cache: Dict[str, WordClassification] = {}  # lemma -> classification
         self._frequency_cache: Dict[str, Optional[int]] = {}
 
@@ -147,9 +146,6 @@ class HybridCEFRClassifier:
 
         # Multi-word expressions: {"look after": (level, source)}
         self.multi_word_expressions: Dict[str, Tuple[CEFRLevel, ClassificationSource]] = {}
-
-        # POS-specific mappings: {(lemma, pos): (level, source)}
-        self.pos_specific: Dict[Tuple[str, str], Tuple[CEFRLevel, ClassificationSource]] = {}
 
         # Frequency rank thresholds for CEFR mapping
         self.frequency_thresholds = {
@@ -188,7 +184,7 @@ class HybridCEFRClassifier:
         if evp_path.exists():
             self._load_evp_wordlist(evp_path)
 
-        logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries, {len(self.multi_word_expressions)} MWEs, {len(self.pos_specific)} POS-specific")
+        logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries, {len(self.multi_word_expressions)} MWEs")
 
     def _load_oxford_wordlist(self, path: Path):
         """Load Oxford 3000/5000 wordlist"""
@@ -199,7 +195,6 @@ class HybridCEFRClassifier:
             for entry in data:
                 word = entry.get('word', '').lower().strip()
                 level = entry.get('cefr_level', '').upper()
-                pos = entry.get('pos', '')
 
                 if not word or not level:
                     continue
@@ -215,12 +210,6 @@ class HybridCEFRClassifier:
                 # Add to main wordlist
                 if lemma not in self.cefr_wordlist:
                     self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.OXFORD_3000)
-
-                # Add POS-specific mapping if available
-                if pos:
-                    pos_key = (lemma, pos.lower())
-                    if pos_key not in self.pos_specific:
-                        self.pos_specific[pos_key] = (cefr_level, ClassificationSource.OXFORD_3000)
 
                 # Check for multi-word expressions
                 if ' ' in word:
@@ -265,7 +254,6 @@ class HybridCEFRClassifier:
             for entry in data:
                 word = entry.get('word', '').lower().strip()
                 level = entry.get('level', '').upper()
-                pos = entry.get('pos', '')
 
                 if not word or not level:
                     continue
@@ -280,12 +268,6 @@ class HybridCEFRClassifier:
                 # Only add if not already present
                 if lemma not in self.cefr_wordlist:
                     self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EVP)
-
-                # Add POS-specific if available
-                if pos:
-                    pos_key = (lemma, pos.lower())
-                    if pos_key not in self.pos_specific:
-                        self.pos_specific[pos_key] = (cefr_level, ClassificationSource.EVP)
 
         except Exception as e:
             logger.error(f"Error loading EVP wordlist: {e}")
@@ -350,7 +332,7 @@ class HybridCEFRClassifier:
         return text
 
     def _get_lemma_simple(self, word: str) -> str:
-        """Simple lemmatization for wordlist loading (single word)"""
+        """Simple lemmatization for wordlist loading (single word, no POS)"""
         doc = self.nlp(word.lower())
         if len(doc) > 0:
             return doc[0].lemma_
@@ -445,30 +427,30 @@ class HybridCEFRClassifier:
         Classify a single word with CEFR level (CACHED)
 
         This uses lemma-level caching so each unique lemma is classified only once.
+
+        Args:
+            word: Word to classify
+            pos: Ignored (kept for API compatibility)
         """
         word_lower = word.lower().strip()
 
-        # Check if we've already classified this exact lemma
-        cache_key = f"{word_lower}:{pos or ''}"
-        if cache_key in self._cefr_cache:
-            return self._cefr_cache[cache_key]
+        # Check if we've already classified this lemma
+        if word_lower in self._cefr_cache:
+            return self._cefr_cache[word_lower]
 
         lemma = word_lower
 
         # Get lemma from cache or compute it
         if word_lower in self._lemma_cache:
-            lemma, cached_pos = self._lemma_cache[word_lower]
-            if not pos:
-                pos = cached_pos
+            lemma = self._lemma_cache[word_lower]
         else:
             # Compute lemma (only happens once per unique word)
             doc = self.nlp(word_lower)
             if len(doc) > 0:
                 lemma = doc[0].lemma_
-                pos = pos or (doc[0].pos_ if hasattr(doc[0], 'pos_') else "")
-                self._lemma_cache[word_lower] = (lemma, pos)
+                self._lemma_cache[word_lower] = lemma
             else:
-                self._lemma_cache[word_lower] = (word_lower, "")
+                self._lemma_cache[word_lower] = word_lower
 
         # Stage 1: Check multi-word expressions
         if ' ' in word_lower and word_lower in self.multi_word_expressions:
@@ -476,75 +458,57 @@ class HybridCEFRClassifier:
             result = WordClassification(
                 word=word,
                 lemma=word_lower,
-                pos=pos or "",
+                pos="",
                 cefr_level=level,
                 confidence=1.0,
                 source=source,
                 is_multi_word=True
             )
-            self._cefr_cache[cache_key] = result
+            self._cefr_cache[word_lower] = result
             return result
 
-        # Stage 2: Check POS-specific mapping
-        if pos:
-            pos_key = (lemma, pos.lower())
-            if pos_key in self.pos_specific:
-                level, source = self.pos_specific[pos_key]
-                result = WordClassification(
-                    word=word,
-                    lemma=lemma,
-                    pos=pos,
-                    cefr_level=level,
-                    confidence=1.0,
-                    source=source
-                )
-                self._cefr_cache[cache_key] = result
-                return result
-
-        # Stage 3: Check main CEFR wordlist
+        # Stage 2: Check main CEFR wordlist
         if lemma in self.cefr_wordlist:
             level, source = self.cefr_wordlist[lemma]
             result = WordClassification(
                 word=word,
                 lemma=lemma,
-                pos=pos or "",
+                pos="",
                 cefr_level=level,
                 confidence=1.0,
                 source=source
             )
-            self._cefr_cache[cache_key] = result
+            self._cefr_cache[word_lower] = result
             return result
 
-        # Stage 4: Frequency-based backoff
+        # Stage 3: Frequency-based backoff
         freq_result = self._classify_by_frequency(word_lower, lemma)
         if freq_result and freq_result.confidence >= 0.5:
-            freq_result.pos = pos or ""
-            self._cefr_cache[cache_key] = freq_result
+            self._cefr_cache[word_lower] = freq_result
             return freq_result
 
-        # Stage 5: Embedding-based classifier (DISABLED BY DEFAULT)
+        # Stage 4: Embedding-based classifier (DISABLED BY DEFAULT)
         if self.use_embedding_classifier:
             emb_result = self._classify_by_embedding(word_lower, lemma)
             if emb_result:
-                emb_result.pos = pos or ""
-                self._cefr_cache[cache_key] = emb_result
+                self._cefr_cache[word_lower] = emb_result
                 return emb_result
 
-        # Stage 6: Fallback - use frequency if available, else C2
+        # Stage 5: Fallback - use frequency if available, else C2
         if freq_result:
-            self._cefr_cache[cache_key] = freq_result
+            self._cefr_cache[word_lower] = freq_result
             return freq_result
 
         # Ultimate fallback: assume C2 (advanced/rare word)
         result = WordClassification(
             word=word,
             lemma=lemma,
-            pos=pos or "",
+            pos="",
             cefr_level=CEFRLevel.C2,
             confidence=0.2,
             source=ClassificationSource.FALLBACK
         )
-        self._cefr_cache[cache_key] = result
+        self._cefr_cache[word_lower] = result
         return result
 
     def classify_text(self, text: str) -> List[WordClassification]:
@@ -555,7 +519,7 @@ class HybridCEFRClassifier:
         1. Normalize text first
         2. Filter valid tokens BEFORE any NLP work
         3. Deduplicate to unique words
-        4. Batch lemmatization with nlp.pipe()
+        4. Batch lemmatization with nlp.pipe() (NO POS tagging!)
         5. Classify unique lemmas only (not every token!)
         6. Use aggressive caching
         7. NO logging inside loops
@@ -579,8 +543,7 @@ class HybridCEFRClassifier:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Filtered {len(words)} tokens → {len(valid_words)} valid → {len(unique_words)} unique")
 
-        # Step 3: Batch lemmatization with nlp.pipe()
-        # Use nlp.pipe() for efficient batch processing
+        # Step 3: Batch lemmatization with nlp.pipe() (NO POS tagging!)
         docs = list(self.nlp.pipe(
             unique_words,
             batch_size=1000,
@@ -589,27 +552,23 @@ class HybridCEFRClassifier:
 
         # Build lemma → word mapping
         lemma_to_word: Dict[str, str] = {}
-        lemma_to_pos: Dict[str, str] = {}
 
         for doc in docs:
             if len(doc) > 0:
                 token = doc[0]
                 word = token.text
                 lemma = token.lemma_
-                pos = token.pos_ if hasattr(token, 'pos_') else ""
 
                 # Cache lemma result
-                self._lemma_cache[word] = (lemma, pos)
+                self._lemma_cache[word] = lemma
 
                 if lemma not in lemma_to_word:
                     lemma_to_word[lemma] = word
-                    lemma_to_pos[lemma] = pos
 
         # Step 4: Classify unique lemmas only (MASSIVE speedup)
         classifications = []
         for lemma, original_word in lemma_to_word.items():
-            pos = lemma_to_pos.get(lemma, "")
-            classification = self.classify_word(original_word, pos)
+            classification = self.classify_word(original_word)
             classifications.append(classification)
 
         elapsed = time.time() - start_time
