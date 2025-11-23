@@ -26,6 +26,74 @@ router = APIRouter(prefix="/api/cefr", tags=["CEFR Classification"])
 # Global classifier instance (initialized on startup)
 _classifier: Optional[HybridCEFRClassifier] = None
 
+# Master exclusion list - ultra-common A1 words that all learners know
+# These are filtered out to show only meaningful vocabulary
+EXCLUDED_A1_WORDS = {
+    "a","an","the","i","you","he","she","it","we","they","me","him","her","us","them",
+    "my","your","his","its","our","their","mine","yours","hers","ours","theirs",
+    "this","that","these","those","here","there",
+    "and","or","but","nor","so","yet","either","neither",
+    "if","then","because","when","while","before","after","since","although",
+    "in","on","at","by","to","for","of","from","with","without","into","out","over","under",
+    "up","down","around","through","across","between","among","off","onto",
+    "within","beyond","inside","outside","beside","behind","above","below",
+    "is","am","are","was","were","be","been","being",
+    "have","has","had","do","does","did",
+    "can","could","should","would","will","may","might","must","shall",
+    "not","no","yes","maybe","very","really","so","quite","just","only","even","still","already","almost",
+    "who","what","when","where","why","how","which","whose",
+    "any","some","many","few","each","every","another","other","both","all","most",
+    "good","bad","big","small","little","large","old","young","new","long","short",
+    "right","left","sure","true","false",
+    "man","woman","boy","girl","people","person","friend","family",
+    "time","day","night","morning","evening","afternoon","life","world","place",
+    "thing","way","work","home","school","house","room","hand","head","face",
+    "body","mother","father","brother","sister","child","children",
+    "come","go","get","make","do","say","tell","see","look","watch","want","need",
+    "know","think","feel","give","take","use","put","keep","find","try","leave",
+    "call","ask","answer","mean","let",
+    "zero","one","two","three","four","five","six","seven","eight","nine","ten",
+    "eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen",
+    "eighteen","nineteen","twenty",
+    "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+    "january","february","march","april","may","june","july","august","september",
+    "october","november","december","spring","summer","autumn","fall","winter",
+    "red","blue","green","yellow","black","white","brown","orange","purple",
+    "pink","gray","grey",
+    "today","yesterday","tomorrow","now","later","soon","always","never",
+    "sometimes","often",
+    "back","front","top","bottom","inside","outside","far","near","close",
+    "hello","hi","bye","okay","ok","thanks","thank","please",
+    "mr","mrs","ms","miss","sir","ma'am"
+}
+
+
+def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
+    """
+    Filter out ultra-common A1 words that all learners already know.
+
+    Args:
+        word: The word token
+        lemma: The lemmatized form
+        cefr_level: CEFR level (A1, A2, B1, B2, C1, C2)
+
+    Returns:
+        True if word should be shown to user, False if it should be filtered out
+    """
+    # If it's not A1 → always keep
+    if cefr_level != "A1":
+        return True
+
+    # Normalize for comparison
+    w = word.lower().strip()
+    l = lemma.lower().strip() if lemma else w
+
+    # Hide ultra-common A1 words
+    if w in EXCLUDED_A1_WORDS or l in EXCLUDED_A1_WORDS:
+        return False
+
+    return True
+
 
 def get_classifier() -> HybridCEFRClassifier:
     """Get or initialize the CEFR classifier"""
@@ -84,7 +152,12 @@ class ScriptClassificationRequest(BaseModel):
 
 
 class ScriptClassificationResponse(BaseModel):
-    """Response with script classification results"""
+    """
+    Response with script classification results.
+
+    Note: Ultra-common A1 words (articles, pronouns, basic prepositions, etc.)
+    are filtered out to show only meaningful vocabulary that learners need to study.
+    """
     movie_id: int
     script_id: int
     total_words: int
@@ -92,7 +165,7 @@ class ScriptClassificationResponse(BaseModel):
     level_distribution: Dict[str, int]
     average_confidence: float
     wordlist_coverage: float
-    top_words_by_level: Dict[str, List[Dict]]
+    top_words_by_level: Dict[str, List[Dict]]  # All words sorted by frequency_rank (easier to harder)
 
 
 class FrequencyThresholdUpdate(BaseModel):
@@ -233,10 +306,16 @@ async def classify_script(
         # Compute statistics
         statistics = classifier.get_statistics(classifications)
 
-        # Top words by CEFR level
+        # All words by CEFR level (sorted easier to harder using frequency_rank)
+        # Filter out ultra-common A1 words
         level_groups = {}
         for cls in classifications:
             level = cls.cefr_level.value
+
+            # Skip ultra-common A1 words (articles, pronouns, etc.)
+            if not should_keep_word(cls.word, cls.lemma, level):
+                continue
+
             if level not in level_groups:
                 level_groups[level] = []
 
@@ -247,8 +326,13 @@ async def classify_script(
                 'frequency_rank': cls.frequency_rank
             })
 
+        # Sort by frequency_rank (lower rank = more common = easier)
+        # Words without rank go to the end
         top_words_by_level = {
-            level: sorted(words, key=lambda x: x['confidence'], reverse=True)[:20]
+            level: sorted(
+                words,
+                key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999)
+            )
             for level, words in level_groups.items()
         }
 
