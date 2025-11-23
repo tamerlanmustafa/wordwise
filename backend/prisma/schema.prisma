@@ -43,6 +43,7 @@ model Movie {
   updatedAt       DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
   words           Word[]
   movieScripts    MovieScript[]
+  aliases         MovieAlias[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
@@ -53,6 +54,7 @@ model MovieScript {
   id                  Int                   @id @default(autoincrement())
   movieId             Int                   @map("movie_id")
   sourceUsed          scriptsource          @map("source_used")
+  rawSubtitleText     String?               @map("raw_subtitle_text") @db.Text
   cleanedScriptText   String?               @map("cleaned_script_text")
   cleanedWordCount    Int?                  @map("cleaned_word_count")
   isTruncated         Boolean               @default(false) @map("is_truncated")
@@ -122,6 +124,26 @@ model UserWordList {
 
 model alembic_version {
   version_num String @id(map: "alembic_version_pkc") @db.VarChar(32)
+}
+
+model ScriptSourcePriority {
+  id       Int          @id @default(autoincrement())
+  source   scriptsource @unique
+  priority Int
+
+  @@index([priority], map: "ix_script_source_priority_priority")
+  @@map("script_source_priorities")
+}
+
+model MovieAlias {
+  id      Int    @id @default(autoincrement())
+  movieId Int    @map("movie_id")
+  alias   String @db.VarChar
+  movie   Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([movieId], map: "ix_movie_aliases_movie_id")
+  @@index([alias], map: "ix_movie_aliases_alias")
+  @@map("movie_aliases")
 }
 
 enum difficultylevel {
