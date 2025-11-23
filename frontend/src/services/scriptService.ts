@@ -108,12 +108,12 @@ export async function fetchMovieScriptById(scriptId: string, movieTitle?: string
       }
     );
 
-    console.log('[API RESPONSE - SCRIPT]', {
-      source: response.data.source_used,
-      words: response.data.word_count,
-      from_cache: response.data.from_cache,
-      title: response.data.metadata.title
-    });
+    // console.log('[API RESPONSE - SCRIPT]', {
+    //   source: response.data.source_used,
+    //   words: response.data.word_count,
+    //   from_cache: response.data.from_cache,
+    //   title: response.data.metadata.title
+    // });
 
     return response.data;
   } catch (error) {
@@ -140,12 +140,12 @@ export async function fetchMovieScript(movieTitle: string): Promise<ScriptRespon
       }
     );
 
-    console.log('[API RESPONSE - SCRIPT]', {
-      source: response.data.source_used,
-      words: response.data.word_count,
-      from_cache: response.data.from_cache,
-      title: response.data.metadata.title
-    });
+    // console.log('[API RESPONSE - SCRIPT]', {
+    //   source: response.data.source_used,
+    //   words: response.data.word_count,
+    //   from_cache: response.data.from_cache,
+    //   title: response.data.metadata.title
+    // });
 
     return response.data;
   } catch (error) {
@@ -163,7 +163,7 @@ export async function fetchMovieScript(movieTitle: string): Promise<ScriptRespon
  * 4. Returns level distribution and top words per level
  */
 export async function classifyMovieScript(movieId: number): Promise<CEFRClassificationResponse> {
-  console.log('[API REQUEST] /api/cefr/classify-script - movie_id:', movieId);
+  // console.log('[API REQUEST] /api/cefr/classify-script - movie_id:', movieId);
 
   try {
     const response = await axios.post<CEFRClassificationResponse>(
@@ -174,12 +174,12 @@ export async function classifyMovieScript(movieId: number): Promise<CEFRClassifi
       }
     );
 
-    console.log('[API RESPONSE - CEFR CLASSIFICATION]', {
-      total_words: response.data.total_words,
-      unique_words: response.data.unique_words,
-      average_confidence: response.data.average_confidence,
-      wordlist_coverage: response.data.wordlist_coverage
-    });
+    // console.log('[API RESPONSE - CEFR CLASSIFICATION]', {
+    //   total_words: response.data.total_words,
+    //   unique_words: response.data.unique_words,
+    //   average_confidence: response.data.average_confidence,
+    //   wordlist_coverage: response.data.wordlist_coverage
+    // });
 
     return response.data;
   } catch (error) {

@@ -44,6 +44,7 @@ class ScriptIngestionService:
             f"(script_id={script_id}, movie_id={movie_id}, year={year}, force_refresh={force_refresh})"
         )
 
+        # Priority 1: Check database cache first (fastest)
         if not force_refresh:
             cached_script = await self._get_from_database(movie_title, movie_id)
             if cached_script:
@@ -53,13 +54,34 @@ class ScriptIngestionService:
                     "from_cache": True
                 }
 
-        logger.info(f"[ScriptIngestion] No cached script for '{search_key}', fetching from sources...")
+        # Priority 2: Try subtitles (most movies, actual dialogue)
+        if not force_refresh:
+            logger.info(f"[ScriptIngestion] → Trying SUBTITLE_SRT for '{search_key}'")
+            try:
+                script_data = await self._fetch_from_subtitle_api(movie_title or search_key, year)
+                if script_data and script_data.get("is_valid"):
+                    logger.info(f"[ScriptIngestion] ✓ SUCCESS with SUBTITLE_SRT for '{movie_title}'")
+
+                    saved_script = await self._save_to_database(
+                        movie_title=movie_title,
+                        movie_id=movie_id,
+                        source_used="SUBTITLE_SRT",
+                        script_data=script_data
+                    )
+
+                    return {
+                        **saved_script,
+                        "from_cache": False
+                    }
+            except Exception as e:
+                logger.warning(f"[ScriptIngestion] ✗ SUBTITLE_SRT failed: {str(e)}")
+
+        # Priority 3 & 4: Try STANDS4 sources
+        logger.info(f"[ScriptIngestion] Subtitle and cache failed, trying STANDS4 sources...")
 
         sources = [
             ("STANDS4_PDF", self._fetch_from_stands4_pdf),
-            ("STANDS4_API", self._fetch_from_stands4_api),
-            ("SUBTITLE_SRT", self._fetch_from_subtitle_api),
-            ("SYNOPSIS", self._fetch_synopsis_fallback)
+            ("STANDS4_API", self._fetch_from_stands4_api)
         ]
 
         last_error = None

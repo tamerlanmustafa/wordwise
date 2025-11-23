@@ -1,15 +1,15 @@
 """
 Free Subtitle API Client
 
-This module handles fetching subtitles from free subtitle APIs.
-Currently implements OpenSubtitles.com free API (no auth required).
-Can be extended with other subtitle sources.
+This module handles fetching subtitles using Subliminal library.
 """
 
 import logging
 from typing import Dict, Optional, List
 import httpx
-import re
+import tempfile
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +21,12 @@ class SubtitleAPIError(Exception):
 
 class SubtitleAPIClient:
     """
-    Client for free subtitle APIs.
+    Client for subtitle fetching using Subliminal.
 
     Features:
-    - Search for movie subtitles
-    - Download SRT/VTT files
-    - Multiple fallback sources
-    - Rate limiting handling
+    - Search for movie subtitles using Subliminal
+    - Download SRT files
+    - Automatic provider fallback
     """
 
     def __init__(self):
@@ -40,9 +39,6 @@ class SubtitleAPIClient:
             }
         )
 
-        # OpenSubtitles.org free API endpoint (no auth for search)
-        self.opensubtitles_base = "https://www.opensubtitles.org"
-
         logger.info("[SubtitleAPI] Client initialized")
 
     async def fetch_subtitle(
@@ -52,7 +48,7 @@ class SubtitleAPIClient:
         language: str = "en"
     ) -> Dict[str, any]:
         """
-        Fetch subtitle for a movie.
+        Fetch subtitle for a movie using Subliminal.
 
         Args:
             movie_title: Movie title
@@ -61,100 +57,131 @@ class SubtitleAPIClient:
 
         Returns:
             Dictionary with:
-                - subtitle_content: SRT/VTT content
-                - format: "srt" or "vtt"
-                - source: API source used
+                - subtitle_content: SRT content
+                - format: "srt"
+                - source: "subliminal"
                 - metadata: Additional info
         """
         logger.info(f"[SubtitleAPI] Fetching subtitle for '{movie_title}' ({year})")
 
         try:
-            # Try different sources in order
-            sources = [
-                self._fetch_from_opensubtitles_free,
-                self._fetch_from_yifysubtitles,
-                self._fetch_from_subscene
-            ]
+            result = await self.fetch_subtitle_subliminal(movie_title, year, language)
+            if result and result.get("subtitle_content"):
+                logger.info(f"[SubtitleAPI] Successfully fetched from Subliminal")
+                return result
 
-            for source_func in sources:
-                try:
-                    result = await source_func(movie_title, year, language)
-                    if result and result.get("subtitle_content"):
-                        logger.info(f"[SubtitleAPI] Successfully fetched from {result.get('source')}")
-                        return result
-                except Exception as e:
-                    logger.warning(f"[SubtitleAPI] Source failed: {str(e)}")
-                    continue
-
-            # If all sources fail
-            raise SubtitleAPIError("All subtitle sources failed")
+            raise SubtitleAPIError("Subliminal failed to find subtitles")
 
         except Exception as e:
             logger.error(f"[SubtitleAPI] Failed to fetch subtitle for '{movie_title}': {str(e)}")
             raise SubtitleAPIError(f"Subtitle fetch failed: {str(e)}")
 
-    async def _fetch_from_opensubtitles_free(
+    async def fetch_subtitle_subliminal(
         self,
         movie_title: str,
-        year: Optional[int],
-        language: str
+        year: Optional[int] = None,
+        language: str = "en"
     ) -> Optional[Dict[str, any]]:
         """
-        Fetch from OpenSubtitles.org using their free web scraping approach.
+        Fetch subtitle using Subliminal library.
 
-        Note: This is a fallback method. For production, consider OpenSubtitles API.
+        Args:
+            movie_title: Movie title
+            year: Release year (optional)
+            language: Subtitle language code (default: "en")
+
+        Returns:
+            Dictionary with subtitle_content, format, and metadata or None
         """
-        logger.info(f"[SubtitleAPI] Trying OpenSubtitles for '{movie_title}'")
+        logger.info(f"[Subliminal] Searching for '{movie_title}' ({year})")
 
         try:
-            # Search URL
-            search_query = movie_title
-            if year:
-                search_query = f"{movie_title} {year}"
+            from subliminal import download_best_subtitles, save_subtitles, scan_video
+            from subliminal import region
+            from babelfish import Language
 
-            search_url = f"{self.opensubtitles_base}/en/search/sublanguageid-{language}/moviename-{search_query.replace(' ', '+')}"
+            # Configure cache (only if not already configured)
+            try:
+                region.configure('dogpile.cache.memory')
+            except Exception:
+                pass  # Already configured
 
-            # For now, return None as this requires web scraping
-            # You'll need to provide the actual free subtitle API URL
-            logger.warning("[SubtitleAPI] OpenSubtitles free access not implemented yet")
+            # Create temporary directory for fake video file
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Build fake video filename
+                if year:
+                    fake_filename = f"{movie_title} ({year}).mkv"
+                else:
+                    fake_filename = f"{movie_title}.mkv"
+
+                fake_video_path = Path(temp_dir) / fake_filename
+                fake_video_path.touch()
+
+                # Scan the fake video
+                video = scan_video(str(fake_video_path))
+
+                # Download best subtitles
+                # Convert 2-letter language code to 3-letter ISO 639-3 code
+                lang_map = {"en": "eng", "es": "spa", "fr": "fra", "de": "deu", "it": "ita", "pt": "por"}
+                lang_code = lang_map.get(language, "eng")
+
+                # Use only opensubtitles provider (faster, no pagination issues)
+                subtitles = download_best_subtitles([video], {Language(lang_code)}, providers=['opensubtitles'])
+
+                if not subtitles or video not in subtitles or not subtitles[video]:
+                    logger.info(f"[Subliminal] No subtitles found")
+                    return None
+
+                # Get the best subtitle
+                best_subtitle = subtitles[video][0]
+                logger.info(f"[Subliminal] Found subtitle from {best_subtitle.provider_name}")
+
+                # Save subtitle to get content
+                save_subtitles(video, subtitles[video])
+
+                # Read the saved subtitle file
+                subtitle_path = fake_video_path.with_suffix('.srt')
+
+                if not subtitle_path.exists():
+                    # Try different extensions
+                    for ext in ['.en.srt', f'.{language}.srt']:
+                        alt_path = fake_video_path.with_suffix(ext)
+                        if alt_path.exists():
+                            subtitle_path = alt_path
+                            break
+
+                if not subtitle_path.exists():
+                    logger.error(f"[Subliminal] Subtitle file not created")
+                    return None
+
+                # Read subtitle content (try UTF-8 first, fallback to Latin-1)
+                try:
+                    with open(subtitle_path, 'r', encoding='utf-8') as f:
+                        subtitle_content = f.read()
+                except UnicodeDecodeError:
+                    with open(subtitle_path, 'r', encoding='latin-1') as f:
+                        subtitle_content = f.read()
+
+                logger.info(f"[Subliminal] ✓ Subtitle downloaded ({len(subtitle_content)} bytes)")
+
+                return {
+                    "subtitle_content": subtitle_content,
+                    "format": "srt",
+                    "source": "subliminal",
+                    "metadata": {
+                        "provider": best_subtitle.provider_name,
+                        "language": language,
+                        "title": movie_title,
+                        "year": year
+                    }
+                }
+
+        except ImportError:
+            logger.error("[Subliminal] Library not installed. Run: pip install subliminal")
             return None
-
         except Exception as e:
-            logger.warning(f"[SubtitleAPI] OpenSubtitles failed: {str(e)}")
+            logger.error(f"[Subliminal] Error: {str(e)}")
             return None
-
-    async def _fetch_from_yifysubtitles(
-        self,
-        movie_title: str,
-        year: Optional[int],
-        language: str
-    ) -> Optional[Dict[str, any]]:
-        """
-        Fetch from YIFYSubtitles.
-
-        Placeholder for when you provide the actual API endpoint.
-        """
-        logger.info(f"[SubtitleAPI] Trying YIFYSubtitles for '{movie_title}'")
-
-        # This is a placeholder - replace with actual implementation
-        # when you provide the free subtitle API URL
-        return None
-
-    async def _fetch_from_subscene(
-        self,
-        movie_title: str,
-        year: Optional[int],
-        language: str
-    ) -> Optional[Dict[str, any]]:
-        """
-        Fetch from Subscene.
-
-        Placeholder for when you provide the actual API endpoint.
-        """
-        logger.info(f"[SubtitleAPI] Trying Subscene for '{movie_title}'")
-
-        # Placeholder
-        return None
 
     async def fetch_from_url(self, subtitle_url: str) -> Dict[str, any]:
         """
@@ -194,94 +221,6 @@ class SubtitleAPIClient:
 
         except httpx.HTTPError as e:
             raise SubtitleAPIError(f"Failed to fetch from URL: {str(e)}")
-
-    async def search_subtitles(
-        self,
-        movie_title: str,
-        year: Optional[int] = None,
-        language: str = "en"
-    ) -> List[Dict[str, str]]:
-        """
-        Search for available subtitles.
-
-        Returns list of available subtitle files with metadata.
-        """
-        logger.info(f"[SubtitleAPI] Searching subtitles for '{movie_title}'")
-
-        # Placeholder - implement based on the API you'll use
-        return []
-
-    async def close(self):
-        """Close HTTP client"""
-        await self.client.aclose()
-
-
-# ==============================================================================
-# INTEGRATION HELPER FOR YOUR CUSTOM SUBTITLE SOURCE
-# ==============================================================================
-
-class CustomSubtitleSource:
-    """
-    Template class for integrating your custom subtitle source.
-
-    Replace the methods below with your actual subtitle API integration.
-    """
-
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        """
-        Initialize with your subtitle API credentials.
-
-        Args:
-            api_key: API key if required
-            base_url: Base URL of the subtitle service
-        """
-        self.api_key = api_key
-        self.base_url = base_url
-        self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0),
-            follow_redirects=True
-        )
-
-    async def fetch_subtitle(
-        self,
-        movie_title: str,
-        year: Optional[int] = None,
-        language: str = "en"
-    ) -> Optional[Dict[str, any]]:
-        """
-        Fetch subtitle from your custom source.
-
-        Implement this method based on your subtitle API documentation.
-
-        Returns:
-            {
-                "subtitle_content": "...",  # Raw SRT/VTT content
-                "format": "srt",  # or "vtt"
-                "source": "your_source_name",
-                "metadata": {...}
-            }
-        """
-        # TODO: Implement based on your subtitle API
-        # Example structure:
-        #
-        # 1. Search for the movie
-        # search_results = await self._search(movie_title, year)
-        #
-        # 2. Get the best match
-        # best_match = self._select_best_match(search_results, language)
-        #
-        # 3. Download subtitle file
-        # subtitle_content = await self._download(best_match['download_url'])
-        #
-        # 4. Return formatted result
-        # return {
-        #     "subtitle_content": subtitle_content,
-        #     "format": "srt",
-        #     "source": "custom_source",
-        #     "metadata": best_match
-        # }
-
-        raise NotImplementedError("Please implement this method with your subtitle API")
 
     async def close(self):
         """Close HTTP client"""
