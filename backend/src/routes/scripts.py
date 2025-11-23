@@ -67,6 +67,7 @@ async def fetch_script(
         # Fetch script
         result = await service.get_or_fetch_script(
             movie_title=request.movie_title,
+            script_id=request.script_id,
             movie_id=request.movie_id,
             year=request.year,
             force_refresh=request.force_refresh
@@ -170,46 +171,57 @@ async def get_script(
         )
 
 
-@router.get("/search", response_model=ScriptSearchResponse)
-async def search_script(
-    title: str = Query(..., min_length=1, description="Movie title to search"),
+@router.get("/search")
+async def search_movies(
+    query: str = Query(..., min_length=1, description="Movie title to search"),
     db: Prisma = Depends(get_db)
 ):
     """
-    Check if a script exists in the database without fetching it.
+    Search for movies matching the query.
 
-    Lightweight endpoint for checking cache status.
+    Returns matching movies from STANDS4. If no results are found, user can still
+    type any movie title and fetch it - the ingestion pipeline will try Subliminal
+    (OpenSubtitles) first for actual movie subtitles/dialogue.
 
     Args:
-        title: Movie title to search
+        query: Movie title to search
 
     Returns:
-        ScriptSearchResponse with cache status
+        List of matching movies with:
+        - id: Script ID
+        - title: Movie title
+        - year: Release year
+        - subtitle: Description
+        - author: Writer/director
+        - genre: Genre
+        - link: Script page URL
     """
-    logger.info(f"[API] Script search: title='{title}'")
+    logger.info(f"[API] Movie search: query='{query}'")
 
     try:
-        movie = await db.movie.find_first(
-            where={"title": {"contains": title, "mode": "insensitive"}},
-            include={"movieScripts": True}
-        )
+        # Initialize STANDS4 client
+        from ..utils.stands4_client import STANDS4Client
+        stands4 = STANDS4Client()
 
-        if movie and movie.movieScripts:
-            script = movie.movieScripts[0]
-            return ScriptSearchResponse(
-                movie_title=movie.title,
-                has_cached_script=True,
-                cached_source=script.sourceUsed,
-                cached_word_count=script.cleanedWordCount
-            )
-        else:
-            return ScriptSearchResponse(
-                movie_title=title,
-                has_cached_script=False
-            )
+        # Search STANDS4 for matching movies
+        try:
+            results = await stands4.search_movie(query)
+            logger.info(f"[API] Found {len(results)} STANDS4 results for '{query}'")
+        except Exception as e:
+            logger.warning(f"[API] STANDS4 search failed: {e}")
+            results = []
+
+        # Close client
+        await stands4.client.aclose()
+
+        return {
+            "query": query,
+            "results": results,
+            "total": len(results)
+        }
 
     except Exception as e:
-        logger.error(f"[API] Search failed for '{title}': {str(e)}", exc_info=True)
+        logger.error(f"[API] Search failed for '{query}': {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Search failed: {str(e)}"

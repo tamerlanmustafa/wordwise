@@ -41,7 +41,8 @@ class ScriptResponse(BaseModel):
 
 class ScriptFetchRequest(BaseModel):
     """Request schema for fetching a script"""
-    movie_title: str = Field(..., min_length=1, max_length=200)
+    movie_title: Optional[str] = Field(None, min_length=1, max_length=200)
+    script_id: Optional[str] = Field(None, description="STANDS4 script ID (from search results)")
     movie_id: Optional[int] = None
     year: Optional[int] = Field(None, ge=1900, le=2100)
     force_refresh: bool = Field(False, description="Force refetch even if cached")
