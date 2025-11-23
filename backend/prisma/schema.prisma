@@ -31,6 +31,7 @@ model User {
 model Movie {
   id              Int              @id @default(autoincrement())
   title           String           @db.VarChar
+  actualTitle     String?          @map("actual_title") @db.VarChar
   year            Int
   genre           String?          @db.VarChar
   difficultyLevel difficultylevel? @map("difficulty_level")
@@ -52,9 +53,7 @@ model MovieScript {
   id                  Int                   @id @default(autoincrement())
   movieId             Int                   @map("movie_id")
   sourceUsed          scriptsource          @map("source_used")
-  rawScriptText       String?               @map("raw_script_text")
   cleanedScriptText   String?               @map("cleaned_script_text")
-  wordCount           Int?                  @map("word_count")
   cleanedWordCount    Int?                  @map("cleaned_word_count")
   isTruncated         Boolean               @default(false) @map("is_truncated")
   isComplete          Boolean               @default(true) @map("is_complete")

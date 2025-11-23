@@ -112,11 +112,18 @@ class STANDS4Client:
             logger.error(f"[STANDS4] Unexpected error for '{movie_title}': {str(e)}", exc_info=True)
             raise STANDS4Error(f"STANDS4 API error: {str(e)}")
 
-    async def search_movie(self, movie_title: str) -> List[Dict[str, str]]:
+    async def search_movie(self, movie_title: str) -> List[Dict[str, any]]:
         """
         Search for movies matching the title.
 
-        Returns list of matches with title, year, and other metadata.
+        Returns list of normalized matches with:
+        - id: Script ID
+        - title: Movie title
+        - year: Release year
+        - subtitle: Description/tagline
+        - author: Writer/director
+        - genre: Genre
+        - link: Script page URL
         """
         logger.info(f"[STANDS4] Searching for '{movie_title}'")
 
@@ -134,16 +141,43 @@ class STANDS4Client:
             data = response.json()
 
             # Extract all results
-            results = []
+            raw_results = []
             if "result" in data:
                 # Handle both single result and list of results
                 result_data = data["result"]
                 if isinstance(result_data, list):
-                    results = result_data
+                    raw_results = result_data
                 elif isinstance(result_data, dict):
-                    results = [result_data]
+                    raw_results = [result_data]
 
-            return results
+            # Normalize results
+            normalized_results = []
+            for result in raw_results:
+                # Extract script ID from link
+                script_link = result.get("link", "")
+                script_id = None
+
+                if script_link:
+                    match = re.search(r'/script/[^/]*?_?(\d+)$', script_link)
+                    if match:
+                        script_id = match.group(1)
+
+                # Also check for direct ID field
+                if not script_id:
+                    script_id = result.get("id", "") or result.get("script_id", "")
+
+                normalized_results.append({
+                    "id": script_id,
+                    "title": result.get("title", ""),
+                    "year": result.get("year", ""),
+                    "subtitle": result.get("subtitle", ""),  # Description
+                    "author": result.get("author", "") or result.get("writer", ""),
+                    "genre": result.get("genre", ""),
+                    "link": script_link
+                })
+
+            logger.info(f"[STANDS4] Found {len(normalized_results)} results for '{movie_title}'")
+            return normalized_results
 
         except Exception as e:
             logger.error(f"[STANDS4] Search failed for '{movie_title}': {str(e)}")
@@ -242,6 +276,18 @@ class STANDS4Client:
         }
 
         return result
+
+    def get_pdf_url_from_script_id(self, script_id: str) -> str:
+        """
+        Construct PDF URL directly from a script ID.
+
+        Args:
+            script_id: STANDS4 script ID (from search results)
+
+        Returns:
+            Direct URL to the PDF
+        """
+        return f"https://www.scripts.com/script-pdf-body.php?id={script_id}"
 
     async def get_pdf_url(self, movie_title: str) -> Optional[str]:
         """

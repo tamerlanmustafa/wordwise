@@ -47,7 +47,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
         <Stack direction="row" spacing={4}>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Total Words
+              Total Words in Script
             </Typography>
             <Typography variant="h6" fontWeight="medium">
               {analysis.totalWords.toLocaleString()}
@@ -55,7 +55,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Unique Words
+              Unique Words Classified
             </Typography>
             <Typography variant="h6" fontWeight="medium">
               {analysis.uniqueWords.toLocaleString()}
@@ -133,7 +133,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
                 {category.words.slice(0, 50).map((wordFreq, index) => (
                   <Grid item key={`${category.level}-${wordFreq.word}-${index}`}>
                     <Chip
-                      label={`${wordFreq.word} (${wordFreq.count}% confidence)`}
+                      label={`${wordFreq.word} `}
                       size="small"
                       variant="outlined"
                       sx={{

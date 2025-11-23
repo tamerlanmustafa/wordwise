@@ -111,8 +111,6 @@ class FrequencyThresholdUpdate(BaseModel):
 async def classify_word(request: WordClassificationRequest):
     """
     Classify a single word with CEFR level
-
-    Returns the CEFR level, confidence score, and source of classification.
     """
     try:
         classifier = get_classifier()
@@ -138,15 +136,11 @@ async def classify_word(request: WordClassificationRequest):
 async def classify_text(request: TextClassificationRequest):
     """
     Classify all words in a text
-
-    Analyzes the entire text and returns CEFR classifications for each word,
-    along with optional statistics about the text difficulty.
     """
     try:
         classifier = get_classifier()
         classifications = classifier.classify_text(request.text)
 
-        # Convert to response format
         response_classifications = [
             WordClassificationResponse(
                 word=cls.word,
@@ -161,10 +155,7 @@ async def classify_text(request: TextClassificationRequest):
             for cls in classifications
         ]
 
-        # Generate statistics if requested
-        statistics = None
-        if request.include_statistics:
-            statistics = classifier.get_statistics(classifications)
+        statistics = classifier.get_statistics(classifications) if request.include_statistics else None
 
         return TextClassificationResponse(
             classifications=response_classifications,
@@ -183,12 +174,8 @@ async def classify_script(
 ):
     """
     Classify an entire movie script from the database
-
-    Retrieves the script from the database, classifies all words,
-    and optionally saves the classifications back to the database.
     """
     try:
-        # Get movie and script from database
         movie = await db.movie.find_unique(
             where={'id': request.movie_id},
             include={'movieScripts': True}
@@ -197,7 +184,7 @@ async def classify_script(
         if not movie:
             raise HTTPException(status_code=404, detail=f"Movie {request.movie_id} not found")
 
-        if not movie.movieScripts or len(movie.movieScripts) == 0:
+        if not movie.movieScripts:
             raise HTTPException(
                 status_code=404,
                 detail=f"No script found for movie {request.movie_id}"
@@ -211,19 +198,16 @@ async def classify_script(
                 detail="Script has no cleaned text"
             )
 
-        # Initialize classifier (needed for both cached and new classifications)
         classifier = get_classifier()
 
-        # Check if classifications already exist in database (cached from previous run)
         existing_classifications = await db.wordclassification.find_many(
             where={'scriptId': script.id}
         )
 
-        # Use cached classifications if they exist, otherwise classify the script
+        # Use cache if exists
         if existing_classifications:
-            logger.info(f"✓ Using cached classifications for script {script.id} ({len(existing_classifications)} words)")
+            logger.info(f"✓ Using cached classifications for script {script.id} ({len(existing_classifications)} entries)")
 
-            # Convert DB classifications to classifier format for statistics
             from src.services.cefr_classifier import WordClassification, CEFRLevel, ClassificationSource
             classifications = [
                 WordClassification(
@@ -238,17 +222,19 @@ async def classify_script(
                 for cls in existing_classifications
             ]
         else:
-            # Classify the script (first time or no cached data)
-            logger.info(f"Classifying script for movie {request.movie_id} ({script.wordCount} words)...")
+            # FIXED: use cleanedWordCount instead of nonexistent wordCount
+            logger.info(
+                f"Classifying script for movie {request.movie_id} "
+                f"({script.cleanedWordCount} words)..."
+            )
+
             classifications = classifier.classify_text(script.cleanedScriptText)
 
-        # Get statistics
+        # Compute statistics
         statistics = classifier.get_statistics(classifications)
 
-        # Get top words for each level
-        top_words_by_level = {}
+        # Top words by CEFR level
         level_groups = {}
-
         for cls in classifications:
             level = cls.cefr_level.value
             if level not in level_groups:
@@ -261,66 +247,55 @@ async def classify_script(
                 'frequency_rank': cls.frequency_rank
             })
 
-        # Get top 20 words per level (by confidence)
-        for level, words in level_groups.items():
-            sorted_words = sorted(words, key=lambda x: x['confidence'], reverse=True)
-            top_words_by_level[level] = sorted_words[:20]
+        top_words_by_level = {
+            level: sorted(words, key=lambda x: x['confidence'], reverse=True)[:20]
+            for level, words in level_groups.items()
+        }
 
-        # Save to database if requested AND classifications are new (not from cache)
+        # Save to database (only if NOT cached)
         if request.save_to_db and not existing_classifications:
-            logger.info(f"Saving {len(classifications)} word classifications to database...")
+            logger.info(f"Saving {len(classifications)} classifications to DB...")
 
-            # Batch insert new classifications
-            # Group by unique lemma to avoid duplicates
-            unique_classifications = {}
+            unique = {}
             for cls in classifications:
                 key = (cls.lemma, cls.cefr_level.value)
-                if key not in unique_classifications:
-                    unique_classifications[key] = cls
+                if key not in unique:
+                    unique[key] = cls
 
-            # Insert in SMALL batches to avoid httpx.ReadTimeout
-            # Reduced batch size from 1000 → 300 for reliability
             batch_size = 300
-            cls_list = list(unique_classifications.values())
-            total_batches = (len(cls_list) + batch_size - 1) // batch_size
+            cls_list = list(unique.values())
 
-            logger.info(f"Inserting {len(cls_list)} unique classifications in {total_batches} batches...")
+            for start in range(0, len(cls_list), batch_size):
+                batch = cls_list[start:start + batch_size]
 
-            for batch_num, i in enumerate(range(0, len(cls_list), batch_size), start=1):
-                batch = cls_list[i:i + batch_size]
+                await db.wordclassification.create_many(
+                    data=[
+                        {
+                            'scriptId': script.id,
+                            'word': cls.word,
+                            'lemma': cls.lemma,
+                            'pos': cls.pos or None,
+                            'cefrLevel': cls.cefr_level.value,
+                            'confidence': cls.confidence,
+                            'source': cls.source.value,
+                            'frequencyRank': cls.frequency_rank,
+                        }
+                        for cls in batch
+                    ],
+                    skip_duplicates=True
+                )
 
-                try:
-                    await db.wordclassification.create_many(
-                        data=[
-                            {
-                                'scriptId': script.id,
-                                'word': cls.word,
-                                'lemma': cls.lemma,
-                                'pos': cls.pos or None,
-                                'cefrLevel': cls.cefr_level.value,
-                                'confidence': cls.confidence,
-                                'source': cls.source.value,
-                                'frequencyRank': cls.frequency_rank
-                            }
-                            for cls in batch
-                        ],
-                        skip_duplicates=True  # Skip duplicates instead of failing
-                    )
+            logger.info("✓ Word classifications saved.")
 
-                    if batch_num % 5 == 0 or batch_num == total_batches:
-                        logger.info(f"Progress: {batch_num}/{total_batches} batches inserted")
-
-                except Exception as e:
-                    logger.error(f"Error inserting batch {batch_num}: {e}")
-                    raise
-
-            logger.info(f"✓ Saved {len(unique_classifications)} unique word classifications")
+        # Final response
+        script_word_count = script.cleanedWordCount or 0
+        unique_words = len(set(cls.lemma for cls in classifications))
 
         return ScriptClassificationResponse(
             movie_id=request.movie_id,
             script_id=script.id,
-            total_words=statistics['total_words'],
-            unique_words=statistics.get('unique_words', len(set(cls.lemma for cls in classifications))),
+            total_words=script_word_count,
+            unique_words=unique_words,
             level_distribution=statistics['level_distribution'],
             average_confidence=statistics['average_confidence'],
             wordlist_coverage=statistics['wordlist_coverage'],
@@ -337,13 +312,9 @@ async def classify_script(
 @router.get("/statistics/{movie_id}")
 async def get_script_statistics(movie_id: int, db: Prisma = Depends(get_db)):
     """
-    Get CEFR statistics for a classified script
-
-    Returns level distribution and statistics without re-classifying.
-    Requires the script to have been previously classified.
+    Get CEFR statistics for a previously classified script
     """
     try:
-        # Get script
         movie = await db.movie.find_unique(
             where={'id': movie_id},
             include={'movieScripts': True}
@@ -354,7 +325,6 @@ async def get_script_statistics(movie_id: int, db: Prisma = Depends(get_db)):
 
         script = movie.movieScripts[0]
 
-        # Get existing classifications from database
         classifications = await db.wordclassification.find_many(
             where={'scriptId': script.id}
         )
@@ -365,21 +335,19 @@ async def get_script_statistics(movie_id: int, db: Prisma = Depends(get_db)):
                 detail=f"No classifications found for movie {movie_id}. Run /classify-script first."
             )
 
-        # Calculate statistics
         level_counts = {}
-        total_confidence = 0.0
+        total_conf = 0
 
         for cls in classifications:
-            level = cls.cefrLevel
-            level_counts[level] = level_counts.get(level, 0) + 1
-            total_confidence += cls.confidence
+            level_counts[cls.cefrLevel] = level_counts.get(cls.cefrLevel, 0) + 1
+            total_conf += cls.confidence
 
         return {
             'movie_id': movie_id,
             'script_id': script.id,
             'total_words': len(classifications),
             'level_distribution': level_counts,
-            'average_confidence': total_confidence / len(classifications) if classifications else 0,
+            'average_confidence': total_conf / len(classifications),
         }
 
     except HTTPException:
@@ -392,14 +360,11 @@ async def get_script_statistics(movie_id: int, db: Prisma = Depends(get_db)):
 @router.put("/update-thresholds")
 async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
     """
-    Update frequency rank thresholds for CEFR mapping
-
-    Allows customization of how frequency ranks map to CEFR levels.
+    Modify frequency thresholds used to map ranks → CEFR levels
     """
     try:
         classifier = get_classifier()
 
-        # Convert to classifier format
         threshold_dict = {
             CEFRLevel.A1: thresholds.A1,
             CEFRLevel.A2: thresholds.A2,
@@ -424,7 +389,9 @@ async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
 
 @router.get("/health")
 async def health_check():
-    """Check if the CEFR classifier is loaded and ready"""
+    """
+    Health check for CEFR classifier
+    """
     try:
         classifier = get_classifier()
         return {
