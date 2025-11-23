@@ -47,7 +47,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
         <Stack direction="row" spacing={4}>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Total Words
+              Total Words in Script
             </Typography>
             <Typography variant="h6" fontWeight="medium">
               {analysis.totalWords.toLocaleString()}
@@ -55,7 +55,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">
-              Unique Words
+              Unique Words Classified
             </Typography>
             <Typography variant="h6" fontWeight="medium">
               {analysis.uniqueWords.toLocaleString()}
@@ -77,8 +77,8 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
         Vocabulary by Difficulty Level
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Words are categorized based on their frequency in this script. More frequent words are
-        easier, while rare words are more challenging.
+        Words are classified using CEFR wordlists (Oxford 3000/5000, EFLLex) and frequency analysis.
+        Confidence scores show classification certainty. Showing top 50 words per level.
       </Typography>
 
       {analysis.categories.map((category) => (
@@ -130,10 +130,10 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
               </Typography>
             ) : (
               <Grid container spacing={1}>
-                {category.words.slice(0, 50).map((wordFreq) => (
-                  <Grid item key={wordFreq.word}>
+                {category.words.slice(0, 50).map((wordFreq, index) => (
+                  <Grid item key={`${category.level}-${wordFreq.word}-${index}`}>
                     <Chip
-                      label={`${wordFreq.word} (${wordFreq.count})`}
+                      label={`${wordFreq.word} `}
                       size="small"
                       variant="outlined"
                       sx={{

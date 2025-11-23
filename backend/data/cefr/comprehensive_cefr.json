@@ -1,0 +1,58 @@
+[
+  {
+    "word": "look after",
+    "cefr_level": "A2",
+    "source": "evp",
+    "pos": "PHRASAL VERB",
+    "definition": "to take care of"
+  },
+  {
+    "word": "give up",
+    "cefr_level": "B1",
+    "source": "evp",
+    "pos": "PHRASAL VERB",
+    "definition": "to stop doing something"
+  },
+  {
+    "word": "abandon",
+    "cefr_level": "C1",
+    "source": "efllex",
+    "pos": "",
+    "definition": ""
+  },
+  {
+    "word": "ability",
+    "cefr_level": "B1",
+    "source": "efllex",
+    "pos": "",
+    "definition": ""
+  },
+  {
+    "word": "able",
+    "cefr_level": "A2",
+    "source": "efllex",
+    "pos": "",
+    "definition": ""
+  },
+  {
+    "word": "about",
+    "cefr_level": "A1",
+    "source": "efllex",
+    "pos": "",
+    "definition": ""
+  },
+  {
+    "word": "the",
+    "cefr_level": "A1",
+    "source": "oxford",
+    "pos": "DET",
+    "definition": "definite article"
+  },
+  {
+    "word": "be",
+    "cefr_level": "A1",
+    "source": "oxford",
+    "pos": "VERB",
+    "definition": "to exist"
+  }
+]

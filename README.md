@@ -4,12 +4,16 @@ WordWise is an innovative language learning platform that helps users learn Engl
 
 ## Features
 
-- 🎬 Movie script analysis with word frequency tracking
-- 📚 Personalized word lists (Learn Later, Favorites, Mastered)
-- 🎯 Difficulty-based categorization (A1-C2 levels)
-- 🔐 Google OAuth authentication
-- 💾 PostgreSQL database with Prisma ORM
-- 🎨 Beautiful, responsive UI with Material-UI
+- 🎬 **Movie Script Analysis** - Automatic download and extraction from STANDS4 PDFs
+- 📊 **Hybrid CEFR Classifier** - Multi-source word difficulty classification (A1-C2)
+  - CEFR wordlists (Oxford 3000/5000, EFLLex, EVP)
+  - Frequency-based backoff (wordfreq)
+  - ML-powered embedding classifier (sentence-transformers)
+  - Lemmatization with spaCy
+- 📚 **Personalized Word Lists** - Learn Later, Favorites, Mastered
+- 🔐 **Google OAuth Authentication** - Secure login without passwords
+- 💾 **PostgreSQL + Prisma ORM** - Type-safe database operations
+- 🎨 **Material-UI** - Beautiful, responsive interface
 
 ## Tech Stack
 
@@ -18,8 +22,11 @@ WordWise is an innovative language learning platform that helps users learn Engl
 - FastAPI - Modern, fast web framework
 - Prisma - Type-safe database ORM
 - PostgreSQL - Primary database
-- Redis - Caching and session management
-- NLTK & spaCy - Natural language processing
+- spaCy - Lemmatization and NLP
+- wordfreq - Frequency-based word classification
+- sentence-transformers - ML word embeddings
+- scikit-learn - CEFR classification models
+- pdfplumber - PDF text extraction
 
 ### Frontend
 - React 19 - UI library
@@ -31,57 +38,28 @@ WordWise is an innovative language learning platform that helps users learn Engl
 - React Router - Client-side routing
 
 ### Infrastructure
-- Docker & Docker Compose - Containerization
 - PostgreSQL 15 - Primary database
-- Redis 7 - Caching and sessions
+- Docker & Docker Compose - Optional containerization
 
 ## Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
+- Python 3.11+
+- Node.js 20+
+- PostgreSQL 15+
 
-### Using Docker (Recommended)
-
-1. Clone and start services:
-```bash
-git clone <repository-url>
-cd wordwise
-docker-compose up -d
-```
-
-2. Access the application:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-
-### Common Docker Commands
-
-```bash
-# Start services
-docker-compose up -d
-
-# Stop services
-docker-compose down
-
-# View logs
-docker-compose logs -f
-
-# Restart a service
-docker-compose restart backend
-
-# Rebuild after changes
-docker-compose up -d --build
-```
-
-### Local Development (Without Docker)
+### Local Development
 
 #### Backend
 
 ```bash
 cd backend
 
-# Install dependencies (no virtual environment needed)
+# Install dependencies
 pip install -r requirements.txt
+
+# Download spaCy model
+python -m spacy download en_core_web_sm
 
 # Set up environment variables
 cp .env.example .env
@@ -90,9 +68,23 @@ cp .env.example .env
 # Generate Prisma client
 prisma generate
 
+# Apply database schema
+prisma db push
+
+# (Optional) Download CEFR wordlists
+python -m src.utils.download_cefr_data
+
+# (Optional) Train embedding classifier
+python -m src.utils.train_embedding_classifier --model all
+
 # Start the server
 uvicorn src.main:app --reload --port 8000
 ```
+
+**CEFR Classifier Setup:**
+1. Populate CEFR wordlists in `backend/data/cefr/` (Oxford 3000/5000, EFLLex, EVP)
+2. Train the embedding classifier (optional, for rare words)
+3. Adjust frequency thresholds via API if needed
 
 #### Frontend
 
@@ -152,43 +144,56 @@ Once the backend is running, visit:
 **Authentication:**
 - `POST /auth/google/login` - Login with Google OAuth
 - `POST /auth/google/signup` - Sign up with Google OAuth
-- `GET /health` - Health check endpoint
+
+**Movie Scripts:**
+- `POST /api/scripts/fetch` - Fetch and save movie script from STANDS4
+
+**CEFR Classification:**
+- `POST /api/cefr/classify-word` - Classify a single word
+- `POST /api/cefr/classify-text` - Classify all words in text
+- `POST /api/cefr/classify-script` - Classify entire movie script
+- `GET /api/cefr/statistics/{movie_id}` - Get cached classification statistics
+- `PUT /api/cefr/update-thresholds` - Adjust frequency thresholds
+- `GET /api/cefr/health` - Check classifier status
+
+**General:**
+- `GET /health` - API health check
 
 ## Database
 
 ### Prisma Commands
 
 ```bash
-# Generate Prisma client (in Docker)
-docker exec wordwise_backend prisma generate
+# Generate Prisma client
+prisma generate
 
-# Sync schema with database
-docker exec wordwise_backend prisma db push
+# Apply schema changes (no migrations)
+prisma db push
 
 # Open Prisma Studio (database GUI)
-docker exec wordwise_backend prisma studio
+prisma studio
 
-# Create migration
-docker exec wordwise_backend prisma migrate dev --name migration_name
+# (Optional) Create migration
+prisma migrate dev --name migration_name
 ```
 
-### Direct Database Access
+### Database Schema
 
-```bash
-# Access PostgreSQL via Docker
-docker exec -it wordwise_postgres psql -U wordwise_user -d wordwise_db
-
-# Example query
-docker exec wordwise_postgres psql -U wordwise_user -d wordwise_db -c "SELECT * FROM users;"
-```
+The database includes:
+- **Users** - OAuth profiles and preferences
+- **Movies** - Movie metadata
+- **MovieScripts** - Full script text from STANDS4 PDFs
+- **WordClassification** - CEFR levels for all words in scripts
+- **Words** - Vocabulary with definitions
+- **UserWordLists** - Personalized word collections
 
 ## Development Guidelines
 
 - Follow PEP 8 for Python code
 - Use TypeScript for all frontend code
-- All development happens in Docker containers
 - Write tests for critical functionality
 - Use meaningful commit messages
+- No Docker required (direct Python/Node development)
 
 ## Performance
 
