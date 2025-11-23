@@ -192,3 +192,11 @@ Complete rewrite of the application stack for better performance, type safety, a
 - Bcrypt password hashing
 - JWT token-based authentication
 - CORS configuration for allowed origins
+
+
+
+
+### 11-23-2025
+
+- remove POS tagging (noun, verb, etc) to handle in the translation service in the future
+- Remove Spacy and use a simpler tokenizer instead,lighter as well
