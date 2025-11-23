@@ -38,7 +38,7 @@ def get_classifier() -> HybridCEFRClassifier:
         logger.info("Initializing CEFR classifier...")
         _classifier = HybridCEFRClassifier(
             data_dir=data_dir,
-            use_embedding_classifier=True
+            use_embedding_classifier=False
         )
         logger.info("CEFR classifier initialized")
 
@@ -254,19 +254,24 @@ async def classify_script(
 
         # Save to database (only if NOT cached)
         if request.save_to_db and not existing_classifications:
-            logger.info(f"Saving {len(classifications)} classifications to DB...")
-
+            # Deduplicate by lemma + CEFR level (avoid storing duplicates)
             unique = {}
             for cls in classifications:
                 key = (cls.lemma, cls.cefr_level.value)
                 if key not in unique:
                     unique[key] = cls
 
-            batch_size = 300
             cls_list = list(unique.values())
+            logger.info(f"Saving {len(cls_list)} unique classifications to DB (deduped from {len(classifications)})...")
 
-            for start in range(0, len(cls_list), batch_size):
-                batch = cls_list[start:start + batch_size]
+            # Batch inserts to avoid timeout
+            batch_size = 200
+            num_batches = (len(cls_list) + batch_size - 1) // batch_size
+
+            for batch_idx in range(num_batches):
+                start = batch_idx * batch_size
+                end = min(start + batch_size, len(cls_list))
+                batch = cls_list[start:end]
 
                 await db.wordclassification.create_many(
                     data=[
@@ -285,7 +290,7 @@ async def classify_script(
                     skip_duplicates=True
                 )
 
-            logger.info("✓ Word classifications saved.")
+            logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
         # Final response
         script_word_count = script.cleanedWordCount or 0

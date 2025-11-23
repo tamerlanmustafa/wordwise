@@ -1,21 +1,20 @@
 """
-Hybrid CEFR Difficulty Classifier
+Hybrid CEFR Difficulty Classifier - OPTIMIZED FOR SPEED
 
 This classifier assigns CEFR levels (A1-C2) to English words using a hybrid approach:
 1. CEFR Wordlists (Oxford 3000/5000, EFLLex, EVP)
 2. Frequency-Based Backoff (wordfreq library)
-3. Embedding-Based Classifier (sentence-transformers + scikit-learn)
+3. Embedding-Based Classifier (DISABLED BY DEFAULT for speed)
 4. Lemmatization (spaCy)
 5. POS-sensitive mapping
 
-Runs entirely locally with no external API calls.
-
-Performance optimizations:
-- Lightweight spaCy with disabled NER/parser
+CRITICAL OPTIMIZATIONS:
+- Aggressive lemma-level caching (process each lemma only once)
+- Token filtering BEFORE any NLP work
+- Deduplication before classification
 - Batch processing with nlp.pipe()
-- Text normalization and deduplication
-- Cached wordfreq lookups
-- Reduced logging overhead
+- NO logging inside loops
+- Embedding classifier DISABLED by default (20-100ms per word!)
 """
 
 import logging
@@ -64,18 +63,60 @@ class WordClassification:
     source: ClassificationSource
     frequency_rank: Optional[int] = None
     is_multi_word: bool = False
-    alternatives: Optional[List[Tuple[CEFRLevel, float]]] = None  # Alternative classifications
+    alternatives: Optional[List[Tuple[CEFRLevel, float]]] = None
+
+
+def is_valid_token(token: str) -> bool:
+    """
+    STRICT token filtering - applied BEFORE any NLP processing.
+
+    Filters out:
+    - Empty/whitespace tokens
+    - Tokens < 2 characters
+    - Pure numbers
+    - Pure punctuation
+    - Unicode artifacts
+    - PDF garbage tokens
+    """
+    if not token:
+        return False
+
+    token = token.strip()
+
+    if len(token) < 2:
+        return False
+
+    # Must contain at least one letter
+    if not any(c.isalpha() for c in token):
+        return False
+
+    # Skip pure numbers
+    if token.isdigit():
+        return False
+
+    # Skip tokens that are mostly punctuation
+    punct_count = sum(1 for c in token if c in ".,!?;:-–—()[]{}\"'")
+    if punct_count > len(token) // 2:
+        return False
+
+    # Skip weird unicode/PDF artifacts
+    if any(ord(c) > 127 for c in token):
+        # Allow common accented characters but block weird unicode
+        if not all(ord(c) < 256 or c in "''""" for c in token):
+            return False
+
+    return True
 
 
 class HybridCEFRClassifier:
     """
-    Main CEFR classifier that combines multiple data sources and methods
+    OPTIMIZED CEFR classifier with aggressive caching and batch processing
     """
 
     def __init__(
         self,
         data_dir: Path,
-        use_embedding_classifier: bool = True,
+        use_embedding_classifier: bool = False,  # DISABLED BY DEFAULT
         spacy_model: str = "en_core_web_sm"
     ):
         """
@@ -83,7 +124,7 @@ class HybridCEFRClassifier:
 
         Args:
             data_dir: Directory containing CEFR wordlists and models
-            use_embedding_classifier: Whether to use embedding-based fallback
+            use_embedding_classifier: Whether to use embedding-based fallback (SLOW!)
             spacy_model: spaCy model name for lemmatization
         """
         self.data_dir = Path(data_dir)
@@ -96,7 +137,9 @@ class HybridCEFRClassifier:
             disable=["ner", "parser", "attribute_ruler"]
         )
 
-        # Frequency lookup cache
+        # OPTIMIZATION: Caches for lemmatization and classification
+        self._lemma_cache: Dict[str, Tuple[str, str]] = {}  # word -> (lemma, pos)
+        self._cefr_cache: Dict[str, WordClassification] = {}  # lemma -> classification
         self._frequency_cache: Dict[str, Optional[int]] = {}
 
         # CEFR wordlist dictionary: {lemma: (level, source)}
@@ -123,6 +166,7 @@ class HybridCEFRClassifier:
         self._load_frequency_data()
 
         if self.use_embedding_classifier:
+            logger.warning("Embedding classifier enabled - this will slow down classification significantly!")
             self._load_embedding_classifier()
 
     def _load_cefr_wordlists(self):
@@ -144,13 +188,10 @@ class HybridCEFRClassifier:
         if evp_path.exists():
             self._load_evp_wordlist(evp_path)
 
-        logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries")
-        logger.info(f"Loaded {len(self.multi_word_expressions)} multi-word expressions")
-        logger.info(f"Loaded {len(self.pos_specific)} POS-specific entries")
+        logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries, {len(self.multi_word_expressions)} MWEs, {len(self.pos_specific)} POS-specific")
 
     def _load_oxford_wordlist(self, path: Path):
         """Load Oxford 3000/5000 wordlist"""
-        logger.info(f"Loading Oxford wordlist from {path}")
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -169,7 +210,7 @@ class HybridCEFRClassifier:
                     continue
 
                 # Lemmatize the word
-                lemma = self._get_lemma(word)
+                lemma = self._get_lemma_simple(word)
 
                 # Add to main wordlist
                 if lemma not in self.cefr_wordlist:
@@ -190,7 +231,6 @@ class HybridCEFRClassifier:
 
     def _load_efllex_wordlist(self, path: Path):
         """Load EFLLex CEFR dataset"""
-        logger.info(f"Loading EFLLex wordlist from {path}")
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -207,7 +247,7 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
 
-                lemma = self._get_lemma(word)
+                lemma = self._get_lemma_simple(word)
 
                 # Only add if not already present (Oxford takes priority)
                 if lemma not in self.cefr_wordlist:
@@ -218,7 +258,6 @@ class HybridCEFRClassifier:
 
     def _load_evp_wordlist(self, path: Path):
         """Load English Vocabulary Profile data"""
-        logger.info(f"Loading EVP wordlist from {path}")
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -236,7 +275,7 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
 
-                lemma = self._get_lemma(word)
+                lemma = self._get_lemma_simple(word)
 
                 # Only add if not already present
                 if lemma not in self.cefr_wordlist:
@@ -253,19 +292,17 @@ class HybridCEFRClassifier:
 
     def _load_frequency_data(self):
         """Load frequency data for backoff classification"""
-        logger.info("Loading frequency data...")
         try:
-            # We'll use the wordfreq library which has built-in frequency data
             import wordfreq
             self.has_wordfreq = True
-            logger.info("wordfreq library loaded successfully")
+            logger.info("wordfreq library available")
         except ImportError:
-            logger.warning("wordfreq library not available - frequency backoff disabled")
+            logger.warning("wordfreq library not available")
             self.has_wordfreq = False
 
     def _load_embedding_classifier(self):
-        """Load embedding-based classifier for rare words"""
-        logger.info("Loading embedding classifier...")
+        """Load embedding-based classifier for rare words (SLOW!)"""
+        logger.warning("Loading embedding classifier (this will slow down classification)...")
         try:
             from sentence_transformers import SentenceTransformer
             import joblib
@@ -285,7 +322,7 @@ class HybridCEFRClassifier:
                 self.embedding_classifier = joblib.load(classifier_path)
                 logger.info("Loaded pre-trained embedding classifier")
             else:
-                logger.warning("No pre-trained classifier found - will train on first use")
+                logger.warning("No pre-trained classifier found")
                 self.embedding_classifier = None
 
             self.has_embedding_classifier = True
@@ -297,56 +334,23 @@ class HybridCEFRClassifier:
     @staticmethod
     def normalize_text(text: str) -> str:
         """
-        Comprehensive text normalization
+        OPTIMIZED text normalization
 
         - Lowercase
-        - Replace curly apostrophes with straight ones
-        - Strip punctuation
-        - Normalize whitespace
+        - Fix curly quotes/apostrophes
+        - Remove extra punctuation
+        - Collapse whitespace
         """
-        # Lowercase
         text = text.lower()
-
-        # Replace curly apostrophes and quotes with straight ones
         text = text.replace("'", "'").replace("'", "'")
         text = text.replace(""", '"').replace(""", '"')
-
-        # Replace dashes with spaces
         text = re.sub(r'[—–−]', ' ', text)
-
-        # Remove all punctuation except apostrophes (for contractions)
         text = re.sub(r"[^\w\s']", ' ', text)
-
-        # Normalize whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-
         return text
 
-    @staticmethod
-    def is_valid_token(token: str) -> bool:
-        """
-        Check if a token should be classified
-
-        Filters out:
-        - Tokens < 2 characters
-        - Tokens with numbers
-        - Tokens that are purely symbols
-        """
-        if len(token) < 2:
-            return False
-
-        # Must contain at least one letter
-        if not re.search(r'[a-zA-Z]', token):
-            return False
-
-        # Skip if contains numbers
-        if re.search(r'\d', token):
-            return False
-
-        return True
-
-    def _get_lemma(self, word: str) -> str:
-        """Get lemma of a word using spaCy"""
+    def _get_lemma_simple(self, word: str) -> str:
+        """Simple lemmatization for wordlist loading (single word)"""
         doc = self.nlp(word.lower())
         if len(doc) > 0:
             return doc[0].lemma_
@@ -363,15 +367,7 @@ class HybridCEFRClassifier:
 
         try:
             import wordfreq
-            # Get Zipf frequency (log10 of frequency per billion words)
             zipf = wordfreq.zipf_frequency(word, lang)
-
-            # Convert Zipf to approximate rank
-            # Zipf 6+ = very common (rank 1-100)
-            # Zipf 5-6 = common (rank 100-1000)
-            # Zipf 4-5 = uncommon (rank 1000-10000)
-            # Zipf 3-4 = rare (rank 10000-100000)
-            # Zipf <3 = very rare (rank 100000+)
 
             if zipf >= 6:
                 rank = int(10 ** (7 - zipf))
@@ -380,12 +376,10 @@ class HybridCEFRClassifier:
             else:
                 rank = 100000
 
-            # Cache the result
             self._frequency_cache[word] = rank
             return rank
 
         except Exception:
-            # Cache None to avoid repeated lookups
             self._frequency_cache[word] = None
             return None
 
@@ -420,55 +414,66 @@ class HybridCEFRClassifier:
         return None
 
     def _classify_by_embedding(self, word: str, lemma: str) -> Optional[WordClassification]:
-        """Classify word using embedding-based classifier"""
+        """Classify word using embedding-based classifier (SLOW - avoid if possible!)"""
         if not self.has_embedding_classifier or self.embedding_classifier is None:
             return None
 
         try:
-            # Get word embedding
             embedding = self.sentence_model.encode([lemma])[0]
-
-            # Predict CEFR level
             prediction = self.embedding_classifier.predict([embedding])[0]
 
-            # Get probability scores
             if hasattr(self.embedding_classifier, 'predict_proba'):
                 probabilities = self.embedding_classifier.predict_proba([embedding])[0]
                 confidence = float(max(probabilities))
             else:
-                confidence = 0.4  # Default confidence for non-probabilistic classifiers
+                confidence = 0.4
 
             return WordClassification(
                 word=word,
                 lemma=lemma,
                 pos="",
                 cefr_level=CEFRLevel(prediction),
-                confidence=confidence * 0.8,  # Reduce confidence for embedding-based
+                confidence=confidence * 0.8,
                 source=ClassificationSource.EMBEDDING_CLASSIFIER
             )
 
-        except Exception as e:
-            logger.debug(f"Error in embedding classification: {e}")
+        except Exception:
             return None
 
     def classify_word(self, word: str, pos: Optional[str] = None) -> WordClassification:
         """
-        Classify a single word with CEFR level
+        Classify a single word with CEFR level (CACHED)
 
-        Args:
-            word: The word to classify
-            pos: Optional part of speech tag
-
-        Returns:
-            WordClassification with level, confidence, and source
+        This uses lemma-level caching so each unique lemma is classified only once.
         """
         word_lower = word.lower().strip()
-        lemma = self._get_lemma(word_lower)
+
+        # Check if we've already classified this exact lemma
+        cache_key = f"{word_lower}:{pos or ''}"
+        if cache_key in self._cefr_cache:
+            return self._cefr_cache[cache_key]
+
+        lemma = word_lower
+
+        # Get lemma from cache or compute it
+        if word_lower in self._lemma_cache:
+            lemma, cached_pos = self._lemma_cache[word_lower]
+            if not pos:
+                pos = cached_pos
+        else:
+            # Compute lemma (only happens once per unique word)
+            doc = self.nlp(word_lower)
+            if len(doc) > 0:
+                lemma = doc[0].lemma_
+                pos = pos or (doc[0].pos_ if hasattr(doc[0], 'pos_') else "")
+                self._lemma_cache[word_lower] = (lemma, pos)
+            else:
+                self._lemma_cache[word_lower] = (word_lower, "")
 
         # Stage 1: Check multi-word expressions
         if ' ' in word_lower and word_lower in self.multi_word_expressions:
             level, source = self.multi_word_expressions[word_lower]
-            return WordClassification(
+            result = WordClassification(
                 word=word,
                 lemma=word_lower,
                 pos=pos or "",
@@ -477,13 +482,15 @@ class HybridCEFRClassifier:
                 source=source,
                 is_multi_word=True
             )
+            self._cefr_cache[cache_key] = result
+            return result
 
         # Stage 2: Check POS-specific mapping
         if pos:
             pos_key = (lemma, pos.lower())
             if pos_key in self.pos_specific:
                 level, source = self.pos_specific[pos_key]
-                return WordClassification(
+                result = WordClassification(
                     word=word,
                     lemma=lemma,
                     pos=pos,
@@ -491,11 +498,13 @@ class HybridCEFRClassifier:
                     confidence=1.0,
                     source=source
                 )
+                self._cefr_cache[cache_key] = result
+                return result
 
         # Stage 3: Check main CEFR wordlist
         if lemma in self.cefr_wordlist:
             level, source = self.cefr_wordlist[lemma]
-            return WordClassification(
+            result = WordClassification(
                 word=word,
                 lemma=lemma,
                 pos=pos or "",
@@ -503,26 +512,31 @@ class HybridCEFRClassifier:
                 confidence=1.0,
                 source=source
             )
+            self._cefr_cache[cache_key] = result
+            return result
 
         # Stage 4: Frequency-based backoff
         freq_result = self._classify_by_frequency(word_lower, lemma)
         if freq_result and freq_result.confidence >= 0.5:
             freq_result.pos = pos or ""
+            self._cefr_cache[cache_key] = freq_result
             return freq_result
 
-        # Stage 5: Embedding-based classifier
+        # Stage 5: Embedding-based classifier (DISABLED BY DEFAULT)
         if self.use_embedding_classifier:
             emb_result = self._classify_by_embedding(word_lower, lemma)
             if emb_result:
                 emb_result.pos = pos or ""
+                self._cefr_cache[cache_key] = emb_result
                 return emb_result
 
         # Stage 6: Fallback - use frequency if available, else C2
         if freq_result:
+            self._cefr_cache[cache_key] = freq_result
             return freq_result
 
         # Ultimate fallback: assume C2 (advanced/rare word)
-        return WordClassification(
+        result = WordClassification(
             word=word,
             lemma=lemma,
             pos=pos or "",
@@ -530,19 +544,21 @@ class HybridCEFRClassifier:
             confidence=0.2,
             source=ClassificationSource.FALLBACK
         )
+        self._cefr_cache[cache_key] = result
+        return result
 
     def classify_text(self, text: str) -> List[WordClassification]:
         """
-        Classify all words in a text (OPTIMIZED)
+        Classify all words in a text - HEAVILY OPTIMIZED
 
-        Performance optimizations:
-        1. Normalize text first (lowercase, punctuation, apostrophes)
-        2. Use nlp.pipe() for batch processing
-        3. Deduplicate words before classification
-        4. Process only unique lemmas
-
-        Args:
-            text: Input text to classify
+        CRITICAL OPTIMIZATIONS:
+        1. Normalize text first
+        2. Filter valid tokens BEFORE any NLP work
+        3. Deduplicate to unique words
+        4. Batch lemmatization with nlp.pipe()
+        5. Classify unique lemmas only (not every token!)
+        6. Use aggressive caching
+        7. NO logging inside loops
 
         Returns:
             List of WordClassification objects (one per unique lemma)
@@ -550,30 +566,28 @@ class HybridCEFRClassifier:
         import time
         start_time = time.time()
 
-        # Step 1: Normalize text
+        # Step 1: Normalize text (lowercase, fix punctuation, collapse whitespace)
         normalized_text = self.normalize_text(text)
-        logger.info(f"Text normalized in {time.time() - start_time:.2f}s")
 
-        # Step 2: Split into chunks for batch processing
-        chunk_start = time.time()
+        # Step 2: Split and filter valid tokens BEFORE spaCy
         words = normalized_text.split()
+        valid_words = [w for w in words if is_valid_token(w)]
 
-        # Filter valid tokens BEFORE spaCy processing
-        valid_words = [w for w in words if self.is_valid_token(w)]
-        logger.info(f"Filtered {len(words)} tokens → {len(valid_words)} valid tokens in {time.time() - chunk_start:.2f}s")
+        # Deduplicate to unique words
+        unique_words = list(set(valid_words))
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Filtered {len(words)} tokens → {len(valid_words)} valid → {len(unique_words)} unique")
 
         # Step 3: Batch lemmatization with nlp.pipe()
-        lemma_start = time.time()
-
         # Use nlp.pipe() for efficient batch processing
         docs = list(self.nlp.pipe(
-            valid_words,
-            batch_size=500,
-            n_process=1  # Use 1 for stability; increase if needed
+            unique_words,
+            batch_size=1000,
+            n_process=1
         ))
 
-        # Build lemma → original word mapping
-        word_to_lemma: Dict[str, str] = {}
+        # Build lemma → word mapping
         lemma_to_word: Dict[str, str] = {}
         lemma_to_pos: Dict[str, str] = {}
 
@@ -584,24 +598,22 @@ class HybridCEFRClassifier:
                 lemma = token.lemma_
                 pos = token.pos_ if hasattr(token, 'pos_') else ""
 
-                word_to_lemma[word] = lemma
+                # Cache lemma result
+                self._lemma_cache[word] = (lemma, pos)
+
                 if lemma not in lemma_to_word:
                     lemma_to_word[lemma] = word
                     lemma_to_pos[lemma] = pos
 
-        logger.info(f"Lemmatized {len(valid_words)} words → {len(lemma_to_word)} unique lemmas in {time.time() - lemma_start:.2f}s")
-
         # Step 4: Classify unique lemmas only (MASSIVE speedup)
-        classify_start = time.time()
         classifications = []
-
         for lemma, original_word in lemma_to_word.items():
             pos = lemma_to_pos.get(lemma, "")
             classification = self.classify_word(original_word, pos)
             classifications.append(classification)
 
-        logger.info(f"Classified {len(classifications)} unique words in {time.time() - classify_start:.2f}s")
-        logger.info(f"TOTAL classification time: {time.time() - start_time:.2f}s")
+        elapsed = time.time() - start_time
+        logger.info(f"Classified {len(unique_words)} unique words → {len(classifications)} lemmas in {elapsed:.2f}s")
 
         return classifications
 
@@ -651,4 +663,4 @@ class HybridCEFRClassifier:
             thresholds: Dictionary mapping CEFR levels to (min_rank, max_rank) tuples
         """
         self.frequency_thresholds.update(thresholds)
-        logger.info(f"Updated frequency thresholds: {self.frequency_thresholds}")
+        logger.info(f"Updated frequency thresholds")

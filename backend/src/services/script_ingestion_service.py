@@ -323,7 +323,6 @@ class ScriptIngestionService:
                 "movie_id": script.movieId,
                 "source_used": script.sourceUsed,
                 "cleaned_text": script.cleanedScriptText,
-                "raw_text": None,  # ALWAYS NONE BECAUSE DB DOESN'T STORE RAW
                 "word_count": script.cleanedWordCount,
                 "is_complete": script.isComplete,
                 "is_truncated": script.isTruncated,
@@ -390,7 +389,6 @@ class ScriptIngestionService:
 
             # Success!
             return {
-                "raw_text": extraction_result["raw_text"],
                 "cleaned_text": extraction_result["cleaned_text"],
                 "word_count": extraction_result["word_count"],
                 "is_valid": True,
@@ -441,7 +439,6 @@ class ScriptIngestionService:
 
             # Success!
             return {
-                "raw_text": script_text,
                 "cleaned_text": script_text.strip(),
                 "word_count": word_count,
                 "is_valid": True,
@@ -503,7 +500,6 @@ class ScriptIngestionService:
 
             # Success!
             return {
-                "raw_text": parsed["raw_text"],
                 "cleaned_text": parsed["cleaned_text"],
                 "word_count": parsed["word_count"],
                 "is_valid": True,
@@ -554,7 +550,6 @@ class ScriptIngestionService:
             )
 
             return {
-                "raw_text": synopsis,
                 "cleaned_text": synopsis.strip(),
                 "word_count": word_count,
                 "is_valid": True,  # Accept synopsis as last resort
