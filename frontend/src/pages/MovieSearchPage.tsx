@@ -13,8 +13,7 @@ import {
 import MovieSearchBar from '../components/MovieSearchBar';
 import DifficultyCategories from '../components/DifficultyCategories';
 import type { ScriptAnalysisResult } from '../types/script';
-import { fetchMovieScript } from '../services/scriptService';
-import { analyzeScriptDifficulty } from '../utils/wordFrequencyAnalyzer';
+import { fetchMovieScript, classifyMovieScript } from '../services/scriptService';
 
 type ErrorType = 'error' | 'not-found' | null;
 
@@ -22,6 +21,19 @@ interface ErrorState {
   type: ErrorType;
   message: string;
 }
+
+// Helper function to get level descriptions
+const getLevelDescription = (level: string): string => {
+  const descriptions: Record<string, string> = {
+    'A1': 'Beginner - Most frequent words (easiest)',
+    'A2': 'Elementary - Very common words',
+    'B1': 'Intermediate - Common words',
+    'B2': 'Upper Intermediate - Less common words',
+    'C1': 'Advanced - Uncommon words',
+    'C2': 'Proficient - Rarest words (hardest)'
+  };
+  return descriptions[level] || 'Unknown level';
+};
 
 export default function MovieSearchPage() {
   const [loading, setLoading] = useState(false);
@@ -63,15 +75,28 @@ export default function MovieSearchPage() {
         wordCount: scriptResponse.word_count
       });
 
-      // Analyze the script difficulty
-      console.log('[ANALYSIS] Starting word frequency analysis...');
-      const result = analyzeScriptDifficulty(
-        scriptResponse.cleaned_text,
-        scriptResponse.metadata.title
-      );
-      console.log('[ANALYSIS RESULT]', result);
+      // Classify the script using CEFR classifier
+      console.log('[CEFR CLASSIFICATION] Starting hybrid CEFR classification...');
+      const cefrResult = await classifyMovieScript(scriptResponse.movie_id);
+      console.log('[CEFR RESULT]', cefrResult);
 
-      setAnalysis(result);
+      // Convert CEFR response to ScriptAnalysisResult format
+      const analysis: ScriptAnalysisResult = {
+        title: scriptResponse.metadata.title,
+        totalWords: cefrResult.total_words,
+        uniqueWords: cefrResult.unique_words,
+        categories: Object.entries(cefrResult.level_distribution).map(([level]) => ({
+          level: level as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+          description: getLevelDescription(level),
+          words: cefrResult.top_words_by_level[level]?.map(w => ({
+            word: w.word,
+            count: Math.round(w.confidence * 100), // Show confidence as percentage
+            frequency: w.confidence
+          })) || []
+        }))
+      };
+
+      setAnalysis(analysis);
     } catch (err: any) {
       console.error('[ERROR]', err);
 
@@ -110,7 +135,7 @@ export default function MovieSearchPage() {
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Search for a movie, and we'll analyze the script to categorize vocabulary from A1
-          (beginner) to C2 (proficient) based on word frequency.
+          (beginner) to C2 (proficient) using CEFR wordlists and frequency analysis.
         </Typography>
       </Box>
 
@@ -149,7 +174,7 @@ export default function MovieSearchPage() {
                 • Saving to database
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • Analyzing word frequencies
+                • Classifying words with CEFR levels
               </Typography>
             </Stack>
           </Paper>

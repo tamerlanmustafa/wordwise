@@ -49,25 +49,45 @@ model Movie {
 }
 
 model MovieScript {
-  id                 Int          @id @default(autoincrement())
-  movieId            Int          @map("movie_id")
-  sourceUsed         scriptsource @map("source_used")
-  rawScriptText      String?      @map("raw_script_text")
-  cleanedScriptText  String?      @map("cleaned_script_text")
-  wordCount          Int?         @map("word_count")
-  cleanedWordCount   Int?         @map("cleaned_word_count")
-  isTruncated        Boolean      @default(false) @map("is_truncated")
-  isComplete         Boolean      @default(true) @map("is_complete")
-  processingMetadata String?      @map("processing_metadata")
-  fetchedAt          DateTime     @default(now()) @map("fetched_at") @db.Timestamptz(6)
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  movie              Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                  Int                   @id @default(autoincrement())
+  movieId             Int                   @map("movie_id")
+  sourceUsed          scriptsource          @map("source_used")
+  rawScriptText       String?               @map("raw_script_text")
+  cleanedScriptText   String?               @map("cleaned_script_text")
+  wordCount           Int?                  @map("word_count")
+  cleanedWordCount    Int?                  @map("cleaned_word_count")
+  isTruncated         Boolean               @default(false) @map("is_truncated")
+  isComplete          Boolean               @default(true) @map("is_complete")
+  processingMetadata  String?               @map("processing_metadata")
+  fetchedAt           DateTime              @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  movie               Movie                 @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  wordClassifications WordClassification[]
 
   @@unique([movieId])
   @@index([movieId], map: "ix_movie_scripts_movie_id")
   @@index([sourceUsed], map: "ix_movie_scripts_source")
   @@map("movie_scripts")
+}
+
+model WordClassification {
+  id            Int               @id @default(autoincrement())
+  scriptId      Int               @map("script_id")
+  word          String            @db.VarChar
+  lemma         String            @db.VarChar
+  pos           String?           @db.VarChar
+  cefrLevel     proficiencylevel  @map("cefr_level")
+  confidence    Float
+  source        classificationsource
+  frequencyRank Int?              @map("frequency_rank")
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  script        MovieScript       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  @@index([scriptId], map: "ix_word_classifications_script_id")
+  @@index([lemma], map: "ix_word_classifications_lemma")
+  @@index([cefrLevel], map: "ix_word_classifications_cefr_level")
+  @@map("word_classifications")
 }
 
 model Word {
@@ -142,4 +162,14 @@ enum scriptsource {
   SUBTITLE_VTT
   SYNOPSIS
   MANUAL_UPLOAD
+}
+
+enum classificationsource {
+  oxford_3000
+  oxford_5000
+  efllex
+  evp
+  frequency_backoff
+  embedding_classifier
+  fallback
 }

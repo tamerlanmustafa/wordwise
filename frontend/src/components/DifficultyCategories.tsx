@@ -77,8 +77,8 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
         Vocabulary by Difficulty Level
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Words are categorized based on their frequency in this script. More frequent words are
-        easier, while rare words are more challenging.
+        Words are classified using CEFR wordlists (Oxford 3000/5000, EFLLex) and frequency analysis.
+        Confidence scores show classification certainty. Showing top 50 words per level.
       </Typography>
 
       {analysis.categories.map((category) => (
@@ -133,7 +133,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
                 {category.words.slice(0, 50).map((wordFreq) => (
                   <Grid item key={wordFreq.word}>
                     <Chip
-                      label={`${wordFreq.word} (${wordFreq.count})`}
+                      label={`${wordFreq.word} (${wordFreq.count}% confidence)`}
                       size="small"
                       variant="outlined"
                       sx={{
