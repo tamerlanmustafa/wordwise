@@ -130,8 +130,8 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
               </Typography>
             ) : (
               <Grid container spacing={1}>
-                {category.words.slice(0, 50).map((wordFreq) => (
-                  <Grid item key={wordFreq.word}>
+                {category.words.slice(0, 50).map((wordFreq, index) => (
+                  <Grid item key={`${category.level}-${wordFreq.word}-${index}`}>
                     <Chip
                       label={`${wordFreq.word} (${wordFreq.count}% confidence)`}
                       size="small"

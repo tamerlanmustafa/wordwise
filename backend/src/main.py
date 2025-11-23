@@ -7,11 +7,45 @@ from .routes import auth_router, movies_router, users_router, oauth_router, scri
 from .services import fetch_movie_script
 import logging
 
-# Configure logging
+# Configure logging with rotating file handler
+import logging.handlers
+from pathlib import Path
+
+# Ensure logs directory exists
+logs_dir = Path(__file__).parent.parent / 'logs'
+logs_dir.mkdir(exist_ok=True)
+
+# Create formatter
+formatter = logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Console handler (INFO level)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# File handler with rotation (DEBUG level)
+file_handler = logging.handlers.RotatingFileHandler(
+    logs_dir / 'wordwise.log',
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=5
+)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+# Configure root logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(levelname)s:%(name)s:%(message)s'
+    handlers=[console_handler, file_handler]
 )
+
+# Reduce noise from verbose libraries
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('prisma').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 settings = get_settings()

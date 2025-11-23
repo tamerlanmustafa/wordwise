@@ -211,6 +211,9 @@ async def classify_script(
                 detail="Script has no cleaned text"
             )
 
+        # Initialize classifier (needed for both cached and new classifications)
+        classifier = get_classifier()
+
         # Check if classifications already exist in database (cached from previous run)
         existing_classifications = await db.wordclassification.find_many(
             where={'scriptId': script.id}
@@ -237,7 +240,6 @@ async def classify_script(
         else:
             # Classify the script (first time or no cached data)
             logger.info(f"Classifying script for movie {request.movie_id} ({script.wordCount} words)...")
-            classifier = get_classifier()
             classifications = classifier.classify_text(script.cleanedScriptText)
 
         # Get statistics
@@ -276,28 +278,41 @@ async def classify_script(
                 if key not in unique_classifications:
                     unique_classifications[key] = cls
 
-            # Insert in batches
-            batch_size = 1000
+            # Insert in SMALL batches to avoid httpx.ReadTimeout
+            # Reduced batch size from 1000 → 300 for reliability
+            batch_size = 300
             cls_list = list(unique_classifications.values())
+            total_batches = (len(cls_list) + batch_size - 1) // batch_size
 
-            for i in range(0, len(cls_list), batch_size):
+            logger.info(f"Inserting {len(cls_list)} unique classifications in {total_batches} batches...")
+
+            for batch_num, i in enumerate(range(0, len(cls_list), batch_size), start=1):
                 batch = cls_list[i:i + batch_size]
 
-                await db.wordclassification.create_many(
-                    data=[
-                        {
-                            'scriptId': script.id,
-                            'word': cls.word,
-                            'lemma': cls.lemma,
-                            'pos': cls.pos or None,
-                            'cefrLevel': cls.cefr_level.value,
-                            'confidence': cls.confidence,
-                            'source': cls.source.value,
-                            'frequencyRank': cls.frequency_rank
-                        }
-                        for cls in batch
-                    ]
-                )
+                try:
+                    await db.wordclassification.create_many(
+                        data=[
+                            {
+                                'scriptId': script.id,
+                                'word': cls.word,
+                                'lemma': cls.lemma,
+                                'pos': cls.pos or None,
+                                'cefrLevel': cls.cefr_level.value,
+                                'confidence': cls.confidence,
+                                'source': cls.source.value,
+                                'frequencyRank': cls.frequency_rank
+                            }
+                            for cls in batch
+                        ],
+                        skip_duplicates=True  # Skip duplicates instead of failing
+                    )
+
+                    if batch_num % 5 == 0 or batch_num == total_batches:
+                        logger.info(f"Progress: {batch_num}/{total_batches} batches inserted")
+
+                except Exception as e:
+                    logger.error(f"Error inserting batch {batch_num}: {e}")
+                    raise
 
             logger.info(f"✓ Saved {len(unique_classifications)} unique word classifications")
 
