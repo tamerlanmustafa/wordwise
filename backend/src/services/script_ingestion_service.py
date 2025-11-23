@@ -57,7 +57,8 @@ class ScriptIngestionService:
 
     async def get_or_fetch_script(
         self,
-        movie_title: str,
+        movie_title: Optional[str] = None,
+        script_id: Optional[str] = None,
         movie_id: Optional[int] = None,
         year: Optional[int] = None,
         force_refresh: bool = False
@@ -68,7 +69,8 @@ class ScriptIngestionService:
         This is the core function that implements the complete ingestion pipeline.
 
         Args:
-            movie_title: Movie title to search
+            movie_title: Movie title to search (optional if script_id provided)
+            script_id: STANDS4 script ID from search results (preferred)
             movie_id: Database movie ID (if known)
             year: Movie release year (improves search accuracy)
             force_refresh: If True, bypass cache and refetch
@@ -87,9 +89,10 @@ class ScriptIngestionService:
         Raises:
             Exception: If all sources fail
         """
+        search_key = script_id or movie_title
         logger.info(
-            f"[ScriptIngestion] Processing '{movie_title}' "
-            f"(movie_id={movie_id}, year={year}, force_refresh={force_refresh})"
+            f"[ScriptIngestion] Processing '{search_key}' "
+            f"(script_id={script_id}, movie_id={movie_id}, year={year}, force_refresh={force_refresh})"
         )
 
         # ======================================================================
@@ -104,7 +107,7 @@ class ScriptIngestionService:
                     "from_cache": True
                 }
 
-        logger.info(f"[ScriptIngestion] No cached script for '{movie_title}', fetching from sources...")
+        logger.info(f"[ScriptIngestion] No cached script for '{search_key}', fetching from sources...")
 
         # ======================================================================
         # STEP 2: Try each source in priority order
@@ -120,9 +123,13 @@ class ScriptIngestionService:
 
         for source_name, fetch_func in sources:
             try:
-                logger.info(f"[ScriptIngestion] → Trying {source_name} for '{movie_title}'")
+                logger.info(f"[ScriptIngestion] → Trying {source_name} for '{search_key}'")
 
-                script_data = await fetch_func(movie_title, year)
+                # Pass script_id to fetch functions if available
+                if script_id and source_name == "STANDS4_PDF":
+                    script_data = await fetch_func(movie_title, year, script_id=script_id)
+                else:
+                    script_data = await fetch_func(movie_title or search_key, year)
 
                 if script_data and script_data.get("is_valid"):
                     # Success! Save to database
@@ -207,7 +214,6 @@ class ScriptIngestionService:
                 "movie_id": script.movieId,
                 "source_used": script.sourceUsed,
                 "cleaned_text": script.cleanedScriptText,
-                "raw_text": script.rawScriptText,
                 "word_count": script.cleanedWordCount,
                 "is_complete": script.isComplete,
                 "is_truncated": script.isTruncated,
@@ -244,8 +250,14 @@ class ScriptIngestionService:
             if not movie_id:
                 logger.info(f"[DB] Creating new movie record for '{movie_title}'")
 
+                # Extract metadata
+                metadata = script_data.get("metadata", {})
+
+                # Get actual title from metadata (falls back to movie_title)
+                actual_title = metadata.get("title", movie_title)
+
                 # Extract year from metadata if available
-                year = script_data.get("metadata", {}).get("year")
+                year = metadata.get("year")
                 if year and isinstance(year, str):
                     try:
                         year = int(year)
@@ -258,8 +270,9 @@ class ScriptIngestionService:
                 movie = await self.db.movie.create(
                     data={
                         "title": movie_title,
+                        "actualTitle": actual_title,
                         "year": year,
-                        "description": script_data.get("metadata", {}).get("synopsis", "")[:500] if script_data.get("metadata", {}).get("synopsis") else None,
+                        "description": metadata.get("synopsis", "")[:500] if metadata.get("synopsis") else None,
                     }
                 )
                 movie_id = movie.id
@@ -280,9 +293,7 @@ class ScriptIngestionService:
                     where={"movieId": movie_id},
                     data={
                         "sourceUsed": getattr(scriptsource, source_used),
-                        "rawScriptText": script_data.get("raw_text"),
                         "cleanedScriptText": script_data.get("cleaned_text"),
-                        "wordCount": script_data.get("word_count", 0),
                         "cleanedWordCount": script_data.get("word_count", 0),
                         "isTruncated": script_data.get("is_truncated", False),
                         "isComplete": script_data.get("is_complete", True),
@@ -297,9 +308,7 @@ class ScriptIngestionService:
                     data={
                         "movieId": movie_id,
                         "sourceUsed": getattr(scriptsource, source_used),
-                        "rawScriptText": script_data.get("raw_text"),
                         "cleanedScriptText": script_data.get("cleaned_text"),
-                        "wordCount": script_data.get("word_count", 0),
                         "cleanedWordCount": script_data.get("word_count", 0),
                         "isTruncated": script_data.get("is_truncated", False),
                         "isComplete": script_data.get("is_complete", True),
@@ -314,12 +323,14 @@ class ScriptIngestionService:
                 "movie_id": script.movieId,
                 "source_used": script.sourceUsed,
                 "cleaned_text": script.cleanedScriptText,
-                "raw_text": script.rawScriptText,
+                "raw_text": None,  # ALWAYS NONE BECAUSE DB DOESN'T STORE RAW
                 "word_count": script.cleanedWordCount,
                 "is_complete": script.isComplete,
                 "is_truncated": script.isTruncated,
-                "metadata": script_data.get("metadata", {})
+                "metadata": json.loads(script.processingMetadata) if script.processingMetadata else {}
             }
+
+
 
         except Exception as e:
             logger.error(f"[DB] Failed to save script: {str(e)}", exc_info=True)
@@ -332,24 +343,37 @@ class ScriptIngestionService:
     async def _fetch_from_stands4_pdf(
         self,
         movie_title: str,
-        year: Optional[int]
+        year: Optional[int],
+        script_id: Optional[str] = None
     ) -> Optional[Dict[str, any]]:
         """
         Fetch and extract from STANDS4 PDF.
 
         Priority 1 - Highest quality source.
         """
-        logger.info(f"[PDF] Attempting PDF fetch for '{movie_title}'")
+        logger.info(f"[PDF] Attempting PDF fetch for '{movie_title}' (script_id={script_id})")
 
         try:
-            # Get PDF URL from STANDS4 API
-            stands4_data = await self.stands4_client.fetch_script(movie_title)
+            stands4_metadata = {}
 
-            if not stands4_data.get("has_pdf"):
-                logger.info(f"[PDF] No PDF available for '{movie_title}'")
-                return None
+            # Get PDF URL - directly from script_id if available
+            if script_id:
+                pdf_url = self.stands4_client.get_pdf_url_from_script_id(script_id)
+                logger.info(f"[PDF] Using direct PDF URL from script_id {script_id}: {pdf_url}")
+                stands4_metadata = {
+                    "script_id": script_id,
+                    "method": "direct_script_id"
+                }
+            else:
+                # Get PDF URL from STANDS4 API search
+                stands4_data = await self.stands4_client.fetch_script(movie_title)
 
-            pdf_url = stands4_data["pdf_url"]
+                if not stands4_data.get("has_pdf"):
+                    logger.info(f"[PDF] No PDF available for '{movie_title}'")
+                    return None
+
+                pdf_url = stands4_data["pdf_url"]
+                stands4_metadata = stands4_data.get("metadata", {})
 
             # Download and extract PDF
             extraction_result = await self.pdf_extractor.download_and_extract(
@@ -373,7 +397,7 @@ class ScriptIngestionService:
                 "is_complete": extraction_result["is_complete"],
                 "is_truncated": extraction_result["is_truncated"],
                 "metadata": {
-                    **stands4_data.get("metadata", {}),
+                    **stands4_metadata,
                     **extraction_result["metadata"],
                     "pdf_url": pdf_url
                 }

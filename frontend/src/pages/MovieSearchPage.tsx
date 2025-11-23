@@ -11,9 +11,15 @@ import {
   Stack,
 } from '@mui/material';
 import MovieSearchBar from '../components/MovieSearchBar';
+import MovieSelectionList from '../components/MovieSelectionList';
 import DifficultyCategories from '../components/DifficultyCategories';
 import type { ScriptAnalysisResult } from '../types/script';
-import { fetchMovieScript, classifyMovieScript } from '../services/scriptService';
+import {
+  searchMovies,
+  fetchMovieScriptById,
+  classifyMovieScript,
+  type MovieSearchResult
+} from '../services/scriptService';
 
 type ErrorType = 'error' | 'not-found' | null;
 
@@ -36,8 +42,11 @@ const getLevelDescription = (level: string): string => {
 };
 
 export default function MovieSearchPage() {
-  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
+  const [searchResults, setSearchResults] = useState<MovieSearchResult[]>([]);
+  const [selectedMovie, setSelectedMovie] = useState<MovieSearchResult | null>(null);
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [searchedQuery, setSearchedQuery] = useState<string>('');
   const [scriptInfo, setScriptInfo] = useState<{
@@ -46,25 +55,60 @@ export default function MovieSearchPage() {
     wordCount: number;
   } | null>(null);
 
+  // Step 1: Search for movies
   const handleSearch = async (query: string) => {
-    setLoading(true);
+    setSearchLoading(true);
     setError(null);
+    setSearchResults([]);
+    setSelectedMovie(null);
     setAnalysis(null);
     setScriptInfo(null);
     setSearchedQuery(query);
 
     try {
-      // Fetch script using the new ingestion system
-      // This will automatically save to database
-      const scriptResponse = await fetchMovieScript(query);
+      // Search for ALL matching movies
+      const searchResponse = await searchMovies(query);
+
+      if (searchResponse.total === 0) {
+        setError({
+          type: 'not-found',
+          message: `No movies found for "${query}". Try a different search.`,
+        });
+      } else {
+        // Show the list of results for user selection
+        setSearchResults(searchResponse.results);
+      }
+    } catch (err: any) {
+      console.error('[SEARCH ERROR]', err);
+      setError({
+        type: 'error',
+        message: err.response?.data?.detail || 'Failed to search for movies. Please try again.',
+      });
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Step 2: Fetch and analyze selected movie
+  const handleMovieSelect = async (movie: MovieSearchResult) => {
+    setAnalyzeLoading(true);
+    setError(null);
+    setSelectedMovie(movie);
+    setAnalysis(null);
+    setScriptInfo(null);
+
+    try {
+      // Fetch the exact script using script ID
+      console.log('[FETCH] Fetching script for:', movie.title, 'ID:', movie.id);
+      const scriptResponse = await fetchMovieScriptById(movie.id, movie.title);
 
       // Check if we got a valid script
       if (!scriptResponse.cleaned_text || scriptResponse.word_count < 100) {
         setError({
           type: 'not-found',
-          message: `Script not found or too short. Try another movie.`,
+          message: `Script not found or too short for "${movie.title}". Try another movie.`,
         });
-        setLoading(false);
+        setAnalyzeLoading(false);
         return;
       }
 
@@ -82,7 +126,7 @@ export default function MovieSearchPage() {
 
       // Convert CEFR response to ScriptAnalysisResult format
       const analysis: ScriptAnalysisResult = {
-        title: scriptResponse.metadata.title,
+        title: movie.title,
         totalWords: cefrResult.total_words,
         uniqueWords: cefrResult.unique_words,
         categories: Object.entries(cefrResult.level_distribution).map(([level]) => ({
@@ -90,7 +134,7 @@ export default function MovieSearchPage() {
           description: getLevelDescription(level),
           words: cefrResult.top_words_by_level[level]?.map(w => ({
             word: w.word,
-            count: Math.round(w.confidence * 100), // Show confidence as percentage
+            count: Math.round(w.confidence * 100),
             frequency: w.confidence
           })) || []
         }))
@@ -98,30 +142,33 @@ export default function MovieSearchPage() {
 
       setAnalysis(analysis);
     } catch (err: any) {
-      console.error('[ERROR]', err);
+      console.error('[ANALYZE ERROR]', err);
 
-      // Check for 404 error (movie not found)
       if (err.response?.status === 404) {
         setError({
           type: 'not-found',
-          message: `Movie "${query}" not found in our database. Try another title.`,
+          message: `Script not found for "${movie.title}". Try another movie.`,
         });
       } else {
         setError({
           type: 'error',
-          message: err.response?.data?.detail || 'Failed to fetch or analyze the script. Please try again later.',
+          message: err.response?.data?.detail || 'Failed to fetch or analyze the script. Please try again.',
         });
       }
     } finally {
-      setLoading(false);
+      setAnalyzeLoading(false);
     }
   };
 
   const handleReset = () => {
     setAnalysis(null);
     setError(null);
+    setSearchResults([]);
+    setSelectedMovie(null);
     setSearchedQuery('');
   };
+
+  const loading = searchLoading || analyzeLoading;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -134,8 +181,7 @@ export default function MovieSearchPage() {
           Discover vocabulary difficulty levels in movie scripts
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Search for a movie, and we'll analyze the script to categorize vocabulary from A1
-          (beginner) to C2 (proficient) using CEFR wordlists and frequency analysis.
+          Search for a movie, select the exact one you want, and we'll analyze the script to categorize vocabulary from A1 (beginner) to C2 (proficient).
         </Typography>
       </Box>
 
@@ -143,7 +189,7 @@ export default function MovieSearchPage() {
       <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
         <MovieSearchBar onSearch={handleSearch} disabled={loading} />
 
-        {(analysis || error) && (
+        {(searchResults.length > 0 || analysis || error) && (
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Button variant="outlined" onClick={handleReset} size="small">
               Search Another Movie
@@ -152,18 +198,40 @@ export default function MovieSearchPage() {
         )}
       </Paper>
 
-      {/* Loading State */}
-      {loading && (
-        <Fade in={loading}>
+      {/* Search Loading State */}
+      {searchLoading && (
+        <Fade in={searchLoading}>
           <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
             <CircularProgress size={60} sx={{ mb: 2 }} />
             <Typography variant="h6" color="text.secondary">
-              Analyzing script for "{searchedQuery}"...
+              Searching for "{searchedQuery}"...
+            </Typography>
+          </Paper>
+        </Fade>
+      )}
+
+      {/* Movie Selection List */}
+      {!searchLoading && searchResults.length > 0 && !selectedMovie && (
+        <Fade in={searchResults.length > 0}>
+          <Box>
+            <MovieSelectionList
+              movies={searchResults}
+              onSelect={handleMovieSelect}
+              loading={analyzeLoading}
+            />
+          </Box>
+        </Fade>
+      )}
+
+      {/* Analyze Loading State */}
+      {analyzeLoading && selectedMovie && (
+        <Fade in={analyzeLoading}>
+          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
+            <CircularProgress size={60} sx={{ mb: 2 }} />
+            <Typography variant="h6" color="text.secondary">
+              Analyzing "{selectedMovie.title}"...
             </Typography>
             <Stack spacing={1} sx={{ mt: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                • Searching STANDS4 database
-              </Typography>
               <Typography variant="body2" color="text.secondary">
                 • Downloading PDF script
               </Typography>
@@ -237,8 +305,8 @@ export default function MovieSearchPage() {
       )}
 
       {/* Empty State */}
-      {!loading && !error && !analysis && (
-        <Fade in={!loading && !error && !analysis}>
+      {!loading && !error && !analysis && searchResults.length === 0 && (
+        <Fade in={!loading && !error && !analysis && searchResults.length === 0}>
           <Paper
             elevation={1}
             sx={{
@@ -253,14 +321,14 @@ export default function MovieSearchPage() {
               Start by searching for a movie
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              Try searching for "Interstellar" to see how it works
+              Try searching for "Titanic" or "Good Will Hunting"
             </Typography>
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" color="text.secondary" display="block">
                 1. Type a movie name in the search box
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block">
-                2. Click the Search button or press Enter
+                2. Select the exact movie from the list
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block">
                 3. View the vocabulary analysis results
