@@ -34,8 +34,11 @@ export function normalizeFrequencies(frequencies: Map<string, number>): WordFreq
   return Array.from(frequencies.entries())
     .map(([word, count]) => ({
       word,
+      lemma: word, // Use word as lemma for local analysis
       count,
-      frequency: count / maxFreq
+      frequency: count / maxFreq,
+      confidence: 1.0, // Default confidence for local analysis
+      frequency_rank: null // No rank data for local analysis
     }))
     .sort((a, b) => b.count - a.count); // Sort by count descending
 }
