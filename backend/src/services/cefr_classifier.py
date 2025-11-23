@@ -9,6 +9,13 @@ This classifier assigns CEFR levels (A1-C2) to English words using a hybrid appr
 5. POS-sensitive mapping
 
 Runs entirely locally with no external API calls.
+
+Performance optimizations:
+- Lightweight spaCy with disabled NER/parser
+- Batch processing with nlp.pipe()
+- Text normalization and deduplication
+- Cached wordfreq lookups
+- Reduced logging overhead
 """
 
 import logging
@@ -18,6 +25,8 @@ from enum import Enum
 import json
 import spacy
 from pathlib import Path
+import re
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +89,15 @@ class HybridCEFRClassifier:
         self.data_dir = Path(data_dir)
         self.use_embedding_classifier = use_embedding_classifier
 
-        # Load spaCy for lemmatization and POS tagging
-        logger.info(f"Loading spaCy model: {spacy_model}")
-        self.nlp = spacy.load(spacy_model)
+        # Load spaCy in LIGHTWEIGHT mode (disable expensive components)
+        logger.info(f"Loading spaCy model: {spacy_model} (lightweight mode)")
+        self.nlp = spacy.load(
+            spacy_model,
+            disable=["ner", "parser", "attribute_ruler"]
+        )
+
+        # Frequency lookup cache
+        self._frequency_cache: Dict[str, Optional[int]] = {}
 
         # CEFR wordlist dictionary: {lemma: (level, source)}
         self.cefr_wordlist: Dict[str, Tuple[CEFRLevel, ClassificationSource]] = {}
@@ -279,6 +294,57 @@ class HybridCEFRClassifier:
             logger.warning(f"Embedding classifier dependencies not available: {e}")
             self.has_embedding_classifier = False
 
+    @staticmethod
+    def normalize_text(text: str) -> str:
+        """
+        Comprehensive text normalization
+
+        - Lowercase
+        - Replace curly apostrophes with straight ones
+        - Strip punctuation
+        - Normalize whitespace
+        """
+        # Lowercase
+        text = text.lower()
+
+        # Replace curly apostrophes and quotes with straight ones
+        text = text.replace("'", "'").replace("'", "'")
+        text = text.replace(""", '"').replace(""", '"')
+
+        # Replace dashes with spaces
+        text = re.sub(r'[—–−]', ' ', text)
+
+        # Remove all punctuation except apostrophes (for contractions)
+        text = re.sub(r"[^\w\s']", ' ', text)
+
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text
+
+    @staticmethod
+    def is_valid_token(token: str) -> bool:
+        """
+        Check if a token should be classified
+
+        Filters out:
+        - Tokens < 2 characters
+        - Tokens with numbers
+        - Tokens that are purely symbols
+        """
+        if len(token) < 2:
+            return False
+
+        # Must contain at least one letter
+        if not re.search(r'[a-zA-Z]', token):
+            return False
+
+        # Skip if contains numbers
+        if re.search(r'\d', token):
+            return False
+
+        return True
+
     def _get_lemma(self, word: str) -> str:
         """Get lemma of a word using spaCy"""
         doc = self.nlp(word.lower())
@@ -287,9 +353,13 @@ class HybridCEFRClassifier:
         return word.lower()
 
     def _get_frequency_rank(self, word: str, lang: str = 'en') -> Optional[int]:
-        """Get frequency rank of a word using wordfreq"""
+        """Get frequency rank of a word using wordfreq (CACHED)"""
         if not self.has_wordfreq:
             return None
+
+        # Check cache first
+        if word in self._frequency_cache:
+            return self._frequency_cache[word]
 
         try:
             import wordfreq
@@ -310,10 +380,13 @@ class HybridCEFRClassifier:
             else:
                 rank = 100000
 
+            # Cache the result
+            self._frequency_cache[word] = rank
             return rank
 
-        except Exception as e:
-            logger.debug(f"Error getting frequency for '{word}': {e}")
+        except Exception:
+            # Cache None to avoid repeated lookups
+            self._frequency_cache[word] = None
             return None
 
     def _classify_by_frequency(self, word: str, lemma: str) -> Optional[WordClassification]:
@@ -460,28 +533,75 @@ class HybridCEFRClassifier:
 
     def classify_text(self, text: str) -> List[WordClassification]:
         """
-        Classify all words in a text
+        Classify all words in a text (OPTIMIZED)
+
+        Performance optimizations:
+        1. Normalize text first (lowercase, punctuation, apostrophes)
+        2. Use nlp.pipe() for batch processing
+        3. Deduplicate words before classification
+        4. Process only unique lemmas
 
         Args:
             text: Input text to classify
 
         Returns:
-            List of WordClassification objects
+            List of WordClassification objects (one per unique lemma)
         """
-        doc = self.nlp(text)
+        import time
+        start_time = time.time()
+
+        # Step 1: Normalize text
+        normalized_text = self.normalize_text(text)
+        logger.info(f"Text normalized in {time.time() - start_time:.2f}s")
+
+        # Step 2: Split into chunks for batch processing
+        chunk_start = time.time()
+        words = normalized_text.split()
+
+        # Filter valid tokens BEFORE spaCy processing
+        valid_words = [w for w in words if self.is_valid_token(w)]
+        logger.info(f"Filtered {len(words)} tokens → {len(valid_words)} valid tokens in {time.time() - chunk_start:.2f}s")
+
+        # Step 3: Batch lemmatization with nlp.pipe()
+        lemma_start = time.time()
+
+        # Use nlp.pipe() for efficient batch processing
+        docs = list(self.nlp.pipe(
+            valid_words,
+            batch_size=500,
+            n_process=1  # Use 1 for stability; increase if needed
+        ))
+
+        # Build lemma → original word mapping
+        word_to_lemma: Dict[str, str] = {}
+        lemma_to_word: Dict[str, str] = {}
+        lemma_to_pos: Dict[str, str] = {}
+
+        for doc in docs:
+            if len(doc) > 0:
+                token = doc[0]
+                word = token.text
+                lemma = token.lemma_
+                pos = token.pos_ if hasattr(token, 'pos_') else ""
+
+                word_to_lemma[word] = lemma
+                if lemma not in lemma_to_word:
+                    lemma_to_word[lemma] = word
+                    lemma_to_pos[lemma] = pos
+
+        logger.info(f"Lemmatized {len(valid_words)} words → {len(lemma_to_word)} unique lemmas in {time.time() - lemma_start:.2f}s")
+
+        # Step 4: Classify unique lemmas only (MASSIVE speedup)
+        classify_start = time.time()
         classifications = []
 
-        for token in doc:
-            # Skip punctuation and whitespace
-            if token.is_punct or token.is_space:
-                continue
-
-            # Get POS tag
-            pos = token.pos_
-
-            # Classify the token
-            classification = self.classify_word(token.text, pos)
+        for lemma, original_word in lemma_to_word.items():
+            pos = lemma_to_pos.get(lemma, "")
+            classification = self.classify_word(original_word, pos)
             classifications.append(classification)
+
+        logger.info(f"Classified {len(classifications)} unique words in {time.time() - classify_start:.2f}s")
+        logger.info(f"TOTAL classification time: {time.time() - start_time:.2f}s")
 
         return classifications
 
