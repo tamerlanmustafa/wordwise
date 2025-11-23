@@ -3,6 +3,7 @@ Word Analyzer - OPTIMIZED FOR SPEED
 
 Lightweight word analysis with aggressive caching and minimal dependencies.
 This module is deprecated in favor of the CEFR classifier but kept for compatibility.
+NO POS tagging for maximum speed.
 """
 
 from typing import List, Dict, Tuple
@@ -52,11 +53,6 @@ def _ensure_nltk():
         except LookupError:
             nltk.download('wordnet', quiet=True)
 
-        try:
-            nltk.data.find('taggers/averaged_perceptron_tagger')
-        except LookupError:
-            nltk.download('averaged_perceptron_tagger', quiet=True)
-
         _LEMMATIZER = WordNetLemmatizer()
         _STOP_WORDS = set(stopwords.words('english'))
 
@@ -64,6 +60,7 @@ def _ensure_nltk():
 class WordAnalyzer:
     """
     OPTIMIZED word analyzer with caching and minimal processing
+    NO POS tagging for maximum speed
 
     NOTE: This class is largely deprecated. Use HybridCEFRClassifier instead.
     """
@@ -108,7 +105,7 @@ class WordAnalyzer:
 
     def lemmatize(self, word: str) -> str:
         """
-        Lemmatize a word to its base form (CACHED)
+        Lemmatize a word to its base form (CACHED, no POS)
         """
         if word in self._lemma_cache:
             return self._lemma_cache[word]
