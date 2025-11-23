@@ -41,10 +41,33 @@ model Movie {
   createdAt       DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
   words           Word[]
+  movieScripts    MovieScript[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
   @@map("movies")
+}
+
+model MovieScript {
+  id                 Int          @id @default(autoincrement())
+  movieId            Int          @map("movie_id")
+  sourceUsed         scriptsource @map("source_used")
+  rawScriptText      String?      @map("raw_script_text")
+  cleanedScriptText  String?      @map("cleaned_script_text")
+  wordCount          Int?         @map("word_count")
+  cleanedWordCount   Int?         @map("cleaned_word_count")
+  isTruncated        Boolean      @default(false) @map("is_truncated")
+  isComplete         Boolean      @default(true) @map("is_complete")
+  processingMetadata String?      @map("processing_metadata")
+  fetchedAt          DateTime     @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  movie              Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([movieId])
+  @@index([movieId], map: "ix_movie_scripts_movie_id")
+  @@index([sourceUsed], map: "ix_movie_scripts_source")
+  @@map("movie_scripts")
 }
 
 model Word {
@@ -110,4 +133,13 @@ enum proficiencylevel {
   B2
   C1
   C2
+}
+
+enum scriptsource {
+  STANDS4_PDF
+  STANDS4_API
+  SUBTITLE_SRT
+  SUBTITLE_VTT
+  SYNOPSIS
+  MANUAL_UPLOAD
 }

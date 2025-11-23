@@ -13,7 +13,7 @@ import {
 import MovieSearchBar from '../components/MovieSearchBar';
 import DifficultyCategories from '../components/DifficultyCategories';
 import type { ScriptAnalysisResult } from '../types/script';
-import { searchScripts, fetchScriptContent } from '../services/scriptService';
+import { fetchMovieScript } from '../services/scriptService';
 import { analyzeScriptDifficulty } from '../utils/wordFrequencyAnalyzer';
 
 type ErrorType = 'error' | 'not-found' | null;
@@ -28,45 +28,65 @@ export default function MovieSearchPage() {
   const [error, setError] = useState<ErrorState | null>(null);
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [searchedQuery, setSearchedQuery] = useState<string>('');
+  const [scriptInfo, setScriptInfo] = useState<{
+    source: string;
+    fromCache: boolean;
+    wordCount: number;
+  } | null>(null);
 
   const handleSearch = async (query: string) => {
     setLoading(true);
     setError(null);
     setAnalysis(null);
+    setScriptInfo(null);
     setSearchedQuery(query);
 
     try {
-      // Search for the movie
-      const searchResults = await searchScripts(query);
+      // Fetch script using the new ingestion system
+      // This will automatically save to database
+      const scriptResponse = await fetchMovieScript(query);
 
-      if (searchResults.length === 0) {
-        // No results found - show fallback message (not an error)
+      // Check if we got a valid script
+      if (!scriptResponse.cleaned_text || scriptResponse.word_count < 100) {
         setError({
           type: 'not-found',
-          message: `No results. Try another movie title.`,
+          message: `Script not found or too short. Try another movie.`,
         });
         setLoading(false);
         return;
       }
 
-      // Use the first result
-      const movie = searchResults[0];
-
-      // Fetch the script content
-      const scriptText = await fetchScriptContent(movie.link);
+      // Store script info for display
+      setScriptInfo({
+        source: scriptResponse.source_used,
+        fromCache: scriptResponse.from_cache,
+        wordCount: scriptResponse.word_count
+      });
 
       // Analyze the script difficulty
       console.log('[ANALYSIS] Starting word frequency analysis...');
-      const result = analyzeScriptDifficulty(scriptText, movie.title);
+      const result = analyzeScriptDifficulty(
+        scriptResponse.cleaned_text,
+        scriptResponse.metadata.title
+      );
       console.log('[ANALYSIS RESULT]', result);
 
       setAnalysis(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[ERROR]', err);
-      setError({
-        type: 'error',
-        message: 'Failed to fetch or analyze the script. Please try again later.',
-      });
+
+      // Check for 404 error (movie not found)
+      if (err.response?.status === 404) {
+        setError({
+          type: 'not-found',
+          message: `Movie "${query}" not found in our database. Try another title.`,
+        });
+      } else {
+        setError({
+          type: 'error',
+          message: err.response?.data?.detail || 'Failed to fetch or analyze the script. Please try again later.',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -117,16 +137,19 @@ export default function MovieSearchPage() {
             </Typography>
             <Stack spacing={1} sx={{ mt: 2 }}>
               <Typography variant="body2" color="text.secondary">
-                • Searching for movie
+                • Searching STANDS4 database
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • Fetching script content
+                • Downloading PDF script
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • Extracting text from PDF
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • Saving to database
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 • Analyzing word frequencies
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                • Categorizing by difficulty level
               </Typography>
             </Stack>
           </Paper>
@@ -169,6 +192,20 @@ export default function MovieSearchPage() {
       {analysis && !loading && (
         <Fade in={!!analysis}>
           <Box>
+            {/* Script Info Banner */}
+            {scriptInfo && (
+              <Alert
+                severity={scriptInfo.fromCache ? 'info' : 'success'}
+                sx={{ mb: 3 }}
+              >
+                <Typography variant="body2">
+                  <strong>Source:</strong> {scriptInfo.source.replace('_', ' ')} • {' '}
+                  <strong>Total Words:</strong> {scriptInfo.wordCount.toLocaleString()} • {' '}
+                  <strong>Status:</strong> {scriptInfo.fromCache ? 'Loaded from cache' : 'Freshly downloaded and saved'}
+                </Typography>
+              </Alert>
+            )}
+
             <DifficultyCategories analysis={analysis} />
           </Box>
         </Fade>
