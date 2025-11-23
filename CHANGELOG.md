@@ -200,3 +200,4 @@ Complete rewrite of the application stack for better performance, type safety, a
 
 - remove POS tagging (noun, verb, etc) to handle in the translation service in the future
 - Remove Spacy and use a simpler tokenizer instead,lighter as well
+- add subliminal as a priority source for words as srt for movies

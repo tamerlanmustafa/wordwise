@@ -179,8 +179,9 @@ async def search_movies(
     """
     Search for movies matching the query.
 
-    Returns ALL matching movies from STANDS4 so the user can select the exact one.
-    This fixes the issue where "Titanic" returns "National Geographic: Secrets of the Titanic".
+    Returns matching movies from STANDS4. If no results are found, user can still
+    type any movie title and fetch it - the ingestion pipeline will try Subliminal
+    (OpenSubtitles) first for actual movie subtitles/dialogue.
 
     Args:
         query: Movie title to search
@@ -202,13 +203,16 @@ async def search_movies(
         from ..utils.stands4_client import STANDS4Client
         stands4 = STANDS4Client()
 
-        # Search STANDS4 for ALL matching movies
-        results = await stands4.search_movie(query)
+        # Search STANDS4 for matching movies
+        try:
+            results = await stands4.search_movie(query)
+            logger.info(f"[API] Found {len(results)} STANDS4 results for '{query}'")
+        except Exception as e:
+            logger.warning(f"[API] STANDS4 search failed: {e}")
+            results = []
 
         # Close client
         await stands4.client.aclose()
-
-        logger.info(f"[API] Found {len(results)} movies matching '{query}'")
 
         return {
             "query": query,

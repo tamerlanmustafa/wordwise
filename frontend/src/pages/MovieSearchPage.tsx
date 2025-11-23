@@ -120,9 +120,9 @@ export default function MovieSearchPage() {
       });
 
       // Classify the script using CEFR classifier
-      console.log('[CEFR CLASSIFICATION] Starting hybrid CEFR classification...');
+      // console.log('[CEFR CLASSIFICATION] Starting hybrid CEFR classification...');
       const cefrResult = await classifyMovieScript(scriptResponse.movie_id);
-      console.log('[CEFR RESULT]', cefrResult);
+      // console.log('[CEFR RESULT]', cefrResult);
 
       // Convert CEFR response to ScriptAnalysisResult format
       const analysis: ScriptAnalysisResult = {
