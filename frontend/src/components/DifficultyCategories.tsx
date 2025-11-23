@@ -5,13 +5,13 @@ import {
   AccordionSummary,
   AccordionDetails,
   Chip,
-  Grid,
   Paper,
   Divider,
   Stack
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { ScriptAnalysisResult, CEFRLevel } from '../types/script';
+import WordCarousel from './WordCarousel';
 
 interface DifficultyCategoriesProps {
   analysis: ScriptAnalysisResult;
@@ -31,8 +31,8 @@ const LEVEL_LABELS: Record<CEFRLevel, string> = {
   A2: 'A2 - Elementary',
   B1: 'B1 - Intermediate',
   B2: 'B2 - Upper Intermediate',
-  C1: 'C1 - Advanced',
-  C2: 'C2 - Proficient',
+  C1: 'C1/C2 - Advanced',
+  C2: 'C2 - Proficient',  // Not displayed (merged into C1)
 };
 
 export default function DifficultyCategories({ analysis }: DifficultyCategoriesProps) {
@@ -78,7 +78,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Words are classified using CEFR wordlists (Oxford 3000/5000, EFLLex) and frequency analysis.
-        Confidence scores show classification certainty. Showing top 50 words per level.
+        Words are sorted from easier to harder within each level based on frequency ranking.
       </Typography>
 
       {analysis.categories.map((category) => (
@@ -124,36 +124,11 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
             </Box>
           </AccordionSummary>
           <AccordionDetails sx={{ pt: 2 }}>
-            {category.words.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No words in this category
-              </Typography>
-            ) : (
-              <Grid container spacing={1}>
-                {category.words.slice(0, 50).map((wordFreq, index) => (
-                  <Grid item key={`${category.level}-${wordFreq.word}-${index}`}>
-                    <Chip
-                      label={`${wordFreq.word} `}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        borderColor: LEVEL_COLORS[category.level],
-                        '&:hover': {
-                          backgroundColor: `${LEVEL_COLORS[category.level]}10`,
-                        },
-                      }}
-                    />
-                  </Grid>
-                ))}
-                {category.words.length > 50 && (
-                  <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                      ... and {category.words.length - 50} more words
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-            )}
+            <WordCarousel
+              words={category.words}
+              levelColor={LEVEL_COLORS[category.level]}
+              wordsPerPage={30}
+            />
           </AccordionDetails>
         </Accordion>
       ))}
