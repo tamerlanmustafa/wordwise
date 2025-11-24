@@ -1,5 +1,6 @@
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import MovieSearchPage from './pages/MovieSearchPage';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 const theme = createTheme({
   palette: {
@@ -20,7 +21,9 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <MovieSearchPage />
+      <LanguageProvider>
+        <MovieSearchPage />
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

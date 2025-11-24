@@ -146,6 +146,21 @@ model MovieAlias {
   @@map("movie_aliases")
 }
 
+model TranslationCache {
+  id         Int      @id @default(autoincrement())
+  sourceText String   @map("source_text") @db.VarChar
+  sourceLang String?  @map("source_lang") @db.VarChar(10)
+  targetLang String   @map("target_lang") @db.VarChar(10)
+  translated String   @db.VarChar
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([sourceText, targetLang], map: "unique_translation")
+  @@index([sourceText], map: "ix_translation_cache_source_text")
+  @@index([targetLang], map: "ix_translation_cache_target_lang")
+  @@map("translation_cache")
+}
+
 enum difficultylevel {
   BEGINNER
   ELEMENTARY
