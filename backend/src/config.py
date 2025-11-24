@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     token: str = ""
     scripts_url: str = "https://www.stands4.com/services/v2/scripts.php"
 
+    # DeepL Translation API
+    deepl_api_key: str = ""
+    deepl_plan: str = "free"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

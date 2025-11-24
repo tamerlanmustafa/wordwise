@@ -12,6 +12,8 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { ScriptAnalysisResult, CEFRLevel } from '../types/script';
 import WordCarousel from './WordCarousel';
+import LanguageSelector from './LanguageSelector';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface DifficultyCategoriesProps {
   analysis: ScriptAnalysisResult;
@@ -36,15 +38,29 @@ const LEVEL_LABELS: Record<CEFRLevel, string> = {
 };
 
 export default function DifficultyCategories({ analysis }: DifficultyCategoriesProps) {
+  const { targetLanguage } = useLanguage();
+
   return (
     <Box>
       {/* Summary Stats */}
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5" gutterBottom fontWeight="bold">
-          {analysis.title}
-        </Typography>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          alignItems={{ xs: 'flex-start', md: 'center' }}
+          justifyContent="space-between"
+          spacing={2}
+          sx={{ mb: 2 }}
+        >
+          <Typography variant="h5" fontWeight="bold">
+            {analysis.title}
+          </Typography>
+
+          <LanguageSelector size="small" showLabel={false} />
+        </Stack>
+
         <Divider sx={{ my: 2 }} />
-        <Stack direction="row" spacing={4}>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4}>
           <Box>
             <Typography variant="body2" color="text.secondary">
               Total Words in Script
@@ -78,7 +94,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Words are classified using CEFR wordlists (Oxford 3000/5000, EFLLex) and frequency analysis.
-        Words are sorted from easier to harder within each level based on frequency ranking.
+        Click any word to view its translation. Words are sorted from easier to harder within each level.
       </Typography>
 
       {analysis.categories.map((category) => (
@@ -128,6 +144,7 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
               words={category.words}
               levelColor={LEVEL_COLORS[category.level]}
               wordsPerPage={30}
+              targetLang={targetLanguage}
             />
           </AccordionDetails>
         </Accordion>

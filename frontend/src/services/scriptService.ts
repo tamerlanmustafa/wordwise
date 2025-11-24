@@ -63,6 +63,40 @@ export interface CEFRClassificationResponse {
   };
 }
 
+export interface TranslationRequest {
+  text: string;
+  target_lang: string;
+  source_lang?: string;
+}
+
+export interface TranslationResponse {
+  source: string;
+  translated: string;
+  target_lang: string;
+  source_lang: string | null;
+  cached: boolean;
+  created_at?: string;
+}
+
+export interface BatchTranslationRequest {
+  texts: string[];
+  target_lang: string;
+  source_lang?: string;
+}
+
+export interface BatchTranslationResponse {
+  results: TranslationResponse[];
+  total: number;
+  cached_count: number;
+  api_calls: number;
+}
+
+export interface TranslationCacheStats {
+  total_translations: number;
+  languages: Record<string, number>;
+  cache_enabled: boolean;
+}
+
 /**
  * Search for movies matching a query.
  * Returns ALL matching movies so the user can select the exact one.
@@ -184,6 +218,112 @@ export async function classifyMovieScript(movieId: number): Promise<CEFRClassifi
     return response.data;
   } catch (error) {
     console.error('[API ERROR - CLASSIFY SCRIPT]', error);
+    throw error;
+  }
+}
+
+/**
+ * Translate text to target language using DeepL
+ * Automatically caches translations to minimize API calls
+ */
+export async function translateText(
+  text: string,
+  targetLang: string,
+  sourceLang: string = 'auto'
+): Promise<TranslationResponse> {
+  console.log('[API REQUEST] /translate -', text, '→', targetLang);
+
+  try {
+    const response = await axios.post<TranslationResponse>(
+      `${API_BASE_URL}/translate`,
+      {
+        text,
+        target_lang: targetLang,
+        source_lang: sourceLang
+      }
+    );
+
+    console.log('[API RESPONSE - TRANSLATION]', {
+      translated: response.data.translated,
+      cached: response.data.cached,
+      source_lang: response.data.source_lang
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - TRANSLATE]', error);
+    throw error;
+  }
+}
+
+/**
+ * Translate multiple texts in a single request
+ * More efficient than individual translations
+ */
+export async function translateBatch(
+  texts: string[],
+  targetLang: string,
+  sourceLang: string = 'auto'
+): Promise<BatchTranslationResponse> {
+  console.log('[API REQUEST] /translate/batch -', texts.length, 'texts →', targetLang);
+
+  try {
+    const response = await axios.post<BatchTranslationResponse>(
+      `${API_BASE_URL}/translate/batch`,
+      {
+        texts,
+        target_lang: targetLang,
+        source_lang: sourceLang
+      }
+    );
+
+    console.log('[API RESPONSE - BATCH TRANSLATION]', {
+      total: response.data.total,
+      cached: response.data.cached_count,
+      api_calls: response.data.api_calls
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - BATCH TRANSLATE]', error);
+    throw error;
+  }
+}
+
+/**
+ * Get translation cache statistics
+ */
+export async function getTranslationCacheStats(): Promise<TranslationCacheStats> {
+  console.log('[API REQUEST] /translate/cache/stats');
+
+  try {
+    const response = await axios.get<TranslationCacheStats>(
+      `${API_BASE_URL}/translate/cache/stats`
+    );
+
+    console.log('[API RESPONSE - CACHE STATS]', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - CACHE STATS]', error);
+    throw error;
+  }
+}
+
+/**
+ * Check translation service health
+ */
+export async function checkTranslationHealth(): Promise<{
+  status: string;
+  api_configured: boolean;
+  plan: string;
+  mock_mode: boolean;
+  message: string;
+}> {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/translate/health`);
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - TRANSLATION HEALTH]', error);
     throw error;
   }
 }
