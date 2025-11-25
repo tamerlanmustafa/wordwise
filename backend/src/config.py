@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     deepl_api_key: str = ""
     deepl_plan: str = "free"
 
+    # Google Cloud Translate API (fallback)
+    google_application_credentials: str = ""
+    google_translate_enabled: str = "false"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

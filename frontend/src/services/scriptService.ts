@@ -75,6 +75,7 @@ export interface TranslationResponse {
   target_lang: string;
   source_lang: string | null;
   cached: boolean;
+  provider?: string | null;
   created_at?: string;
 }
 

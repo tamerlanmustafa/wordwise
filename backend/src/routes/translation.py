@@ -17,6 +17,7 @@ from ..utils.deepl_client import (
     DeepLQuotaExceededError,
     DeepLInvalidLanguageError
 )
+from ..utils.google_translate_client import GoogleTranslateError
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class TranslationResponse(BaseModel):
     target_lang: str = Field(..., description="Target language code")
     source_lang: Optional[str] = Field(None, description="Detected source language")
     cached: bool = Field(..., description="Whether result came from cache")
+    provider: Optional[str] = Field(None, description="Translation provider used (deepl, google, cache)")
     created_at: Optional[str] = Field(None, description="Cache entry timestamp (ISO format)")
 
 
@@ -138,6 +140,12 @@ async def translate_text(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid language code: {str(e)}"
+        )
+    except GoogleTranslateError as e:
+        logger.error(f"Google Translate error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Translation failed (Google fallback): {str(e)}"
         )
     except DeepLError as e:
         logger.error(f"Translation error: {e}")
