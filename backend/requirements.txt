@@ -43,6 +43,7 @@ numpy==1.24.3
 
 # Translation Service
 aiohttp==3.9.1
+google-cloud-translate==3.11.3
 
 # Testing
 pytest==7.4.3
