@@ -67,6 +67,7 @@ export interface TranslationRequest {
   text: string;
   target_lang: string;
   source_lang?: string;
+  user_id?: number;
 }
 
 export interface TranslationResponse {
@@ -83,6 +84,7 @@ export interface BatchTranslationRequest {
   texts: string[];
   target_lang: string;
   source_lang?: string;
+  user_id?: number;
 }
 
 export interface BatchTranslationResponse {
@@ -96,6 +98,31 @@ export interface TranslationCacheStats {
   total_translations: number;
   languages: Record<string, number>;
   cache_enabled: boolean;
+}
+
+export interface DifficultWord {
+  word: string;
+  target_lang: string;
+  translation: string;
+  attempt_count: number;
+  first_translated: string;
+  last_translated: string;
+  providers_used: string[];
+}
+
+export interface DifficultWordsResponse {
+  words: DifficultWord[];
+  total: number;
+  min_attempts: number;
+}
+
+export interface UserTranslationStats {
+  user_id: number;
+  total_translations: number;
+  unique_words: number;
+  languages: Record<string, number>;
+  providers: Record<string, number>;
+  most_recent: string | null;
 }
 
 /**
@@ -224,15 +251,17 @@ export async function classifyMovieScript(movieId: number): Promise<CEFRClassifi
 }
 
 /**
- * Translate text to target language using DeepL
+ * Translate text to target language using DeepL or Google Translate
  * Automatically caches translations to minimize API calls
+ * Tracks user translation attempts when userId is provided
  */
 export async function translateText(
   text: string,
   targetLang: string,
-  sourceLang: string = 'auto'
+  sourceLang: string = 'auto',
+  userId?: number
 ): Promise<TranslationResponse> {
-  console.log('[API REQUEST] /translate -', text, '→', targetLang);
+  console.log('[API REQUEST] /translate -', text, '→', targetLang, userId ? `(user: ${userId})` : '');
 
   try {
     const response = await axios.post<TranslationResponse>(
@@ -240,13 +269,15 @@ export async function translateText(
       {
         text,
         target_lang: targetLang,
-        source_lang: sourceLang
+        source_lang: sourceLang,
+        user_id: userId
       }
     );
 
     console.log('[API RESPONSE - TRANSLATION]', {
       translated: response.data.translated,
       cached: response.data.cached,
+      provider: response.data.provider,
       source_lang: response.data.source_lang
     });
 
@@ -260,13 +291,17 @@ export async function translateText(
 /**
  * Translate multiple texts in a single request
  * More efficient than individual translations
+ * Tracks user translation attempts when userId is provided
  */
 export async function translateBatch(
   texts: string[],
   targetLang: string,
-  sourceLang: string = 'auto'
+  sourceLang: string = 'auto',
+  userId?: number
 ): Promise<BatchTranslationResponse> {
-  console.log('[API REQUEST] /translate/batch -', texts.length, 'texts →', targetLang);
+  console.log('[API REQUEST] /translate/batch -', texts.length, 'texts →', targetLang, userId ? `(user: ${userId})` : '');
+  console.log('[DEBUG] First 5 texts:', texts.slice(0, 5));
+  console.log('[DEBUG] All texts:', texts);
 
   try {
     const response = await axios.post<BatchTranslationResponse>(
@@ -274,7 +309,8 @@ export async function translateBatch(
       {
         texts,
         target_lang: targetLang,
-        source_lang: sourceLang
+        source_lang: sourceLang,
+        user_id: userId
       }
     );
 
@@ -306,6 +342,71 @@ export async function getTranslationCacheStats(): Promise<TranslationCacheStats>
     return response.data;
   } catch (error) {
     console.error('[API ERROR - CACHE STATS]', error);
+    throw error;
+  }
+}
+
+/**
+ * Get words that user has translated multiple times (indicating difficulty)
+ * Helps identify which words are harder for the user to learn
+ */
+export async function getUserDifficultWords(
+  userId: number,
+  targetLang?: string,
+  minAttempts: number = 2,
+  limit: number = 50
+): Promise<DifficultWordsResponse> {
+  console.log('[API REQUEST] /translate/user/${userId}/difficult-words');
+
+  try {
+    const params: any = { min_attempts: minAttempts, limit };
+    if (targetLang) {
+      params.target_lang = targetLang;
+    }
+
+    const response = await axios.get<DifficultWordsResponse>(
+      `${API_BASE_URL}/translate/user/${userId}/difficult-words`,
+      { params }
+    );
+
+    console.log('[API RESPONSE - DIFFICULT WORDS]', {
+      total: response.data.total,
+      words: response.data.words.length
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - DIFFICULT WORDS]', error);
+    throw error;
+  }
+}
+
+/**
+ * Get user's translation statistics
+ * Returns overview of translation activity, languages used, and providers
+ */
+export async function getUserTranslationStats(
+  userId: number,
+  targetLang?: string
+): Promise<UserTranslationStats> {
+  console.log('[API REQUEST] /translate/user/${userId}/stats');
+
+  try {
+    const params: any = {};
+    if (targetLang) {
+      params.target_lang = targetLang;
+    }
+
+    const response = await axios.get<UserTranslationStats>(
+      `${API_BASE_URL}/translate/user/${userId}/stats`,
+      { params }
+    );
+
+    console.log('[API RESPONSE - USER STATS]', response.data);
+
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - USER STATS]', error);
     throw error;
   }
 }

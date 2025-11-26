@@ -6,7 +6,7 @@ Provides endpoints for text translation using DeepL API with caching.
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import logging
 
 from prisma import Prisma
@@ -30,6 +30,7 @@ class TranslationRequest(BaseModel):
     text: str = Field(..., description="Text to translate", max_length=5000)
     target_lang: str = Field(..., description="Target language code (e.g., 'DE', 'FR', 'ES')")
     source_lang: str = Field(default="auto", description="Source language or 'auto' for detection")
+    user_id: Optional[int] = Field(None, description="User ID for tracking translation attempts")
 
     @validator('text')
     def validate_text(cls, v):
@@ -48,17 +49,28 @@ class TranslationRequest(BaseModel):
 
 class BatchTranslationRequest(BaseModel):
     """Request model for batch translation"""
-    texts: List[str] = Field(..., description="List of texts to translate", max_items=100)
+    texts: List[str] = Field(..., description="List of texts to translate", max_items=2000)
     target_lang: str = Field(..., description="Target language code")
     source_lang: str = Field(default="auto", description="Source language or 'auto'")
+    user_id: Optional[int] = Field(None, description="User ID for tracking translation attempts")
 
     @validator('texts')
     def validate_texts(cls, v):
         if not v:
             raise ValueError("Texts list cannot be empty")
-        if len(v) > 100:
-            raise ValueError("Maximum 100 texts per batch request")
-        return [text.strip() for text in v if text.strip()]
+        if len(v) > 2000:
+            raise ValueError("Maximum 2000 texts per batch request")
+
+        # Ensure all items are strings
+        if not all(isinstance(text, str) for text in v):
+            raise ValueError("All texts must be strings")
+
+        # Filter out empty/whitespace-only strings
+        cleaned = [text.strip() for text in v if text.strip()]
+        # Verify we still have texts after filtering
+        if not cleaned:
+            raise ValueError("Texts list cannot contain only empty strings")
+        return cleaned
 
 
 class TranslationResponse(BaseModel):
@@ -124,7 +136,8 @@ async def translate_text(
         result = await service.get_translation(
             text=request.text,
             target_lang=request.target_lang,
-            source_lang=request.source_lang
+            source_lang=request.source_lang,
+            user_id=request.user_id
         )
 
         return TranslationResponse(**result)
@@ -174,12 +187,15 @@ async def translate_batch(
     - Max 100 texts per request
     - Each text max 5000 characters
     """
+    logger.info(f"[BATCH TRANSLATE] Received {len(request.texts)} texts, target={request.target_lang}")
+    logger.debug(f"[BATCH TRANSLATE] First 5 texts: {request.texts[:5]}")
     try:
         service = TranslationService(db)
         results = await service.batch_translate(
             texts=request.texts,
             target_lang=request.target_lang,
-            source_lang=request.source_lang
+            source_lang=request.source_lang,
+            user_id=request.user_id
         )
 
         # Count cached vs API calls
@@ -293,3 +309,106 @@ async def translation_health_check():
         "message": "Translation service is operational" if api_key_configured
                    else "Running in mock mode - configure DEEPL_API_KEY for real translations"
     }
+
+
+# User Analytics Endpoints
+class DifficultWordsResponse(BaseModel):
+    """Response model for difficult words"""
+    words: List[Dict[str, Any]]
+    total: int
+    min_attempts: int
+
+
+class UserStatsResponse(BaseModel):
+    """Response model for user translation statistics"""
+    user_id: int
+    total_translations: int
+    unique_words: int
+    languages: Dict[str, int]
+    providers: Dict[str, int]
+    most_recent: Optional[str]
+
+
+@router.get("/user/{user_id}/difficult-words", response_model=DifficultWordsResponse)
+async def get_difficult_words(
+    user_id: int,
+    target_lang: Optional[str] = None,
+    min_attempts: int = 2,
+    limit: int = 50,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Get words that user has translated multiple times (indicating difficulty)
+
+    This endpoint helps identify which words are harder for the user to learn
+    by tracking how many times they've looked up the same word.
+
+    Args:
+        user_id: User ID
+        target_lang: Filter by target language (optional)
+        min_attempts: Minimum translation attempts to consider word "difficult" (default: 2)
+        limit: Maximum number of words to return (default: 50)
+
+    Returns:
+        List of difficult words sorted by attempt count (highest first)
+    """
+    try:
+        service = TranslationService(db)
+        words = await service.get_user_difficult_words(
+            user_id=user_id,
+            target_lang=target_lang,
+            min_attempts=min_attempts,
+            limit=limit
+        )
+
+        return DifficultWordsResponse(
+            words=words,
+            total=len(words),
+            min_attempts=min_attempts
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get difficult words for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve difficult words"
+        )
+
+
+@router.get("/user/{user_id}/stats", response_model=UserStatsResponse)
+async def get_user_translation_stats(
+    user_id: int,
+    target_lang: Optional[str] = None,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Get user's translation statistics
+
+    Returns overview of user's translation activity including:
+    - Total number of translations
+    - Number of unique words translated
+    - Breakdown by language and provider
+    - Most recent translation timestamp
+
+    Args:
+        user_id: User ID
+        target_lang: Filter by target language (optional)
+
+    Returns:
+        User translation statistics
+    """
+    try:
+        service = TranslationService(db)
+        stats = await service.get_user_translation_stats(
+            user_id=user_id,
+            target_lang=target_lang
+        )
+
+        return UserStatsResponse(**stats)
+
+    except Exception as e:
+        logger.error(f"Failed to get translation stats for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve user statistics"
+        )

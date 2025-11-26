@@ -1,43 +1,21 @@
 import {
   Box,
   Typography,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Chip,
   Paper,
   Divider,
   Stack
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import type { ScriptAnalysisResult, CEFRLevel } from '../types/script';
-import WordCarousel from './WordCarousel';
+import type { ScriptAnalysisResult } from '../types/script';
+import VocabularyTabs from './VocabularyTabs';
 import LanguageSelector from './LanguageSelector';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface DifficultyCategoriesProps {
   analysis: ScriptAnalysisResult;
+  userId?: number;
 }
 
-const LEVEL_COLORS: Record<CEFRLevel, string> = {
-  A1: '#4caf50', // Green - easiest
-  A2: '#8bc34a', // Light green
-  B1: '#ffc107', // Amber
-  B2: '#ff9800', // Orange
-  C1: '#ff5722', // Deep orange
-  C2: '#f44336', // Red - hardest
-};
-
-const LEVEL_LABELS: Record<CEFRLevel, string> = {
-  A1: 'A1 - Beginner',
-  A2: 'A2 - Elementary',
-  B1: 'B1 - Intermediate',
-  B2: 'B2 - Upper Intermediate',
-  C1: 'C1/C2 - Advanced',
-  C2: 'C2 - Proficient',  // Not displayed (merged into C1)
-};
-
-export default function DifficultyCategories({ analysis }: DifficultyCategoriesProps) {
+export default function DifficultyCategories({ analysis, userId }: DifficultyCategoriesProps) {
   const { targetLanguage } = useLanguage();
 
   return (
@@ -88,67 +66,20 @@ export default function DifficultyCategories({ analysis }: DifficultyCategoriesP
         </Stack>
       </Paper>
 
-      {/* Difficulty Categories */}
+      {/* Vocabulary Tabs - On-Demand Translations */}
       <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
         Vocabulary by Difficulty Level
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Words are classified using CEFR wordlists (Oxford 3000/5000, EFLLex) and frequency analysis.
-        Click any word to view its translation. Words are sorted from easier to harder within each level.
+        Translations are loaded on-demand (10 words per page) to optimize API usage.
       </Typography>
 
-      {analysis.categories.map((category) => (
-        <Accordion
-          key={category.level}
-          defaultExpanded={category.level === 'A1'}
-          sx={{
-            mb: 2,
-            '&:before': { display: 'none' },
-            boxShadow: 2,
-          }}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon />}
-            sx={{
-              backgroundColor: `${LEVEL_COLORS[category.level]}15`,
-              borderLeft: `4px solid ${LEVEL_COLORS[category.level]}`,
-              '&:hover': {
-                backgroundColor: `${LEVEL_COLORS[category.level]}25`,
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-              <Chip
-                label={LEVEL_LABELS[category.level]}
-                sx={{
-                  backgroundColor: LEVEL_COLORS[category.level],
-                  color: 'white',
-                  fontWeight: 'bold',
-                  minWidth: 120,
-                }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                {category.description}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ ml: 'auto', fontWeight: 'medium' }}
-              >
-                {category.words.length} words
-              </Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails sx={{ pt: 2 }}>
-            <WordCarousel
-              words={category.words}
-              levelColor={LEVEL_COLORS[category.level]}
-              wordsPerPage={30}
-              targetLang={targetLanguage}
-            />
-          </AccordionDetails>
-        </Accordion>
-      ))}
+      <VocabularyTabs
+        categories={analysis.categories}
+        targetLang={targetLanguage}
+        userId={userId}
+      />
     </Box>
   );
 }

@@ -9,20 +9,21 @@ datasource db {
 }
 
 model User {
-  id                 Int               @id @default(autoincrement())
-  email              String            @unique(map: "ix_users_email") @db.VarChar
-  username           String            @unique(map: "ix_users_username") @db.VarChar
-  passwordHash       String?           @map("password_hash") @db.VarChar
-  languagePreference String?           @map("language_preference") @db.VarChar
-  proficiencyLevel   proficiencylevel? @map("proficiency_level")
-  isActive           Boolean?          @map("is_active")
-  isAdmin            Boolean?          @map("is_admin")
-  createdAt          DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime?         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  oauthProvider      oauthprovider     @map("oauth_provider")
-  googleId           String?           @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
-  profilePictureUrl  String?           @map("profile_picture_url") @db.VarChar
+  id                 Int                       @id @default(autoincrement())
+  email              String                    @unique(map: "ix_users_email") @db.VarChar
+  username           String                    @unique(map: "ix_users_username") @db.VarChar
+  passwordHash       String?                   @map("password_hash") @db.VarChar
+  languagePreference String?                   @map("language_preference") @db.VarChar
+  proficiencyLevel   proficiencylevel?         @map("proficiency_level")
+  isActive           Boolean?                  @map("is_active")
+  isAdmin            Boolean?                  @map("is_admin")
+  createdAt          DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime?                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  oauthProvider      oauthprovider             @map("oauth_provider")
+  googleId           String?                   @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
+  profilePictureUrl  String?                   @map("profile_picture_url") @db.VarChar
   wordLists          UserWordList[]
+  translationHistory UserTranslationHistory[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -159,6 +160,22 @@ model TranslationCache {
   @@index([sourceText], map: "ix_translation_cache_source_text")
   @@index([targetLang], map: "ix_translation_cache_target_lang")
   @@map("translation_cache")
+}
+
+model UserTranslationHistory {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  word            String   @db.VarChar
+  targetLang      String   @map("target_lang") @db.VarChar(10)
+  translationUsed String   @map("translation_used") @db.VarChar
+  provider        String?  @db.VarChar(20)
+  translatedAt    DateTime @default(now()) @map("translated_at") @db.Timestamptz(6)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "ix_user_translation_history_user_id")
+  @@index([userId, word], map: "ix_user_translation_history_user_word")
+  @@index([userId, translatedAt], map: "ix_user_translation_history_user_date")
+  @@map("user_translation_history")
 }
 
 enum difficultylevel {

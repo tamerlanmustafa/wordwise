@@ -4,7 +4,7 @@ import { translateText, type TranslationResponse } from '../services/scriptServi
 interface UseTranslationResult {
   translated: string | null;
   translatedData: TranslationResponse | null;
-  translate: (text: string, targetLang: string, sourceLang?: string) => Promise<void>;
+  translate: (text: string, targetLang: string, sourceLang?: string, userId?: number) => Promise<void>;
   loading: boolean;
   error: string | null;
   cached: boolean;
@@ -12,13 +12,14 @@ interface UseTranslationResult {
 }
 
 /**
- * Hook for translating text using DeepL API with caching
+ * Hook for translating text using hybrid DeepL + Google Translate with caching
+ * Automatically tracks user translation attempts when userId is provided
  *
  * @example
  * const { translated, translate, loading, error, cached } = useTranslation();
  *
- * // Translate a word
- * await translate('escape', 'DE');
+ * // Translate a word (with user tracking)
+ * await translate('escape', 'DE', 'auto', userId);
  * console.log(translated); // "Flucht"
  * console.log(cached); // true/false
  */
@@ -30,7 +31,8 @@ export function useTranslation(): UseTranslationResult {
   const translate = useCallback(async (
     text: string,
     targetLang: string,
-    sourceLang: string = 'auto'
+    sourceLang: string = 'auto',
+    userId?: number
   ) => {
     // Don't translate empty text
     if (!text || !text.trim()) {
@@ -42,7 +44,7 @@ export function useTranslation(): UseTranslationResult {
     setError(null);
 
     try {
-      const response = await translateText(text, targetLang, sourceLang);
+      const response = await translateText(text, targetLang, sourceLang, userId);
       setTranslatedData(response);
     } catch (err: any) {
       console.error('Translation error:', err);
