@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
 
+    #TMDB API
+    tmdb_api_key: str
+
     # Application
     app_name: str = "WordWise"
     app_version: str = "1.0.0"
@@ -35,6 +38,14 @@ class Settings(BaseSettings):
     user_id: str = ""
     token: str = ""
     scripts_url: str = "https://www.stands4.com/services/v2/scripts.php"
+
+    # DeepL Translation API
+    deepl_api_key: str = ""
+    deepl_plan: str = "free"
+
+    # Google Cloud Translate API (fallback)
+    google_application_credentials: str = ""
+    google_translate_enabled: str = "false"
 
     class Config:
         env_file = ".env"
