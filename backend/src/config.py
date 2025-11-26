@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
 
+    #TMDB API
+    tmdb_api_key: str
+
     # Application
     app_name: str = "WordWise"
     app_version: str = "1.0.0"
