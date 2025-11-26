@@ -204,3 +204,66 @@ Complete rewrite of the application stack for better performance, type safety, a
 - add nested pagination in levels of words, combine c1 and c2 together only on ui until we figure out why c1 doesnt get filled
 - add translation from DeepL Free tier, (azerbaijani is not supported as a target language)
 
+
+
+## [2.2.0] - 2025-11-24
+
+### Added
+- **User Translation Tracking System** - Track translation attempts to identify difficult words
+  - New `UserTranslationHistory` table to record every translation attempt
+  - Tracks: word, target language, translation used, provider, timestamp
+  - Automatic tracking when user_id is provided in translation requests
+  - No impact on performance - tracking runs async without blocking translations
+
+- **Learning Analytics API Endpoints**
+  - `GET /translate/user/{user_id}/difficult-words` - Get words translated multiple times
+    - Customizable min_attempts threshold (default: 2)
+    - Sorted by attempt count (highest first)
+    - Shows first/last translation dates and providers used
+  - `GET /translate/user/{user_id}/stats` - Get user translation statistics
+    - Total translations count
+    - Unique words count
+    - Breakdown by language and provider
+    - Most recent translation timestamp
+
+- **Hybrid Translation Provider System**
+  - DeepL as primary provider (31 supported languages)
+  - Google Cloud Translate as fallback for unsupported languages
+  - Automatic provider selection based on language support
+  - Azerbaijani (AZ) automatically uses Google Translate fallback
+  - All other languages use DeepL (ES, FR, DE, TR, etc.)
+  - Provider tracking in translation history and responses
+
+### Changed
+- **Translation Service Enhanced**
+  - Added optional `user_id` parameter to track translation attempts
+  - Provider field now shows: "deepl", "google", or "cache"
+  - Comprehensive logging for provider selection and fallbacks
+  - All translation methods support user tracking (single + batch)
+
+- **Frontend Translation Updates**
+  - Updated `translateText()` and `translateBatch()` to accept userId
+  - Added `getUserDifficultWords()` API function
+  - Added `getUserTranslationStats()` API function
+  - Updated `useTranslation` hook to support user tracking
+  - New TypeScript interfaces: DifficultWord, DifficultWordsResponse, UserTranslationStats
+
+### Database Schema
+- **New Model: UserTranslationHistory**
+  - Fields: user_id, word, target_lang, translation_used, provider, translated_at
+  - Indexes on: user_id, (user_id + word), (user_id + translated_at)
+  - Cascade delete when user is removed
+  - Efficiently stores every translation attempt for analytics
+
+### Use Cases
+- **Identify Difficult Words**: See which words user keeps translating (struggling to remember)
+- **Personalized Learning**: Create study lists based on translation frequency
+- **Progress Tracking**: Monitor user's language learning journey
+- **Provider Analytics**: Track which translation service is being used most
+- **Language Focus**: See which languages user is actively learning
+
+### Testing
+- Added `test_translation_tracking.py` - Comprehensive test suite
+- Verifies user tracking, difficult word detection, statistics, and provider tracking
+- All tests passing successfully
+
