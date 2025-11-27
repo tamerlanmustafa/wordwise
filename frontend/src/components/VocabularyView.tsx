@@ -168,14 +168,20 @@ export default function VocabularyView({
           const newMap = new Map(newGroups[activeTab].translatedWords);
 
           batchResponse.results.forEach((result) => {
-            newMap.set(result.source.toLowerCase(), {
-              word: result.source,
-              lemma: result.source,
-              translation: result.translated,
-              confidence: undefined,
-              cached: result.cached,
-              provider: result.provider
-            });
+            const sourceLower = result.source.toLowerCase();
+            const translationLower = result.translated.toLowerCase();
+
+            // Skip if source and translation are the same
+            if (sourceLower !== translationLower) {
+              newMap.set(sourceLower, {
+                word: sourceLower,
+                lemma: sourceLower,
+                translation: translationLower,
+                confidence: undefined,
+                cached: result.cached,
+                provider: result.provider
+              });
+            }
           });
 
           newGroups[activeTab] = {
@@ -379,6 +385,11 @@ export default function VocabularyView({
                         const translatedWord = activeGroup.translatedWords.get(wordFreq.word.toLowerCase());
                         const isLoading = !translatedWord && loading;
 
+                        // Skip words where source and translation are the same
+                        if (!isLoading && !translatedWord) {
+                          return null;
+                        }
+
                         return (
                           <Box key={`${wordFreq.lemma}-${index}`}>
                             <ListItem
@@ -395,7 +406,7 @@ export default function VocabularyView({
                                   <Skeleton variant="text" width="60%" />
                                   <Skeleton variant="text" width="40%" />
                                 </Stack>
-                              ) : (
+                              ) : translatedWord ? (
                                 <Stack
                                   direction="row"
                                   alignItems="center"
@@ -411,7 +422,7 @@ export default function VocabularyView({
                                         color: 'text.primary'
                                       }}
                                     >
-                                      {wordFreq.word}
+                                      {wordFreq.word.toLowerCase()}
                                       <Typography
                                         component="span"
                                         variant="body1"
@@ -431,7 +442,7 @@ export default function VocabularyView({
                                           fontWeight: 500
                                         }}
                                       >
-                                        {translatedWord?.translation || wordFreq.word}
+                                        {translatedWord.translation}
                                       </Typography>
                                     </Typography>
 
@@ -490,7 +501,7 @@ export default function VocabularyView({
                                     </IconButton>
                                   </Stack>
                                 </Stack>
-                              )}
+                              ) : null}
                             </ListItem>
                             {index < currentPageWords.length - 1 && <Divider />}
                           </Box>
