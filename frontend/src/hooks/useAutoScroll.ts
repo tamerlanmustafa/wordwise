@@ -12,20 +12,17 @@ export function useAutoScroll({
   pauseOnHover = true,
 }: UseAutoScrollOptions = {}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const isPausedRef = useRef(false);
-  const handlersAttachedRef = useRef(false);
+  const targetSpeedRef = useRef(speed);
+  const currentSpeedRef = useRef(speed);
+
+  const setSpeed = (newSpeed: number) => {
+    targetSpeedRef.current = newSpeed;
+  };
 
   useEffect(() => {
     let animationId: number;
     let lastTime = 0;
     let isInitialized = false;
-
-    const handleMouseEnter = () => {
-      isPausedRef.current = true;
-    };
-    const handleMouseLeave = () => {
-      isPausedRef.current = false;
-    };
 
     const scroll = (timestamp: number) => {
       const el = containerRef.current;
@@ -42,33 +39,31 @@ export function useAutoScroll({
         }
       }
 
-      // Attach hover listeners once when element is available
-      if (!handlersAttachedRef.current && pauseOnHover) {
-        handlersAttachedRef.current = true;
-        el.addEventListener("mouseenter", handleMouseEnter);
-        el.addEventListener("mouseleave", handleMouseLeave);
-      }
-
       if (!lastTime) lastTime = timestamp;
       const delta = timestamp - lastTime;
       lastTime = timestamp;
 
-      // Only scroll if not paused
-      if (!isPausedRef.current) {
-        const distance = (speed * delta) / 1000;
+      // Smoothly transition speed
+      const speedDiff = targetSpeedRef.current - currentSpeedRef.current;
+      if (Math.abs(speedDiff) > 0.1) {
+        currentSpeedRef.current += speedDiff * 0.1; // Smooth transition
+      } else {
+        currentSpeedRef.current = targetSpeedRef.current;
+      }
 
-        if (direction === "right") {
-          el.scrollLeft += distance;
-          const max = el.scrollWidth - el.clientWidth;
-          if (el.scrollLeft >= max / 2) {
-            el.scrollLeft = 0;
-          }
-        } else {
-          el.scrollLeft -= distance;
-          const max = el.scrollWidth - el.clientWidth;
-          if (el.scrollLeft <= max / 2) {
-            el.scrollLeft = max;
-          }
+      const distance = (currentSpeedRef.current * delta) / 1000;
+
+      if (direction === "right") {
+        el.scrollLeft += distance;
+        const max = el.scrollWidth - el.clientWidth;
+        if (el.scrollLeft >= max / 2) {
+          el.scrollLeft = 0;
+        }
+      } else {
+        el.scrollLeft -= distance;
+        const max = el.scrollWidth - el.clientWidth;
+        if (el.scrollLeft <= max / 2) {
+          el.scrollLeft = max;
         }
       }
 
@@ -79,14 +74,8 @@ export function useAutoScroll({
 
     return () => {
       if (animationId) cancelAnimationFrame(animationId);
-      const el = containerRef.current;
-      if (el && handlersAttachedRef.current) {
-        el.removeEventListener("mouseenter", handleMouseEnter);
-        el.removeEventListener("mouseleave", handleMouseLeave);
-        handlersAttachedRef.current = false;
-      }
     };
   }, [speed, direction, pauseOnHover]);
 
-  return containerRef;
+  return { containerRef, setSpeed };
 }

@@ -18,14 +18,14 @@ export default function MovieCarousel({
 }: MovieCarouselProps) {
   const direction: "left" | "right" = index % 2 === 0 ? "right" : "left";
 
-  /**
-   * This ref MUST be attached directly to the REAL scroll container
-   * or scrolling will never work.
-   */
-  const scrollRef = useAutoScroll({
+  const { containerRef: scrollRef, setSpeed } = useAutoScroll({
     speed: 30,
     direction,
   });
+
+  const handleCardHover = (paused: boolean) => {
+    setSpeed(paused ? 0 : 30);
+  };
 
   if (loading) {
     return (
@@ -70,11 +70,16 @@ export default function MovieCarousel({
           overflowY: "hidden",
           padding: "8px 0",
           scrollbarWidth: "none",
-          cursor: "grab",
+          cursor: "default",
         }}
       >
         {duplicated.map((movie, idx) => (
-          <div key={`${movie.id}-${idx}`} style={{ flexShrink: 0 }}>
+          <div
+            key={`${movie.id}-${idx}`}
+            style={{ flexShrink: 0, cursor: "pointer" }}
+            onMouseEnter={() => handleCardHover(true)}
+            onMouseLeave={() => handleCardHover(false)}
+          >
             <MovieCard movie={movie} />
           </div>
         ))}
