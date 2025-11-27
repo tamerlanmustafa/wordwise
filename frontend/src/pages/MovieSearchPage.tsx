@@ -12,13 +12,14 @@ import {
 } from '@mui/material';
 import MovieSearchBar from '../components/MovieSearchBar';
 import MovieSelectionList from '../components/MovieSelectionList';
-import DifficultyCategories from '../components/DifficultyCategories';
+import VocabularyView from '../components/VocabularyView';
 import type { ScriptAnalysisResult } from '../types/script';
 import {
   searchMovies,
   fetchMovieScriptById,
   classifyMovieScript,
-  type MovieSearchResult
+  type MovieSearchResult,
+  type TMDBMetadata
 } from '../services/scriptService';
 
 type ErrorType = 'error' | 'not-found' | null;
@@ -49,6 +50,7 @@ export default function MovieSearchPage() {
   const [selectedMovie, setSelectedMovie] = useState<MovieSearchResult | null>(null);
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [searchedQuery, setSearchedQuery] = useState<string>('');
+  const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
   const [scriptInfo, setScriptInfo] = useState<{
     source: string;
     fromCache: boolean;
@@ -63,10 +65,11 @@ export default function MovieSearchPage() {
     setSelectedMovie(null);
     setAnalysis(null);
     setScriptInfo(null);
+    setTmdbMetadata(null);
     setSearchedQuery(query);
 
     try {
-      // Search for ALL matching movies
+      // Search for ALL matching movies (includes TMDB metadata)
       const searchResponse = await searchMovies(query);
 
       if (searchResponse.total === 0) {
@@ -77,6 +80,8 @@ export default function MovieSearchPage() {
       } else {
         // Show the list of results for user selection
         setSearchResults(searchResponse.results);
+        // Store TMDB metadata for display
+        setTmdbMetadata(searchResponse.tmdb_metadata);
       }
     } catch (err: any) {
       console.error('[SEARCH ERROR]', err);
@@ -220,25 +225,13 @@ export default function MovieSearchPage() {
     setSearchResults([]);
     setSelectedMovie(null);
     setSearchedQuery('');
+    setTmdbMetadata(null);
   };
 
   const loading = searchLoading || analyzeLoading;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography variant="h3" component="h1" fontWeight="bold" gutterBottom>
-          Movie Script Analyzer
-        </Typography>
-        <Typography variant="h6" color="text.secondary" paragraph>
-          Discover vocabulary difficulty levels in movie scripts
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Search for a movie, select the exact one you want, and we'll analyze the script to categorize vocabulary from A1 (beginner) to C2 (proficient).
-        </Typography>
-      </Box>
-
       {/* Search Bar */}
       <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
         <MovieSearchBar onSearch={handleSearch} disabled={loading} />
@@ -353,7 +346,10 @@ export default function MovieSearchPage() {
               </Alert>
             )}
 
-            <DifficultyCategories analysis={analysis} />
+            <VocabularyView
+              analysis={analysis}
+              tmdbMetadata={tmdbMetadata}
+            />
           </Box>
         </Fade>
       )}

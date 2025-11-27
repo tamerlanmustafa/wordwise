@@ -179,45 +179,68 @@ async def search_movies(
     """
     Search for movies matching the query.
 
-    Returns matching movies from STANDS4. If no results are found, user can still
-    type any movie title and fetch it - the ingestion pipeline will try Subliminal
-    (OpenSubtitles) first for actual movie subtitles/dialogue.
+    Returns matching movies from STANDS4 with TMDB metadata (poster, year, overview).
+    TMDB is used ONLY for UI metadata - NOT for scripts or vocabulary.
+
+    If no results are found, user can still type any movie title and fetch it -
+    the ingestion pipeline will try Subliminal (OpenSubtitles) first for actual
+    movie subtitles/dialogue.
 
     Args:
         query: Movie title to search
 
     Returns:
-        List of matching movies with:
-        - id: Script ID
-        - title: Movie title
-        - year: Release year
-        - subtitle: Description
-        - author: Writer/director
-        - genre: Genre
-        - link: Script page URL
+        Dictionary with:
+        - query: Search query
+        - results: List of STANDS4 movies
+        - total: Number of results
+        - tmdb_metadata: TMDB metadata (poster, year, overview, genres) or None
     """
     logger.info(f"[API] Movie search: query='{query}'")
 
     try:
-        # Initialize STANDS4 client
+        import asyncio
         from ..utils.stands4_client import STANDS4Client
+        from ..utils.tmdb_client import TMDBClient
+
+        # Initialize clients
         stands4 = STANDS4Client()
+        tmdb = TMDBClient()
 
-        # Search STANDS4 for matching movies
-        try:
-            results = await stands4.search_movie(query)
-            logger.info(f"[API] Found {len(results)} STANDS4 results for '{query}'")
-        except Exception as e:
-            logger.warning(f"[API] STANDS4 search failed: {e}")
-            results = []
+        # Run STANDS4 search and TMDB metadata fetch in parallel
+        stands4_task = stands4.search_movie(query)
+        tmdb_task = tmdb.get_movie_metadata(query)
 
-        # Close client
+        # Wait for both to complete
+        stands4_results, tmdb_metadata = await asyncio.gather(
+            stands4_task,
+            tmdb_task,
+            return_exceptions=True
+        )
+
+        # Handle STANDS4 results
+        if isinstance(stands4_results, Exception):
+            logger.warning(f"[API] STANDS4 search failed: {stands4_results}")
+            stands4_results = []
+        else:
+            logger.info(f"[API] Found {len(stands4_results)} STANDS4 results for '{query}'")
+
+        # Handle TMDB metadata (failures are silent)
+        if isinstance(tmdb_metadata, Exception):
+            logger.warning(f"[API] TMDB metadata fetch failed: {tmdb_metadata}")
+            tmdb_metadata = None
+        elif tmdb_metadata:
+            logger.info(f"[API] ✓ TMDB metadata: {tmdb_metadata.get('title')} ({tmdb_metadata.get('year')})")
+
+        # Close clients
         await stands4.client.aclose()
+        await tmdb.close()
 
         return {
             "query": query,
-            "results": results,
-            "total": len(results)
+            "results": stands4_results,
+            "total": len(stands4_results),
+            "tmdb_metadata": tmdb_metadata
         }
 
     except Exception as e:

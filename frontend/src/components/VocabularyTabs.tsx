@@ -31,7 +31,7 @@ interface TranslatedWord {
   translation: string;
   confidence?: number;
   cached: boolean;
-  provider?: string;
+  provider?: string | null;
 }
 
 interface CEFRGroup {
