@@ -12,10 +12,21 @@ export interface MovieSearchResult {
   link: string;
 }
 
+export interface TMDBMetadata {
+  id: number;
+  title: string;
+  year: number | null;
+  poster: string | null;  // Full image URL
+  overview: string;
+  genres: string[];
+  popularity: number;
+}
+
 export interface MovieSearchResponse {
   query: string;
   results: MovieSearchResult[];
   total: number;
+  tmdb_metadata: TMDBMetadata | null;  // TMDB metadata for UI display only
 }
 
 export interface ScriptResponse {
