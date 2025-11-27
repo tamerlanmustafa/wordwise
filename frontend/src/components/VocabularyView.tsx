@@ -24,8 +24,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
 import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
-import { translateBatch, type TranslationResponse } from '../services/scriptService';
-import LanguageSelector from './LanguageSelector';
+import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface VocabularyViewProps {
@@ -40,7 +39,7 @@ interface TranslatedWord {
   translation: string;
   confidence?: number;
   cached: boolean;
-  provider?: string;
+  provider?: string | null;
 }
 
 interface CEFRGroup {
@@ -242,19 +241,9 @@ export default function VocabularyView({
     <Box sx={{ width: '100%' }}>
       {/* Summary Stats */}
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          alignItems={{ xs: 'flex-start', md: 'center' }}
-          justifyContent="space-between"
-          spacing={2}
-          sx={{ mb: 2 }}
-        >
-          <Typography variant="h5" fontWeight="bold">
-            {analysis.title}
-          </Typography>
-
-          <LanguageSelector size="small" showLabel={false} />
-        </Stack>
+        <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
+          {analysis.title}
+        </Typography>
 
         <Divider sx={{ my: 2 }} />
 
@@ -287,259 +276,262 @@ export default function VocabularyView({
       </Paper>
 
       {/* Two-Column Layout: Vocabulary (Left) + TMDB Metadata (Right) */}
-      <Grid container spacing={3}>
+      <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
-        <Grid item xs={12} md={9}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-            Vocabulary by Difficulty Level
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Words are classified using CEFR wordlists (Oxford 3000/5000, EFLex) and frequency analysis.
-            Translations are loaded on-demand (10 words per page) to optimize API usage.
-          </Typography>
+        <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                Vocabulary by Difficulty Level
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Words are classified using CEFR wordlists (Oxford 3000/5000, EFLex) and frequency analysis.
+                Translations are loaded on-demand (10 words per page) to optimize API usage.
+              </Typography>
 
-          {/* Tabs Navigation */}
-          <Paper elevation={2} sx={{ borderRadius: 2, mb: 3 }}>
-            <Tabs
-              value={activeTab}
-              onChange={handleTabChange}
-              variant="scrollable"
-              scrollButtons="auto"
-              sx={{
-                px: 2,
-                '& .MuiTab-root': {
-                  minHeight: 64,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: '1rem'
-                }
-              }}
-            >
-              {groups.map((group) => (
-                <Tab
-                  key={group.level}
-                  label={
-                    <Stack direction="row" spacing={1.5} alignItems="center">
-                      <Typography variant="h6" fontWeight={700}>
-                        {group.level}
-                      </Typography>
-                      <Chip
-                        label={group.words.length}
-                        size="small"
-                        sx={{
-                          bgcolor: `${group.color}20`,
-                          color: group.color,
-                          fontWeight: 600,
-                          fontSize: '0.875rem'
-                        }}
-                      />
-                    </Stack>
-                  }
+              {/* Tabs Navigation */}
+              <Paper elevation={2} sx={{ borderRadius: 2, mb: 3 }}>
+                <Tabs
+                  value={activeTab}
+                  onChange={handleTabChange}
+                  variant="scrollable"
+                  scrollButtons="auto"
                   sx={{
-                    color: 'text.secondary',
-                    '&.Mui-selected': {
-                      color: group.color
+                    px: 2,
+                    '& .MuiTab-root': {
+                      minHeight: 64,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: '1rem'
                     }
                   }}
-                />
-              ))}
-            </Tabs>
-          </Paper>
-
-          {/* Active Tab Content */}
-          <Box>
-            {/* Header */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-              <Box>
-                <Typography variant="h5" fontWeight={700} sx={{ color: activeGroup.color }}>
-                  {activeGroup.level} Level
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {activeGroup.description}
-                </Typography>
-              </Box>
-              <Chip
-                label={`${activeGroup.words.length} words`}
-                sx={{
-                  bgcolor: `${activeGroup.color}15`,
-                  color: activeGroup.color,
-                  fontWeight: 600
-                }}
-              />
-            </Stack>
-
-            {/* Error State */}
-            {error && (
-              <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
-                <Typography color="error.dark">{error}</Typography>
+                >
+                  {groups.map((group) => (
+                    <Tab
+                      key={group.level}
+                      label={
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          <Typography variant="h6" fontWeight={700}>
+                            {group.level}
+                          </Typography>
+                          <Chip
+                            label={group.words.length}
+                            size="small"
+                            sx={{
+                              bgcolor: `${group.color}20`,
+                              color: group.color,
+                              fontWeight: 600,
+                              fontSize: '0.875rem'
+                            }}
+                          />
+                        </Stack>
+                      }
+                      sx={{
+                        color: 'text.secondary',
+                        '&.Mui-selected': {
+                          color: group.color
+                        }
+                      }}
+                    />
+                  ))}
+                </Tabs>
               </Paper>
-            )}
 
-            {/* Word List */}
-            <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
-              <List sx={{ py: 0 }}>
-                {currentPageWords.length === 0 ? (
-                  <ListItem>
-                    <Typography variant="body2" color="text.secondary">
-                      No words in this level
+              {/* Active Tab Content */}
+              <Box>
+                {/* Header */}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                  <Box>
+                    <Typography variant="h5" fontWeight={700} sx={{ color: activeGroup.color }}>
+                      {activeGroup.level} Level
                     </Typography>
-                  </ListItem>
-                ) : (
-                  currentPageWords.map((wordFreq, index) => {
-                    const translatedWord = activeGroup.translatedWords.get(wordFreq.word.toLowerCase());
-                    const isLoading = !translatedWord && loading;
+                    <Typography variant="body2" color="text.secondary">
+                      {activeGroup.description}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={`${activeGroup.words.length} words`}
+                    sx={{
+                      bgcolor: `${activeGroup.color}15`,
+                      color: activeGroup.color,
+                      fontWeight: 600
+                    }}
+                  />
+                </Stack>
 
-                    return (
-                      <Box key={`${wordFreq.lemma}-${index}`}>
-                        <ListItem
-                          sx={{
-                            py: 2,
-                            px: 3,
-                            '&:hover': {
-                              bgcolor: `${activeGroup.color}08`
-                            }
-                          }}
-                        >
-                          {isLoading ? (
-                            <Stack sx={{ width: '100%' }} spacing={1}>
-                              <Skeleton variant="text" width="60%" />
-                              <Skeleton variant="text" width="40%" />
-                            </Stack>
-                          ) : (
-                            <Stack
-                              direction="row"
-                              alignItems="center"
-                              spacing={2}
-                              sx={{ width: '100%' }}
-                            >
-                              {/* Word and Translation */}
-                              <Box sx={{ flexGrow: 1 }}>
-                                <Typography
-                                  variant="body1"
-                                  sx={{
-                                    fontWeight: 500,
-                                    color: 'text.primary'
-                                  }}
-                                >
-                                  {wordFreq.word}
-                                  <Typography
-                                    component="span"
-                                    variant="body1"
-                                    sx={{
-                                      mx: 2,
-                                      color: 'text.disabled',
-                                      fontWeight: 300
-                                    }}
-                                  >
-                                    —
-                                  </Typography>
-                                  <Typography
-                                    component="span"
-                                    variant="body1"
-                                    sx={{
-                                      color: activeGroup.color,
-                                      fontWeight: 500
-                                    }}
-                                  >
-                                    {translatedWord?.translation || wordFreq.word}
-                                  </Typography>
-                                </Typography>
-
-                                {/* Metadata */}
-                                <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                                  {wordFreq.confidence && (
-                                    <Chip
-                                      label={`${Math.round(wordFreq.confidence * 100)}% confidence`}
-                                      size="small"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.7rem',
-                                        bgcolor: 'action.hover'
-                                      }}
-                                    />
-                                  )}
-                                  {translatedWord?.cached && (
-                                    <Chip
-                                      label="cached"
-                                      size="small"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.7rem',
-                                        bgcolor: 'action.hover'
-                                      }}
-                                    />
-                                  )}
-                                  {translatedWord?.provider && (
-                                    <Chip
-                                      label={translatedWord.provider}
-                                      size="small"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.7rem',
-                                        bgcolor: translatedWord.provider === 'google' ? '#4285f420' : '#0A84FF20',
-                                        color: translatedWord.provider === 'google' ? '#4285f4' : '#0A84FF'
-                                      }}
-                                    />
-                                  )}
-                                </Stack>
-                              </Box>
-
-                              {/* Action Buttons */}
-                              <Stack direction="row" spacing={0.5}>
-                                <IconButton
-                                  size="small"
-                                  sx={{
-                                    color: 'action.disabled',
-                                    '&:hover': {
-                                      color: activeGroup.color
-                                    }
-                                  }}
-                                  title="Save for later (coming soon)"
-                                >
-                                  <BookmarkBorderIcon fontSize="small" />
-                                </IconButton>
-                              </Stack>
-                            </Stack>
-                          )}
-                        </ListItem>
-                        {index < currentPageWords.length - 1 && <Divider />}
-                      </Box>
-                    );
-                  })
+                {/* Error State */}
+                {error && (
+                  <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
+                    <Typography color="error.dark">{error}</Typography>
+                  </Paper>
                 )}
-              </List>
-            </Paper>
 
-            {/* Pagination */}
-            {activeGroup.totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-                <Pagination
-                  count={activeGroup.totalPages}
-                  page={activeGroup.currentPage}
-                  onChange={handlePageChange}
-                  color="primary"
-                  size="large"
-                  showFirstButton
-                  showLastButton
-                />
+                {/* Word List */}
+                <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
+                  <List sx={{ py: 0 }}>
+                    {currentPageWords.length === 0 ? (
+                      <ListItem>
+                        <Typography variant="body2" color="text.secondary">
+                          No words in this level
+                        </Typography>
+                      </ListItem>
+                    ) : (
+                      currentPageWords.map((wordFreq, index) => {
+                        const translatedWord = activeGroup.translatedWords.get(wordFreq.word.toLowerCase());
+                        const isLoading = !translatedWord && loading;
+
+                        return (
+                          <Box key={`${wordFreq.lemma}-${index}`}>
+                            <ListItem
+                              sx={{
+                                py: 2,
+                                px: 3,
+                                '&:hover': {
+                                  bgcolor: `${activeGroup.color}08`
+                                }
+                              }}
+                            >
+                              {isLoading ? (
+                                <Stack sx={{ width: '100%' }} spacing={1}>
+                                  <Skeleton variant="text" width="60%" />
+                                  <Skeleton variant="text" width="40%" />
+                                </Stack>
+                              ) : (
+                                <Stack
+                                  direction="row"
+                                  alignItems="center"
+                                  spacing={2}
+                                  sx={{ width: '100%' }}
+                                >
+                                  {/* Word and Translation */}
+                                  <Box sx={{ flexGrow: 1 }}>
+                                    <Typography
+                                      variant="body1"
+                                      sx={{
+                                        fontWeight: 500,
+                                        color: 'text.primary'
+                                      }}
+                                    >
+                                      {wordFreq.word}
+                                      <Typography
+                                        component="span"
+                                        variant="body1"
+                                        sx={{
+                                          mx: 2,
+                                          color: 'text.disabled',
+                                          fontWeight: 300
+                                        }}
+                                      >
+                                        —
+                                      </Typography>
+                                      <Typography
+                                        component="span"
+                                        variant="body1"
+                                        sx={{
+                                          color: activeGroup.color,
+                                          fontWeight: 500
+                                        }}
+                                      >
+                                        {translatedWord?.translation || wordFreq.word}
+                                      </Typography>
+                                    </Typography>
+
+                                    {/* Metadata */}
+                                    <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                                      {wordFreq.confidence && (
+                                        <Chip
+                                          label={`${Math.round(wordFreq.confidence * 100)}% confidence`}
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: 'action.hover'
+                                          }}
+                                        />
+                                      )}
+                                      {translatedWord?.cached && (
+                                        <Chip
+                                          label="cached"
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: 'action.hover'
+                                          }}
+                                        />
+                                      )}
+                                      {translatedWord?.provider && (
+                                        <Chip
+                                          label={translatedWord.provider}
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: translatedWord.provider === 'google' ? '#4285f420' : '#0A84FF20',
+                                            color: translatedWord.provider === 'google' ? '#4285f4' : '#0A84FF'
+                                          }}
+                                        />
+                                      )}
+                                    </Stack>
+                                  </Box>
+
+                                  {/* Action Buttons */}
+                                  <Stack direction="row" spacing={0.5}>
+                                    <IconButton
+                                      size="small"
+                                      sx={{
+                                        color: 'action.disabled',
+                                        '&:hover': {
+                                          color: activeGroup.color
+                                        }
+                                      }}
+                                      title="Save for later (coming soon)"
+                                    >
+                                      <BookmarkBorderIcon fontSize="small" />
+                                    </IconButton>
+                                  </Stack>
+                                </Stack>
+                              )}
+                            </ListItem>
+                            {index < currentPageWords.length - 1 && <Divider />}
+                          </Box>
+                        );
+                      })
+                    )}
+                  </List>
+                </Paper>
+
+                {/* Pagination */}
+                {activeGroup.totalPages > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+                    <Pagination
+                      count={activeGroup.totalPages}
+                      page={activeGroup.currentPage}
+                      onChange={handlePageChange}
+                      color="primary"
+                      size="large"
+                      showFirstButton
+                      showLastButton
+                    />
+                  </Box>
+                )}
+
+                {/* Stats Footer */}
+                <Box sx={{ mt: 3, textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Showing {currentPageWords.length} of {activeGroup.words.length} words •
+                    Page {activeGroup.currentPage} of {activeGroup.totalPages} •
+                    Translations loaded on demand
+                  </Typography>
+                </Box>
               </Box>
-            )}
-
-            {/* Stats Footer */}
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">
-                Showing {currentPageWords.length} of {activeGroup.words.length} words •
-                Page {activeGroup.currentPage} of {activeGroup.totalPages} •
-                Translations loaded on demand
-              </Typography>
             </Box>
-          </Box>
         </Grid>
 
         {/* Right Column: TMDB Metadata Sidebar */}
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={3} sx={{ display: 'flex', flexDirection: 'column' }}>
           {tmdbMetadata ? (
-            <Card elevation={2} sx={{ position: 'sticky', top: 16 }}>
+            <Box sx={{ flexGrow: 1, position: 'relative' }}>
+              <Card elevation={2} sx={{ position: 'sticky', top: 16 }}>
               {/* Poster */}
               {tmdbMetadata.poster ? (
                 <CardMedia
@@ -627,7 +619,8 @@ export default function VocabularyView({
                   </Box>
                 )}
               </CardContent>
-            </Card>
+              </Card>
+            </Box>
           ) : (
             // Skeleton loader for TMDB metadata
             <Card elevation={2}>

@@ -232,19 +232,6 @@ export default function MovieSearchPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography variant="h3" component="h1" fontWeight="bold" gutterBottom>
-          Movie Script Analyzer
-        </Typography>
-        <Typography variant="h6" color="text.secondary" paragraph>
-          Discover vocabulary difficulty levels in movie scripts
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Search for a movie, select the exact one you want, and we'll analyze the script to categorize vocabulary from A1 (beginner) to C2 (proficient).
-        </Typography>
-      </Box>
-
       {/* Search Bar */}
       <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
         <MovieSearchBar onSearch={handleSearch} disabled={loading} />

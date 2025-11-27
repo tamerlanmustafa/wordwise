@@ -13,12 +13,11 @@ import {
   Container,
   IconButton,
   Divider,
-  Button,
   Pagination
 } from '@mui/material';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import type { DifficultyCategory, WordFrequency } from '../types/script';
-import { translateBatch, type TranslationResponse } from '../services/scriptService';
+import { translateBatch } from '../services/scriptService';
 
 interface VocabularyTabsProps {
   categories: DifficultyCategory[];
@@ -32,7 +31,7 @@ interface TranslatedWord {
   translation: string;
   confidence?: number;
   cached: boolean;
-  provider?: string;
+  provider?: string | null;
 }
 
 interface CEFRGroup {
@@ -255,7 +254,7 @@ export default function VocabularyTabs({
             }
           }}
         >
-          {groups.map((group, index) => (
+          {groups.map((group) => (
             <Tab
               key={group.level}
               label={
