@@ -5,7 +5,7 @@ echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
 echo "Generating Prisma client..."
-prisma generate
+prisma generate --schema=./prisma/schema.prisma
 
 echo "Downloading NLTK data..."
 python -c "import nltk; nltk.download('wordnet', quiet=True); nltk.download('omw-1.4', quiet=True); nltk.download('punkt', quiet=True); print('NLTK data downloaded')"
