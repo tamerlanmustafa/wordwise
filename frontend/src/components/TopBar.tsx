@@ -40,7 +40,7 @@ export default function TopBar() {
   };
 
   return (
-    <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', color: 'text.primary' }}>
+    <AppBar position="static" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary' }}>
       <Toolbar sx={{ justifyContent: 'space-between' }}>
         {/* Left: WordWise Logo */}
         <Box

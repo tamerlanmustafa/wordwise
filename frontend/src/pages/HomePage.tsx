@@ -54,8 +54,7 @@ export default function HomePage() {
       {/* Hero Section with Search */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
+          background: '#FFFDF6)',
           textAlign: 'center',
           py: 4
         }}
