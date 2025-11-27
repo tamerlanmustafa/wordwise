@@ -84,3 +84,10 @@ Thumbs.db
 
 plans/
 wordwise-phase-1-foundation-75d65b35.plan.md
+
+
+google-service.json
+google-services.json
+backend/google_service.json
+service-account.json
+*.secret.json
