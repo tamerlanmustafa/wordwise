@@ -12,7 +12,7 @@ function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <Router>
+        <Router basename="/wordwise">
           <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <TopBar />
             <Box component="main" sx={{ flexGrow: 1 }}>
