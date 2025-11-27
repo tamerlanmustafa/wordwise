@@ -12,9 +12,11 @@ import {
   Tooltip,
   Select,
   FormControl,
+  TextField,
+  InputAdornment,
   type SelectChangeEvent
 } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -26,6 +28,11 @@ export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isHomePage = location.pathname === '/';
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -39,9 +46,16 @@ export default function TopBar() {
     setTargetLanguage(event.target.value);
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   return (
     <AppBar position="static" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary' }}>
-      <Toolbar sx={{ justifyContent: 'space-between' }}>
+      <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
         {/* Left: WordWise Logo */}
         <Box
           component={Link}
@@ -51,6 +65,7 @@ export default function TopBar() {
             color: 'primary.main',
             display: 'flex',
             alignItems: 'center',
+            flexShrink: 0,
             '&:hover': {
               opacity: 0.8
             }
@@ -61,8 +76,80 @@ export default function TopBar() {
           </Typography>
         </Box>
 
+        {/* Center: Search Bar (hidden on homepage) */}
+        {!isHomePage && (
+          <Box
+            component="form"
+            onSubmit={handleSearch}
+            sx={{ flexGrow: 1, maxWidth: 500 }}
+          >
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Search movies..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1, }}>
+                  <Box
+                    onClick={searchQuery.trim() ? handleSearch : undefined}
+                    sx={{
+                      cursor: searchQuery.trim() ? 'pointer' : 'default',
+                      color: searchQuery.trim() ? 'primary.contrastText' : 'text.disabled',
+                      bgcolor: searchQuery.trim() ? 'primary.main' : 'transparent',
+                      fontWeight: 500,
+                      fontSize: '0.75rem',
+                      px: 1.2,
+                      py: 0.2,
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: searchQuery.trim() ? 'primary.main' : 'divider',
+                      transition: 'all 0.2s',
+                      '&:hover': searchQuery.trim()
+                        ? { bgcolor: 'primary.dark', borderColor: 'primary.dark' }
+                        : {}
+                    }}
+                  >
+                    Search
+                  </Box>
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                height: 34,
+                border: 0, 
+                borderRadius: 8,
+                pr: 0.5, // button spacing
+              },
+
+              /* smooth placeholder transition */
+              '& .MuiInputBase-input::placeholder': {
+                fontSize: '0.8rem',
+                opacity: 0.7,
+                transition: 'opacity 0.25s ease',
+              },
+
+              /* fade placeholder ONLY on focus */
+              '& .Mui-focused .MuiInputBase-input::placeholder': {
+                opacity: 0,
+              },
+
+              /* keep input text spacing before button */
+              '& .MuiInputBase-input': {
+                paddingRight: '6px',
+              },
+            }}
+          />
+
+
+
+          </Box>
+        )}
+
         {/* Right: Controls */}
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
           {/* Language Selector */}
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <Select
