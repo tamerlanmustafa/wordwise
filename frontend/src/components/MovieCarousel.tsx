@@ -1,7 +1,7 @@
-import { Box, Typography, Stack, Skeleton } from '@mui/material';
-import type { TMDBMovie } from '../services/tmdbService';
-import MovieCard from './MovieCard';
-import { useAutoScroll } from '../hooks/useAutoScroll';
+import { Box, Typography, Skeleton } from "@mui/material";
+import type { TMDBMovie } from "../services/tmdbService";
+import MovieCard from "./MovieCard";
+import { useAutoScroll } from "../hooks/useAutoScroll";
 
 interface MovieCarouselProps {
   title: string;
@@ -10,12 +10,21 @@ interface MovieCarouselProps {
   index: number;
 }
 
-export default function MovieCarousel({ title, movies, loading, index }: MovieCarouselProps) {
-  const direction = index % 2 === 0 ? 'right' : 'left';
-  const containerRef = useAutoScroll({
-    speed: 0.8,
+export default function MovieCarousel({
+  title,
+  movies,
+  loading,
+  index,
+}: MovieCarouselProps) {
+  const direction: "left" | "right" = index % 2 === 0 ? "right" : "left";
+
+  /**
+   * This ref MUST be attached directly to the REAL scroll container
+   * or scrolling will never work.
+   */
+  const scrollRef = useAutoScroll({
+    speed: 30,
     direction,
-    pauseOnHover: true
   });
 
   if (loading) {
@@ -24,78 +33,57 @@ export default function MovieCarousel({ title, movies, loading, index }: MovieCa
         <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
           {title}
         </Typography>
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{
-            overflowX: 'auto',
-            pb: 2,
-            '&::-webkit-scrollbar': {
-              height: 8
-            },
-            '&::-webkit-scrollbar-track': {
-              bgcolor: 'background.paper'
-            },
-            '&::-webkit-scrollbar-thumb': {
-              bgcolor: 'grey.400',
-              borderRadius: 2
-            }
-          }}
-        >
+        <Box sx={{ display: "flex", gap: 2 }}>
           {[...Array(10)].map((_, i) => (
             <Skeleton
               key={i}
               variant="rectangular"
               width={200}
               height={350}
-              sx={{ borderRadius: 1, flexShrink: 0 }}
+              sx={{ borderRadius: 1 }}
             />
           ))}
-        </Stack>
+        </Box>
       </Box>
     );
   }
 
-  // Duplicate movies for seamless infinite scroll
-  const duplicatedMovies = [...movies, ...movies];
+  if (!movies || movies.length === 0) return null;
+
+  // Duplicate list for perfect infinite loop
+  const duplicated = [...movies, ...movies];
 
   return (
     <Box sx={{ mb: 6 }}>
       <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
         {title}
       </Typography>
-      <Stack
-        ref={containerRef}
-        direction="row"
-        spacing={2}
-        sx={{
-          overflowX: 'auto',
-          pb: 2,
-          cursor: 'grab',
-          '&:active': {
-            cursor: 'grabbing'
-          },
-          '&::-webkit-scrollbar': {
-            height: 8
-          },
-          '&::-webkit-scrollbar-track': {
-            bgcolor: 'background.paper'
-          },
-          '&::-webkit-scrollbar-thumb': {
-            bgcolor: 'grey.400',
-            borderRadius: 2,
-            '&:hover': {
-              bgcolor: 'grey.500'
-            }
-          }
+
+      {/* THIS ONE is the real scroll container */}
+      <div
+        ref={scrollRef}
+        className="carousel-scroll"
+        style={{
+          display: "flex",
+          gap: "16px",
+          overflowX: "auto",
+          overflowY: "hidden",
+          padding: "8px 0",
+          scrollbarWidth: "none",
+          cursor: "grab",
         }}
       >
-        {duplicatedMovies.map((movie, idx) => (
-          <Box key={`${movie.id}-${idx}`} sx={{ flexShrink: 0 }}>
+        {duplicated.map((movie, idx) => (
+          <div key={`${movie.id}-${idx}`} style={{ flexShrink: 0 }}>
             <MovieCard movie={movie} />
-          </Box>
+          </div>
         ))}
-      </Stack>
+      </div>
+      <style>{`
+        .carousel-scroll::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </Box>
   );
 }

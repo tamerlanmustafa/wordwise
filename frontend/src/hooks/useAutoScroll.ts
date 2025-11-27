@@ -1,77 +1,65 @@
-import { useEffect, useRef } from 'react';
+import { useRef, useEffect } from "react";
 
 interface UseAutoScrollOptions {
   speed?: number;
-  direction?: 'left' | 'right';
-  pauseOnHover?: boolean;
+  direction?: "left" | "right";
 }
 
 export function useAutoScroll({
-  speed = 0.5,
-  direction = 'right',
-  pauseOnHover = true
+  speed = 30,
+  direction = "right",
 }: UseAutoScrollOptions = {}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isPausedRef = useRef(false);
-  const animationFrameRef = useRef<number | undefined>(undefined);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    let animationId: number;
+    let lastTime = 0;
+    let isInitialized = false;
 
-    let scrollPosition = 0;
-    const scrollSpeed = direction === 'right' ? speed : -speed;
+    const scroll = (timestamp: number) => {
+      const el = containerRef.current;
+      if (!el) {
+        animationId = requestAnimationFrame(scroll);
+        return;
+      }
 
-    const animate = () => {
-      if (!isPausedRef.current && container) {
-        scrollPosition += scrollSpeed;
-
-        const maxScroll = container.scrollWidth - container.clientWidth;
-
-        // Seamless loop: when we reach halfway, reset to start
-        // This works because we duplicate the content
-        if (direction === 'right' && scrollPosition >= maxScroll / 2) {
-          scrollPosition = 0;
-        } else if (direction === 'left' && scrollPosition <= -maxScroll / 2) {
-          scrollPosition = maxScroll / 2;
+      // Initialize starting position once
+      if (!isInitialized) {
+        isInitialized = true;
+        if (direction === "left") {
+          el.scrollLeft = el.scrollWidth - el.clientWidth;
         }
-
-        container.scrollLeft = scrollPosition;
       }
 
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
+      if (!lastTime) lastTime = timestamp;
+      const delta = timestamp - lastTime;
+      lastTime = timestamp;
 
-    animationFrameRef.current = requestAnimationFrame(animate);
+      const distance = (speed * delta) / 1000;
 
-    // Handle pause on hover
-    const handleMouseEnter = () => {
-      if (pauseOnHover) {
-        isPausedRef.current = true;
+      if (direction === "right") {
+        el.scrollLeft += distance;
+        const max = el.scrollWidth - el.clientWidth;
+        if (el.scrollLeft >= max / 2) {
+          el.scrollLeft = 0;
+        }
+      } else {
+        el.scrollLeft -= distance;
+        const max = el.scrollWidth - el.clientWidth;
+        if (el.scrollLeft <= max / 2) {
+          el.scrollLeft = max;
+        }
       }
+
+      animationId = requestAnimationFrame(scroll);
     };
 
-    const handleMouseLeave = () => {
-      if (pauseOnHover) {
-        isPausedRef.current = false;
-      }
-    };
-
-    if (pauseOnHover) {
-      container.addEventListener('mouseenter', handleMouseEnter);
-      container.addEventListener('mouseleave', handleMouseLeave);
-    }
+    animationId = requestAnimationFrame(scroll);
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (pauseOnHover && container) {
-        container.removeEventListener('mouseenter', handleMouseEnter);
-        container.removeEventListener('mouseleave', handleMouseLeave);
-      }
+      if (animationId) cancelAnimationFrame(animationId);
     };
-  }, [speed, direction, pauseOnHover]);
+  }, [speed, direction]);
 
   return containerRef;
 }

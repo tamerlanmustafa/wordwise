@@ -95,6 +95,7 @@ export default function HomePage() {
 
         {/* Genres Section - Responsive Grid */}
         <Box sx={{ mb: 6 }}>
+          
           <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
             Browse by Genre
           </Typography>
