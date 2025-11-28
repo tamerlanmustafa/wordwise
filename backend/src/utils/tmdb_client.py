@@ -7,7 +7,7 @@ NEVER used for scripts, subtitles, or vocabulary extraction.
 
 import httpx
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,67 @@ class TMDBClient:
     async def close(self):
         """Close the HTTP client"""
         await self.client.aclose()
+
+    async def autocomplete(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Lightweight autocomplete search for movies.
+
+        Args:
+            query: Search query
+            limit: Maximum number of results (default 5)
+
+        Returns:
+            List of movie suggestions with minimal metadata:
+            [{
+                "id": int,
+                "title": str,
+                "year": int or None,
+                "poster": str (full URL) or None
+            }]
+        """
+        if not self.api_key or not query:
+            return []
+
+        try:
+            search_url = f"{TMDB_BASE_URL}/search/movie"
+            params = {
+                "api_key": self.api_key,
+                "query": query,
+                "language": "en-US",
+                "page": 1
+            }
+
+            response = await self.client.get(search_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("results", [])[:limit]
+
+            suggestions = []
+            for movie in results:
+                release_date = movie.get("release_date")
+                year = None
+                if release_date:
+                    try:
+                        year = int(release_date.split("-")[0])
+                    except (ValueError, IndexError):
+                        pass
+
+                poster_path = movie.get("poster_path")
+                poster_url = f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else None
+
+                suggestions.append({
+                    "id": movie.get("id"),
+                    "title": movie.get("title"),
+                    "year": year,
+                    "poster": poster_url
+                })
+
+            return suggestions
+
+        except Exception as e:
+            logger.error(f"[TMDB] Autocomplete error for '{query}': {e}")
+            return []
 
     async def get_movie_metadata(self, title: str) -> Optional[Dict[str, Any]]:
         """
