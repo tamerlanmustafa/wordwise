@@ -5,6 +5,8 @@ import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import MovieSearchPage from './pages/MovieSearchPage';
+import SignUpPage from './pages/SignUpPage';
+import LoginPage from './pages/LoginPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -27,6 +29,8 @@ function App() {
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/movie/:id" element={<MovieDetailPage />} />
                     <Route path="/analyze" element={<MovieSearchPage />} />
+                    <Route path="/signup" element={<SignUpPage />} />
+                    <Route path="/login" element={<LoginPage />} />
                   </Routes>
                 </Box>
               </Box>

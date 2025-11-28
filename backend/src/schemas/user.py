@@ -35,3 +35,8 @@ class Token(BaseModel):
     token_type: str
 
 
+class AuthResponse(BaseModel):
+    user: UserResponse
+    token: str
+
+

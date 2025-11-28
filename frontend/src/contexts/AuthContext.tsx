@@ -1,19 +1,20 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useGoogleLogin, googleLogout } from '@react-oauth/google';
+import { googleLogout } from '@react-oauth/google';
+import type { CredentialResponse } from '@react-oauth/google';
 import axios from 'axios';
 
 interface User {
   id: number;
   email: string;
-  name: string;
-  picture?: string;
-  googleId: string;
+  username: string;
+  oauth_provider: string;
+  profile_picture_url?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: () => void;
+  handleGoogleLogin: (credentialResponse: CredentialResponse) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -35,55 +36,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        // Get user info from Google
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          {
-            headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-          }
-        );
+  const handleGoogleLogin = async (credentialResponse: CredentialResponse) => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const backendResponse = await axios.post(`${API_BASE_URL}/auth/google/login`, {
+        id_token: credentialResponse.credential,
+      });
 
-        const googleUser = userInfoResponse.data;
+      const userData = backendResponse.data.user;
+      const authToken = backendResponse.data.access_token;
 
-        // Send to your backend to create/login user
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        const backendResponse = await axios.post(`${API_BASE_URL}/api/auth/google`, {
-          token: tokenResponse.access_token,
-          email: googleUser.email,
-          name: googleUser.name,
-          picture: googleUser.picture,
-          googleId: googleUser.sub,
-        });
+      // Store user and token
+      localStorage.setItem('wordwise_user', JSON.stringify(userData));
+      localStorage.setItem('wordwise_token', authToken);
 
-        const userData = backendResponse.data.user;
-        const authToken = backendResponse.data.token;
+      setUser(userData);
 
-        // Store user and token
-        localStorage.setItem('wordwise_user', JSON.stringify(userData));
-        localStorage.setItem('wordwise_token', authToken);
-
-        setUser(userData);
-      } catch (error) {
-        console.error('Login failed:', error);
-        // Fallback: store user locally even if backend fails
-        if (error instanceof Error && 'response' in error) {
-          console.error('Backend error:', (error as any).response?.data);
-        }
+      // Redirect to home page
+      window.location.href = '/wordwise/';
+    } catch (error) {
+      console.error('Login failed:', error);
+      if (error instanceof Error && 'response' in error) {
+        console.error('Backend error:', (error as any).response?.data);
       }
-    },
-    onError: () => {
-      console.error('Google Login Failed');
-    },
-  });
+    }
+  };
 
   const logout = () => {
     googleLogout();
     localStorage.removeItem('wordwise_user');
     localStorage.removeItem('wordwise_token');
     setUser(null);
+
+    // Redirect to home page
+    window.location.href = '/wordwise/';
   };
 
   return (
@@ -91,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        login,
+        handleGoogleLogin,
         logout,
         isAuthenticated: !!user,
       }}

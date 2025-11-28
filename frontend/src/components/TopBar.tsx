@@ -23,6 +23,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,7 +31,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
-  const { user, login, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
@@ -159,22 +160,40 @@ export default function TopBar() {
 
         {/* Right: Controls */}
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-          {/* Sign In / Sign Up Buttons (shown when NOT authenticated) */}
+          {/* Sign Up / Log In Buttons (shown when NOT authenticated) */}
           {!isAuthenticated && (
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<LoginIcon />}
-              onClick={login}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 600,
-                px: 2,
-                borderRadius: 2
-              }}
-            >
-              Sign In
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<LoginIcon />}
+                component={Link}
+                to="/login"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  borderRadius: 2
+                }}
+              >
+                Log In
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PersonAddIcon />}
+                component={Link}
+                to="/signup"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  borderRadius: 2
+                }}
+              >
+                Sign Up
+              </Button>
+            </>
           )}
 
           {/* Language Selector */}
