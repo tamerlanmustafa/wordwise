@@ -23,7 +23,20 @@ settings = get_settings()
 
 def _verify_and_get_google_user_info(id_token: str) -> dict:
     """Verify Google ID token and extract user info."""
-    google_user_info = verify_google_token(id_token, settings.google_client_id)
+    google_user_info = None
+
+    # Try dev client ID first
+    try:
+        google_user_info = verify_google_token(id_token, settings.google_client_id)
+    except Exception:
+        pass
+
+    # Try prod client ID if dev failed and prod is configured
+    if not google_user_info and settings.google_client_id_prod:
+        try:
+            google_user_info = verify_google_token(id_token, settings.google_client_id_prod)
+        except Exception:
+            pass
 
     if not google_user_info:
         raise HTTPException(
