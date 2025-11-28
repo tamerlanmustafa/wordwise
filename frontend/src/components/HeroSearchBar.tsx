@@ -31,14 +31,16 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
     }
   };
 
-  const handleSelectMovie = (title: string) => {
+  const handleSelectMovie = (id: number, title: string, year: number | null) => {
     setQuery(title);
     setShowDropdown(false);
-    if (onSearch) {
-      onSearch(title);
-    } else {
-      navigate(`/search?q=${encodeURIComponent(title)}`);
-    }
+    navigate(`/movie/${id}`, {
+      state: {
+        title,
+        year,
+        tmdbId: id
+      }
+    });
   };
 
   return (
@@ -106,7 +108,7 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
               <List disablePadding>
                 {suggestions.map((movie) => (
                   <ListItem key={movie.id} disablePadding>
-                    <ListItemButton onClick={() => handleSelectMovie(movie.title)}>
+                    <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year)}>
                       <ListItemAvatar>
                         <Avatar
                           src={movie.poster || undefined}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-interface MovieSuggestion {
+export interface MovieSuggestion {
   id: number;
   title: string;
   year: number | null;
