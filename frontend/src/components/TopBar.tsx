@@ -245,13 +245,13 @@ export default function TopBar() {
           {/* User Menu (shown when authenticated) */}
           {isAuthenticated && (
             <>
-              <Tooltip title={user?.name || 'Account'}>
+              <Tooltip title={user?.username || 'Account'}>
                 <IconButton onClick={handleUserMenuOpen} color="inherit">
                   <Avatar
-                    src={user?.picture}
+                    src={user?.profile_picture_url}
                     sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
                   >
-                    {!user?.picture && <AccountCircleIcon />}
+                    {!user?.profile_picture_url && <AccountCircleIcon />}
                   </Avatar>
                 </IconButton>
               </Tooltip>

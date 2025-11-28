@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { googleLogout } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import axios from 'axios';
