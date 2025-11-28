@@ -163,7 +163,7 @@ async def google_signup(request: GoogleSignupRequest, db: Prisma = Depends(get_d
         # Generate JWT access token
         access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
         access_token = create_access_token(
-            data={"sub": user.id, "email": user.email},
+            data={"sub": str(user.id), "email": user.email},
             expires_delta=access_token_expires
         )
 
@@ -196,7 +196,7 @@ async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)
         # Generate JWT access token
         access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
         access_token = create_access_token(
-            data={"sub": user.id, "email": user.email},
+            data={"sub": str(user.id), "email": user.email},
             expires_delta=access_token_expires
         )
 

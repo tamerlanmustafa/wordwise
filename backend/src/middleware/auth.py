@@ -29,9 +29,15 @@ async def get_current_user(
         raise credentials_exception
 
     logger.info(f"[AUTH] Token payload: {payload}")
-    user_id: Optional[int] = payload.get("sub")
-    if user_id is None:
+    user_id_str = payload.get("sub")
+    if user_id_str is None:
         logger.error("[AUTH] No user_id in token payload")
+        raise credentials_exception
+
+    try:
+        user_id: int = int(user_id_str)
+    except (ValueError, TypeError):
+        logger.error(f"[AUTH] Invalid user_id format: {user_id_str}")
         raise credentials_exception
 
     logger.info(f"[AUTH] Looking up user_id: {user_id}")
