@@ -14,6 +14,7 @@ import {
   FormControl,
   TextField,
   InputAdornment,
+  Button,
   type SelectChangeEvent
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -21,12 +22,16 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import TranslateIcon from '@mui/icons-material/Translate';
+import LoginIcon from '@mui/icons-material/Login';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
+  const { user, logout, isAuthenticated } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
@@ -40,6 +45,11 @@ export default function TopBar() {
 
   const handleUserMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleUserMenuClose();
   };
 
   const handleLanguageChange = (event: SelectChangeEvent) => {
@@ -150,6 +160,42 @@ export default function TopBar() {
 
         {/* Right: Controls */}
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          {/* Sign Up / Log In Buttons (shown when NOT authenticated) */}
+          {!isAuthenticated && (
+            <>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<LoginIcon />}
+                component={Link}
+                to="/login"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  borderRadius: 2
+                }}
+              >
+                Log In
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PersonAddIcon />}
+                component={Link}
+                to="/signup"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  borderRadius: 2
+                }}
+              >
+                Sign Up
+              </Button>
+            </>
+          )}
+
           {/* Language Selector */}
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <Select
@@ -196,32 +242,44 @@ export default function TopBar() {
             </IconButton>
           </Tooltip>
 
-          {/* User Menu */}
-          <Tooltip title="Account">
-            <IconButton onClick={handleUserMenuOpen} color="inherit">
-              <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                <AccountCircleIcon />
-              </Avatar>
-            </IconButton>
-          </Tooltip>
+          {/* User Menu (shown when authenticated) */}
+          {isAuthenticated && (
+            <>
+              <Tooltip title={user?.name || 'Account'}>
+                <IconButton onClick={handleUserMenuOpen} color="inherit">
+                  <Avatar
+                    src={user?.picture}
+                    sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
+                  >
+                    {!user?.picture && <AccountCircleIcon />}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
 
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleUserMenuClose}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'right',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
-          >
-            <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>
-            <MenuItem onClick={handleUserMenuClose}>Settings</MenuItem>
-            <MenuItem onClick={handleUserMenuClose}>Log out</MenuItem>
-          </Menu>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleUserMenuClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+              >
+                <MenuItem disabled>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {user?.email}
+                  </Typography>
+                </MenuItem>
+                <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>
+                <MenuItem onClick={handleUserMenuClose}>Settings</MenuItem>
+                <MenuItem onClick={handleLogout}>Log out</MenuItem>
+              </Menu>
+            </>
+          )}
         </Stack>
       </Toolbar>
     </AppBar>

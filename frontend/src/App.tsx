@@ -1,32 +1,44 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import MovieSearchPage from './pages/MovieSearchPage';
+import SignUpPage from './pages/SignUpPage';
+import LoginPage from './pages/LoginPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { AuthProvider } from './contexts/AuthContext';
 import TopBar from './components/TopBar';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 function App() {
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <Router basename="/wordwise">
-          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <TopBar />
-            <Box component="main" sx={{ flexGrow: 1 }}>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/movie/:id" element={<MovieDetailPage />} />
-                <Route path="/analyze" element={<MovieSearchPage />} />
-              </Routes>
-            </Box>
-          </Box>
-        </Router>
-      </LanguageProvider>
-    </ThemeProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <Router basename="/wordwise">
+              <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                <TopBar />
+                <Box component="main" sx={{ flexGrow: 1 }}>
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/search" element={<SearchPage />} />
+                    <Route path="/movie/:id" element={<MovieDetailPage />} />
+                    <Route path="/analyze" element={<MovieSearchPage />} />
+                    <Route path="/signup" element={<SignUpPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                  </Routes>
+                </Box>
+              </Box>
+            </Router>
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </GoogleOAuthProvider>
   );
 }
 

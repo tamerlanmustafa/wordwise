@@ -262,6 +262,43 @@ export async function classifyMovieScript(movieId: number): Promise<CEFRClassifi
 }
 
 /**
+ * Get vocabulary preview (PUBLIC - no auth required).
+ * Returns only 3 sample words from each CEFR level, no translations.
+ */
+export async function getVocabularyPreview(movieId: number): Promise<CEFRClassificationResponse> {
+  try {
+    const response = await axios.get<CEFRClassificationResponse>(
+      `${API_BASE_URL}/movies/${movieId}/vocabulary/preview`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - VOCABULARY PREVIEW]', error);
+    throw error;
+  }
+}
+
+/**
+ * Get full vocabulary (PROTECTED - auth required).
+ * Returns all words with CEFR levels, supports translations.
+ */
+export async function getVocabularyFull(movieId: number, token: string): Promise<CEFRClassificationResponse> {
+  try {
+    const response = await axios.get<CEFRClassificationResponse>(
+      `${API_BASE_URL}/movies/${movieId}/vocabulary/full`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('[API ERROR - VOCABULARY FULL]', error);
+    throw error;
+  }
+}
+
+/**
  * Translate text to target language using DeepL or Google Translate
  * Automatically caches translations to minimize API calls
  * Tracks user translation attempts when userId is provided

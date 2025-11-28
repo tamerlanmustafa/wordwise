@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from prisma import Prisma
 from datetime import timedelta
 from ..database import get_db
-from ..schemas.user import UserCreate, UserResponse, UserLogin, Token
+from ..schemas.user import UserCreate, UserResponse, UserLogin, AuthResponse
 from ..utils.auth import verify_password, get_password_hash, create_access_token
 from ..config import get_settings
 from ..middleware.auth import get_current_user
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
     """Register a new user"""
     # Check if email already exists
@@ -45,10 +45,20 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
         }
     )
 
-    return new_user
+    # Create access token
+    access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
+    access_token = create_access_token(
+        data={"sub": new_user.id, "email": new_user.email},
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "user": new_user,
+        "token": access_token
+    }
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=AuthResponse)
 async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
     """Login user and return JWT token"""
     user = await db.user.find_unique(where={"email": credentials.email})
@@ -73,7 +83,10 @@ async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
         expires_delta=access_token_expires
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "user": user,
+        "token": access_token
+    }
 
 
 @router.get("/me", response_model=UserResponse)
