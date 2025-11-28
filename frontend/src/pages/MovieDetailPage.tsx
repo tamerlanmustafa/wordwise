@@ -15,8 +15,11 @@ import {
   searchMovies,
   fetchMovieScriptById,
   classifyMovieScript,
+  getVocabularyPreview,
+  getVocabularyFull,
   type TMDBMetadata
 } from '../services/scriptService';
+import { useAuth } from '../contexts/AuthContext';
 
 const getLevelDescription = (level: string): string => {
   const descriptions: Record<string, string> = {
@@ -33,11 +36,13 @@ const getLevelDescription = (level: string): string => {
 export default function MovieDetailPage() {
   const location = useLocation();
   const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number } | null;
+  const { isAuthenticated, user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
   const [scriptInfo, setScriptInfo] = useState<{
     source: string;
     fromCache: boolean;
@@ -97,11 +102,29 @@ export default function MovieDetailPage() {
         console.log('[MOVIE DETAIL] Script fetched, word count:', scriptResponse.word_count);
 
         // Step 4: Classify vocabulary using CEFR
-        const cefrResult = await classifyMovieScript(scriptResponse.movie_id);
+        await classifyMovieScript(scriptResponse.movie_id);
 
         console.log('[MOVIE DETAIL] CEFR classification complete');
 
-        // Step 5: Convert to analysis format
+        // Step 5: Fetch vocabulary based on auth status
+        let cefrResult;
+        if (isAuthenticated && user) {
+          const token = localStorage.getItem('wordwise_token');
+          if (token) {
+            cefrResult = await getVocabularyFull(scriptResponse.movie_id, token);
+            setIsPreview(false);
+          } else {
+            cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
+            setIsPreview(true);
+          }
+        } else {
+          cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
+          setIsPreview(true);
+        }
+
+        console.log('[MOVIE DETAIL] Vocabulary loaded, preview mode:', isPreview);
+
+        // Step 6: Convert to analysis format
         const rawCategories = Object.entries(cefrResult.level_distribution).map(([level]) => ({
           level: level as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
           description: getLevelDescription(level),
@@ -246,6 +269,8 @@ export default function MovieDetailPage() {
           <VocabularyView
             analysis={analysis}
             tmdbMetadata={tmdbMetadata}
+            userId={user?.id}
+            isPreview={isPreview}
           />
         </Box>
       </Fade>

@@ -16,21 +16,27 @@ import {
   IconButton,
   Card,
   CardMedia,
-  CardContent
+  CardContent,
+  Button,
+  Alert
 } from '@mui/material';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import MovieIcon from '@mui/icons-material/Movie';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
+import LockIcon from '@mui/icons-material/Lock';
+import { Link } from 'react-router-dom';
 import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
 import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface VocabularyViewProps {
   analysis: ScriptAnalysisResult;
   tmdbMetadata: TMDBMetadata | null;
   userId?: number;
+  isPreview?: boolean;
 }
 
 interface TranslatedWord {
@@ -66,9 +72,11 @@ const WORDS_PER_PAGE = 10;
 export default function VocabularyView({
   analysis,
   tmdbMetadata,
-  userId
+  userId,
+  isPreview = false
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -121,9 +129,9 @@ export default function VocabularyView({
     );
   }, [targetLanguage]);
 
-  // Load translations for current page of active tab
+  // Load translations for current page of active tab (only if authenticated and not preview mode)
   useEffect(() => {
-    if (groups.length === 0) return;
+    if (groups.length === 0 || isPreview || !isAuthenticated) return;
 
     const loadPageTranslations = async () => {
       const activeGroup = groups[activeTab];
@@ -201,7 +209,7 @@ export default function VocabularyView({
 
     loadPageTranslations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, groups[activeTab]?.currentPage, targetLanguage, userId]);
+  }, [activeTab, groups[activeTab]?.currentPage, targetLanguage, userId, isPreview, isAuthenticated]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -344,6 +352,29 @@ export default function VocabularyView({
 
               {/* Active Tab Content */}
               <Box>
+                {/* Preview Mode CTA */}
+                {isPreview && (
+                  <Alert
+                    severity="info"
+                    icon={<LockIcon />}
+                    sx={{ mb: 3 }}
+                    action={
+                      <Button
+                        component={Link}
+                        to="/signup"
+                        variant="contained"
+                        size="small"
+                      >
+                        Sign Up
+                      </Button>
+                    }
+                  >
+                    <Typography variant="body2" fontWeight="medium">
+                      Sign in to unlock the full vocabulary list with translations and pagination
+                    </Typography>
+                  </Alert>
+                )}
+
                 {/* Header */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                   <Box>
@@ -355,7 +386,7 @@ export default function VocabularyView({
                     </Typography>
                   </Box>
                   <Chip
-                    label={`${activeGroup.words.length} words`}
+                    label={isPreview ? `3 sample words` : `${activeGroup.words.length} words`}
                     sx={{
                       bgcolor: `${activeGroup.color}15`,
                       color: activeGroup.color,
@@ -383,7 +414,33 @@ export default function VocabularyView({
                     ) : (
                       currentPageWords.map((wordFreq, index) => {
                         const translatedWord = activeGroup.translatedWords.get(wordFreq.word.toLowerCase());
-                        const isLoading = !translatedWord && loading;
+                        const isLoading = !translatedWord && loading && !isPreview;
+
+                        // In preview mode, show words without translations
+                        if (isPreview) {
+                          return (
+                            <Box key={`${wordFreq.lemma}-${index}`}>
+                              <ListItem
+                                sx={{
+                                  py: 2,
+                                  px: 3,
+                                  bgcolor: 'action.hover'
+                                }}
+                              >
+                                <Typography
+                                  variant="body1"
+                                  sx={{
+                                    fontWeight: 500,
+                                    color: 'text.primary'
+                                  }}
+                                >
+                                  {wordFreq.word.toLowerCase()}
+                                </Typography>
+                              </ListItem>
+                              {index < currentPageWords.length - 1 && <Divider />}
+                            </Box>
+                          );
+                        }
 
                         // Skip words where source and translation are the same
                         if (!isLoading && !translatedWord) {
@@ -511,8 +568,8 @@ export default function VocabularyView({
                   </List>
                 </Paper>
 
-                {/* Pagination */}
-                {activeGroup.totalPages > 1 && (
+                {/* Pagination (hide in preview mode) */}
+                {!isPreview && activeGroup.totalPages > 1 && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
                     <Pagination
                       count={activeGroup.totalPages}
@@ -529,9 +586,11 @@ export default function VocabularyView({
                 {/* Stats Footer */}
                 <Box sx={{ mt: 3, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
-                    Showing {currentPageWords.length} of {activeGroup.words.length} words •
-                    Page {activeGroup.currentPage} of {activeGroup.totalPages} •
-                    Translations loaded on demand
+                    {isPreview ? (
+                      `Showing 3 sample words • Sign in to view all ${activeGroup.words.length} words with translations`
+                    ) : (
+                      `Showing ${currentPageWords.length} of ${activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages} • Translations loaded on demand`
+                    )}
                   </Typography>
                 </Box>
               </Box>

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse, ScriptSearchResponse
 from ..middleware.auth import get_current_active_user
@@ -103,5 +103,128 @@ async def search_scripts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search scripts: {str(e)}"
         )
+
+
+@router.get("/{movie_id}/vocabulary/preview")
+async def get_vocabulary_preview(
+    movie_id: int,
+    db: Prisma = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get a preview of the movie vocabulary (PUBLIC - no auth required).
+    Returns only 3 sample words from each CEFR level, no translations.
+    """
+    # Check if movie exists
+    movie = await db.movie.find_unique(where={"id": movie_id})
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Movie not found"
+        )
+
+    # Get script for this movie
+    script = await db.moviescript.find_first(where={"movieId": movie_id})
+    if not script:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Script not found for this movie"
+        )
+
+    # Get all word classifications
+    all_words = await db.wordclassification.find_many(
+        where={"scriptId": script.id},
+        order={'confidence': 'desc'}
+    )
+
+    # Group by level and take first 3 from each
+    top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
+    level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
+
+    for word in all_words:
+        level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
+        level_distribution[level] = level_distribution.get(level, 0) + 1
+
+        if level not in top_words_by_level:
+            top_words_by_level[level] = []
+        if len(top_words_by_level[level]) < 3:
+            top_words_by_level[level].append({
+                "word": word.word,
+                "lemma": word.lemma,
+                "confidence": word.confidence,
+                "frequency_rank": word.frequencyRank
+            })
+
+    return {
+        "movie_id": movie_id,
+        "total_words": len(all_words),
+        "unique_words": len(all_words),
+        "level_distribution": level_distribution,
+        "top_words_by_level": top_words_by_level,
+        "average_confidence": sum(w.confidence for w in all_words) / len(all_words) if all_words else 0,
+        "wordlist_coverage": 0.0,
+        "preview": True
+    }
+
+
+@router.get("/{movie_id}/vocabulary/full")
+async def get_vocabulary_full(
+    movie_id: int,
+    current_user = Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get the complete movie vocabulary (PROTECTED - auth required).
+    Returns all words with CEFR levels, supports translations.
+    """
+    # Check if movie exists
+    movie = await db.movie.find_unique(where={"id": movie_id})
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Movie not found"
+        )
+
+    # Get script for this movie
+    script = await db.moviescript.find_first(where={"movieId": movie_id})
+    if not script:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Script not found for this movie"
+        )
+
+    # Get all word classifications
+    cefr_words = await db.wordclassification.find_many(
+        where={"scriptId": script.id},
+        order={'confidence': 'desc'}
+    )
+
+    # Group by level
+    top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
+    level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
+
+    for word in cefr_words:
+        level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
+        level_distribution[level] = level_distribution.get(level, 0) + 1
+
+        if level not in top_words_by_level:
+            top_words_by_level[level] = []
+        top_words_by_level[level].append({
+            "word": word.word,
+            "lemma": word.lemma,
+            "confidence": word.confidence,
+            "frequency_rank": word.frequencyRank
+        })
+
+    return {
+        "movie_id": movie_id,
+        "script_id": 0,
+        "total_words": len(cefr_words),
+        "unique_words": len(cefr_words),
+        "level_distribution": level_distribution,
+        "top_words_by_level": top_words_by_level,
+        "average_confidence": sum(w.confidence for w in cefr_words) / len(cefr_words) if cefr_words else 0,
+        "wordlist_coverage": 0.0,
+        "preview": False
+    }
 
 
