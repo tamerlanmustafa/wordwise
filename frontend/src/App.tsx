@@ -8,6 +8,7 @@ import MovieSearchPage from './pages/MovieSearchPage';
 import SignUpPage from './pages/SignUpPage';
 import LoginPage from './pages/LoginPage';
 import SavedWordsPage from './pages/SavedWordsPage';
+import AllListsPage from './pages/AllListsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -32,6 +33,7 @@ function App() {
                     <Route path="/analyze" element={<MovieSearchPage />} />
                     <Route path="/signup" element={<SignUpPage />} />
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/lists" element={<AllListsPage />} />
                     <Route path="/lists/:listName" element={<SavedWordsPage />} />
                   </Routes>
                 </Box>

@@ -25,6 +25,7 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
+import ListIcon from '@mui/icons-material/List';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -277,11 +278,11 @@ export default function TopBar() {
                 </MenuItem>
                 <MenuItem
                   component={Link}
-                  to="/lists/saved"
+                  to="/lists"
                   onClick={handleUserMenuClose}
                 >
-                  <BookmarkIcon sx={{ mr: 1, fontSize: 20 }} />
-                  Saved Words
+                  <ListIcon sx={{ mr: 1, fontSize: 20 }} />
+                  Lists
                 </MenuItem>
                 <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>
                 <MenuItem onClick={handleUserMenuClose}>Settings</MenuItem>
