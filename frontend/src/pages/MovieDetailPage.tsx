@@ -43,6 +43,7 @@ export default function MovieDetailPage() {
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
   const [isPreview, setIsPreview] = useState(false);
+  const [movieId, setMovieId] = useState<number | undefined>(undefined);
   const [scriptInfo, setScriptInfo] = useState<{
     source: string;
     fromCache: boolean;
@@ -92,12 +93,13 @@ export default function MovieDetailPage() {
           return;
         }
 
-        // Store script info
+        // Store script info and movie ID
         setScriptInfo({
           source: scriptResponse.source_used,
           fromCache: scriptResponse.from_cache,
           wordCount: scriptResponse.word_count
         });
+        setMovieId(scriptResponse.movie_id);
 
         console.log('[MOVIE DETAIL] Script fetched, word count:', scriptResponse.word_count);
 
@@ -271,6 +273,7 @@ export default function MovieDetailPage() {
             tmdbMetadata={tmdbMetadata}
             userId={user?.id}
             isPreview={isPreview}
+            movieId={movieId}
           />
         </Box>
       </Fade>

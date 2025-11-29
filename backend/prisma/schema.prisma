@@ -24,6 +24,7 @@ model User {
   profilePictureUrl  String?                   @map("profile_picture_url") @db.VarChar
   wordLists          UserWordList[]
   translationHistory UserTranslationHistory[]
+  userWords          UserWord[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -45,6 +46,7 @@ model Movie {
   words           Word[]
   movieScripts    MovieScript[]
   aliases         MovieAlias[]
+  userWords       UserWord[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
@@ -176,6 +178,22 @@ model UserTranslationHistory {
   @@index([userId, word], map: "ix_user_translation_history_user_word")
   @@index([userId, translatedAt], map: "ix_user_translation_history_user_date")
   @@map("user_translation_history")
+}
+
+model UserWord {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  word      String   @db.VarChar
+  movieId   Int?     @map("movie_id")
+  isLearned Boolean  @default(false) @map("is_learned")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, word, movieId], map: "unique_user_word_movie")
+  @@index([userId], map: "ix_user_words_user_id")
+  @@index([userId, isLearned], map: "ix_user_words_user_learned")
+  @@map("user_words")
 }
 
 enum difficultylevel {

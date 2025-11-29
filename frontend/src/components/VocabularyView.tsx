@@ -18,9 +18,14 @@ import {
   CardMedia,
   CardContent,
   Button,
-  Alert
+  Alert,
+  Tooltip,
+  Fade
 } from '@mui/material';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MovieIcon from '@mui/icons-material/Movie';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -31,12 +36,15 @@ import type { TMDBMetadata } from '../services/scriptService';
 import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserWords } from '../hooks/useUserWords';
+import axios from 'axios';
 
 interface VocabularyViewProps {
   analysis: ScriptAnalysisResult;
   tmdbMetadata: TMDBMetadata | null;
   userId?: number;
   isPreview?: boolean;
+  movieId?: number;
 }
 
 interface TranslatedWord {
@@ -73,14 +81,19 @@ export default function VocabularyView({
   analysis,
   tmdbMetadata,
   userId,
-  isPreview = false
+  isPreview = false,
+  movieId
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
+  const { savedWords, learnedWords, saveWord, toggleLearned, isWordSavedInMovie } = useUserWords();
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   // Merge C1 and C2 into single "Advanced" category
   const mergedCategories = useMemo(() => {
@@ -117,14 +130,44 @@ export default function VocabularyView({
     setGroups(initialGroups);
   }, [mergedCategories]);
 
-  // Clear translations when target language changes
+  useEffect(() => {
+    if (!isAuthenticated || !movieId) return;
+
+    const fetchOtherMovies = async () => {
+      const token = localStorage.getItem('wordwise_token');
+      if (!token) return;
+
+      const uniqueWords = new Set<string>();
+      groups.forEach(g => g.words.forEach(w => uniqueWords.add(w.word.toLowerCase())));
+
+      if (uniqueWords.size === 0) return;
+
+      try {
+        const response = await axios.post(
+          `${API_BASE_URL}/user/words/other-movies/batch`,
+          Array.from(uniqueWords),
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { exclude_movie_id: movieId }
+          }
+        );
+        setOtherMovies(response.data);
+      } catch (error) {
+        console.error('Failed to fetch other movies:', error);
+        setOtherMovies({});
+      }
+    };
+
+    fetchOtherMovies();
+  }, [groups, isAuthenticated, movieId]);
+
   useEffect(() => {
     if (groups.length === 0) return;
 
     setGroups(prevGroups =>
       prevGroups.map(group => ({
         ...group,
-        translatedWords: new Map() // Clear all translations
+        translatedWords: new Map()
       }))
     );
   }, [targetLanguage]);
@@ -544,17 +587,33 @@ export default function VocabularyView({
 
                                   {/* Action Buttons */}
                                   <Stack direction="row" spacing={0.5}>
+                                    <Tooltip
+                                      title={
+                                        otherMovies[wordFreq.word.toLowerCase()]?.length > 0
+                                          ? `You might have seen this word in: ${otherMovies[wordFreq.word.toLowerCase()].map(m => m.title).join(', ')}`
+                                          : ''
+                                      }
+                                      placement="top"
+                                      TransitionComponent={Fade}
+                                      TransitionProps={{ timeout: 300 }}
+                                      arrow
+                                      disableHoverListener={!otherMovies[wordFreq.word.toLowerCase()]?.length}
+                                    >
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => saveWord(wordFreq.word.toLowerCase(), movieId)}
+                                        sx={{ color: isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? 'warning.main' : 'text.secondary' }}
+                                      >
+                                        {isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                                      </IconButton>
+                                    </Tooltip>
                                     <IconButton
                                       size="small"
-                                      sx={{
-                                        color: 'action.disabled',
-                                        '&:hover': {
-                                          color: activeGroup.color
-                                        }
-                                      }}
-                                      title="Save for later (coming soon)"
+                                      onClick={() => toggleLearned(wordFreq.word.toLowerCase())}
+                                      disabled={!savedWords.has(wordFreq.word.toLowerCase())}
+                                      sx={{ color: learnedWords.has(wordFreq.word.toLowerCase()) ? 'success.main' : 'text.secondary' }}
                                     >
-                                      <BookmarkBorderIcon fontSize="small" />
+                                      {learnedWords.has(wordFreq.word.toLowerCase()) ? <CheckCircleIcon /> : <CheckCircleOutlineIcon />}
                                     </IconButton>
                                   </Stack>
                                 </Stack>
