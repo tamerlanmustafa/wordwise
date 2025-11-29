@@ -12,7 +12,7 @@ export function useMovieAutocomplete(query: string, debounceMs: number = 300) {
   const [suggestions, setSuggestions] = useState<MovieSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (timeoutRef.current) {
