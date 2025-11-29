@@ -12,6 +12,7 @@ interface UserWord {
 
 export function useUserWords() {
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
+  const [savedWordMoviePairs, setSavedWordMoviePairs] = useState<Set<string>>(new Set());
   const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -29,16 +30,21 @@ export function useUserWords() {
       });
 
       const saved = new Set<string>();
+      const pairs = new Set<string>();
       const learned = new Set<string>();
 
       response.data.forEach((word) => {
         saved.add(word.word);
+        if (word.movie_id) {
+          pairs.add(`${word.word}:${word.movie_id}`);
+        }
         if (word.is_learned) {
           learned.add(word.word);
         }
       });
 
       setSavedWords(saved);
+      setSavedWordMoviePairs(pairs);
       setLearnedWords(learned);
     } catch (error) {
       console.error('Failed to fetch user words:', error);
@@ -64,17 +70,35 @@ export function useUserWords() {
 
       if (response.data.saved) {
         setSavedWords((prev) => new Set(prev).add(word));
+        if (movieId) {
+          setSavedWordMoviePairs((prev) => new Set(prev).add(`${word}:${movieId}`));
+        }
       } else {
-        setSavedWords((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(word);
-          return newSet;
+        const allUserWords = await axios.get<UserWord[]>(`${API_BASE_URL}/user/words/`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
-        setLearnedWords((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(word);
-          return newSet;
-        });
+        const stillHasWord = allUserWords.data.some(w => w.word === word);
+
+        if (!stillHasWord) {
+          setSavedWords((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(word);
+            return newSet;
+          });
+          setLearnedWords((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(word);
+            return newSet;
+          });
+        }
+
+        if (movieId) {
+          setSavedWordMoviePairs((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(`${word}:${movieId}`);
+            return newSet;
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to save word:', error);
@@ -108,12 +132,18 @@ export function useUserWords() {
     }
   };
 
+  const isWordSavedInMovie = (word: string, movieId?: number) => {
+    if (!movieId) return savedWords.has(word);
+    return savedWordMoviePairs.has(`${word}:${movieId}`);
+  };
+
   return {
     savedWords,
     learnedWords,
     loading,
     saveWord,
     toggleLearned,
-    refetch: fetchUserWords
+    refetch: fetchUserWords,
+    isWordSavedInMovie
   };
 }

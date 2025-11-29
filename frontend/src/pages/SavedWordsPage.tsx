@@ -32,6 +32,8 @@ interface SavedWord {
   movie_title: string | null;
   is_learned: boolean;
   created_at: string;
+  saved_in_count?: number;
+  saved_in_movies?: Array<{ title: string; created_at: string }>;
 }
 
 export default function SavedWordsPage() {
@@ -203,23 +205,35 @@ export default function SavedWordsPage() {
                     <Typography variant="h6" fontWeight={600}>
                       {word.word}
                     </Typography>
-                    {word.movie_title && (
+                    {word.saved_in_movies && word.saved_in_movies.length > 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        You saved this word from: {word.saved_in_movies.map(m => m.title).join(', ')}
+                      </Typography>
+                    ) : word.movie_title ? (
                       <Typography variant="body2" color="text.secondary">
                         From: {word.movie_title}
                       </Typography>
-                    )}
+                    ) : null}
                     <Typography variant="caption" color="text.secondary">
                       Added: {new Date(word.created_at).toLocaleDateString()}
                     </Typography>
                   </Box>
 
-                  <Stack direction="row" spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
                     {word.is_learned && (
                       <Chip
                         icon={<CheckCircleIcon />}
                         label="Learned"
                         color="success"
                         size="small"
+                      />
+                    )}
+                    {word.saved_in_count && word.saved_in_count > 1 && (
+                      <Chip
+                        label={`${word.saved_in_count} movies`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ borderColor: 'primary.main', color: 'primary.main' }}
                       />
                     )}
                     <IconButton size="small" color="warning">

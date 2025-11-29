@@ -190,7 +190,7 @@ model UserWord {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, word], map: "unique_user_word")
+  @@unique([userId, word, movieId], map: "unique_user_word_movie")
   @@index([userId], map: "ix_user_words_user_id")
   @@index([userId, isLearned], map: "ix_user_words_user_learned")
   @@map("user_words")

@@ -32,12 +32,15 @@ async def save_word(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db)
 ):
-    existing = await db.userword.find_first(
-        where={
-            "userId": current_user.id,
-            "word": request.word
-        }
-    )
+    where_clause = {
+        "userId": current_user.id,
+        "word": request.word
+    }
+
+    if request.movie_id:
+        where_clause["movieId"] = request.movie_id
+
+    existing = await db.userword.find_first(where=where_clause)
 
     if existing:
         await db.userword.delete(where={"id": existing.id})
@@ -65,23 +68,24 @@ async def learn_word(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db)
 ):
-    user_word = await db.userword.find_first(
+    user_words = await db.userword.find_many(
         where={
             "userId": current_user.id,
             "word": request.word
         }
     )
 
-    if not user_word:
+    if not user_words:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Word not found in saved words"
         )
 
-    await db.userword.update(
-        where={"id": user_word.id},
-        data={"isLearned": request.is_learned}
-    )
+    for user_word in user_words:
+        await db.userword.update(
+            where={"id": user_word.id},
+            data={"isLearned": request.is_learned}
+        )
 
     return {"learned": request.is_learned, "word": request.word}
 
@@ -106,6 +110,73 @@ async def get_user_words(
         )
         for word in words
     ]
+
+
+@router.get("/other-movies")
+async def get_other_movie_uses(
+    word: str,
+    exclude_movie_id: Optional[int] = None,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    where_clause = {
+        "userId": current_user.id,
+        "word": word
+    }
+
+    if exclude_movie_id:
+        where_clause["NOT"] = {"movieId": exclude_movie_id}
+
+    words = await db.userword.find_many(
+        where=where_clause,
+        include={"movie": True}
+    )
+
+    return [
+        {
+            "movie_id": word.movieId,
+            "title": word.movie.title if word.movie else None
+        }
+        for word in words
+        if word.movie
+    ]
+
+
+@router.post("/other-movies/batch")
+async def get_other_movie_uses_batch(
+    words: List[str],
+    exclude_movie_id: Optional[int] = None,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    where_clause = {
+        "userId": current_user.id,
+        "word": {"in": words}
+    }
+
+    if exclude_movie_id:
+        where_clause["NOT"] = {"movieId": exclude_movie_id}
+
+    user_words = await db.userword.find_many(
+        where=where_clause,
+        include={"movie": True}
+    )
+
+    result = {}
+    for word in user_words:
+        if not word.movie:
+            continue
+
+        word_key = word.word
+        if word_key not in result:
+            result[word_key] = []
+
+        result[word_key].append({
+            "movie_id": word.movieId,
+            "title": word.movie.title
+        })
+
+    return result
 
 
 @router.get("/list/{list_name}")
@@ -135,6 +206,25 @@ async def get_user_words_list(
         include={"movie": True}
     )
 
+    all_user_words = await db.userword.find_many(
+        where={"userId": current_user.id},
+        include={"movie": True},
+        order={"createdAt": "desc"}
+    )
+
+    word_counts = {}
+    word_movies = {}
+    for w in all_user_words:
+        if w.word not in word_counts:
+            word_counts[w.word] = 0
+            word_movies[w.word] = []
+        word_counts[w.word] += 1
+        if w.movie:
+            word_movies[w.word].append({
+                "title": w.movie.title,
+                "created_at": w.createdAt.isoformat()
+            })
+
     return {
         "list_name": list_name,
         "total": len(words),
@@ -145,7 +235,9 @@ async def get_user_words_list(
                 "movie_id": word.movieId,
                 "movie_title": word.movie.title if word.movie else None,
                 "is_learned": word.isLearned,
-                "created_at": word.createdAt.isoformat()
+                "created_at": word.createdAt.isoformat(),
+                "saved_in_count": word_counts.get(word.word, 1),
+                "saved_in_movies": word_movies.get(word.word, [])
             }
             for word in words
         ]
