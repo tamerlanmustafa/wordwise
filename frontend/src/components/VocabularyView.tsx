@@ -21,6 +21,9 @@ import {
   Alert
 } from '@mui/material';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MovieIcon from '@mui/icons-material/Movie';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -31,6 +34,7 @@ import type { TMDBMetadata } from '../services/scriptService';
 import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserWords } from '../hooks/useUserWords';
 
 interface VocabularyViewProps {
   analysis: ScriptAnalysisResult;
@@ -77,6 +81,7 @@ export default function VocabularyView({
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
+  const { savedWords, learnedWords, saveWord, toggleLearned } = useUserWords();
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -546,15 +551,18 @@ export default function VocabularyView({
                                   <Stack direction="row" spacing={0.5}>
                                     <IconButton
                                       size="small"
-                                      sx={{
-                                        color: 'action.disabled',
-                                        '&:hover': {
-                                          color: activeGroup.color
-                                        }
-                                      }}
-                                      title="Save for later (coming soon)"
+                                      onClick={() => saveWord(wordFreq.word.toLowerCase(), tmdbMetadata?.id)}
+                                      sx={{ color: savedWords.has(wordFreq.word.toLowerCase()) ? 'warning.main' : 'text.secondary' }}
                                     >
-                                      <BookmarkBorderIcon fontSize="small" />
+                                      {savedWords.has(wordFreq.word.toLowerCase()) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => toggleLearned(wordFreq.word.toLowerCase())}
+                                      disabled={!savedWords.has(wordFreq.word.toLowerCase())}
+                                      sx={{ color: learnedWords.has(wordFreq.word.toLowerCase()) ? 'success.main' : 'text.secondary' }}
+                                    >
+                                      {learnedWords.has(wordFreq.word.toLowerCase()) ? <CheckCircleIcon /> : <CheckCircleOutlineIcon />}
                                     </IconButton>
                                   </Stack>
                                 </Stack>
