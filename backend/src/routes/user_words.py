@@ -43,14 +43,18 @@ async def save_word(
         await db.userword.delete(where={"id": existing.id})
         return {"saved": False, "word": request.word}
 
-    await db.userword.create(
-        data={
-            "userId": current_user.id,
-            "word": request.word,
-            "movieId": request.movie_id,
-            "isLearned": False
-        }
-    )
+    data = {
+        "userId": current_user.id,
+        "word": request.word,
+        "isLearned": False
+    }
+
+    if request.movie_id:
+        movie_exists = await db.movie.find_unique(where={"id": request.movie_id})
+        if movie_exists:
+            data["movieId"] = request.movie_id
+
+    await db.userword.create(data=data)
 
     return {"saved": True, "word": request.word}
 
