@@ -13,13 +13,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
   const year = movie.release_date ? new Date(movie.release_date).getFullYear() : '';
 
   const handleClick = () => {
-    // Navigate to analysis page with movie title
-    // The MovieDetailPage will use WordWise backend API to fetch script and analyze vocabulary
     navigate(`/movie/${movie.id}`, {
       state: {
         title: movie.title,
         year: year || null,
-        tmdbId: movie.id
+        tmdbId: movie.id,
+        movieTitle: movie.title
       }
     });
   };

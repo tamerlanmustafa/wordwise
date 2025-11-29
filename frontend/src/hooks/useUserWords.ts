@@ -8,6 +8,8 @@ interface UserWord {
   movie_id: number | null;
   is_learned: boolean;
   created_at: string;
+  saved_in_count?: number;
+  saved_in_movies?: Array<{ title: string; created_at: string; movie_id: number }>;
 }
 
 export function useUserWords() {
@@ -35,9 +37,17 @@ export function useUserWords() {
 
       response.data.forEach((word) => {
         saved.add(word.word);
-        if (word.movie_id) {
+
+        if (word.saved_in_movies && word.saved_in_movies.length > 0) {
+          word.saved_in_movies.forEach((movieData: any) => {
+            if (movieData.movie_id) {
+              pairs.add(`${word.word}:${movieData.movie_id}`);
+            }
+          });
+        } else if (word.movie_id) {
           pairs.add(`${word.word}:${word.movie_id}`);
         }
+
         if (word.is_learned) {
           learned.add(word.word);
         }

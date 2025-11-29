@@ -24,6 +24,8 @@ class UserWordResponse(BaseModel):
     movie_id: Optional[int]
     is_learned: bool
     created_at: str
+    saved_in_count: Optional[int] = None
+    saved_in_movies: Optional[List[dict]] = None
 
 
 @router.post("/save")
@@ -97,18 +99,49 @@ async def get_user_words(
 ):
     words = await db.userword.find_many(
         where={"userId": current_user.id},
+        include={"movie": True},
         order={"createdAt": "desc"}
     )
 
+    word_map = {}
+    for word in words:
+        word_key = word.word
+        if word_key not in word_map:
+            word_map[word_key] = {
+                "id": word.id,
+                "word": word.word,
+                "movie_id": word.movieId,
+                "movie_ids": [],
+                "is_learned": word.isLearned,
+                "created_at": word.createdAt,
+                "saved_in_movies": [],
+                "saved_in_count": 0
+            }
+
+        word_map[word_key]["saved_in_count"] += 1
+        if word.movieId:
+            word_map[word_key]["movie_ids"].append(word.movieId)
+        if word.movie:
+            word_map[word_key]["saved_in_movies"].append({
+                "title": word.movie.title,
+                "created_at": word.createdAt.isoformat(),
+                "movie_id": word.movieId
+            })
+
+        if word.createdAt < word_map[word_key]["created_at"]:
+            word_map[word_key]["created_at"] = word.createdAt
+
     return [
         UserWordResponse(
-            id=word.id,
-            word=word.word,
-            movie_id=word.movieId,
-            is_learned=word.isLearned,
-            created_at=word.createdAt.isoformat()
+            id=data["id"],
+            word=data["word"],
+            movie_id=data["movie_id"],
+            is_learned=data["is_learned"],
+            created_at=data["created_at"].isoformat(),
+            saved_in_count=data["saved_in_count"],
+            saved_in_movies=data["saved_in_movies"]
         )
-        for word in words
+        for data in word_map.values()
     ]
 
 
@@ -225,11 +258,10 @@ async def get_user_words_list(
                 "created_at": w.createdAt.isoformat()
             })
 
-    return {
-        "list_name": list_name,
-        "total": len(words),
-        "words": [
-            {
+    unique_words = {}
+    for word in words:
+        if word.word not in unique_words:
+            unique_words[word.word] = {
                 "id": word.id,
                 "word": word.word,
                 "movie_id": word.movieId,
@@ -239,6 +271,9 @@ async def get_user_words_list(
                 "saved_in_count": word_counts.get(word.word, 1),
                 "saved_in_movies": word_movies.get(word.word, [])
             }
-            for word in words
-        ]
+
+    return {
+        "list_name": list_name,
+        "total": len(unique_words),
+        "words": list(unique_words.values())
     }

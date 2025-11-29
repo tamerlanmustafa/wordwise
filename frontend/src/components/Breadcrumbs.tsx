@@ -8,7 +8,7 @@ const routeNameMap: Record<string, string> = {
   'saved': 'Saved Words',
   'learned': 'Learned Words',
   'search': 'Search',
-  'movie': 'Movie',
+  'movie': 'Movies',
   'analyze': 'Analyze',
   'signup': 'Sign Up',
   'login': 'Log In'
@@ -21,6 +21,8 @@ export default function Breadcrumbs() {
   if (pathnames.length === 0) {
     return null;
   }
+
+  const state = location.state as { movieTitle?: string } | undefined;
 
   const breadcrumbItems = [
     <Link
@@ -38,7 +40,11 @@ export default function Breadcrumbs() {
   pathnames.forEach((segment, index) => {
     const to = `/${pathnames.slice(0, index + 1).join('/')}`;
     const isLast = index === pathnames.length - 1;
-    const label = routeNameMap[segment] || segment;
+    let label = routeNameMap[segment] || segment;
+
+    if (pathnames[index - 1] === 'movie' && state?.movieTitle) {
+      label = state.movieTitle;
+    }
 
     if (isLast) {
       breadcrumbItems.push(

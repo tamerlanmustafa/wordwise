@@ -206,17 +206,24 @@ export default function SavedWordsPage() {
                       {word.word}
                     </Typography>
                     {word.saved_in_movies && word.saved_in_movies.length > 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        You saved this word from: {word.saved_in_movies.map(m => m.title).join(', ')}
-                      </Typography>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                          You saved this word from:
+                        </Typography>
+                        {word.saved_in_movies.map((m, idx) => (
+                          <Typography key={idx} variant="caption" color="text.secondary" display="block">
+                            • {m.title} ({new Date(m.created_at).toLocaleDateString()})
+                          </Typography>
+                        ))}
+                      </Box>
                     ) : word.movie_title ? (
                       <Typography variant="body2" color="text.secondary">
                         From: {word.movie_title}
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Added: {new Date(word.created_at).toLocaleDateString()}
+                        </Typography>
                       </Typography>
                     ) : null}
-                    <Typography variant="caption" color="text.secondary">
-                      Added: {new Date(word.created_at).toLocaleDateString()}
-                    </Typography>
                   </Box>
 
                   <Stack direction="row" spacing={1} alignItems="center">
