@@ -24,6 +24,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -273,6 +274,14 @@ export default function TopBar() {
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {user?.email}
                   </Typography>
+                </MenuItem>
+                <MenuItem
+                  component={Link}
+                  to="/lists/saved"
+                  onClick={handleUserMenuClose}
+                >
+                  <BookmarkIcon sx={{ mr: 1, fontSize: 20 }} />
+                  Saved Words
                 </MenuItem>
                 <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>
                 <MenuItem onClick={handleUserMenuClose}>Settings</MenuItem>

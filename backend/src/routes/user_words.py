@@ -106,3 +106,47 @@ async def get_user_words(
         )
         for word in words
     ]
+
+
+@router.get("/list/{list_name}")
+async def get_user_words_list(
+    list_name: str,
+    sort: Optional[str] = "date_desc",
+    level: Optional[str] = None,
+    movie_id: Optional[int] = None,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    where_clause = {"userId": current_user.id}
+
+    if list_name == "saved":
+        pass
+    elif list_name == "learned":
+        where_clause["isLearned"] = True
+
+    if movie_id:
+        where_clause["movieId"] = movie_id
+
+    order = {"createdAt": "desc"} if sort == "date_desc" else {"createdAt": "asc"}
+
+    words = await db.userword.find_many(
+        where=where_clause,
+        order=order,
+        include={"movie": True}
+    )
+
+    return {
+        "list_name": list_name,
+        "total": len(words),
+        "words": [
+            {
+                "id": word.id,
+                "word": word.word,
+                "movie_id": word.movieId,
+                "movie_title": word.movie.title if word.movie else None,
+                "is_learned": word.isLearned,
+                "created_at": word.createdAt.isoformat()
+            }
+            for word in words
+        ]
+    }
