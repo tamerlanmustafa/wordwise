@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Container,
@@ -15,10 +15,14 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  IconButton
+  IconButton,
+  TextField,
+  ListSubheader,
+  InputAdornment
 } from '@mui/material';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import SearchIcon from '@mui/icons-material/Search';
 import axios from 'axios';
 
 interface SavedWord {
@@ -33,10 +37,12 @@ interface SavedWord {
 export default function SavedWordsPage() {
   const { listName } = useParams<{ listName: string }>();
   const [words, setWords] = useState<SavedWord[]>([]);
+  const [allWords, setAllWords] = useState<SavedWord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState('date_desc');
   const [filterMovie, setFilterMovie] = useState<number | 'all'>('all');
+  const [movieSearchQuery, setMovieSearchQuery] = useState('');
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -65,6 +71,10 @@ export default function SavedWordsPage() {
       );
 
       setWords(response.data.words);
+
+      if (filterMovie === 'all') {
+        setAllWords(response.data.words);
+      }
     } catch (err) {
       setError('Failed to load saved words');
     } finally {
@@ -72,13 +82,30 @@ export default function SavedWordsPage() {
     }
   };
 
-  const movieMap = new Map<number, string>();
-  words.forEach(w => {
-    if (w.movie_id && w.movie_title) {
-      movieMap.set(w.movie_id, w.movie_title);
+  const allUniqueMovies = useMemo(() => {
+    const movieMap = new Map<number, string>();
+    allWords.forEach(w => {
+      if (w.movie_id && w.movie_title) {
+        movieMap.set(w.movie_id, w.movie_title);
+      }
+    });
+    return Array.from(movieMap.entries())
+      .map(([id, title]) => ({ id, title }))
+      .sort((a, b) => {
+        const aLastSaved = Math.max(...allWords.filter(w => w.movie_id === a.id).map(w => new Date(w.created_at).getTime()));
+        const bLastSaved = Math.max(...allWords.filter(w => w.movie_id === b.id).map(w => new Date(w.created_at).getTime()));
+        return bLastSaved - aLastSaved;
+      });
+  }, [allWords]);
+
+  const filteredMovies = useMemo(() => {
+    if (!movieSearchQuery.trim()) {
+      return allUniqueMovies;
     }
-  });
-  const uniqueMovies = Array.from(movieMap.entries()).map(([id, title]) => ({ id, title }));
+    return allUniqueMovies.filter(m =>
+      m.title.toLowerCase().includes(movieSearchQuery.toLowerCase())
+    );
+  }, [allUniqueMovies, movieSearchQuery]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -95,11 +122,44 @@ export default function SavedWordsPage() {
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 200 }}>
+        <FormControl size="small" sx={{ minWidth: 300 }}>
           <InputLabel>Filter by Movie</InputLabel>
-          <Select value={filterMovie} onChange={(e) => setFilterMovie(e.target.value as any)} label="Filter by Movie">
+          <Select
+            value={filterMovie}
+            onChange={(e) => setFilterMovie(e.target.value as number | 'all')}
+            label="Filter by Movie"
+            MenuProps={{
+              PaperProps: {
+                sx: { maxHeight: 400 }
+              }
+            }}
+          >
+            <ListSubheader>
+              <TextField
+                size="small"
+                autoFocus
+                placeholder="Search movies..."
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+                value={movieSearchQuery}
+                onChange={(e) => setMovieSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                sx={{ mb: 1 }}
+              />
+            </ListSubheader>
             <MenuItem value="all">All Movies</MenuItem>
-            {uniqueMovies.map((movie) => (
+            {filteredMovies.length === 0 && movieSearchQuery && (
+              <MenuItem disabled sx={{ whiteSpace: 'normal', wordWrap: 'break-word' }}>
+                No movies found
+              </MenuItem>
+            )}
+            {filteredMovies.map((movie) => (
               <MenuItem key={movie.id} value={movie.id}>
                 {movie.title}
               </MenuItem>

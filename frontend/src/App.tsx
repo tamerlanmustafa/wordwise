@@ -13,6 +13,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 import TopBar from './components/TopBar';
+import Breadcrumbs from './components/Breadcrumbs';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 // APP
@@ -22,10 +23,11 @@ function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <Router basename="/wordwise">
+            <Router basename="/wordwise/">
               <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
                 <TopBar />
                 <Box component="main" sx={{ flexGrow: 1 }}>
+                  <Breadcrumbs />
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/search" element={<SearchPage />} />
