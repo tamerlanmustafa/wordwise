@@ -72,9 +72,13 @@ export default function SavedWordsPage() {
     }
   };
 
-  const uniqueMovies = Array.from(
-    new Set(words.filter(w => w.movie_id).map(w => ({ id: w.movie_id, title: w.movie_title })))
-  );
+  const movieMap = new Map<number, string>();
+  words.forEach(w => {
+    if (w.movie_id && w.movie_title) {
+      movieMap.set(w.movie_id, w.movie_title);
+    }
+  });
+  const uniqueMovies = Array.from(movieMap.entries()).map(([id, title]) => ({ id, title }));
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>

@@ -281,7 +281,6 @@ export default function TopBar() {
                   to="/lists"
                   onClick={handleUserMenuClose}
                 >
-                  <ListIcon sx={{ mr: 1, fontSize: 20 }} />
                   Lists
                 </MenuItem>
                 <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>

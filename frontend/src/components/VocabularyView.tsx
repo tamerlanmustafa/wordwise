@@ -41,6 +41,7 @@ interface VocabularyViewProps {
   tmdbMetadata: TMDBMetadata | null;
   userId?: number;
   isPreview?: boolean;
+  movieId?: number;
 }
 
 interface TranslatedWord {
@@ -77,7 +78,8 @@ export default function VocabularyView({
   analysis,
   tmdbMetadata,
   userId,
-  isPreview = false
+  isPreview = false,
+  movieId
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
@@ -551,7 +553,7 @@ export default function VocabularyView({
                                   <Stack direction="row" spacing={0.5}>
                                     <IconButton
                                       size="small"
-                                      onClick={() => saveWord(wordFreq.word.toLowerCase(), tmdbMetadata?.id)}
+                                      onClick={() => saveWord(wordFreq.word.toLowerCase(), movieId)}
                                       sx={{ color: savedWords.has(wordFreq.word.toLowerCase()) ? 'warning.main' : 'text.secondary' }}
                                     >
                                       {savedWords.has(wordFreq.word.toLowerCase()) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
