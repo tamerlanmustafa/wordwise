@@ -198,12 +198,18 @@ async def get_vocabulary_full(
         order={'confidence': 'desc'}
     )
 
-    # Group by level
+    from src.routes.cefr import should_keep_word
+
+    # Group by level, filtering ultra-common A1 words
     top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
     level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
 
     for word in cefr_words:
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
+
+        if not should_keep_word(word.word, word.lemma, level):
+            continue
+
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
         if level not in top_words_by_level:
@@ -214,6 +220,12 @@ async def get_vocabulary_full(
             "confidence": word.confidence,
             "frequency_rank": word.frequencyRank
         })
+
+    for level in top_words_by_level:
+        top_words_by_level[level].sort(
+            key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999),
+            reverse=True
+        )
 
     return {
         "movie_id": movie_id,

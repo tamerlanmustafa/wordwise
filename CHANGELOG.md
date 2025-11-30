@@ -267,3 +267,9 @@ Complete rewrite of the application stack for better performance, type safety, a
 - Verifies user tracking, difficult word detection, statistics, and provider tracking
 - All tests passing successfully
 
+
+
+### 11/29/2025
+- Add Tmdb data and saved words logic
+- 
+
