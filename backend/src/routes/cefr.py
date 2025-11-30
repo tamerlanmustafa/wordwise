@@ -376,6 +376,25 @@ async def classify_script(
 
             logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
+            from src.services.difficulty_scorer import compute_difficulty
+            level, score, dist = compute_difficulty(statistics['level_distribution'])
+
+            await db.movie.update(
+                where={'id': request.movie_id},
+                data={
+                    'difficultyLevel': level,
+                    'difficultyScore': score,
+                    'cefrDistribution': dist
+                }
+            )
+
+            await db.moviescript.update(
+                where={'id': script.id},
+                data={'isPreprocessed': True}
+            )
+
+            logger.info(f"✓ Updated movie difficulty: {level.value}, score: {score}")
+
         # Final response
         script_word_count = script.cleanedWordCount or 0
         unique_words = len(set(cls.lemma for cls in classifications))

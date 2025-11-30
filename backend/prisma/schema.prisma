@@ -31,25 +31,28 @@ model User {
 }
 
 model Movie {
-  id              Int              @id @default(autoincrement())
-  title           String           @db.VarChar
-  actualTitle     String?          @map("actual_title") @db.VarChar
-  year            Int
-  genre           String?          @db.VarChar
-  difficultyLevel difficultylevel? @map("difficulty_level")
-  script_text     String?
-  wordCount       Int?             @map("word_count")
-  description     String?
-  poster_url      String?          @db.VarChar
-  createdAt       DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  words           Word[]
-  movieScripts    MovieScript[]
-  aliases         MovieAlias[]
-  userWords       UserWord[]
+  id                 Int              @id @default(autoincrement())
+  title              String           @db.VarChar
+  actualTitle        String?          @map("actual_title") @db.VarChar
+  year               Int
+  genre              String?          @db.VarChar
+  difficultyLevel    difficultylevel? @map("difficulty_level")
+  difficultyScore    Int?             @map("difficulty_score")
+  cefrDistribution   Json?            @map("cefr_distribution")
+  script_text        String?
+  wordCount          Int?             @map("word_count")
+  description        String?
+  poster_url         String?          @db.VarChar
+  createdAt          DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  words              Word[]
+  movieScripts       MovieScript[]
+  aliases            MovieAlias[]
+  userWords          UserWord[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
+  @@index([difficultyLevel], map: "ix_movies_difficulty")
   @@map("movies")
 }
 
@@ -60,6 +63,9 @@ model MovieScript {
   rawSubtitleText     String?               @map("raw_subtitle_text") @db.Text
   cleanedScriptText   String?               @map("cleaned_script_text")
   cleanedWordCount    Int?                  @map("cleaned_word_count")
+  tokenizedWords      Json?                 @map("tokenized_words")
+  cefrResults         Json?                 @map("cefr_results")
+  isPreprocessed      Boolean               @default(false) @map("is_preprocessed")
   isTruncated         Boolean               @default(false) @map("is_truncated")
   isComplete          Boolean               @default(true) @map("is_complete")
   processingMetadata  String?               @map("processing_metadata")

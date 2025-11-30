@@ -7,5 +7,6 @@ from .cefr import router as cefr_router
 from .translation import router as translation_router
 from .tmdb import router as tmdb_router
 from .user_words import router as user_words_router
+from .admin import router as admin_router
 
-__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router"]
+__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router"]

@@ -52,6 +52,45 @@ async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
     return movie
 
 
+@router.get("/{movie_id}/difficulty")
+async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
+    movie = await db.movie.find_unique(where={"id": movie_id})
+
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found")
+
+    return {
+        "difficulty_level": movie.difficultyLevel.value if movie.difficultyLevel else None,
+        "difficulty_score": movie.difficultyScore,
+        "distribution": movie.cefrDistribution
+    }
+
+
+@router.get("/recommendations")
+async def get_movie_recommendations(
+    level: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    db: Prisma = Depends(get_db)
+):
+    where_clause = {}
+
+    if level:
+        from prisma.enums import difficultylevel
+        try:
+            target_level = difficultylevel(level.upper())
+            where_clause["difficultyLevel"] = target_level
+        except ValueError:
+            pass
+
+    movies = await db.movie.find_many(
+        where=where_clause,
+        take=limit,
+        order={"difficultyScore": "asc"}
+    )
+
+    return {"movies": movies, "level": level, "total": len(movies)}
+
+
 @router.post("/", response_model=MovieResponse, status_code=status.HTTP_201_CREATED)
 async def create_movie(
     movie_data: MovieCreate,

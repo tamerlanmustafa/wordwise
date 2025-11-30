@@ -44,6 +44,10 @@ export default function MovieDetailPage() {
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [movieId, setMovieId] = useState<number | undefined>(undefined);
+  const [difficulty, setDifficulty] = useState<{
+    level: string | null;
+    score: number | null;
+  } | null>(null);
   const [scriptInfo, setScriptInfo] = useState<{
     source: string;
     fromCache: boolean;
@@ -195,6 +199,17 @@ export default function MovieDetailPage() {
         setAnalysis(finalAnalysis);
         console.log('[MOVIE DETAIL] Analysis complete');
 
+        try {
+          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const diffResponse = await axios.get(`${API_BASE_URL}/movies/${scriptResponse.movie_id}/difficulty`);
+          setDifficulty({
+            level: diffResponse.data.difficulty_level,
+            score: diffResponse.data.difficulty_score
+          });
+        } catch (diffErr) {
+          console.log('[DIFFICULTY] Not available yet');
+        }
+
       } catch (err: any) {
         console.error('[ANALYZE ERROR]', err);
 
@@ -262,6 +277,12 @@ export default function MovieDetailPage() {
             <strong>Source:</strong> {scriptInfo.source.replace('_', ' ')} • {' '}
             <strong>Total Words:</strong> {scriptInfo.wordCount.toLocaleString()} • {' '}
             <strong>Status:</strong> {scriptInfo.fromCache ? 'Loaded from cache' : 'Freshly downloaded and saved'}
+            {difficulty?.level && (
+              <>
+                {' • '}
+                <strong>Difficulty:</strong> {difficulty.level} ({difficulty.score}/100)
+              </>
+            )}
           </Typography>
         </Alert>
       )}
