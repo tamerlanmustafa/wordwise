@@ -141,8 +141,6 @@ export interface UserTranslationStats {
  * Returns ALL matching movies so the user can select the exact one.
  */
 export async function searchMovies(query: string): Promise<MovieSearchResponse> {
-  console.log('[API REQUEST] /api/scripts/search?query=', query);
-
   try {
     const response = await axios.get<MovieSearchResponse>(
       `${API_BASE_URL}/api/scripts/search`,
@@ -150,12 +148,6 @@ export async function searchMovies(query: string): Promise<MovieSearchResponse> 
         params: { query }
       }
     );
-
-    console.log('[API RESPONSE - SEARCH]', {
-      query: response.data.query,
-      total: response.data.total,
-      results: response.data.results.length
-    });
 
     return response.data;
   } catch (error) {
@@ -169,8 +161,6 @@ export async function searchMovies(query: string): Promise<MovieSearchResponse> 
  * This ensures we get the EXACT movie the user selected.
  */
 export async function fetchMovieScriptById(scriptId: string, movieTitle?: string): Promise<ScriptResponse> {
-  console.log('[API REQUEST] /api/scripts/fetch - script_id:', scriptId);
-
   try {
     const response = await axios.post<ScriptResponse>(
       `${API_BASE_URL}/api/scripts/fetch`,
@@ -180,13 +170,6 @@ export async function fetchMovieScriptById(scriptId: string, movieTitle?: string
         force_refresh: false
       }
     );
-
-    // console.log('[API RESPONSE - SCRIPT]', {
-    //   source: response.data.source_used,
-    //   words: response.data.word_count,
-    //   from_cache: response.data.from_cache,
-    //   title: response.data.metadata.title
-    // });
 
     return response.data;
   } catch (error) {
@@ -202,8 +185,6 @@ export async function fetchMovieScriptById(scriptId: string, movieTitle?: string
  * This can return the WRONG movie (e.g., "Titanic" → "National Geographic: Secrets of the Titanic")
  */
 export async function fetchMovieScript(movieTitle: string): Promise<ScriptResponse> {
-  console.log('[API REQUEST] /api/scripts/fetch -', movieTitle);
-
   try {
     const response = await axios.post<ScriptResponse>(
       `${API_BASE_URL}/api/scripts/fetch`,
@@ -212,13 +193,6 @@ export async function fetchMovieScript(movieTitle: string): Promise<ScriptRespon
         force_refresh: false
       }
     );
-
-    // console.log('[API RESPONSE - SCRIPT]', {
-    //   source: response.data.source_used,
-    //   words: response.data.word_count,
-    //   from_cache: response.data.from_cache,
-    //   title: response.data.metadata.title
-    // });
 
     return response.data;
   } catch (error) {
@@ -309,8 +283,6 @@ export async function translateText(
   sourceLang: string = 'auto',
   userId?: number
 ): Promise<TranslationResponse> {
-  console.log('[API REQUEST] /translate -', text, '→', targetLang, userId ? `(user: ${userId})` : '');
-
   try {
     const response = await axios.post<TranslationResponse>(
       `${API_BASE_URL}/translate`,
@@ -321,13 +293,6 @@ export async function translateText(
         user_id: userId
       }
     );
-
-    console.log('[API RESPONSE - TRANSLATION]', {
-      translated: response.data.translated,
-      cached: response.data.cached,
-      provider: response.data.provider,
-      source_lang: response.data.source_lang
-    });
 
     return response.data;
   } catch (error) {
@@ -347,10 +312,6 @@ export async function translateBatch(
   sourceLang: string = 'auto',
   userId?: number
 ): Promise<BatchTranslationResponse> {
-  console.log('[API REQUEST] /translate/batch -', texts.length, 'texts →', targetLang, userId ? `(user: ${userId})` : '');
-  console.log('[DEBUG] First 5 texts:', texts.slice(0, 5));
-  console.log('[DEBUG] All texts:', texts);
-
   try {
     const response = await axios.post<BatchTranslationResponse>(
       `${API_BASE_URL}/translate/batch`,
@@ -361,12 +322,6 @@ export async function translateBatch(
         user_id: userId
       }
     );
-
-    console.log('[API RESPONSE - BATCH TRANSLATION]', {
-      total: response.data.total,
-      cached: response.data.cached_count,
-      api_calls: response.data.api_calls
-    });
 
     return response.data;
   } catch (error) {
@@ -379,14 +334,11 @@ export async function translateBatch(
  * Get translation cache statistics
  */
 export async function getTranslationCacheStats(): Promise<TranslationCacheStats> {
-  console.log('[API REQUEST] /translate/cache/stats');
-
   try {
     const response = await axios.get<TranslationCacheStats>(
       `${API_BASE_URL}/translate/cache/stats`
     );
 
-    console.log('[API RESPONSE - CACHE STATS]', response.data);
     return response.data;
   } catch (error) {
     console.error('[API ERROR - CACHE STATS]', error);
@@ -404,8 +356,6 @@ export async function getUserDifficultWords(
   minAttempts: number = 2,
   limit: number = 50
 ): Promise<DifficultWordsResponse> {
-  console.log('[API REQUEST] /translate/user/${userId}/difficult-words');
-
   try {
     const params: any = { min_attempts: minAttempts, limit };
     if (targetLang) {
@@ -416,11 +366,6 @@ export async function getUserDifficultWords(
       `${API_BASE_URL}/translate/user/${userId}/difficult-words`,
       { params }
     );
-
-    console.log('[API RESPONSE - DIFFICULT WORDS]', {
-      total: response.data.total,
-      words: response.data.words.length
-    });
 
     return response.data;
   } catch (error) {
@@ -437,8 +382,6 @@ export async function getUserTranslationStats(
   userId: number,
   targetLang?: string
 ): Promise<UserTranslationStats> {
-  console.log('[API REQUEST] /translate/user/${userId}/stats');
-
   try {
     const params: any = {};
     if (targetLang) {
@@ -449,8 +392,6 @@ export async function getUserTranslationStats(
       `${API_BASE_URL}/translate/user/${userId}/stats`,
       { params }
     );
-
-    console.log('[API RESPONSE - USER STATS]', response.data);
 
     return response.data;
   } catch (error) {

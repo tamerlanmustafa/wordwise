@@ -22,13 +22,11 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    logger.info(f"[AUTH] Verifying token: {token[:20]}...")
     payload = verify_token(token)
     if payload is None:
         logger.error("[AUTH] Token verification failed")
         raise credentials_exception
 
-    logger.info(f"[AUTH] Token payload: {payload}")
     user_id_str = payload.get("sub")
     if user_id_str is None:
         logger.error("[AUTH] No user_id in token payload")
@@ -40,13 +38,11 @@ async def get_current_user(
         logger.error(f"[AUTH] Invalid user_id format: {user_id_str}")
         raise credentials_exception
 
-    logger.info(f"[AUTH] Looking up user_id: {user_id}")
     user = await db.user.find_unique(where={"id": user_id})
     if user is None:
         logger.error(f"[AUTH] User not found with id: {user_id}")
         raise credentials_exception
 
-    logger.info(f"[AUTH] User found: {user.email}, active: {user.isActive}")
     return user
 
 

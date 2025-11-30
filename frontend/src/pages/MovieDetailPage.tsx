@@ -68,8 +68,6 @@ export default function MovieDetailPage() {
       try {
         const movieTitle = movieState.title!;
 
-        console.log('[MOVIE DETAIL] Analyzing movie:', movieTitle);
-
         // Step 1: Search for the movie using WordWise API
         const searchResponse = await searchMovies(movieTitle);
 
@@ -86,7 +84,6 @@ export default function MovieDetailPage() {
 
         // Step 2: Use the first result (best match)
         const scriptId = searchResponse.results[0].id;
-        console.log('[MOVIE DETAIL] Found script ID:', scriptId);
 
         // Step 3: Fetch the script
         const scriptResponse = await fetchMovieScriptById(scriptId, movieTitle);
@@ -105,12 +102,8 @@ export default function MovieDetailPage() {
         });
         setMovieId(scriptResponse.movie_id);
 
-        console.log('[MOVIE DETAIL] Script fetched, word count:', scriptResponse.word_count);
-
         // Step 4: Classify vocabulary using CEFR
         await classifyMovieScript(scriptResponse.movie_id);
-
-        console.log('[MOVIE DETAIL] CEFR classification complete');
 
         // Step 5: Fetch vocabulary based on auth status
         let cefrResult;
@@ -127,8 +120,6 @@ export default function MovieDetailPage() {
           cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
           setIsPreview(true);
         }
-
-        console.log('[MOVIE DETAIL] Vocabulary loaded, preview mode:', isPreview);
 
         // Step 6: Convert to analysis format
         const rawCategories = Object.entries(cefrResult.level_distribution).map(([level]) => ({
@@ -197,7 +188,6 @@ export default function MovieDetailPage() {
         };
 
         setAnalysis(finalAnalysis);
-        console.log('[MOVIE DETAIL] Analysis complete');
 
         try {
           const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -207,7 +197,7 @@ export default function MovieDetailPage() {
             score: diffResponse.data.difficulty_score
           });
         } catch (diffErr) {
-          console.log('[DIFFICULTY] Not available yet');
+          // Difficulty not yet computed, skip silently
         }
 
       } catch (err: any) {

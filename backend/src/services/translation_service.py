@@ -74,7 +74,6 @@ class TranslationService:
             )
 
             if cached:
-                logger.info(f"Cache hit for '{normalized_text}' -> {target_lang}")
                 return {
                     "source_text": cached.sourceText,
                     "translated": cached.translated,
@@ -117,7 +116,6 @@ class TranslationService:
                     }
                 }
             )
-            logger.info(f"Saved to cache: '{source_text}' -> '{translated}' ({target_lang})")
         except Exception as e:
             logger.error(f"Failed to save to cache: {e}")
 
@@ -140,7 +138,6 @@ class TranslationService:
                     "provider": provider
                 }
             )
-            logger.info(f"Tracked translation for user {user_id}: '{word}' -> {target_lang}")
         except Exception as e:
             # Don't fail the request if tracking fails
             logger.error(f"Failed to track user translation: {e}")
@@ -206,12 +203,9 @@ class TranslationService:
                 }
 
         # Cache miss - determine which provider to use
-        logger.info(f"Cache miss for '{normalized_text}' -> {target_lang_upper}")
-
         # Try DeepL first if language is supported
         if target_lang_upper in DEEPL_SUPPORTED_TARGET_LANGS:
             try:
-                logger.info(f"Using DeepL for {target_lang_upper}")
                 result = await self.deepl_client.translate(
                     text=original_text,
                     target_lang=target_lang_upper,
@@ -248,10 +242,10 @@ class TranslationService:
                     "provider": "deepl"
                 }
 
-            except DeepLInvalidLanguageError as e:
+            except DeepLInvalidLanguageError:
                 # DeepL rejected the language - fallback to Google
-                logger.warning(f"DeepL invalid language for {target_lang_upper}, falling back to Google: {e}")
                 # Fall through to Google Translate
+                pass
 
             except DeepLQuotaExceededError as e:
                 # Quota exceeded - re-raise, don't fallback
@@ -264,8 +258,6 @@ class TranslationService:
                 raise
 
         # Use Google Translate (either not in DeepL list or DeepL rejected it)
-        logger.info(f"FALLBACK to Google Translate for {target_lang_upper}")
-
         try:
             result = await self.google_client.translate(
                 text=original_text,
