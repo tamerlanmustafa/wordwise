@@ -123,7 +123,18 @@ export default function SignUpPage() {
           )}
 
           {/* Google Sign Up */}
-          <Box sx={{ mb: 3 }}>
+          <Box
+            sx={{
+              mb: 3,
+              '& > div': {
+                width: '100% !important',
+              },
+              '& iframe': {
+                width: '100% !important',
+                minHeight: '56px !important', // Match MUI TextField height
+              }
+            }}
+          >
             <GoogleLogin
               onSuccess={handleGoogleLogin}
               onError={() => {
@@ -131,7 +142,6 @@ export default function SignUpPage() {
               }}
               size="large"
               text="signup_with"
-              width="400"
             />
           </Box>
 

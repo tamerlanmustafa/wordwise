@@ -108,7 +108,18 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          <Box sx={{ mb: 2 }}>
+          <Box
+            sx={{
+              mb: 2,
+              '& > div': {
+                width: '100% !important',
+              },
+              '& iframe': {
+                width: '100% !important',
+                minHeight: '56px !important', // Match MUI TextField height
+              }
+            }}
+          >
             <GoogleLogin
               onSuccess={handleGoogleLogin}
               onError={() => {
@@ -116,7 +127,6 @@ export default function LoginPage() {
               }}
               size="large"
               text="signin_with"
-              width="400"
             />
           </Box>
 
