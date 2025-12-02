@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from pathlib import Path
 import logging
+import json
 
 from src.services.cefr_classifier import (
     HybridCEFRClassifier,
@@ -428,12 +429,13 @@ async def classify_script(
             from src.services.difficulty_scorer import compute_difficulty
             level, score, dist = compute_difficulty(statistics['level_distribution'])
 
+            # Convert dict to JSON string for Prisma Json field
             await db.movie.update(
                 where={'id': request.movie_id},
                 data={
                     'difficultyLevel': level,
                     'difficultyScore': score,
-                    'cefrDistribution': dist
+                    'cefrDistribution': json.dumps(dist) if dist else None
                 }
             )
 
