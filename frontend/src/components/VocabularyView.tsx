@@ -38,7 +38,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
 import { usePrefetchPagination } from '../hooks/usePrefetchPagination';
-import { repackPages, clampPageNumber } from '../utils/paginationRepack';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -61,14 +60,11 @@ interface TranslatedWord {
 interface CEFRGroup {
   level: string;
   description: string;
-  words: WordFrequency[]; // Original unfiltered words
+  words: WordFrequency[]; // All words for this level (stable pagination)
   translatedWords: Map<string, TranslatedWord>;
   color: string;
   currentPage: number;
   totalPages: number;
-  // Repacked pagination (after filtering)
-  repackedPages?: WordFrequency[][];
-  filteredTotalItems?: number;
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -290,77 +286,6 @@ export default function VocabularyView({
     onPrefetchComplete: handlePrefetchComplete
   });
 
-  // Repack pagination after filtering (authenticated mode only)
-  useEffect(() => {
-    // Guards: Don't repack prematurely
-    if (isPreview || !isAuthenticated || groups.length === 0) return;
-
-    setGroups(prevGroups => {
-      return prevGroups.map((group) => {
-        // Guard: Don't repack if no translations loaded yet
-        if (!group.translatedWords || group.translatedWords.size === 0) {
-          return group; // Keep original state
-        }
-
-        // =====================================================================
-        // CRITICAL FIX: Only remove words if translation EXISTS and EQUALS source
-        // DO NOT remove words that haven't been translated yet
-        // =====================================================================
-        const filteredWords = group.words.filter(wordFreq => {
-          const sourceLower = wordFreq.word.toLowerCase();
-          const translatedWord = group.translatedWords.get(sourceLower);
-
-          // KEEP word if:
-          // 1. No translation yet (will be loaded later) ✓
-          if (!translatedWord) return true;
-
-          // 2. Translation exists but is empty/null (edge case) ✓
-          if (!translatedWord.translation) return true;
-
-          const translationLower = translatedWord.translation.toLowerCase();
-
-          // 3. Translation differs from source ✓
-          if (sourceLower !== translationLower) return true;
-
-          // REMOVE word only if:
-          // 4. Translation exists AND equals source ✗
-          return false;
-        });
-
-        // Sanity check: Warn if over-filtering detected
-        const filterRatio = filteredWords.length / group.words.length;
-        if (filterRatio < 0.5 && group.words.length > 20) {
-          console.warn(
-            `[Pagination Repack] High filtering detected for ${group.level}: ` +
-            `${group.words.length} → ${filteredWords.length} words (${Math.round(filterRatio * 100)}%). ` +
-            `This may indicate premature filtering.`
-          );
-        }
-
-        // Repack filtered words into consistent pages
-        const repackResult = repackPages(filteredWords, WORDS_PER_PAGE);
-
-        // Clamp current page if it's now out of bounds
-        const clampedPage = clampPageNumber(group.currentPage, repackResult.totalPages);
-
-        // Log repacking info (debug)
-        if (repackResult.totalPages !== group.totalPages) {
-          console.log(
-            `[Pagination Repack] ${group.level}: ${group.totalPages} → ${repackResult.totalPages} pages ` +
-            `(${filteredWords.length} filtered words)`
-          );
-        }
-
-        return {
-          ...group,
-          repackedPages: repackResult.pages,
-          filteredTotalItems: repackResult.totalItems,
-          currentPage: clampedPage,
-          totalPages: repackResult.totalPages
-        };
-      });
-    });
-  }, [groups.map(g => g.translatedWords.size).join(','), isPreview, isAuthenticated]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -399,13 +324,12 @@ export default function VocabularyView({
   const activeGroup = groups[activeTab];
   if (!activeGroup) return null;
 
-  // Use repacked pages if available (authenticated mode), otherwise use original slicing
-  const currentPageWords = isPreview || !activeGroup.repackedPages
-    ? activeGroup.words.slice(
-        (activeGroup.currentPage - 1) * WORDS_PER_PAGE,
-        activeGroup.currentPage * WORDS_PER_PAGE
-      )
-    : (activeGroup.repackedPages[activeGroup.currentPage - 1] || []);
+  // Always use stable pagination: 10 words per page from the original word list
+  // Filtering happens during rendering, not during pagination
+  const currentPageWords = activeGroup.words.slice(
+    (activeGroup.currentPage - 1) * WORDS_PER_PAGE,
+    activeGroup.currentPage * WORDS_PER_PAGE
+  );
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -545,7 +469,7 @@ export default function VocabularyView({
                     label={
                       isPreview
                         ? `3 sample words`
-                        : `${activeGroup.filteredTotalItems ?? activeGroup.words.length} words`
+                        : `${activeGroup.words.length} words`
                     }
                     sx={{
                       bgcolor: `${activeGroup.color}15`,
@@ -602,8 +526,7 @@ export default function VocabularyView({
                           );
                         }
 
-                        // Words are pre-filtered in repacking logic, so all words here should have translations
-                        // Only show skeleton during loading
+                        // Show skeleton while loading translation
                         if (isLoading) {
                           return (
                             <Box key={`${wordFreq.lemma}-${index}`}>
@@ -618,9 +541,18 @@ export default function VocabularyView({
                           );
                         }
 
-                        // Skip if no translation (should not happen after repacking, but safety check)
+                        // If no translation yet, show word without translation (shouldn't happen after loading)
                         if (!translatedWord) {
-                          return null;
+                          return (
+                            <Box key={`${wordFreq.lemma}-${index}`}>
+                              <ListItem sx={{ py: 2, px: 3 }}>
+                                <Typography variant="body1" sx={{ fontWeight: 500, color: 'text.primary' }}>
+                                  {wordFreq.word.toLowerCase()}
+                                </Typography>
+                              </ListItem>
+                              {index < currentPageWords.length - 1 && <Divider />}
+                            </Box>
+                          );
                         }
 
                         return (
@@ -776,7 +708,7 @@ export default function VocabularyView({
                     {isPreview ? (
                       `Showing 3 sample words • Sign in to view all ${activeGroup.words.length} words with translations`
                     ) : (
-                      `Showing ${currentPageWords.length} of ${activeGroup.filteredTotalItems ?? activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages}`
+                      `Showing ${currentPageWords.length} of ${activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages}`
                     )}
                   </Typography>
                 </Box>
