@@ -36,6 +36,10 @@ jobs:
 
       - name: Build
         working-directory: ./frontend
+        env:
+          VITE_API_URL: https://wordwise-backend-3i5n.onrender.com
+          VITE_GOOGLE_CLIENT_ID: 400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com
+          VITE_TMDB_API_KEY: 9dece7a38786ac0c58794d6db4af3d51
         run: npm run build
 
       - name: Upload artifact
