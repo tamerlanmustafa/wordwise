@@ -37,13 +37,13 @@ const getLevelDescription = (level: string): string => {
 export default function MovieDetailPage() {
   const location = useLocation();
   const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number } | null;
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ScriptAnalysisResult | null>(null);
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
-  const [isPreview, setIsPreview] = useState(false);
+  const [isPreview, setIsPreview] = useState(!isAuthenticated);
   const [movieId, setMovieId] = useState<number | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<{
     level: string | null;
@@ -55,7 +55,17 @@ export default function MovieDetailPage() {
     wordCount: number;
   } | null>(null);
 
+  // Update preview mode when auth state changes
   useEffect(() => {
+    setIsPreview(!isAuthenticated);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    // Wait for auth to finish loading before fetching movie data
+    if (authLoading) {
+      return;
+    }
+
     if (!movieState?.title) {
       setError('Movie title not provided');
       setLoading(false);
@@ -209,7 +219,7 @@ export default function MovieDetailPage() {
     };
 
     analyzeMovie();
-  }, [movieState]);
+  }, [movieState, authLoading, isAuthenticated, user]);
 
   if (loading) {
     return (

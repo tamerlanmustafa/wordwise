@@ -179,15 +179,17 @@ export default function VocabularyView({
       const endIdx = startIdx + WORDS_PER_PAGE;
       const pageWords = words.slice(startIdx, endIdx);
 
-      // Check if we already have translations for this page
+      // Check if we already have translations for this page (BEFORE setting loading)
       const wordsToTranslate = pageWords.filter(w =>
         w.word && w.word.trim() && !translatedWords.has(w.word.toLowerCase())
       );
 
+      // Early return if all translations cached - no loading state needed
       if (wordsToTranslate.length === 0) {
         return;
       }
 
+      // Only set loading if we actually need to fetch translations
       setLoading(true);
       setError(null);
 
@@ -263,7 +265,8 @@ export default function VocabularyView({
     });
   };
 
-  if (groups.length === 0) {
+  // Only show skeleton on INITIAL load (not when switching tabs/pages with cached data)
+  if (groups.length === 0 && analysis.categories.length === 0) {
     return (
       <Grid container spacing={3}>
         <Grid item xs={12} md={9}>

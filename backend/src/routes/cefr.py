@@ -246,7 +246,11 @@ async def classify_script(
     db: Prisma = Depends(get_db)
 ):
     """
-    Classify an entire movie script from the database
+    Classify an entire movie script from the database.
+
+    PERFORMANCE OPTIMIZATION:
+    If classifications already exist in DB, returns cached data immediately
+    WITHOUT initializing the CEFR classifier or loading any word lists.
     """
     try:
         movie = await db.movie.find_unique(
@@ -271,37 +275,82 @@ async def classify_script(
                 detail="Script has no cleaned text"
             )
 
-        classifier = get_classifier()
-
+        # ========================================================================
+        # CRITICAL PERFORMANCE OPTIMIZATION: Check cache BEFORE classifier init
+        # ========================================================================
         existing_classifications = await db.wordclassification.find_many(
             where={'scriptId': script.id}
         )
 
-        # Use cache if exists
+        # ========================================================================
+        # FAST PATH: Return cached data immediately (no classifier initialization)
+        # ========================================================================
         if existing_classifications:
-            logger.info(f"✓ Using cached classifications for script {script.id} ({len(existing_classifications)} entries)")
-
-            from src.services.cefr_classifier import WordClassification, CEFRLevel, ClassificationSource
-            classifications = [
-                WordClassification(
-                    word=cls.word,
-                    lemma=cls.lemma,
-                    pos=cls.pos or "",
-                    cefr_level=CEFRLevel(cls.cefrLevel),
-                    confidence=cls.confidence,
-                    source=ClassificationSource(cls.source),
-                    frequency_rank=cls.frequencyRank
-                )
-                for cls in existing_classifications
-            ]
-        else:
-            # FIXED: use cleanedWordCount instead of nonexistent wordCount
             logger.info(
-                f"Classifying script for movie {request.movie_id} "
-                f"({script.cleanedWordCount} words)..."
+                f"✓ FAST PATH: Using cached classifications for script {script.id} "
+                f"({len(existing_classifications)} entries) - NO classifier initialization"
             )
 
-            classifications = classifier.classify_text(script.cleanedScriptText)
+            # Build level distribution and top words directly from DB data
+            level_groups = {}
+            level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
+            total_confidence = 0.0
+
+            for cls in existing_classifications:
+                level = cls.cefrLevel if isinstance(cls.cefrLevel, str) else cls.cefrLevel.value
+
+                # Apply word filter
+                if not should_keep_word(cls.word, cls.lemma, level):
+                    continue
+
+                level_distribution[level] = level_distribution.get(level, 0) + 1
+                total_confidence += cls.confidence
+
+                if level not in level_groups:
+                    level_groups[level] = []
+
+                level_groups[level].append({
+                    'word': cls.word,
+                    'lemma': cls.lemma,
+                    'confidence': cls.confidence,
+                    'frequency_rank': cls.frequencyRank
+                })
+
+            # Sort by frequency_rank (easier to harder)
+            top_words_by_level = {
+                level: sorted(
+                    words,
+                    key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999)
+                )
+                for level, words in level_groups.items()
+            }
+
+            # Calculate average confidence
+            total_kept = sum(level_distribution.values())
+            average_confidence = total_confidence / total_kept if total_kept > 0 else 0.0
+
+            # Return immediately without initializing classifier
+            return ScriptClassificationResponse(
+                movie_id=request.movie_id,
+                script_id=script.id,
+                total_words=script.cleanedWordCount or 0,
+                unique_words=len(set(cls.lemma for cls in existing_classifications)),
+                level_distribution=level_distribution,
+                average_confidence=average_confidence,
+                wordlist_coverage=0.0,  # Not computed for cached data
+                top_words_by_level=top_words_by_level
+            )
+
+        # ========================================================================
+        # SLOW PATH: No cache exists, initialize classifier and process script
+        # ========================================================================
+        logger.info(
+            f"SLOW PATH: No cache found. Initializing classifier and processing script "
+            f"for movie {request.movie_id} ({script.cleanedWordCount} words)..."
+        )
+
+        classifier = get_classifier()
+        classifications = classifier.classify_text(script.cleanedScriptText)
 
         # Compute statistics
         statistics = classifier.get_statistics(classifications)
