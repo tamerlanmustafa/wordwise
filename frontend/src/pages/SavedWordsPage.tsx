@@ -23,7 +23,7 @@ import {
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SearchIcon from '@mui/icons-material/Search';
-import axios from 'axios';
+import apiClient from '../services/api';
 
 interface SavedWord {
   id: number;
@@ -46,8 +46,6 @@ export default function SavedWordsPage() {
   const [filterMovie, setFilterMovie] = useState<number | 'all'>('all');
   const [movieSearchQuery, setMovieSearchQuery] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
   useEffect(() => {
     fetchWords();
   }, [listName, sortBy, filterMovie]);
@@ -57,19 +55,15 @@ export default function SavedWordsPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('wordwise_token');
       const params: any = { sort: sortBy };
 
       if (filterMovie !== 'all') {
         params.movie_id = filterMovie;
       }
 
-      const response = await axios.get(
-        `${API_BASE_URL}/user/words/list/${listName || 'saved'}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params
-        }
+      const response = await apiClient.get(
+        `/user/words/list/${listName || 'saved'}`,
+        { params }
       );
 
       setWords(response.data.words);

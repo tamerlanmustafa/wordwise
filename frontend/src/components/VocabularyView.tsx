@@ -37,7 +37,7 @@ import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
-import axios from 'axios';
+import apiClient from '../services/api';
 
 interface VocabularyViewProps {
   analysis: ScriptAnalysisResult;
@@ -93,8 +93,6 @@ export default function VocabularyView({
   const [error, setError] = useState<string | null>(null);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
   // Merge C1 and C2 into single "Advanced" category
   const mergedCategories = useMemo(() => {
     return analysis.categories.reduce((acc, category) => {
@@ -134,8 +132,7 @@ export default function VocabularyView({
     if (!isAuthenticated || !movieId) return;
 
     const fetchOtherMovies = async () => {
-      const token = localStorage.getItem('wordwise_token');
-      if (!token) return;
+      if (!isAuthenticated) return;
 
       const uniqueWords = new Set<string>();
       groups.forEach(g => g.words.forEach(w => uniqueWords.add(w.word.toLowerCase())));
@@ -143,13 +140,10 @@ export default function VocabularyView({
       if (uniqueWords.size === 0) return;
 
       try {
-        const response = await axios.post(
-          `${API_BASE_URL}/user/words/other-movies/batch`,
+        const response = await apiClient.post(
+          `/user/words/other-movies/batch`,
           Array.from(uniqueWords),
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { exclude_movie_id: movieId }
-          }
+          { params: { exclude_movie_id: movieId } }
         );
         setOtherMovies(response.data);
       } catch (error) {

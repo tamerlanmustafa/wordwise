@@ -1,4 +1,5 @@
 import axios from 'axios';
+import apiClient from './api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -255,15 +256,10 @@ export async function getVocabularyPreview(movieId: number): Promise<CEFRClassif
  * Get full vocabulary (PROTECTED - auth required).
  * Returns all words with CEFR levels, supports translations.
  */
-export async function getVocabularyFull(movieId: number, token: string): Promise<CEFRClassificationResponse> {
+export async function getVocabularyFull(movieId: number): Promise<CEFRClassificationResponse> {
   try {
-    const response = await axios.get<CEFRClassificationResponse>(
-      `${API_BASE_URL}/movies/${movieId}/vocabulary/full`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
+    const response = await apiClient.get<CEFRClassificationResponse>(
+      `/movies/${movieId}/vocabulary/full`
     );
     return response.data;
   } catch (error) {

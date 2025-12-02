@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UserWord {
@@ -19,17 +19,12 @@ export function useUserWords() {
   const [loading, setLoading] = useState(false);
   const { isAuthenticated } = useAuth();
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
   const fetchUserWords = async () => {
     if (!isAuthenticated) return;
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('wordwise_token');
-      const response = await axios.get<UserWord[]>(`${API_BASE_URL}/user/words/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get<UserWord[]>(`/user/words/`);
 
       const saved = new Set<string>();
       const pairs = new Set<string>();
@@ -71,11 +66,9 @@ export function useUserWords() {
     if (!isAuthenticated) return;
 
     try {
-      const token = localStorage.getItem('wordwise_token');
-      const response = await axios.post(
-        `${API_BASE_URL}/user/words/save`,
-        { word, movie_id: movieId },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await apiClient.post(
+        `/user/words/save`,
+        { word, movie_id: movieId }
       );
 
       if (response.data.saved) {
@@ -84,9 +77,7 @@ export function useUserWords() {
           setSavedWordMoviePairs((prev) => new Set(prev).add(`${word}:${movieId}`));
         }
       } else {
-        const allUserWords = await axios.get<UserWord[]>(`${API_BASE_URL}/user/words/`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const allUserWords = await apiClient.get<UserWord[]>(`/user/words/`);
         const stillHasWord = allUserWords.data.some(w => w.word === word);
 
         if (!stillHasWord) {
@@ -121,11 +112,9 @@ export function useUserWords() {
     const newLearnedState = !learnedWords.has(word);
 
     try {
-      const token = localStorage.getItem('wordwise_token');
-      await axios.post(
-        `${API_BASE_URL}/user/words/learn`,
-        { word, is_learned: newLearnedState },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await apiClient.post(
+        `/user/words/learn`,
+        { word, is_learned: newLearnedState }
       );
 
       if (newLearnedState) {

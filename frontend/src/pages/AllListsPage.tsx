@@ -3,13 +3,11 @@ import { Link } from 'react-router-dom';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../services/api';
 
 export default function AllListsPage() {
   const [savedCount, setSavedCount] = useState(0);
   const [learnedCount, setLearnedCount] = useState(0);
-
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   useEffect(() => {
     fetchCounts();
@@ -17,10 +15,7 @@ export default function AllListsPage() {
 
   const fetchCounts = async () => {
     try {
-      const token = localStorage.getItem('wordwise_token');
-      const response = await axios.get(`${API_BASE_URL}/user/words/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`/user/words/`);
 
       const words = response.data;
       setSavedCount(words.length);

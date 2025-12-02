@@ -20,6 +20,7 @@ import {
   type TMDBMetadata
 } from '../services/scriptService';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 
 const getLevelDescription = (level: string): string => {
   const descriptions: Record<string, string> = {
@@ -108,14 +109,8 @@ export default function MovieDetailPage() {
         // Step 5: Fetch vocabulary based on auth status
         let cefrResult;
         if (isAuthenticated && user) {
-          const token = localStorage.getItem('wordwise_token');
-          if (token) {
-            cefrResult = await getVocabularyFull(scriptResponse.movie_id, token);
-            setIsPreview(false);
-          } else {
-            cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
-            setIsPreview(true);
-          }
+          cefrResult = await getVocabularyFull(scriptResponse.movie_id);
+          setIsPreview(false);
         } else {
           cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
           setIsPreview(true);
