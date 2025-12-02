@@ -4,6 +4,7 @@ Hybrid CEFR Difficulty Classifier - MAXIMUM SPEED OPTIMIZATION
 NO spaCy - uses NLTK WordNetLemmatizer for maximum speed
 Global persistent caching across all requests
 Aggressive pre-cleaning before tokenization
+POS-aware lemmatization using lightweight dictionary
 """
 
 import logging
@@ -34,6 +35,22 @@ except LookupError:
 _GLOBAL_LEMMA_CACHE: Dict[str, str] = {}
 _GLOBAL_CEFR_CACHE: Dict[str, 'WordClassification'] = {}
 _GLOBAL_FREQUENCY_CACHE: Dict[str, Optional[int]] = {}
+
+# Load POS dictionary once at module level
+_POS_DICT: Optional[Dict[str, str]] = None
+
+def _load_pos_dictionary() -> Dict[str, str]:
+    """Load POS dictionary once on first access"""
+    global _POS_DICT
+    if _POS_DICT is None:
+        try:
+            from ..data.pos_dictionary import POS_DICTIONARY
+            _POS_DICT = POS_DICTIONARY
+            logger.info(f"Loaded POS dictionary with {len(_POS_DICT)} entries")
+        except Exception as e:
+            logger.warning(f"Failed to load POS dictionary: {e}")
+            _POS_DICT = {}
+    return _POS_DICT
 
 
 class CEFRLevel(str, Enum):
@@ -241,14 +258,50 @@ class HybridCEFRClassifier:
         return text
 
     def _get_lemma_simple(self, word: str) -> str:
+        """Simple lemmatization without POS (used during initialization)"""
         return self.lemmatizer.lemmatize(word.lower())
 
     def _get_lemma_fast(self, word: str) -> str:
+        """
+        Fast lemmatization with POS dictionary lookup
+
+        Process:
+        1. Check global cache
+        2. Lookup word in POS dictionary
+        3. If found, use appropriate POS tag for lemmatization
+        4. If not found, default to noun-based lemmatization
+        """
         global _GLOBAL_LEMMA_CACHE
-        if word in _GLOBAL_LEMMA_CACHE:
-            return _GLOBAL_LEMMA_CACHE[word]
-        lemma = self.lemmatizer.lemmatize(word)
-        _GLOBAL_LEMMA_CACHE[word] = lemma
+
+        word_lower = word.lower()
+
+        # Check cache first
+        if word_lower in _GLOBAL_LEMMA_CACHE:
+            return _GLOBAL_LEMMA_CACHE[word_lower]
+
+        # Get POS dictionary
+        pos_dict = _load_pos_dictionary()
+
+        # Lookup POS tag
+        pos_tag = pos_dict.get(word_lower)
+
+        # Lemmatize with POS if available
+        if pos_tag:
+            # Map our simple tags to WordNet POS constants
+            wordnet_pos = {
+                'n': wordnet.NOUN,
+                'v': wordnet.VERB,
+                'a': wordnet.ADJ,
+                'r': wordnet.ADV
+            }.get(pos_tag, wordnet.NOUN)
+
+            lemma = self.lemmatizer.lemmatize(word_lower, pos=wordnet_pos)
+        else:
+            # Fallback to noun-based lemmatization (original behavior)
+            lemma = self.lemmatizer.lemmatize(word_lower)
+
+        # Cache result
+        _GLOBAL_LEMMA_CACHE[word_lower] = lemma
         return lemma
 
     def _get_frequency_rank(self, word: str, lang: str = 'en') -> Optional[int]:
