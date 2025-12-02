@@ -250,9 +250,15 @@ class HybridCEFRClassifier:
     @staticmethod
     def aggressive_preclean(text: str) -> str:
         text = text.lower()
+        # Normalize smart quotes to standard apostrophe
         text = text.replace("'", "'").replace("'", "'")
         text = text.replace(""", '"').replace(""", '"')
-        text = re.sub(r'[^\w\s]', ' ', text)
+        # Remove punctuation EXCEPT apostrophes within words
+        text = re.sub(r"[^\w\s']", ' ', text)
+        # Remove standalone apostrophes (not part of word)
+        text = re.sub(r"\s'\s", ' ', text)
+        text = re.sub(r"^\s*'\s*", '', text)
+        # Remove digits
         text = re.sub(r'\d+', '', text)
         text = re.sub(r'\s+', ' ', text).strip()
         return text
@@ -269,7 +275,8 @@ class HybridCEFRClassifier:
         1. Check global cache
         2. Lookup word in POS dictionary
         3. If found, use appropriate POS tag for lemmatization
-        4. If not found, default to noun-based lemmatization
+        4. If not found, try noun lemmatization (for plurals)
+        5. Handle irregular plural nouns
         """
         global _GLOBAL_LEMMA_CACHE
 
@@ -278,6 +285,28 @@ class HybridCEFRClassifier:
         # Check cache first
         if word_lower in _GLOBAL_LEMMA_CACHE:
             return _GLOBAL_LEMMA_CACHE[word_lower]
+
+        # Irregular plural nouns that need special handling
+        irregular_plurals = {
+            'children': 'child',
+            'people': 'person',
+            'men': 'man',
+            'women': 'woman',
+            'feet': 'foot',
+            'teeth': 'tooth',
+            'geese': 'goose',
+            'mice': 'mouse',
+            'oxen': 'ox',
+            'sheep': 'sheep',
+            'deer': 'deer',
+            'fish': 'fish'
+        }
+
+        # Check irregular plurals
+        if word_lower in irregular_plurals:
+            lemma = irregular_plurals[word_lower]
+            _GLOBAL_LEMMA_CACHE[word_lower] = lemma
+            return lemma
 
         # Get POS dictionary
         pos_dict = _load_pos_dictionary()
@@ -297,8 +326,28 @@ class HybridCEFRClassifier:
 
             lemma = self.lemmatizer.lemmatize(word_lower, pos=wordnet_pos)
         else:
-            # Fallback to noun-based lemmatization (original behavior)
-            lemma = self.lemmatizer.lemmatize(word_lower)
+            # Fallback to noun-based lemmatization for plurals
+            lemma = self.lemmatizer.lemmatize(word_lower, pos=wordnet.NOUN)
+
+            # If lemmatization didn't change anything and word ends with 's' or 'es',
+            # it might be a plural noun not in our dictionary
+            if lemma == word_lower and (word_lower.endswith('s') and len(word_lower) > 2):
+                # Try to remove common plural endings
+                if word_lower.endswith('ies') and len(word_lower) > 4:
+                    # stories -> story, cherries -> cherry
+                    potential_lemma = word_lower[:-3] + 'y'
+                    _GLOBAL_LEMMA_CACHE[word_lower] = potential_lemma
+                    return potential_lemma
+                elif word_lower.endswith('es') and len(word_lower) > 3:
+                    # Check if it's a real plural (watches -> watch, boxes -> box)
+                    potential_lemma = self.lemmatizer.lemmatize(word_lower[:-2], pos=wordnet.NOUN)
+                    if potential_lemma != word_lower[:-2]:
+                        _GLOBAL_LEMMA_CACHE[word_lower] = potential_lemma
+                        return potential_lemma
+                    # Try removing just 'es'
+                    potential_lemma = word_lower[:-2]
+                    _GLOBAL_LEMMA_CACHE[word_lower] = potential_lemma
+                    return potential_lemma
 
         # Cache result
         _GLOBAL_LEMMA_CACHE[word_lower] = lemma

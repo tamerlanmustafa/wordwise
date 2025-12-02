@@ -172,6 +172,22 @@ export default function VocabularyView({
     );
   }, [targetLanguage]);
 
+  // Helper function to get displayable words (excludes words with same source/translation)
+  const getDisplayableWords = (words: WordFrequency[], translatedWordsMap: Map<string, TranslatedWord>) => {
+    return words.filter(w => {
+      const translatedWord = translatedWordsMap.get(w.word.toLowerCase());
+      // Only include if we have a translation and it's different from the source
+      return translatedWord !== undefined;
+    });
+  };
+
+  // Helper function to repack pages to ensure 10 words per page
+  const repackPages = (allWords: WordFrequency[], translatedWordsMap: Map<string, TranslatedWord>) => {
+    const displayableWords = getDisplayableWords(allWords, translatedWordsMap);
+    const totalPages = Math.ceil(displayableWords.length / WORDS_PER_PAGE);
+    return { displayableWords, totalPages };
+  };
+
   // Load translations for current page of active tab (only if authenticated and not preview mode)
   useEffect(() => {
     if (groups.length === 0 || isPreview || !isAuthenticated) return;
@@ -237,9 +253,13 @@ export default function VocabularyView({
             }
           });
 
+          // Repack pages after filtering
+          const { displayableWords, totalPages: newTotalPages } = repackPages(newGroups[activeTab].words, newMap);
+
           newGroups[activeTab] = {
             ...newGroups[activeTab],
-            translatedWords: newMap
+            translatedWords: newMap,
+            totalPages: newTotalPages
           };
 
           return newGroups;
@@ -362,9 +382,16 @@ export default function VocabularyView({
   const activeGroup = groups[activeTab];
   if (!activeGroup) return null;
 
+  // Get displayable words (filtered by translation availability)
+  const displayableWords = isPreview
+    ? activeGroup.words.slice(0, 3) // Show first 3 in preview
+    : getDisplayableWords(activeGroup.words, activeGroup.translatedWords);
+
   const startIdx = (activeGroup.currentPage - 1) * WORDS_PER_PAGE;
   const endIdx = startIdx + WORDS_PER_PAGE;
-  const currentPageWords = activeGroup.words.slice(startIdx, endIdx);
+  const currentPageWords = isPreview
+    ? displayableWords
+    : displayableWords.slice(startIdx, endIdx);
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -555,11 +582,6 @@ export default function VocabularyView({
                               {index < currentPageWords.length - 1 && <Divider />}
                             </Box>
                           );
-                        }
-
-                        // Skip words where source and translation are the same
-                        if (!isLoading && !translatedWord) {
-                          return null;
                         }
 
                         return (
