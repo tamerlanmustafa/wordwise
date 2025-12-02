@@ -180,7 +180,7 @@ export default function VocabularyView({
       const activeGroup = groups[activeTab];
       if (!activeGroup) return;
 
-      const { currentPage, words, translatedWords, totalPages } = activeGroup;
+      const { currentPage, words, translatedWords } = activeGroup;
       const startIdx = (currentPage - 1) * WORDS_PER_PAGE;
       const endIdx = startIdx + WORDS_PER_PAGE;
       const pageWords = words.slice(startIdx, endIdx);
@@ -191,8 +191,6 @@ export default function VocabularyView({
       );
 
       if (wordsToTranslate.length === 0) {
-        // Current page is already loaded, but still prefetch next page
-        prefetchNextPage(activeGroup);
         return;
       }
 
@@ -244,82 +242,12 @@ export default function VocabularyView({
 
           return newGroups;
         });
-
-        // After loading current page, prefetch next page
-        prefetchNextPage(activeGroup);
       } catch (err: any) {
         console.error('Failed to load translations:', err);
         setError('Failed to load translations. Please try again.');
       } finally {
         setLoading(false);
       }
-    };
-
-    // Prefetch next page translations (fire-and-forget)
-    const prefetchNextPage = (activeGroup: CEFRGroup) => {
-      const { currentPage, words, translatedWords, totalPages } = activeGroup;
-
-      // Only prefetch if there's a next page
-      if (currentPage >= totalPages) return;
-
-      const nextStartIdx = currentPage * WORDS_PER_PAGE;
-      const nextEndIdx = nextStartIdx + WORDS_PER_PAGE;
-      const nextPageWords = words.slice(nextStartIdx, nextEndIdx);
-
-      // Check which words need translation
-      const nextWordsToTranslate = nextPageWords.filter(w =>
-        w.word && w.word.trim() && !translatedWords.has(w.word.toLowerCase())
-      );
-
-      if (nextWordsToTranslate.length === 0) return;
-
-      const nextUniqueWords = Array.from(new Set(nextWordsToTranslate.map(w => w.word)))
-        .filter(w => w != null && typeof w === 'string' && w.trim().length > 0);
-
-      if (nextUniqueWords.length === 0) return;
-
-      // Fire-and-forget prefetch (don't await, don't set loading state)
-      translateBatch(
-        nextUniqueWords,
-        targetLanguage,
-        'auto',
-        userId
-      ).then(batchResponse => {
-        // Update cache when prefetch completes
-        setGroups(prevGroups => {
-          // Verify we're still on the same tab to avoid stale updates
-          if (prevGroups[activeTab] !== activeGroup) return prevGroups;
-
-          const newGroups = [...prevGroups];
-          const newMap = new Map(newGroups[activeTab].translatedWords);
-
-          batchResponse.results.forEach((result) => {
-            const sourceLower = result.source.toLowerCase();
-            const translationLower = result.translated.toLowerCase();
-
-            if (sourceLower !== translationLower) {
-              newMap.set(sourceLower, {
-                word: sourceLower,
-                lemma: sourceLower,
-                translation: translationLower,
-                confidence: undefined,
-                cached: result.cached,
-                provider: result.provider
-              });
-            }
-          });
-
-          newGroups[activeTab] = {
-            ...newGroups[activeTab],
-            translatedWords: newMap
-          };
-
-          return newGroups;
-        });
-      }).catch(err => {
-        // Silent fail for prefetch - don't show error to user
-        console.debug('Prefetch failed (silent):', err);
-      });
     };
 
     loadPageTranslations();
