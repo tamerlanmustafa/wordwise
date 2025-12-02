@@ -435,7 +435,7 @@ export default function VocabularyView({
       <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
         <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
-            <Box>
+            <Box sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
                 Vocabulary by Difficulty Level
               </Typography>
@@ -492,59 +492,61 @@ export default function VocabularyView({
                 </Tabs>
               </Paper>
 
-              {/* Preview Mode CTA */}
-              {isPreview && (
-                <Alert
-                  severity="info"
-                  icon={<LockIcon />}
-                  sx={{ mb: 3 }}
-                  action={
-                    <Button
-                      component={Link}
-                      to="/signup"
-                      variant="contained"
-                      size="small"
-                    >
-                      Sign Up
-                    </Button>
-                  }
-                >
-                  <Typography variant="body2" fontWeight="medium">
-                    Sign in to unlock the full vocabulary list with translations and pagination
-                  </Typography>
-                </Alert>
-              )}
+              {/* Active Tab Content */}
+              <Box>
+                {/* Preview Mode CTA */}
+                {isPreview && (
+                  <Alert
+                    severity="info"
+                    icon={<LockIcon />}
+                    sx={{ mb: 3 }}
+                    action={
+                      <Button
+                        component={Link}
+                        to="/signup"
+                        variant="contained"
+                        size="small"
+                      >
+                        Sign Up
+                      </Button>
+                    }
+                  >
+                    <Typography variant="body2" fontWeight="medium">
+                      Sign in to unlock the full vocabulary list with translations and pagination
+                    </Typography>
+                  </Alert>
+                )}
 
-              {/* Header */}
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                <Box>
-                  <Typography variant="h5" fontWeight={700} sx={{ color: activeGroup.color }}>
-                    {activeGroup.level} Level
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {activeGroup.description}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={isPreview ? `3 sample words` : `${activeGroup.words.length} words`}
-                  sx={{
-                    bgcolor: `${activeGroup.color}15`,
-                    color: activeGroup.color,
-                    fontWeight: 600
-                  }}
-                />
-              </Stack>
+                {/* Header */}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                  <Box>
+                    <Typography variant="h5" fontWeight={700} sx={{ color: activeGroup.color }}>
+                      {activeGroup.level} Level
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {activeGroup.description}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={isPreview ? `3 sample words` : `${activeGroup.words.length} words`}
+                    sx={{
+                      bgcolor: `${activeGroup.color}15`,
+                      color: activeGroup.color,
+                      fontWeight: 600
+                    }}
+                  />
+                </Stack>
 
-              {/* Error State */}
-              {error && (
-                <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
-                  <Typography color="error.dark">{error}</Typography>
-                </Paper>
-              )}
+                {/* Error State */}
+                {error && (
+                  <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
+                    <Typography color="error.dark">{error}</Typography>
+                  </Paper>
+                )}
 
-              {/* Word List */}
-              <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
-                <List sx={{ py: 0 }}>
+                {/* Word List */}
+                <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
+                  <List sx={{ py: 0 }}>
                     {currentPageWords.length === 0 ? (
                       <ListItem>
                         <Typography variant="body2" color="text.secondary">
@@ -721,51 +723,29 @@ export default function VocabularyView({
 
                 {/* Pagination (hide in preview mode) */}
                 {!isPreview && activeGroup.totalPages > 1 && (
-                  <Stack spacing={2} sx={{ mt: 3, mb: 3 }}>
-                    {/* Previous/Next Buttons */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                      <Button
-                        variant="outlined"
-                        onClick={() => handlePageChange({} as React.ChangeEvent<unknown>, activeGroup.currentPage - 1)}
-                        disabled={activeGroup.currentPage === 1}
-                        sx={{ flex: 1 }}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        onClick={() => handlePageChange({} as React.ChangeEvent<unknown>, activeGroup.currentPage + 1)}
-                        disabled={activeGroup.currentPage === activeGroup.totalPages}
-                        sx={{ flex: 1 }}
-                      >
-                        Next
-                      </Button>
-                    </Box>
-
-                    {/* Page Number Pagination */}
-                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                      <Pagination
-                        count={activeGroup.totalPages}
-                        page={activeGroup.currentPage}
-                        onChange={handlePageChange}
-                        color="primary"
-                        size="large"
-                        showFirstButton
-                        showLastButton
-                      />
-                    </Box>
-                  </Stack>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+                    <Pagination
+                      count={activeGroup.totalPages}
+                      page={activeGroup.currentPage}
+                      onChange={handlePageChange}
+                      color="primary"
+                      size="large"
+                      showFirstButton
+                      showLastButton
+                    />
+                  </Box>
                 )}
 
-              {/* Stats Footer */}
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Typography variant="caption" color="text.secondary">
-                  {isPreview ? (
-                    `Showing 3 sample words • Sign in to view all ${activeGroup.words.length} words with translations`
-                  ) : (
-                    `Showing ${currentPageWords.length} of ${activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages} • Translations loaded on demand`
-                  )}
-                </Typography>
+                {/* Stats Footer */}
+                <Box sx={{ mt: 3, textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {isPreview ? (
+                      `Showing 3 sample words • Sign in to view all ${activeGroup.words.length} words with translations`
+                    ) : (
+                      `Showing ${currentPageWords.length} of ${activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages} • Translations loaded on demand`
+                    )}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
         </Grid>

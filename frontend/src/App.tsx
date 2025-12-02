@@ -15,52 +15,11 @@ import { AuthProvider } from './contexts/AuthContext';
 import TopBar from './components/TopBar';
 import Breadcrumbs from './components/Breadcrumbs';
 
-// Type declaration for Google OAuth API
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: {
-          prompt?: (momentListener?: any) => void;
-        };
-      };
-    };
-  }
-}
-
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
+// APP
 function App() {
   return (
-    <GoogleOAuthProvider
-      clientId={GOOGLE_CLIENT_ID}
-      onScriptLoadSuccess={() => {
-        // Override Google's popup positioning to center it
-        if (window.google?.accounts?.id) {
-          const originalPrompt = window.google.accounts.id.prompt;
-          window.google.accounts.id.prompt = function(momentListener) {
-            // Center popup configuration
-            const width = 500;
-            const height = 600;
-            const left = (window.screen.width - width) / 2;
-            const top = (window.screen.height - height) / 2;
-
-            // Store original window.open
-            const originalOpen = window.open;
-            window.open = function(url, target, features) {
-              const urlString = typeof url === 'string' ? url : url?.toString() || '';
-              if (urlString.includes('accounts.google.com')) {
-                const centeredFeatures = `width=${width},height=${height},left=${left},top=${top},toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,centerscreen=yes,chrome=yes`;
-                return originalOpen.call(window, url, target, centeredFeatures);
-              }
-              return originalOpen.call(window, url, target, features);
-            };
-
-            return originalPrompt?.call(this, momentListener);
-          };
-        }
-      }}
-    >
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>

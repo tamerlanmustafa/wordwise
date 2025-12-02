@@ -19,7 +19,7 @@ export default function MovieCarousel({
   const direction: "left" | "right" = index % 2 === 0 ? "right" : "left";
 
   const { containerRef: scrollRef, setSpeed } = useAutoScroll({
-    speed: 30,
+    speed: 10,
     direction,
   });
 
