@@ -38,7 +38,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
 import { usePrefetchPagination } from '../hooks/usePrefetchPagination';
-import { repackPages, clampPageNumber, type RepackedPagination } from '../utils/paginationRepack';
+import { repackPages, clampPageNumber } from '../utils/paginationRepack';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -296,7 +296,7 @@ export default function VocabularyView({
     if (isPreview || !isAuthenticated || groups.length === 0) return;
 
     setGroups(prevGroups => {
-      return prevGroups.map((group, index) => {
+      return prevGroups.map((group) => {
         // Guard: Don't repack if no translations loaded yet
         if (!group.translatedWords || group.translatedWords.size === 0) {
           return group; // Keep original state
