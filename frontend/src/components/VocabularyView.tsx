@@ -37,6 +37,7 @@ import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
+import { usePrefetchPagination } from '../hooks/usePrefetchPagination';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -249,6 +250,41 @@ export default function VocabularyView({
     loadPageTranslations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, groups[activeTab]?.currentPage, targetLanguage, userId, isPreview, isAuthenticated]);
+
+  // Prefetch callback: Merge prefetched translations into the active group
+  const handlePrefetchComplete = (tabIndex: number, newTranslations: Map<string, TranslatedWord>) => {
+    setGroups(prevGroups => {
+      const newGroups = [...prevGroups];
+      const existingMap = newGroups[tabIndex].translatedWords;
+
+      // Merge new translations into existing map
+      const mergedMap = new Map(existingMap);
+      newTranslations.forEach((value, key) => {
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, value);
+        }
+      });
+
+      newGroups[tabIndex] = {
+        ...newGroups[tabIndex],
+        translatedWords: mergedMap
+      };
+
+      return newGroups;
+    });
+  };
+
+  // Enable background pagination prefetch
+  usePrefetchPagination({
+    groups,
+    activeTab,
+    targetLanguage,
+    userId,
+    isPreview,
+    isAuthenticated,
+    wordsPerPage: WORDS_PER_PAGE,
+    onPrefetchComplete: handlePrefetchComplete
+  });
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
