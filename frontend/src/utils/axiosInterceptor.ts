@@ -79,8 +79,8 @@ axios.interceptors.request.use(
   async (config: any) => {
     const token = localStorage.getItem('wordwise_token');
 
-    // Skip token check for auth endpoints
-    if (config.url?.includes('/auth/')) {
+    // Skip token check for auth endpoints and preview endpoints
+    if (config.url?.includes('/auth/') || config.url?.includes('/preview')) {
       return config;
     }
 
@@ -88,30 +88,38 @@ axios.interceptors.request.use(
       if (!isRefreshing) {
         isRefreshing = true;
 
-        const newToken = await refreshToken();
-        isRefreshing = false;
+        try {
+          const newToken = await refreshToken();
+          isRefreshing = false;
 
-        if (newToken) {
-          processQueue(null, newToken);
-          if (config.headers) {
-            config.headers.Authorization = `Bearer ${newToken}`;
+          if (newToken) {
+            processQueue(null, newToken);
+            if (config.headers) {
+              config.headers.Authorization = `Bearer ${newToken}`;
+            }
+          } else {
+            processQueue(new Error('Token refresh failed'), null);
+            return Promise.reject(new Error('Token refresh failed'));
           }
-        } else {
-          processQueue(new Error('Token refresh failed'), null);
-          return Promise.reject(new Error('Token refresh failed'));
+        } catch (error) {
+          isRefreshing = false;
+          processQueue(error as Error, null);
+          return Promise.reject(error);
         }
       } else {
         // Wait for the ongoing refresh to complete
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then((newToken) => {
+        try {
+          const newToken = await new Promise<string>((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          });
+
           if (config.headers && newToken) {
             config.headers.Authorization = `Bearer ${newToken}`;
           }
           return config;
-        }).catch((err) => {
+        } catch (err) {
           return Promise.reject(err);
-        });
+        }
       }
     }
 

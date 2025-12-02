@@ -271,13 +271,12 @@ async def classify_script(
                 detail="Script has no cleaned text"
             )
 
-        classifier = get_classifier()
-
+        # Check cache BEFORE initializing classifier
         existing_classifications = await db.wordclassification.find_many(
             where={'scriptId': script.id}
         )
 
-        # Use cache if exists
+        # Use cache if exists (skip classifier initialization entirely)
         if existing_classifications:
             logger.info(f"✓ Using cached classifications for script {script.id} ({len(existing_classifications)} entries)")
 
@@ -294,8 +293,34 @@ async def classify_script(
                 )
                 for cls in existing_classifications
             ]
+
+            # Compute statistics without initializing classifier
+            level_counts = {level: 0 for level in CEFRLevel}
+            source_counts = {source: 0 for source in ClassificationSource}
+            total_confidence = 0.0
+            for cls in classifications:
+                level_counts[cls.cefr_level] += 1
+                source_counts[cls.source] += 1
+                total_confidence += cls.confidence
+
+            statistics = {
+                'total_words': len(classifications),
+                'level_distribution': {k.value: v for k, v in level_counts.items()},
+                'source_distribution': {k.value: v for k, v in source_counts.items()},
+                'average_confidence': total_confidence / len(classifications) if classifications else 0,
+                'wordlist_coverage': sum(
+                    1 for cls in classifications
+                    if cls.source in [
+                        ClassificationSource.OXFORD_3000,
+                        ClassificationSource.OXFORD_5000,
+                        ClassificationSource.EFLLEX,
+                    ]
+                ) / len(classifications) if classifications else 0
+            }
         else:
-            # FIXED: use cleanedWordCount instead of nonexistent wordCount
+            # Initialize classifier for classification
+            classifier = get_classifier()
+
             logger.info(
                 f"Classifying script for movie {request.movie_id} "
                 f"({script.cleanedWordCount} words)..."
@@ -303,8 +328,8 @@ async def classify_script(
 
             classifications = classifier.classify_text(script.cleanedScriptText)
 
-        # Compute statistics
-        statistics = classifier.get_statistics(classifications)
+            # Compute statistics
+            statistics = classifier.get_statistics(classifications)
 
         # All words by CEFR level (sorted easier to harder using frequency_rank)
         # Filter out ultra-common A1 words

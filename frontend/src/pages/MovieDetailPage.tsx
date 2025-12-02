@@ -36,7 +36,7 @@ const getLevelDescription = (level: string): string => {
 export default function MovieDetailPage() {
   const location = useLocation();
   const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number } | null;
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,93 @@ export default function MovieDetailPage() {
     wordCount: number;
   } | null>(null);
 
+  // Update preview mode and refetch full vocabulary when authentication status changes
   useEffect(() => {
+    console.log('[DEBUG] Auth status changed:', { isAuthenticated, hasUser: !!user, movieId, hasAnalysis: !!analysis });
+    setIsPreview(!isAuthenticated);
+
+    // If user logs in and we have movieId, refetch full vocabulary
+    if (isAuthenticated && user && movieId && analysis) {
+      console.log('[DEBUG] Refetching full vocabulary...');
+      const refetchFullVocabulary = async () => {
+        try {
+          const token = localStorage.getItem('wordwise_token');
+          console.log('[DEBUG] Token exists:', !!token);
+          if (!token) return;
+
+          console.log('[DEBUG] Calling getVocabularyFull...');
+          const cefrResult = await getVocabularyFull(movieId, token);
+          console.log('[DEBUG] Got full vocabulary:', { totalWords: cefrResult.total_words });
+
+          // Convert to analysis format
+          const rawCategories = Object.entries(cefrResult.level_distribution).map(([level]) => ({
+            level: level as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+            description: getLevelDescription(level),
+            words: cefrResult.top_words_by_level[level]?.map(w => ({
+              word: w.word,
+              lemma: w.lemma,
+              count: Math.round(w.confidence * 100),
+              frequency: w.confidence,
+              confidence: w.confidence,
+              frequency_rank: w.frequency_rank
+            })) || []
+          }));
+
+          // Merge C1 and C2 into "Advanced"
+          const mergedCategories = rawCategories.reduce((acc, category) => {
+            if (category.level === 'C1') {
+              const advancedIndex = acc.findIndex(c => c.level === 'C1');
+              if (advancedIndex === -1) {
+                acc.push({
+                  level: 'C1' as const,
+                  description: 'Advanced vocabulary',
+                  words: category.words
+                });
+              } else {
+                acc[advancedIndex].words.push(...category.words);
+              }
+            } else if (category.level === 'C2') {
+              const advancedIndex = acc.findIndex(c => c.level === 'C1');
+              if (advancedIndex === -1) {
+                acc.push({
+                  level: 'C1' as const,
+                  description: 'Advanced vocabulary',
+                  words: category.words
+                });
+              } else {
+                acc[advancedIndex].words.push(...category.words);
+              }
+            } else {
+              acc.push(category);
+            }
+            return acc;
+          }, [] as Array<{ level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'; description: string; words: any[] }>);
+
+          const finalAnalysis: ScriptAnalysisResult = {
+            title: analysis.title,
+            totalWords: cefrResult.total_words,
+            uniqueWords: cefrResult.unique_words,
+            categories: mergedCategories
+          };
+
+          console.log('[DEBUG] Setting full vocabulary analysis with categories:', mergedCategories.map(c => ({ level: c.level, wordCount: c.words.length })));
+          setAnalysis(finalAnalysis);
+        } catch (err) {
+          console.error('[DEBUG ERROR] Failed to refetch full vocabulary:', err);
+        }
+      };
+
+      refetchFullVocabulary();
+    }
+  }, [isAuthenticated, user, movieId]);
+
+  useEffect(() => {
+    // Wait for auth context to finish loading before fetching data
+    if (authLoading) {
+      console.log('[DEBUG] Auth context still loading, waiting...');
+      return;
+    }
+
     if (!movieState?.title) {
       setError('Movie title not provided');
       setLoading(false);
@@ -106,19 +192,20 @@ export default function MovieDetailPage() {
         await classifyMovieScript(scriptResponse.movie_id);
 
         // Step 5: Fetch vocabulary based on auth status
+        console.log('[DEBUG] Initial vocabulary fetch - auth status:', { isAuthenticated, hasUser: !!user, loading });
         let cefrResult;
         if (isAuthenticated && user) {
           const token = localStorage.getItem('wordwise_token');
           if (token) {
+            console.log('[DEBUG] Fetching FULL vocabulary (initial)');
             cefrResult = await getVocabularyFull(scriptResponse.movie_id, token);
-            setIsPreview(false);
           } else {
+            console.log('[DEBUG] Fetching PREVIEW vocabulary (no token)');
             cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
-            setIsPreview(true);
           }
         } else {
+          console.log('[DEBUG] Fetching PREVIEW vocabulary (not authenticated)');
           cefrResult = await getVocabularyPreview(scriptResponse.movie_id);
-          setIsPreview(true);
         }
 
         // Step 6: Convert to analysis format
@@ -214,7 +301,7 @@ export default function MovieDetailPage() {
     };
 
     analyzeMovie();
-  }, [movieState]);
+  }, [movieState, authLoading, isAuthenticated, user]);
 
   if (loading) {
     return (
