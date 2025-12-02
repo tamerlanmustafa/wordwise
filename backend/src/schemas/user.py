@@ -25,7 +25,6 @@ class UserResponse(BaseModel):
     proficiency_level: Optional[proficiencylevel]
     is_active: Optional[bool]
     created_at: Optional[datetime]
-    profile_picture_url: Optional[str] = None
 
     class Config:
         from_attributes = True

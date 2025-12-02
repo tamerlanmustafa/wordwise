@@ -95,19 +95,3 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/refresh")
-async def refresh_token(current_user = Depends(get_current_user)):
-    """Refresh JWT token for authenticated user"""
-    # Generate new token
-    access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
-    access_token = create_access_token(
-        data={"sub": current_user.id, "email": current_user.email},
-        expires_delta=access_token_expires
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
-
-

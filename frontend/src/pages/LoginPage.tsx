@@ -108,7 +108,7 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          <Box sx={{ mb: 2, '& > div': { width: '100% !important' } }}>
+          <Box sx={{ mb: 2 }}>
             <GoogleLogin
               onSuccess={handleGoogleLogin}
               onError={() => {
@@ -116,7 +116,7 @@ export default function LoginPage() {
               }}
               size="large"
               text="signin_with"
-              width="100%"
+              width="400"
             />
           </Box>
 

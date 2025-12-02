@@ -83,21 +83,6 @@ POS_DICTIONARY = {
     "news": "n", "means": "n", "series": "n", "species": "n",
     "sheep": "n", "deer": "n", "fish": "n",
 
-    # Common plural nouns that need explicit marking
-    "slobs": "n", "slob": "n",
-    "cheerleaders": "n", "cheerleader": "n",
-    "movies": "n", "movie": "n",
-    "words": "n", "word": "n",
-    "scripts": "n", "script": "n",
-    "books": "n", "book": "n",
-    "stories": "n", "story": "n",
-    "characters": "n", "character": "n",
-    "actors": "n", "actor": "n",
-    "scenes": "n", "scene": "n",
-    "lines": "n", "line": "n",
-    "dialogues": "n", "dialogue": "n",
-    "subtitles": "n", "subtitle": "n",
-
     # Modal-like verbs
     "ought": "v", "dare": "v", "need": "v",
 
