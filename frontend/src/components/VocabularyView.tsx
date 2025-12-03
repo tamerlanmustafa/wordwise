@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -37,8 +37,6 @@ import { translateBatch } from '../services/scriptService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
-import { usePrefetchPagination } from '../hooks/usePrefetchPagination';
-import { repackPages, clampPageNumber } from '../utils/paginationRepack';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -61,14 +59,10 @@ interface TranslatedWord {
 interface CEFRGroup {
   level: string;
   description: string;
-  words: WordFrequency[]; // Original unfiltered words
-  translatedWords: Map<string, TranslatedWord>;
+  rawWords: WordFrequency[]; // Original list from backend
+  translations: Map<string, TranslatedWord>; // Translation cache
   color: string;
   currentPage: number;
-  totalPages: number;
-  // Repacked pagination (after filtering)
-  repackedPages?: WordFrequency[][];
-  filteredTotalItems?: number;
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -94,9 +88,14 @@ export default function VocabularyView({
   const { savedWords, learnedWords, saveWord, toggleLearned, isWordSavedInMovie } = useUserWords();
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
+  const groupsRef = useRef<CEFRGroup[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
 
   // Merge C1 and C2 into single "Advanced" category
   const mergedCategories = useMemo(() => {
@@ -124,23 +123,34 @@ export default function VocabularyView({
     const initialGroups: CEFRGroup[] = mergedCategories.map(category => ({
       level: category.level,
       description: category.description,
-      words: category.words,
-      translatedWords: new Map(),
+      rawWords: category.words,
+      translations: new Map(),
       color: LEVEL_COLORS[category.level] || '#4caf50',
-      currentPage: 1,
-      totalPages: Math.ceil(category.words.length / WORDS_PER_PAGE)
+      currentPage: 1
     }));
     setGroups(initialGroups);
   }, [mergedCategories]);
 
+  // Clear translations when language changes
+  useEffect(() => {
+    if (groups.length === 0) return;
+
+    setGroups(prevGroups =>
+      prevGroups.map(group => ({
+        ...group,
+        translations: new Map(),
+        currentPage: 1
+      }))
+    );
+  }, [targetLanguage]);
+
+  // Fetch other movies for word tooltips
   useEffect(() => {
     if (!isAuthenticated || !movieId) return;
 
     const fetchOtherMovies = async () => {
-      if (!isAuthenticated) return;
-
       const uniqueWords = new Set<string>();
-      groups.forEach(g => g.words.forEach(w => uniqueWords.add(w.word.toLowerCase())));
+      groups.forEach(g => g.rawWords.forEach(w => uniqueWords.add(w.word.toLowerCase())));
 
       if (uniqueWords.size === 0) return;
 
@@ -160,207 +170,115 @@ export default function VocabularyView({
     fetchOtherMovies();
   }, [groups, isAuthenticated, movieId]);
 
-  useEffect(() => {
-    if (groups.length === 0) return;
+  // Sliding window builder: fetches translations for current + next page only
+  const buildSlidingWindow = useCallback(async (
+    groupIndex: number,
+    startValidIndex: number
+  ) => {
+    if (isPreview || !isAuthenticated) return;
 
-    setGroups(prevGroups =>
-      prevGroups.map(group => ({
-        ...group,
-        translatedWords: new Map()
-      }))
-    );
-  }, [targetLanguage]);
+    const currentGroups = groupsRef.current;
+    const group = currentGroups[groupIndex];
+    if (!group) return;
 
-  // Load translations for current page of active tab (only if authenticated and not preview mode)
-  useEffect(() => {
-    if (groups.length === 0 || isPreview || !isAuthenticated) return;
+    const { rawWords, translations } = group;
+    const wordsToTranslate: string[] = [];
 
-    const loadPageTranslations = async () => {
-      const activeGroup = groups[activeTab];
-      if (!activeGroup) return;
+    // SLIDING WINDOW LOGIC:
+    // We need to translate words for:
+    // - Current page: startValidIndex to startValidIndex + WORDS_PER_PAGE
+    // - Next page: startValidIndex + WORDS_PER_PAGE to startValidIndex + 2*WORDS_PER_PAGE
+    // Total: approximately 20 words (2 pages * 10 words)
 
-      const { currentPage, words, translatedWords } = activeGroup;
-      const startIdx = (currentPage - 1) * WORDS_PER_PAGE;
-      const endIdx = startIdx + WORDS_PER_PAGE;
-      const pageWords = words.slice(startIdx, endIdx);
+    const targetValidCount = WORDS_PER_PAGE * 2; // Current + next page
+    let validWordsFound = 0;
+    let rawIndex = 0;
 
-      // Check if we already have translations for this page (BEFORE setting loading)
-      const wordsToTranslate = pageWords.filter(w =>
-        w.word && w.word.trim() && !translatedWords.has(w.word.toLowerCase())
-      );
+    // First pass: count how many valid words we've seen to find our window start
+    while (rawIndex < rawWords.length && validWordsFound < startValidIndex) {
+      const wordKey = rawWords[rawIndex].word.toLowerCase();
+      const translation = translations.get(wordKey);
 
-      // Early return if all translations cached - no loading state needed
-      if (wordsToTranslate.length === 0) {
-        return;
+      // Only count if we have translation AND it's different from source
+      if (translation && translation.translation.toLowerCase() !== wordKey) {
+        validWordsFound++;
       }
+      rawIndex++;
+    }
 
-      // Only set loading if we actually need to fetch translations
-      setLoading(true);
-      setError(null);
+    // Second pass: collect words we need to translate for the window
+    validWordsFound = 0; // Reset counter for window
+    while (rawIndex < rawWords.length && validWordsFound < targetValidCount) {
+      const wordKey = rawWords[rawIndex].word.toLowerCase();
+      const translation = translations.get(wordKey);
 
-      try {
-        const uniqueWords = Array.from(new Set(wordsToTranslate.map(w => w.word)))
-          .filter(w => w != null && typeof w === 'string' && w.trim().length > 0);
-
-        if (uniqueWords.length === 0) {
-          setLoading(false);
-          return;
+      if (!translation) {
+        // Need translation for this word
+        if (!wordsToTranslate.includes(wordKey)) {
+          wordsToTranslate.push(wordKey);
         }
+      } else if (translation.translation.toLowerCase() !== wordKey) {
+        // Already have valid translation, count it toward our window
+        validWordsFound++;
+      }
+      // If translation === source, skip it entirely (doesn't count as valid)
 
+      rawIndex++;
+    }
+
+    // If we need translations, fetch them
+    if (wordsToTranslate.length > 0) {
+      try {
         const batchResponse = await translateBatch(
-          uniqueWords,
+          wordsToTranslate,
           targetLanguage,
           'auto',
           userId
         );
 
-        // Update the translatedWords map for this group
+        // Update translations map only - don't recalculate all validIndices
         setGroups(prevGroups => {
           const newGroups = [...prevGroups];
-          const newMap = new Map(newGroups[activeTab].translatedWords);
+          const newMap = new Map(newGroups[groupIndex].translations);
 
           batchResponse.results.forEach((result) => {
             const sourceLower = result.source.toLowerCase();
             const translationLower = result.translated.toLowerCase();
 
-            // Skip if source and translation are the same
-            if (sourceLower !== translationLower) {
-              newMap.set(sourceLower, {
-                word: sourceLower,
-                lemma: sourceLower,
-                translation: translationLower,
-                confidence: undefined,
-                cached: result.cached,
-                provider: result.provider
-              });
-            }
+            newMap.set(sourceLower, {
+              word: sourceLower,
+              lemma: sourceLower,
+              translation: translationLower,
+              confidence: undefined,
+              cached: result.cached,
+              provider: result.provider
+            });
           });
 
-          newGroups[activeTab] = {
-            ...newGroups[activeTab],
-            translatedWords: newMap
+          newGroups[groupIndex] = {
+            ...newGroups[groupIndex],
+            translations: newMap
           };
 
           return newGroups;
         });
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to load translations:', err);
         setError('Failed to load translations. Please try again.');
-      } finally {
-        setLoading(false);
       }
-    };
+    }
+  }, [targetLanguage, userId, isPreview, isAuthenticated]);
 
-    loadPageTranslations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, groups[activeTab]?.currentPage, targetLanguage, userId, isPreview, isAuthenticated]);
-
-  // Prefetch callback: Merge prefetched translations into the active group
-  const handlePrefetchComplete = (tabIndex: number, newTranslations: Map<string, TranslatedWord>) => {
-    setGroups(prevGroups => {
-      const newGroups = [...prevGroups];
-      const existingMap = newGroups[tabIndex].translatedWords;
-
-      // Merge new translations into existing map
-      const mergedMap = new Map(existingMap);
-      newTranslations.forEach((value, key) => {
-        if (!mergedMap.has(key)) {
-          mergedMap.set(key, value);
-        }
-      });
-
-      newGroups[tabIndex] = {
-        ...newGroups[tabIndex],
-        translatedWords: mergedMap
-      };
-
-      return newGroups;
-    });
-  };
-
-  // Enable background pagination prefetch
-  usePrefetchPagination({
-    groups,
-    activeTab,
-    targetLanguage,
-    userId,
-    isPreview,
-    isAuthenticated,
-    wordsPerPage: WORDS_PER_PAGE,
-    onPrefetchComplete: handlePrefetchComplete
-  });
-
-  // Repack pagination after filtering (authenticated mode only)
+  // Trigger sliding window when page or tab changes
   useEffect(() => {
-    // Guards: Don't repack prematurely
-    if (isPreview || !isAuthenticated || groups.length === 0) return;
+    if (groups.length === 0 || isPreview || !isAuthenticated) return;
 
-    setGroups(prevGroups => {
-      return prevGroups.map((group) => {
-        // Guard: Don't repack if no translations loaded yet
-        if (!group.translatedWords || group.translatedWords.size === 0) {
-          return group; // Keep original state
-        }
+    const group = groups[activeTab];
+    if (!group) return;
 
-        // =====================================================================
-        // CRITICAL FIX: Only remove words if translation EXISTS and EQUALS source
-        // DO NOT remove words that haven't been translated yet
-        // =====================================================================
-        const filteredWords = group.words.filter(wordFreq => {
-          const sourceLower = wordFreq.word.toLowerCase();
-          const translatedWord = group.translatedWords.get(sourceLower);
-
-          // KEEP word if:
-          // 1. No translation yet (will be loaded later) ✓
-          if (!translatedWord) return true;
-
-          // 2. Translation exists but is empty/null (edge case) ✓
-          if (!translatedWord.translation) return true;
-
-          const translationLower = translatedWord.translation.toLowerCase();
-
-          // 3. Translation differs from source ✓
-          if (sourceLower !== translationLower) return true;
-
-          // REMOVE word only if:
-          // 4. Translation exists AND equals source ✗
-          return false;
-        });
-
-        // Sanity check: Warn if over-filtering detected
-        const filterRatio = filteredWords.length / group.words.length;
-        if (filterRatio < 0.5 && group.words.length > 20) {
-          console.warn(
-            `[Pagination Repack] High filtering detected for ${group.level}: ` +
-            `${group.words.length} → ${filteredWords.length} words (${Math.round(filterRatio * 100)}%). ` +
-            `This may indicate premature filtering.`
-          );
-        }
-
-        // Repack filtered words into consistent pages
-        const repackResult = repackPages(filteredWords, WORDS_PER_PAGE);
-
-        // Clamp current page if it's now out of bounds
-        const clampedPage = clampPageNumber(group.currentPage, repackResult.totalPages);
-
-        // Log repacking info (debug)
-        if (repackResult.totalPages !== group.totalPages) {
-          console.log(
-            `[Pagination Repack] ${group.level}: ${group.totalPages} → ${repackResult.totalPages} pages ` +
-            `(${filteredWords.length} filtered words)`
-          );
-        }
-
-        return {
-          ...group,
-          repackedPages: repackResult.pages,
-          filteredTotalItems: repackResult.totalItems,
-          currentPage: clampedPage,
-          totalPages: repackResult.totalPages
-        };
-      });
-    });
-  }, [groups.map(g => g.translatedWords.size).join(','), isPreview, isAuthenticated]);
+    const startValidIndex = (group.currentPage - 1) * WORDS_PER_PAGE;
+    buildSlidingWindow(activeTab, startValidIndex);
+  }, [activeTab, groups[activeTab]?.currentPage, targetLanguage, isPreview, isAuthenticated, buildSlidingWindow]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -377,7 +295,7 @@ export default function VocabularyView({
     });
   };
 
-  // Only show skeleton on INITIAL load (not when switching tabs/pages with cached data)
+  // Only show skeleton on INITIAL load
   if (groups.length === 0 && analysis.categories.length === 0) {
     return (
       <Grid container spacing={3}>
@@ -399,13 +317,39 @@ export default function VocabularyView({
   const activeGroup = groups[activeTab];
   if (!activeGroup) return null;
 
-  // Use repacked pages if available (authenticated mode), otherwise use original slicing
-  const currentPageWords = isPreview || !activeGroup.repackedPages
-    ? activeGroup.words.slice(
-        (activeGroup.currentPage - 1) * WORDS_PER_PAGE,
-        activeGroup.currentPage * WORDS_PER_PAGE
-      )
-    : (activeGroup.repackedPages[activeGroup.currentPage - 1] || []);
+  // Build current page words by collecting valid items from rawWords
+  const currentPageWords: WordFrequency[] = [];
+  const startValidIndex = (activeGroup.currentPage - 1) * WORDS_PER_PAGE;
+  let validCount = 0;
+
+  for (let i = 0; i < activeGroup.rawWords.length && currentPageWords.length < WORDS_PER_PAGE; i++) {
+    const wordKey = activeGroup.rawWords[i].word.toLowerCase();
+    const translation = activeGroup.translations.get(wordKey);
+
+    // Skip if no translation yet
+    if (!translation) continue;
+
+    // Check if valid (translation !== source)
+    if (translation.translation.toLowerCase() !== wordKey) {
+      // Only add to page if we've skipped enough valid items (for pagination)
+      if (validCount >= startValidIndex) {
+        currentPageWords.push(activeGroup.rawWords[i]);
+      }
+      validCount++;
+    }
+  }
+
+  // Count total valid words for display
+  const totalValidWords = activeGroup.rawWords.filter(w => {
+    const translation = activeGroup.translations.get(w.word.toLowerCase());
+    return translation && translation.translation.toLowerCase() !== w.word.toLowerCase();
+  }).length;
+
+  // Calculate total pages based on valid words
+  const totalPages = Math.max(1, Math.ceil(totalValidWords / WORDS_PER_PAGE));
+
+  // Fill with skeletons if we don't have 10 yet
+  const skeletonCount = Math.max(0, WORDS_PER_PAGE - currentPageWords.length);
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -455,7 +399,7 @@ export default function VocabularyView({
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 Words are classified using CEFR wordlists (Oxford 3000/5000, EFLex) and frequency analysis.
-                Translations are loaded on-demand (10 words per page) to optimize API usage.
+                Translations are loaded on-demand using a sliding window (current + next page).
               </Typography>
 
               {/* Tabs Navigation */}
@@ -484,7 +428,7 @@ export default function VocabularyView({
                             {group.level}
                           </Typography>
                           <Chip
-                            label={group.words.length}
+                            label={group.rawWords.length}
                             size="small"
                             sx={{
                               bgcolor: `${group.color}20`,
@@ -545,7 +489,7 @@ export default function VocabularyView({
                     label={
                       isPreview
                         ? `3 sample words`
-                        : `${activeGroup.filteredTotalItems ?? activeGroup.words.length} words`
+                        : `${totalValidWords || activeGroup.rawWords.length} words`
                     }
                     sx={{
                       bgcolor: `${activeGroup.color}15`,
@@ -565,76 +509,59 @@ export default function VocabularyView({
                 {/* Word List */}
                 <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
                   <List sx={{ py: 0 }}>
-                    {currentPageWords.length === 0 ? (
+                    {currentPageWords.length === 0 && skeletonCount === 0 ? (
                       <ListItem>
                         <Typography variant="body2" color="text.secondary">
                           No words in this level
                         </Typography>
                       </ListItem>
                     ) : (
-                      currentPageWords.map((wordFreq, index) => {
-                        const translatedWord = activeGroup.translatedWords.get(wordFreq.word.toLowerCase());
-                        const isLoading = !translatedWord && loading && !isPreview;
+                      <>
+                        {/* Render actual words */}
+                        {currentPageWords.map((wordFreq, index) => {
+                          const translatedWord = activeGroup.translations.get(wordFreq.word.toLowerCase());
 
-                        // In preview mode, show words without translations
-                        if (isPreview) {
+                          // In preview mode, show words without translations
+                          if (isPreview) {
+                            return (
+                              <Box key={`${wordFreq.lemma}-${index}`}>
+                                <ListItem
+                                  sx={{
+                                    py: 2,
+                                    px: 3,
+                                    bgcolor: 'action.hover'
+                                  }}
+                                >
+                                  <Typography
+                                    variant="body1"
+                                    sx={{
+                                      fontWeight: 500,
+                                      color: 'text.primary'
+                                    }}
+                                  >
+                                    {wordFreq.word.toLowerCase()}
+                                  </Typography>
+                                </ListItem>
+                                {index < currentPageWords.length - 1 && <Divider />}
+                              </Box>
+                            );
+                          }
+
+                          if (!translatedWord) {
+                            return null; // Should not happen due to sliding window
+                          }
+
                           return (
                             <Box key={`${wordFreq.lemma}-${index}`}>
                               <ListItem
                                 sx={{
                                   py: 2,
                                   px: 3,
-                                  bgcolor: 'action.hover'
+                                  '&:hover': {
+                                    bgcolor: `${activeGroup.color}08`
+                                  }
                                 }}
                               >
-                                <Typography
-                                  variant="body1"
-                                  sx={{
-                                    fontWeight: 500,
-                                    color: 'text.primary'
-                                  }}
-                                >
-                                  {wordFreq.word.toLowerCase()}
-                                </Typography>
-                              </ListItem>
-                              {index < currentPageWords.length - 1 && <Divider />}
-                            </Box>
-                          );
-                        }
-
-                        // Words are pre-filtered in repacking logic, so all words here should have translations
-                        // Only show skeleton during loading
-                        if (isLoading) {
-                          return (
-                            <Box key={`${wordFreq.lemma}-${index}`}>
-                              <ListItem sx={{ py: 2, px: 3 }}>
-                                <Stack sx={{ width: '100%' }} spacing={1}>
-                                  <Skeleton variant="text" width="60%" />
-                                  <Skeleton variant="text" width="40%" />
-                                </Stack>
-                              </ListItem>
-                              {index < currentPageWords.length - 1 && <Divider />}
-                            </Box>
-                          );
-                        }
-
-                        // Skip if no translation (should not happen after repacking, but safety check)
-                        if (!translatedWord) {
-                          return null;
-                        }
-
-                        return (
-                          <Box key={`${wordFreq.lemma}-${index}`}>
-                            <ListItem
-                              sx={{
-                                py: 2,
-                                px: 3,
-                                '&:hover': {
-                                  bgcolor: `${activeGroup.color}08`
-                                }
-                              }}
-                            >
-                              {translatedWord && (
                                 <Stack
                                   direction="row"
                                   alignItems="center"
@@ -745,21 +672,34 @@ export default function VocabularyView({
                                     </IconButton>
                                   </Stack>
                                 </Stack>
-                              )}
+                              </ListItem>
+                              {(index < currentPageWords.length - 1 || skeletonCount > 0) && <Divider />}
+                            </Box>
+                          );
+                        })}
+
+                        {/* Render skeleton placeholders to always have 10 rows */}
+                        {[...Array(skeletonCount)].map((_, i) => (
+                          <Box key={`skeleton-${i}`}>
+                            <ListItem sx={{ py: 2, px: 3 }}>
+                              <Stack sx={{ width: '100%' }} spacing={1}>
+                                <Skeleton variant="text" width="60%" />
+                                <Skeleton variant="text" width="40%" />
+                              </Stack>
                             </ListItem>
-                            {index < currentPageWords.length - 1 && <Divider />}
+                            {i < skeletonCount - 1 && <Divider />}
                           </Box>
-                        );
-                      })
+                        ))}
+                      </>
                     )}
                   </List>
                 </Paper>
 
                 {/* Pagination (hide in preview mode) */}
-                {!isPreview && activeGroup.totalPages > 1 && (
+                {!isPreview && totalPages > 1 && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
                     <Pagination
-                      count={activeGroup.totalPages}
+                      count={totalPages}
                       page={activeGroup.currentPage}
                       onChange={handlePageChange}
                       color="primary"
@@ -774,9 +714,9 @@ export default function VocabularyView({
                 <Box sx={{ mt: 3, textAlign: 'center' }}>
                   <Typography variant="caption" color="text.secondary">
                     {isPreview ? (
-                      `Showing 3 sample words • Sign in to view all ${activeGroup.words.length} words with translations`
+                      `Showing 3 sample words • Sign in to view all ${activeGroup.rawWords.length} words with translations`
                     ) : (
-                      `Showing ${currentPageWords.length} of ${activeGroup.filteredTotalItems ?? activeGroup.words.length} words • Page ${activeGroup.currentPage} of ${activeGroup.totalPages}`
+                      `Showing ${currentPageWords.length} of ${totalValidWords || activeGroup.rawWords.length} words • Page ${activeGroup.currentPage} of ${totalPages}`
                     )}
                   </Typography>
                 </Box>
