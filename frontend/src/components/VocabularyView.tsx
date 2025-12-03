@@ -275,8 +275,13 @@ export default function VocabularyView({
   };
 
   // Enable background pagination prefetch
+  // Extract stable values from active group to prevent cascade
+  const activeGroupForPrefetch = groups[activeTab];
   usePrefetchPagination({
-    groups,
+    currentPage: activeGroupForPrefetch?.currentPage || 1,
+    totalPages: activeGroupForPrefetch?.totalPages || 1,
+    words: activeGroupForPrefetch?.words || [],
+    translatedWords: activeGroupForPrefetch?.translatedWords || new Map(),
     activeTab,
     targetLanguage,
     userId,
