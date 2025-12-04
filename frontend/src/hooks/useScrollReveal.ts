@@ -12,7 +12,7 @@ interface UseScrollRevealResult {
   suppressScrollReveal: (ms: number) => void;
 }
 
-const SCROLL_DEBOUNCE_MS = 25; // Debounce scroll calculations to prevent flicker
+const HIDE_DEBOUNCE_MS = 15; // Debounce only for hide to prevent flicker
 const MIN_TOGGLE_INTERVAL_MS = 150; // Minimum time between TopBar visibility toggles
 
 export function useScrollReveal({
@@ -23,7 +23,7 @@ export function useScrollReveal({
   const { setShowTopBar } = useTopBarVisibility();
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
-  const debounceTimer = useRef<number | null>(null);
+  const hideDebounceTimer = useRef<number | null>(null);
   const isProgrammaticScrollRef = useRef(false);
   const lastToggleTimeRef = useRef(0);
 
@@ -50,34 +50,44 @@ export function useScrollReveal({
 
     const currentScrollY = window.scrollY;
     const scrollDelta = currentScrollY - lastScrollY.current;
+    const now = Date.now();
 
-    // Debounce scroll calculations to prevent flicker during fast scrolling
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
+    // Hysteresis lock: prevent toggle if too soon after last toggle
+    if (now - lastToggleTimeRef.current < MIN_TOGGLE_INTERVAL_MS) {
+      lastScrollY.current = currentScrollY;
+      ticking.current = false;
+      return;
     }
 
-    debounceTimer.current = window.setTimeout(() => {
-      const now = Date.now();
+    // IMMEDIATE REVEAL: Scrolling up - show topbar instantly (no debounce)
+    if (scrollDelta < -revealThreshold) {
+      setShowTopBar(true);
+      lastToggleTimeRef.current = now;
+      lastScrollY.current = currentScrollY;
+      ticking.current = false;
+      return;
+    }
 
-      // Hysteresis lock: prevent toggle if too soon after last toggle
-      if (now - lastToggleTimeRef.current < MIN_TOGGLE_INTERVAL_MS) {
-        return;
+    // DEBOUNCED HIDE: Scrolling down - hide topbar with debounce to prevent flicker
+    if (scrollDelta > hideThreshold && currentScrollY > 100) {
+      // Clear existing hide timer
+      if (hideDebounceTimer.current) {
+        clearTimeout(hideDebounceTimer.current);
       }
 
-      // Scrolling down - hide topbar (with hysteresis)
-      if (scrollDelta > hideThreshold && currentScrollY > 100) {
+      // Debounce the hide action
+      hideDebounceTimer.current = window.setTimeout(() => {
         setShowTopBar(false);
-        lastToggleTimeRef.current = now;
-      }
-      // Scrolling up - show topbar (with hysteresis)
-      else if (scrollDelta < -revealThreshold) {
-        setShowTopBar(true);
-        lastToggleTimeRef.current = now;
-      }
+        lastToggleTimeRef.current = Date.now();
+      }, HIDE_DEBOUNCE_MS);
 
       lastScrollY.current = currentScrollY;
-    }, SCROLL_DEBOUNCE_MS);
+      ticking.current = false;
+      return;
+    }
 
+    // Update scroll position even if no action taken
+    lastScrollY.current = currentScrollY;
     ticking.current = false;
   }, [revealThreshold, hideThreshold, enabled, setShowTopBar]);
 
