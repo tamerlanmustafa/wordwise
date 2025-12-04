@@ -416,7 +416,9 @@ export default function VocabularyView({
                       width: `${100 / groups.length}%`,
                       height: '100%',
                       zIndex: 0,
-                      pointerEvents: 'none'
+                      pointerEvents: 'none',
+                      borderRadius: '14px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)'
                     }}
                   >
                     <Box
@@ -425,7 +427,6 @@ export default function VocabularyView({
                         height: '100%',
                         backgroundColor: `${groups[activeTab]?.color}15`,
                         borderRadius: '14px',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                         transition: 'background-color 0.3s ease'
                       }}
                     />
