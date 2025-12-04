@@ -22,6 +22,7 @@ import {
   Fade,
   CircularProgress
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -360,7 +361,8 @@ export default function VocabularyView({
                 transform: showTopBar ? 'translateY(0)' : 'translateY(-48px)',
                 transition: 'transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)',
                 backgroundColor: 'background.default',
-                mb: 3
+                mb: 3,
+                mx: 1 // Slight horizontal margin to reduce width
               }}
             >
               <Paper
@@ -370,57 +372,140 @@ export default function VocabularyView({
                   boxShadow: scrolledPastTop
                     ? '0px 4px 12px rgba(0, 0, 0, 0.08)'
                     : 'none',
-                  transition: 'box-shadow 0.3s ease'
+                  transition: 'box-shadow 0.3s ease',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 2,
+                    padding: '2px',
+                    background: 'linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #fd79a8, #a29bfe, #6c5ce7, #ff6b6b)',
+                    backgroundSize: '400% 100%',
+                    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                    WebkitMaskComposite: 'xor',
+                    maskComposite: 'exclude',
+                    animation: 'gradient-shift 15s linear infinite',
+                    pointerEvents: 'none'
+                  },
+                  '@keyframes gradient-shift': {
+                    '0%': {
+                      backgroundPosition: '0% 50%'
+                    },
+                    '100%': {
+                      backgroundPosition: '400% 50%'
+                    }
+                  }
                 }}
               >
-                <Tabs
-                  value={pendingTab !== null ? pendingTab : activeTab}
-                  onChange={handleTabChange}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  centered
-                  sx={{
-                    px: 2,
-                    '& .MuiTab-root': {
-                      minHeight: 64,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      fontSize: '1rem'
-                    },
-                    '& .MuiTabs-flexContainer': {
-                      justifyContent: 'center'
-                    }
-                  }}
-                >
-                  {groups.map((group) => (
+                <Box sx={{ position: 'relative' }}>
+                  {/* Animated background indicator that slides between tabs */}
+                  <motion.div
+                    animate={{
+                      left: `${activeTab * (100 / groups.length)}%`,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 300,
+                      damping: 30
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      width: `${100 / groups.length}%`,
+                      height: '100%',
+                      zIndex: 0,
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: `${groups[activeTab]?.color}15`,
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                        transition: 'background-color 0.3s ease'
+                      }}
+                    />
+                  </motion.div>
+
+                  <Tabs
+                    value={pendingTab !== null ? pendingTab : activeTab}
+                    onChange={handleTabChange}
+                    variant="scrollable"
+                    scrollButtons={false}
+                    sx={{
+                      px: 0,
+                      py: 0,
+                      position: 'relative',
+                      zIndex: 1,
+                      '& .MuiTabs-indicator': { display: 'none' },
+                      '& .MuiTabs-flexContainer': {
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                      },
+                      '& .MuiTab-root': {
+                        flex: 1,
+                        minWidth: 0,
+                        padding: 0,
+                      }
+                    }}
+                  >
+
+                  {groups.map((group, index) => (
                     <Tab
                       key={group.level}
-                      label={
-                        <Stack direction="row" spacing={1.5} alignItems="center">
-                          <Typography variant="h6" fontWeight={700}>
-                            {group.level}
-                          </Typography>
-                          <Chip
-                            label={group.words.length}
-                            size="small"
-                            sx={{
-                              bgcolor: `${group.color}20`,
-                              color: group.color,
-                              fontWeight: 600,
-                              fontSize: '0.875rem'
-                            }}
-                          />
-                        </Stack>
-                      }
+                      disableRipple
                       sx={{
                         color: 'text.secondary',
+                        borderTop: 'none',
+                        borderBottom: 'none',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        position: 'relative',
+                        transition: 'all 200ms ease-in-out',
+                        backgroundColor: 'transparent',
                         '&.Mui-selected': {
                           color: group.color
+                        },
+                        // Gradient separator on the left (except first tab)
+                        '&::before': {
+                          content: index === 0 ? '""' : '""',
+                          position: 'absolute',
+                          left: 0,
+                          top: '25%',
+                          bottom: '25%',
+                          width: index === 0 ? 0 : '1px',
+                          background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.15) 20%, rgba(0,0,0,0.15) 80%, transparent)',
+                          opacity: 0.8
                         }
-                      }}
+                    }}
+                      label={
+                        <Box
+                          sx={{
+                            position: 'relative',
+                            padding: '6px 20px',
+                            borderRadius: '10px',
+                          }}
+                        >
+                          <Stack direction="column" spacing={0} alignItems="center">
+                            <Typography
+                              variant="h5"                              
+                              sx={{
+                                fontWeight: 700,
+                                
+                            }}>
+                              {group.level}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      }
                     />
                   ))}
                 </Tabs>
+                </Box>
               </Paper>
             </Box>
 
