@@ -106,6 +106,10 @@ export default function VocabularyView({
   const isRestoringScrollRef = useRef(false);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Track Grid item dimensions for fade mask positioning
+  const gridItemRef = useRef<HTMLDivElement | null>(null);
+  const [fadeMaskStyle, setFadeMaskStyle] = useState({ left: 0, width: '100%' });
+
   // Merge C1 and C2 into single "Advanced" category
   const mergedCategories = useMemo(() => {
     return analysis.categories.reduce((acc, category) => {
@@ -254,6 +258,24 @@ export default function VocabularyView({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Update fade mask position to match Grid item
+  useEffect(() => {
+    const updateFadeMaskPosition = () => {
+      if (gridItemRef.current) {
+        const rect = gridItemRef.current.getBoundingClientRect();
+        // Grid spacing adds 12px padding on left side, adjust to match content
+        setFadeMaskStyle({
+          left: rect.left + 24,
+          width: `${rect.width - 24}px` // Subtract both left (12) and right (12) spacing
+        });
+      }
+    };
+
+    updateFadeMaskPosition();
+    window.addEventListener('resize', updateFadeMaskPosition);
+    return () => window.removeEventListener('resize', updateFadeMaskPosition);
+  }, []);
+
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
@@ -289,29 +311,37 @@ export default function VocabularyView({
       {/* Two-Column Layout: Vocabulary (Left) + TMDB Metadata (Right) */}
       <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
-        <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Box sx={{ flexGrow: 1 }} ref={listContainerRef}>
-            {/* <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-              Vocabulary by Difficulty Level
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Words are classified using CEFR wordlists (Oxford 3000/5000, EFLex) and frequency analysis.
-              Scroll down to load more words — translations are fetched on-demand for optimal API usage.
-            </Typography> */}
+        <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }} ref={gridItemRef}>
+          {/* Bottom fade mask with iOS-style blur */}
+          <Box
+            sx={{
+              position: 'fixed',
+              bottom: 0,
+              left: `${fadeMaskStyle.left}px`,
+              width: fadeMaskStyle.width,
+              height: '200px',
+              background: (theme) => `linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 100%)`,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)', // Safari support
+              pointerEvents: 'none',
+              zIndex: 1050,
+              maskImage: 'linear-gradient(to top, black 0%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 100%)'
+            }}
+          />
 
+          <Box sx={{ flexGrow: 1 }} ref={listContainerRef}>
             {/* Sticky Tabs - Always Visible */}
             <Box
               sx={{
-              position: 'sticky',
-              top: '72px',              // ← Always fixed, no change ever
-              zIndex: 1100,
-              transform: showTopBar
-                ? 'translateY(0)'
-                : 'translateY(-48px)', // ← Entire offset handled here
-              transition: 'transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)',
-              backgroundColor: 'background.default',
-              mb: 3,
-            }}
+                position: 'sticky',
+                top: '72px', // Always fixed, no change ever
+                zIndex: 1100,
+                transform: showTopBar ? 'translateY(0)' : 'translateY(-48px)',
+                transition: 'transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                backgroundColor: 'background.default',
+                mb: 3
+              }}
             >
               <Paper
                 elevation={2}
@@ -427,86 +457,30 @@ export default function VocabularyView({
               )}
 
               {/* Infinite Scroll Word List */}
-              <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', position: 'relative', mb: 3 }}>
-                {/* Top fade mask - sticky at top of visible area */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '828px', // keep your test height
-    background:
-      'linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%)',
-    pointerEvents: 'none',
-    zIndex: 6, // Prevents pushing content down
-                  }}
-                />
-
+              <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
                 <List sx={{ py: 0 }}>
-                  {visibleWords.length === 0 && !isLoadingMore ? (
-                    <ListItem>
-                      <Typography variant="body2" color="text.secondary">
-                        {isPreview ? 'Sign in to view vocabulary' : 'No words in this level'}
-                      </Typography>
-                    </ListItem>
-                  ) : (
-                    <>
-                      {visibleWords.map((wordFreq, index) => {
-                        const translatedWord = translations.get(wordFreq.word.toLowerCase());
+                    {visibleWords.length === 0 && !isLoadingMore ? (
+                      <ListItem>
+                        <Typography variant="body2" color="text.secondary">
+                          {isPreview ? 'Sign in to view vocabulary' : 'No words in this level'}
+                        </Typography>
+                      </ListItem>
+                    ) : (
+                      <>
+                        {visibleWords.map((wordFreq, index) => {
+                          const translatedWord = translations.get(wordFreq.word.toLowerCase());
 
-                        // In preview mode, show first 3 words without translations
-                        if (isPreview && index < 3) {
-                          return (
-                            <Box key={`${wordFreq.lemma}-${index}`}>
-                              <ListItem
-                                sx={{
-                                  py: 2,
-                                  px: 3,
-                                  bgcolor: 'action.hover'
-                                }}
-                              >
-                                <Typography
-                                  variant="body1"
+                          // In preview mode, show first 3 words without translations
+                          if (isPreview && index < 3) {
+                            return (
+                              <Box key={`${wordFreq.lemma}-${index}`}>
+                                <ListItem
                                   sx={{
-                                    fontWeight: 500,
-                                    color: 'text.primary'
+                                    py: 2,
+                                    px: 3,
+                                    bgcolor: 'action.hover'
                                   }}
                                 >
-                                  {wordFreq.word.toLowerCase()}
-                                </Typography>
-                              </ListItem>
-                              {index < 2 && <Divider />}
-                            </Box>
-                          );
-                        }
-
-                        if (isPreview) return null;
-
-                        // Skip if no translation (filtered out by useInfiniteWordFeed)
-                        if (!translatedWord) {
-                          return null;
-                        }
-
-                        return (
-                          <Box key={`${wordFreq.lemma}-${index}`}>
-                            <ListItem
-                              sx={{
-                                py: 2,
-                                px: 3,
-                                '&:hover': {
-                                  bgcolor: `${activeGroup.color}08`
-                                }
-                              }}
-                            >
-                              <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={2}
-                                sx={{ width: '100%' }}
-                              >
-                                {/* Word and Translation */}
-                                <Box sx={{ flexGrow: 1 }}>
                                   <Typography
                                     variant="body1"
                                     sx={{
@@ -515,136 +489,162 @@ export default function VocabularyView({
                                     }}
                                   >
                                     {wordFreq.word.toLowerCase()}
-                                    <Typography
-                                      component="span"
-                                      variant="body1"
-                                      sx={{
-                                        mx: 2,
-                                        color: 'text.disabled',
-                                        fontWeight: 300
-                                      }}
-                                    >
-                                      —
-                                    </Typography>
-                                    <Typography
-                                      component="span"
-                                      variant="body1"
-                                      sx={{
-                                        color: activeGroup.color,
-                                        fontWeight: 500
-                                      }}
-                                    >
-                                      {translatedWord.translation}
-                                    </Typography>
                                   </Typography>
+                                </ListItem>
+                                {index < 2 && <Divider />}
+                              </Box>
+                            );
+                          }
 
-                                  {/* Metadata */}
-                                  <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                                    {wordFreq.confidence && (
-                                      <Chip
-                                        label={`${Math.round(wordFreq.confidence * 100)}% confidence`}
-                                        size="small"
-                                        sx={{
-                                          height: 20,
-                                          fontSize: '0.7rem',
-                                          bgcolor: 'action.hover'
-                                        }}
-                                      />
-                                    )}
-                                    {translatedWord.cached && (
-                                      <Chip
-                                        label="cached"
-                                        size="small"
-                                        sx={{
-                                          height: 20,
-                                          fontSize: '0.7rem',
-                                          bgcolor: 'action.hover'
-                                        }}
-                                      />
-                                    )}
-                                    {translatedWord.provider && (
-                                      <Chip
-                                        label={translatedWord.provider}
-                                        size="small"
-                                        sx={{
-                                          height: 20,
-                                          fontSize: '0.7rem',
-                                          bgcolor: translatedWord.provider === 'google' ? '#4285f420' : '#0A84FF20',
-                                          color: translatedWord.provider === 'google' ? '#4285f4' : '#0A84FF'
-                                        }}
-                                      />
-                                    )}
-                                  </Stack>
-                                </Box>
+                          if (isPreview) return null;
 
-                                {/* Action Buttons */}
-                                <Stack direction="row" spacing={0.5}>
-                                  <Tooltip
-                                    title={
-                                      otherMovies[wordFreq.word.toLowerCase()]?.length > 0
-                                        ? `You might have seen this word in: ${otherMovies[wordFreq.word.toLowerCase()].map(m => m.title).join(', ')}`
-                                        : ''
-                                    }
-                                    placement="top"
-                                    TransitionComponent={Fade}
-                                    TransitionProps={{ timeout: 300 }}
-                                    arrow
-                                    disableHoverListener={!otherMovies[wordFreq.word.toLowerCase()]?.length}
-                                  >
+                          // Skip if no translation (filtered out by useInfiniteWordFeed)
+                          if (!translatedWord) {
+                            return null;
+                          }
+
+                          return (
+                            <Box key={`${wordFreq.lemma}-${index}`}>
+                              <ListItem
+                                sx={{
+                                  py: 2,
+                                  px: 3,
+                                  '&:hover': {
+                                    bgcolor: `${activeGroup.color}08`
+                                  }
+                                }}
+                              >
+                                <Stack
+                                  direction="row"
+                                  alignItems="center"
+                                  spacing={2}
+                                  sx={{ width: '100%' }}
+                                >
+                                  {/* Word and Translation */}
+                                  <Box sx={{ flexGrow: 1 }}>
+                                    <Typography
+                                      variant="body1"
+                                      sx={{
+                                        fontWeight: 500,
+                                        color: 'text.primary'
+                                      }}
+                                    >
+                                      {wordFreq.word.toLowerCase()}
+                                      <Typography
+                                        component="span"
+                                        variant="body1"
+                                        sx={{
+                                          mx: 2,
+                                          color: 'text.disabled',
+                                          fontWeight: 300
+                                        }}
+                                      >
+                                        —
+                                      </Typography>
+                                      <Typography
+                                        component="span"
+                                        variant="body1"
+                                        sx={{
+                                          color: activeGroup.color,
+                                          fontWeight: 500
+                                        }}
+                                      >
+                                        {translatedWord.translation}
+                                      </Typography>
+                                    </Typography>
+
+                                    {/* Metadata */}
+                                    <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                                      {wordFreq.confidence && (
+                                        <Chip
+                                          label={`${Math.round(wordFreq.confidence * 100)}% confidence`}
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: 'action.hover'
+                                          }}
+                                        />
+                                      )}
+                                      {translatedWord.cached && (
+                                        <Chip
+                                          label="cached"
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: 'action.hover'
+                                          }}
+                                        />
+                                      )}
+                                      {translatedWord.provider && (
+                                        <Chip
+                                          label={translatedWord.provider}
+                                          size="small"
+                                          sx={{
+                                            height: 20,
+                                            fontSize: '0.7rem',
+                                            bgcolor: translatedWord.provider === 'google' ? '#4285f420' : '#0A84FF20',
+                                            color: translatedWord.provider === 'google' ? '#4285f4' : '#0A84FF'
+                                          }}
+                                        />
+                                      )}
+                                    </Stack>
+                                  </Box>
+
+                                  {/* Action Buttons */}
+                                  <Stack direction="row" spacing={0.5}>
+                                    <Tooltip
+                                      title={
+                                        otherMovies[wordFreq.word.toLowerCase()]?.length > 0
+                                          ? `You might have seen this word in: ${otherMovies[wordFreq.word.toLowerCase()].map(m => m.title).join(', ')}`
+                                          : ''
+                                      }
+                                      placement="top"
+                                      TransitionComponent={Fade}
+                                      TransitionProps={{ timeout: 300 }}
+                                      arrow
+                                      disableHoverListener={!otherMovies[wordFreq.word.toLowerCase()]?.length}
+                                    >
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => saveWord(wordFreq.word.toLowerCase(), movieId)}
+                                        sx={{ color: isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? 'warning.main' : 'text.secondary' }}
+                                      >
+                                        {isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                                      </IconButton>
+                                    </Tooltip>
                                     <IconButton
                                       size="small"
-                                      onClick={() => saveWord(wordFreq.word.toLowerCase(), movieId)}
-                                      sx={{ color: isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? 'warning.main' : 'text.secondary' }}
+                                      onClick={() => toggleLearned(wordFreq.word.toLowerCase())}
+                                      disabled={!savedWords.has(wordFreq.word.toLowerCase())}
+                                      sx={{ color: learnedWords.has(wordFreq.word.toLowerCase()) ? 'success.main' : 'text.secondary' }}
                                     >
-                                      {isWordSavedInMovie(wordFreq.word.toLowerCase(), movieId) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+                                      {learnedWords.has(wordFreq.word.toLowerCase()) ? <CheckCircleIcon /> : <CheckCircleOutlineIcon />}
                                     </IconButton>
-                                  </Tooltip>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => toggleLearned(wordFreq.word.toLowerCase())}
-                                    disabled={!savedWords.has(wordFreq.word.toLowerCase())}
-                                    sx={{ color: learnedWords.has(wordFreq.word.toLowerCase()) ? 'success.main' : 'text.secondary' }}
-                                  >
-                                    {learnedWords.has(wordFreq.word.toLowerCase()) ? <CheckCircleIcon /> : <CheckCircleOutlineIcon />}
-                                  </IconButton>
+                                  </Stack>
                                 </Stack>
-                              </Stack>
-                            </ListItem>
-                            {index < visibleWords.length - 1 && <Divider />}
-                          </Box>
-                        );
-                      })}
+                              </ListItem>
+                              {index < visibleWords.length - 1 && <Divider />}
+                            </Box>
+                          );
+                        })}
 
-                      {/* Loading Indicator */}
-                      {isLoadingMore && (
-                        <ListItem sx={{ py: 3, justifyContent: 'center' }}>
-                          <Stack spacing={2} alignItems="center">
-                            <CircularProgress size={32} sx={{ color: activeGroup.color }} />
-                            <Typography variant="body2" color="text.secondary">
-                              Loading more words...
-                            </Typography>
-                          </Stack>
-                        </ListItem>
-                      )}
-                    </>
-                  )}
-                </List>
-
-                {/* Bottom fade mask - sticky at bottom of visible area */}
-                <Box
-                  sx={{
-                    position: 'sticky',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: '328px',
-                    background: 'linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%)',
-                    pointerEvents: 'none',
-                    zIndex: 6,
-                    marginTop: '-328px' // Prevents pushing content up
-                  }}
-                />
-              </Paper>
+                        {/* Loading Indicator */}
+                        {isLoadingMore && (
+                          <ListItem sx={{ py: 3, justifyContent: 'center' }}>
+                            <Stack spacing={2} alignItems="center">
+                              <CircularProgress size={32} sx={{ color: activeGroup.color }} />
+                              <Typography variant="body2" color="text.secondary">
+                                Loading more words...
+                              </Typography>
+                            </Stack>
+                          </ListItem>
+                        )}
+                      </>
+                    )}
+                  </List>
+                </Paper>
 
               {/* Sentinel div for IntersectionObserver */}
               {!isPreview && hasMore && (
