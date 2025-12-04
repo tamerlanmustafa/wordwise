@@ -12,6 +12,7 @@ import AllListsPage from './pages/AllListsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { TopBarVisibilityProvider } from './contexts/TopBarVisibilityContext';
 import TopBar from './components/TopBar';
 import Breadcrumbs from './components/Breadcrumbs';
 
@@ -23,24 +24,26 @@ function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <Router basename="/wordwise/">
-              <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-                <TopBar />
-                <Box component="main" sx={{ flexGrow: 1 }}>
-                  <Breadcrumbs />
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/search" element={<SearchPage />} />
-                    <Route path="/movie/:id" element={<MovieDetailPage />} />
-                    <Route path="/analyze" element={<MovieSearchPage />} />
-                    <Route path="/signup" element={<SignUpPage />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/lists" element={<AllListsPage />} />
-                    <Route path="/lists/:listName" element={<SavedWordsPage />} />
-                  </Routes>
+            <TopBarVisibilityProvider>
+              <Router basename="/wordwise/">
+                <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                  <TopBar />
+                  <Box component="main" sx={{ flexGrow: 1 }}>
+                    <Breadcrumbs />
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/search" element={<SearchPage />} />
+                      <Route path="/movie/:id" element={<MovieDetailPage />} />
+                      <Route path="/analyze" element={<MovieSearchPage />} />
+                      <Route path="/signup" element={<SignUpPage />} />
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/lists" element={<AllListsPage />} />
+                      <Route path="/lists/:listName" element={<SavedWordsPage />} />
+                    </Routes>
+                  </Box>
                 </Box>
-              </Box>
-            </Router>
+              </Router>
+            </TopBarVisibilityProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

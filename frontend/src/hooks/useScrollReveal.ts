@@ -1,44 +1,54 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
+import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 
 interface UseScrollRevealOptions {
   revealThreshold?: number; // px to scroll up before revealing
   hideThreshold?: number;   // px to scroll down before hiding
+  enabled?: boolean;         // Enable/disable scroll reveal behavior
 }
 
 interface UseScrollRevealResult {
-  showHeader: boolean;
   showTabs: boolean;
 }
 
 export function useScrollReveal({
   revealThreshold = 20,
-  hideThreshold = 10
+  hideThreshold = 10,
+  enabled = true
 }: UseScrollRevealOptions = {}): UseScrollRevealResult {
-  const [showHeader, setShowHeader] = useState(true);
-  const [showTabs, setShowTabs] = useState(true);
+  const { setShowTopBar } = useTopBarVisibility();
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
 
   const updateScrollDirection = useCallback(() => {
+    if (!enabled) {
+      setShowTopBar(true);
+      ticking.current = false;
+      return;
+    }
+
     const currentScrollY = window.scrollY;
     const scrollDelta = currentScrollY - lastScrollY.current;
 
-    // Scrolling down - hide header and tabs
+    // Scrolling down - hide topbar
     if (scrollDelta > hideThreshold && currentScrollY > 100) {
-      setShowHeader(false);
-      setShowTabs(false);
+      setShowTopBar(false);
     }
-    // Scrolling up - show header and tabs
+    // Scrolling up - show topbar
     else if (scrollDelta < -revealThreshold) {
-      setShowHeader(true);
-      setShowTabs(true);
+      setShowTopBar(true);
     }
 
     lastScrollY.current = currentScrollY;
     ticking.current = false;
-  }, [revealThreshold, hideThreshold]);
+  }, [revealThreshold, hideThreshold, enabled, setShowTopBar]);
 
   useEffect(() => {
+    if (!enabled) {
+      setShowTopBar(true);
+      return;
+    }
+
     const handleScroll = () => {
       if (!ticking.current) {
         window.requestAnimationFrame(updateScrollDirection);
@@ -47,8 +57,11 @@ export function useScrollReveal({
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [updateScrollDirection]);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      setShowTopBar(true); // Reset to visible when unmounting
+    };
+  }, [updateScrollDirection, enabled, setShowTopBar]);
 
-  return { showHeader, showTabs };
+  return { showTabs: true };
 }

@@ -83,11 +83,43 @@ export default function VocabularyView({
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
 
-  // Scroll reveal for header and tabs
-  const { showHeader, showTabs } = useScrollReveal({
+  // Scroll reveal for topbar (tabs controlled locally with state)
+  useScrollReveal({
     revealThreshold: 20,
-    hideThreshold: 10
+    hideThreshold: 10,
+    enabled: !isPreview
   });
+  const [showTabsLocal, setShowTabsLocal] = useState(true);
+
+  // Track scroll for tabs visibility
+  useEffect(() => {
+    if (isPreview) return;
+
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          const scrollDelta = currentScrollY - lastScrollY;
+
+          if (scrollDelta > 10 && currentScrollY > 100) {
+            setShowTabsLocal(false);
+          } else if (scrollDelta < -20) {
+            setShowTabsLocal(true);
+          }
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isPreview]);
 
   // Tab switching debounce
   const tabSwitchTimerRef = useRef<number | null>(null);
@@ -264,56 +296,6 @@ export default function VocabularyView({
 
   return (
     <Box sx={{ width: '100%' }}>
-      {/* Sticky Header - Reveal on Scroll Up */}
-      <Box
-        sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 1100,
-          transform: showHeader ? 'translateY(0)' : 'translateY(-100%)',
-          opacity: showHeader ? 1 : 0,
-          transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
-          backgroundColor: 'background.default',
-          pb: 2
-        }}
-      >
-        {/* Summary Stats */}
-        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
-            {analysis.title}
-          </Typography>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Words in Script
-              </Typography>
-              <Typography variant="h6" fontWeight="medium">
-                {analysis.totalWords.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Unique Words Classified
-              </Typography>
-              <Typography variant="h6" fontWeight="medium">
-                {analysis.uniqueWords.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Vocabulary Richness
-              </Typography>
-              <Typography variant="h6" fontWeight="medium">
-                {((analysis.uniqueWords / analysis.totalWords) * 100).toFixed(1)}%
-              </Typography>
-            </Box>
-          </Stack>
-        </Paper>
-      </Box>
-
       {/* Two-Column Layout: Vocabulary (Left) + TMDB Metadata (Right) */}
       <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
@@ -331,11 +313,11 @@ export default function VocabularyView({
             <Box
               sx={{
                 position: 'sticky',
-                top: showHeader ? 180 : 0, // Adjust based on header height
+                top: 0,
                 zIndex: 1099,
-                transform: showTabs ? 'translateY(0)' : 'translateY(-100%)',
-                opacity: showTabs ? 1 : 0,
-                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out, top 0.3s ease-in-out',
+                transform: showTabsLocal ? 'translateY(0)' : 'translateY(-100%)',
+                opacity: showTabsLocal ? 1 : 0,
+                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
                 backgroundColor: 'background.default',
                 mb: 3
               }}
