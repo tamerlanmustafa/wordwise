@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -37,6 +37,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
 import { useInfiniteWordFeed } from '../hooks/useInfiniteWordFeed';
+import { useScrollReveal } from '../hooks/useScrollReveal';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -52,6 +53,11 @@ interface CEFRGroup {
   description: string;
   words: WordFrequency[];
   color: string;
+}
+
+interface TabScrollState {
+  scrollTop: number;
+  loadedCount: number;
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -76,6 +82,21 @@ export default function VocabularyView({
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
+
+  // Scroll reveal for header and tabs
+  const { showHeader, showTabs } = useScrollReveal({
+    revealThreshold: 20,
+    hideThreshold: 10
+  });
+
+  // Tab switching debounce
+  const tabSwitchTimerRef = useRef<number | null>(null);
+  const [pendingTab, setPendingTab] = useState<number | null>(null);
+
+  // Scroll position preservation per tab
+  const scrollStateRef = useRef<Record<string, TabScrollState>>({});
+  const isRestoringScrollRef = useRef(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Merge C1 and C2 into single "Advanced" category
   const mergedCategories = useMemo(() => {
@@ -129,6 +150,40 @@ export default function VocabularyView({
     batchSize: 20
   });
 
+  // Save scroll position before tab change
+  const saveScrollPosition = useCallback(() => {
+    if (activeGroup && listContainerRef.current) {
+      const scrollTop = window.scrollY;
+      scrollStateRef.current[activeGroup.level] = {
+        scrollTop,
+        loadedCount: visibleWords.length
+      };
+    }
+  }, [activeGroup, visibleWords.length]);
+
+  // Restore scroll position after tab change
+  const restoreScrollPosition = useCallback(() => {
+    if (activeGroup && listContainerRef.current) {
+      const savedState = scrollStateRef.current[activeGroup.level];
+      if (savedState && savedState.scrollTop > 0) {
+        isRestoringScrollRef.current = true;
+        setTimeout(() => {
+          window.scrollTo({ top: savedState.scrollTop, behavior: 'instant' });
+          setTimeout(() => {
+            isRestoringScrollRef.current = false;
+          }, 100);
+        }, 50);
+      }
+    }
+  }, [activeGroup]);
+
+  // Restore scroll when visibleWords changes (after data loads)
+  useEffect(() => {
+    if (visibleWords.length > 0 && !isLoadingMore) {
+      restoreScrollPosition();
+    }
+  }, [visibleWords.length, isLoadingMore, restoreScrollPosition]);
+
   // Fetch other movies for word tooltips
   useEffect(() => {
     if (!isAuthenticated || !movieId || groups.length === 0) return;
@@ -155,9 +210,36 @@ export default function VocabularyView({
     fetchOtherMovies();
   }, [groups, isAuthenticated, movieId]);
 
+  // Debounced tab change handler
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
+    if (newValue === activeTab) return;
+
+    // Save current scroll position
+    saveScrollPosition();
+
+    // Clear existing timer
+    if (tabSwitchTimerRef.current) {
+      clearTimeout(tabSwitchTimerRef.current);
+    }
+
+    // Set pending tab
+    setPendingTab(newValue);
+
+    // Debounce: wait 100ms before actually switching
+    tabSwitchTimerRef.current = setTimeout(() => {
+      setActiveTab(newValue);
+      setPendingTab(null);
+    }, 100);
   };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (tabSwitchTimerRef.current) {
+        clearTimeout(tabSwitchTimerRef.current);
+      }
+    };
+  }, []);
 
   // Show skeleton on initial load
   if (groups.length === 0 && analysis.categories.length === 0) {
@@ -182,47 +264,61 @@ export default function VocabularyView({
 
   return (
     <Box sx={{ width: '100%' }}>
-      {/* Summary Stats */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
-          {analysis.title}
-        </Typography>
+      {/* Sticky Header - Reveal on Scroll Up */}
+      <Box
+        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          transform: showHeader ? 'translateY(0)' : 'translateY(-100%)',
+          opacity: showHeader ? 1 : 0,
+          transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+          backgroundColor: 'background.default',
+          pb: 2
+        }}
+      >
+        {/* Summary Stats */}
+        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
+            {analysis.title}
+          </Typography>
 
-        <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: 2 }} />
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4}>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Total Words in Script
-            </Typography>
-            <Typography variant="h6" fontWeight="medium">
-              {analysis.totalWords.toLocaleString()}
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Unique Words Classified
-            </Typography>
-            <Typography variant="h6" fontWeight="medium">
-              {analysis.uniqueWords.toLocaleString()}
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Vocabulary Richness
-            </Typography>
-            <Typography variant="h6" fontWeight="medium">
-              {((analysis.uniqueWords / analysis.totalWords) * 100).toFixed(1)}%
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4}>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Total Words in Script
+              </Typography>
+              <Typography variant="h6" fontWeight="medium">
+                {analysis.totalWords.toLocaleString()}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Unique Words Classified
+              </Typography>
+              <Typography variant="h6" fontWeight="medium">
+                {analysis.uniqueWords.toLocaleString()}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Vocabulary Richness
+              </Typography>
+              <Typography variant="h6" fontWeight="medium">
+                {((analysis.uniqueWords / analysis.totalWords) * 100).toFixed(1)}%
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+      </Box>
 
       {/* Two-Column Layout: Vocabulary (Left) + TMDB Metadata (Right) */}
       <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
         <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Box sx={{ flexGrow: 1 }}>
+          <Box sx={{ flexGrow: 1 }} ref={listContainerRef}>
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
               Vocabulary by Difficulty Level
             </Typography>
@@ -231,53 +327,66 @@ export default function VocabularyView({
               Scroll down to load more words — translations are fetched on-demand for optimal API usage.
             </Typography>
 
-            {/* Tabs Navigation */}
-            <Paper elevation={2} sx={{ borderRadius: 2, mb: 3 }}>
-              <Tabs
-                value={activeTab}
-                onChange={handleTabChange}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{
-                  px: 2,
-                  '& .MuiTab-root': {
-                    minHeight: 64,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    fontSize: '1rem'
-                  }
-                }}
-              >
-                {groups.map((group) => (
-                  <Tab
-                    key={group.level}
-                    label={
-                      <Stack direction="row" spacing={1.5} alignItems="center">
-                        <Typography variant="h6" fontWeight={700}>
-                          {group.level}
-                        </Typography>
-                        <Chip
-                          label={group.words.length}
-                          size="small"
-                          sx={{
-                            bgcolor: `${group.color}20`,
-                            color: group.color,
-                            fontWeight: 600,
-                            fontSize: '0.875rem'
-                          }}
-                        />
-                      </Stack>
+            {/* Sticky Tabs - Reveal on Scroll Up */}
+            <Box
+              sx={{
+                position: 'sticky',
+                top: showHeader ? 180 : 0, // Adjust based on header height
+                zIndex: 1099,
+                transform: showTabs ? 'translateY(0)' : 'translateY(-100%)',
+                opacity: showTabs ? 1 : 0,
+                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out, top 0.3s ease-in-out',
+                backgroundColor: 'background.default',
+                mb: 3
+              }}
+            >
+              <Paper elevation={2} sx={{ borderRadius: 2 }}>
+                <Tabs
+                  value={pendingTab !== null ? pendingTab : activeTab}
+                  onChange={handleTabChange}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{
+                    px: 2,
+                    '& .MuiTab-root': {
+                      minHeight: 64,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: '1rem'
                     }
-                    sx={{
-                      color: 'text.secondary',
-                      '&.Mui-selected': {
-                        color: group.color
+                  }}
+                >
+                  {groups.map((group) => (
+                    <Tab
+                      key={group.level}
+                      label={
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          <Typography variant="h6" fontWeight={700}>
+                            {group.level}
+                          </Typography>
+                          <Chip
+                            label={group.words.length}
+                            size="small"
+                            sx={{
+                              bgcolor: `${group.color}20`,
+                              color: group.color,
+                              fontWeight: 600,
+                              fontSize: '0.875rem'
+                            }}
+                          />
+                        </Stack>
                       }
-                    }}
-                  />
-                ))}
-              </Tabs>
-            </Paper>
+                      sx={{
+                        color: 'text.secondary',
+                        '&.Mui-selected': {
+                          color: group.color
+                        }
+                      }}
+                    />
+                  ))}
+                </Tabs>
+              </Paper>
+            </Box>
 
             {/* Active Tab Content */}
             <Box>
