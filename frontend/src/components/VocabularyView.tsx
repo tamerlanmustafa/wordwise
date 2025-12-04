@@ -22,7 +22,7 @@ import {
   Fade,
   CircularProgress
 } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -368,7 +368,7 @@ export default function VocabularyView({
               <Paper
                 elevation={2}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: '16px',
                   boxShadow: scrolledPastTop
                     ? '0px 4px 12px rgba(0, 0, 0, 0.08)'
                     : 'none',
@@ -379,7 +379,7 @@ export default function VocabularyView({
                     content: '""',
                     position: 'absolute',
                     inset: 0,
-                    borderRadius: 2,
+                    borderRadius: '16px',
                     padding: '2px',
                     background: 'linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #fd79a8, #a29bfe, #6c5ce7, #ff6b6b)',
                     backgroundSize: '400% 100%',
@@ -424,6 +424,7 @@ export default function VocabularyView({
                         width: '100%',
                         height: '100%',
                         backgroundColor: `${groups[activeTab]?.color}15`,
+                        borderRadius: '14px',
                         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                         transition: 'background-color 0.3s ease'
                       }}
@@ -460,26 +461,16 @@ export default function VocabularyView({
                       disableRipple
                       sx={{
                         color: 'text.secondary',
-                        borderTop: 'none',
-                        borderBottom: 'none',
-                        borderLeft: 'none',
-                        borderRight: 'none',
+                        border: '1px solid rgba(0,0,0,0.08)',
+                        borderRight: index === groups.length - 1 ? '1px solid rgba(0,0,0,0.08)' : 'none',
                         position: 'relative',
                         transition: 'all 200ms ease-in-out',
                         backgroundColor: 'transparent',
+                        borderRadius: '14px',
+                        overflow: 'hidden',
                         '&.Mui-selected': {
-                          color: group.color
-                        },
-                        // Gradient separator on the left (except first tab)
-                        '&::before': {
-                          content: index === 0 ? '""' : '""',
-                          position: 'absolute',
-                          left: 0,
-                          top: '25%',
-                          bottom: '25%',
-                          width: index === 0 ? 0 : '1px',
-                          background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.15) 20%, rgba(0,0,0,0.15) 80%, transparent)',
-                          opacity: 0.8
+                          color: group.color,
+                          borderColor: `${group.color}30`
                         }
                     }}
                       label={
@@ -487,7 +478,6 @@ export default function VocabularyView({
                           sx={{
                             position: 'relative',
                             padding: '6px 20px',
-                            borderRadius: '10px',
                           }}
                         >
                           <Stack direction="column" spacing={0} alignItems="center">
