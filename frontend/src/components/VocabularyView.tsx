@@ -94,6 +94,9 @@ export default function VocabularyView({
   // Get TopBar visibility for proper tab positioning
   const { showTopBar } = useTopBarVisibility();
 
+  // Track scroll position for sticky tab shadow
+  const [scrolledPastTop, setScrolledPastTop] = useState(false);
+
   // Tab switching debounce
   const tabSwitchTimerRef = useRef<number | null>(null);
   const [pendingTab, setPendingTab] = useState<number | null>(null);
@@ -241,6 +244,16 @@ export default function VocabularyView({
     }, 100);
   };
 
+  // Detect scroll position for sticky tab shadow
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolledPastTop(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
@@ -300,7 +313,16 @@ export default function VocabularyView({
               mb: 3,
             }}
             >
-              <Paper elevation={2} sx={{ borderRadius: 2 }}>
+              <Paper
+                elevation={2}
+                sx={{
+                  borderRadius: 2,
+                  boxShadow: scrolledPastTop
+                    ? '0px 4px 12px rgba(0, 0, 0, 0.08)'
+                    : 'none',
+                  transition: 'box-shadow 0.3s ease'
+                }}
+              >
                 <Tabs
                   value={pendingTab !== null ? pendingTab : activeTab}
                   onChange={handleTabChange}
@@ -405,7 +427,22 @@ export default function VocabularyView({
               )}
 
               {/* Infinite Scroll Word List */}
-              <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
+              <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden', position: 'relative', mb: 3 }}>
+                {/* Top fade mask - sticky at top of visible area */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '828px', // keep your test height
+    background:
+      'linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%)',
+    pointerEvents: 'none',
+    zIndex: 6, // Prevents pushing content down
+                  }}
+                />
+
                 <List sx={{ py: 0 }}>
                   {visibleWords.length === 0 && !isLoadingMore ? (
                     <ListItem>
@@ -592,6 +629,21 @@ export default function VocabularyView({
                     </>
                   )}
                 </List>
+
+                {/* Bottom fade mask - sticky at bottom of visible area */}
+                <Box
+                  sx={{
+                    position: 'sticky',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '328px',
+                    background: 'linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%)',
+                    pointerEvents: 'none',
+                    zIndex: 6,
+                    marginTop: '-328px' // Prevents pushing content up
+                  }}
+                />
               </Paper>
 
               {/* Sentinel div for IntersectionObserver */}
