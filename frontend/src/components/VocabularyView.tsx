@@ -378,6 +378,7 @@ export default function VocabularyView({
                   onChange={handleTabChange}
                   variant="scrollable"
                   scrollButtons="auto"
+                  centered
                   sx={{
                     px: 2,
                     '& .MuiTab-root': {
@@ -385,6 +386,9 @@ export default function VocabularyView({
                       textTransform: 'none',
                       fontWeight: 600,
                       fontSize: '1rem'
+                    },
+                    '& .MuiTabs-flexContainer': {
+                      justifyContent: 'center'
                     }
                   }}
                 >
