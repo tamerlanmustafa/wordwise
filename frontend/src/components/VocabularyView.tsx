@@ -312,6 +312,26 @@ export default function VocabularyView({
       <Grid container spacing={3} alignItems="stretch">
         {/* Left Column: Vocabulary Tabs */}
         <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }} ref={gridItemRef}>
+          {/* Top fade mask with iOS-style blur - only visible when TopBar is hidden */}
+          <Box
+            sx={{
+              position: 'fixed',
+              top: 0, // Top of viewport
+              left: `${fadeMaskStyle.left}px`,
+              width: fadeMaskStyle.width,
+              height: '120px',
+              background: (theme) => `linear-gradient(to bottom, ${theme.palette.background.default} 0%, transparent 100%)`,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)', // Safari support
+              pointerEvents: 'none',
+              zIndex: 1050, // Behind tabs (tabs are zIndex 1100) and TopBar (zIndex 1200)
+              maskImage: 'linear-gradient(to bottom, black 0%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 100%)',
+              opacity: showTopBar ? 0 : 1,
+              transition: 'opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1)'
+            }}
+          />
+
           {/* Bottom fade mask with iOS-style blur */}
           <Box
             sx={{
@@ -319,7 +339,7 @@ export default function VocabularyView({
               bottom: 0,
               left: `${fadeMaskStyle.left}px`,
               width: fadeMaskStyle.width,
-              height: '200px',
+              height: '120px',
               background: (theme) => `linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 100%)`,
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)', // Safari support
