@@ -38,6 +38,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
 import { useInfiniteWordFeed } from '../hooks/useInfiniteWordFeed';
 import { useScrollReveal } from '../hooks/useScrollReveal';
+import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 import apiClient from '../services/api';
 
 interface VocabularyViewProps {
@@ -83,43 +84,15 @@ export default function VocabularyView({
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
 
-  // Scroll reveal for topbar (tabs controlled locally with state)
-  useScrollReveal({
+  // Scroll reveal for topbar (tabs always stay visible once scrolling starts)
+  const { suppressScrollReveal } = useScrollReveal({
     revealThreshold: 20,
-    hideThreshold: 10,
+    hideThreshold: 30,
     enabled: !isPreview
   });
-  const [showTabsLocal, setShowTabsLocal] = useState(true);
 
-  // Track scroll for tabs visibility
-  useEffect(() => {
-    if (isPreview) return;
-
-    let lastScrollY = window.scrollY;
-    let ticking = false;
-
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY;
-          const scrollDelta = currentScrollY - lastScrollY;
-
-          if (scrollDelta > 10 && currentScrollY > 100) {
-            setShowTabsLocal(false);
-          } else if (scrollDelta < -20) {
-            setShowTabsLocal(true);
-          }
-
-          lastScrollY = currentScrollY;
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isPreview]);
+  // Get TopBar visibility for proper tab positioning
+  const { showTopBar } = useTopBarVisibility();
 
   // Tab switching debounce
   const tabSwitchTimerRef = useRef<number | null>(null);
@@ -199,6 +172,10 @@ export default function VocabularyView({
       const savedState = scrollStateRef.current[activeGroup.level];
       if (savedState && savedState.scrollTop > 0) {
         isRestoringScrollRef.current = true;
+
+        // Suppress scroll reveal for 200ms during programmatic scroll
+        suppressScrollReveal(200);
+
         setTimeout(() => {
           window.scrollTo({ top: savedState.scrollTop, behavior: 'instant' });
           setTimeout(() => {
@@ -207,7 +184,7 @@ export default function VocabularyView({
         }, 50);
       }
     }
-  }, [activeGroup]);
+  }, [activeGroup, suppressScrollReveal]);
 
   // Restore scroll when visibleWords changes (after data loads)
   useEffect(() => {
@@ -301,26 +278,27 @@ export default function VocabularyView({
         {/* Left Column: Vocabulary Tabs */}
         <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flexGrow: 1 }} ref={listContainerRef}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            {/* <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
               Vocabulary by Difficulty Level
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Words are classified using CEFR wordlists (Oxford 3000/5000, EFLex) and frequency analysis.
               Scroll down to load more words — translations are fetched on-demand for optimal API usage.
-            </Typography>
+            </Typography> */}
 
-            {/* Sticky Tabs - Reveal on Scroll Up */}
+            {/* Sticky Tabs - Always Visible */}
             <Box
               sx={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 1099,
-                transform: showTabsLocal ? 'translateY(0)' : 'translateY(-100%)',
-                opacity: showTabsLocal ? 1 : 0,
-                transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
-                backgroundColor: 'background.default',
-                mb: 3
-              }}
+              position: 'sticky',
+              top: '72px',              // ← Always fixed, no change ever
+              zIndex: 1100,
+              transform: showTopBar
+                ? 'translateY(0)'
+                : 'translateY(-48px)', // ← Entire offset handled here
+              transition: 'transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)',
+              backgroundColor: 'background.default',
+              mb: 3,
+            }}
             >
               <Paper elevation={2} sx={{ borderRadius: 2 }}>
                 <Tabs

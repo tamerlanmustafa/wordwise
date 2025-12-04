@@ -74,8 +74,8 @@ export default function TopBar() {
         color: 'text.primary',
         top: 0,
         zIndex: 1200,
-        transform: showTopBar ? 'translateY(0)' : 'translateY(-100%)',
-        transition: 'transform 0.3s ease-in-out'
+        transform: showTopBar ? 'translateY(0)' : 'translateY(-60px)',
+        transition: 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)'
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
