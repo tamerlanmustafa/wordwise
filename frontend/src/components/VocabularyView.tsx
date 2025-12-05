@@ -370,7 +370,7 @@ export default function VocabularyView({
                 sx={{
                   borderRadius: '16px',
                   boxShadow: scrolledPastTop
-                    ? '0px 4px 12px rgba(0, 0, 0, 0.08)'
+                    ? '0px 4px 12px rgba(0, 0, 0, 0.09)'
                     : 'none',
                   transition: 'box-shadow 0.3s ease',
                   position: 'relative',
@@ -418,7 +418,7 @@ export default function VocabularyView({
                       zIndex: 0,
                       pointerEvents: 'none',
                       borderRadius: '14px',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)'
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.14)'
                     }}
                   >
                     <Box
@@ -469,9 +469,12 @@ export default function VocabularyView({
                         backgroundColor: 'transparent',
                         borderRadius: '14px',
                         overflow: 'hidden',
+                        filter: activeTab === index ? 'none' : 'blur(0.5px)',
+                        opacity: activeTab === index ? 1 : 0.6,
                         '&.Mui-selected': {
                           color: group.color,
-                          borderColor: `${group.color}30`
+                          filter: 'none',
+                          opacity: 1
                         }
                     }}
                       label={
