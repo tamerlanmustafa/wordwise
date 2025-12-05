@@ -45,15 +45,6 @@ export default function MovieDetailPage() {
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
   const [isPreview, setIsPreview] = useState(!isAuthenticated);
   const [movieId, setMovieId] = useState<number | undefined>(undefined);
-  const [difficulty, setDifficulty] = useState<{
-    level: string | null;
-    score: number | null;
-  } | null>(null);
-  const [scriptInfo, setScriptInfo] = useState<{
-    source: string;
-    fromCache: boolean;
-    wordCount: number;
-  } | null>(null);
 
   // Update preview mode when auth state changes
   useEffect(() => {
@@ -105,11 +96,12 @@ export default function MovieDetailPage() {
           return;
         }
 
-        // Store script info and movie ID
-        setScriptInfo({
+        // Log script info and store movie ID
+        console.log('[SCRIPT INFO]', {
           source: scriptResponse.source_used,
           fromCache: scriptResponse.from_cache,
-          wordCount: scriptResponse.word_count
+          wordCount: scriptResponse.word_count,
+          movieId: scriptResponse.movie_id
         });
         setMovieId(scriptResponse.movie_id);
 
@@ -197,7 +189,7 @@ export default function MovieDetailPage() {
         try {
           const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           const diffResponse = await axios.get(`${API_BASE_URL}/movies/${scriptResponse.movie_id}/difficulty`);
-          setDifficulty({
+          console.log('[DIFFICULTY INFO]', {
             level: diffResponse.data.difficulty_level,
             score: diffResponse.data.difficulty_score
           });
@@ -263,25 +255,6 @@ export default function MovieDetailPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {scriptInfo && (
-        <Alert
-          severity={scriptInfo.fromCache ? 'info' : 'success'}
-          sx={{ mb: 3 }}
-        >
-          <Typography variant="body2">
-            <strong>Source:</strong> {scriptInfo.source.replace('_', ' ')} • {' '}
-            <strong>Total Words:</strong> {scriptInfo.wordCount.toLocaleString()} • {' '}
-            <strong>Status:</strong> {scriptInfo.fromCache ? 'Loaded from cache' : 'Freshly downloaded and saved'}
-            {difficulty?.level && (
-              <>
-                {' • '}
-                <strong>Difficulty:</strong> {difficulty.level} ({difficulty.score}/100)
-              </>
-            )}
-          </Typography>
-        </Alert>
-      )}
-
       <Fade in={!!analysis}>
         <Box>
           <VocabularyView

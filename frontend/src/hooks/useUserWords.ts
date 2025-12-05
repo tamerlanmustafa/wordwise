@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -62,7 +62,8 @@ export function useUserWords() {
     fetchUserWords();
   }, [isAuthenticated]);
 
-  const saveWord = async (word: string, movieId?: number) => {
+  // Wrap in useCallback to provide stable reference to memoized components
+  const saveWord = useCallback(async (word: string, movieId?: number) => {
     if (!isAuthenticated) return;
 
     try {
@@ -104,9 +105,10 @@ export function useUserWords() {
     } catch (error) {
       console.error('Failed to save word:', error);
     }
-  };
+  }, [isAuthenticated]);
 
-  const toggleLearned = async (word: string) => {
+  // Wrap in useCallback to provide stable reference to memoized components
+  const toggleLearned = useCallback(async (word: string) => {
     if (!isAuthenticated) return;
 
     const newLearnedState = !learnedWords.has(word);
@@ -129,12 +131,13 @@ export function useUserWords() {
     } catch (error) {
       console.error('Failed to toggle learned:', error);
     }
-  };
+  }, [isAuthenticated, learnedWords]);
 
-  const isWordSavedInMovie = (word: string, movieId?: number) => {
+  // Wrap in useCallback to provide stable reference to memoized components
+  const isWordSavedInMovie = useCallback((word: string, movieId?: number) => {
     if (!movieId) return savedWords.has(word);
     return savedWordMoviePairs.has(`${word}:${movieId}`);
-  };
+  }, [savedWords, savedWordMoviePairs]);
 
   return {
     savedWords,

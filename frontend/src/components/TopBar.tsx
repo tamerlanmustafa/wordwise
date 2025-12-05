@@ -27,11 +27,13 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
   const { user, logout, isAuthenticated } = useAuth();
+  const { showTopBar } = useTopBarVisibility();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
@@ -64,7 +66,18 @@ export default function TopBar() {
   };
 
   return (
-    <AppBar position="static" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary' }}>
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        bgcolor: 'background.paper',
+        color: 'text.primary',
+        top: 0,
+        zIndex: 1200,
+        transform: showTopBar ? 'translateY(0)' : 'translateY(-60px)',
+        transition: 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)'
+      }}
+    >
       <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
         {/* Left: WordWise Logo */}
         <Box

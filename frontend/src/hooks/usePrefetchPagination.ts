@@ -10,20 +10,18 @@ interface TranslatedWord {
   provider?: string | null;
 }
 
-interface CEFRGroup {
-  level: string;
-  description: string;
-  words: Array<{ word: string; lemma?: string }>;
-  translatedWords: Map<string, TranslatedWord>;
-  color: string;
+interface UsePrefetchPaginationOptions {
+  // Stable values extracted from active group (non-reactive)
   currentPage: number;
   totalPages: number;
-}
+  words: Array<{ word: string; lemma?: string }>;
+  translatedWords: Map<string, TranslatedWord>;
 
-interface UsePrefetchPaginationOptions {
-  groups: CEFRGroup[];
+  // Navigation state (triggers prefetch)
   activeTab: number;
   targetLanguage: string;
+
+  // Config
   userId?: number;
   isPreview: boolean;
   isAuthenticated: boolean;
@@ -45,7 +43,10 @@ interface UsePrefetchPaginationOptions {
  * - No UI changes required
  */
 export function usePrefetchPagination({
-  groups,
+  currentPage,
+  totalPages,
+  words,
+  translatedWords,
   activeTab,
   targetLanguage,
   userId,
@@ -57,6 +58,10 @@ export function usePrefetchPagination({
   const abortControllerRef = useRef<AbortController | null>(null);
   const prefetchedPagesRef = useRef<Set<string>>(new Set());
 
+  // Stabilize translatedWords using ref to prevent cascade
+  const translatedWordsRef = useRef(translatedWords);
+  translatedWordsRef.current = translatedWords;
+
   useEffect(() => {
     // Reset prefetch cache when language changes
     prefetchedPagesRef.current.clear();
@@ -64,14 +69,10 @@ export function usePrefetchPagination({
 
   useEffect(() => {
     // Don't prefetch in preview mode or when not authenticated
-    if (isPreview || !isAuthenticated || groups.length === 0) {
+    if (isPreview || !isAuthenticated || !words || words.length === 0) {
       return;
     }
 
-    const activeGroup = groups[activeTab];
-    if (!activeGroup) return;
-
-    const { currentPage, totalPages, words, translatedWords } = activeGroup;
     const nextPage = currentPage + 1;
 
     // Only prefetch if there's a next page
@@ -106,7 +107,7 @@ export function usePrefetchPagination({
 
         // Filter out words we already have translations for
         const wordsToTranslate = nextPageWords.filter(w =>
-          w.word && w.word.trim() && !translatedWords.has(w.word.toLowerCase())
+          w.word && w.word.trim() && !translatedWordsRef.current.has(w.word.toLowerCase())
         );
 
         // If all translations already cached, mark as prefetched and exit
@@ -183,14 +184,19 @@ export function usePrefetchPagination({
       }
     };
   }, [
-    groups,
-    activeTab,
-    targetLanguage,
+    // ✅ CORRECT: Only react to user navigation, NOT to data changes
+    currentPage,        // Triggers when user changes page
+    activeTab,          // Triggers when user switches tab
+    targetLanguage,     // Triggers when user changes language
+    words,              // Triggers when new movie/script loads (stable reference)
+    totalPages,         // Triggers when total pages changes (stable)
+    // Config values (rarely change, safe to include)
     userId,
     isPreview,
     isAuthenticated,
     wordsPerPage,
     onPrefetchComplete
+    // ❌ translatedWords NOT in deps - using ref to prevent cascade
   ]);
 
   // Cleanup on unmount

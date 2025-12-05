@@ -238,7 +238,7 @@ export default function VocabularyTabs({
   return (
     <Box sx={{ width: '100%' }}>
       {/* Tabs Navigation */}
-      <Paper elevation={2} sx={{ borderRadius: 2, mb: 3 }}>
+      <Paper elevation={2} sx={{ borderRadius: 2, mb: 3,  }}>
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
@@ -250,7 +250,8 @@ export default function VocabularyTabs({
               minHeight: 64,
               textTransform: 'none',
               fontWeight: 600,
-              fontSize: '1rem'
+              fontSize: '1rem',
+              
             }
           }}
         >
