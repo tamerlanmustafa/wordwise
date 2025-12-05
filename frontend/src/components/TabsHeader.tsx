@@ -1,6 +1,5 @@
 import { memo, useMemo } from 'react';
 import { Box, Paper, Tabs, Tab, Typography, Stack } from '@mui/material';
-import { motion } from 'framer-motion';
 
 interface CEFRGroup {
   level: string;
@@ -28,27 +27,16 @@ export const TabsHeader = memo<TabsHeaderProps>(({
   // Memoize the active group color to prevent recalculations
   const activeColor = useMemo(() => groups[activeTab]?.color || '#4caf50', [groups, activeTab]);
 
-  // Memoize motion.div animation values
-  const motionStyle = useMemo(() => ({
-    position: 'absolute' as const,
-    top: 0,
-    width: `${100 / groups.length}%`,
-    height: '100%',
-    zIndex: 0,
-    pointerEvents: 'none' as const,
-    borderRadius: '14px',
-  }), [groups.length]);
+  // Memoize indicator position for CSS transform - zero JavaScript overhead
+  const indicatorTransform = useMemo(() =>
+    `translateX(${activeTab * 100}%)`,
+    [activeTab]
+  );
 
-  const motionAnimate = useMemo(() => ({
-    left: `${activeTab * (100 / groups.length)}%`,
-  }), [activeTab, groups.length]);
-
-  // Memoize transition config (never changes)
-  const motionTransition = useMemo(() => ({
-    type: 'spring' as const,
-    stiffness: 300,
-    damping: 30
-  }), []);
+  const indicatorWidth = useMemo(() =>
+    `${100 / groups.length}%`,
+    [groups.length]
+  );
 
   return (
     <Box
@@ -103,24 +91,24 @@ export const TabsHeader = memo<TabsHeaderProps>(({
         }}
       >
         <Box sx={{ position: 'relative' }}>
-          {/* Animated background indicator - stable reference prevents remounting */}
-          <motion.div
-            animate={motionAnimate}
-            transition={motionTransition}
-            style={motionStyle}
-          >
-            <Box
-              sx={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: `${activeColor}15`,
-                borderRadius: '14px',
-                // GPU-accelerated transition
-                transition: 'background-color 0.3s ease',
-                willChange: 'background-color'
-              }}
-            />
-          </motion.div>
+          {/* Animated background indicator - pure CSS for zero JS overhead */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: indicatorWidth,
+              height: '100%',
+              zIndex: 0,
+              pointerEvents: 'none',
+              borderRadius: '14px',
+              backgroundColor: `${activeColor}15`,
+              // GPU-accelerated transform - zero layout recalculation
+              transform: indicatorTransform,
+              transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease',
+              willChange: 'transform'
+            }}
+          />
 
           <Tabs
             value={activeTab}
