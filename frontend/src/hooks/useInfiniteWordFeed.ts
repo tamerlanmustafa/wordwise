@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslationQueue } from './useTranslationQueue';
 import type { WordFrequency } from '../types/script';
 
@@ -105,6 +105,18 @@ export function useInfiniteWordFeed({
   // LRU cache for translations
   const translationCacheRef = useRef(new LRUCache<string, TranslatedWord>(LRU_CACHE_SIZE));
 
+  // Cache for visible words per rawWords array (persists across tab switches)
+  const visibleWordsCache = useRef<Map<string, WordFrequency[]>>(new Map());
+  const translationsCache = useRef<Map<string, Map<string, TranslatedWord>>>(new Map());
+
+  // Generate cache key from rawWords - optimized to avoid expensive join
+  const cacheKey = useMemo(() => {
+    if (rawWords.length === 0) return 'empty';
+    if (rawWords.length === 1) return rawWords[0].word;
+    // Fast hash: length + first + last word
+    return `${rawWords.length}-${rawWords[0].word}-${rawWords[rawWords.length - 1].word}`;
+  }, [rawWords]);
+
   const { enqueue, getQueueSize, getPendingCount, reset: resetQueue } = useTranslationQueue(targetLanguage, userId);
 
   // Track which batches we've already prefetched to prevent duplicates
@@ -121,23 +133,46 @@ export function useInfiniteWordFeed({
 
   // Reset state when rawWords, targetLanguage, or auth status changes
   useEffect(() => {
-    setVisibleWords([]);
-    setLoadedCount(0);
+    // Check if we have cached data for this tab
+    const cachedVisible = visibleWordsCache.current.get(cacheKey);
+    const cachedTranslations = translationsCache.current.get(cacheKey);
+
+    if (cachedVisible && cachedTranslations) {
+      // Restore from cache immediately - no flash of "no words"
+      setVisibleWords(cachedVisible);
+      setTranslations(cachedTranslations);
+      setLoadedCount(cachedVisible.length);
+    } else {
+      // No cache, clear state
+      setVisibleWords([]);
+      setTranslations(new Map());
+      setLoadedCount(0);
+    }
+
     setIsLoadingMore(false);
     setError(null);
     prefetchedBatchesRef.current = new Set();
     // DON'T clear translationCacheRef - keep cache across tabs!
-    // DON'T clear translations map - reuse cached translations
-    // Only clear cache when language changes
     resetQueue();
     isLoadingRef.current = false;
-  }, [rawWords, targetLanguage, isAuthenticated, resetQueue]);
+  }, [rawWords, targetLanguage, isAuthenticated, resetQueue, cacheKey]);
 
   // Separate effect: only clear cache when language changes
   useEffect(() => {
     translationCacheRef.current.clear();
     setTranslations(new Map());
+    visibleWordsCache.current.clear();
+    translationsCache.current.clear();
   }, [targetLanguage]);
+
+  // Save to cache only when loading completes (not on every state change)
+  useEffect(() => {
+    // Only cache when we have data AND we're not currently loading
+    if (visibleWords.length > 0 && translations.size > 0 && !isLoadingMore) {
+      visibleWordsCache.current.set(cacheKey, visibleWords);
+      translationsCache.current.set(cacheKey, new Map(translations));
+    }
+  }, [visibleWords, translations, cacheKey, isLoadingMore]);
 
   // Load next batch of words
   const loadNextBatch = useCallback(async (autoFetch = false) => {
@@ -160,6 +195,17 @@ export function useInfiniteWordFeed({
         return;
       }
 
+      // Build updated translations map with cached values FIRST
+      let updatedTranslations = new Map(translations);
+      newBatch.forEach(wordFreq => {
+        const wordLower = wordFreq.word.toLowerCase();
+        const cacheKey = `${wordLower}-${targetLanguage}`;
+        const cached = translationCacheRef.current.get(cacheKey);
+        if (cached) {
+          updatedTranslations.set(wordLower, cached);
+        }
+      });
+
       // Extract words that need translation
       const wordsToTranslate = newBatch
         .map(w => w.word.toLowerCase())
@@ -169,8 +215,21 @@ export function useInfiniteWordFeed({
           return !translationCacheRef.current.has(cacheKey);
         });
 
+      // Add cached words to visible list immediately (non-blocking)
+      const cachedBatch = newBatch.filter(wordFreq => {
+        const wordLower = wordFreq.word.toLowerCase();
+        const translation = updatedTranslations.get(wordLower);
+        return translation && translation.translation !== wordLower;
+      });
+
+      if (cachedBatch.length > 0) {
+        setVisibleWords(prev => [...prev, ...cachedBatch]);
+        setTranslations(updatedTranslations);
+      }
+
+      let newlyTranslatedBatch: WordFrequency[] = [];
+
       // Translate the batch (queue handles rate limiting and deduplication)
-      let updatedTranslations = new Map(translations);
       if (wordsToTranslate.length > 0) {
         const results = await enqueue(wordsToTranslate, 'high');
 
@@ -198,38 +257,35 @@ export function useInfiniteWordFeed({
 
         // Update state with new translations
         setTranslations(updatedTranslations);
-      } else {
-        // Use cached translations
-        newBatch.forEach(wordFreq => {
+
+        // Filter only newly translated words (not already in cachedBatch)
+        newlyTranslatedBatch = newBatch.filter(wordFreq => {
           const wordLower = wordFreq.word.toLowerCase();
-          const cacheKey = `${wordLower}-${targetLanguage}`;
-          const cached = translationCacheRef.current.get(cacheKey);
-          if (cached) {
-            updatedTranslations.set(wordLower, cached);
+          const translation = updatedTranslations.get(wordLower);
+
+          // Skip if already added in cachedBatch
+          const wasInCachedBatch = cachedBatch.some(w => w.word.toLowerCase() === wordLower);
+          if (wasInCachedBatch) return false;
+
+          // Skip words where translation === source (no actual translation)
+          if (translation && translation.translation === wordLower) {
+            return false;
           }
+
+          return translation !== undefined;
         });
-        setTranslations(updatedTranslations);
+
+        // Add newly translated words to visible words
+        if (newlyTranslatedBatch.length > 0) {
+          setVisibleWords(prev => [...prev, ...newlyTranslatedBatch]);
+        }
       }
 
-      // Filter out words where translation === source BEFORE adding to visibleWords
-      const filteredBatch = newBatch.filter(wordFreq => {
-        const wordLower = wordFreq.word.toLowerCase();
-        const translation = updatedTranslations.get(wordLower);
-
-        // Skip words where translation === source (no actual translation)
-        if (translation && translation.translation === wordLower) {
-          return false;
-        }
-
-        return true;
-      });
-
-      // Add filtered batch to visible words
-      setVisibleWords(prev => [...prev, ...filteredBatch]);
       setLoadedCount(end);
 
-      // Batch starvation prevention: if filtered batch < threshold, auto-fetch next
-      if (filteredBatch.length < MIN_VALID_WORDS_THRESHOLD && end < rawWords.length && !autoFetch) {
+      // Batch starvation prevention: if total visible batch < threshold, auto-fetch next
+      const totalVisibleBatch = cachedBatch.length + newlyTranslatedBatch.length;
+      if (totalVisibleBatch < MIN_VALID_WORDS_THRESHOLD && end < rawWords.length && !autoFetch) {
         // Recursively fetch next batch
         isLoadingRef.current = false;
         setIsLoadingMore(false);
@@ -318,12 +374,22 @@ export function useInfiniteWordFeed({
     getPendingCount
   ]);
 
-  // Load initial batch on mount
+  // Load initial batch on mount - only if not cached
   useEffect(() => {
-    if (loadedCount === 0 && rawWords.length > 0 && isAuthenticated && !isPreview) {
-      loadNextBatch();
+    const hasCachedData = visibleWordsCache.current.has(cacheKey);
+
+    // Only load if we have no cached data and no loaded count
+    if (!hasCachedData && loadedCount === 0 && rawWords.length > 0 && isAuthenticated && !isPreview) {
+      // Use requestIdleCallback if available for even smoother performance
+      if ('requestIdleCallback' in window) {
+        const id = requestIdleCallback(() => loadNextBatch(), { timeout: 100 });
+        return () => cancelIdleCallback(id);
+      } else {
+        const timer = setTimeout(() => loadNextBatch(), 0);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [loadedCount, rawWords.length, isAuthenticated, isPreview, loadNextBatch]);
+  }, [loadedCount, rawWords.length, isAuthenticated, isPreview, loadNextBatch, cacheKey]);
 
   // Set up IntersectionObserver for sentinel
   const sentinelRef = useCallback((node: HTMLDivElement | null) => {
