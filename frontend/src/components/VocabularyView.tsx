@@ -98,10 +98,6 @@ export default function VocabularyView({
   // Track scroll position for sticky tab shadow
   const [scrolledPastTop, setScrolledPastTop] = useState(false);
 
-  // Tab switching debounce
-  const tabSwitchTimerRef = useRef<number | null>(null);
-  const [pendingTab, setPendingTab] = useState<number | null>(null);
-
   // Scroll position preservation per tab
   const scrollStateRef = useRef<Record<string, TabScrollState>>({});
   const isRestoringScrollRef = useRef(false);
@@ -160,7 +156,7 @@ export default function VocabularyView({
     userId,
     isAuthenticated,
     isPreview,
-    batchSize: 20
+    batchSize: 50
   });
 
   // Save scroll position before tab change
@@ -227,26 +223,15 @@ export default function VocabularyView({
     fetchOtherMovies();
   }, [groups, isAuthenticated, movieId]);
 
-  // Debounced tab change handler
+  // Tab change handler
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     if (newValue === activeTab) return;
 
     // Save current scroll position
     saveScrollPosition();
 
-    // Clear existing timer
-    if (tabSwitchTimerRef.current) {
-      clearTimeout(tabSwitchTimerRef.current);
-    }
-
-    // Set pending tab
-    setPendingTab(newValue);
-
-    // Debounce: wait 100ms before actually switching
-    tabSwitchTimerRef.current = setTimeout(() => {
-      setActiveTab(newValue);
-      setPendingTab(null);
-    }, 100);
+    // Immediately switch tabs (no debounce delay)
+    setActiveTab(newValue);
   };
 
   // Detect scroll position for sticky tab shadow
@@ -277,14 +262,6 @@ export default function VocabularyView({
     return () => window.removeEventListener('resize', updateFadeMaskPosition);
   }, []);
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (tabSwitchTimerRef.current) {
-        clearTimeout(tabSwitchTimerRef.current);
-      }
-    };
-  }, []);
 
   // Show skeleton on initial load
   if (groups.length === 0 && analysis.categories.length === 0) {
@@ -433,7 +410,7 @@ export default function VocabularyView({
                   </motion.div>
 
                   <Tabs
-                    value={pendingTab !== null ? pendingTab : activeTab}
+                    value={activeTab}
                     onChange={handleTabChange}
                     variant="scrollable"
                     scrollButtons={false}

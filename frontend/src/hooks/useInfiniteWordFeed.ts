@@ -122,15 +122,22 @@ export function useInfiniteWordFeed({
   // Reset state when rawWords, targetLanguage, or auth status changes
   useEffect(() => {
     setVisibleWords([]);
-    setTranslations(new Map());
     setLoadedCount(0);
     setIsLoadingMore(false);
     setError(null);
     prefetchedBatchesRef.current = new Set();
-    translationCacheRef.current.clear();
+    // DON'T clear translationCacheRef - keep cache across tabs!
+    // DON'T clear translations map - reuse cached translations
+    // Only clear cache when language changes
     resetQueue();
     isLoadingRef.current = false;
   }, [rawWords, targetLanguage, isAuthenticated, resetQueue]);
+
+  // Separate effect: only clear cache when language changes
+  useEffect(() => {
+    translationCacheRef.current.clear();
+    setTranslations(new Map());
+  }, [targetLanguage]);
 
   // Load next batch of words
   const loadNextBatch = useCallback(async (autoFetch = false) => {
