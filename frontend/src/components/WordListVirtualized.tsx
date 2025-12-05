@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -77,11 +77,59 @@ export const WordListVirtualized = memo<WordListVirtualizedProps>(({
   sentinelRef,
   listContainerRef
 }) => {
-  // Memoize word list height calculation
-  const listHeight = useMemo(() =>
-    Math.min(visibleWords.length * 80, 600),
-    [visibleWords.length]
-  );
+  // Memoize word list height calculation - fixed height for stability
+  const listHeight = useMemo(() => 600, []);
+
+  // Memoize rowProps to prevent breaking VirtualList memoization
+  const rowProps = useMemo(() => ({
+    visibleWords,
+    translations,
+    groupColor,
+    isWordSavedInMovie,
+    learnedWords,
+    savedWords,
+    saveWord,
+    toggleLearned,
+    otherMovies,
+    movieId
+  }), [
+    visibleWords,
+    translations,
+    groupColor,
+    isWordSavedInMovie,
+    learnedWords,
+    savedWords,
+    saveWord,
+    toggleLearned,
+    otherMovies,
+    movieId
+  ]);
+
+  // Memoize row component to prevent recreation on every render
+  const WordRow = useCallback(({ index, style, visibleWords, translations, groupColor, isWordSavedInMovie, learnedWords, savedWords, saveWord, toggleLearned, otherMovies, movieId }: any) => {
+    const wordFreq = visibleWords[index];
+    const translation = translations.get(wordFreq.word.toLowerCase());
+
+    if (!translation) return null;
+
+    return (
+      <div style={style}>
+        <WordItem
+          wordFreq={wordFreq}
+          translation={translation}
+          groupColor={groupColor}
+          isWordSavedInMovie={isWordSavedInMovie}
+          learnedWords={learnedWords}
+          savedWords={savedWords}
+          saveWord={saveWord}
+          toggleLearned={toggleLearned}
+          otherMovies={otherMovies[wordFreq.word.toLowerCase()]}
+          movieId={movieId}
+          showDivider={index < visibleWords.length - 1}
+        />
+      </div>
+    );
+  }, []);
 
   return (
     <Box ref={listContainerRef} sx={{
@@ -190,43 +238,9 @@ export const WordListVirtualized = memo<WordListVirtualizedProps>(({
             defaultHeight={listHeight}
             rowCount={visibleWords.length}
             rowHeight={80}
-            overscanCount={5}
-            rowProps={{
-              visibleWords,
-              translations,
-              groupColor,
-              isWordSavedInMovie,
-              learnedWords,
-              savedWords,
-              saveWord,
-              toggleLearned,
-              otherMovies,
-              movieId
-            }}
-            rowComponent={({ index, style, visibleWords, translations, groupColor, isWordSavedInMovie, learnedWords, savedWords, saveWord, toggleLearned, otherMovies, movieId }) => {
-              const wordFreq = visibleWords[index];
-              const translation = translations.get(wordFreq.word.toLowerCase());
-
-              if (!translation) return null;
-
-              return (
-                <div style={style}>
-                  <WordItem
-                    wordFreq={wordFreq}
-                    translation={translation}
-                    groupColor={groupColor}
-                    isWordSavedInMovie={isWordSavedInMovie}
-                    learnedWords={learnedWords}
-                    savedWords={savedWords}
-                    saveWord={saveWord}
-                    toggleLearned={toggleLearned}
-                    otherMovies={otherMovies[wordFreq.word.toLowerCase()]}
-                    movieId={movieId}
-                    showDivider={index < visibleWords.length - 1}
-                  />
-                </div>
-              );
-            }}
+            overscanCount={3}
+            rowProps={rowProps}
+            rowComponent={WordRow}
           />
         )}
 
