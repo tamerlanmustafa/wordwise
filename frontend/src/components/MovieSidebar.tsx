@@ -40,7 +40,7 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
   return (
     <Card elevation={2} sx={{
       position: 'sticky',
-      top: 16,
+      top: 80,
       alignSelf: 'flex-start'
     }}>
         {/* Poster */}
