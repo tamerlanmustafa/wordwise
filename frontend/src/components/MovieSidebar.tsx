@@ -38,18 +38,11 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
   }
 
   return (
-    <Box sx={{
-      flexGrow: 1,
-      position: 'relative',
-      // Prevent layout thrashing
-      contain: 'layout style'
+    <Card elevation={2} sx={{
+      position: 'sticky',
+      top: 16,
+      alignSelf: 'flex-start'
     }}>
-      <Card elevation={2} sx={{
-        position: 'sticky',
-        top: 16,
-        // Prevent layout shift
-        willChange: 'transform'
-      }}>
         {/* Poster */}
         {tmdbMetadata.poster ? (
           <CardMedia
@@ -137,8 +130,7 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
             </Box>
           )}
         </CardContent>
-      </Card>
-    </Box>
+    </Card>
   );
 }, (prevProps, nextProps) => {
   // Only re-render if tmdbMetadata actually changes
