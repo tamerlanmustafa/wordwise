@@ -13,14 +13,20 @@ import MovieIcon from '@mui/icons-material/Movie';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
 import type { TMDBMetadata } from '../services/scriptService';
+import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
+import { DifficultyBadge } from './DifficultyBadge';
 
 interface MovieSidebarProps {
   tmdbMetadata: TMDBMetadata | null;
+  difficulty?: MovieDifficultyResult | null;
+  difficultyIsMock?: boolean;
 }
 
 // Memoized MovieSidebar - should NOT re-render when activeTab changes
 export const MovieSidebar = memo<MovieSidebarProps>(({
-  tmdbMetadata
+  tmdbMetadata,
+  difficulty,
+  difficultyIsMock = false
 }) => {
   if (!tmdbMetadata) {
     return (
@@ -43,6 +49,11 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
       top: 80,
       alignSelf: 'flex-start'
     }}>
+        {/* Difficulty Badge - First element, full width */}
+        {difficulty && (
+          <DifficultyBadge difficulty={difficulty} isMock={difficultyIsMock} size="medium" />
+        )}
+
         {/* Poster */}
         {tmdbMetadata.poster ? (
           <CardMedia
@@ -133,9 +144,11 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
     </Card>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if tmdbMetadata actually changes
-  // Since tmdbMetadata is static for a given movie, this should almost never re-render
-  return prevProps.tmdbMetadata === nextProps.tmdbMetadata;
+  // Only re-render if tmdbMetadata, difficulty, or mock flag changes
+  // Since these are static for a given movie, this should almost never re-render
+  return prevProps.tmdbMetadata === nextProps.tmdbMetadata &&
+         prevProps.difficulty === nextProps.difficulty &&
+         prevProps.difficultyIsMock === nextProps.difficultyIsMock;
 });
 
 MovieSidebar.displayName = 'MovieSidebar';

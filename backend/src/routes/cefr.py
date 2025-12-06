@@ -426,8 +426,19 @@ async def classify_script(
 
             logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
-            from src.services.difficulty_scorer import compute_difficulty
-            level, score, dist = compute_difficulty(statistics['level_distribution'])
+            # Compute difficulty using advanced algorithm with confidence and frequency
+            from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
+
+            word_data_list = [
+                WordData(
+                    cefr_level=cls.cefr_level.value,
+                    confidence=cls.confidence,
+                    frequency_rank=cls.frequency_rank
+                )
+                for cls in classifications
+            ]
+
+            level, score, breakdown = compute_difficulty_advanced(word_data_list)
 
             # Convert dict to JSON string for Prisma Json field
             await db.movie.update(
@@ -435,7 +446,7 @@ async def classify_script(
                 data={
                     'difficultyLevel': level,
                     'difficultyScore': score,
-                    'cefrDistribution': json.dumps(dist) if dist else None
+                    'cefrDistribution': json.dumps(breakdown) if breakdown else None
                 }
             )
 

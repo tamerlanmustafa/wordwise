@@ -1,8 +1,95 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from prisma.enums import difficultylevel, proficiencylevel
 
 
+class WordData:
+    """Represents a classified word with confidence and frequency data."""
+    def __init__(self, cefr_level: str, confidence: float, frequency_rank: int | None):
+        self.cefr_level = cefr_level
+        self.confidence = confidence
+        self.frequency_rank = frequency_rank
+
+
+def compute_difficulty_advanced(words: List[WordData]) -> Tuple[difficultylevel, int, Dict[str, float]]:
+    """
+    Compute movie difficulty using confidence-weighted CEFR levels and frequency rarity.
+
+    Algorithm:
+    1. Assign base weights to CEFR levels (A1=1 through C2=6)
+    2. Apply confidence weighting to each word's contribution
+    3. Add frequency rarity adjustment for uncommon words
+    4. Calculate weighted average and map to difficulty level
+
+    Args:
+        words: List of WordData objects with CEFR level, confidence, and frequency rank
+
+    Returns:
+        Tuple of (difficulty_level, score_0_100, breakdown_percentages)
+    """
+    if not words:
+        return difficultylevel.BEGINNER, 0, {}
+
+    # CEFR level weights
+    LEVEL_WEIGHTS = {
+        'A1': 1.0,
+        'A2': 2.0,
+        'B1': 3.0,
+        'B2': 4.0,
+        'C1': 5.0,
+        'C2': 6.0
+    }
+
+    # Frequency rarity threshold - words ranked above this get difficulty boost
+    RARE_WORD_THRESHOLD = 5000
+    RARITY_BOOST = 0.1
+
+    total_weighted_score = 0.0
+    total_weight = 0.0
+    level_counts = {level: 0 for level in LEVEL_WEIGHTS.keys()}
+
+    for word in words:
+        base_weight = LEVEL_WEIGHTS.get(word.cefr_level, 3.0)
+
+        # Apply frequency rarity adjustment
+        if word.frequency_rank and word.frequency_rank > RARE_WORD_THRESHOLD:
+            base_weight += RARITY_BOOST
+
+        # Weight by confidence
+        weighted_contribution = base_weight * word.confidence
+
+        total_weighted_score += weighted_contribution
+        total_weight += word.confidence
+        level_counts[word.cefr_level] = level_counts.get(word.cefr_level, 0) + 1
+
+    # Calculate average difficulty score (1-6 scale)
+    avg_difficulty = total_weighted_score / total_weight if total_weight > 0 else 3.0
+
+    # Map to 0-100 scale
+    score = int(((avg_difficulty - 1.0) / 5.0) * 100)
+    score = max(0, min(100, score))  # Clamp to 0-100
+
+    # Map score to difficulty level
+    if score < 20:
+        level = difficultylevel.ELEMENTARY
+    elif score < 40:
+        level = difficultylevel.INTERMEDIATE
+    elif score < 60:
+        level = difficultylevel.ADVANCED
+    else:
+        level = difficultylevel.PROFICIENT
+
+    # Calculate breakdown percentages
+    total_words = len(words)
+    breakdown = {k: v / total_words for k, v in level_counts.items() if v > 0}
+
+    return level, score, breakdown
+
+
 def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylevel, int, Dict[str, int]]:
+    """
+    Legacy difficulty computation using only CEFR distribution counts.
+    Kept for backward compatibility.
+    """
     total = sum(cefr_distribution.values())
     if total == 0:
         return difficultylevel.BEGINNER, 0, cefr_distribution

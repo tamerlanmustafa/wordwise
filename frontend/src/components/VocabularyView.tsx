@@ -10,6 +10,7 @@ import { WordListVirtualized } from './WordListVirtualized';
 import { MovieSidebar } from './MovieSidebar';
 import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
+import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
@@ -24,6 +25,8 @@ interface VocabularyViewProps {
   userId?: number;
   isPreview?: boolean;
   movieId?: number;
+  difficulty?: MovieDifficultyResult | null;
+  difficultyIsMock?: boolean;
 }
 
 interface CEFRGroup {
@@ -53,7 +56,9 @@ function VocabularyViewBase({
   tmdbMetadata,
   userId,
   isPreview = false,
-  movieId
+  movieId,
+  difficulty,
+  difficultyIsMock = false
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
@@ -359,7 +364,7 @@ function VocabularyViewBase({
 
         {/* Right Column: TMDB Metadata Sidebar - Isolated component */}
         <Grid item xs={12} md={3}>
-          <MovieSidebar tmdbMetadata={tmdbMetadata} />
+          <MovieSidebar tmdbMetadata={tmdbMetadata} difficulty={difficulty} difficultyIsMock={difficultyIsMock} />
         </Grid>
       </Grid>
     </Box>

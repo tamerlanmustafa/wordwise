@@ -20,6 +20,7 @@ import {
   type TMDBMetadata
 } from '../services/scriptService';
 import { useAuth } from '../contexts/AuthContext';
+import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import axios from 'axios';
 
 const getLevelDescription = (level: string): string => {
@@ -45,6 +46,8 @@ export default function MovieDetailPage() {
   const [tmdbMetadata, setTmdbMetadata] = useState<TMDBMetadata | null>(null);
   const [isPreview, setIsPreview] = useState(!isAuthenticated);
   const [movieId, setMovieId] = useState<number | undefined>(undefined);
+  const [difficulty, setDifficulty] = useState<MovieDifficultyResult | null>(null);
+  const [difficultyIsMock, setDifficultyIsMock] = useState(false);
 
   // Update preview mode when auth state changes
   useEffect(() => {
@@ -186,15 +189,41 @@ export default function MovieDetailPage() {
 
         setAnalysis(finalAnalysis);
 
+        // TEMPORARY: Mock difficulty data for testing UI
+        setDifficulty({
+          level: 'B2',
+          score: 55,
+          breakdown: {
+            'A1': 0.15,
+            'A2': 0.25,
+            'B1': 0.30,
+            'B2': 0.20,
+            'C1': 0.08,
+            'C2': 0.02
+          }
+        });
+        setDifficultyIsMock(true);
+
+        // Fetch difficulty data from backend
         try {
           const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           const diffResponse = await axios.get(`${API_BASE_URL}/movies/${scriptResponse.movie_id}/difficulty`);
-          console.log('[DIFFICULTY INFO]', {
-            level: diffResponse.data.difficulty_level,
-            score: diffResponse.data.difficulty_score
-          });
+
+          if (diffResponse.data.difficulty_level && diffResponse.data.difficulty_score !== null) {
+            setDifficulty({
+              level: diffResponse.data.difficulty_level,
+              score: diffResponse.data.difficulty_score,
+              breakdown: diffResponse.data.breakdown || {}
+            });
+            setDifficultyIsMock(false);
+            console.log('[DIFFICULTY INFO]', {
+              level: diffResponse.data.difficulty_level,
+              score: diffResponse.data.difficulty_score
+            });
+          }
         } catch (diffErr) {
-          // Difficulty not yet computed, skip silently
+          // Difficulty not yet computed, keep mock data
+          console.log('[DIFFICULTY] Using mock data - backend not available');
         }
 
       } catch (err: any) {
@@ -263,6 +292,8 @@ export default function MovieDetailPage() {
             userId={user?.id}
             isPreview={isPreview}
             movieId={movieId}
+            difficulty={difficulty}
+            difficultyIsMock={difficultyIsMock}
           />
         </Box>
       </Fade>
