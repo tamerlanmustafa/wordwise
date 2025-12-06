@@ -112,7 +112,7 @@ export const WordItem = memo<WordItemProps>(({
                   }}
                 />
               )}
-              {translation.cached && (
+              {(translation.cached || translation.provider === 'cache') && (
                 <Chip
                   label="cached"
                   size="small"
@@ -123,7 +123,7 @@ export const WordItem = memo<WordItemProps>(({
                   }}
                 />
               )}
-              {translation.provider && (
+              {translation.provider && translation.provider !== 'cache' && (
                 <Chip
                   label={translation.provider}
                   size="small"
