@@ -201,7 +201,17 @@ export const WordListVirtualized = memo<WordListVirtualizedProps>(({
         overflow: 'hidden',
         mb: 3,
         // Prevent layout thrashing
-        contain: 'layout style paint'
+        contain: 'layout style paint',
+        // Hide scrollbar
+        '& > div': {
+          overflow: 'visible !important',
+          // Hide scrollbar for all browsers
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          '&::-webkit-scrollbar': {
+            display: 'none'
+          }
+        }
       }}>
         {visibleWords.length === 0 && !isLoadingMore ? (
           <List sx={{ py: 0 }}>
@@ -244,6 +254,9 @@ export const WordListVirtualized = memo<WordListVirtualizedProps>(({
             overscanCount={3}
             rowProps={rowProps}
             rowComponent={WordRow}
+            style={{
+              overflow: 'visible'
+            }}
           />
         )}
 
