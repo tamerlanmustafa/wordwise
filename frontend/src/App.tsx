@@ -25,7 +25,13 @@ function App() {
         <LanguageProvider>
           <AuthProvider>
             <TopBarVisibilityProvider>
-              <Router basename="/wordwise/">
+              <Router
+                basename="/wordwise/"
+                future={{
+                  v7_startTransition: true,
+                  v7_relativeSplatPath: true
+                }}
+              >
                 <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
                   <TopBar />
                   <Box component="main" sx={{ flexGrow: 1 }}>
