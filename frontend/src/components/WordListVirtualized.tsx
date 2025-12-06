@@ -110,7 +110,10 @@ export const WordListVirtualized = memo<WordListVirtualizedProps>(({
     const wordFreq = visibleWords[index];
     const translation = translations.get(wordFreq.word.toLowerCase());
 
-    if (!translation) return null;
+    if (!translation) {
+      // Return empty div instead of null to satisfy react-window type requirements
+      return <div style={style} />;
+    }
 
     return (
       <div style={style}>
