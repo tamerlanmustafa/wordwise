@@ -54,15 +54,43 @@ async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
 
 @router.get("/{movie_id}/difficulty")
 async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
+    import json
+
     movie = await db.movie.find_unique(where={"id": movie_id})
 
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
 
+    # Parse cefrDistribution if it's a JSON string
+    breakdown = {}
+    if movie.cefrDistribution:
+        if isinstance(movie.cefrDistribution, str):
+            breakdown = json.loads(movie.cefrDistribution)
+        else:
+            breakdown = movie.cefrDistribution
+
+    # Map difficulty level to CEFR level based on score
+    difficulty_level = None
+    if movie.difficultyScore is not None:
+        # Map 0-100 score to CEFR levels
+        score = movie.difficultyScore
+        if score < 20:
+            difficulty_level = "A1"
+        elif score < 35:
+            difficulty_level = "A2"
+        elif score < 50:
+            difficulty_level = "B1"
+        elif score < 65:
+            difficulty_level = "B2"
+        elif score < 80:
+            difficulty_level = "C1"
+        else:
+            difficulty_level = "C2"
+
     return {
-        "difficulty_level": movie.difficultyLevel.value if movie.difficultyLevel else None,
+        "difficulty_level": difficulty_level,
         "difficulty_score": movie.difficultyScore,
-        "distribution": movie.cefrDistribution
+        "breakdown": breakdown
     }
 
 

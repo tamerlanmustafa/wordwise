@@ -209,6 +209,8 @@ export default function MovieDetailPage() {
           const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           const diffResponse = await axios.get(`${API_BASE_URL}/movies/${scriptResponse.movie_id}/difficulty`);
 
+          console.log('[DIFFICULTY] Backend response:', diffResponse.data);
+
           if (diffResponse.data.difficulty_level && diffResponse.data.difficulty_score !== null) {
             setDifficulty({
               level: diffResponse.data.difficulty_level,
@@ -216,14 +218,17 @@ export default function MovieDetailPage() {
               breakdown: diffResponse.data.breakdown || {}
             });
             setDifficultyIsMock(false);
-            console.log('[DIFFICULTY INFO]', {
+            console.log('[DIFFICULTY] Using real data from backend:', {
               level: diffResponse.data.difficulty_level,
               score: diffResponse.data.difficulty_score
             });
+          } else {
+            console.log('[DIFFICULTY] Backend returned null difficulty - movie was analyzed before difficulty feature was added. Using mock data.');
           }
         } catch (diffErr) {
           // Difficulty not yet computed, keep mock data
-          console.log('[DIFFICULTY] Using mock data - backend not available');
+          console.error('[DIFFICULTY] Error fetching difficulty:', diffErr);
+          console.log('[DIFFICULTY] Using mock data - backend request failed');
         }
 
       } catch (err: any) {
