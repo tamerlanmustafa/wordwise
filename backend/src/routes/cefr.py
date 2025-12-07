@@ -378,11 +378,12 @@ async def classify_script(
 
         # Sort by frequency_rank (lower rank = more common = easier)
         # Words without rank go to the end
+        # Cap at 50 words per level for performance
         top_words_by_level = {
             level: sorted(
                 words,
                 key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999)
-            )
+            )[:50]  # Cap at 50 words per level
             for level, words in level_groups.items()
         }
 
@@ -426,19 +427,30 @@ async def classify_script(
 
             logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
-            # Compute difficulty using advanced algorithm with confidence and frequency
+            # Compute difficulty using advanced algorithm with ALL words (no cap)
+            # The 50-word cap is applied ONLY to API response, not to scoring
             from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
 
+            # Use ALL classifications for difficulty scoring (critical fix)
             word_data_list = [
                 WordData(
                     cefr_level=cls.cefr_level.value,
                     confidence=cls.confidence,
-                    frequency_rank=cls.frequency_rank
+                    frequency_rank=cls.frequency_rank,
+                    word=cls.word
                 )
                 for cls in classifications
             ]
 
-            level, score, breakdown = compute_difficulty_advanced(word_data_list)
+            # Extract genres from TMDB metadata for genre normalization
+            genres = []
+            if movie and hasattr(movie, 'genres') and movie.genres:
+                try:
+                    genres = json.loads(movie.genres) if isinstance(movie.genres, str) else movie.genres
+                except:
+                    genres = []
+
+            level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=genres)
 
             # Convert dict to JSON string for Prisma Json field
             await db.movie.update(
