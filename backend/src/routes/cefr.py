@@ -350,8 +350,16 @@ async def classify_script(
             f"for movie {request.movie_id} ({script.cleanedWordCount} words)..."
         )
 
+        # Extract genres for genre-aware classification
+        genres = []
+        if movie and hasattr(movie, 'genres') and movie.genres:
+            try:
+                genres = json.loads(movie.genres) if isinstance(movie.genres, str) else movie.genres
+            except:
+                genres = []
+
         classifier = get_classifier()
-        classifications = classifier.classify_text(script.cleanedScriptText)
+        classifications = classifier.classify_text(script.cleanedScriptText, genres=genres)
 
         # Compute statistics
         statistics = classifier.get_statistics(classifications)

@@ -35,6 +35,46 @@ _GLOBAL_LEMMA_CACHE: Dict[str, str] = {}
 _GLOBAL_CEFR_CACHE: Dict[str, 'WordClassification'] = {}
 _GLOBAL_FREQUENCY_CACHE: Dict[str, Optional[int]] = {}
 
+# Kids vocabulary whitelist - playful, fantasy, onomatopoeia words that are conceptually simple
+# Despite low corpus frequency, these are A2-level for kids
+KIDS_SIMPLE_VOCAB = {
+    # Creatures & fantasy
+    'ogre', 'goblin', 'troll', 'fairy', 'pixie', 'dragon', 'unicorn', 'elf', 'dwarf',
+    'monster', 'beast', 'creature', 'wizard', 'witch', 'ghost', 'vampire', 'zombie',
+    # Noises / onomatopoeia
+    'roar', 'bang', 'boom', 'pow', 'zap', 'swoosh', 'splat', 'growl', 'hiss', 'buzz',
+    'crash', 'smash', 'snap', 'pop', 'whoosh', 'thud', 'thump', 'clang', 'ding',
+    'meow', 'woof', 'bark', 'chirp', 'tweet', 'quack', 'moo', 'oink', 'neigh',
+    # Playful verbs
+    'giggle', 'tickle', 'wiggle', 'sneak', 'peek', 'boo', 'hop', 'skip', 'bounce',
+    'chase', 'hide', 'seek', 'grab', 'toss', 'catch', 'splash', 'dash', 'zoom',
+    # Magic / fantasy items
+    'spell', 'potion', 'wand', 'curse', 'magic', 'enchanted', 'charm', 'jinx',
+    # Common fantasy places/things kids know
+    'castle', 'kingdom', 'throne', 'crown', 'sword', 'shield', 'armor', 'dungeon',
+    'tower', 'palace', 'prince', 'princess', 'knight', 'hero', 'villain',
+    # Adventure/action words
+    'adventure', 'quest', 'treasure', 'battle', 'rescue', 'escape', 'brave',
+    # Emotions/reactions (playful)
+    'yay', 'hooray', 'yippee', 'uh-oh', 'oops', 'wow', 'ouch', 'eww', 'yuck',
+    # Common adjectives in kids movies
+    'silly', 'funny', 'scary', 'spooky', 'creepy', 'weird', 'crazy', 'wild',
+    'awesome', 'cool', 'neat', 'super', 'mega', 'giant', 'tiny', 'huge',
+    # Animals common in kids movies
+    'bunny', 'kitty', 'puppy', 'pony', 'tiger', 'lion', 'bear', 'wolf',
+    'elephant', 'giraffe', 'monkey', 'zebra', 'penguin', 'dolphin',
+    # Nature/weather
+    'rainbow', 'snowflake', 'thunder', 'lightning', 'storm', 'sunshine',
+    # Toys/play
+    'toy', 'doll', 'teddy', 'robot', 'rocket', 'spaceship',
+    # Food (playful)
+    'yummy', 'cookie', 'candy', 'cake', 'ice cream', 'pizza', 'chocolate',
+    # Action verbs
+    'fly', 'jump', 'run', 'swim', 'climb', 'slide', 'swing', 'ride',
+    # Fantasy concepts
+    'dream', 'wish', 'believe', 'imagine', 'pretend', 'wonder'
+}
+
 
 class CEFRLevel(str, Enum):
     A1 = "A1"
@@ -83,6 +123,36 @@ def is_valid_token(token: str) -> bool:
         if not all(ord(c) < 256 or c in "''""" for c in token):
             return False
     return True
+
+
+def is_proper_noun_or_fantasy_word(word: str) -> bool:
+    """
+    Detect proper nouns and fantasy/constructed words.
+    Returns True if word should be classified as A2 (beginner-friendly).
+
+    Rules:
+    1. Proper nouns (capitalized words like "Harry", "Zootopia")
+    2. Fantasy/constructed words with hyphens or apostrophes
+    3. Words with unusual patterns (mixed case, repeated characters)
+    """
+    if not word or len(word) < 2:
+        return False
+
+    # Rule 1: Proper noun detection (capitalized)
+    if word[0].isupper():
+        return True
+
+    # Rule 2: Fantasy/constructed words with special characters
+    if '-' in word or "'" in word:
+        return True
+
+    # Rule 3: Words with unusual repeated patterns (e.g., "oooo", "aaaa")
+    if len(word) >= 4:
+        for i in range(len(word) - 3):
+            if word[i] == word[i+1] == word[i+2] == word[i+3]:
+                return True
+
+    return False
 
 
 class HybridCEFRClassifier:
@@ -273,27 +343,42 @@ class HybridCEFRClassifier:
             return None
 
     def _classify_by_frequency(self, word: str, lemma: str) -> Optional[WordClassification]:
+        """
+        Frequency-based classification capped at B2.
+        Only dictionary lookup can assign C1/C2 to prevent frequency noise.
+        """
         rank = self._get_frequency_rank(lemma)
         if rank is None:
             return None
-        for level, (min_rank, max_rank) in self.frequency_thresholds.items():
-            if min_rank <= rank < max_rank:
-                if rank < 3000:
-                    confidence = 0.7
-                elif rank < 10000:
-                    confidence = 0.5
-                else:
-                    confidence = 0.3
-                return WordClassification(
-                    word=word,
-                    lemma=lemma,
-                    pos="",
-                    cefr_level=level,
-                    confidence=confidence,
-                    source=ClassificationSource.FREQUENCY_BACKOFF,
-                    frequency_rank=rank
-                )
-        return None
+
+        # Map frequency rank to CEFR level (MAX B2)
+        if rank < 1000:
+            level = CEFRLevel.A1
+            confidence = 0.7
+        elif rank < 2000:
+            level = CEFRLevel.A2
+            confidence = 0.7
+        elif rank < 5000:
+            level = CEFRLevel.B1
+            confidence = 0.6
+        elif rank < 10000:
+            level = CEFRLevel.B2
+            confidence = 0.5
+        else:
+            # Very rare words (>10k rank) → B2 max (NOT C1/C2)
+            # These are often domain-specific, not advanced
+            level = CEFRLevel.B2
+            confidence = 0.3
+
+        return WordClassification(
+            word=word,
+            lemma=lemma,
+            pos="",
+            cefr_level=level,
+            confidence=confidence,
+            source=ClassificationSource.FREQUENCY_BACKOFF,
+            frequency_rank=rank
+        )
 
     def _classify_by_embedding(self, word: str, lemma: str) -> Optional[WordClassification]:
         if not self.has_embedding_classifier or self.embedding_classifier is None:
@@ -317,11 +402,48 @@ class HybridCEFRClassifier:
         except Exception:
             return None
 
-    def classify_word(self, word: str, pos: Optional[str] = None) -> WordClassification:
+    def classify_word(self, word: str, pos: Optional[str] = None, is_kids_genre: bool = False) -> WordClassification:
+        """
+        Classify a word with optional genre context.
+
+        Args:
+            word: The word to classify
+            pos: Part of speech (optional)
+            is_kids_genre: True if movie is kids/family/animation/fantasy
+        """
         global _GLOBAL_CEFR_CACHE
         word_lower = word.lower().strip()
-        if word_lower in _GLOBAL_CEFR_CACHE:
-            return _GLOBAL_CEFR_CACHE[word_lower]
+
+        # Cache key includes genre flag to avoid cross-contamination
+        cache_key = f"{word_lower}:{'kids' if is_kids_genre else 'adult'}"
+        if cache_key in _GLOBAL_CEFR_CACHE:
+            return _GLOBAL_CEFR_CACHE[cache_key]
+
+        # KIDS WHITELIST: Force A2 for playful/fantasy/onomatopoeia words
+        if word_lower in KIDS_SIMPLE_VOCAB:
+            result = WordClassification(
+                word=word,
+                lemma=word_lower,
+                pos="",
+                cefr_level=CEFRLevel.A2,
+                confidence=0.95,
+                source=ClassificationSource.FALLBACK
+            )
+            _GLOBAL_CEFR_CACHE[cache_key] = result
+            return result
+
+        # PROPER NOUNS & FANTASY WORDS: Detect before classification
+        if is_proper_noun_or_fantasy_word(word):
+            result = WordClassification(
+                word=word,
+                lemma=word_lower,
+                pos="",
+                cefr_level=CEFRLevel.A2,
+                confidence=0.9,
+                source=ClassificationSource.FALLBACK
+            )
+            _GLOBAL_CEFR_CACHE[cache_key] = result
+            return result
 
         lemma = self._get_lemma_fast(word_lower)
 
@@ -339,6 +461,7 @@ class HybridCEFRClassifier:
             _GLOBAL_CEFR_CACHE[word_lower] = result
             return result
 
+        # Dictionary lookup (only source allowed to assign C1/C2)
         if lemma in self.cefr_wordlist:
             level, source = self.cefr_wordlist[lemma]
             result = WordClassification(
@@ -349,39 +472,80 @@ class HybridCEFRClassifier:
                 confidence=1.0,
                 source=source
             )
-            _GLOBAL_CEFR_CACHE[word_lower] = result
+            _GLOBAL_CEFR_CACHE[cache_key] = result
             return result
 
+        # Frequency-based (capped at B2)
         freq_result = self._classify_by_frequency(word_lower, lemma)
         if freq_result and freq_result.confidence >= 0.5:
-            _GLOBAL_CEFR_CACHE[word_lower] = freq_result
+            # For kids genres: downgrade B2+ non-dictionary words to A2
+            if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
+                freq_result.cefr_level = CEFRLevel.A2
+                freq_result.confidence = 0.6
+            _GLOBAL_CEFR_CACHE[cache_key] = freq_result
             return freq_result
 
+        # Embedding classifier (if enabled)
         if self.use_embedding_classifier:
             emb_result = self._classify_by_embedding(word_lower, lemma)
             if emb_result:
-                _GLOBAL_CEFR_CACHE[word_lower] = emb_result
+                # For kids genres: downgrade high levels from embeddings
+                if is_kids_genre and emb_result.cefr_level in [CEFRLevel.B2, CEFRLevel.C1, CEFRLevel.C2]:
+                    emb_result.cefr_level = CEFRLevel.A2
+                    emb_result.confidence *= 0.7
+                _GLOBAL_CEFR_CACHE[cache_key] = emb_result
                 return emb_result
 
+        # Low-confidence frequency result
         if freq_result:
-            _GLOBAL_CEFR_CACHE[word_lower] = freq_result
+            if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
+                freq_result.cefr_level = CEFRLevel.A2
+                freq_result.confidence = 0.4
+            _GLOBAL_CEFR_CACHE[cache_key] = freq_result
             return freq_result
 
+        # Final fallback: Unknown words → A2
         result = WordClassification(
             word=word,
             lemma=lemma,
             pos="",
-            cefr_level=CEFRLevel.C2,
+            cefr_level=CEFRLevel.A2,
             confidence=0.2,
             source=ClassificationSource.FALLBACK
         )
-        _GLOBAL_CEFR_CACHE[word_lower] = result
+        _GLOBAL_CEFR_CACHE[cache_key] = result
         return result
 
-    def classify_text(self, text: str) -> List[WordClassification]:
+    def classify_text(self, text: str, genres: Optional[List[str]] = None) -> List[WordClassification]:
+        """
+        Classify all words in text with optional genre context.
+
+        Args:
+            text: The text to classify
+            genres: List of movie genres (e.g., ['Animation', 'Family', 'Adventure'])
+        """
         import time
         start_time = time.time()
 
+        # Determine if this is kids/family content
+        is_kids_genre = False
+        if genres:
+            genres_lower = [g.lower() for g in genres]
+            is_kids_genre = any(g in genres_lower for g in ['family', 'animation', 'kids', 'fantasy', 'children'])
+
+        # CRITICAL FIX: Preserve original words BEFORE cleaning for proper noun detection
+        # Split on whitespace and punctuation but keep the original capitalization
+        import re
+        original_words = re.findall(r'\b[a-zA-Z]+(?:[-\'][a-zA-Z]+)*\b', text)
+
+        # Map lowercase → original form (for proper noun detection)
+        original_case_map: Dict[str, str] = {}
+        for word in original_words:
+            lower = word.lower()
+            if lower not in original_case_map:
+                original_case_map[lower] = word
+
+        # Now do the aggressive cleaning for tokenization
         cleaned_text = self.aggressive_preclean(text)
         words = cleaned_text.split()
         valid_words = [w for w in words if is_valid_token(w)]
@@ -389,17 +553,54 @@ class HybridCEFRClassifier:
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Filtered {len(words)} tokens → {len(valid_words)} valid → {len(unique_words)} unique")
+            if is_kids_genre:
+                logger.debug(f"Kids/family genre detected - applying conservative classification")
 
         lemma_to_word: Dict[str, str] = {}
         for word in unique_words:
             lemma = self._get_lemma_fast(word)
             if lemma not in lemma_to_word:
-                lemma_to_word[lemma] = word
+                # Use original capitalized form if available
+                lemma_to_word[lemma] = original_case_map.get(word, word)
 
         classifications = []
         for lemma, original_word in lemma_to_word.items():
-            classification = self.classify_word(original_word)
+            # Pass the ORIGINAL capitalized word with genre context
+            classification = self.classify_word(original_word, is_kids_genre=is_kids_genre)
             classifications.append(classification)
+
+        # CRITICAL FIX 3: Sanity check for impossible C2 spikes
+        # If C2 > 1.5% AND C1 < 0.5%, this indicates misclassification
+        # Solution: Downgrade 90% of C2 words to A2 (likely proper nouns/fantasy words)
+        if classifications:
+            total = len(classifications)
+            c1_count = sum(1 for cls in classifications if cls.cefr_level == CEFRLevel.C1)
+            c2_count = sum(1 for cls in classifications if cls.cefr_level == CEFRLevel.C2)
+
+            c1_pct = c1_count / total if total > 0 else 0
+            c2_pct = c2_count / total if total > 0 else 0
+
+            # Detect impossible pattern: high C2, low C1
+            if c2_pct > 0.015 and c1_pct < 0.005:
+                logger.warning(f"⚠️ Impossible C2 spike detected: C2={c2_pct*100:.1f}%, C1={c1_pct*100:.1f}%")
+                logger.warning(f"Downgrading 90% of C2 words to A2 (likely proper nouns/fantasy words)")
+
+                # Find all C2 classifications
+                c2_classifications = [cls for cls in classifications if cls.cefr_level == CEFRLevel.C2]
+
+                # Downgrade 90% of them to A2
+                downgrade_count = int(len(c2_classifications) * 0.9)
+                for i in range(downgrade_count):
+                    cls = c2_classifications[i]
+                    # Update the classification in place
+                    cls.cefr_level = CEFRLevel.A2
+                    cls.confidence = 0.3
+                    # Update cache to reflect the fix
+                    word_key = cls.word.lower().strip()
+                    if word_key in _GLOBAL_CEFR_CACHE:
+                        _GLOBAL_CEFR_CACHE[word_key] = cls
+
+                logger.info(f"✓ Downgraded {downgrade_count}/{len(c2_classifications)} C2 words to A2")
 
         elapsed = time.time() - start_time
         logger.info(f"Classified {len(unique_words)} unique words → {len(classifications)} lemmas in {elapsed:.2f}s")

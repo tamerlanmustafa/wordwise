@@ -84,15 +84,41 @@ def compute_median_cefr_level(words: List[WordData]) -> float:
     return statistics.median(numeric_levels)
 
 
-def compute_cefr_spread(level_counts: Dict[str, int]) -> int:
-    """Compute spread (max - min) of CEFR levels."""
+def compute_cefr_spread(level_counts: Dict[str, int], total_words: int) -> int:
+    """
+    Compute effective CEFR spread, ignoring tiny tail noise.
+
+    If C2 < 1% of words, treat max as C1.
+    If C1+C2 < 2%, treat max as B2.
+    This prevents rare outliers from inflating spread.
+    """
     CEFR_NUMERIC = {'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 6}
 
+    if total_words == 0:
+        return 0
+
+    # Calculate percentages
+    pct_C2 = level_counts.get('C2', 0) / total_words
+    pct_C1 = level_counts.get('C1', 0) / total_words
+    pct_advanced = pct_C1 + pct_C2
+
+    # Find present levels
     present_levels = [CEFR_NUMERIC[lvl] for lvl, count in level_counts.items() if count > 0]
     if not present_levels:
         return 0
 
-    return max(present_levels) - min(present_levels)
+    # Determine effective max level (ignore noise)
+    raw_max = max(present_levels)
+    effective_max = raw_max
+
+    if pct_C2 < 0.01:  # C2 < 1%
+        effective_max = min(effective_max, CEFR_NUMERIC['C1'])
+
+    if pct_advanced < 0.02:  # C1+C2 < 2%
+        effective_max = min(effective_max, CEFR_NUMERIC['B2'])
+
+    min_level = min(present_levels)
+    return effective_max - min_level
 
 
 def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str]] = None) -> Tuple[difficultylevel, int, Dict[str, float]]:
@@ -184,26 +210,30 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     # Normalize to 0-1 range (assume 1-4 syllables typical)
     syllable_score = min(avg_syllables / 4.0, 1.0)
 
-    # 4. CEFR weighted gap score - 20% (using real percentages)
+    # 4. CEFR weighted gap score with adjusted B2 weight
+    # B2 is upper-intermediate, NOT advanced - reduced from 2.0 → 1.2
+    CEFR_GAP_WEIGHTS_ADJUSTED = {
+        'A1': 0, 'A2': 1.0, 'B1': 1.4, 'B2': 1.2, 'C1': 3.0, 'C2': 4.0
+    }
     cefr_gap_score = (
-        pct_A2 * CEFR_GAP_WEIGHTS['A2'] +
-        pct_B1 * CEFR_GAP_WEIGHTS['B1'] +
-        pct_B2 * CEFR_GAP_WEIGHTS['B2'] +
-        pct_C1 * CEFR_GAP_WEIGHTS['C1'] +
-        pct_C2 * CEFR_GAP_WEIGHTS['C2']
+        pct_A2 * CEFR_GAP_WEIGHTS_ADJUSTED['A2'] +
+        pct_B1 * CEFR_GAP_WEIGHTS_ADJUSTED['B1'] +
+        pct_B2 * CEFR_GAP_WEIGHTS_ADJUSTED['B2'] +
+        pct_C1 * CEFR_GAP_WEIGHTS_ADJUSTED['C1'] +
+        pct_C2 * CEFR_GAP_WEIGHTS_ADJUSTED['C2']
     )
     # Normalize to 0-1 (max weight is 4.0)
     cefr_gap_score = min(cefr_gap_score / 4.0, 1.0)
 
-    # Advanced-level safety threshold: if C1+C2 < 1%, reduce their weight drastically
+    # Advanced-level safety threshold: if C1+C2 < 2%, reduce their weight drastically
     pct_advanced = pct_C1 + pct_C2
-    if pct_advanced < 0.01:  # Less than 1%
-        cefr_gap_score *= 0.3  # Reduce impact of rare advanced words
+    if pct_advanced < 0.02:  # Less than 2%
+        cefr_gap_score *= 0.25  # Reduce impact of rare advanced words
 
     # 5. Phrasal verb density - 4% (reduced from 10%)
     idiom_density = phrasal_verb_count / total_words if total_words > 0 else 0
 
-    # 6. Sentence complexity - 13% (using weighted complex ratio as proxy)
+    # 6. Sentence complexity - reduced from 13% → 4%
     sentence_complexity = weighted_complex
 
     # 7. Median CEFR level (unique words only) - adds 0-30 points
@@ -214,36 +244,56 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     repetition_ratio = unique_word_count / total_words if total_words > 0 else 0
     repetition_component = repetition_ratio * 10  # 0-10 points
 
-    # 9. CEFR spread (max - min level)
-    spread = compute_cefr_spread(level_counts)
+    # 9. CEFR spread (max - min level) with noise filtering
+    spread = compute_cefr_spread(level_counts, total_words)
     spread_component = spread * 3  # 0-15 points
 
-    # Rebalanced difficulty formula
+    # Final weights (domain-agnostic, CEFR-aligned)
     difficulty_score = (
-        0.30 * weighted_complex +
-        0.08 * lexical_diversity +
-        0.07 * syllable_score +
-        0.20 * cefr_gap_score +
-        0.04 * idiom_density +
-        0.13 * sentence_complexity +
-        0.10 * (spread_component / 15.0) +  # Normalize spread to 0-1
-        0.05 * (median_component / 30.0) +  # Normalize median to 0-1
-        0.03 * repetition_component  # Already 0-1 range
+        0.30 * weighted_complex +           # Core vocab complexity
+        0.06 * lexical_diversity +          # Vocabulary richness
+        0.05 * syllable_score +             # Word length proxy
+        0.10 * cefr_gap_score +             # CEFR distribution spread
+        0.03 * idiom_density +              # Phrasal complexity
+        0.04 * sentence_complexity +        # Reduced from 6% → 4%
+        0.03 * (spread_component / 15.0) +  # Level range
+        0.04 * (median_component / 30.0) +  # Median level
+        0.05 * repetition_component         # Lexical variation
     )
 
-    # Genre normalization (apply after base score)
+    # CRITICAL: Global CEFR vocabulary safety rule
+    # No movie can be C1/C2 without meaningful advanced vocabulary
+    if pct_advanced < 0.01:  # Less than 1% C1+C2
+        difficulty_score = min(difficulty_score, 0.55)  # Cap at upper B2
+
+    # Priority-based genre multiplier (kids ALWAYS overrides adult)
     genre_multiplier = 1.0
     if genres:
         genres_lower = [g.lower() for g in genres]
 
-        # Reduce difficulty for family/kids content
-        if any(g in genres_lower for g in ['family', 'animation', 'kids', 'comedy']):
-            genre_multiplier = 0.75
-        # Increase for complex genres
-        elif any(g in genres_lower for g in ['mystery', 'sci-fi', 'science fiction', 'political', 'thriller', 'crime']):
+        # Kids/family ALWAYS takes priority
+        if any(g in genres_lower for g in ['animation', 'family', 'kids', 'children']):
+            genre_multiplier = 0.50
+        # Adult genre boosts ONLY if not kids/family
+        elif any(g in genres_lower for g in ['mystery', 'sci-fi', 'science fiction', 'political', 'thriller', 'crime', 'drama']):
             genre_multiplier = 1.15
 
     difficulty_score *= genre_multiplier
+
+    # Vocabulary-based band clamping (prevents stylistic metrics from overriding vocab)
+    if pct_advanced > 0.07:  # 7%+ C1/C2
+        base_band = "C1+"
+    elif pct_B2 > 0.08:  # 8%+ B2
+        base_band = "B"
+    else:
+        base_band = "A"
+
+    # Enforce band boundaries
+    if base_band == "A":
+        difficulty_score = min(difficulty_score, 0.40)  # Max A2
+    elif base_band == "B":
+        difficulty_score = max(0.35, min(difficulty_score, 0.70))  # B1-B2 range
+    # C1+ band has no upper clamp
 
     # Clamp negative values at 0 before scaling
     difficulty_score = max(0.0, difficulty_score)
@@ -252,19 +302,19 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     score = int(difficulty_score * 100)
     score = max(0, min(100, score))
 
-    # Updated thresholds (adjusted to prevent kids movies from over-scoring)
-    if score < 22:
-        level = difficultylevel.ELEMENTARY
-    elif score < 35:
-        level = difficultylevel.ELEMENTARY  # Still A2 range
-    elif score < 50:
-        level = difficultylevel.INTERMEDIATE
-    elif score < 65:
-        level = difficultylevel.INTERMEDIATE  # Still B2 range
-    elif score < 80:
-        level = difficultylevel.ADVANCED
+    # Overhauled thresholds optimized for realistic classification
+    if score < 25:
+        level = difficultylevel.ELEMENTARY  # A1
+    elif score < 40:
+        level = difficultylevel.ELEMENTARY  # A2
+    elif score < 55:
+        level = difficultylevel.INTERMEDIATE  # B1
+    elif score < 70:
+        level = difficultylevel.INTERMEDIATE  # B2
+    elif score < 85:
+        level = difficultylevel.ADVANCED  # C1
     else:
-        level = difficultylevel.PROFICIENT
+        level = difficultylevel.PROFICIENT  # C2
 
     # Calculate breakdown percentages
     breakdown = {k: v / total_words for k, v in level_counts.items() if v > 0}
