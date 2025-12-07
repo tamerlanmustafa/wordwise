@@ -1,0 +1,178 @@
+/**
+ * WordRow Styles
+ *
+ * Lightweight CSS optimized for virtualized rendering performance.
+ * Uses CSS custom properties for theme integration.
+ */
+
+.word-row {
+  position: relative;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background-color 0.15s ease;
+  /* Prevent layout shifts */
+  contain: layout style paint;
+}
+
+.word-row:hover {
+  background-color: color-mix(in srgb, var(--group-color) 8%, transparent);
+}
+
+/* Content */
+.word-row__content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0; /* Allow text truncation */
+}
+
+.word-row__word {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary, #000);
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.word-row__separator {
+  color: var(--text-disabled, #999);
+  font-weight: 300;
+  flex-shrink: 0;
+}
+
+.word-row__translation {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--group-color);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Smooth fade-in */
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.word-row__translation--loading {
+  opacity: 0.3;
+  font-style: italic;
+}
+
+.word-row__translation--loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Metadata */
+.word-row__metadata {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.word-row__badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  background-color: var(--action-hover, #f5f5f5);
+  color: var(--text-secondary, #666);
+  white-space: nowrap;
+}
+
+.word-row__badge--cached {
+  background-color: var(--action-hover, #f5f5f5);
+  color: var(--text-secondary, #666);
+}
+
+.word-row__badge--google {
+  background-color: rgba(66, 133, 244, 0.12);
+  color: #4285f4;
+}
+
+.word-row__badge--deepl {
+  background-color: rgba(10, 132, 255, 0.12);
+  color: #0A84FF;
+}
+
+/* Actions */
+.word-row__actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.word-row__action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary, #666);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* GPU-accelerated */
+  will-change: transform;
+}
+
+.word-row__action-btn:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  transform: scale(1.1);
+}
+
+.word-row__action-btn:active {
+  transform: scale(0.95);
+}
+
+.word-row__action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.word-row__action-btn--active {
+  color: var(--warning-main, #ff9800);
+}
+
+.word-row__action-btn--learned {
+  color: var(--success-main, #4caf50);
+}
+
+/* Divider */
+.word-row__divider {
+  position: absolute;
+  bottom: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background-color: var(--divider, #e0e0e0);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .word-row {
+    --text-primary: #fff;
+    --text-secondary: #aaa;
+    --text-disabled: #666;
+    --action-hover: rgba(255, 255, 255, 0.08);
+    --divider: rgba(255, 255, 255, 0.12);
+    --warning-main: #ffb74d;
+    --success-main: #66bb6a;
+  }
+
+  .word-row:hover {
+    background-color: color-mix(in srgb, var(--group-color) 12%, transparent);
+  }
+
+  .word-row__action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
