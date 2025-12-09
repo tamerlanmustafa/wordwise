@@ -159,7 +159,15 @@ export function useWorkerVocabularyFeed({
       return;
     }
 
-    // Find words that need translation
+    // Mark words that already have translations from worker cache as "translated"
+    // This prevents re-fetching translations that the worker already has cached
+    visibleWords.forEach(w => {
+      if (w.translation && !translatedWordsRef.current.has(w.word)) {
+        translatedWordsRef.current.add(w.word);
+      }
+    });
+
+    // Find words that need translation (no translation AND not already requested)
     const untranslatedWords = visibleWords.filter(
       w => !w.translation && !translatedWordsRef.current.has(w.word)
     );

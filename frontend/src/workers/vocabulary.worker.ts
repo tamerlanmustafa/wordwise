@@ -252,7 +252,8 @@ function generateBatch(
       frequency: soa.frequencies[idx],
       confidence: soa.confidences[idx],
       frequencyRank: freqRank === -1 ? null : freqRank, // Convert -1 back to null
-      index: idx // Stable index for React keys
+      index: idx, // Stable index for React keys
+      position: i + 1 // 1-based position in filtered/sorted list for display
     };
 
     // Hydrate translation if available (from LRU cache)

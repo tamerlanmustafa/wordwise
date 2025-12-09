@@ -139,7 +139,8 @@ export interface DisplayWord {
   frequencyRank: number | null; // Optional rank
 
   // Rendering metadata
-  index: number;             // Stable index for react keys
+  index: number;             // Stable index for react keys (source data position)
+  position: number;          // Position in filtered/sorted list (1-based for display)
 
   // Translation (hydrated progressively)
   translation?: string;

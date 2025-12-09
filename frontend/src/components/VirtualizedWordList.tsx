@@ -11,7 +11,7 @@
  * - Minimal re-renders via memoization
  */
 
-import { memo, useCallback, useRef, useEffect } from 'react';
+import { memo, useCallback, useRef, useEffect, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { WordRow } from './WordRow';
@@ -73,13 +73,24 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // Track if we've requested the next batch
   const hasRequestedNextBatchRef = useRef(false);
 
+  // Track scroll margin to avoid recalculation issues
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Update scroll margin when parent ref is set
+  useEffect(() => {
+    if (parentRef.current) {
+      setScrollMargin(parentRef.current.offsetTop);
+    }
+  }, []);
+
   // TanStack Virtual configuration - use window scroll instead of container scroll
+  // IMPORTANT: Use totalCount (not words.length) so the virtualizer knows the full list size
+  // This prevents scroll jumps when new batches are loaded
   const virtualizer = useWindowVirtualizer({
-    count: words.length,
+    count: totalCount,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
-    // Enable smooth scrolling - offset from top of page to list
-    scrollMargin: parentRef.current?.offsetTop ?? 0
+    scrollMargin
   });
 
   const virtualItems = virtualizer.getVirtualItems();
@@ -94,18 +105,19 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
       return;
     }
 
-    // Check if we're near the end
+    // Check if we're near the end of loaded content
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) return;
 
-    const distanceFromEnd = words.length - lastItem.index;
+    // Request next batch if the user is scrolling into unloaded territory
+    // (when virtual item index approaches or exceeds loaded count)
+    const needsMoreData = lastItem.index >= loadedCount - 10;
 
-    // Request next batch if we're within threshold
-    if (distanceFromEnd < 10 && !hasRequestedNextBatchRef.current) {
+    if (needsMoreData && !hasRequestedNextBatchRef.current) {
       hasRequestedNextBatchRef.current = true;
       onRequestBatch(loadedCount, 50);
     }
-  }, [virtualItems, words.length, loadedCount, totalCount, isLoadingMore, onRequestBatch]);
+  }, [virtualItems, loadedCount, totalCount, isLoadingMore, onRequestBatch]);
 
   // Reset batch request flag when loading completes
   useEffect(() => {
@@ -168,7 +180,23 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
         {/* Virtual items */}
         {virtualItems.map((virtualItem) => {
           const word = words[virtualItem.index];
-          if (!word) return null;
+
+          // If word not yet loaded, render placeholder to maintain scroll position
+          if (!word) {
+            return (
+              <div
+                key={`placeholder-${virtualItem.index}`}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`
+                }}
+              />
+            );
+          }
 
           const wordLower = word.word.toLowerCase();
           const isSaved = isWordSavedInMovie(wordLower, movieId);
@@ -195,7 +223,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
             >
               <WordRow
                 word={word}
-                rowNumber={virtualItem.index + 1}
+                rowNumber={word.position}
                 groupColor={groupColor}
                 showDivider={virtualItem.index < words.length - 1}
                 isSaved={isSaved}

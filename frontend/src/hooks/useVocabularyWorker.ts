@@ -246,29 +246,17 @@ export function useVocabularyWorker({
     }
 
     if (totalCount > 0 && loadedCount === 0) {
-      // Request first batch using requestIdleCallback
-      const requestFirstBatch = () => {
-        if (workerRef.current) {
-          const message: WorkerInboundMessage = {
-            type: 'REQUEST_BATCH',
-            payload: {
-              startIndex: 0,
-              count: BATCH_SIZE
-            }
-          };
-
-          workerRef.current.postMessage(message);
-          setIsLoadingMore(true);
+      // Request first batch IMMEDIATELY (no delay) for instant tab switching
+      const message: WorkerInboundMessage = {
+        type: 'REQUEST_BATCH',
+        payload: {
+          startIndex: 0,
+          count: BATCH_SIZE
         }
       };
 
-      if ('requestIdleCallback' in window) {
-        const id = requestIdleCallback(requestFirstBatch, { timeout: 100 });
-        return () => cancelIdleCallback(id);
-      } else {
-        const timer = setTimeout(requestFirstBatch, 0);
-        return () => clearTimeout(timer);
-      }
+      workerRef.current.postMessage(message);
+      setIsLoadingMore(true);
     }
   }, [totalCount, loadedCount, isAuthenticated, isPreview]);
 
