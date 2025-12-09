@@ -16,6 +16,29 @@ import { memo } from 'react';
 import type { DisplayWord } from '../types/vocabularyWorker';
 import './WordRow.css';
 
+// Lightweight SVG icons as components (no MUI overhead)
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const CheckCircleIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    {filled ? (
+      <>
+        <circle cx="12" cy="12" r="10" fill="currentColor" stroke="none" />
+        <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ) : (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    )}
+  </svg>
+);
+
 interface WordRowProps {
   // Word data
   word: DisplayWord;
@@ -64,11 +87,11 @@ export const WordRow = memo<WordRowProps>(({
 
   return (
     <div className="word-row" style={{ '--group-color': groupColor } as React.CSSProperties}>
+      {/* Row Number */}
+      <span className="word-row__number">{rowNumber}.</span>
+
       {/* Content */}
       <div className="word-row__content">
-        {/* Row Number */}
-        <span className="word-row__number">{rowNumber}</span>
-
         {/* Word */}
         <span className="word-row__word">
           {word.word}
@@ -106,12 +129,12 @@ export const WordRow = memo<WordRowProps>(({
       <div className="word-row__actions">
         {/* Save button */}
         <button
-          className={`word-row__action-btn ${isSaved ? 'word-row__action-btn--active' : ''}`}
+          className={`word-row__action-btn ${isSaved ? 'word-row__action-btn--saved' : ''}`}
           onClick={() => onSave(word.word)}
-          title={otherMoviesText || 'Save word'}
+          title={otherMoviesText || (isSaved ? 'Remove from saved' : 'Save word')}
           aria-label={isSaved ? 'Unsave word' : 'Save word'}
         >
-          {isSaved ? '★' : '☆'}
+          <BookmarkIcon filled={isSaved} />
         </button>
 
         {/* Learned button */}
@@ -119,9 +142,10 @@ export const WordRow = memo<WordRowProps>(({
           className={`word-row__action-btn ${isLearned ? 'word-row__action-btn--learned' : ''}`}
           onClick={() => onToggleLearned(word.word)}
           disabled={!canToggleLearned}
+          title={isLearned ? 'Mark as not learned' : 'Mark as learned'}
           aria-label={isLearned ? 'Mark as unlearned' : 'Mark as learned'}
         >
-          {isLearned ? '✓' : '○'}
+          <CheckCircleIcon filled={isLearned} />
         </button>
       </div>
 

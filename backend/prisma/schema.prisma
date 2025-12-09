@@ -97,6 +97,7 @@ model WordClassification {
   @@index([scriptId], map: "ix_word_classifications_script_id")
   @@index([lemma], map: "ix_word_classifications_lemma")
   @@index([cefrLevel], map: "ix_word_classifications_cefr_level")
+  @@index([scriptId, cefrLevel], map: "ix_word_classifications_script_cefr")
   @@map("word_classifications")
 }
 

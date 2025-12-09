@@ -12,7 +12,8 @@
  */
 
 import { memo, useCallback, useRef, useEffect } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { WordRow } from './WordRow';
 import type { DisplayWord } from '../types/vocabularyWorker';
 
@@ -46,7 +47,7 @@ interface VirtualizedWordListProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const ROW_HEIGHT = 80; // Fixed row height for performance
+const ROW_HEIGHT = 56; // Fixed row height for performance (matches CSS min-height)
 const OVERSCAN = 8;    // Number of rows to render outside viewport
 // BATCH_THRESHOLD reserved for future prefetching optimization
 
@@ -72,13 +73,12 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // Track if we've requested the next batch
   const hasRequestedNextBatchRef = useRef(false);
 
-  // TanStack Virtual configuration
-  const virtualizer = useVirtualizer({
+  // TanStack Virtual configuration - use window scroll instead of container scroll
+  const virtualizer = useWindowVirtualizer({
     count: words.length,
-    getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
-    // Enable smooth scrolling
+    // Enable smooth scrolling - offset from top of page to list
     scrollMargin: parentRef.current?.offsetTop ?? 0
   });
 
@@ -127,6 +127,24 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   }, [onToggleLearned]);
 
   // ============================================================================
+  // THEME - Get MUI theme for CSS variables
+  // ============================================================================
+  const muiTheme = useMuiTheme();
+
+  // CSS custom properties for theme colors
+  const themeVars = {
+    '--text-primary': muiTheme.palette.text.primary,
+    '--text-secondary': muiTheme.palette.text.secondary,
+    '--text-disabled': muiTheme.palette.text.disabled,
+    '--divider-color': muiTheme.palette.divider,
+    '--row-hover-bg': muiTheme.palette.action.hover,
+    '--action-hover-bg': muiTheme.palette.action.hover,
+    '--badge-bg': muiTheme.palette.action.hover,
+    '--primary-color': muiTheme.palette.primary.main,
+    '--success-color': muiTheme.palette.success?.main || '#4caf50',
+  } as React.CSSProperties;
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
@@ -134,10 +152,9 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
     <div
       ref={parentRef}
       style={{
-        height: '600px',
-        overflow: 'auto',
-        contain: 'strict', // Optimize rendering performance
-        willChange: 'scroll-position'
+        width: '100%',
+        contain: 'layout style paint',
+        ...themeVars
       }}
     >
       {/* Virtual list container */}

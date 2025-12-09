@@ -105,32 +105,42 @@ const translationCache = new LRUMap<string, { translation: string; provider?: st
  * - Easier vectorization
  * - Lower memory overhead
  * - Faster sorting/filtering on single fields
+ * - TypedArrays are transferable (zero-copy between threads)
  */
 function convertToSoA(words: WordFrequency[]): WordsStructOfArrays {
   const length = words.length;
 
-  const soa: WordsStructOfArrays = {
-    words: new Array(length),
-    lemmas: new Array(length),
-    counts: new Array(length),
-    frequencies: new Array(length),
-    confidences: new Array(length),
-    frequencyRanks: new Array(length),
-    indices: new Array(length)
-  };
+  // Pre-allocate TypedArrays for numeric fields (more memory efficient)
+  const counts = new Uint32Array(length);
+  const frequencies = new Float32Array(length);
+  const confidences = new Float32Array(length);
+  const frequencyRanks = new Int32Array(length);
+  const indices = new Uint32Array(length);
+
+  // String arrays (cannot use TypedArrays)
+  const wordStrings: string[] = new Array(length);
+  const lemmas: string[] = new Array(length);
 
   for (let i = 0; i < length; i++) {
     const word = words[i];
-    soa.words[i] = word.word.toLowerCase();
-    soa.lemmas[i] = word.lemma.toLowerCase();
-    soa.counts[i] = word.count;
-    soa.frequencies[i] = word.frequency;
-    soa.confidences[i] = word.confidence;
-    soa.frequencyRanks[i] = word.frequency_rank ?? null;
-    soa.indices[i] = i; // Stable index
+    wordStrings[i] = word.word.toLowerCase();
+    lemmas[i] = word.lemma.toLowerCase();
+    counts[i] = word.count;
+    frequencies[i] = word.frequency;
+    confidences[i] = word.confidence;
+    frequencyRanks[i] = word.frequency_rank ?? -1; // -1 = null
+    indices[i] = i; // Stable index
   }
 
-  return soa;
+  return {
+    words: wordStrings,
+    lemmas,
+    counts,
+    frequencies,
+    confidences,
+    frequencyRanks,
+    indices
+  };
 }
 
 // ============================================================================
@@ -145,8 +155,8 @@ function applySearchFilter(
   searchQuery: string | undefined
 ): number[] {
   if (!searchQuery || searchQuery.trim() === '') {
-    // No filter - return all indices
-    return soa.indices.slice();
+    // No filter - return all indices as regular array for sorting
+    return Array.from(soa.indices);
   }
 
   const query = searchQuery.toLowerCase().trim();
@@ -233,6 +243,7 @@ function generateBatch(
   for (let i = startIndex; i < endIndex; i++) {
     const idx = indices[i];
     const word = soa.words[idx];
+    const freqRank = soa.frequencyRanks[idx];
 
     const displayWord: DisplayWord = {
       word,
@@ -240,7 +251,7 @@ function generateBatch(
       count: soa.counts[idx],
       frequency: soa.frequencies[idx],
       confidence: soa.confidences[idx],
-      frequencyRank: soa.frequencyRanks[idx],
+      frequencyRank: freqRank === -1 ? null : freqRank, // Convert -1 back to null
       index: idx // Stable index for React keys
     };
 
@@ -267,8 +278,8 @@ async function handleInitWords(payload: { words: WordFrequency[]; cefrLevel: str
     // Convert to SoA format
     state.sourceData = convertToSoA(payload.words);
 
-    // Initialize filtered indices (all words)
-    state.filteredIndices = state.sourceData.indices.slice();
+    // Initialize filtered indices (all words) - convert TypedArray to regular array
+    state.filteredIndices = Array.from(state.sourceData.indices);
 
     // Sort by default (frequency)
     state.filteredIndices = sortIndices(
@@ -425,7 +436,25 @@ async function handleTranslationUpdate(payload: {
       });
     }
 
-    // No response needed - translations are hydrated on next batch request
+    // Re-send current batch with updated translations
+    if (state.sourceData && state.loadedBatchEnd > 0) {
+      const batch = generateBatch(
+        state.sourceData,
+        state.filteredIndices,
+        0,
+        state.loadedBatchEnd
+      );
+
+      postMessage({
+        type: 'BATCH_READY',
+        payload: {
+          batch,
+          startIndex: 0,
+          endIndex: state.loadedBatchEnd,
+          totalCount: state.filteredIndices.length
+        }
+      } as WorkerOutboundMessage);
+    }
   } catch (error: any) {
     postMessage({
       type: 'ERROR',

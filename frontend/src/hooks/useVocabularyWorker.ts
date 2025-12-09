@@ -68,6 +68,9 @@ export function useVocabularyWorker({
   // Worker instance
   const workerRef = useRef<Worker | null>(null);
 
+  // Mounted guard to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   // State
   const [visibleWords, setVisibleWords] = useState<DisplayWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +95,9 @@ export function useVocabularyWorker({
   // ============================================================================
 
   const scheduleUpdate = useCallback((updates: typeof pendingUpdatesRef.current) => {
+    // Guard: Don't schedule updates if unmounted
+    if (!isMountedRef.current) return;
+
     // Merge updates
     Object.assign(pendingUpdatesRef.current, updates);
 
@@ -102,6 +108,13 @@ export function useVocabularyWorker({
 
     // Schedule new RAF
     rafIdRef.current = requestAnimationFrame(() => {
+      // Guard: Check mounted before applying updates
+      if (!isMountedRef.current) {
+        pendingUpdatesRef.current = {};
+        rafIdRef.current = null;
+        return;
+      }
+
       const pending = pendingUpdatesRef.current;
 
       // Apply all pending updates at once
@@ -168,6 +181,9 @@ export function useVocabularyWorker({
   // ============================================================================
 
   useEffect(() => {
+    // Mark as mounted
+    isMountedRef.current = true;
+
     // Create worker
     const worker = new Worker(
       new URL('../workers/vocabulary.worker.ts', import.meta.url),
@@ -180,8 +196,12 @@ export function useVocabularyWorker({
 
     // Cleanup
     return () => {
+      // Mark as unmounted FIRST to prevent any new state updates
+      isMountedRef.current = false;
+
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
       }
       worker.terminate();
       workerRef.current = null;

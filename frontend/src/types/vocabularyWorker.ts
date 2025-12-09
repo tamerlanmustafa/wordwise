@@ -11,15 +11,16 @@ import type { WordFrequency, CEFRLevel } from './script';
 // STRUCT-OF-ARRAYS FORMAT (SoA)
 // ============================================================================
 // More memory efficient and cache-friendly than Array-of-Structs
+// Numeric fields use TypedArrays for better performance and transferability
 
 export interface WordsStructOfArrays {
-  words: string[];           // Lowercase words
-  lemmas: string[];          // Lemmatized forms
-  counts: number[];          // Occurrence counts
-  frequencies: number[];     // Frequency scores
-  confidences: number[];     // CEFR confidence scores
-  frequencyRanks: (number | null)[]; // Optional frequency ranks
-  indices: number[];         // Original indices for stable sorting
+  words: string[];           // Lowercase words (strings must remain as array)
+  lemmas: string[];          // Lemmatized forms (strings must remain as array)
+  counts: Uint32Array;       // Occurrence counts (optimized)
+  frequencies: Float32Array; // Frequency scores (optimized)
+  confidences: Float32Array; // CEFR confidence scores (optimized)
+  frequencyRanks: Int32Array;// Frequency ranks (-1 = null) (optimized)
+  indices: Uint32Array;      // Original indices for stable sorting (optimized)
 }
 
 // ============================================================================

@@ -6,15 +6,14 @@ import {
   Stack
 } from '@mui/material';
 import { TabsHeader } from './TabsHeader';
-import { WordListVirtualized } from './WordListVirtualized';
+import { WordListWorkerBased } from './WordListWorkerBased';
 import { MovieSidebar } from './MovieSidebar';
-import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency } from '../types/script';
+import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency, CEFRLevel } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserWords } from '../hooks/useUserWords';
-import { useInfiniteWordFeed } from '../hooks/useInfiniteWordFeed';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 import apiClient from '../services/api';
@@ -30,7 +29,7 @@ interface VocabularyViewProps {
 }
 
 interface CEFRGroup {
-  level: string;
+  level: CEFRLevel;
   description: string;
   words: WordFrequency[];
   color: string;
@@ -124,23 +123,6 @@ function VocabularyViewBase({
   // Get active group
   const activeGroup = groups[activeTab];
 
-  // Infinite scroll feed for active group
-  const {
-    visibleWords,
-    translations,
-    isLoadingMore,
-    hasMore,
-    error,
-    sentinelRef
-  } = useInfiniteWordFeed({
-    rawWords: activeGroup?.words || [],
-    targetLanguage,
-    userId,
-    isAuthenticated,
-    isPreview,
-    batchSize: 50
-  });
-
   // Memoize groups data for TabsHeader
   const tabsHeaderGroups = useMemo(() =>
     groups.map(g => ({
@@ -158,10 +140,10 @@ function VocabularyViewBase({
       const scrollTop = window.scrollY;
       scrollStateRef.current[activeGroup.level] = {
         scrollTop,
-        loadedCount: visibleWords.length
+        loadedCount: 0  // Worker handles loading internally
       };
     }
-  }, [activeGroup, visibleWords.length]);
+  }, [activeGroup]);
 
   // Restore scroll position after tab change
   const restoreScrollPosition = useCallback(() => {
@@ -183,12 +165,12 @@ function VocabularyViewBase({
     }
   }, [activeGroup, suppressScrollReveal]);
 
-  // Restore scroll when visibleWords changes (after data loads)
+  // Restore scroll when tab changes
   useEffect(() => {
-    if (visibleWords.length > 0 && !isLoadingMore) {
+    if (activeGroup) {
       restoreScrollPosition();
     }
-  }, [visibleWords.length, isLoadingMore, restoreScrollPosition]);
+  }, [activeGroup, restoreScrollPosition]);
 
   // Fetch other movies for word tooltips
   useEffect(() => {
@@ -338,17 +320,13 @@ function VocabularyViewBase({
             showTopBar={showTopBar}
           />
 
-          {/* WordListVirtualized - Isolated component, doesn't re-render on activeTab changes */}
-          <WordListVirtualized
+          {/* WordListWorkerBased - Worker-based component with numbering */}
+          <WordListWorkerBased
             groupLevel={activeGroup.level}
             groupDescription={activeGroup.description}
             groupColor={activeGroup.color}
             totalWordCount={activeGroup.words.length}
-            visibleWords={visibleWords}
-            translations={translations}
-            isLoadingMore={isLoadingMore}
-            hasMore={hasMore}
-            error={error}
+            rawWords={activeGroup.words}
             isPreview={isPreview}
             isWordSavedInMovie={isWordSavedInMovie}
             saveWord={saveWord}
@@ -357,7 +335,9 @@ function VocabularyViewBase({
             savedWords={savedWords}
             otherMovies={otherMovies}
             movieId={movieId}
-            sentinelRef={sentinelRef}
+            targetLanguage={targetLanguage}
+            userId={userId}
+            isAuthenticated={isAuthenticated}
             listContainerRef={listContainerRef}
           />
         </Grid>

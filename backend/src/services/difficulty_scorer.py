@@ -230,55 +230,45 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     if pct_advanced < 0.02:  # Less than 2%
         cefr_gap_score *= 0.25  # Reduce impact of rare advanced words
 
-    # 5. Phrasal verb density - 4% (reduced from 10%)
+    # 5. Phrasal verb density - 5%
     idiom_density = phrasal_verb_count / total_words if total_words > 0 else 0
 
-    # 6. Sentence complexity - reduced from 13% → 4%
-    sentence_complexity = weighted_complex
-
-    # 7. Median CEFR level (unique words only) - adds 0-30 points
+    # 6. Median CEFR level (unique words only) - normalized to 0-1
     median_cefr = compute_median_cefr_level(words)
-    median_component = median_cefr * 5  # 1-6 scale * 5 = 5-30
+    median_score = (median_cefr - 1.0) / 5.0  # Map 1-6 to 0-1
 
-    # 8. Repetition ratio (unique/total) - higher = more complex
+    # 7. Repetition ratio (unique/total) - higher = more complex vocabulary
     repetition_ratio = unique_word_count / total_words if total_words > 0 else 0
-    repetition_component = repetition_ratio * 10  # 0-10 points
 
-    # 9. CEFR spread (max - min level) with noise filtering
+    # 8. CEFR spread (max - min level) with noise filtering - normalized to 0-1
     spread = compute_cefr_spread(level_counts, total_words)
-    spread_component = spread * 3  # 0-15 points
+    spread_score = spread / 5.0  # Max spread is 5 (C2 - A1)
 
-    # Final weights (domain-agnostic, CEFR-aligned)
+    # Final weights (sum = 100%)
+    # Weights:
+    #   - weighted_complex:   35% (core vocabulary complexity - most important)
+    #   - cefr_gap_score:     20% (CEFR distribution spread)
+    #   - median_score:       15% (median CEFR level)
+    #   - lexical_diversity:  10% (vocabulary richness)
+    #   - spread_score:        8% (CEFR level range)
+    #   - syllable_score:      5% (word length proxy)
+    #   - idiom_density:       4% (phrasal complexity)
+    #   - repetition_ratio:    3% (lexical variation)
     difficulty_score = (
-        0.30 * weighted_complex +           # Core vocab complexity
-        0.06 * lexical_diversity +          # Vocabulary richness
+        0.35 * weighted_complex +           # Core vocab complexity
+        0.20 * cefr_gap_score +             # CEFR distribution spread
+        0.15 * median_score +               # Median CEFR level
+        0.10 * lexical_diversity +          # Vocabulary richness
+        0.08 * spread_score +               # Level range
         0.05 * syllable_score +             # Word length proxy
-        0.10 * cefr_gap_score +             # CEFR distribution spread
-        0.03 * idiom_density +              # Phrasal complexity
-        0.04 * sentence_complexity +        # Reduced from 6% → 4%
-        0.03 * (spread_component / 15.0) +  # Level range
-        0.04 * (median_component / 30.0) +  # Median level
-        0.05 * repetition_component         # Lexical variation
+        0.04 * idiom_density +              # Phrasal complexity
+        0.03 * repetition_ratio             # Lexical variation
     )
 
     # CRITICAL: Global CEFR vocabulary safety rule
     # No movie can be C1/C2 without meaningful advanced vocabulary
     if pct_advanced < 0.01:  # Less than 1% C1+C2
         difficulty_score = min(difficulty_score, 0.55)  # Cap at upper B2
-
-    # Priority-based genre multiplier (kids ALWAYS overrides adult)
-    genre_multiplier = 1.0
-    if genres:
-        genres_lower = [g.lower() for g in genres]
-
-        # Kids/family ALWAYS takes priority
-        if any(g in genres_lower for g in ['animation', 'family', 'kids', 'children']):
-            genre_multiplier = 0.50
-        # Adult genre boosts ONLY if not kids/family
-        elif any(g in genres_lower for g in ['mystery', 'sci-fi', 'science fiction', 'political', 'thriller', 'crime', 'drama']):
-            genre_multiplier = 1.15
-
-    difficulty_score *= genre_multiplier
 
     # Vocabulary-based band clamping (prevents stylistic metrics from overriding vocab)
     if pct_advanced > 0.07:  # 7%+ C1/C2
@@ -288,7 +278,7 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     else:
         base_band = "A"
 
-    # Enforce band boundaries
+    # Enforce band boundaries BEFORE genre adjustment
     if base_band == "A":
         difficulty_score = min(difficulty_score, 0.40)  # Max A2
     elif base_band == "B":
@@ -301,6 +291,18 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     # Map to 0-100 scale
     score = int(difficulty_score * 100)
     score = max(0, min(100, score))
+
+    # Apply genre adjustment AFTER mapping to 0-100 scale
+    # This ensures genre affects final score, not intermediate calculations
+    if genres:
+        genres_lower = [g.lower() for g in genres]
+
+        # Kids/family ALWAYS takes priority - reduce difficulty
+        if any(g in genres_lower for g in ['animation', 'family', 'kids', 'children']):
+            score = int(score * 0.75)  # 25% reduction for kids content
+        # Adult/complex genres get a modest boost ONLY if not kids/family
+        elif any(g in genres_lower for g in ['mystery', 'sci-fi', 'science fiction', 'political', 'thriller', 'crime', 'drama']):
+            score = min(100, int(score * 1.10))  # 10% boost, capped at 100
 
     # Overhauled thresholds optimized for realistic classification
     if score < 25:
