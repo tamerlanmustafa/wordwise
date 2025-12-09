@@ -72,6 +72,114 @@ _GLOBAL_LEMMA_CACHE: LRUCache = LRUCache(maxsize=LEMMA_CACHE_SIZE)
 _GLOBAL_CEFR_CACHE: LRUCache = LRUCache(maxsize=CEFR_CACHE_SIZE)
 _GLOBAL_FREQUENCY_CACHE: LRUCache = LRUCache(maxsize=FREQUENCY_CACHE_SIZE)
 
+# Common phrasal verbs with CEFR levels
+# Format: { 'phrasal_verb': 'CEFR_level' }
+# Phrasal verbs often have idiomatic meanings that differ from their components
+PHRASAL_VERBS = {
+    # A2 level - Basic phrasal verbs
+    'get up': 'A2', 'wake up': 'A2', 'sit down': 'A2', 'stand up': 'A2',
+    'look at': 'A2', 'look for': 'A2', 'turn on': 'A2', 'turn off': 'A2',
+    'put on': 'A2', 'take off': 'A2', 'come in': 'A2', 'go out': 'A2',
+    'pick up': 'A2', 'put down': 'A2', 'come back': 'A2', 'go back': 'A2',
+
+    # B1 level - Intermediate phrasal verbs
+    'give up': 'B1', 'look after': 'B1', 'look out': 'B1', 'find out': 'B1',
+    'grow up': 'B1', 'set up': 'B1', 'take care': 'B1', 'make up': 'B1',
+    'bring up': 'B1', 'carry on': 'B1', 'come on': 'B1', 'go on': 'B1',
+    'hold on': 'B1', 'hang up': 'B1', 'keep on': 'B1', 'fill in': 'B1',
+    'look up': 'B1', 'run out': 'B1', 'sort out': 'B1', 'work out': 'B1',
+    'check in': 'B1', 'check out': 'B1', 'log in': 'B1', 'log out': 'B1',
+    'sign up': 'B1', 'sign in': 'B1', 'break down': 'B1', 'break up': 'B1',
+
+    # B2 level - Upper-intermediate phrasal verbs
+    'come up with': 'B2', 'look forward to': 'B2', 'put up with': 'B2',
+    'get along with': 'B2', 'run into': 'B2', 'figure out': 'B2',
+    'turn out': 'B2', 'point out': 'B2', 'turn up': 'B2', 'show up': 'B2',
+    'take over': 'B2', 'take up': 'B2', 'take on': 'B2', 'bring about': 'B2',
+    'carry out': 'B2', 'cut down': 'B2', 'cut off': 'B2', 'deal with': 'B2',
+    'end up': 'B2', 'get away': 'B2', 'get over': 'B2', 'get through': 'B2',
+    'go through': 'B2', 'hand in': 'B2', 'hang out': 'B2', 'let down': 'B2',
+    'look into': 'B2', 'make out': 'B2', 'pass away': 'B2', 'pull off': 'B2',
+    'put off': 'B2', 'set off': 'B2', 'settle down': 'B2', 'show off': 'B2',
+    'slow down': 'B2', 'speed up': 'B2', 'stick to': 'B2', 'throw away': 'B2',
+    'try on': 'B2', 'turn down': 'B2', 'wear out': 'B2', 'wind up': 'B2',
+
+    # C1 level - Advanced phrasal verbs
+    'back out': 'C1', 'bail out': 'C1', 'black out': 'C1', 'blow up': 'C1',
+    'break into': 'C1', 'brush up': 'C1', 'call off': 'C1', 'catch on': 'C1',
+    'cave in': 'C1', 'come across': 'C1', 'come down to': 'C1', 'crack down': 'C1',
+    'do away with': 'C1', 'draw up': 'C1', 'fall through': 'C1', 'get by': 'C1',
+    'give in': 'C1', 'go about': 'C1', 'hold up': 'C1', 'iron out': 'C1',
+    'kick off': 'C1', 'knock out': 'C1', 'lay off': 'C1', 'live up to': 'C1',
+    'phase out': 'C1', 'play down': 'C1', 'pull through': 'C1', 'rule out': 'C1',
+    'scale back': 'C1', 'send off': 'C1', 'step down': 'C1', 'sum up': 'C1',
+    'take apart': 'C1', 'touch on': 'C1', 'track down': 'C1', 'wipe out': 'C1',
+    'write off': 'C1', 'zero in': 'C1',
+
+    # C2 level - Highly idiomatic phrasal verbs
+    'bank on': 'C2', 'bear out': 'C2', 'boil down to': 'C2', 'breeze through': 'C2',
+    'brush off': 'C2', 'buy into': 'C2', 'clam up': 'C2', 'clamp down': 'C2',
+    'dawn on': 'C2', 'dish out': 'C2', 'dole out': 'C2', 'egg on': 'C2',
+    'eke out': 'C2', 'fend off': 'C2', 'ferret out': 'C2', 'fizzle out': 'C2',
+    'fork out': 'C2', 'gun for': 'C2', 'hash out': 'C2', 'home in': 'C2',
+    'lash out': 'C2', 'latch onto': 'C2', 'level with': 'C2', 'mull over': 'C2',
+    'pan out': 'C2', 'phase in': 'C2', 'pine for': 'C2', 'play up': 'C2',
+    'pore over': 'C2', 'rack up': 'C2', 'ramp up': 'C2', 'rein in': 'C2',
+    'root out': 'C2', 'rustle up': 'C2', 'screw up': 'C2', 'seize up': 'C2',
+    'shell out': 'C2', 'shore up': 'C2', 'shrug off': 'C2', 'size up': 'C2',
+    'siphon off': 'C2', 'stake out': 'C2', 'stave off': 'C2', 'tee off': 'C2',
+    'tuck away': 'C2', 'usher in': 'C2', 'ward off': 'C2', 'whittle down': 'C2',
+}
+
+# Common idioms with CEFR levels
+# These are fixed expressions whose meaning cannot be derived from components
+COMMON_IDIOMS = {
+    # B1 level idioms
+    'piece of cake': 'B1', 'break a leg': 'B1', 'under the weather': 'B1',
+    'once in a while': 'B1', 'on the other hand': 'B1', 'at the end of the day': 'B1',
+    'as soon as possible': 'B1', 'in the long run': 'B1', 'make sense': 'B1',
+    'by the way': 'B1', 'in fact': 'B1', 'after all': 'B1',
+
+    # B2 level idioms
+    'hit the nail on the head': 'B2', 'spill the beans': 'B2', 'let the cat out of the bag': 'B2',
+    'beat around the bush': 'B2', 'bite off more than you can chew': 'B2',
+    'a blessing in disguise': 'B2', 'burn the midnight oil': 'B2', 'cost an arm and a leg': 'B2',
+    'get out of hand': 'B2', 'go the extra mile': 'B2', 'in hot water': 'B2',
+    'kill two birds with one stone': 'B2', 'miss the boat': 'B2', 'on the ball': 'B2',
+    'pull someones leg': 'B2', 'take it with a grain of salt': 'B2', 'under pressure': 'B2',
+    'when pigs fly': 'B2', 'the ball is in your court': 'B2', 'back to square one': 'B2',
+
+    # C1 level idioms
+    'add fuel to the fire': 'C1', 'at the drop of a hat': 'C1', 'a chip on your shoulder': 'C1',
+    'barking up the wrong tree': 'C1', 'between a rock and a hard place': 'C1',
+    'bite the bullet': 'C1', 'break the ice': 'C1', 'cut to the chase': 'C1',
+    'devil advocate': 'C1', 'every cloud has a silver lining': 'C1',
+    'fit as a fiddle': 'C1', 'get your act together': 'C1', 'go down in flames': 'C1',
+    'have a ball': 'C1', 'hit the ground running': 'C1', 'in the same boat': 'C1',
+    'jump on the bandwagon': 'C1', 'keep your chin up': 'C1', 'leave no stone unturned': 'C1',
+    'make a long story short': 'C1', 'no pain no gain': 'C1', 'on thin ice': 'C1',
+    'once in a blue moon': 'C1', 'play it by ear': 'C1', 'put your foot in your mouth': 'C1',
+    'rain cats and dogs': 'C1', 'see eye to eye': 'C1', 'the last straw': 'C1',
+    'throw in the towel': 'C1', 'up in the air': 'C1', 'wrap your head around': 'C1',
+
+    # C2 level idioms (highly idiomatic, culture-specific)
+    'a penny for your thoughts': 'C2', 'ace up your sleeve': 'C2',
+    'all bark and no bite': 'C2', 'beat a dead horse': 'C2', 'behind the eight ball': 'C2',
+    'blow off steam': 'C2', 'burn bridges': 'C2', 'by the skin of your teeth': 'C2',
+    'cry over spilt milk': 'C2', 'cut corners': 'C2', 'dead ringer': 'C2',
+    'down to the wire': 'C2', 'draw a blank': 'C2', 'drop the ball': 'C2',
+    'face the music': 'C2', 'get cold feet': 'C2', 'give the cold shoulder': 'C2',
+    'go bananas': 'C2', 'hand over fist': 'C2', 'have an axe to grind': 'C2',
+    'hit below the belt': 'C2', 'in a pickle': 'C2', 'jump the gun': 'C2',
+    'keep tabs on': 'C2', 'kick the bucket': 'C2', 'let sleeping dogs lie': 'C2',
+    'make ends meet': 'C2', 'off the hook': 'C2', 'on cloud nine': 'C2',
+    'out of the blue': 'C2', 'pull strings': 'C2', 'ring a bell': 'C2',
+    'sit on the fence': 'C2', 'spick and span': 'C2', 'steal someones thunder': 'C2',
+    'take the bull by the horns': 'C2', 'through thick and thin': 'C2',
+    'under the table': 'C2', 'up the creek': 'C2', 'wet behind the ears': 'C2',
+}
+
+
 # Kids vocabulary whitelist - playful, fantasy, onomatopoeia words that are conceptually simple
 # Despite low corpus frequency, these are A2-level for kids
 KIDS_SIMPLE_VOCAB = {
@@ -142,8 +250,55 @@ class WordClassification:
     confidence: float
     source: ClassificationSource
     frequency_rank: Optional[int] = None
+    zipf_score: Optional[float] = None  # Zipf frequency (0-7 scale, higher = more common)
     is_multi_word: bool = False
     alternatives: Optional[List[Tuple[CEFRLevel, float]]] = None
+
+
+def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
+    """
+    Detect phrasal verbs and idioms in text.
+
+    Args:
+        text: The input text to analyze
+
+    Returns:
+        List of tuples: (expression, type, cefr_level)
+        where type is 'phrasal_verb' or 'idiom'
+    """
+    text_lower = text.lower()
+    detected = []
+
+    # Check for phrasal verbs (sorted by length to match longer ones first)
+    for pv, level in sorted(PHRASAL_VERBS.items(), key=lambda x: -len(x[0])):
+        if pv in text_lower:
+            detected.append((pv, 'phrasal_verb', level))
+
+    # Check for idioms (sorted by length to match longer ones first)
+    for idiom, level in sorted(COMMON_IDIOMS.items(), key=lambda x: -len(x[0])):
+        if idiom in text_lower:
+            detected.append((idiom, 'idiom', level))
+
+    return detected
+
+
+def count_phrasal_verbs_and_idioms(text: str) -> Dict[str, int]:
+    """
+    Count phrasal verbs and idioms by CEFR level.
+
+    Args:
+        text: The input text to analyze
+
+    Returns:
+        Dictionary with counts by level: {'A2': 5, 'B1': 3, 'B2': 2, ...}
+    """
+    detected = detect_phrasal_verbs_and_idioms(text)
+    counts = {'A1': 0, 'A2': 0, 'B1': 0, 'B2': 0, 'C1': 0, 'C2': 0}
+
+    for _, _, level in detected:
+        counts[level] = counts.get(level, 0) + 1
+
+    return counts
 
 
 def is_valid_token(token: str) -> bool:
@@ -359,54 +514,90 @@ class HybridCEFRClassifier:
         _GLOBAL_LEMMA_CACHE.set(word, lemma)
         return lemma
 
-    def _get_frequency_rank(self, word: str, lang: str = 'en') -> Optional[int]:
+    def _get_frequency_data(self, word: str, lang: str = 'en') -> Tuple[Optional[int], Optional[float]]:
+        """
+        Get frequency rank and raw Zipf score for a word.
+
+        Returns:
+            Tuple of (frequency_rank, zipf_score)
+            - frequency_rank: Estimated rank (1 = most common, higher = rarer)
+            - zipf_score: Raw Zipf frequency (0-7 scale, higher = more common)
+        """
         global _GLOBAL_FREQUENCY_CACHE
         if not self.has_wordfreq:
-            return None
-        if word in _GLOBAL_FREQUENCY_CACHE:
-            return _GLOBAL_FREQUENCY_CACHE.get(word)
+            return None, None
+
+        cache_key = f"freq:{word}"
+        cached = _GLOBAL_FREQUENCY_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
             import wordfreq
             zipf = wordfreq.zipf_frequency(word, lang)
-            if zipf >= 6:
-                rank = int(10 ** (7 - zipf))
-            elif zipf >= 3:
+
+            # Convert Zipf to approximate rank
+            # Zipf 7 ≈ rank 1, Zipf 6 ≈ rank 10, Zipf 5 ≈ rank 100, etc.
+            if zipf > 0:
                 rank = int(10 ** (7 - zipf))
             else:
-                rank = 100000
-            _GLOBAL_FREQUENCY_CACHE.set(word, rank)
-            return rank
+                rank = 100000  # Very rare / not found
+
+            result = (rank, zipf)
+            _GLOBAL_FREQUENCY_CACHE.set(cache_key, result)
+            return result
         except Exception:
-            _GLOBAL_FREQUENCY_CACHE.set(word, None)
-            return None
+            _GLOBAL_FREQUENCY_CACHE.set(cache_key, (None, None))
+            return None, None
+
+    def _get_frequency_rank(self, word: str, lang: str = 'en') -> Optional[int]:
+        """Legacy method for backward compatibility."""
+        rank, _ = self._get_frequency_data(word, lang)
+        return rank
+
+    def _get_zipf_score(self, word: str, lang: str = 'en') -> Optional[float]:
+        """Get raw Zipf frequency score (0-7 scale, higher = more common)."""
+        _, zipf = self._get_frequency_data(word, lang)
+        return zipf
 
     def _classify_by_frequency(self, word: str, lemma: str) -> Optional[WordClassification]:
         """
-        Frequency-based classification capped at B2.
-        Only dictionary lookup can assign C1/C2 to prevent frequency noise.
+        Frequency-based classification using Zipf score and frequency rank.
+
+        Zipf scale interpretation:
+        - 7.0+: Ultra-common words (the, be, to) → A1
+        - 6.0-7.0: Very common words → A1
+        - 5.0-6.0: Common words → A2
+        - 4.0-5.0: Intermediate words → B1
+        - 3.0-4.0: Less common words → B2
+        - 2.0-3.0: Uncommon words → C1
+        - 0.0-2.0: Rare words → C2
         """
-        rank = self._get_frequency_rank(lemma)
-        if rank is None:
+        rank, zipf = self._get_frequency_data(lemma)
+        if rank is None or zipf is None:
             return None
 
-        # Map frequency rank to CEFR level (MAX B2)
-        if rank < 1000:
+        # Use Zipf score for more accurate CEFR mapping
+        # Zipf scale: 0-7, where higher = more common
+        if zipf >= 6.0:
             level = CEFRLevel.A1
-            confidence = 0.7
-        elif rank < 2000:
+            confidence = 0.8
+        elif zipf >= 5.0:
             level = CEFRLevel.A2
-            confidence = 0.7
-        elif rank < 5000:
+            confidence = 0.75
+        elif zipf >= 4.0:
             level = CEFRLevel.B1
-            confidence = 0.6
-        elif rank < 10000:
+            confidence = 0.65
+        elif zipf >= 3.0:
             level = CEFRLevel.B2
-            confidence = 0.5
+            confidence = 0.55
+        elif zipf >= 2.0:
+            level = CEFRLevel.C1
+            confidence = 0.45
         else:
-            # Very rare words (>10k rank) → B2 max (NOT C1/C2)
-            # These are often domain-specific, not advanced
-            level = CEFRLevel.B2
-            confidence = 0.3
+            # Very rare words (Zipf < 2.0) → C2
+            level = CEFRLevel.C2
+            confidence = 0.35
 
         return WordClassification(
             word=word,
@@ -415,7 +606,8 @@ class HybridCEFRClassifier:
             cefr_level=level,
             confidence=confidence,
             source=ClassificationSource.FREQUENCY_BACKOFF,
-            frequency_rank=rank
+            frequency_rank=rank,
+            zipf_score=zipf
         )
 
     def _classify_by_embedding(self, word: str, lemma: str) -> Optional[WordClassification]:
@@ -686,10 +878,32 @@ class HybridCEFRClassifier:
         level_counts = {level: 0 for level in CEFRLevel}
         source_counts = {source: 0 for source in ClassificationSource}
         total_confidence = 0.0
+        zipf_scores = []
+
         for cls in classifications:
             level_counts[cls.cefr_level] += 1
             source_counts[cls.source] += 1
             total_confidence += cls.confidence
+            if cls.zipf_score is not None:
+                zipf_scores.append(cls.zipf_score)
+
+        # Calculate Zipf statistics
+        zipf_stats = {}
+        if zipf_scores:
+            zipf_stats = {
+                'mean': sum(zipf_scores) / len(zipf_scores),
+                'min': min(zipf_scores),
+                'max': max(zipf_scores),
+                'count': len(zipf_scores)
+            }
+            # Add median
+            sorted_zipf = sorted(zipf_scores)
+            mid = len(sorted_zipf) // 2
+            if len(sorted_zipf) % 2 == 0:
+                zipf_stats['median'] = (sorted_zipf[mid - 1] + sorted_zipf[mid]) / 2
+            else:
+                zipf_stats['median'] = sorted_zipf[mid]
+
         return {
             'total_words': len(classifications),
             'level_distribution': {k.value: v for k, v in level_counts.items()},
@@ -703,8 +917,69 @@ class HybridCEFRClassifier:
                     ClassificationSource.EFLLEX,
                     ClassificationSource.EVP
                 ]
-            ) / len(classifications)
+            ) / len(classifications),
+            'zipf_statistics': zipf_stats
         }
+
+    def get_idiom_statistics(self, text: str) -> Dict:
+        """
+        Get statistics about phrasal verbs and idioms in the text.
+
+        Args:
+            text: The raw text to analyze
+
+        Returns:
+            Dictionary with idiom and phrasal verb statistics
+        """
+        if not text:
+            return {}
+
+        detected = detect_phrasal_verbs_and_idioms(text)
+
+        # Count by type
+        phrasal_verbs = [d for d in detected if d[1] == 'phrasal_verb']
+        idioms = [d for d in detected if d[1] == 'idiom']
+
+        # Count by CEFR level
+        level_counts = count_phrasal_verbs_and_idioms(text)
+
+        return {
+            'total_phrasal_verbs': len(phrasal_verbs),
+            'total_idioms': len(idioms),
+            'phrasal_verb_list': [(pv, level) for pv, _, level in phrasal_verbs],
+            'idiom_list': [(idiom, level) for idiom, _, level in idioms],
+            'level_distribution': level_counts,
+            'complexity_indicator': self._calculate_idiom_complexity(level_counts)
+        }
+
+    def _calculate_idiom_complexity(self, level_counts: Dict[str, int]) -> str:
+        """
+        Calculate an idiom complexity indicator based on CEFR distribution.
+
+        Returns one of: 'low', 'medium', 'high', 'very_high'
+        """
+        total = sum(level_counts.values())
+        if total == 0:
+            return 'low'
+
+        # Weight by CEFR level
+        weighted = (
+            level_counts.get('A2', 0) * 1 +
+            level_counts.get('B1', 0) * 2 +
+            level_counts.get('B2', 0) * 3 +
+            level_counts.get('C1', 0) * 4 +
+            level_counts.get('C2', 0) * 5
+        )
+        avg_complexity = weighted / total if total > 0 else 0
+
+        if avg_complexity < 2:
+            return 'low'
+        elif avg_complexity < 3:
+            return 'medium'
+        elif avg_complexity < 4:
+            return 'high'
+        else:
+            return 'very_high'
 
     def update_frequency_thresholds(self, thresholds: Dict[CEFRLevel, Tuple[int, int]]):
         self.frequency_thresholds.update(thresholds)

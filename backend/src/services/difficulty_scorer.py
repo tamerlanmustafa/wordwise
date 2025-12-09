@@ -1,15 +1,18 @@
 from typing import Dict, Tuple, List, Optional
 from prisma.enums import difficultylevel, proficiencylevel
 import statistics
+import re
+import math
 
 
 class WordData:
     """Represents a classified word with confidence and frequency data."""
-    def __init__(self, cefr_level: str, confidence: float, frequency_rank: int | None, word: str = ""):
+    def __init__(self, cefr_level: str, confidence: float, frequency_rank: int | None, word: str = "", zipf_score: float | None = None):
         self.cefr_level = cefr_level
         self.confidence = confidence
         self.frequency_rank = frequency_rank
         self.word = word
+        self.zipf_score = zipf_score  # Zipf frequency (0-7 scale, higher = more common)
 
 
 def count_syllables(word: str) -> int:
@@ -46,6 +49,89 @@ def detect_phrasal_verb(word: str) -> bool:
     return word.lower() in particles
 
 
+def count_sentences(text: str) -> int:
+    """Count sentences in text using common sentence terminators."""
+    # Match sentence-ending punctuation followed by space/end
+    sentences = re.split(r'[.!?]+(?:\s|$)', text)
+    # Filter empty strings
+    return max(1, len([s for s in sentences if s.strip()]))
+
+
+def compute_flesch_kincaid_grade(text: str, words: List[WordData]) -> float:
+    """
+    Calculate Flesch-Kincaid Grade Level.
+
+    Formula: 0.39 * (words/sentences) + 11.8 * (syllables/words) - 15.59
+
+    Returns US grade level (0-18+). Higher = more difficult.
+    """
+    if not text or not words:
+        return 0.0
+
+    total_words = len(words)
+    total_sentences = count_sentences(text)
+    total_syllables = sum(count_syllables(w.word) for w in words if w.word)
+
+    if total_words == 0 or total_sentences == 0:
+        return 0.0
+
+    words_per_sentence = total_words / total_sentences
+    syllables_per_word = total_syllables / total_words
+
+    grade = 0.39 * words_per_sentence + 11.8 * syllables_per_word - 15.59
+    return max(0.0, grade)  # Can't be negative
+
+
+def compute_flesch_reading_ease(text: str, words: List[WordData]) -> float:
+    """
+    Calculate Flesch Reading Ease score.
+
+    Formula: 206.835 - 1.015 * (words/sentences) - 84.6 * (syllables/words)
+
+    Returns score 0-100. Higher = easier to read.
+    - 90-100: Very easy (5th grade)
+    - 80-90: Easy (6th grade)
+    - 70-80: Fairly easy (7th grade)
+    - 60-70: Standard (8th-9th grade)
+    - 50-60: Fairly difficult (10th-12th grade)
+    - 30-50: Difficult (college)
+    - 0-30: Very difficult (college graduate)
+    """
+    if not text or not words:
+        return 100.0  # Empty = easiest
+
+    total_words = len(words)
+    total_sentences = count_sentences(text)
+    total_syllables = sum(count_syllables(w.word) for w in words if w.word)
+
+    if total_words == 0 or total_sentences == 0:
+        return 100.0
+
+    words_per_sentence = total_words / total_sentences
+    syllables_per_word = total_syllables / total_words
+
+    score = 206.835 - 1.015 * words_per_sentence - 84.6 * syllables_per_word
+    return max(0.0, min(100.0, score))  # Clamp to 0-100
+
+
+def compute_average_zipf(words: List[WordData]) -> float:
+    """
+    Compute average Zipf score for vocabulary rarity assessment.
+
+    Zipf scale: 0-7 (higher = more common)
+    - 7.0: Ultra-common (the, be, to)
+    - 5.0-6.0: Common everyday words
+    - 3.0-4.0: Less common words
+    - 1.0-2.0: Rare words
+    - 0.0: Very rare / not in corpus
+    """
+    zipf_scores = [w.zipf_score for w in words if w.zipf_score is not None]
+    if not zipf_scores:
+        return 4.0  # Default to intermediate
+
+    return sum(zipf_scores) / len(zipf_scores)
+
+
 def compute_lexical_diversity(words: List[WordData]) -> float:
     """Calculate Herdan's C (lexical diversity)."""
     if not words:
@@ -58,11 +144,134 @@ def compute_lexical_diversity(words: List[WordData]) -> float:
         return 0.0
 
     # Herdan's C = log(unique) / log(total)
-    import math
     try:
         return math.log(unique_words) / math.log(total_words)
     except (ValueError, ZeroDivisionError):
         return 0.0
+
+
+def compute_type_token_ratio(words: List[WordData]) -> float:
+    """
+    Calculate Type-Token Ratio (TTR).
+
+    TTR = unique words / total words
+
+    Simple measure of lexical diversity.
+    - Higher TTR = more diverse vocabulary
+    - Lower TTR = more repetitive vocabulary
+
+    Note: TTR is affected by text length; longer texts tend to have lower TTR.
+    """
+    if not words:
+        return 0.0
+
+    unique_words = len(set(w.word.lower() for w in words if w.word))
+    total_words = len(words)
+
+    if total_words == 0:
+        return 0.0
+
+    return unique_words / total_words
+
+
+def compute_root_ttr(words: List[WordData]) -> float:
+    """
+    Calculate Root TTR (Guiraud's Index).
+
+    Root TTR = unique words / sqrt(total words)
+
+    More stable than simple TTR for varying text lengths.
+    """
+    if not words:
+        return 0.0
+
+    unique_words = len(set(w.word.lower() for w in words if w.word))
+    total_words = len(words)
+
+    if total_words == 0:
+        return 0.0
+
+    return unique_words / math.sqrt(total_words)
+
+
+def compute_log_ttr(words: List[WordData]) -> float:
+    """
+    Calculate Log TTR (Herdan's C).
+
+    Log TTR = log(unique) / log(total)
+
+    Most stable for varying text lengths.
+    """
+    return compute_lexical_diversity(words)
+
+
+def compute_uber_index(words: List[WordData]) -> float:
+    """
+    Calculate Uber Index.
+
+    Uber = log(total)^2 / (log(total) - log(unique))
+
+    Measures lexical richness independent of text length.
+    """
+    if not words:
+        return 0.0
+
+    unique_words = len(set(w.word.lower() for w in words if w.word))
+    total_words = len(words)
+
+    if total_words <= 1 or unique_words == 0:
+        return 0.0
+
+    try:
+        log_total = math.log(total_words)
+        log_unique = math.log(unique_words)
+        denominator = log_total - log_unique
+
+        if denominator <= 0:
+            return float('inf')  # All words are unique
+
+        return (log_total ** 2) / denominator
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def compute_comprehensive_lexical_diversity(words: List[WordData]) -> Dict[str, float]:
+    """
+    Compute comprehensive lexical diversity metrics.
+
+    Returns multiple measures to give a complete picture of vocabulary richness:
+    - ttr: Type-Token Ratio (simple ratio)
+    - root_ttr: Guiraud's Index (root-based)
+    - log_ttr: Herdan's C (log-based, most stable)
+    - uber_index: Uber Index (advanced metric)
+    - unique_words: Count of unique words
+    - total_words: Total word count
+    - repetition_ratio: 1 - TTR (how repetitive the text is)
+    """
+    if not words:
+        return {
+            'ttr': 0.0,
+            'root_ttr': 0.0,
+            'log_ttr': 0.0,
+            'uber_index': 0.0,
+            'unique_words': 0,
+            'total_words': 0,
+            'repetition_ratio': 0.0
+        }
+
+    unique_count = len(set(w.word.lower() for w in words if w.word))
+    total_count = len(words)
+    ttr = compute_type_token_ratio(words)
+
+    return {
+        'ttr': round(ttr, 4),
+        'root_ttr': round(compute_root_ttr(words), 4),
+        'log_ttr': round(compute_log_ttr(words), 4),
+        'uber_index': round(compute_uber_index(words), 4),
+        'unique_words': unique_count,
+        'total_words': total_count,
+        'repetition_ratio': round(1 - ttr, 4) if ttr > 0 else 0.0
+    }
 
 
 def compute_median_cefr_level(words: List[WordData]) -> float:
@@ -82,6 +291,99 @@ def compute_median_cefr_level(words: List[WordData]) -> float:
 
     numeric_levels = list(unique_word_levels.values())
     return statistics.median(numeric_levels)
+
+
+# Genre difficulty multipliers based on TMDB genres
+# These are empirically tuned based on typical vocabulary in each genre
+GENRE_DIFFICULTY_WEIGHTS = {
+    # Easiest genres (kids/family content) - 0.70-0.80 multiplier
+    'animation': 0.75,
+    'family': 0.75,
+    'kids': 0.70,
+    'children': 0.70,
+
+    # Easy-medium genres (accessible entertainment) - 0.85-0.95 multiplier
+    'comedy': 0.90,
+    'romance': 0.90,
+    'action': 0.92,
+    'adventure': 0.88,
+    'fantasy': 0.85,  # Often simpler language despite fantastical content
+    'music': 0.88,
+    'musical': 0.88,
+
+    # Medium genres (standard difficulty) - 0.95-1.05 multiplier
+    'horror': 0.98,
+    'thriller': 1.02,
+    'crime': 1.05,
+    'mystery': 1.05,
+    'drama': 1.00,
+
+    # Complex genres (sophisticated vocabulary) - 1.05-1.15 multiplier
+    'science fiction': 1.10,
+    'sci-fi': 1.10,
+    'documentary': 1.12,
+    'history': 1.10,
+    'war': 1.08,
+    'western': 1.05,
+    'biography': 1.08,
+
+    # Most complex (academic/specialized vocabulary) - 1.10-1.20 multiplier
+    'political': 1.15,
+    'film noir': 1.12,
+    'tv movie': 1.00,  # Neutral
+}
+
+
+def compute_genre_multiplier(genres: List[str]) -> float:
+    """
+    Compute a difficulty multiplier based on movie genres.
+
+    Combines multiple genre weights using a weighted average where
+    more specific genres (kids, sci-fi) take precedence over general ones.
+
+    Args:
+        genres: List of genre strings (e.g., ['Animation', 'Family', 'Adventure'])
+
+    Returns:
+        Multiplier (0.70 - 1.20) to apply to difficulty score
+    """
+    if not genres:
+        return 1.0
+
+    genres_lower = [g.lower().strip() for g in genres]
+
+    # Priority check: Kids content ALWAYS dominates
+    kids_genres = ['animation', 'family', 'kids', 'children']
+    if any(g in genres_lower for g in kids_genres):
+        # Find the lowest (easiest) multiplier among kids genres
+        kids_weights = [GENRE_DIFFICULTY_WEIGHTS.get(g, 1.0) for g in genres_lower if g in kids_genres]
+        return min(kids_weights) if kids_weights else 0.75
+
+    # Collect all matching genre weights
+    weights = []
+    for genre in genres_lower:
+        if genre in GENRE_DIFFICULTY_WEIGHTS:
+            weights.append(GENRE_DIFFICULTY_WEIGHTS[genre])
+
+    if not weights:
+        return 1.0  # No recognized genres
+
+    # For multiple genres, use a weighted average biased toward extremes
+    # This ensures complex genres aren't diluted by neutral ones
+    if len(weights) == 1:
+        return weights[0]
+
+    # Sort to identify extreme values
+    sorted_weights = sorted(weights)
+
+    # Weighted average: give more weight to the most extreme value
+    # (whether it's easy or hard)
+    if sorted_weights[-1] > 1.0:
+        # Harder content: bias toward the hardest genre
+        return sorted_weights[-1] * 0.7 + (sum(sorted_weights[:-1]) / max(1, len(sorted_weights) - 1)) * 0.3
+    else:
+        # Easier content: bias toward the easiest genre
+        return sorted_weights[0] * 0.7 + (sum(sorted_weights[1:]) / max(1, len(sorted_weights) - 1)) * 0.3
 
 
 def compute_cefr_spread(level_counts: Dict[str, int], total_words: int) -> int:
@@ -121,7 +423,11 @@ def compute_cefr_spread(level_counts: Dict[str, int], total_words: int) -> int:
     return effective_max - min_level
 
 
-def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str]] = None) -> Tuple[difficultylevel, int, Dict[str, float]]:
+def compute_difficulty_advanced(
+    words: List[WordData],
+    genres: Optional[List[str]] = None,
+    text: Optional[str] = None
+) -> Tuple[difficultylevel, int, Dict[str, float]]:
     """
     Refined multi-signal difficulty computation with genre normalization.
 
@@ -134,7 +440,14 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     - Median CEFR level (unique words only)
     - Repetition ratio (unique/total)
     - CEFR spread (max - min level)
+    - Average Zipf score (vocabulary rarity)
+    - Flesch Reading Ease (if text provided)
     - Genre normalization
+
+    Args:
+        words: List of WordData objects with CEFR classifications
+        genres: Optional list of movie genres (e.g., ['Animation', 'Family'])
+        text: Optional raw text for readability metrics
 
     Returns difficulty_level, score (0-100), and breakdown percentages.
     """
@@ -244,25 +557,41 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     spread = compute_cefr_spread(level_counts, total_words)
     spread_score = spread / 5.0  # Max spread is 5 (C2 - A1)
 
+    # 9. Average Zipf score (vocabulary rarity) - normalized to 0-1
+    # Zipf 7 = very common (score 0), Zipf 0 = very rare (score 1)
+    avg_zipf = compute_average_zipf(words)
+    zipf_rarity_score = max(0.0, min(1.0, (7.0 - avg_zipf) / 7.0))
+
+    # 10. Flesch Reading Ease (if text provided) - normalized to 0-1
+    # FRE 100 = easiest (score 0), FRE 0 = hardest (score 1)
+    readability_score = 0.5  # Default middle value
+    if text:
+        fre = compute_flesch_reading_ease(text, words)
+        readability_score = max(0.0, min(1.0, (100.0 - fre) / 100.0))
+
     # Final weights (sum = 100%)
-    # Weights:
-    #   - weighted_complex:   35% (core vocabulary complexity - most important)
-    #   - cefr_gap_score:     20% (CEFR distribution spread)
-    #   - median_score:       15% (median CEFR level)
-    #   - lexical_diversity:  10% (vocabulary richness)
-    #   - spread_score:        8% (CEFR level range)
-    #   - syllable_score:      5% (word length proxy)
-    #   - idiom_density:       4% (phrasal complexity)
-    #   - repetition_ratio:    3% (lexical variation)
+    # Weights redistributed to include Zipf and readability:
+    #   - weighted_complex:   30% (core vocabulary complexity - most important)
+    #   - cefr_gap_score:     18% (CEFR distribution spread)
+    #   - median_score:       12% (median CEFR level)
+    #   - zipf_rarity_score:  10% (vocabulary rarity via Zipf)
+    #   - lexical_diversity:   8% (vocabulary richness)
+    #   - readability_score:   7% (Flesch reading ease)
+    #   - spread_score:        6% (CEFR level range)
+    #   - syllable_score:      4% (word length proxy)
+    #   - idiom_density:       3% (phrasal complexity)
+    #   - repetition_ratio:    2% (lexical variation)
     difficulty_score = (
-        0.35 * weighted_complex +           # Core vocab complexity
-        0.20 * cefr_gap_score +             # CEFR distribution spread
-        0.15 * median_score +               # Median CEFR level
-        0.10 * lexical_diversity +          # Vocabulary richness
-        0.08 * spread_score +               # Level range
-        0.05 * syllable_score +             # Word length proxy
-        0.04 * idiom_density +              # Phrasal complexity
-        0.03 * repetition_ratio             # Lexical variation
+        0.30 * weighted_complex +           # Core vocab complexity
+        0.18 * cefr_gap_score +             # CEFR distribution spread
+        0.12 * median_score +               # Median CEFR level
+        0.10 * zipf_rarity_score +          # Vocabulary rarity (Zipf)
+        0.08 * lexical_diversity +          # Vocabulary richness
+        0.07 * readability_score +          # Flesch reading ease
+        0.06 * spread_score +               # Level range
+        0.04 * syllable_score +             # Word length proxy
+        0.03 * idiom_density +              # Phrasal complexity
+        0.02 * repetition_ratio             # Lexical variation
     )
 
     # CRITICAL: Global CEFR vocabulary safety rule
@@ -295,14 +624,9 @@ def compute_difficulty_advanced(words: List[WordData], genres: Optional[List[str
     # Apply genre adjustment AFTER mapping to 0-100 scale
     # This ensures genre affects final score, not intermediate calculations
     if genres:
-        genres_lower = [g.lower() for g in genres]
-
-        # Kids/family ALWAYS takes priority - reduce difficulty
-        if any(g in genres_lower for g in ['animation', 'family', 'kids', 'children']):
-            score = int(score * 0.75)  # 25% reduction for kids content
-        # Adult/complex genres get a modest boost ONLY if not kids/family
-        elif any(g in genres_lower for g in ['mystery', 'sci-fi', 'science fiction', 'political', 'thriller', 'crime', 'drama']):
-            score = min(100, int(score * 1.10))  # 10% boost, capped at 100
+        genre_multiplier = compute_genre_multiplier(genres)
+        score = int(score * genre_multiplier)
+        score = max(0, min(100, score))
 
     # Overhauled thresholds optimized for realistic classification
     if score < 25:
