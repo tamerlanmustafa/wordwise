@@ -18,7 +18,9 @@ interface QueueItem {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [300, 500, 1000]; // Exponential backoff: 300ms -> 500ms -> 1s
-const BATCH_WINDOW_MS = 30; // Group words entering viewport within 30ms
+const BATCH_WINDOW_MS = 50; // Group words within 50ms window for better batching
+const RATE_LIMIT_MS = 100; // Reduced from 200ms - backend now handles parallel requests
+const MAX_BATCH_SIZE = 100; // Increased from ~50 - backend can handle larger batches
 
 export function useTranslationQueue(targetLanguage: string, userId?: number) {
   const queueRef = useRef<QueueItem[]>([]);
@@ -49,8 +51,8 @@ export function useTranslationQueue(targetLanguage: string, userId?: number) {
     const retryCount = item.retryCount || 0;
 
     try {
-      // Rate limiting: 200ms delay between requests
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Rate limiting: reduced delay since backend now handles parallel requests
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS));
 
       // Translate batch
       const response = await translateBatch(
@@ -123,20 +125,41 @@ export function useTranslationQueue(targetLanguage: string, userId?: number) {
     const batch = pendingBatchRef.current;
     pendingBatchRef.current = null;
 
-    // Create single queue item that resolves all promises
-    const queueItem: QueueItem = {
-      words: batch.words,
-      priority: batch.priority,
-      resolve: (results) => {
-        // Resolve all waiting promises with the same results
-        batch.resolvers.forEach(resolve => resolve(results));
-      },
-      reject: (error) => {
-        batch.rejecters.forEach(reject => reject(error));
-      }
-    };
+    // Split into chunks of MAX_BATCH_SIZE if needed
+    const allWords = batch.words;
+    const chunks: string[][] = [];
+    for (let i = 0; i < allWords.length; i += MAX_BATCH_SIZE) {
+      chunks.push(allWords.slice(i, i + MAX_BATCH_SIZE));
+    }
 
-    queueRef.current.push(queueItem);
+    // Track results from all chunks
+    const allResults: TranslationResult[] = [];
+    let completedChunks = 0;
+    let hasError = false;
+
+    chunks.forEach((chunkWords) => {
+      const queueItem: QueueItem = {
+        words: chunkWords,
+        priority: batch.priority,
+        resolve: (results) => {
+          if (hasError) return;
+          allResults.push(...results);
+          completedChunks++;
+          // When all chunks complete, resolve all waiting promises
+          if (completedChunks === chunks.length) {
+            batch.resolvers.forEach(resolve => resolve(allResults));
+          }
+        },
+        reject: (error) => {
+          if (hasError) return;
+          hasError = true;
+          batch.rejecters.forEach(reject => reject(error));
+        }
+      };
+
+      queueRef.current.push(queueItem);
+    });
+
     processQueue();
   }, [processQueue]);
 

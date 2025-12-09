@@ -1,0 +1,194 @@
+/**
+ * WordRow Styles
+ *
+ * Lightweight CSS optimized for virtualized rendering performance.
+ * Theme colors are passed via CSS custom properties from parent components.
+ */
+
+.word-row {
+  position: relative;
+  padding: 16px 24px;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  grid-template-rows: 1fr; /* Single row - fixed height */
+  gap: 0 16px;
+  align-items: center;
+  min-height: 56px; /* Fixed min height for consistency */
+  transition: background-color 0.15s ease;
+  /* Prevent layout shifts */
+  contain: layout style paint;
+}
+
+.word-row:hover {
+  background-color: var(--row-hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+/* Row Number - same color as word, bigger font */
+.word-row__number {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-primary);
+  text-align: right;
+  padding-right: 8px;
+}
+
+/* Content */
+.word-row__content {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.word-row__word {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.word-row__separator {
+  color: var(--text-disabled);
+  font-weight: 300;
+  flex-shrink: 0;
+}
+
+.word-row__translation {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--group-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  /* Smooth fade-in */
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.word-row__translation--loading {
+  opacity: 0.4;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.word-row__translation--loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Metadata - inline with actions, absolute positioned to not affect row height */
+.word-row__metadata {
+  position: absolute;
+  right: 100px; /* Position before actions */
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.word-row:hover .word-row__metadata {
+  opacity: 1;
+}
+
+.word-row__badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 0.6rem;
+  border-radius: 4px;
+  background-color: var(--badge-bg, rgba(0, 0, 0, 0.06));
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.word-row__badge--cached {
+  background-color: var(--badge-bg, rgba(0, 0, 0, 0.06));
+  color: var(--text-secondary);
+}
+
+.word-row__badge--google {
+  background-color: rgba(66, 133, 244, 0.12);
+  color: #4285f4;
+}
+
+.word-row__badge--deepl {
+  background-color: rgba(10, 132, 255, 0.12);
+  color: #0A84FF;
+}
+
+/* Actions */
+.word-row__actions {
+  grid-column: 3 / 4;
+  grid-row: 1 / 2;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.word-row__action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* GPU-accelerated */
+  will-change: transform;
+}
+
+.word-row__action-btn:hover {
+  background-color: var(--action-hover-bg, rgba(0, 0, 0, 0.06));
+  transform: scale(1.1);
+}
+
+.word-row__action-btn:active {
+  transform: scale(0.95);
+}
+
+.word-row__action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.word-row__action-btn:disabled:hover {
+  background-color: transparent;
+  transform: none;
+}
+
+.word-row__action-btn--saved {
+  color: var(--primary-color, #b59fe1);
+}
+
+.word-row__action-btn--learned {
+  color: var(--success-color, #4caf50);
+}
+
+/* Divider */
+.word-row__divider {
+  position: absolute;
+  bottom: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background-color: var(--divider-color);
+}
