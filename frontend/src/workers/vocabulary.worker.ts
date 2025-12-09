@@ -19,6 +19,63 @@ import type {
 import type { WordFrequency } from '../types/script';
 
 // ============================================================================
+// LRU MAP FOR BOUNDED MEMORY
+// ============================================================================
+
+const TRANSLATION_CACHE_SIZE = 5000; // Max translations to keep in memory
+
+/**
+ * Simple LRU Map implementation to prevent unbounded memory growth.
+ * When the map exceeds maxSize, oldest entries are evicted.
+ */
+class LRUMap<K, V> {
+  private map = new Map<K, V>();
+  private maxSize: number;
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.map.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.map.delete(key);
+      this.map.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    // Delete existing to reset order
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    }
+    this.map.set(key, value);
+
+    // Evict oldest entries if over capacity
+    while (this.map.size > this.maxSize) {
+      const firstKey = this.map.keys().next().value;
+      if (firstKey !== undefined) {
+        this.map.delete(firstKey);
+      }
+    }
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key);
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+
+  get size(): number {
+    return this.map.size;
+  }
+}
+
+// ============================================================================
 // WORKER STATE
 // ============================================================================
 
@@ -30,9 +87,12 @@ const state: WorkerState = {
     showOnlySaved: false,
     savedWords: new Set()
   },
-  translations: new Map(),
+  translations: new Map(), // Will use LRU wrapper
   loadedBatchEnd: 0
 };
+
+// LRU-wrapped translation cache
+const translationCache = new LRUMap<string, { translation: string; provider?: string; cached?: boolean }>(TRANSLATION_CACHE_SIZE);
 
 // ============================================================================
 // STRUCT-OF-ARRAYS CONVERSION
@@ -184,8 +244,8 @@ function generateBatch(
       index: idx // Stable index for React keys
     };
 
-    // Hydrate translation if available
-    const translation = state.translations.get(word);
+    // Hydrate translation if available (from LRU cache)
+    const translation = translationCache.get(word);
     if (translation) {
       displayWord.translation = translation.translation;
       displayWord.translationProvider = translation.provider;
@@ -356,9 +416,9 @@ async function handleTranslationUpdate(payload: {
   }>;
 }) {
   try {
-    // Update translation map
+    // Update LRU translation cache
     for (const { word, translation, provider, cached } of payload.translations) {
-      state.translations.set(word.toLowerCase(), {
+      translationCache.set(word.toLowerCase(), {
         translation,
         provider,
         cached
@@ -385,7 +445,7 @@ function handleReset() {
     showOnlySaved: false,
     savedWords: new Set()
   };
-  state.translations.clear();
+  translationCache.clear();  // Clear LRU cache on reset
   state.loadedBatchEnd = 0;
 }
 

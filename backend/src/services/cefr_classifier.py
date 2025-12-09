@@ -2,7 +2,7 @@
 Hybrid CEFR Difficulty Classifier - MAXIMUM SPEED OPTIMIZATION
 
 NO spaCy - uses NLTK WordNetLemmatizer for maximum speed
-Global persistent caching across all requests
+LRU caching to prevent memory leaks
 Aggressive pre-cleaning before tokenization
 """
 
@@ -13,6 +13,7 @@ from enum import Enum
 import json
 from pathlib import Path
 import re
+from functools import lru_cache
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 import nltk
@@ -30,10 +31,46 @@ try:
 except LookupError:
     nltk.download('omw-1.4', quiet=True)
 
-# GLOBAL PERSISTENT CACHES (shared across all requests)
-_GLOBAL_LEMMA_CACHE: Dict[str, str] = {}
-_GLOBAL_CEFR_CACHE: Dict[str, 'WordClassification'] = {}
-_GLOBAL_FREQUENCY_CACHE: Dict[str, Optional[int]] = {}
+# LRU CACHE SIZES - prevent unbounded memory growth
+LEMMA_CACHE_SIZE = 50000
+CEFR_CACHE_SIZE = 50000
+FREQUENCY_CACHE_SIZE = 50000
+
+
+class LRUCache:
+    """Simple LRU cache with max size for mutable values like WordClassification."""
+
+    def __init__(self, maxsize: int = 10000):
+        from collections import OrderedDict
+        self._cache: 'OrderedDict[str, any]' = OrderedDict()
+        self._maxsize = maxsize
+
+    def get(self, key: str) -> Optional[any]:
+        if key in self._cache:
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def set(self, key: str, value: any) -> None:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        # Evict oldest if over capacity
+        while len(self._cache) > self._maxsize:
+            self._cache.popitem(last=False)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._cache
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+
+# GLOBAL LRU CACHES (bounded memory)
+_GLOBAL_LEMMA_CACHE: LRUCache = LRUCache(maxsize=LEMMA_CACHE_SIZE)
+_GLOBAL_CEFR_CACHE: LRUCache = LRUCache(maxsize=CEFR_CACHE_SIZE)
+_GLOBAL_FREQUENCY_CACHE: LRUCache = LRUCache(maxsize=FREQUENCY_CACHE_SIZE)
 
 # Kids vocabulary whitelist - playful, fantasy, onomatopoeia words that are conceptually simple
 # Despite low corpus frequency, these are A2-level for kids
@@ -315,10 +352,11 @@ class HybridCEFRClassifier:
 
     def _get_lemma_fast(self, word: str) -> str:
         global _GLOBAL_LEMMA_CACHE
-        if word in _GLOBAL_LEMMA_CACHE:
-            return _GLOBAL_LEMMA_CACHE[word]
+        cached = _GLOBAL_LEMMA_CACHE.get(word)
+        if cached is not None:
+            return cached
         lemma = self.lemmatizer.lemmatize(word)
-        _GLOBAL_LEMMA_CACHE[word] = lemma
+        _GLOBAL_LEMMA_CACHE.set(word, lemma)
         return lemma
 
     def _get_frequency_rank(self, word: str, lang: str = 'en') -> Optional[int]:
@@ -326,7 +364,7 @@ class HybridCEFRClassifier:
         if not self.has_wordfreq:
             return None
         if word in _GLOBAL_FREQUENCY_CACHE:
-            return _GLOBAL_FREQUENCY_CACHE[word]
+            return _GLOBAL_FREQUENCY_CACHE.get(word)
         try:
             import wordfreq
             zipf = wordfreq.zipf_frequency(word, lang)
@@ -336,10 +374,10 @@ class HybridCEFRClassifier:
                 rank = int(10 ** (7 - zipf))
             else:
                 rank = 100000
-            _GLOBAL_FREQUENCY_CACHE[word] = rank
+            _GLOBAL_FREQUENCY_CACHE.set(word, rank)
             return rank
         except Exception:
-            _GLOBAL_FREQUENCY_CACHE[word] = None
+            _GLOBAL_FREQUENCY_CACHE.set(word, None)
             return None
 
     def _classify_by_frequency(self, word: str, lemma: str) -> Optional[WordClassification]:
@@ -416,8 +454,9 @@ class HybridCEFRClassifier:
 
         # Cache key includes genre flag to avoid cross-contamination
         cache_key = f"{word_lower}:{'kids' if is_kids_genre else 'adult'}"
-        if cache_key in _GLOBAL_CEFR_CACHE:
-            return _GLOBAL_CEFR_CACHE[cache_key]
+        cached = _GLOBAL_CEFR_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
 
         # KIDS WHITELIST: Force A2 for playful/fantasy/onomatopoeia words
         if word_lower in KIDS_SIMPLE_VOCAB:
@@ -429,7 +468,7 @@ class HybridCEFRClassifier:
                 confidence=0.95,
                 source=ClassificationSource.FALLBACK
             )
-            _GLOBAL_CEFR_CACHE[cache_key] = result
+            _GLOBAL_CEFR_CACHE.set(cache_key, result)
             return result
 
         # PROPER NOUNS & FANTASY WORDS: Detect before classification
@@ -442,7 +481,7 @@ class HybridCEFRClassifier:
                 confidence=0.9,
                 source=ClassificationSource.FALLBACK
             )
-            _GLOBAL_CEFR_CACHE[cache_key] = result
+            _GLOBAL_CEFR_CACHE.set(cache_key, result)
             return result
 
         lemma = self._get_lemma_fast(word_lower)
@@ -458,7 +497,7 @@ class HybridCEFRClassifier:
                 source=source,
                 is_multi_word=True
             )
-            _GLOBAL_CEFR_CACHE[word_lower] = result
+            _GLOBAL_CEFR_CACHE.set(word_lower, result)
             return result
 
         # Dictionary lookup (only source allowed to assign C1/C2)
@@ -472,17 +511,25 @@ class HybridCEFRClassifier:
                 confidence=1.0,
                 source=source
             )
-            _GLOBAL_CEFR_CACHE[cache_key] = result
+            _GLOBAL_CEFR_CACHE.set(cache_key, result)
             return result
 
         # Frequency-based (capped at B2)
         freq_result = self._classify_by_frequency(word_lower, lemma)
         if freq_result and freq_result.confidence >= 0.5:
             # For kids genres: downgrade B2+ non-dictionary words to A2
+            # IMPORTANT: Create new object to avoid mutating cached results
             if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
-                freq_result.cefr_level = CEFRLevel.A2
-                freq_result.confidence = 0.6
-            _GLOBAL_CEFR_CACHE[cache_key] = freq_result
+                freq_result = WordClassification(
+                    word=freq_result.word,
+                    lemma=freq_result.lemma,
+                    pos=freq_result.pos,
+                    cefr_level=CEFRLevel.A2,
+                    confidence=0.6,
+                    source=freq_result.source,
+                    is_multi_word=freq_result.is_multi_word
+                )
+            _GLOBAL_CEFR_CACHE.set(cache_key, freq_result)
             return freq_result
 
         # Embedding classifier (if enabled)
@@ -490,18 +537,34 @@ class HybridCEFRClassifier:
             emb_result = self._classify_by_embedding(word_lower, lemma)
             if emb_result:
                 # For kids genres: downgrade high levels from embeddings
+                # IMPORTANT: Create new object to avoid mutating cached results
                 if is_kids_genre and emb_result.cefr_level in [CEFRLevel.B2, CEFRLevel.C1, CEFRLevel.C2]:
-                    emb_result.cefr_level = CEFRLevel.A2
-                    emb_result.confidence *= 0.7
-                _GLOBAL_CEFR_CACHE[cache_key] = emb_result
+                    emb_result = WordClassification(
+                        word=emb_result.word,
+                        lemma=emb_result.lemma,
+                        pos=emb_result.pos,
+                        cefr_level=CEFRLevel.A2,
+                        confidence=emb_result.confidence * 0.7,
+                        source=emb_result.source,
+                        is_multi_word=emb_result.is_multi_word
+                    )
+                _GLOBAL_CEFR_CACHE.set(cache_key, emb_result)
                 return emb_result
 
         # Low-confidence frequency result
         if freq_result:
+            # IMPORTANT: Create new object to avoid mutating cached results
             if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
-                freq_result.cefr_level = CEFRLevel.A2
-                freq_result.confidence = 0.4
-            _GLOBAL_CEFR_CACHE[cache_key] = freq_result
+                freq_result = WordClassification(
+                    word=freq_result.word,
+                    lemma=freq_result.lemma,
+                    pos=freq_result.pos,
+                    cefr_level=CEFRLevel.A2,
+                    confidence=0.4,
+                    source=freq_result.source,
+                    is_multi_word=freq_result.is_multi_word
+                )
+            _GLOBAL_CEFR_CACHE.set(cache_key, freq_result)
             return freq_result
 
         # Final fallback: Unknown words → A2
@@ -513,7 +576,7 @@ class HybridCEFRClassifier:
             confidence=0.2,
             source=ClassificationSource.FALLBACK
         )
-        _GLOBAL_CEFR_CACHE[cache_key] = result
+        _GLOBAL_CEFR_CACHE.set(cache_key, result)
         return result
 
     def classify_text(self, text: str, genres: Optional[List[str]] = None) -> List[WordClassification]:
@@ -572,6 +635,8 @@ class HybridCEFRClassifier:
         # CRITICAL FIX 3: Sanity check for impossible C2 spikes
         # If C2 > 1.5% AND C1 < 0.5%, this indicates misclassification
         # Solution: Downgrade 90% of C2 words to A2 (likely proper nouns/fantasy words)
+        # NOTE: We create NEW objects instead of mutating - cache is NOT updated to avoid
+        # corrupting classifications for other movies
         if classifications:
             total = len(classifications)
             c1_count = sum(1 for cls in classifications if cls.cefr_level == CEFRLevel.C1)
@@ -585,22 +650,30 @@ class HybridCEFRClassifier:
                 logger.warning(f"⚠️ Impossible C2 spike detected: C2={c2_pct*100:.1f}%, C1={c1_pct*100:.1f}%")
                 logger.warning(f"Downgrading 90% of C2 words to A2 (likely proper nouns/fantasy words)")
 
-                # Find all C2 classifications
-                c2_classifications = [cls for cls in classifications if cls.cefr_level == CEFRLevel.C2]
+                # Find indices of C2 classifications
+                c2_indices = [i for i, cls in enumerate(classifications) if cls.cefr_level == CEFRLevel.C2]
 
-                # Downgrade 90% of them to A2
-                downgrade_count = int(len(c2_classifications) * 0.9)
+                # Downgrade 90% of them to A2 by creating NEW objects (don't mutate!)
+                downgrade_count = int(len(c2_indices) * 0.9)
                 for i in range(downgrade_count):
-                    cls = c2_classifications[i]
-                    # Update the classification in place
-                    cls.cefr_level = CEFRLevel.A2
-                    cls.confidence = 0.3
-                    # Update cache to reflect the fix
-                    word_key = cls.word.lower().strip()
-                    if word_key in _GLOBAL_CEFR_CACHE:
-                        _GLOBAL_CEFR_CACHE[word_key] = cls
+                    idx = c2_indices[i]
+                    old_cls = classifications[idx]
+                    # Create NEW object - NEVER mutate the original
+                    new_cls = WordClassification(
+                        word=old_cls.word,
+                        lemma=old_cls.lemma,
+                        pos=old_cls.pos,
+                        cefr_level=CEFRLevel.A2,
+                        confidence=0.3,
+                        source=old_cls.source,
+                        is_multi_word=old_cls.is_multi_word
+                    )
+                    classifications[idx] = new_cls
+                    # NOTE: We do NOT update _GLOBAL_CEFR_CACHE here!
+                    # The C2 spike fix is movie-specific (proper nouns/fantasy context)
+                    # Other movies may have legitimate C2 words with the same lemma
 
-                logger.info(f"✓ Downgraded {downgrade_count}/{len(c2_classifications)} C2 words to A2")
+                logger.info(f"✓ Downgraded {downgrade_count}/{len(c2_indices)} C2 words to A2")
 
         elapsed = time.time() - start_time
         logger.info(f"Classified {len(unique_words)} unique words → {len(classifications)} lemmas in {elapsed:.2f}s")

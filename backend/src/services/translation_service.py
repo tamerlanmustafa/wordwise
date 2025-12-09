@@ -304,40 +304,47 @@ class TranslationService:
         texts: List[str],
         target_lang: str,
         source_lang: str = "auto",
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        max_concurrent: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Translate multiple texts efficiently with caching
+        Translate multiple texts efficiently with caching and parallel requests.
 
         Args:
             texts: List of texts to translate
             target_lang: Target language code
             source_lang: Source language code or 'auto'
             user_id: User ID for tracking (optional)
+            max_concurrent: Maximum concurrent translation requests (default 5)
 
         Returns:
             List of translation results (same order as input)
         """
-        results = []
+        import asyncio
 
-        for text in texts:
-            try:
-                result = await self.get_translation(
-                    text=text,
-                    target_lang=target_lang,
-                    source_lang=source_lang,
-                    user_id=user_id
-                )
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Batch translation failed for '{text}': {e}")
-                results.append({
-                    "source": text,
-                    "error": str(e),
-                    "target_lang": target_lang.upper()
-                })
+        semaphore = asyncio.Semaphore(max_concurrent)
 
-        return results
+        async def translate_with_semaphore(text: str) -> Dict[str, Any]:
+            async with semaphore:
+                try:
+                    return await self.get_translation(
+                        text=text,
+                        target_lang=target_lang,
+                        source_lang=source_lang,
+                        user_id=user_id
+                    )
+                except Exception as e:
+                    logger.error(f"Batch translation failed for '{text}': {e}")
+                    return {
+                        "source": text,
+                        "error": str(e),
+                        "target_lang": target_lang.upper()
+                    }
+
+        # Run all translations in parallel with semaphore limiting concurrency
+        results = await asyncio.gather(*[translate_with_semaphore(text) for text in texts])
+
+        return list(results)
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """Get translation cache statistics"""
