@@ -20,6 +20,9 @@ interface WordRowProps {
   // Word data
   word: DisplayWord;
 
+  // Row number (1-indexed for display)
+  rowNumber: number;
+
   // Rendering metadata
   groupColor: string;
   showDivider: boolean;
@@ -45,6 +48,7 @@ interface WordRowProps {
  */
 export const WordRow = memo<WordRowProps>(({
   word,
+  rowNumber,
   groupColor,
   showDivider,
   isSaved,
@@ -62,6 +66,9 @@ export const WordRow = memo<WordRowProps>(({
     <div className="word-row" style={{ '--group-color': groupColor } as React.CSSProperties}>
       {/* Content */}
       <div className="word-row__content">
+        {/* Row Number */}
+        <span className="word-row__number">{rowNumber}</span>
+
         {/* Word */}
         <span className="word-row__word">
           {word.word}
@@ -129,6 +136,7 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.word.translation === nextProps.word.translation &&
     prevProps.word.translationProvider === nextProps.word.translationProvider &&
     prevProps.word.translationCached === nextProps.word.translationCached &&
+    prevProps.rowNumber === nextProps.rowNumber &&
     prevProps.groupColor === nextProps.groupColor &&
     prevProps.showDivider === nextProps.showDivider &&
     prevProps.isSaved === nextProps.isSaved &&

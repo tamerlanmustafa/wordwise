@@ -199,33 +199,6 @@ function generateBatch(
 }
 
 // ============================================================================
-// CHUNKED PROCESSING
-// ============================================================================
-
-/**
- * Process large operations in chunks to avoid blocking the event loop
- * Uses setTimeout(0) to yield to the event loop between chunks
- */
-async function processInChunks<T>(
-  items: T[],
-  chunkSize: number,
-  processor: (chunk: T[]) => void
-): Promise<void> {
-  let offset = 0;
-
-  while (offset < items.length) {
-    const chunk = items.slice(offset, offset + chunkSize);
-    processor(chunk);
-    offset += chunkSize;
-
-    // Yield to event loop
-    if (offset < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-    }
-  }
-}
-
-// ============================================================================
 // MESSAGE HANDLERS
 // ============================================================================
 

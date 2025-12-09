@@ -32,11 +32,11 @@ import LockIcon from '@mui/icons-material/Lock';
 import { Link } from 'react-router-dom';
 import { VirtualizedWordList } from './VirtualizedWordList';
 import { useWorkerVocabularyFeed } from '../hooks/useWorkerVocabularyFeed';
-import type { WordFrequency } from '../types/script';
+import type { WordFrequency, CEFRLevel } from '../types/script';
 
 interface WordListWorkerBasedProps {
   // Active group data
-  groupLevel: string;
+  groupLevel: CEFRLevel;
   groupDescription: string;
   groupColor: string;
   totalWordCount: number;
@@ -112,7 +112,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
     toggleLearned(word);
   }, [toggleLearned]);
 
-  const handleRequestBatch = useCallback((startIndex: number, count: number) => {
+  const handleRequestBatch = useCallback((_startIndex: number, _count: number) => {
     requestMore();
   }, [requestMore]);
 

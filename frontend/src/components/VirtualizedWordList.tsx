@@ -43,12 +43,12 @@ interface VirtualizedWordListProps {
   movieId?: number;
 
   // Container ref
-  containerRef?: React.RefObject<HTMLDivElement>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const ROW_HEIGHT = 80; // Fixed row height for performance
 const OVERSCAN = 8;    // Number of rows to render outside viewport
-const BATCH_THRESHOLD = 200; // Request next batch when 200px from end
+// BATCH_THRESHOLD reserved for future prefetching optimization
 
 export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   words,
@@ -64,7 +64,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   isLoadingMore,
   otherMovies,
   movieId,
-  containerRef
+  containerRef: _containerRef  // Reserved for scroll sync
 }) => {
   // Scroll container ref
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -178,6 +178,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
             >
               <WordRow
                 word={word}
+                rowNumber={virtualItem.index + 1}
                 groupColor={groupColor}
                 showDivider={virtualItem.index < words.length - 1}
                 isSaved={isSaved}

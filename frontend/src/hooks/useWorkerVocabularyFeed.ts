@@ -15,15 +15,15 @@
  * 5. Worker receives translation updates and merges them into future batches
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useVocabularyWorker } from './useVocabularyWorker';
 import { useTranslationQueue } from './useTranslationQueue';
-import type { WordFrequency } from '../types/script';
+import type { WordFrequency, CEFRLevel } from '../types/script';
 import type { DisplayWord } from '../types/vocabularyWorker';
 
 interface UseWorkerVocabularyFeedOptions {
   rawWords: WordFrequency[];
-  cefrLevel: string;
+  cefrLevel: CEFRLevel;
   targetLanguage: string;
   userId?: number;
   isAuthenticated: boolean;

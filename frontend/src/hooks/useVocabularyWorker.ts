@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { WordFrequency } from '../types/script';
+import type { WordFrequency, CEFRLevel } from '../types/script';
 import type {
   WorkerInboundMessage,
   WorkerOutboundMessage,
@@ -23,7 +23,7 @@ import type {
 
 interface UseVocabularyWorkerOptions {
   rawWords: WordFrequency[];
-  cefrLevel: string;
+  cefrLevel: CEFRLevel;
   targetLanguage: string;
   userId?: number;
   isAuthenticated: boolean;
@@ -60,8 +60,8 @@ const BATCH_SIZE = 50;
 export function useVocabularyWorker({
   rawWords,
   cefrLevel,
-  targetLanguage,
-  userId,
+  targetLanguage: _targetLanguage,  // Reserved for future translation integration
+  userId: _userId,                   // Reserved for future personalization
   isAuthenticated,
   isPreview = false
 }: UseVocabularyWorkerOptions): UseVocabularyWorkerResult {
@@ -127,7 +127,7 @@ export function useVocabularyWorker({
 
     switch (message.type) {
       case 'BATCH_READY': {
-        const { batch, startIndex, endIndex, totalCount } = message.payload;
+        const { batch, startIndex: _startIndex, endIndex, totalCount } = message.payload;
 
         scheduleUpdate({
           visibleWords: batch,
