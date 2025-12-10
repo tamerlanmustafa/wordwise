@@ -124,6 +124,27 @@ class DeepLClient:
                     data=data,
                     timeout=aiohttp.ClientTimeout(total=self.timeout)
                 ) as response:
+                    # Check content type before parsing JSON
+                    content_type = response.headers.get('Content-Type', '')
+
+                    # Handle non-JSON responses (error pages, HTML, etc.)
+                    if 'application/json' not in content_type:
+                        response_text = await response.text()
+                        logger.error(f"DeepL returned non-JSON response (status={response.status}, content-type={content_type}): {response_text[:200]}")
+
+                        if response.status == 403:
+                            raise DeepLQuotaExceededError(
+                                "DeepL API quota exceeded or invalid API key"
+                            )
+                        elif response.status == 429:
+                            raise DeepLQuotaExceededError("Too many requests - rate limit exceeded")
+                        elif response.status == 456:
+                            raise DeepLQuotaExceededError("DeepL character quota exceeded for this billing period")
+                        else:
+                            raise DeepLError(
+                                f"DeepL API error: {response.status} - unexpected response format"
+                            )
+
                     response_data = await response.json()
 
                     # Handle errors
@@ -138,6 +159,8 @@ class DeepLClient:
                         raise DeepLError(error_message)
                     elif response.status == 429:
                         raise DeepLQuotaExceededError("Too many requests - rate limit exceeded")
+                    elif response.status == 456:
+                        raise DeepLQuotaExceededError("DeepL character quota exceeded for this billing period")
                     elif response.status != 200:
                         raise DeepLError(
                             f"DeepL API error: {response.status} - {response_data}"
@@ -154,6 +177,10 @@ class DeepLClient:
                         "detected_source_lang": translation.get("detected_source_language")
                     }
 
+        except aiohttp.ContentTypeError as e:
+            # This happens when response.json() fails due to wrong content type
+            logger.error(f"DeepL returned invalid content type: {e}")
+            raise DeepLError(f"DeepL API returned invalid response format - check API key and quota")
         except aiohttp.ClientError as e:
             logger.error(f"Network error during translation: {e}")
             raise DeepLError(f"Network error: {str(e)}")
