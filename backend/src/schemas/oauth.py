@@ -3,16 +3,21 @@ OAuth authentication schemas for request/response validation.
 """
 
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class GoogleLoginRequest(BaseModel):
     """Request body for Google OAuth login"""
     id_token: str = Field(..., description="Google ID token from client")
+    native_language: Optional[str] = Field(None, description="User's native language code")
+    learning_language: Optional[str] = Field(None, description="Language user is learning")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjI3..."
+                "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjI3...",
+                "native_language": "es",
+                "learning_language": "en"
             }
         }
 

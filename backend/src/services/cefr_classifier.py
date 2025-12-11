@@ -340,6 +340,54 @@ CONTRACTION_FRAGMENTS = {
     're', 'd', 's', 't', 'm'  # Common suffixes
 }
 
+# Foreign words commonly appearing in English movies (Italian, Spanish, etc.)
+# These should be filtered out as they're not English vocabulary to learn
+FOREIGN_WORDS_FILTER = {
+    # Italian (common in mafia movies)
+    'natale', 'salud', 'salute', 'cannoli', 'consigliere', 'capo', 'capisce',
+    'pezzonovante', 'goombah', 'goomba', 'paesano', 'paisano', 'grazie', 'gràzie',
+    'prego', 'ciao', 'arrivederci', 'buongiorno', 'buona', 'sera', 'notte',
+    'bambino', 'bambina', 'ragazzo', 'ragazza', 'signore', 'signora', 'signorina',
+    'famiglia', 'mamma', 'papa', 'nonna', 'nonno', 'zio', 'zia',
+    'capisci', 'capito', 'basta', 'andiamo', 'aspetta', 'mangia', 'mangiare',
+    'vino', 'vini', 'pasta', 'antipasto', 'primo', 'secondo', 'dolce',
+    'bella', 'bello', 'bellissimo', 'bellissima', 'bravo', 'brava',
+    'stronzo', 'cazzo', 'merda', 'minchia', 'fottiti', 'vaffanculo',
+    'omertà', 'vendetta', 'cosa', 'nostra', 'mafia', 'mafioso',
+    'capocol', 'prosciutto', 'mortadella', 'salami', 'ricotta', 'mozzarella',
+    # Spanish
+    'hola', 'adios', 'adiós', 'buenos', 'buenas', 'dias', 'noches', 'tardes',
+    'gracias', 'por', 'favor', 'señor', 'señora', 'señorita', 'amigo', 'amiga',
+    'hermano', 'hermana', 'madre', 'padre', 'abuela', 'abuelo', 'hijo', 'hija',
+    'loco', 'loca', 'puta', 'puto', 'pendejo', 'cabron', 'cabrón', 'chinga',
+    'mierda', 'carajo', 'coño', 'joder', 'hostia', 'cojones',
+    'vamos', 'vámonos', 'ándale', 'arriba', 'órale', 'ese', 'vato', 'cholo',
+    'dinero', 'plata', 'trabajo', 'casa', 'cerveza', 'tequila', 'mezcal',
+    # French
+    'bonjour', 'bonsoir', 'salut', 'merci', 'beaucoup', 'oui', 'non',
+    'monsieur', 'madame', 'mademoiselle', 'excusez', 'pardon', 'voila', 'voilà',
+    'rendez', 'vous', 'c\'est', 'la', 'vie', 'mon', 'dieu', 'sacré', 'bleu',
+    'merde', 'putain', 'bordel', 'foutre', 'encule',
+    'au', 'revoir', 'bonne', 'nuit', 'jour', 'très', 'bien', 'mal',
+    # German
+    'guten', 'tag', 'morgen', 'abend', 'danke', 'bitte', 'ja', 'nein',
+    'herr', 'frau', 'fräulein', 'auf', 'wiedersehen', 'tschüss',
+    'scheisse', 'scheiße', 'verdammt', 'arschloch', 'wunderbar', 'jawohl',
+    # Japanese (common in anime/martial arts)
+    'hai', 'arigato', 'arigatou', 'gomen', 'gomenasai', 'sumimasen',
+    'sayonara', 'konnichiwa', 'ohayo', 'oyasumi', 'itadakimasu',
+    'sensei', 'senpai', 'sama', 'san', 'kun', 'chan', 'domo', 'moshi',
+    'baka', 'kuso', 'chikusho', 'shimatta', 'nani', 'sugoi', 'kawaii',
+    # Latin (formal/religious)
+    'et', 'cetera', 'ergo', 'quid', 'pro', 'quo', 'vice', 'versa',
+    'carpe', 'diem', 'veni', 'vidi', 'vici', 'amen', 'hallelujah',
+    # Russian
+    'da', 'nyet', 'niet', 'spasibo', 'tovarisch', 'babushka', 'vodka',
+    # Yiddish (common in American films)
+    'oy', 'vey', 'mazel', 'tov', 'mensch', 'meshuggeneh', 'kvetch',
+    'schlemiel', 'schlep', 'shmuck', 'putz', 'nebbish', 'nosh', 'tchotchke',
+}
+
 # Slang/informal vocabulary that's conceptually simple (A2-B1 level)
 # Despite low corpus frequency, these are commonly understood in movies/TV
 INFORMAL_SIMPLE_VOCAB = {
@@ -373,6 +421,9 @@ def is_valid_token(token: str) -> bool:
         return False
     # Filter out contraction fragments
     if token.lower() in CONTRACTION_FRAGMENTS:
+        return False
+    # Filter out foreign words (Italian, Spanish, French, etc.)
+    if token.lower() in FOREIGN_WORDS_FILTER:
         return False
     if not any(c.isalpha() for c in token):
         return False

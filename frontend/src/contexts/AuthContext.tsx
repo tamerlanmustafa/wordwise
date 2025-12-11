@@ -11,10 +11,15 @@ interface User {
   profile_picture_url?: string;
 }
 
+interface LanguagePreferences {
+  nativeLanguage: string;
+  learningLanguage: string;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  handleGoogleLogin: (credentialResponse: CredentialResponse) => Promise<void>;
+  handleGoogleLogin: (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -36,11 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const handleGoogleLogin = async (credentialResponse: CredentialResponse) => {
+  const handleGoogleLogin = async (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => {
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const backendResponse = await axios.post(`${API_BASE_URL}/auth/google/login`, {
         id_token: credentialResponse.credential,
+        native_language: languagePrefs?.nativeLanguage,
+        learning_language: languagePrefs?.learningLanguage,
       });
 
       const userData = backendResponse.data.user;

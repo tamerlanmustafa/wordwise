@@ -53,7 +53,13 @@ def _verify_and_get_google_user_info(id_token: str) -> dict:
     return google_user_info
 
 
-async def _create_or_update_user(google_user_info: dict, db: Prisma, allow_new: bool = True):
+async def _create_or_update_user(
+    google_user_info: dict,
+    db: Prisma,
+    allow_new: bool = True,
+    native_language: str | None = None,
+    learning_language: str | None = None
+):
     """Create or update user based on Google info using Prisma."""
     google_id = google_user_info['google_id']
     email = google_user_info['email']
@@ -72,13 +78,20 @@ async def _create_or_update_user(google_user_info: dict, db: Prisma, allow_new: 
 
         if user:
             # Existing user logging in with Google for the first time
+            update_data = {
+                "googleId": google_id,
+                "oauthProvider": "google",
+                "profilePictureUrl": google_user_info.get('picture')
+            }
+            # Update language preferences if provided and not already set
+            if native_language and not user.nativeLanguage:
+                update_data["nativeLanguage"] = native_language
+            if learning_language and not user.learningLanguage:
+                update_data["learningLanguage"] = learning_language
+
             user = await db.user.update(
                 where={"id": user.id},
-                data={
-                    "googleId": google_id,
-                    "oauthProvider": "google",
-                    "profilePictureUrl": google_user_info.get('picture')
-                }
+                data=update_data
             )
         else:
             # New user
@@ -98,23 +111,37 @@ async def _create_or_update_user(google_user_info: dict, db: Prisma, allow_new: 
                 counter += 1
 
             # Create new user with Prisma
-            user = await db.user.create(
-                data={
-                    "email": email,
-                    "username": username,
-                    "googleId": google_id,
-                    "oauthProvider": "google",
-                    "profilePictureUrl": google_user_info.get('picture'),
-                    "isActive": True
-                }
-            )
+            user_data = {
+                "email": email,
+                "username": username,
+                "googleId": google_id,
+                "oauthProvider": "google",
+                "profilePictureUrl": google_user_info.get('picture'),
+                "isActive": True
+            }
+            # Add language preferences if provided
+            if native_language:
+                user_data["nativeLanguage"] = native_language
+            if learning_language:
+                user_data["learningLanguage"] = learning_language
+
+            user = await db.user.create(data=user_data)
             is_new_user = True
     else:
         # Existing Google user - update profile picture if changed
+        update_data = {}
         if user.profilePictureUrl != google_user_info.get('picture'):
+            update_data["profilePictureUrl"] = google_user_info.get('picture')
+        # Update language preferences if provided and not already set
+        if native_language and not user.nativeLanguage:
+            update_data["nativeLanguage"] = native_language
+        if learning_language and not user.learningLanguage:
+            update_data["learningLanguage"] = learning_language
+
+        if update_data:
             user = await db.user.update(
                 where={"id": user.id},
-                data={"profilePictureUrl": google_user_info.get('picture')}
+                data=update_data
             )
 
     return user, is_new_user
@@ -190,8 +217,14 @@ async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)
         # Verify Google ID token
         google_user_info = _verify_and_get_google_user_info(request.id_token)
 
-        # Create or update user (allows new users)
-        user, _ = await _create_or_update_user(google_user_info, db, allow_new=True)
+        # Create or update user (allows new users), with language preferences
+        user, _ = await _create_or_update_user(
+            google_user_info,
+            db,
+            allow_new=True,
+            native_language=request.native_language,
+            learning_language=request.learning_language
+        )
 
         # Generate JWT access token
         access_token_expires = timedelta(hours=settings.jwt_expiration_hours)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from prisma import Prisma
 from datetime import timedelta
 from ..database import get_db
-from ..schemas.user import UserCreate, UserResponse, UserLogin, AuthResponse
+from ..schemas.user import UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate, SUPPORTED_LANGUAGES
 from ..utils.auth import verify_password, get_password_hash, create_access_token
 from ..config import get_settings
 from ..middleware.auth import get_current_user
@@ -38,6 +38,8 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
             "username": user_data.username,
             "passwordHash": hashed_password,
             "languagePreference": user_data.language_preference,
+            "nativeLanguage": user_data.native_language,
+            "learningLanguage": user_data.learning_language,
             "proficiencyLevel": user_data.proficiency_level,
             "oauthProvider": "email",
             "isActive": True,
@@ -108,6 +110,71 @@ async def refresh_token(current_user = Depends(get_current_user)):
     return {
         "token": access_token,
         "user": current_user
+    }
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_user_profile(
+    user_update: UserUpdate,
+    current_user = Depends(get_current_user),
+    db: Prisma = Depends(get_db)
+):
+    """Update current user's profile"""
+    update_data = {}
+
+    if user_update.username is not None:
+        # Check if username is already taken
+        existing = await db.user.find_first(
+            where={"username": user_update.username, "id": {"not": current_user.id}}
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+        update_data["username"] = user_update.username
+
+    if user_update.language_preference is not None:
+        update_data["languagePreference"] = user_update.language_preference
+
+    if user_update.native_language is not None:
+        if user_update.native_language not in SUPPORTED_LANGUAGES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported language: {user_update.native_language}"
+            )
+        update_data["nativeLanguage"] = user_update.native_language
+
+    if user_update.learning_language is not None:
+        if user_update.learning_language not in SUPPORTED_LANGUAGES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported language: {user_update.learning_language}"
+            )
+        update_data["learningLanguage"] = user_update.learning_language
+
+    if user_update.proficiency_level is not None:
+        update_data["proficiencyLevel"] = user_update.proficiency_level
+
+    if not update_data:
+        return current_user
+
+    updated_user = await db.user.update(
+        where={"id": current_user.id},
+        data=update_data
+    )
+
+    return updated_user
+
+
+@router.get("/languages")
+async def get_supported_languages():
+    """Get list of supported languages for learning and translation"""
+    return {
+        "languages": [
+            {"code": code, "name": name}
+            for code, name in SUPPORTED_LANGUAGES.items()
+        ]
     }
 
 

@@ -14,6 +14,8 @@ model User {
   username           String                    @unique(map: "ix_users_username") @db.VarChar
   passwordHash       String?                   @map("password_hash") @db.VarChar
   languagePreference String?                   @map("language_preference") @db.VarChar
+  nativeLanguage     String?                   @default("en") @map("native_language") @db.VarChar(10)
+  learningLanguage   String?                   @default("en") @map("learning_language") @db.VarChar(10)
   proficiencyLevel   proficiencylevel?         @map("proficiency_level")
   isActive           Boolean?                  @map("is_active")
   isAdmin            Boolean?                  @map("is_admin")
