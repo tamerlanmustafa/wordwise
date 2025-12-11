@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] - 2025-11-22
 
 ### Added
-- **Hybrid CEFR Difficulty Classifier** - Complete word classification system
+- **Hybrid CEFR Difficulty Classifier** - Complete word classification system 
   - Multi-source CEFR wordlist support (Oxford 3000/5000, EFLLex, EVP)
   - Frequency-based backoff using wordfreq library
   - Optional ML embedding classifier (sentence-transformers + scikit-learn)
