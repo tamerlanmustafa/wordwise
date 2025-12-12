@@ -389,6 +389,9 @@ async function handleRequestBatch(payload: { startIndex: number; count: number }
 
   try {
     const { startIndex, count } = payload;
+
+    // Use all filtered indices - no upfront filtering since we use click-to-expand
+    // Words where source === translation will show "no translation" badge when expanded
     const batch = generateBatch(
       state.sourceData,
       state.filteredIndices,
@@ -438,6 +441,8 @@ async function handleTranslationUpdate(payload: {
     }
 
     // Re-send current batch with updated translations
+    // Note: With click-to-expand, translations are fetched on-demand in the UI
+    // This handler is kept for potential future batch translation use
     if (state.sourceData && state.loadedBatchEnd > 0) {
       const batch = generateBatch(
         state.sourceData,

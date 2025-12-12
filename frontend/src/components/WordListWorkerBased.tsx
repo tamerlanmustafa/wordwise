@@ -32,6 +32,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import { Link } from 'react-router-dom';
 import { VirtualizedWordList } from './VirtualizedWordList';
 import { useWorkerVocabularyFeed } from '../hooks/useWorkerVocabularyFeed';
+import { translateText } from '../services/scriptService';
 import type { WordFrequency, CEFRLevel } from '../types/script';
 
 interface WordListWorkerBasedProps {
@@ -115,6 +116,20 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   const handleRequestBatch = useCallback((_startIndex: number, _count: number) => {
     requestMore();
   }, [requestMore]);
+
+  // On-demand translation callback (called when user clicks to expand a word)
+  const handleTranslate = useCallback(async (word: string): Promise<{ translation: string; provider?: string } | null> => {
+    try {
+      const result = await translateText(word, targetLanguage, 'en', userId);
+      return {
+        translation: result.translated,
+        provider: result.provider || (result.cached ? 'cache' : undefined)
+      };
+    } catch (error) {
+      console.error('Translation error:', error);
+      return null;
+    }
+  }, [targetLanguage, userId]);
 
   // Memoize preview words
   const previewWords = useMemo(() => {
@@ -241,6 +256,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             savedWords={savedWords}
             onSaveWord={handleSaveWord}
             onToggleLearned={handleToggleLearned}
+            onTranslate={handleTranslate}
             onRequestBatch={handleRequestBatch}
             isLoadingMore={isLoadingMore}
             otherMovies={otherMovies}

@@ -8,6 +8,7 @@ import {
 import { TabsHeader } from './TabsHeader';
 import { WordListWorkerBased } from './WordListWorkerBased';
 import { MovieSidebar } from './MovieSidebar';
+import { ScrollToTop } from './ScrollToTop';
 import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency, CEFRLevel } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
@@ -321,25 +322,37 @@ function VocabularyViewBase({
           />
 
           {/* WordListWorkerBased - Worker-based component with numbering */}
-          <WordListWorkerBased
-            groupLevel={activeGroup.level}
-            groupDescription={activeGroup.description}
-            groupColor={activeGroup.color}
-            totalWordCount={activeGroup.words.length}
-            rawWords={activeGroup.words}
-            isPreview={isPreview}
-            isWordSavedInMovie={isWordSavedInMovie}
-            saveWord={saveWord}
-            toggleLearned={toggleLearned}
-            learnedWords={learnedWords}
-            savedWords={savedWords}
-            otherMovies={otherMovies}
-            movieId={movieId}
-            targetLanguage={targetLanguage}
-            userId={userId}
-            isAuthenticated={isAuthenticated}
-            listContainerRef={listContainerRef}
-          />
+          {/* Key ensures remount on tab change, triggering fade-in animation */}
+          <Box
+            key={activeGroup.level}
+            sx={{
+              animation: 'fadeIn 0.25s ease-out',
+              '@keyframes fadeIn': {
+                from: { opacity: 0, transform: 'translateY(8px)' },
+                to: { opacity: 1, transform: 'translateY(0)' }
+              }
+            }}
+          >
+            <WordListWorkerBased
+              groupLevel={activeGroup.level}
+              groupDescription={activeGroup.description}
+              groupColor={activeGroup.color}
+              totalWordCount={activeGroup.words.length}
+              rawWords={activeGroup.words}
+              isPreview={isPreview}
+              isWordSavedInMovie={isWordSavedInMovie}
+              saveWord={saveWord}
+              toggleLearned={toggleLearned}
+              learnedWords={learnedWords}
+              savedWords={savedWords}
+              otherMovies={otherMovies}
+              movieId={movieId}
+              targetLanguage={targetLanguage}
+              userId={userId}
+              isAuthenticated={isAuthenticated}
+              listContainerRef={listContainerRef}
+            />
+          </Box>
         </Grid>
 
         {/* Right Column: TMDB Metadata Sidebar - Isolated component */}
@@ -347,6 +360,9 @@ function VocabularyViewBase({
           <MovieSidebar tmdbMetadata={tmdbMetadata} difficulty={difficulty} difficultyIsMock={difficultyIsMock} />
         </Grid>
       </Grid>
+
+      {/* Scroll to top button */}
+      <ScrollToTop threshold={400} />
     </Box>
   );
 }

@@ -140,10 +140,30 @@ export function useVocabularyWorker({
 
     switch (message.type) {
       case 'BATCH_READY': {
-        const { batch, startIndex: _startIndex, endIndex, totalCount } = message.payload;
+        const { batch, startIndex, endIndex, totalCount } = message.payload;
+
+        // Merge batch into existing words array
+        // Worker returns batches that may overlap or extend the current array
+        setVisibleWords(prevWords => {
+          // If this is the first batch or a reset (startIndex = 0), replace entirely
+          if (startIndex === 0) {
+            return batch;
+          }
+
+          // Otherwise, append new words to existing array
+          // Create a new array that includes all words up to endIndex
+          const newWords = [...prevWords];
+
+          // Insert/update words at their correct positions
+          batch.forEach((word, i) => {
+            const targetIndex = startIndex + i;
+            newWords[targetIndex] = word;
+          });
+
+          return newWords;
+        });
 
         scheduleUpdate({
-          visibleWords: batch,
           loadedCount: endIndex,
           totalCount,
           isLoadingMore: false,

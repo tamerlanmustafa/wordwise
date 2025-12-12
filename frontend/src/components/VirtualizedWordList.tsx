@@ -7,7 +7,7 @@
  * - DOM recycling (only 10-20 DOM nodes for thousands of words)
  * - Smooth 60fps scrolling
  * - Automatic batch loading on scroll
- * - Progressive translation hydration
+ * - Dynamic row heights for expandable rows
  * - Minimal re-renders via memoization
  */
 
@@ -34,6 +34,7 @@ interface VirtualizedWordListProps {
   // Actions (must be stable)
   onSaveWord: (word: string, movieId?: number) => void;
   onToggleLearned: (word: string) => void;
+  onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
 
   // Batch loading
   onRequestBatch: (startIndex: number, count: number) => void;
@@ -47,9 +48,9 @@ interface VirtualizedWordListProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const ROW_HEIGHT = 56; // Fixed row height for performance (matches CSS min-height)
-const OVERSCAN = 8;    // Number of rows to render outside viewport
-// BATCH_THRESHOLD reserved for future prefetching optimization
+const ROW_HEIGHT_COLLAPSED = 56; // Collapsed row height
+const ROW_HEIGHT_EXPANDED = 88;  // Expanded row height (with translation)
+const OVERSCAN = 8;              // Number of rows to render outside viewport
 
 export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   words,
@@ -61,6 +62,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   savedWords,
   onSaveWord,
   onToggleLearned,
+  onTranslate,
   onRequestBatch,
   isLoadingMore,
   otherMovies,
@@ -76,6 +78,9 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // Track scroll margin to avoid recalculation issues
   const [scrollMargin, setScrollMargin] = useState(0);
 
+  // Track expanded rows for dynamic sizing
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
   // Update scroll margin when parent ref is set
   useEffect(() => {
     if (parentRef.current) {
@@ -88,12 +93,29 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // This prevents scroll jumps when new batches are loaded
   const virtualizer = useWindowVirtualizer({
     count: totalCount,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: useCallback((index: number) => {
+      return expandedRows.has(index) ? ROW_HEIGHT_EXPANDED : ROW_HEIGHT_COLLAPSED;
+    }, [expandedRows]),
     overscan: OVERSCAN,
     scrollMargin
   });
 
   const virtualItems = virtualizer.getVirtualItems();
+
+  // Callback to notify when a row expands/collapses
+  const handleRowExpandChange = useCallback((index: number, isExpanded: boolean) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (isExpanded) {
+        next.add(index);
+      } else {
+        next.delete(index);
+      }
+      return next;
+    });
+    // Tell virtualizer to remeasure this item
+    virtualizer.measure();
+  }, [virtualizer]);
 
   // ============================================================================
   // INFINITE SCROLL - Request next batch when near end
@@ -215,7 +237,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: `${virtualItem.size}px`,
+                minHeight: `${virtualItem.size}px`,
                 transform: `translateY(${virtualItem.start}px)`,
                 // GPU acceleration
                 willChange: 'transform'
@@ -224,6 +246,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
               <WordRow
                 word={word}
                 rowNumber={word.position}
+                virtualIndex={virtualItem.index}
                 groupColor={groupColor}
                 showDivider={virtualItem.index < words.length - 1}
                 isSaved={isSaved}
@@ -231,6 +254,8 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 canToggleLearned={canToggleLearned}
                 onSave={handleSaveWord}
                 onToggleLearned={handleToggleLearned}
+                onTranslate={onTranslate}
+                onExpandChange={handleRowExpandChange}
                 otherMoviesText={otherMoviesText}
               />
             </div>
@@ -267,6 +292,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
     prevProps.isWordSavedInMovie === nextProps.isWordSavedInMovie &&
     prevProps.onSaveWord === nextProps.onSaveWord &&
     prevProps.onToggleLearned === nextProps.onToggleLearned &&
+    prevProps.onTranslate === nextProps.onTranslate &&
     prevProps.onRequestBatch === nextProps.onRequestBatch
   );
 });

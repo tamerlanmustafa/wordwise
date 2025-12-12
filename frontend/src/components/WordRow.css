@@ -2,47 +2,52 @@
  * WordRow Styles
  *
  * Lightweight CSS optimized for virtualized rendering performance.
+ * Click-to-expand design with on-demand translation loading.
  * Theme colors are passed via CSS custom properties from parent components.
  */
 
 .word-row {
   position: relative;
-  padding: 16px 24px;
+  padding: 12px 24px;
   display: grid;
-  grid-template-columns: 48px 1fr auto;
-  grid-template-rows: 1fr; /* Single row - fixed height */
-  gap: 0 16px;
-  align-items: center;
-  min-height: 56px; /* Fixed min height for consistency */
-  transition: background-color 0.15s ease;
-  /* Prevent layout shifts */
-  contain: layout style paint;
+  grid-template-columns: 48px 1fr auto auto;
+  gap: 0 12px;
+  /* Align items to start so number stays aligned with word when expanded */
+  align-items: start;
+  min-height: 48px;
+  /* Smooth transition for background and height changes */
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+  user-select: none;
 }
 
 .word-row:hover {
   background-color: var(--row-hover-bg, rgba(0, 0, 0, 0.04));
 }
 
-/* Row Number - same color as word, bigger font */
+.word-row--expanded {
+  background-color: var(--row-hover-bg, rgba(0, 0, 0, 0.02));
+}
+
+/* Row Number - aligned with word text */
 .word-row__number {
-  grid-column: 1 / 2;
-  grid-row: 1 / 2;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  font-family: inherit;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   text-align: right;
   padding-right: 8px;
+  /* Match the line height of the word for vertical alignment */
+  line-height: 24px;
+  padding-top: 1px;
 }
 
 /* Content */
 .word-row__content {
-  grid-column: 2 / 3;
-  grid-row: 1 / 2;
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 8px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .word-row__word {
@@ -50,7 +55,37 @@
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
+}
+
+/* Expand hint (chevron) */
+.word-row__expand-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-disabled);
   flex-shrink: 0;
+}
+
+/* Translation container (shown when expanded) */
+.word-row__translation-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  margin-top: 4px;
+  padding-left: 0;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .word-row__separator {
@@ -63,40 +98,19 @@
   font-size: 1rem;
   font-weight: 500;
   color: var(--group-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-  /* Smooth fade-in */
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.word-row__translation--loading {
-  opacity: 0.4;
-  font-style: italic;
-  color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .word-row__translation--loaded {
   opacity: 1;
-  transform: translateY(0);
 }
 
-/* Metadata - inline with actions, absolute positioned to not affect row height */
+/* Metadata - shown on hover */
 .word-row__metadata {
-  position: absolute;
-  right: 100px; /* Position before actions */
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   gap: 6px;
-  flex-wrap: nowrap;
   opacity: 0;
   transition: opacity 0.15s ease;
-  pointer-events: none;
 }
 
 .word-row:hover .word-row__metadata {
@@ -104,7 +118,8 @@
 }
 
 .word-row__badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 2px 6px;
   font-size: 0.6rem;
   border-radius: 4px;
@@ -131,18 +146,21 @@
   color: #0A84FF;
 }
 
+.word-row__badge--warning {
+  background-color: rgba(255, 152, 0, 0.12);
+  color: #f57c00;
+}
+
 /* Actions */
 .word-row__actions {
-  grid-column: 3 / 4;
-  grid-row: 1 / 2;
   display: flex;
   gap: 4px;
   align-items: center;
 }
 
 .word-row__action-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: none;
   background-color: transparent;
@@ -152,8 +170,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* GPU-accelerated */
-  will-change: transform;
 }
 
 .word-row__action-btn:hover {
@@ -191,4 +207,19 @@
   right: 24px;
   height: 1px;
   background-color: var(--divider-color);
+}
+
+/* Loading spinner animation */
+.word-row__spinner {
+  animation: spin 1s linear infinite;
+  color: var(--group-color);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
