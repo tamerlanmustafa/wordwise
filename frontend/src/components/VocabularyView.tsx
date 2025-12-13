@@ -294,24 +294,6 @@ function VocabularyViewBase({
             }}
           />
 
-          {/* Bottom fade mask with iOS-style blur */}
-          <Box
-            sx={{
-              position: 'fixed',
-              bottom: 0,
-              left: `${fadeMaskStyle.left}px`,
-              width: fadeMaskStyle.width,
-              height: '120px',
-              background: (theme) => `linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 100%)`,
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)', // Safari support
-              pointerEvents: 'none',
-              zIndex: 1050,
-              maskImage: 'linear-gradient(to top, black 0%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 100%)'
-            }}
-          />
-
           {/* TabsHeader - Isolated component, only re-renders on activeTab/scroll changes */}
           <TabsHeader
             groups={tabsHeaderGroups}
@@ -360,6 +342,24 @@ function VocabularyViewBase({
           <MovieSidebar tmdbMetadata={tmdbMetadata} difficulty={difficulty} difficultyIsMock={difficultyIsMock} />
         </Grid>
       </Grid>
+
+      {/* Bottom fade mask - fixed to viewport bottom for "rows coming out" effect */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: `${fadeMaskStyle.left}px`,
+          width: fadeMaskStyle.width,
+          height: '100px',
+          background: (theme) => `linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 100%)`,
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          pointerEvents: 'none',
+          zIndex: 1050,
+          maskImage: 'linear-gradient(to top, black 0%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 100%)'
+        }}
+      />
 
       {/* Scroll to top button */}
       <ScrollToTop threshold={400} />

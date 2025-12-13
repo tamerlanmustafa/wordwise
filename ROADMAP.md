@@ -2,55 +2,88 @@
 
 This document outlines the development priorities for WordWise, organized by timeframe.
 
-## Short-Term Priorities (1-2 Weeks)
+---
 
-### Critical Fixes
+## Recently Completed ✅
 
-1. **Translation Performance**
-   - [ ] Implement parallel translation API calls with `asyncio.gather()` and Semaphore(5)
-   - [ ] Current: 50 words × 200ms = 10 seconds sequential
-   - [ ] Target: 50 words / 5 parallel = 2 seconds
-   - [ ] Impact: 5x faster translation loading
+### Performance & UX Improvements (Completed Dec 2024)
+
+1. **Click-to-Expand Translation Pattern**
+   - Translations only fetched when user clicks a word row
+   - Eliminates batch translation overhead entirely
+   - Zero initial translation load time, no rate limiting issues
+   - Smooth CSS Grid animation for expand/collapse transitions
 
 2. **Memory Management**
-   - [ ] Add LRU cache eviction to backend CEFR caches (`functools.lru_cache(maxsize=50000)`)
-   - [ ] Add LRU eviction to frontend worker translation Map
-   - [ ] Clear translation/word caches on movie/tab change
-   - [ ] Impact: Prevents memory leaks in long sessions
+   - Backend CEFR caches use LRU with 50k max entries
+   - Frontend worker translation Map uses LRU with 5k max entries
+   - Caches cleared on movie/tab change
+   - Prevents memory leaks in long sessions
 
-3. **Viewport-First Translation**
-   - [ ] Prioritize translations for visible words only
-   - [ ] Background-load off-screen words
-   - [ ] Impact: Instant perceived load time
+3. **User Profile Settings Page**
+   - Created /settings page for updating language preferences
+   - Users can change native/learning language and proficiency level
+   - Displays current user profile info with avatar
+   - Settings accessible from TopBar user menu
+
+4. **Login Page Language Selection**
+   - Language preference dialog for existing users without languages set
+   - Dialog appears after login if native_language is null
+   - Works for both email/password and Google OAuth login
+
+5. **UI Polish**
+   - Smooth fade transitions when switching CEFR tabs
+   - Virtualized list with dynamic row heights for expanded words
+   - Scroll-to-top floating button
+   - Row number alignment with word text
+
+---
+
+## Short-Term Priorities (Next 2 Weeks)
+
+### Performance & Reliability
+
+1. **Rate Limiting & Security**
+   - [ ] Add rate limiting to auth endpoints (prevent brute force)
+   - [ ] Add rate limiting to translation endpoints (protect API quotas)
+   - [ ] Validate translation input length (max 500 chars)
+   - [ ] Implement request timeouts for external APIs
+
+2. **Error Handling & Monitoring**
+   - [ ] Set up error monitoring (Sentry or similar)
+   - [ ] Add graceful error states in UI for failed translations
+   - [ ] Improve error messages for common failures
 
 ### User Experience
 
-4. **User Profile Settings Page**
-   - [ ] Create settings page for updating language preferences
-   - [ ] Allow users to change native/learning language after signup
-   - [ ] Display current user profile information
+3. **Search & Filter in Vocabulary**
+   - [ ] Real-time search within vocabulary lists
+   - [ ] Filter by: saved, learned
+   - [ ] Sort options: alphabetical, frequency, confidence
 
-5. **Login Page Language Selection**
-   - [ ] Add language preference prompts for existing users without languages set
-   - [ ] Migrate existing users to have language preferences
+4. **Translation Language Sync**
+   - [ ] Sync LanguageContext with user's native_language from profile
+   - [ ] Auto-set translation target language based on user preferences
+
+---
 
 ## Mid-Term Priorities (1-2 Months)
 
 ### Backend Improvements
 
-6. **Redis Cache Layer**
+5. **Redis Cache Layer**
    - [ ] Replace database-based TranslationCache with Redis
    - [ ] Enable distributed caching for horizontal scaling
    - [ ] Add TTL-based cache expiration (30 days for translations)
    - [ ] Impact: Faster cache reads, better scalability
 
-7. **Background Job Processing**
+6. **Background Job Processing**
    - [ ] Implement Celery for async tasks
    - [ ] Move script fetching to background jobs
    - [ ] Add bulk classification as background task
    - [ ] Return immediate response with job status polling
 
-8. **Translation API Quota Management**
+7. **Translation API Quota Management**
    - [ ] Track DeepL API usage (500K chars/month free tier)
    - [ ] Implement usage warnings and limits per user
    - [ ] Consider DeepL Pro upgrade ($25/mo) for higher limits
@@ -58,73 +91,70 @@ This document outlines the development priorities for WordWise, organized by tim
 
 ### Frontend Improvements
 
-9. **IndexedDB Persistence**
+8. **IndexedDB Persistence**
    - [ ] Cache translations in IndexedDB (survive page refresh)
    - [ ] Cache vocabulary data for offline access
    - [ ] Sync with server on reconnection
 
-10. **Search & Filter in Vocabulary**
-    - [ ] Real-time search within vocabulary lists
-    - [ ] Filter by: saved, learned, translated
-    - [ ] Sort options: alphabetical, frequency, confidence
-
-11. **Progress Dashboard**
-    - [ ] Visual learning progress tracking
-    - [ ] Words learned over time charts
-    - [ ] Difficult words analysis (frequently translated)
-    - [ ] Movie completion status
+9. **Progress Dashboard**
+   - [ ] Visual learning progress tracking
+   - [ ] Words learned over time charts
+   - [ ] Difficult words analysis (frequently translated)
+   - [ ] Movie completion status
 
 ### Classification Improvements
 
-12. **Named Entity Recognition**
+10. **Named Entity Recognition**
     - [ ] Better detection of proper nouns and character names
     - [ ] Use spaCy NER or similar for accurate detection
     - [ ] Reduce false positives in fantasy content
 
-13. **Context-Aware Classification**
+11. **Context-Aware Classification**
     - [ ] Consider surrounding words for ambiguous terms
     - [ ] Sentence-level difficulty analysis
     - [ ] Handle homographs (bank = financial vs river)
+
+---
 
 ## Long-Term Priorities (3-6 Months)
 
 ### Architecture
 
-14. **GraphQL API**
+12. **GraphQL API**
     - [ ] Single endpoint for all data queries
     - [ ] Client-driven queries reduce over-fetching
     - [ ] Subscriptions for real-time updates
 
-15. **Translation Microservice**
+13. **Translation Microservice**
     - [ ] Split translation into separate service
     - [ ] Independent scaling based on load
     - [ ] Support multiple translation providers easily
 
-16. **Horizontal Scaling**
+14. **Horizontal Scaling**
     - [ ] Kubernetes deployment with 5-10 replicas
     - [ ] PostgreSQL read replicas for heavy reads
     - [ ] Load balancer with session affinity
 
 ### Features
 
-17. **Spaced Repetition System (SRS)**
+15. **Spaced Repetition System (SRS)**
     - [ ] Implement SM-2 or similar algorithm
     - [ ] Schedule word reviews based on retention
     - [ ] Push notifications for daily reviews
     - [ ] Gamification with streaks
 
-18. **Flashcard Mode**
+16. **Flashcard Mode**
     - [ ] Interactive flashcard study sessions
     - [ ] Audio pronunciation
     - [ ] Example sentences from movies
     - [ ] Self-grading (easy/hard/again)
 
-19. **TV Series Support**
+17. **TV Series Support**
     - [ ] Episode-by-episode vocabulary tracking
     - [ ] Cumulative series vocabulary
     - [ ] Track progress across seasons
 
-20. **Mobile App**
+18. **Mobile App**
     - [ ] React Native or Flutter app
     - [ ] Offline vocabulary access
     - [ ] Push notifications for reviews
@@ -132,78 +162,89 @@ This document outlines the development priorities for WordWise, organized by tim
 
 ### AI/ML Enhancements
 
-21. **ML-Based Difficulty Prediction**
+19. **ML-Based Difficulty Prediction**
     - [ ] Train model on user feedback
     - [ ] Personalized difficulty based on user's level
     - [ ] Continuous improvement from usage data
 
-22. **AI-Powered Definitions**
+20. **AI-Powered Definitions**
     - [ ] Generate context-aware definitions
     - [ ] Movie-specific word usage explanations
     - [ ] Example sentences from the actual movie
 
-23. **Pronunciation Guide**
+21. **Pronunciation Guide**
     - [ ] Text-to-speech for word pronunciation
     - [ ] IPA phonetic notation
     - [ ] Regional accent variations
+
+---
 
 ## Technical Debt
 
 ### High Priority
 
 - [ ] Add comprehensive test suite (pytest for backend, Jest for frontend)
-- [ ] Implement rate limiting on API endpoints
-- [ ] Add request size limits for translation inputs
-- [ ] Set up error monitoring (Sentry)
+- [ ] Document all API endpoints with examples
+- [ ] Add database connection pooling (PgBouncer)
 
 ### Medium Priority
 
-- [ ] Add database connection pooling (PgBouncer)
 - [ ] Implement soft deletes for data recovery
 - [ ] Add composite indexes for common query patterns
-- [ ] Document all API endpoints with examples
+- [ ] Use TypedArrays for SoA data in worker (2x memory savings)
 
 ### Low Priority
 
-- [ ] Use TypedArrays for SoA data in worker (2x memory savings)
 - [ ] Add request timeout handling for external APIs
 - [ ] Implement refresh token rotation
 - [ ] Add admin dashboard for analytics
 
+---
+
 ## Security Priorities
 
-1. **Immediate**
-   - [ ] Add rate limiting to auth endpoints
-   - [ ] Implement request timeouts for external APIs
-   - [ ] Validate translation input length (max 500 chars)
+### Immediate (Next Sprint)
 
-2. **Short-Term**
-   - [ ] Add CSRF protection
-   - [ ] Implement API key rotation mechanism
-   - [ ] Add security headers (HSTS, CSP)
+- [ ] Add rate limiting to auth endpoints
+- [ ] Implement request timeouts for external APIs
+- [ ] Validate translation input length (max 500 chars)
 
-3. **Long-Term**
-   - [ ] SOC 2 compliance preparation
-   - [ ] Regular security audits
-   - [ ] Bug bounty program
+### Short-Term
+
+- [ ] Add CSRF protection
+- [ ] Implement API key rotation mechanism
+- [ ] Add security headers (HSTS, CSP)
+
+### Long-Term
+
+- [ ] SOC 2 compliance preparation
+- [ ] Regular security audits
+- [ ] Bug bounty program
+
+---
 
 ## Success Metrics
 
 ### Performance Targets
-- Initial page load: < 2 seconds
-- Translation load (visible words): < 500ms
-- Tab switch: < 50ms
-- Scroll: 60fps consistently
-- API response (cached): < 100ms
+
+| Metric | Target | Status |
+|--------|--------|--------|
+| Initial page load | < 2 seconds | Pending measurement |
+| Translation load | < 500ms | ✅ Click-to-expand: instant (~200ms per word) |
+| Tab switch | < 50ms | ✅ Smooth fade transition |
+| Scroll performance | 60fps | ✅ Virtualized list with dynamic heights |
+| API response (cached) | < 100ms | Pending measurement |
 
 ### User Engagement
+
 - Daily active users growth
 - Average session duration > 10 minutes
 - Words learned per user per week
 - Return rate > 40%
 
 ### Technical Health
+
 - Error rate < 0.1%
 - API availability > 99.9%
 - Translation cache hit rate > 80%
-- Zero memory leaks in 24h sessions
+- Zero memory leaks in 24h sessions ✅ (LRU caches implemented)

@@ -294,8 +294,13 @@ export default function TopBar() {
                 >
                   Lists
                 </MenuItem>
-                <MenuItem onClick={handleUserMenuClose}>Account</MenuItem>
-                <MenuItem onClick={handleUserMenuClose}>Settings</MenuItem>
+                <MenuItem
+                  component={Link}
+                  to="/settings"
+                  onClick={handleUserMenuClose}
+                >
+                  Settings
+                </MenuItem>
                 <MenuItem onClick={handleLogout}>Log out</MenuItem>
               </Menu>
             </>

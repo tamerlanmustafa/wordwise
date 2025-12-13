@@ -115,6 +115,7 @@ export const WordRow = memo<WordRowProps>(({
   otherMoviesText
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false); // Controls DOM presence
   const [translation, setTranslation] = useState<string | null>(word.translation || null);
   const [provider, setProvider] = useState<string | null>(word.translationProvider || null);
   const [isLoading, setIsLoading] = useState(false);
@@ -126,7 +127,11 @@ export const WordRow = memo<WordRowProps>(({
     }
 
     if (!isExpanded) {
-      setIsExpanded(true);
+      setShouldRender(true); // Mount immediately
+      // Small delay to ensure DOM is ready before animation starts
+      requestAnimationFrame(() => {
+        setIsExpanded(true);
+      });
       onExpandChange(virtualIndex, true);
 
       // Fetch translation if not already loaded
@@ -148,6 +153,10 @@ export const WordRow = memo<WordRowProps>(({
     } else {
       setIsExpanded(false);
       onExpandChange(virtualIndex, false);
+      // Wait for animation to finish before unmounting
+      setTimeout(() => {
+        setShouldRender(false);
+      }, 200); // Match CSS animation duration
     }
   }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange]);
 
@@ -179,23 +188,25 @@ export const WordRow = memo<WordRowProps>(({
           )}
         </span>
 
-        {/* Translation (shown only when expanded) */}
-        {isExpanded && (
-          <div className="word-row__translation-container">
-            <span className="word-row__separator">—</span>
-            <span className={`word-row__translation ${translation ? 'word-row__translation--loaded' : ''}`}>
-              {isLoading ? 'Translating...' : (translation || '...')}
-            </span>
-            {provider && provider !== 'cache' && (
-              <span className={`word-row__badge word-row__badge--${provider}`}>
-                {provider}
+        {/* Translation (animated expand/collapse using CSS grid) */}
+        {shouldRender && (
+          <div className={`word-row__translation-container ${isExpanded ? 'word-row__translation-container--visible' : ''}`}>
+            <div className="word-row__translation-inner">
+              <span className="word-row__separator">—</span>
+              <span className={`word-row__translation ${translation ? 'word-row__translation--loaded' : ''}`}>
+                {isLoading ? 'Translating...' : (translation || '...')}
               </span>
-            )}
-            {isUntranslatable && (
-              <span className="word-row__badge word-row__badge--warning">
-                no translation
-              </span>
-            )}
+              {provider && provider !== 'cache' && (
+                <span className={`word-row__badge word-row__badge--${provider}`}>
+                  {provider}
+                </span>
+              )}
+              {isUntranslatable && (
+                <span className="word-row__badge word-row__badge--warning">
+                  no translation
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

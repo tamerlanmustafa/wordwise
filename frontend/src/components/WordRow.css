@@ -55,6 +55,8 @@
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
+  /* Match line-height with number for vertical alignment */
+  line-height: 24px;
 }
 
 /* Expand hint (chevron) */
@@ -64,28 +66,36 @@
   justify-content: center;
   color: var(--text-disabled);
   flex-shrink: 0;
+  /* Match line-height for vertical alignment */
+  height: 24px;
 }
 
-/* Translation container (shown when expanded) */
+/* Translation container (animated expand/collapse) */
 .word-row__translation-container {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-basis: 100%;
-  margin-top: 4px;
   padding-left: 0;
-  animation: slideDown 0.2s ease;
+  /* Grid for smooth height animation */
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out, opacity 0.2s ease-out;
+  opacity: 0;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.word-row__translation-container > .word-row__translation-inner {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+/* Expanded/visible state */
+.word-row__translation-container--visible {
+  grid-template-rows: 1fr;
+  opacity: 1;
 }
 
 .word-row__separator {

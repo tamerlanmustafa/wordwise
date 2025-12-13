@@ -113,8 +113,11 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
       }
       return next;
     });
-    // Tell virtualizer to remeasure this item
-    virtualizer.measure();
+    // Delay virtualizer remeasure to sync with CSS animation (200ms)
+    // This creates a smooth dropdown effect instead of instant snap
+    setTimeout(() => {
+      virtualizer.measure();
+    }, 50); // Small delay to let CSS animation start
   }, [virtualizer]);
 
   // ============================================================================

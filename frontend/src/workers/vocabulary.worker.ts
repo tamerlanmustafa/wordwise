@@ -276,6 +276,10 @@ function generateBatch(
 
 async function handleInitWords(payload: { words: WordFrequency[]; cefrLevel: string }) {
   try {
+    // Clear translation cache on new data (movie/tab change)
+    // Translations are word-specific, so old cache is invalid for new vocabulary
+    translationCache.clear();
+
     // Convert to SoA format
     state.sourceData = convertToSoA(payload.words);
 
