@@ -65,6 +65,12 @@ const LoadingSpinner = () => (
   </svg>
 );
 
+interface SentenceExample {
+  sentence: string;
+  translation: string;
+  word_position: number;
+}
+
 interface WordRowProps {
   // Word data
   word: DisplayWord;
@@ -93,6 +99,10 @@ interface WordRowProps {
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
 
+  // Sentence examples enrichment
+  movieId?: number;
+  targetLang?: string;
+
   // Other movies tooltip
   otherMoviesText?: string;
 }
@@ -117,6 +127,8 @@ export const WordRow = memo<WordRowProps>(({
   onTranslate,
   onExpandChange,
   getIdiomsForWord,
+  movieId,
+  targetLang,
   otherMoviesText
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -128,6 +140,10 @@ export const WordRow = memo<WordRowProps>(({
   // Idiom context state
   const [idiomInfo, setIdiomInfo] = useState<{ idiom: IdiomInfo; translation: string } | null>(null);
   const [isLoadingIdiom, setIsLoadingIdiom] = useState(false);
+
+  // Sentence examples state
+  const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[] | null>(null);
+  const [isLoadingExamples, setIsLoadingExamples] = useState(false);
 
   const handleRowClick = useCallback(async (e: React.MouseEvent) => {
     // Don't toggle if clicking on action buttons
@@ -181,6 +197,29 @@ export const WordRow = memo<WordRowProps>(({
           setIsLoadingIdiom(false);
         }
       }
+
+      // Fetch sentence examples if available and not already loaded
+      if (movieId && targetLang && !sentenceExamples) {
+        setIsLoadingExamples(true);
+        try {
+          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(
+            `${API_BASE_URL}/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            setSentenceExamples(data.examples || []);
+          } else if (response.status !== 404) {
+            // Only log non-404 errors (404 means no enrichment data yet)
+            console.error('Failed to fetch sentence examples:', response.statusText);
+          }
+        } catch (error) {
+          console.error('Sentence examples fetch failed:', error);
+        } finally {
+          setIsLoadingExamples(false);
+        }
+      }
     } else {
       setIsExpanded(false);
       onExpandChange(virtualIndex, false);
@@ -189,7 +228,7 @@ export const WordRow = memo<WordRowProps>(({
         setShouldRender(false);
       }, 200); // Match CSS animation duration
     }
-  }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange, getIdiomsForWord, idiomInfo]);
+  }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange, getIdiomsForWord, idiomInfo, movieId, targetLang, sentenceExamples]);
 
   // Check if translation equals source word (should be hidden when collapsed)
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
@@ -253,6 +292,37 @@ export const WordRow = memo<WordRowProps>(({
                     </span>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Sentence examples - shows examples from movie script */}
+            {(sentenceExamples || isLoadingExamples) && (
+              <div className="word-row__examples">
+                {isLoadingExamples ? (
+                  <span className="word-row__examples-loading">Loading examples from script...</span>
+                ) : sentenceExamples && sentenceExamples.length > 0 ? (
+                  <>
+                    <div className="word-row__examples-header">
+                      <span className="word-row__examples-label">Movie examples:</span>
+                      <span className="word-row__badge word-row__badge--examples">
+                        {sentenceExamples.length}
+                      </span>
+                    </div>
+                    <div className="word-row__examples-list">
+                      {sentenceExamples.map((example, idx) => (
+                        <div key={idx} className="word-row__example">
+                          <div className="word-row__example-sentence">
+                            <span className="word-row__example-bullet">•</span>
+                            <span className="word-row__example-text">{example.sentence}</span>
+                          </div>
+                          <div className="word-row__example-translation">
+                            {example.translation}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </div>
             )}
           </div>
@@ -319,7 +389,9 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.onToggleLearned === nextProps.onToggleLearned &&
     prevProps.onTranslate === nextProps.onTranslate &&
     prevProps.onExpandChange === nextProps.onExpandChange &&
-    prevProps.getIdiomsForWord === nextProps.getIdiomsForWord
+    prevProps.getIdiomsForWord === nextProps.getIdiomsForWord &&
+    prevProps.movieId === nextProps.movieId &&
+    prevProps.targetLang === nextProps.targetLang
   );
 });
 

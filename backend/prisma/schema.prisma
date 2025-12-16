@@ -205,6 +205,26 @@ model UserWord {
   @@map("user_words")
 }
 
+model WordSentenceExample {
+  id           Int              @id @default(autoincrement())
+  movieId      Int              @map("movie_id")
+  word         String           @db.VarChar
+  lemma        String           @db.VarChar
+  cefrLevel    proficiencylevel @map("cefr_level")
+  sentence     String           @db.Text
+  translation  String           @db.Text
+  targetLang   String           @map("target_lang") @db.VarChar(10)
+  wordPosition Int              @map("word_position")
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([movieId, word, sentence, targetLang], map: "unique_word_sentence_example")
+  @@index([movieId], map: "ix_word_sentence_examples_movie_id")
+  @@index([movieId, word], map: "ix_word_sentence_examples_movie_word")
+  @@index([movieId, targetLang], map: "ix_word_sentence_examples_movie_lang")
+  @@map("word_sentence_examples")
+}
+
 enum difficultylevel {
   BEGINNER
   ELEMENTARY

@@ -268,6 +268,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             isLoadingMore={isLoadingMore}
             otherMovies={otherMovies}
             movieId={movieId}
+            targetLang={targetLanguage}
             containerRef={listContainerRef}
             getIdiomsForWord={getIdiomsForWord}
           />

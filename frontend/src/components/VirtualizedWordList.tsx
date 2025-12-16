@@ -48,6 +48,9 @@ interface VirtualizedWordListProps {
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
 
+  // Sentence examples enrichment
+  targetLang?: string;
+
   // Container ref
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -72,6 +75,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   otherMovies,
   movieId,
   getIdiomsForWord,
+  targetLang,
   containerRef: _containerRef  // Reserved for scroll sync
 }) => {
   // Scroll container ref
@@ -266,6 +270,8 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 onExpandChange={handleRowExpandChange}
                 otherMoviesText={otherMoviesText}
                 getIdiomsForWord={getIdiomsForWord}
+                movieId={movieId}
+                targetLang={targetLang}
               />
             </div>
           );
