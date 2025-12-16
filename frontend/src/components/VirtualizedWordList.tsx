@@ -55,9 +55,10 @@ interface VirtualizedWordListProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const ROW_HEIGHT_COLLAPSED = 56; // Collapsed row height
-const ROW_HEIGHT_EXPANDED = 88;  // Expanded row height (with translation)
-const OVERSCAN = 8;              // Number of rows to render outside viewport
+const ROW_HEIGHT_COLLAPSED = 56;  // Collapsed row height
+const ROW_HEIGHT_EXPANDED = 150;   // Expanded row height (with translation + potential examples)
+const ROW_HEIGHT_EXPANDED_MAX = 450; // Maximum height for rows with multiple examples
+const OVERSCAN = 8;               // Number of rows to render outside viewport
 
 export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   words,
@@ -103,10 +104,13 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   const virtualizer = useWindowVirtualizer({
     count: totalCount,
     estimateSize: useCallback((index: number) => {
-      return expandedRows.has(index) ? ROW_HEIGHT_EXPANDED : ROW_HEIGHT_COLLAPSED;
+      // Use a more generous estimate for expanded rows to prevent overlap
+      return expandedRows.has(index) ? ROW_HEIGHT_EXPANDED_MAX : ROW_HEIGHT_COLLAPSED;
     }, [expandedRows]),
     overscan: OVERSCAN,
-    scrollMargin
+    scrollMargin,
+    // Enable dynamic measurements - virtualizer will measure actual DOM height
+    measureElement: (el) => el?.getBoundingClientRect().height ?? ROW_HEIGHT_COLLAPSED
   });
 
   const virtualItems = virtualizer.getVirtualItems();
@@ -122,11 +126,16 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
       }
       return next;
     });
-    // Delay virtualizer remeasure to sync with CSS animation (200ms)
-    // This creates a smooth dropdown effect instead of instant snap
-    setTimeout(() => {
-      virtualizer.measure();
-    }, 50); // Small delay to let CSS animation start
+
+    // Multiple remeasures to handle async content loading:
+    // 1. Initial remeasure for translation/idiom (50ms)
+    setTimeout(() => virtualizer.measure(), 50);
+
+    // 2. Second remeasure for sentence examples (300ms - after API fetch)
+    setTimeout(() => virtualizer.measure(), 300);
+
+    // 3. Final remeasure to ensure everything is settled (600ms)
+    setTimeout(() => virtualizer.measure(), 600);
   }, [virtualizer]);
 
   // ============================================================================
@@ -244,6 +253,8 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
           return (
             <div
               key={word.index} // Use stable index from worker
+              data-index={virtualItem.index} // For virtualizer measurement
+              ref={virtualizer.measureElement} // Enable dynamic measurement
               style={{
                 position: 'absolute',
                 top: 0,
