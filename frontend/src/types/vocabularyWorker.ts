@@ -6,6 +6,7 @@
  */
 
 import type { WordFrequency, CEFRLevel } from './script';
+import type { IdiomInfo } from '../services/scriptService';
 
 // ============================================================================
 // STRUCT-OF-ARRAYS FORMAT (SoA)
@@ -32,6 +33,8 @@ export type WorkerMessageType =
   | 'APPLY_FILTER'
   | 'REQUEST_BATCH'
   | 'TRANSLATION_UPDATE'
+  | 'GET_IDIOMS_FOR_WORD'
+  | 'IDIOMS_RESULT'
   | 'BATCH_READY'
   | 'ALL_LOADED'
   | 'ERROR'
@@ -46,6 +49,7 @@ export interface InitWordsMessage {
   payload: {
     words: WordFrequency[];
     cefrLevel: CEFRLevel;
+    idioms?: IdiomInfo[];
   };
 }
 
@@ -83,11 +87,20 @@ export interface ResetMessage {
   type: 'RESET';
 }
 
+export interface GetIdiomsForWordMessage {
+  type: 'GET_IDIOMS_FOR_WORD';
+  payload: {
+    word: string;
+    requestId: string;  // For correlating async response
+  };
+}
+
 export type WorkerInboundMessage =
   | InitWordsMessage
   | ApplyFilterMessage
   | RequestBatchMessage
   | TranslationUpdateMessage
+  | GetIdiomsForWordMessage
   | ResetMessage;
 
 // ============================================================================
@@ -119,10 +132,20 @@ export interface ErrorMessage {
   };
 }
 
+export interface IdiomsResultMessage {
+  type: 'IDIOMS_RESULT';
+  payload: {
+    word: string;
+    requestId: string;
+    idioms: IdiomInfo[];
+  };
+}
+
 export type WorkerOutboundMessage =
   | BatchReadyMessage
   | AllLoadedMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | IdiomsResultMessage;
 
 // ============================================================================
 // DISPLAY WORD FORMAT

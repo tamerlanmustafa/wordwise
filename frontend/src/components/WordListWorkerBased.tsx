@@ -32,7 +32,9 @@ import LockIcon from '@mui/icons-material/Lock';
 import { Link } from 'react-router-dom';
 import { VirtualizedWordList } from './VirtualizedWordList';
 import { useWorkerVocabularyFeed } from '../hooks/useWorkerVocabularyFeed';
+import { translateText } from '../services/scriptService';
 import type { WordFrequency, CEFRLevel } from '../types/script';
+import type { IdiomInfo } from '../services/scriptService';
 
 interface WordListWorkerBasedProps {
   // Active group data
@@ -61,6 +63,9 @@ interface WordListWorkerBasedProps {
   userId?: number;
   isAuthenticated: boolean;
 
+  // Idioms for context-aware translation
+  idioms?: IdiomInfo[];
+
   // Refs (maintained for compatibility)
   listContainerRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -82,6 +87,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   targetLanguage,
   userId,
   isAuthenticated,
+  idioms = [],
   listContainerRef
 }) => {
   // Worker-based vocabulary feed
@@ -93,14 +99,16 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
     loadedCount,
     hasMore,
     error,
-    requestMore
+    requestMore,
+    getIdiomsForWord
   } = useWorkerVocabularyFeed({
     rawWords,
     cefrLevel: groupLevel,
     targetLanguage,
     userId,
     isAuthenticated,
-    isPreview
+    isPreview,
+    idioms
   });
 
   // Stable callbacks
@@ -115,6 +123,20 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   const handleRequestBatch = useCallback((_startIndex: number, _count: number) => {
     requestMore();
   }, [requestMore]);
+
+  // On-demand translation callback (called when user clicks to expand a word)
+  const handleTranslate = useCallback(async (word: string): Promise<{ translation: string; provider?: string } | null> => {
+    try {
+      const result = await translateText(word, targetLanguage, 'en', userId);
+      return {
+        translation: result.translated,
+        provider: result.provider || (result.cached ? 'cache' : undefined)
+      };
+    } catch (error) {
+      console.error('Translation error:', error);
+      return null;
+    }
+  }, [targetLanguage, userId]);
 
   // Memoize preview words
   const previewWords = useMemo(() => {
@@ -241,11 +263,13 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             savedWords={savedWords}
             onSaveWord={handleSaveWord}
             onToggleLearned={handleToggleLearned}
+            onTranslate={handleTranslate}
             onRequestBatch={handleRequestBatch}
             isLoadingMore={isLoadingMore}
             otherMovies={otherMovies}
             movieId={movieId}
             containerRef={listContainerRef}
+            getIdiomsForWord={getIdiomsForWord}
           />
         )}
       </Paper>

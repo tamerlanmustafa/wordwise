@@ -9,13 +9,30 @@ interface User {
   username: string;
   oauth_provider: string;
   profile_picture_url?: string;
+  native_language?: string;
+  learning_language?: string;
+  proficiency_level?: string;
+}
+
+interface LanguagePreferences {
+  nativeLanguage: string;
+  learningLanguage: string;
+}
+
+interface UserUpdateData {
+  username?: string;
+  native_language?: string;
+  learning_language?: string;
+  proficiency_level?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  handleGoogleLogin: (credentialResponse: CredentialResponse) => Promise<void>;
+  handleGoogleLogin: (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => Promise<void>;
   logout: () => void;
+  updateUser: (data: UserUpdateData) => Promise<void>;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -36,11 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const handleGoogleLogin = async (credentialResponse: CredentialResponse) => {
+  const handleGoogleLogin = async (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => {
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const backendResponse = await axios.post(`${API_BASE_URL}/auth/google/login`, {
         id_token: credentialResponse.credential,
+        native_language: languagePrefs?.nativeLanguage,
+        learning_language: languagePrefs?.learningLanguage,
       });
 
       const userData = backendResponse.data.user;
@@ -72,6 +91,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/wordwise/';
   };
 
+  const refreshUser = async () => {
+    const token = localStorage.getItem('wordwise_token');
+    if (!token) return;
+
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await axios.get(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const userData = response.data;
+      localStorage.setItem('wordwise_user', JSON.stringify(userData));
+      setUser(userData);
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  };
+
+  const updateUser = async (data: UserUpdateData) => {
+    const token = localStorage.getItem('wordwise_token');
+    if (!token) throw new Error('Not authenticated');
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const response = await axios.patch(`${API_BASE_URL}/auth/me`, data, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const userData = response.data;
+    localStorage.setItem('wordwise_user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -79,6 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         handleGoogleLogin,
         logout,
+        updateUser,
+        refreshUser,
         isAuthenticated: !!user,
       }}
     >

@@ -17,6 +17,7 @@ import type {
   DisplayWord
 } from '../types/vocabularyWorker';
 import type { WordFrequency } from '../types/script';
+import type { IdiomInfo } from '../services/scriptService';
 
 // ============================================================================
 // LRU MAP FOR BOUNDED MEMORY
@@ -93,6 +94,32 @@ const state: WorkerState = {
 
 // LRU-wrapped translation cache
 const translationCache = new LRUMap<string, { translation: string; provider?: string; cached?: boolean }>(TRANSLATION_CACHE_SIZE);
+
+// Word-to-idiom map for O(1) lookup
+// Maps lowercase word -> array of idioms containing that word
+let wordToIdiomsMap: Map<string, IdiomInfo[]> = new Map();
+
+/**
+ * Build word-to-idiom map from idiom list
+ * Each word in an idiom phrase maps to the idiom(s) it belongs to
+ */
+function buildWordToIdiomsMap(idioms: IdiomInfo[]): void {
+  wordToIdiomsMap.clear();
+
+  for (const idiom of idioms) {
+    for (const word of idiom.words) {
+      const lower = word.toLowerCase();
+      if (!wordToIdiomsMap.has(lower)) {
+        wordToIdiomsMap.set(lower, []);
+      }
+      // Avoid duplicates
+      const existing = wordToIdiomsMap.get(lower)!;
+      if (!existing.some(i => i.phrase === idiom.phrase)) {
+        existing.push(idiom);
+      }
+    }
+  }
+}
 
 // ============================================================================
 // STRUCT-OF-ARRAYS CONVERSION
@@ -274,8 +301,19 @@ function generateBatch(
 // MESSAGE HANDLERS
 // ============================================================================
 
-async function handleInitWords(payload: { words: WordFrequency[]; cefrLevel: string }) {
+async function handleInitWords(payload: { words: WordFrequency[]; cefrLevel: string; idioms?: IdiomInfo[] }) {
   try {
+    // Clear translation cache on new data (movie/tab change)
+    // Translations are word-specific, so old cache is invalid for new vocabulary
+    translationCache.clear();
+
+    // Build word-to-idiom map for O(1) lookup
+    if (payload.idioms && payload.idioms.length > 0) {
+      buildWordToIdiomsMap(payload.idioms);
+    } else {
+      wordToIdiomsMap.clear();
+    }
+
     // Convert to SoA format
     state.sourceData = convertToSoA(payload.words);
 
@@ -389,6 +427,9 @@ async function handleRequestBatch(payload: { startIndex: number; count: number }
 
   try {
     const { startIndex, count } = payload;
+
+    // Use all filtered indices - no upfront filtering since we use click-to-expand
+    // Words where source === translation will show "no translation" badge when expanded
     const batch = generateBatch(
       state.sourceData,
       state.filteredIndices,
@@ -438,6 +479,8 @@ async function handleTranslationUpdate(payload: {
     }
 
     // Re-send current batch with updated translations
+    // Note: With click-to-expand, translations are fetched on-demand in the UI
+    // This handler is kept for potential future batch translation use
     if (state.sourceData && state.loadedBatchEnd > 0) {
       const batch = generateBatch(
         state.sourceData,
@@ -476,7 +519,22 @@ function handleReset() {
     savedWords: new Set()
   };
   translationCache.clear();  // Clear LRU cache on reset
+  wordToIdiomsMap.clear();   // Clear idiom map on reset
   state.loadedBatchEnd = 0;
+}
+
+function handleGetIdiomsForWord(payload: { word: string; requestId: string }) {
+  const { word, requestId } = payload;
+  const idioms = wordToIdiomsMap.get(word.toLowerCase()) || [];
+
+  postMessage({
+    type: 'IDIOMS_RESULT',
+    payload: {
+      word,
+      requestId,
+      idioms
+    }
+  } as WorkerOutboundMessage);
 }
 
 // ============================================================================
@@ -505,6 +563,10 @@ self.addEventListener('message', async (event: MessageEvent<WorkerInboundMessage
 
     case 'RESET':
       handleReset();
+      break;
+
+    case 'GET_IDIOMS_FOR_WORD':
+      handleGetIdiomsForWord(message.payload);
       break;
 
     default:

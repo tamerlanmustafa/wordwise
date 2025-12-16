@@ -15,7 +15,8 @@ from src.services.cefr_classifier import (
     HybridCEFRClassifier,
     CEFRLevel,
     ClassificationSource,
-    WordClassification
+    WordClassification,
+    detect_phrasal_verbs_and_idioms
 )
 from src.database import get_db
 from prisma import Prisma
@@ -152,6 +153,14 @@ class ScriptClassificationRequest(BaseModel):
     save_to_db: bool = Field(True, description="Save classifications to database")
 
 
+class IdiomInfo(BaseModel):
+    """Information about a detected idiom or phrasal verb"""
+    phrase: str = Field(..., description="The idiom or phrasal verb phrase")
+    type: str = Field(..., description="Type: 'phrasal_verb' or 'idiom'")
+    cefr_level: str = Field(..., description="CEFR level of the expression")
+    words: List[str] = Field(..., description="Component words of the expression")
+
+
 class ScriptClassificationResponse(BaseModel):
     """
     Response with script classification results.
@@ -167,6 +176,7 @@ class ScriptClassificationResponse(BaseModel):
     average_confidence: float
     wordlist_coverage: float
     top_words_by_level: Dict[str, List[Dict]]  # All words sorted by frequency_rank (easier to harder)
+    idioms: List[IdiomInfo] = Field(default_factory=list, description="Detected idioms and phrasal verbs")
 
 
 class FrequencyThresholdUpdate(BaseModel):
@@ -330,6 +340,19 @@ async def classify_script(
             total_kept = sum(level_distribution.values())
             average_confidence = total_confidence / total_kept if total_kept > 0 else 0.0
 
+            # Detect idioms and phrasal verbs from the script text
+            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idioms = [
+                IdiomInfo(
+                    phrase=phrase,
+                    type=expr_type,
+                    cefr_level=level,
+                    words=phrase.split()
+                )
+                for phrase, expr_type, level in idiom_results
+            ]
+            logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
+
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
                 movie_id=request.movie_id,
@@ -339,7 +362,8 @@ async def classify_script(
                 level_distribution=level_distribution,
                 average_confidence=average_confidence,
                 wordlist_coverage=0.0,  # Not computed for cached data
-                top_words_by_level=top_words_by_level
+                top_words_by_level=top_words_by_level,
+                idioms=idioms
             )
 
         # ========================================================================
@@ -477,6 +501,19 @@ async def classify_script(
 
             logger.info(f"✓ Updated movie difficulty: {level.value}, score: {score}")
 
+        # Detect idioms and phrasal verbs from the script text
+        idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+        idioms = [
+            IdiomInfo(
+                phrase=phrase,
+                type=expr_type,
+                cefr_level=level,
+                words=phrase.split()
+            )
+            for phrase, expr_type, level in idiom_results
+        ]
+        logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
+
         # Final response
         script_word_count = script.cleanedWordCount or 0
         unique_words = len(set(cls.lemma for cls in classifications))
@@ -489,7 +526,8 @@ async def classify_script(
             level_distribution=statistics['level_distribution'],
             average_confidence=statistics['average_confidence'],
             wordlist_coverage=statistics['wordlist_coverage'],
-            top_words_by_level=top_words_by_level
+            top_words_by_level=top_words_by_level,
+            idioms=idioms
         )
 
     except HTTPException:

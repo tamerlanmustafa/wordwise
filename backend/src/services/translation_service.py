@@ -244,18 +244,18 @@ class TranslationService:
 
             except DeepLInvalidLanguageError:
                 # DeepL rejected the language - fallback to Google
-                # Fall through to Google Translate
+                logger.info(f"DeepL doesn't support language, falling back to Google")
                 pass
 
             except DeepLQuotaExceededError as e:
-                # Quota exceeded - re-raise, don't fallback
-                logger.error(f"DeepL quota exceeded: {e}")
-                raise
+                # Rate limited - fallback to Google Translate
+                logger.warning(f"DeepL rate limited, falling back to Google: {e}")
+                pass
 
             except DeepLError as e:
-                # Other DeepL error - re-raise
-                logger.error(f"DeepL error: {e}")
-                raise
+                # Other DeepL error - fallback to Google
+                logger.warning(f"DeepL error, falling back to Google: {e}")
+                pass
 
         # Use Google Translate (either not in DeepL list or DeepL rejected it)
         try:
@@ -305,17 +305,17 @@ class TranslationService:
         target_lang: str,
         source_lang: str = "auto",
         user_id: Optional[int] = None,
-        max_concurrent: int = 5
+        max_concurrent: int = 2
     ) -> List[Dict[str, Any]]:
         """
-        Translate multiple texts efficiently with caching and parallel requests.
+        Translate multiple texts efficiently with caching and rate-limited requests.
 
         Args:
             texts: List of texts to translate
             target_lang: Target language code
             source_lang: Source language code or 'auto'
             user_id: User ID for tracking (optional)
-            max_concurrent: Maximum concurrent translation requests (default 5)
+            max_concurrent: Maximum concurrent translation requests (default 2 to avoid rate limits)
 
         Returns:
             List of translation results (same order as input)
@@ -323,9 +323,14 @@ class TranslationService:
         import asyncio
 
         semaphore = asyncio.Semaphore(max_concurrent)
+        rate_limit_delay = 0.1  # 100ms delay between API calls to avoid rate limiting
 
-        async def translate_with_semaphore(text: str) -> Dict[str, Any]:
+        async def translate_with_semaphore(text: str, index: int) -> Dict[str, Any]:
             async with semaphore:
+                # Add small delay between API calls to avoid rate limiting
+                if index > 0:
+                    await asyncio.sleep(rate_limit_delay * (index % max_concurrent))
+
                 try:
                     return await self.get_translation(
                         text=text,
@@ -341,8 +346,10 @@ class TranslationService:
                         "target_lang": target_lang.upper()
                     }
 
-        # Run all translations in parallel with semaphore limiting concurrency
-        results = await asyncio.gather(*[translate_with_semaphore(text) for text in texts])
+        # Run translations with controlled concurrency
+        results = await asyncio.gather(*[
+            translate_with_semaphore(text, i) for i, text in enumerate(texts)
+        ])
 
         return list(results)
 
