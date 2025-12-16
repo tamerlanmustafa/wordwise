@@ -46,7 +46,7 @@ export const TabsHeader = memo<TabsHeaderProps>(({
         zIndex: 1100,
         transform: showTopBar ? 'translateY(0)' : 'translateY(-48px)',
         transition: 'transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        backgroundColor: 'background.default',
+        // backgroundColor: 'background.default',
         mb: 3,
         mx: 1,
         // Prevent layout shift by fixing dimensions
