@@ -12,6 +12,11 @@ WordWise is a vocabulary learning platform that helps users learn English by ana
   - Genre-aware classification (kids/family movies get conservative levels)
   - Foreign word filtering (Italian, Spanish, French, etc.)
   - Contraction fragment filtering
+- **Idiom & Phrasal Verb Detection** - Context-aware translation
+  - 350+ idioms and phrasal verbs detected automatically
+  - Shows both literal translation and idiomatic meaning
+  - CEFR level badges for expressions (purple=idiom, teal=phrasal verb)
+  - O(1) lookup via word→idiom Map in Web Worker
 - **Personalized Word Lists** - Learn Later, Favorites, Mastered
 - **Translation System** - Hybrid DeepL + Google Translate with caching
 - **User Language Preferences** - Native language and learning language selection

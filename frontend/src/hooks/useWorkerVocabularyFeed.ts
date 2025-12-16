@@ -13,10 +13,14 @@
  * This eliminates rate limiting issues with translation APIs.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useVocabularyWorker } from './useVocabularyWorker';
 import type { WordFrequency, CEFRLevel } from '../types/script';
 import type { DisplayWord } from '../types/vocabularyWorker';
+import type { IdiomInfo } from '../services/scriptService';
+
+// Stable empty array reference to prevent infinite re-renders
+const EMPTY_IDIOMS: IdiomInfo[] = [];
 
 interface UseWorkerVocabularyFeedOptions {
   rawWords: WordFrequency[];
@@ -25,6 +29,7 @@ interface UseWorkerVocabularyFeedOptions {
   userId?: number;
   isAuthenticated: boolean;
   isPreview?: boolean;
+  idioms?: IdiomInfo[];
 }
 
 interface UseWorkerVocabularyFeedResult {
@@ -36,6 +41,7 @@ interface UseWorkerVocabularyFeedResult {
   hasMore: boolean;
   error: string | null;
   requestMore: () => void;
+  getIdiomsForWord: (word: string) => Promise<IdiomInfo[]>;
 }
 
 export function useWorkerVocabularyFeed({
@@ -44,8 +50,15 @@ export function useWorkerVocabularyFeed({
   targetLanguage,
   userId,
   isAuthenticated,
-  isPreview = false
+  isPreview = false,
+  idioms
 }: UseWorkerVocabularyFeedOptions): UseWorkerVocabularyFeedResult {
+  // Use stable empty array if idioms is undefined/empty to prevent infinite re-renders
+  const stableIdioms = useMemo(
+    () => (idioms && idioms.length > 0 ? idioms : EMPTY_IDIOMS),
+    [idioms]
+  );
+
   // Worker hook
   const {
     visibleWords,
@@ -54,14 +67,16 @@ export function useWorkerVocabularyFeed({
     totalCount,
     loadedCount,
     error,
-    requestBatch
+    requestBatch,
+    getIdiomsForWord
   } = useVocabularyWorker({
     rawWords,
     cefrLevel,
     targetLanguage,
     userId,
     isAuthenticated,
-    isPreview
+    isPreview,
+    idioms: stableIdioms
   });
 
   // ============================================================================
@@ -90,6 +105,7 @@ export function useWorkerVocabularyFeed({
     loadedCount,
     hasMore,
     error,
-    requestMore
+    requestMore,
+    getIdiomsForWord
   };
 }

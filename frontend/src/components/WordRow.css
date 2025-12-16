@@ -161,6 +161,17 @@
   color: #f57c00;
 }
 
+/* Idiom type badges */
+.word-row__badge--idiom {
+  background-color: rgba(156, 39, 176, 0.12);
+  color: #9c27b0;
+}
+
+.word-row__badge--phrasal_verb {
+  background-color: rgba(0, 150, 136, 0.12);
+  color: #009688;
+}
+
 /* Actions */
 .word-row__actions {
   display: flex;
@@ -217,6 +228,42 @@
   right: 24px;
   height: 1px;
   background-color: var(--divider-color);
+}
+
+/* Idiom context section */
+.word-row__idiom-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 4px;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.word-row__idiom-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.word-row__idiom-phrase {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+.word-row__idiom-translation {
+  color: var(--group-color);
+  font-weight: 500;
+}
+
+.word-row__idiom-loading {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.8rem;
 }
 
 /* Loading spinner animation */

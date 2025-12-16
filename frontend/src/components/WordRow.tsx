@@ -15,6 +15,7 @@
 
 import { memo, useState, useCallback } from 'react';
 import type { DisplayWord } from '../types/vocabularyWorker';
+import type { IdiomInfo } from '../services/scriptService';
 import './WordRow.css';
 
 // Lightweight SVG icons as components (no MUI overhead)
@@ -89,6 +90,9 @@ interface WordRowProps {
   onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
   onExpandChange: (index: number, isExpanded: boolean) => void;
 
+  // Idiom lookup
+  getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
+
   // Other movies tooltip
   otherMoviesText?: string;
 }
@@ -112,6 +116,7 @@ export const WordRow = memo<WordRowProps>(({
   onToggleLearned,
   onTranslate,
   onExpandChange,
+  getIdiomsForWord,
   otherMoviesText
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -119,6 +124,10 @@ export const WordRow = memo<WordRowProps>(({
   const [translation, setTranslation] = useState<string | null>(word.translation || null);
   const [provider, setProvider] = useState<string | null>(word.translationProvider || null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Idiom context state
+  const [idiomInfo, setIdiomInfo] = useState<{ idiom: IdiomInfo; translation: string } | null>(null);
+  const [isLoadingIdiom, setIsLoadingIdiom] = useState(false);
 
   const handleRowClick = useCallback(async (e: React.MouseEvent) => {
     // Don't toggle if clicking on action buttons
@@ -150,6 +159,28 @@ export const WordRow = memo<WordRowProps>(({
           setIsLoading(false);
         }
       }
+
+      // Fetch idiom context if available and not already loaded
+      if (getIdiomsForWord && !idiomInfo) {
+        setIsLoadingIdiom(true);
+        try {
+          const idioms = await getIdiomsForWord(word.word);
+          if (idioms.length > 0) {
+            // Translate the idiom phrase
+            const idiomTranslation = await onTranslate(idioms[0].phrase);
+            if (idiomTranslation) {
+              setIdiomInfo({
+                idiom: idioms[0],
+                translation: idiomTranslation.translation
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Idiom lookup failed:', error);
+        } finally {
+          setIsLoadingIdiom(false);
+        }
+      }
     } else {
       setIsExpanded(false);
       onExpandChange(virtualIndex, false);
@@ -158,7 +189,7 @@ export const WordRow = memo<WordRowProps>(({
         setShouldRender(false);
       }, 200); // Match CSS animation duration
     }
-  }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange]);
+  }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange, getIdiomsForWord, idiomInfo]);
 
   // Check if translation equals source word (should be hidden when collapsed)
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
@@ -207,6 +238,23 @@ export const WordRow = memo<WordRowProps>(({
                 </span>
               )}
             </div>
+            {/* Idiom context - shows when word is part of an idiom */}
+            {(idiomInfo || isLoadingIdiom) && (
+              <div className="word-row__idiom-context">
+                {isLoadingIdiom ? (
+                  <span className="word-row__idiom-loading">Checking idioms...</span>
+                ) : idiomInfo && (
+                  <>
+                    <span className="word-row__idiom-label">Part of:</span>
+                    <span className="word-row__idiom-phrase">"{idiomInfo.idiom.phrase}"</span>
+                    <span className="word-row__idiom-translation">— {idiomInfo.translation}</span>
+                    <span className={`word-row__badge word-row__badge--${idiomInfo.idiom.type}`}>
+                      {idiomInfo.idiom.cefr_level}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -270,7 +318,8 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.onSave === nextProps.onSave &&
     prevProps.onToggleLearned === nextProps.onToggleLearned &&
     prevProps.onTranslate === nextProps.onTranslate &&
-    prevProps.onExpandChange === nextProps.onExpandChange
+    prevProps.onExpandChange === nextProps.onExpandChange &&
+    prevProps.getIdiomsForWord === nextProps.getIdiomsForWord
   );
 });
 

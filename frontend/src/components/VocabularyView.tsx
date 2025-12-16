@@ -332,6 +332,7 @@ function VocabularyViewBase({
               targetLanguage={targetLanguage}
               userId={userId}
               isAuthenticated={isAuthenticated}
+              idioms={analysis.idioms}
               listContainerRef={listContainerRef}
             />
           </Box>

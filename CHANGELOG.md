@@ -5,6 +5,42 @@ All notable changes to the WordWise project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2025-12-15
+
+### Added
+- **Context-Aware Translation & Idiom Detection**
+  - Backend detects 350+ idioms/phrasal verbs from existing dictionary
+  - Idiom data returned in CEFR classification response
+  - Each idiom includes: phrase, type (idiom/phrasal_verb), CEFR level, component words
+  - Fast O(1) idiom lookup via word→idiom Map in Web Worker
+
+- **Context-Aware Translation Display**
+  - When clicking a word that's part of an idiom, shows:
+    - Literal word translation (e.g., "leg → нога")
+    - Idiom context with translation (e.g., Part of: "pulling one's leg" — шутить)
+    - CEFR level badge for the idiom
+  - Purple badge for idioms, teal badge for phrasal verbs
+  - No external APIs needed - reuses existing DeepL/Google translation
+
+### Changed
+- **Click-to-Expand Translation Pattern**
+  - Translations only fetched when user clicks a word row
+  - Eliminates batch translation overhead entirely
+  - Zero initial translation load time, no rate limiting issues
+  - Smooth CSS Grid animation for expand/collapse transitions
+
+- **Memory Management**
+  - Backend CEFR caches use LRU with 50k max entries
+  - Frontend worker translation Map uses LRU with 5k max entries
+  - Caches cleared on movie/tab change
+  - Prevents memory leaks in long sessions
+
+- **UI Polish**
+  - Smooth fade transitions when switching CEFR tabs
+  - Virtualized list with dynamic row heights for expanded words
+  - Scroll-to-top floating button
+  - Row number alignment with word text
+
 ## [2.4.0] - 2025-12-11
 
 ### Added

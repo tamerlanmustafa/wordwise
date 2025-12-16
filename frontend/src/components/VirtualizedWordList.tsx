@@ -16,6 +16,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { WordRow } from './WordRow';
 import type { DisplayWord } from '../types/vocabularyWorker';
+import type { IdiomInfo } from '../services/scriptService';
 
 interface VirtualizedWordListProps {
   // Data
@@ -44,6 +45,9 @@ interface VirtualizedWordListProps {
   otherMovies: Record<string, Array<{ movie_id: number; title: string }>>;
   movieId?: number;
 
+  // Idiom lookup
+  getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
+
   // Container ref
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -67,6 +71,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   isLoadingMore,
   otherMovies,
   movieId,
+  getIdiomsForWord,
   containerRef: _containerRef  // Reserved for scroll sync
 }) => {
   // Scroll container ref
@@ -260,6 +265,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 onTranslate={onTranslate}
                 onExpandChange={handleRowExpandChange}
                 otherMoviesText={otherMoviesText}
+                getIdiomsForWord={getIdiomsForWord}
               />
             </div>
           );

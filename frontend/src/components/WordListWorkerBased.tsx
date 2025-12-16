@@ -34,6 +34,7 @@ import { VirtualizedWordList } from './VirtualizedWordList';
 import { useWorkerVocabularyFeed } from '../hooks/useWorkerVocabularyFeed';
 import { translateText } from '../services/scriptService';
 import type { WordFrequency, CEFRLevel } from '../types/script';
+import type { IdiomInfo } from '../services/scriptService';
 
 interface WordListWorkerBasedProps {
   // Active group data
@@ -62,6 +63,9 @@ interface WordListWorkerBasedProps {
   userId?: number;
   isAuthenticated: boolean;
 
+  // Idioms for context-aware translation
+  idioms?: IdiomInfo[];
+
   // Refs (maintained for compatibility)
   listContainerRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -83,6 +87,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   targetLanguage,
   userId,
   isAuthenticated,
+  idioms = [],
   listContainerRef
 }) => {
   // Worker-based vocabulary feed
@@ -94,14 +99,16 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
     loadedCount,
     hasMore,
     error,
-    requestMore
+    requestMore,
+    getIdiomsForWord
   } = useWorkerVocabularyFeed({
     rawWords,
     cefrLevel: groupLevel,
     targetLanguage,
     userId,
     isAuthenticated,
-    isPreview
+    isPreview,
+    idioms
   });
 
   // Stable callbacks
@@ -262,6 +269,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             otherMovies={otherMovies}
             movieId={movieId}
             containerRef={listContainerRef}
+            getIdiomsForWord={getIdiomsForWord}
           />
         )}
       </Paper>

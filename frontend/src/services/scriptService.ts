@@ -50,6 +50,13 @@ export interface ScriptResponse {
   fetched_at: string | null;
 }
 
+export interface IdiomInfo {
+  phrase: string;
+  type: 'phrasal_verb' | 'idiom';
+  cefr_level: string;
+  words: string[];
+}
+
 export interface CEFRClassificationResponse {
   movie_id: number;
   script_id: number;
@@ -73,6 +80,7 @@ export interface CEFRClassificationResponse {
       frequency_rank: number | null;
     }>;
   };
+  idioms?: IdiomInfo[];
 }
 
 export interface TranslationRequest {

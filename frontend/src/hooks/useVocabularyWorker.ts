@@ -20,6 +20,10 @@ import type {
   WorkerOutboundMessage,
   DisplayWord
 } from '../types/vocabularyWorker';
+import type { IdiomInfo } from '../services/scriptService';
+
+// Stable empty array reference to prevent infinite re-renders
+const EMPTY_IDIOMS: IdiomInfo[] = [];
 
 interface UseVocabularyWorkerOptions {
   rawWords: WordFrequency[];
@@ -28,6 +32,7 @@ interface UseVocabularyWorkerOptions {
   userId?: number;
   isAuthenticated: boolean;
   isPreview?: boolean;
+  idioms?: IdiomInfo[];
 }
 
 interface UseVocabularyWorkerResult {
@@ -53,6 +58,7 @@ interface UseVocabularyWorkerResult {
     savedWords?: Set<string>;
   }) => void;
   reset: () => void;
+  getIdiomsForWord: (word: string) => Promise<IdiomInfo[]>;
 }
 
 const BATCH_SIZE = 50;
@@ -63,8 +69,11 @@ export function useVocabularyWorker({
   targetLanguage: _targetLanguage,  // Reserved for future translation integration
   userId: _userId,                   // Reserved for future personalization
   isAuthenticated,
-  isPreview = false
+  isPreview = false,
+  idioms
 }: UseVocabularyWorkerOptions): UseVocabularyWorkerResult {
+  // Use stable empty array if idioms is undefined/empty to prevent infinite re-renders
+  const stableIdioms = idioms && idioms.length > 0 ? idioms : EMPTY_IDIOMS;
   // Worker instance
   const workerRef = useRef<Worker | null>(null);
 
@@ -89,6 +98,12 @@ export function useVocabularyWorker({
     error?: string | null;
   }>({});
   const rafIdRef = useRef<number | null>(null);
+
+  // Pending idiom lookup promises (for async getIdiomsForWord)
+  const pendingIdiomLookupsRef = useRef<Map<string, {
+    resolve: (idioms: IdiomInfo[]) => void;
+    reject: (error: Error) => void;
+  }>>(new Map());
 
   // ============================================================================
   // BATCHED STATE UPDATES
@@ -193,6 +208,16 @@ export function useVocabularyWorker({
         });
         break;
       }
+
+      case 'IDIOMS_RESULT': {
+        const { requestId, idioms } = message.payload;
+        const pending = pendingIdiomLookupsRef.current.get(requestId);
+        if (pending) {
+          pending.resolve(idioms);
+          pendingIdiomLookupsRef.current.delete(requestId);
+        }
+        break;
+      }
     }
   }, [scheduleUpdate]);
 
@@ -244,17 +269,18 @@ export function useVocabularyWorker({
     setError(null);
     setIsLoading(true);
 
-    // Send words to worker
+    // Send words to worker (include idioms for context-aware translation)
     const message: WorkerInboundMessage = {
       type: 'INIT_WORDS',
       payload: {
         words: rawWords,
-        cefrLevel
+        cefrLevel,
+        idioms: stableIdioms
       }
     };
 
     workerRef.current.postMessage(message);
-  }, [rawWords, cefrLevel, isAuthenticated, isPreview]);
+  }, [rawWords, cefrLevel, isAuthenticated, isPreview, stableIdioms]);
 
   // ============================================================================
   // REQUEST INITIAL BATCH
@@ -358,6 +384,41 @@ export function useVocabularyWorker({
     setIsLoading(true);
   }, []);
 
+  const getIdiomsForWord = useCallback((word: string): Promise<IdiomInfo[]> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        resolve([]);
+        return;
+      }
+
+      // Generate unique request ID
+      const requestId = `${word}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Store the promise handlers
+      pendingIdiomLookupsRef.current.set(requestId, { resolve, reject });
+
+      // Send message to worker
+      const message: WorkerInboundMessage = {
+        type: 'GET_IDIOMS_FOR_WORD',
+        payload: {
+          word,
+          requestId
+        }
+      };
+
+      workerRef.current.postMessage(message);
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        const pending = pendingIdiomLookupsRef.current.get(requestId);
+        if (pending) {
+          pending.resolve([]); // Return empty on timeout
+          pendingIdiomLookupsRef.current.delete(requestId);
+        }
+      }, 5000);
+    });
+  }, []);
+
   // ============================================================================
   // RETURN STABLE REFERENCES
   // ============================================================================
@@ -372,7 +433,8 @@ export function useVocabularyWorker({
     requestBatch,
     updateTranslations,
     applyFilter,
-    reset
+    reset,
+    getIdiomsForWord
   }), [
     visibleWords,
     isLoading,
@@ -383,6 +445,7 @@ export function useVocabularyWorker({
     requestBatch,
     updateTranslations,
     applyFilter,
-    reset
+    reset,
+    getIdiomsForWord
   ]);
 }
