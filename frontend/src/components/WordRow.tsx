@@ -2,18 +2,20 @@
  * WordRow Component
  *
  * Ultra-lightweight word row component optimized for virtualized rendering.
+ * Click-to-expand design: translation is only fetched when user clicks.
  *
  * Performance optimizations:
  * - Minimal DOM depth (no deep nesting)
  * - No heavy MUI components inside rows (only IconButton for actions)
  * - Custom memo comparison for precise re-render control
- * - Placeholder translation text for instant rendering
+ * - Translation loaded on-demand (no batch API calls)
  * - CSS class toggle for fade-in effect when translation loads
  * - Stable prop references via useCallback/useMemo from parent
  */
 
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 import type { DisplayWord } from '../types/vocabularyWorker';
+import type { IdiomInfo } from '../services/scriptService';
 import './WordRow.css';
 
 // Lightweight SVG icons as components (no MUI overhead)
@@ -39,12 +41,39 @@ const CheckCircleIcon = ({ filled }: { filled: boolean }) => (
   </svg>
 );
 
+const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    style={{
+      transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+      transition: 'transform 0.2s ease'
+    }}
+  >
+    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const LoadingSpinner = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" className="word-row__spinner">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" opacity="0.25" />
+    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+  </svg>
+);
+
 interface WordRowProps {
   // Word data
   word: DisplayWord;
 
   // Row number (1-indexed for display)
   rowNumber: number;
+
+  // Virtual list index (for expand tracking)
+  virtualIndex: number;
 
   // Rendering metadata
   groupColor: string;
@@ -58,13 +87,18 @@ interface WordRowProps {
   // Actions (must be stable references)
   onSave: (word: string) => void;
   onToggleLearned: (word: string) => void;
+  onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
+  onExpandChange: (index: number, isExpanded: boolean) => void;
+
+  // Idiom lookup
+  getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
 
   // Other movies tooltip
   otherMoviesText?: string;
 }
 
 /**
- * Lightweight WordRow component
+ * Lightweight WordRow component with click-to-expand translation
  *
  * Uses plain HTML + CSS classes instead of MUI for maximum performance.
  * Designed to be rendered 1000s of times without performance degradation.
@@ -72,6 +106,7 @@ interface WordRowProps {
 export const WordRow = memo<WordRowProps>(({
   word,
   rowNumber,
+  virtualIndex,
   groupColor,
   showDivider,
   isSaved,
@@ -79,14 +114,92 @@ export const WordRow = memo<WordRowProps>(({
   canToggleLearned,
   onSave,
   onToggleLearned,
+  onTranslate,
+  onExpandChange,
+  getIdiomsForWord,
   otherMoviesText
 }) => {
-  const hasTranslation = !!word.translation;
-  const translationText = word.translation || '...';
-  const translationClass = hasTranslation ? 'word-row__translation--loaded' : 'word-row__translation--loading';
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false); // Controls DOM presence
+  const [translation, setTranslation] = useState<string | null>(word.translation || null);
+  const [provider, setProvider] = useState<string | null>(word.translationProvider || null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Idiom context state
+  const [idiomInfo, setIdiomInfo] = useState<{ idiom: IdiomInfo; translation: string } | null>(null);
+  const [isLoadingIdiom, setIsLoadingIdiom] = useState(false);
+
+  const handleRowClick = useCallback(async (e: React.MouseEvent) => {
+    // Don't toggle if clicking on action buttons
+    if ((e.target as HTMLElement).closest('.word-row__action-btn')) {
+      return;
+    }
+
+    if (!isExpanded) {
+      setShouldRender(true); // Mount immediately
+      // Small delay to ensure DOM is ready before animation starts
+      requestAnimationFrame(() => {
+        setIsExpanded(true);
+      });
+      onExpandChange(virtualIndex, true);
+
+      // Fetch translation if not already loaded
+      if (!translation) {
+        setIsLoading(true);
+        try {
+          const result = await onTranslate(word.word);
+          if (result) {
+            setTranslation(result.translation);
+            setProvider(result.provider || null);
+          }
+        } catch (error) {
+          console.error('Translation failed:', error);
+          setTranslation('Translation failed');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+
+      // Fetch idiom context if available and not already loaded
+      if (getIdiomsForWord && !idiomInfo) {
+        setIsLoadingIdiom(true);
+        try {
+          const idioms = await getIdiomsForWord(word.word);
+          if (idioms.length > 0) {
+            // Translate the idiom phrase
+            const idiomTranslation = await onTranslate(idioms[0].phrase);
+            if (idiomTranslation) {
+              setIdiomInfo({
+                idiom: idioms[0],
+                translation: idiomTranslation.translation
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Idiom lookup failed:', error);
+        } finally {
+          setIsLoadingIdiom(false);
+        }
+      }
+    } else {
+      setIsExpanded(false);
+      onExpandChange(virtualIndex, false);
+      // Wait for animation to finish before unmounting
+      setTimeout(() => {
+        setShouldRender(false);
+      }, 200); // Match CSS animation duration
+    }
+  }, [isExpanded, translation, onTranslate, word.word, virtualIndex, onExpandChange, getIdiomsForWord, idiomInfo]);
+
+  // Check if translation equals source word (should be hidden when collapsed)
+  const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
   return (
-    <div className="word-row" style={{ '--group-color': groupColor } as React.CSSProperties}>
+    <div
+      className={`word-row ${isExpanded ? 'word-row--expanded' : ''}`}
+      style={{ '--group-color': groupColor } as React.CSSProperties}
+      onClick={handleRowClick}
+    >
       {/* Row Number */}
       <span className="word-row__number">{rowNumber}.</span>
 
@@ -97,30 +210,60 @@ export const WordRow = memo<WordRowProps>(({
           {word.word}
         </span>
 
-        {/* Separator */}
-        <span className="word-row__separator">—</span>
-
-        {/* Translation (fades in when loaded) */}
-        <span className={`word-row__translation ${translationClass}`}>
-          {translationText}
+        {/* Expand indicator */}
+        <span className="word-row__expand-hint">
+          {isLoading ? (
+            <LoadingSpinner />
+          ) : (
+            <ChevronIcon expanded={isExpanded} />
+          )}
         </span>
+
+        {/* Translation (animated expand/collapse using CSS grid) */}
+        {shouldRender && (
+          <div className={`word-row__translation-container ${isExpanded ? 'word-row__translation-container--visible' : ''}`}>
+            <div className="word-row__translation-inner">
+              <span className="word-row__separator">—</span>
+              <span className={`word-row__translation ${translation ? 'word-row__translation--loaded' : ''}`}>
+                {isLoading ? 'Translating...' : (translation || '...')}
+              </span>
+              {provider && provider !== 'cache' && (
+                <span className={`word-row__badge word-row__badge--${provider}`}>
+                  {provider}
+                </span>
+              )}
+              {isUntranslatable && (
+                <span className="word-row__badge word-row__badge--warning">
+                  no translation
+                </span>
+              )}
+            </div>
+            {/* Idiom context - shows when word is part of an idiom */}
+            {(idiomInfo || isLoadingIdiom) && (
+              <div className="word-row__idiom-context">
+                {isLoadingIdiom ? (
+                  <span className="word-row__idiom-loading">Checking idioms...</span>
+                ) : idiomInfo && (
+                  <>
+                    <span className="word-row__idiom-label">Part of:</span>
+                    <span className="word-row__idiom-phrase">"{idiomInfo.idiom.phrase}"</span>
+                    <span className="word-row__idiom-translation">— {idiomInfo.translation}</span>
+                    <span className={`word-row__badge word-row__badge--${idiomInfo.idiom.type}`}>
+                      {idiomInfo.idiom.cefr_level}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Metadata */}
+      {/* Metadata (confidence) - shown on hover */}
       <div className="word-row__metadata">
         {word.confidence && (
           <span className="word-row__badge">
             {Math.round(word.confidence * 100)}% conf
-          </span>
-        )}
-        {word.translationCached && (
-          <span className="word-row__badge word-row__badge--cached">
-            cached
-          </span>
-        )}
-        {word.translationProvider && word.translationProvider !== 'cache' && (
-          <span className={`word-row__badge word-row__badge--${word.translationProvider}`}>
-            {word.translationProvider}
           </span>
         )}
       </div>
@@ -130,7 +273,10 @@ export const WordRow = memo<WordRowProps>(({
         {/* Save button */}
         <button
           className={`word-row__action-btn ${isSaved ? 'word-row__action-btn--saved' : ''}`}
-          onClick={() => onSave(word.word)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSave(word.word);
+          }}
           title={otherMoviesText || (isSaved ? 'Remove from saved' : 'Save word')}
           aria-label={isSaved ? 'Unsave word' : 'Save word'}
         >
@@ -140,7 +286,10 @@ export const WordRow = memo<WordRowProps>(({
         {/* Learned button */}
         <button
           className={`word-row__action-btn ${isLearned ? 'word-row__action-btn--learned' : ''}`}
-          onClick={() => onToggleLearned(word.word)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLearned(word.word);
+          }}
           disabled={!canToggleLearned}
           title={isLearned ? 'Mark as not learned' : 'Mark as learned'}
           aria-label={isLearned ? 'Mark as unlearned' : 'Mark as learned'}
@@ -159,15 +308,18 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.word.word === nextProps.word.word &&
     prevProps.word.translation === nextProps.word.translation &&
     prevProps.word.translationProvider === nextProps.word.translationProvider &&
-    prevProps.word.translationCached === nextProps.word.translationCached &&
     prevProps.rowNumber === nextProps.rowNumber &&
+    prevProps.virtualIndex === nextProps.virtualIndex &&
     prevProps.groupColor === nextProps.groupColor &&
     prevProps.showDivider === nextProps.showDivider &&
     prevProps.isSaved === nextProps.isSaved &&
     prevProps.isLearned === nextProps.isLearned &&
     prevProps.canToggleLearned === nextProps.canToggleLearned &&
     prevProps.onSave === nextProps.onSave &&
-    prevProps.onToggleLearned === nextProps.onToggleLearned
+    prevProps.onToggleLearned === nextProps.onToggleLearned &&
+    prevProps.onTranslate === nextProps.onTranslate &&
+    prevProps.onExpandChange === nextProps.onExpandChange &&
+    prevProps.getIdiomsForWord === nextProps.getIdiomsForWord
   );
 });
 

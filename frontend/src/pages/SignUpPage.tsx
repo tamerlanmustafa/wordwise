@@ -9,11 +9,50 @@ import {
   Stack,
   Divider,
   Alert,
-  Link as MuiLink
+  Link as MuiLink,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
+import type { SelectChangeEvent } from '@mui/material';
+
+// Supported languages for the app
+const SUPPORTED_LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'da', name: 'Danish' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'el', name: 'Greek' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'th', name: 'Thai' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'bg', name: 'Bulgarian' },
+];
 
 export default function SignUpPage() {
   const { handleGoogleLogin } = useAuth();
@@ -21,7 +60,9 @@ export default function SignUpPage() {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    nativeLanguage: '',
+    learningLanguage: 'en'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,12 +75,20 @@ export default function SignUpPage() {
     setError('');
   };
 
+  const handleSelectChange = (e: SelectChangeEvent) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    setError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     // Validation
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.email || !formData.password || !formData.nativeLanguage || !formData.learningLanguage) {
       setError('All fields are required');
       return;
     }
@@ -67,6 +116,8 @@ export default function SignUpPage() {
           username: formData.name,
           email: formData.email,
           password: formData.password,
+          native_language: formData.nativeLanguage,
+          learning_language: formData.learningLanguage,
         }),
       });
 
@@ -122,6 +173,53 @@ export default function SignUpPage() {
             </Alert>
           )}
 
+          {/* Language Preferences - Required for all signup methods */}
+          <Stack spacing={2} sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" color="text.secondary" align="center">
+              First, tell us about your language goals
+            </Typography>
+
+            <FormControl fullWidth required>
+              <InputLabel id="native-language-label">Your Native Language</InputLabel>
+              <Select
+                labelId="native-language-label"
+                name="nativeLanguage"
+                value={formData.nativeLanguage}
+                label="Your Native Language"
+                onChange={handleSelectChange}
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <MenuItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth required>
+              <InputLabel id="learning-language-label">Language You're Learning</InputLabel>
+              <Select
+                labelId="learning-language-label"
+                name="learningLanguage"
+                value={formData.learningLanguage}
+                label="Language You're Learning"
+                onChange={handleSelectChange}
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <MenuItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
+          <Divider sx={{ mb: 3 }}>
+            <Typography variant="body2" color="text.secondary">
+              Then choose how to sign up
+            </Typography>
+          </Divider>
+
           {/* Google Sign Up */}
           <Box
             sx={{
@@ -136,7 +234,16 @@ export default function SignUpPage() {
             }}
           >
             <GoogleLogin
-              onSuccess={handleGoogleLogin}
+              onSuccess={(credentialResponse) => {
+                if (!formData.nativeLanguage || !formData.learningLanguage) {
+                  setError('Please select your languages before signing up with Google');
+                  return;
+                }
+                handleGoogleLogin(credentialResponse, {
+                  nativeLanguage: formData.nativeLanguage,
+                  learningLanguage: formData.learningLanguage
+                });
+              }}
               onError={() => {
                 setError('Google sign up failed. Please try again.');
               }}

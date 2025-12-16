@@ -22,9 +22,17 @@ export interface DifficultyCategory {
   description: string;
 }
 
+export interface IdiomInfo {
+  phrase: string;
+  type: 'phrasal_verb' | 'idiom';
+  cefr_level: string;
+  words: string[];
+}
+
 export interface ScriptAnalysisResult {
   title: string;
   totalWords: number;
   uniqueWords: number;
   categories: DifficultyCategory[];
+  idioms?: IdiomInfo[];
 }

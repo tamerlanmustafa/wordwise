@@ -1,19 +1,29 @@
 # WordWise - Language Learning Through Movies
 
-WordWise is an innovative language learning platform that helps users learn English vocabulary by analyzing movie scripts. Users can study words from their favorite movies, track their progress, and improve their language skills through engaging content.
+WordWise is a vocabulary learning platform that helps users learn English by analyzing movie scripts. Users can study words from their favorite movies, track their progress, and improve their language skills through engaging content.
 
 ## Features
 
-- 🎬 **Movie Script Analysis** - Automatic download and extraction from STANDS4 PDFs
-- 📊 **Hybrid CEFR Classifier** - Multi-source word difficulty classification (A1-C2)
+- **Movie Script Analysis** - Automatic download from subtitles (Subliminal) and STANDS4 PDFs
+- **Hybrid CEFR Classifier** - Multi-source word difficulty classification (A1-C2)
   - CEFR wordlists (Oxford 3000/5000, EFLLex, EVP)
   - Frequency-based backoff (wordfreq)
-  - ML-powered embedding classifier (sentence-transformers)
-  - Lemmatization with spaCy
-- 📚 **Personalized Word Lists** - Learn Later, Favorites, Mastered
-- 🔐 **Google OAuth Authentication** - Secure login without passwords
-- 💾 **PostgreSQL + Prisma ORM** - Type-safe database operations
-- 🎨 **Material-UI** - Beautiful, responsive interface
+  - Lemmatization with NLTK WordNet
+  - Genre-aware classification (kids/family movies get conservative levels)
+  - Foreign word filtering (Italian, Spanish, French, etc.)
+  - Contraction fragment filtering
+- **Idiom & Phrasal Verb Detection** - Context-aware translation
+  - 350+ idioms and phrasal verbs detected automatically
+  - Shows both literal translation and idiomatic meaning
+  - CEFR level badges for expressions (purple=idiom, teal=phrasal verb)
+  - O(1) lookup via word→idiom Map in Web Worker
+- **Personalized Word Lists** - Learn Later, Favorites, Mastered
+- **Translation System** - Hybrid DeepL + Google Translate with caching
+- **User Language Preferences** - Native language and learning language selection
+- **Google OAuth Authentication** - Secure login without passwords
+- **PostgreSQL + Prisma ORM** - Type-safe database operations
+- **Web Worker Vocabulary Engine** - 10-100x faster rendering with TanStack Virtual
+- **Material-UI** - Beautiful, responsive interface
 
 ## Tech Stack
 
@@ -22,18 +32,20 @@ WordWise is an innovative language learning platform that helps users learn Engl
 - FastAPI - Modern, fast web framework
 - Prisma - Type-safe database ORM
 - PostgreSQL - Primary database
-- spaCy - Lemmatization and NLP
+- NLTK WordNet - Lemmatization
 - wordfreq - Frequency-based word classification
-- sentence-transformers - ML word embeddings
-- scikit-learn - CEFR classification models
+- DeepL API - Primary translation provider
+- Google Cloud Translate - Fallback translation provider
 - pdfplumber - PDF text extraction
+- Subliminal - Subtitle downloading
 
 ### Frontend
 - React 19 - UI library
 - Vite 7 - Build tool and dev server
 - TypeScript - Type safety
 - Material-UI - Component library
-- Redux Toolkit - State management
+- TanStack Virtual - High-performance list virtualization
+- Web Workers - Off-thread vocabulary processing
 - Axios - HTTP client
 - React Router - Client-side routing
 
@@ -58,8 +70,8 @@ cd backend
 # Install dependencies
 pip install -r requirements.txt
 
-# Download spaCy model
-python -m spacy download en_core_web_sm
+# Download NLTK data
+python -c "import nltk; nltk.download('wordnet'); nltk.download('omw-1.4')"
 
 # Set up environment variables
 cp .env.example .env
@@ -74,17 +86,9 @@ prisma db push
 # (Optional) Download CEFR wordlists
 python -m src.utils.download_cefr_data
 
-# (Optional) Train embedding classifier
-python -m src.utils.train_embedding_classifier --model all
-
 # Start the server
 uvicorn src.main:app --reload --port 8000
 ```
-
-**CEFR Classifier Setup:**
-1. Populate CEFR wordlists in `backend/data/cefr/` (Oxford 3000/5000, EFLLex, EVP)
-2. Train the embedding classifier (optional, for rare words)
-3. Adjust frequency thresholds via API if needed
 
 #### Frontend
 
@@ -108,29 +112,74 @@ npm run dev
 wordwise/
 ├── backend/
 │   ├── prisma/
-│   │   └── schema.prisma    # Database schema
+│   │   └── schema.prisma           # Database schema
+│   ├── data/
+│   │   └── cefr/                   # CEFR wordlist files
 │   ├── src/
-│   │   ├── routes/          # API routes
-│   │   ├── services/        # Business logic
-│   │   ├── middleware/      # Custom middleware
-│   │   ├── database.py      # Prisma connection
-│   │   └── main.py          # FastAPI app
+│   │   ├── routes/
+│   │   │   ├── auth.py             # Email authentication
+│   │   │   ├── oauth.py            # Google OAuth
+│   │   │   ├── movies.py           # Movie endpoints
+│   │   │   ├── scripts.py          # Script fetching
+│   │   │   ├── cefr.py             # CEFR classification
+│   │   │   ├── translation.py      # Translation API
+│   │   │   ├── user_words.py       # Saved/learned words
+│   │   │   └── tmdb.py             # TMDB integration
+│   │   ├── services/
+│   │   │   ├── cefr_classifier.py  # CEFR classification logic
+│   │   │   ├── difficulty_scorer.py # Movie difficulty scoring
+│   │   │   ├── translation_service.py # Translation with caching
+│   │   │   ├── script_ingestion_service.py # Script fetching
+│   │   │   └── external/           # External API integrations
+│   │   ├── schemas/                # Pydantic models
+│   │   ├── middleware/             # Auth middleware
+│   │   ├── utils/
+│   │   │   ├── tmdb_client.py      # TMDB API client
+│   │   │   ├── deepl_client.py     # DeepL API client
+│   │   │   ├── google_translate_client.py
+│   │   │   └── subtitle_parser.py  # SRT parsing
+│   │   ├── config.py               # Environment config
+│   │   ├── database.py             # Prisma connection
+│   │   └── main.py                 # FastAPI app
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # React pages
-│   │   ├── components/      # React components
-│   │   ├── services/        # API services
-│   │   ├── store/           # Redux store
-│   │   ├── App.tsx          # Router configuration
-│   │   └── main.tsx         # Entry point
+│   │   ├── pages/
+│   │   │   ├── HomePage.tsx        # Landing page
+│   │   │   ├── MovieSearchPage.tsx # Search movies
+│   │   │   ├── MovieDetailPage.tsx # Movie vocabulary view
+│   │   │   ├── SavedWordsPage.tsx  # Saved words list
+│   │   │   ├── LoginPage.tsx       # Login form
+│   │   │   └── SignUpPage.tsx      # Registration form
+│   │   ├── components/
+│   │   │   ├── VocabularyView.tsx  # Main vocabulary display
+│   │   │   ├── WordListWorkerBased.tsx # Worker-powered word list
+│   │   │   ├── VirtualizedWordList.tsx # TanStack Virtual list
+│   │   │   ├── TopBar.tsx          # Navigation bar
+│   │   │   └── LanguageSelector.tsx # Language picker
+│   │   ├── workers/
+│   │   │   └── vocabulary.worker.ts # Web Worker for processing
+│   │   ├── hooks/
+│   │   │   ├── useVocabularyWorker.ts
+│   │   │   ├── useTranslationQueue.ts
+│   │   │   └── useUserWords.ts
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.tsx     # Authentication state
+│   │   │   ├── LanguageContext.tsx # Language preferences
+│   │   │   └── ThemeContext.tsx    # Dark/light mode
+│   │   ├── services/               # API service functions
+│   │   ├── types/                  # TypeScript interfaces
+│   │   ├── App.tsx                 # Router configuration
+│   │   └── main.tsx                # Entry point
 │   ├── vite.config.ts
 │   └── package.json
 ├── docker/
-│   ├── Dockerfile.backend   # Backend Docker image
-│   ├── Dockerfile.frontend  # Frontend Docker image
-│   └── nginx.conf           # Production nginx config
-└── docker-compose.yml
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   └── nginx.conf
+├── docker-compose.yml
+├── CHANGELOG.md
+└── ROADMAP.md
 ```
 
 ## API Documentation
@@ -142,22 +191,38 @@ Once the backend is running, visit:
 ### Key API Endpoints
 
 **Authentication:**
-- `POST /auth/google/login` - Login with Google OAuth
-- `POST /auth/google/signup` - Sign up with Google OAuth
+- `POST /auth/register` - Register with email/password
+- `POST /auth/login` - Login with email/password
+- `POST /auth/google/login` - Login/signup with Google OAuth
+- `GET /auth/me` - Get current user
+- `PATCH /auth/me` - Update user profile (language preferences)
+- `GET /auth/languages` - Get supported languages list
 
-**Movie Scripts:**
-- `POST /api/scripts/fetch` - Fetch and save movie script from STANDS4
+**Movies:**
+- `GET /movies/search` - Search movies via TMDB
+- `GET /movies/{id}` - Get movie details
+- `GET /movies/{id}/vocabulary/full` - Get classified vocabulary
+
+**Scripts:**
+- `POST /api/scripts/fetch` - Fetch movie script (subtitles → STANDS4)
 
 **CEFR Classification:**
 - `POST /api/cefr/classify-word` - Classify a single word
 - `POST /api/cefr/classify-text` - Classify all words in text
-- `POST /api/cefr/classify-script` - Classify entire movie script
-- `GET /api/cefr/statistics/{movie_id}` - Get cached classification statistics
-- `PUT /api/cefr/update-thresholds` - Adjust frequency thresholds
+- `GET /api/cefr/statistics/{movie_id}` - Get classification statistics
 - `GET /api/cefr/health` - Check classifier status
 
-**General:**
-- `GET /health` - API health check
+**Translation:**
+- `POST /translate` - Translate single word
+- `POST /translate/batch` - Translate multiple words
+- `GET /translate/user/{user_id}/difficult-words` - Get frequently translated words
+- `GET /translate/user/{user_id}/stats` - Get translation statistics
+
+**User Words:**
+- `GET /user/words` - Get all saved words
+- `POST /user/words` - Save a word
+- `DELETE /user/words/{word}` - Remove saved word
+- `POST /user/words/{word}/learned` - Mark word as learned
 
 ## Database
 
@@ -167,25 +232,58 @@ Once the backend is running, visit:
 # Generate Prisma client
 prisma generate
 
-# Apply schema changes (no migrations)
+# Apply schema changes
 prisma db push
 
 # Open Prisma Studio (database GUI)
 prisma studio
 
-# (Optional) Create migration
+# Create migration (for production)
 prisma migrate dev --name migration_name
 ```
 
-### Database Schema
+### Key Models
 
-The database includes:
-- **Users** - OAuth profiles and preferences
-- **Movies** - Movie metadata
-- **MovieScripts** - Full script text from STANDS4 PDFs
+- **User** - OAuth profiles, language preferences (nativeLanguage, learningLanguage)
+- **Movie** - Movie metadata from TMDB
+- **MovieScript** - Full script text from subtitles/STANDS4
 - **WordClassification** - CEFR levels for all words in scripts
-- **Words** - Vocabulary with definitions
-- **UserWordLists** - Personalized word collections
+- **UserWord** - User's saved words with movie associations
+- **TranslationCache** - Cached translations by language pair
+- **UserTranslationHistory** - Track translations for learning analytics
+
+## Performance
+
+### CEFR Classifier
+- Single word: <1ms
+- Short text (100 words): ~50ms
+- Full movie script (10K words): 1-2 seconds
+
+### Frontend (Web Worker System)
+- Initial render (5K words): ~45ms (10x faster than before)
+- Tab switch: ~12ms (23x faster)
+- Scroll: 60fps (smooth)
+- DOM nodes: ~15 (8x fewer than before)
+
+## Environment Variables
+
+### Backend (.env)
+```bash
+DATABASE_URL="postgresql://user:password@localhost:5432/wordwise_db"
+JWT_SECRET_KEY="your-secret-key"
+GOOGLE_CLIENT_ID="your-google-client-id"
+DEEPL_API_KEY="your-deepl-api-key"
+GOOGLE_TRANSLATE_CREDENTIALS="path/to/credentials.json"
+STANDS4_USER_ID="your-stands4-user-id"
+STANDS4_TOKEN="your-stands4-token"
+```
+
+### Frontend (.env)
+```bash
+VITE_API_URL="http://localhost:8000"
+VITE_GOOGLE_CLIENT_ID="your-google-client-id"
+VITE_TMDB_API_KEY="your-tmdb-api-key"
+```
 
 ## Development Guidelines
 
@@ -194,13 +292,6 @@ The database includes:
 - Write tests for critical functionality
 - Use meaningful commit messages
 - No Docker required (direct Python/Node development)
-
-## Performance
-
-- **Vite dev server:** 10x faster than Next.js
-- **Docker builds:** 60-87% faster with multi-stage caching
-- **Image sizes:** 75-94% smaller with optimized builds
-- **Hot reload:** Instant with Vite HMR
 
 ## Contributing
 

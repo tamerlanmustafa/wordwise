@@ -9,6 +9,7 @@ import SignUpPage from './pages/SignUpPage';
 import LoginPage from './pages/LoginPage';
 import SavedWordsPage from './pages/SavedWordsPage';
 import AllListsPage from './pages/AllListsPage';
+import SettingsPage from './pages/SettingsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -39,6 +40,7 @@ function App() {
                       <Route path="/login" element={<LoginPage />} />
                       <Route path="/lists" element={<AllListsPage />} />
                       <Route path="/lists/:listName" element={<SavedWordsPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
                   </Box>
                 </Box>

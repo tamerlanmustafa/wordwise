@@ -76,71 +76,82 @@ _GLOBAL_FREQUENCY_CACHE: LRUCache = LRUCache(maxsize=FREQUENCY_CACHE_SIZE)
 # Format: { 'phrasal_verb': 'CEFR_level' }
 # Phrasal verbs often have idiomatic meanings that differ from their components
 PHRASAL_VERBS = {
-    # A2 level - Basic phrasal verbs
+    # A2 level - Basic phrasal verbs (everyday, taught early)
     'get up': 'A2', 'wake up': 'A2', 'sit down': 'A2', 'stand up': 'A2',
     'look at': 'A2', 'look for': 'A2', 'turn on': 'A2', 'turn off': 'A2',
     'put on': 'A2', 'take off': 'A2', 'come in': 'A2', 'go out': 'A2',
     'pick up': 'A2', 'put down': 'A2', 'come back': 'A2', 'go back': 'A2',
+    'go away': 'A2', 'come on': 'A2', 'get on': 'A2', 'get off': 'A2',
 
-    # B1 level - Intermediate phrasal verbs
+    # B1 level - Intermediate phrasal verbs (common in everyday speech)
     'give up': 'B1', 'look after': 'B1', 'look out': 'B1', 'find out': 'B1',
     'grow up': 'B1', 'set up': 'B1', 'take care': 'B1', 'make up': 'B1',
-    'bring up': 'B1', 'carry on': 'B1', 'come on': 'B1', 'go on': 'B1',
-    'hold on': 'B1', 'hang up': 'B1', 'keep on': 'B1', 'fill in': 'B1',
-    'look up': 'B1', 'run out': 'B1', 'sort out': 'B1', 'work out': 'B1',
-    'check in': 'B1', 'check out': 'B1', 'log in': 'B1', 'log out': 'B1',
-    'sign up': 'B1', 'sign in': 'B1', 'break down': 'B1', 'break up': 'B1',
+    'bring up': 'B1', 'carry on': 'B1', 'go on': 'B1', 'hold on': 'B1',
+    'hang up': 'B1', 'keep on': 'B1', 'fill in': 'B1', 'look up': 'B1',
+    'run out': 'B1', 'sort out': 'B1', 'work out': 'B1', 'check in': 'B1',
+    'check out': 'B1', 'log in': 'B1', 'log out': 'B1', 'sign up': 'B1',
+    'sign in': 'B1', 'break down': 'B1', 'break up': 'B1', 'blow up': 'B1',
+    'call off': 'B1', 'come across': 'B1', 'kick off': 'B1', 'knock out': 'B1',
+    'screw up': 'B1', 'mess up': 'B1', 'show up': 'B1', 'hang out': 'B1',
 
     # B2 level - Upper-intermediate phrasal verbs
     'come up with': 'B2', 'look forward to': 'B2', 'put up with': 'B2',
     'get along with': 'B2', 'run into': 'B2', 'figure out': 'B2',
-    'turn out': 'B2', 'point out': 'B2', 'turn up': 'B2', 'show up': 'B2',
-    'take over': 'B2', 'take up': 'B2', 'take on': 'B2', 'bring about': 'B2',
-    'carry out': 'B2', 'cut down': 'B2', 'cut off': 'B2', 'deal with': 'B2',
-    'end up': 'B2', 'get away': 'B2', 'get over': 'B2', 'get through': 'B2',
-    'go through': 'B2', 'hand in': 'B2', 'hang out': 'B2', 'let down': 'B2',
-    'look into': 'B2', 'make out': 'B2', 'pass away': 'B2', 'pull off': 'B2',
-    'put off': 'B2', 'set off': 'B2', 'settle down': 'B2', 'show off': 'B2',
-    'slow down': 'B2', 'speed up': 'B2', 'stick to': 'B2', 'throw away': 'B2',
-    'try on': 'B2', 'turn down': 'B2', 'wear out': 'B2', 'wind up': 'B2',
+    'turn out': 'B2', 'point out': 'B2', 'turn up': 'B2', 'take over': 'B2',
+    'take up': 'B2', 'take on': 'B2', 'bring about': 'B2', 'carry out': 'B2',
+    'cut down': 'B2', 'cut off': 'B2', 'deal with': 'B2', 'end up': 'B2',
+    'get away': 'B2', 'get over': 'B2', 'get through': 'B2', 'go through': 'B2',
+    'hand in': 'B2', 'let down': 'B2', 'look into': 'B2', 'make out': 'B2',
+    'pass away': 'B2', 'pull off': 'B2', 'put off': 'B2', 'set off': 'B2',
+    'settle down': 'B2', 'show off': 'B2', 'slow down': 'B2', 'speed up': 'B2',
+    'stick to': 'B2', 'throw away': 'B2', 'try on': 'B2', 'turn down': 'B2',
+    'wear out': 'B2', 'wind up': 'B2', 'back out': 'B2', 'give in': 'B2',
+    'break into': 'B2', 'get by': 'B2', 'brush off': 'B2', 'catch on': 'B2',
 
-    # C1 level - Advanced phrasal verbs
-    'back out': 'C1', 'bail out': 'C1', 'black out': 'C1', 'blow up': 'C1',
-    'break into': 'C1', 'brush up': 'C1', 'call off': 'C1', 'catch on': 'C1',
-    'cave in': 'C1', 'come across': 'C1', 'come down to': 'C1', 'crack down': 'C1',
-    'do away with': 'C1', 'draw up': 'C1', 'fall through': 'C1', 'get by': 'C1',
-    'give in': 'C1', 'go about': 'C1', 'hold up': 'C1', 'iron out': 'C1',
-    'kick off': 'C1', 'knock out': 'C1', 'lay off': 'C1', 'live up to': 'C1',
-    'phase out': 'C1', 'play down': 'C1', 'pull through': 'C1', 'rule out': 'C1',
-    'scale back': 'C1', 'send off': 'C1', 'step down': 'C1', 'sum up': 'C1',
-    'take apart': 'C1', 'touch on': 'C1', 'track down': 'C1', 'wipe out': 'C1',
-    'write off': 'C1', 'zero in': 'C1',
+    # C1 level - Advanced phrasal verbs (less common, more formal/specialized)
+    'bail out': 'C1', 'black out': 'C1', 'brush up': 'C1', 'cave in': 'C1',
+    'come down to': 'C1', 'crack down': 'C1', 'do away with': 'C1',
+    'draw up': 'C1', 'fall through': 'C1', 'go about': 'C1', 'hold up': 'C1',
+    'iron out': 'C1', 'lay off': 'C1', 'live up to': 'C1', 'phase out': 'C1',
+    'play down': 'C1', 'pull through': 'C1', 'rule out': 'C1', 'scale back': 'C1',
+    'send off': 'C1', 'step down': 'C1', 'sum up': 'C1', 'take apart': 'C1',
+    'touch on': 'C1', 'track down': 'C1', 'wipe out': 'C1', 'write off': 'C1',
+    'zero in': 'C1', 'boil down to': 'C1', 'dawn on': 'C1', 'pan out': 'C1',
+    'ramp up': 'C1', 'shrug off': 'C1', 'size up': 'C1', 'lash out': 'C1',
+    'mull over': 'C1', 'rack up': 'C1',
 
-    # C2 level - Highly idiomatic phrasal verbs
-    'bank on': 'C2', 'bear out': 'C2', 'boil down to': 'C2', 'breeze through': 'C2',
-    'brush off': 'C2', 'buy into': 'C2', 'clam up': 'C2', 'clamp down': 'C2',
-    'dawn on': 'C2', 'dish out': 'C2', 'dole out': 'C2', 'egg on': 'C2',
-    'eke out': 'C2', 'fend off': 'C2', 'ferret out': 'C2', 'fizzle out': 'C2',
-    'fork out': 'C2', 'gun for': 'C2', 'hash out': 'C2', 'home in': 'C2',
-    'lash out': 'C2', 'latch onto': 'C2', 'level with': 'C2', 'mull over': 'C2',
-    'pan out': 'C2', 'phase in': 'C2', 'pine for': 'C2', 'play up': 'C2',
-    'pore over': 'C2', 'rack up': 'C2', 'ramp up': 'C2', 'rein in': 'C2',
-    'root out': 'C2', 'rustle up': 'C2', 'screw up': 'C2', 'seize up': 'C2',
-    'shell out': 'C2', 'shore up': 'C2', 'shrug off': 'C2', 'size up': 'C2',
-    'siphon off': 'C2', 'stake out': 'C2', 'stave off': 'C2', 'tee off': 'C2',
-    'tuck away': 'C2', 'usher in': 'C2', 'ward off': 'C2', 'whittle down': 'C2',
+    # C2 level - Highly idiomatic/rare phrasal verbs
+    'bank on': 'C2', 'bear out': 'C2', 'breeze through': 'C2', 'buy into': 'C2',
+    'clam up': 'C2', 'clamp down': 'C2', 'dish out': 'C2', 'dole out': 'C2',
+    'egg on': 'C2', 'eke out': 'C2', 'fend off': 'C2', 'ferret out': 'C2',
+    'fizzle out': 'C2', 'fork out': 'C2', 'gun for': 'C2', 'hash out': 'C2',
+    'home in': 'C2', 'latch onto': 'C2', 'level with': 'C2', 'phase in': 'C2',
+    'pine for': 'C2', 'play up': 'C2', 'pore over': 'C2', 'rein in': 'C2',
+    'root out': 'C2', 'rustle up': 'C2', 'seize up': 'C2', 'shell out': 'C2',
+    'shore up': 'C2', 'siphon off': 'C2', 'stake out': 'C2', 'stave off': 'C2',
+    'tee off': 'C2', 'tuck away': 'C2', 'usher in': 'C2', 'ward off': 'C2',
+    'whittle down': 'C2',
 }
 
 # Common idioms with CEFR levels
 # These are fixed expressions whose meaning cannot be derived from components
+# Levels based on: frequency of use, transparency of meaning, teaching resources
 COMMON_IDIOMS = {
-    # B1 level idioms
+    # A2 level idioms - Very basic, transparent, taught early
+    'make sense': 'A2', 'by the way': 'A2', 'in fact': 'A2', 'after all': 'A2',
+    'of course': 'A2', 'no way': 'A2', 'no problem': 'A2', 'good luck': 'A2',
+    'take care': 'A2', 'watch out': 'A2', 'come on': 'A2', 'hang on': 'A2',
+
+    # B1 level idioms - Common, frequently used in everyday speech
     'piece of cake': 'B1', 'break a leg': 'B1', 'under the weather': 'B1',
     'once in a while': 'B1', 'on the other hand': 'B1', 'at the end of the day': 'B1',
-    'as soon as possible': 'B1', 'in the long run': 'B1', 'make sense': 'B1',
-    'by the way': 'B1', 'in fact': 'B1', 'after all': 'B1',
+    'as soon as possible': 'B1', 'in the long run': 'B1', 'so far so good': 'B1',
+    'out of the blue': 'B1', 'ring a bell': 'B1', 'get cold feet': 'B1',
+    'break the ice': 'B1', 'in the same boat': 'B1', 'keep your chin up': 'B1',
+    'no pain no gain': 'B1', 'on thin ice': 'B1', 'up in the air': 'B1',
+    'rain cats and dogs': 'B1', 'it takes two to tango': 'B1',
 
-    # B2 level idioms
+    # B2 level idioms - Common but more figurative
     'hit the nail on the head': 'B2', 'spill the beans': 'B2', 'let the cat out of the bag': 'B2',
     'beat around the bush': 'B2', 'bite off more than you can chew': 'B2',
     'a blessing in disguise': 'B2', 'burn the midnight oil': 'B2', 'cost an arm and a leg': 'B2',
@@ -148,35 +159,41 @@ COMMON_IDIOMS = {
     'kill two birds with one stone': 'B2', 'miss the boat': 'B2', 'on the ball': 'B2',
     'pull someones leg': 'B2', 'take it with a grain of salt': 'B2', 'under pressure': 'B2',
     'when pigs fly': 'B2', 'the ball is in your court': 'B2', 'back to square one': 'B2',
+    'blow off steam': 'B2', 'cut corners': 'B2', 'drop the ball': 'B2',
+    'make ends meet': 'B2', 'off the hook': 'B2', 'on cloud nine': 'B2',
+    'once in a blue moon': 'B2', 'see eye to eye': 'B2', 'the last straw': 'B2',
+    'throw in the towel': 'B2', 'bite the bullet': 'B2', 'cut to the chase': 'B2',
+    'get your act together': 'B2', 'play it by ear': 'B2', 'face the music': 'B2',
+    'go bananas': 'B2', 'in a pickle': 'B2', 'jump the gun': 'B2',
+    'cry over spilt milk': 'B2', 'burn bridges': 'B2', 'give the cold shoulder': 'B2',
+    'kick the bucket': 'B2', 'through thick and thin': 'B2',
 
-    # C1 level idioms
+    # C1 level idioms - Less common, more specialized
     'add fuel to the fire': 'C1', 'at the drop of a hat': 'C1', 'a chip on your shoulder': 'C1',
     'barking up the wrong tree': 'C1', 'between a rock and a hard place': 'C1',
-    'bite the bullet': 'C1', 'break the ice': 'C1', 'cut to the chase': 'C1',
     'devil advocate': 'C1', 'every cloud has a silver lining': 'C1',
-    'fit as a fiddle': 'C1', 'get your act together': 'C1', 'go down in flames': 'C1',
-    'have a ball': 'C1', 'hit the ground running': 'C1', 'in the same boat': 'C1',
-    'jump on the bandwagon': 'C1', 'keep your chin up': 'C1', 'leave no stone unturned': 'C1',
-    'make a long story short': 'C1', 'no pain no gain': 'C1', 'on thin ice': 'C1',
-    'once in a blue moon': 'C1', 'play it by ear': 'C1', 'put your foot in your mouth': 'C1',
-    'rain cats and dogs': 'C1', 'see eye to eye': 'C1', 'the last straw': 'C1',
-    'throw in the towel': 'C1', 'up in the air': 'C1', 'wrap your head around': 'C1',
+    'fit as a fiddle': 'C1', 'go down in flames': 'C1',
+    'have a ball': 'C1', 'hit the ground running': 'C1',
+    'jump on the bandwagon': 'C1', 'leave no stone unturned': 'C1',
+    'make a long story short': 'C1', 'put your foot in your mouth': 'C1',
+    'wrap your head around': 'C1', 'all bark and no bite': 'C1',
+    'beat a dead horse': 'C1', 'by the skin of your teeth': 'C1',
+    'draw a blank': 'C1', 'keep tabs on': 'C1', 'let sleeping dogs lie': 'C1',
+    'pull strings': 'C1', 'sit on the fence': 'C1', 'steal someones thunder': 'C1',
+    'take the bull by the horns': 'C1', 'under the table': 'C1',
+    'down to the wire': 'C1', 'hit below the belt': 'C1',
 
-    # C2 level idioms (highly idiomatic, culture-specific)
+    # C2 level idioms (highly idiomatic, culture-specific, rare)
     'a penny for your thoughts': 'C2', 'ace up your sleeve': 'C2',
-    'all bark and no bite': 'C2', 'beat a dead horse': 'C2', 'behind the eight ball': 'C2',
-    'blow off steam': 'C2', 'burn bridges': 'C2', 'by the skin of your teeth': 'C2',
-    'cry over spilt milk': 'C2', 'cut corners': 'C2', 'dead ringer': 'C2',
-    'down to the wire': 'C2', 'draw a blank': 'C2', 'drop the ball': 'C2',
-    'face the music': 'C2', 'get cold feet': 'C2', 'give the cold shoulder': 'C2',
-    'go bananas': 'C2', 'hand over fist': 'C2', 'have an axe to grind': 'C2',
-    'hit below the belt': 'C2', 'in a pickle': 'C2', 'jump the gun': 'C2',
-    'keep tabs on': 'C2', 'kick the bucket': 'C2', 'let sleeping dogs lie': 'C2',
-    'make ends meet': 'C2', 'off the hook': 'C2', 'on cloud nine': 'C2',
-    'out of the blue': 'C2', 'pull strings': 'C2', 'ring a bell': 'C2',
-    'sit on the fence': 'C2', 'spick and span': 'C2', 'steal someones thunder': 'C2',
-    'take the bull by the horns': 'C2', 'through thick and thin': 'C2',
-    'under the table': 'C2', 'up the creek': 'C2', 'wet behind the ears': 'C2',
+    'behind the eight ball': 'C2', 'dead ringer': 'C2',
+    'hand over fist': 'C2', 'have an axe to grind': 'C2',
+    'spick and span': 'C2', 'up the creek': 'C2', 'wet behind the ears': 'C2',
+    'read between the lines': 'C2', 'skeleton in the closet': 'C2',
+    'the whole nine yards': 'C2', 'wear your heart on your sleeve': 'C2',
+    'wild goose chase': 'C2', 'fly off the handle': 'C2', 'go cold turkey': 'C2',
+    'have a bone to pick': 'C2', 'hold your horses': 'C2', 'in the doldrums': 'C2',
+    'living on borrowed time': 'C2', 'paint the town red': 'C2', 'red herring': 'C2',
+    'sail close to the wind': 'C2', 'throw caution to the wind': 'C2',
 }
 
 
@@ -211,13 +228,27 @@ KIDS_SIMPLE_VOCAB = {
     # Nature/weather
     'rainbow', 'snowflake', 'thunder', 'lightning', 'storm', 'sunshine',
     # Toys/play
-    'toy', 'doll', 'teddy', 'robot', 'rocket', 'spaceship',
+    'toy', 'doll', 'teddy', 'robot', 'rocket', 'spaceship', 'plushy', 'plushie',
     # Food (playful)
     'yummy', 'cookie', 'candy', 'cake', 'ice cream', 'pizza', 'chocolate',
     # Action verbs
     'fly', 'jump', 'run', 'swim', 'climb', 'slide', 'swing', 'ride',
     # Fantasy concepts
-    'dream', 'wish', 'believe', 'imagine', 'pretend', 'wonder'
+    'dream', 'wish', 'believe', 'imagine', 'pretend', 'wonder',
+    # Made-up/playful words common in kids movies/cartoons
+    'yabbadabbado', 'yabbadabbadoo', 'cowabunga', 'zoinks', 'jinkies',
+    'heebiejeebies', 'heebie-jeebies', 'heebiedabajeebies', 'willies',
+    'fuzzbucket', 'fuzzbuckets', 'fuzzball', 'furball',
+    'puddy', 'puddin', 'toodle', 'toodles', 'tootles', 'doodoo',
+    'dokey', 'okey-dokey', 'okeydokey', 'okiedokie',
+    'siree', 'yessiree', 'nossiree',
+    'spiderwebs', 'cobwebs', 'spiderweb', 'cobweb',
+    # Casual speech patterns (dropped letters)
+    'spreadin', 'runnin', 'jumpin', 'swimmin', 'playin', 'goin', 'comin',
+    'lookin', 'talkin', 'walkin', 'workin', 'tryin', 'doin', 'nothin',
+    'somethin', 'anythin', 'everythin',
+    # Exclamations
+    'whee', 'wheee', 'wee', 'yippee', 'wahoo', 'woohoo', 'yahoo',
 }
 
 
@@ -301,8 +332,98 @@ def count_phrasal_verbs_and_idioms(text: str) -> Dict[str, int]:
     return counts
 
 
+# Contraction fragments to filter out (from "hasn't", "weren't", etc.)
+# These are tokenization artifacts that should be excluded
+CONTRACTION_FRAGMENTS = {
+    'hasn', 'hadn', 'wasn', 'weren', 'wouldn', 'couldn', 'shouldn', 'didn',
+    'doesn', 'isn', 'aren', 'mustn', 'needn', 'mightn', 'shan', 've', 'll',
+    're', 'd', 's', 't', 'm'  # Common suffixes
+}
+
+# Foreign words commonly appearing in English movies (Italian, Spanish, etc.)
+# These should be filtered out as they're not English vocabulary to learn
+FOREIGN_WORDS_FILTER = {
+    # Italian (common in mafia movies)
+    'natale', 'salud', 'salute', 'cannoli', 'consigliere', 'capo', 'capisce',
+    'pezzonovante', 'goombah', 'goomba', 'paesano', 'paisano', 'grazie', 'gràzie',
+    'prego', 'ciao', 'arrivederci', 'buongiorno', 'buona', 'sera', 'notte',
+    'bambino', 'bambina', 'ragazzo', 'ragazza', 'signore', 'signora', 'signorina',
+    'famiglia', 'mamma', 'papa', 'nonna', 'nonno', 'zio', 'zia',
+    'capisci', 'capito', 'basta', 'andiamo', 'aspetta', 'mangia', 'mangiare',
+    'vino', 'vini', 'pasta', 'antipasto', 'primo', 'secondo', 'dolce',
+    'bella', 'bello', 'bellissimo', 'bellissima', 'bravo', 'brava',
+    'stronzo', 'cazzo', 'merda', 'minchia', 'fottiti', 'vaffanculo',
+    'omertà', 'vendetta', 'cosa', 'nostra', 'mafia', 'mafioso',
+    'capocol', 'prosciutto', 'mortadella', 'salami', 'ricotta', 'mozzarella',
+    # Spanish
+    'hola', 'adios', 'adiós', 'buenos', 'buenas', 'dias', 'noches', 'tardes',
+    'gracias', 'por', 'favor', 'señor', 'señora', 'señorita', 'amigo', 'amiga',
+    'hermano', 'hermana', 'madre', 'padre', 'abuela', 'abuelo', 'hijo', 'hija',
+    'loco', 'loca', 'puta', 'puto', 'pendejo', 'cabron', 'cabrón', 'chinga',
+    'mierda', 'carajo', 'coño', 'joder', 'hostia', 'cojones',
+    'vamos', 'vámonos', 'ándale', 'arriba', 'órale', 'ese', 'vato', 'cholo',
+    'dinero', 'plata', 'trabajo', 'casa', 'cerveza', 'tequila', 'mezcal',
+    # French
+    'bonjour', 'bonsoir', 'salut', 'merci', 'beaucoup', 'oui', 'non',
+    'monsieur', 'madame', 'mademoiselle', 'excusez', 'pardon', 'voila', 'voilà',
+    'rendez', 'vous', 'c\'est', 'la', 'vie', 'mon', 'dieu', 'sacré', 'bleu',
+    'merde', 'putain', 'bordel', 'foutre', 'encule',
+    'au', 'revoir', 'bonne', 'nuit', 'jour', 'très', 'bien', 'mal',
+    # German
+    'guten', 'tag', 'morgen', 'abend', 'danke', 'bitte', 'ja', 'nein',
+    'herr', 'frau', 'fräulein', 'auf', 'wiedersehen', 'tschüss',
+    'scheisse', 'scheiße', 'verdammt', 'arschloch', 'wunderbar', 'jawohl',
+    # Japanese (common in anime/martial arts)
+    'hai', 'arigato', 'arigatou', 'gomen', 'gomenasai', 'sumimasen',
+    'sayonara', 'konnichiwa', 'ohayo', 'oyasumi', 'itadakimasu',
+    'sensei', 'senpai', 'sama', 'san', 'kun', 'chan', 'domo', 'moshi',
+    'baka', 'kuso', 'chikusho', 'shimatta', 'nani', 'sugoi', 'kawaii',
+    # Latin (formal/religious)
+    'et', 'cetera', 'ergo', 'quid', 'pro', 'quo', 'vice', 'versa',
+    'carpe', 'diem', 'veni', 'vidi', 'vici', 'amen', 'hallelujah',
+    # Russian
+    'da', 'nyet', 'niet', 'spasibo', 'tovarisch', 'babushka', 'vodka',
+    # Yiddish (common in American films)
+    'oy', 'vey', 'mazel', 'tov', 'mensch', 'meshuggeneh', 'kvetch',
+    'schlemiel', 'schlep', 'shmuck', 'putz', 'nebbish', 'nosh', 'tchotchke',
+}
+
+# Slang/informal vocabulary that's conceptually simple (A2-B1 level)
+# Despite low corpus frequency, these are commonly understood in movies/TV
+INFORMAL_SIMPLE_VOCAB = {
+    # Insults & vulgar (common in movies, simple concepts)
+    'chickenshit', 'fatso', 'sonofabitch', 'motherfucker', 'asshole', 'dumbass',
+    'dipshit', 'bullshit', 'horseshit', 'shithead', 'fuckhead', 'dickhead',
+    'bastard', 'bitch', 'crap', 'damn', 'dammit', 'goddamn', 'jerk', 'idiot',
+    'moron', 'loser', 'creep', 'weirdo', 'freak', 'psycho', 'sicko', 'perv',
+    # Informal terms for people
+    'druggie', 'druggies', 'junkie', 'junkies', 'stoner', 'pothead', 'crackhead',
+    'stoolie', 'snitch', 'narc', 'cop', 'cops', 'feds', 'bigwig', 'bigwigs',
+    'fatcat', 'hotshot', 'lowlife', 'scumbag', 'sleazebag', 'dirtbag',
+    'lovebird', 'lovebirds', 'womanizer', 'ladykiller', 'bigmouth',
+    # Slang verbs & adjectives
+    'badass', 'kickass', 'bitchy', 'pissy', 'crappy', 'shitty', 'sucky',
+    'freaky', 'trippy', 'groovy', 'groovies', 'funky', 'wacky', 'nutty',
+    # Movie/street slang
+    'heist', 'gig', 'gigs', 'hustle', 'scam', 'con', 'setup', 'stakeout',
+    'getaway', 'hideout', 'shootout', 'showdown', 'standoff', 'throwdown',
+    # Playful/casual expressions
+    'screwup', 'screw-up', 'messup', 'mixup', 'hookup', 'breakup', 'makeup',
+    'babycakes', 'sweetie', 'honey', 'babe', 'cutie', 'hottie',
+    # Foreign borrowings (common in movies)
+    'finito', 'kaput', 'nada', 'zilch', 'zippo', 'schmutz', 'schmuck',
+    'klutz', 'shtick', 'schmaltz', 'chutzpah', 'kibitz',
+}
+
+
 def is_valid_token(token: str) -> bool:
     if not token or len(token) < 2:
+        return False
+    # Filter out contraction fragments
+    if token.lower() in CONTRACTION_FRAGMENTS:
+        return False
+    # Filter out foreign words (Italian, Spanish, French, etc.)
+    if token.lower() in FOREIGN_WORDS_FILTER:
         return False
     if not any(c.isalpha() for c in token):
         return False
@@ -380,16 +501,83 @@ class HybridCEFRClassifier:
 
     def _load_cefr_wordlists(self):
         logger.info("Loading CEFR wordlists...")
+
+        # Priority 1: Comprehensive CEFR (best coverage - 11k+ words)
+        comprehensive_path = self.data_dir / "comprehensive_cefr.json"
+        if comprehensive_path.exists():
+            self._load_comprehensive_wordlist(comprehensive_path)
+
+        # Priority 2: Oxford 3000/5000 (high quality, authoritative)
         oxford_path = self.data_dir / "oxford_3000_5000.json"
         if oxford_path.exists():
             self._load_oxford_wordlist(oxford_path)
+
+        # Priority 3: EFLLex (good coverage)
         efllex_path = self.data_dir / "efllex.json"
         if efllex_path.exists():
             self._load_efllex_wordlist(efllex_path)
+
+        # Priority 4: EVP (phrasal verbs and expressions)
         evp_path = self.data_dir / "evp.json"
         if evp_path.exists():
             self._load_evp_wordlist(evp_path)
+
+        # Priority 5: NGSL (New General Service List - most useful 2800 words)
+        ngsl_path = self.data_dir / "ngsl.json"
+        if ngsl_path.exists():
+            self._load_ngsl_wordlist(ngsl_path)
+
         logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries, {len(self.multi_word_expressions)} MWEs")
+
+    def _load_comprehensive_wordlist(self, path: Path):
+        """Load comprehensive CEFR wordlist (11k+ entries)."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            count = 0
+            for entry in data:
+                word = entry.get('word', '').lower().strip()
+                level = entry.get('cefr_level', '').upper()
+                if not word or not level:
+                    continue
+                try:
+                    cefr_level = CEFRLevel(level)
+                except ValueError:
+                    continue
+                lemma = self._get_lemma_simple(word)
+                if lemma not in self.cefr_wordlist:
+                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EFLLEX)
+                    count += 1
+                if ' ' in word:
+                    self.multi_word_expressions[word] = (cefr_level, ClassificationSource.EFLLEX)
+            logger.info(f"Loaded {count} entries from comprehensive CEFR")
+        except Exception as e:
+            logger.error(f"Error loading comprehensive wordlist: {e}")
+
+    def _load_ngsl_wordlist(self, path: Path):
+        """Load NGSL (New General Service List) - 2800 most useful words."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            count = 0
+            for entry in data:
+                word = entry.get('word', '').lower().strip()
+                # NGSL uses rank-based CEFR assignment
+                level = entry.get('cefr_level', entry.get('cefr', '')).upper()
+                if not word or not level:
+                    continue
+                try:
+                    cefr_level = CEFRLevel(level)
+                except ValueError:
+                    continue
+                lemma = self._get_lemma_simple(word)
+                if lemma not in self.cefr_wordlist:
+                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EFLLEX)
+                    count += 1
+            if count > 0:
+                logger.info(f"Loaded {count} entries from NGSL")
+        except Exception as e:
+            logger.error(f"Error loading NGSL wordlist: {e}")
 
     def _load_oxford_wordlist(self, path: Path):
         try:
@@ -503,16 +691,65 @@ class HybridCEFRClassifier:
         return text
 
     def _get_lemma_simple(self, word: str) -> str:
-        return self.lemmatizer.lemmatize(word.lower())
+        """Get lemma trying multiple POS tags for better coverage."""
+        word_lower = word.lower()
+
+        # Special case: irregular plurals that lemmatize incorrectly
+        # "thieves" -> "thieve" (verb) but should be "thief" (noun)
+        irregular_plurals = {
+            'thieves': 'thief', 'knives': 'knife', 'wives': 'wife',
+            'lives': 'life', 'leaves': 'leaf', 'wolves': 'wolf',
+            'halves': 'half', 'calves': 'calf', 'shelves': 'shelf',
+            'loaves': 'loaf', 'elves': 'elf', 'scarves': 'scarf',
+        }
+        if word_lower in irregular_plurals:
+            return irregular_plurals[word_lower]
+
+        # Try verb first (handles -ing, -ed forms), then noun, then adjective
+        for pos in ['v', 'n', 'a', 'r']:
+            lemma = self.lemmatizer.lemmatize(word_lower, pos=pos)
+            if lemma != word_lower:
+                return lemma
+        return word_lower
+
+    def _get_all_lemmas(self, word: str) -> List[str]:
+        """Get all possible lemmas for a word (verb, noun, adj forms)."""
+        word_lower = word.lower()
+        lemmas = {word_lower}
+        for pos in ['v', 'n', 'a', 'r']:
+            lemma = self.lemmatizer.lemmatize(word_lower, pos=pos)
+            lemmas.add(lemma)
+        return list(lemmas)
 
     def _get_lemma_fast(self, word: str) -> str:
+        """Get lemma with caching, trying multiple POS tags."""
         global _GLOBAL_LEMMA_CACHE
         cached = _GLOBAL_LEMMA_CACHE.get(word)
         if cached is not None:
             return cached
-        lemma = self.lemmatizer.lemmatize(word)
-        _GLOBAL_LEMMA_CACHE.set(word, lemma)
-        return lemma
+
+        word_lower = word.lower()
+
+        # Special case: irregular plurals that lemmatize incorrectly
+        irregular_plurals = {
+            'thieves': 'thief', 'knives': 'knife', 'wives': 'wife',
+            'lives': 'life', 'leaves': 'leaf', 'wolves': 'wolf',
+            'halves': 'half', 'calves': 'calf', 'shelves': 'shelf',
+            'loaves': 'loaf', 'elves': 'elf', 'scarves': 'scarf',
+        }
+        if word_lower in irregular_plurals:
+            result = irregular_plurals[word_lower]
+            _GLOBAL_LEMMA_CACHE.set(word, result)
+            return result
+
+        # Try verb lemmatization first (handles -ing, -ed), then noun, adj
+        for pos in ['v', 'n', 'a', 'r']:
+            lemma = self.lemmatizer.lemmatize(word_lower, pos=pos)
+            if lemma != word_lower:
+                _GLOBAL_LEMMA_CACHE.set(word, lemma)
+                return lemma
+        _GLOBAL_LEMMA_CACHE.set(word, word_lower)
+        return word_lower
 
     def _get_frequency_data(self, word: str, lang: str = 'en') -> Tuple[Optional[int], Optional[float]]:
         """
@@ -611,25 +848,43 @@ class HybridCEFRClassifier:
         )
 
     def _classify_by_embedding(self, word: str, lemma: str) -> Optional[WordClassification]:
-        if not self.has_embedding_classifier or self.embedding_classifier is None:
+        """
+        Classify word using embedding similarity to known CEFR words.
+
+        Uses semantic similarity to find the most similar known words and
+        votes on the CEFR level based on their levels.
+        """
+        if not self.use_embedding_classifier:
             return None
+
         try:
-            embedding = self.sentence_model.encode([lemma])[0]
-            prediction = self.embedding_classifier.predict([embedding])[0]
-            if hasattr(self.embedding_classifier, 'predict_proba'):
-                probabilities = self.embedding_classifier.predict_proba([embedding])[0]
-                confidence = float(max(probabilities))
-            else:
-                confidence = 0.4
+            from .embedding_similarity_classifier import get_embedding_classifier
+
+            classifier = get_embedding_classifier(self.data_dir)
+            cefr_level, confidence, similar_words = classifier.classify(lemma)
+
+            if cefr_level is None:
+                return None
+
+            # Log the similar words for debugging
+            if logger.isEnabledFor(logging.DEBUG) and similar_words:
+                similar_str = ", ".join(f"{sw.word}({sw.cefr_level}:{sw.similarity:.2f})"
+                                       for sw in similar_words[:3])
+                logger.debug(f"Embedding similarity for '{lemma}': [{similar_str}] → {cefr_level}")
+
             return WordClassification(
                 word=word,
                 lemma=lemma,
                 pos="",
-                cefr_level=CEFRLevel(prediction),
-                confidence=confidence * 0.8,
+                cefr_level=CEFRLevel(cefr_level),
+                confidence=confidence,
                 source=ClassificationSource.EMBEDDING_CLASSIFIER
             )
-        except Exception:
+        except ImportError:
+            logger.warning("sentence-transformers not available for embedding classification")
+            return None
+        except Exception as e:
+            logger.debug(f"Embedding classification failed for '{lemma}': {e}")
             return None
 
     def classify_word(self, word: str, pos: Optional[str] = None, is_kids_genre: bool = False) -> WordClassification:
@@ -658,6 +913,19 @@ class HybridCEFRClassifier:
                 pos="",
                 cefr_level=CEFRLevel.A2,
                 confidence=0.95,
+                source=ClassificationSource.FALLBACK
+            )
+            _GLOBAL_CEFR_CACHE.set(cache_key, result)
+            return result
+
+        # INFORMAL SLANG WHITELIST: Common in movies/TV, conceptually simple
+        if word_lower in INFORMAL_SIMPLE_VOCAB:
+            result = WordClassification(
+                word=word,
+                lemma=word_lower,
+                pos="",
+                cefr_level=CEFRLevel.B1,  # Slang is B1 (understandable but informal)
+                confidence=0.85,
                 source=ClassificationSource.FALLBACK
             )
             _GLOBAL_CEFR_CACHE.set(cache_key, result)
@@ -692,15 +960,40 @@ class HybridCEFRClassifier:
             _GLOBAL_CEFR_CACHE.set(word_lower, result)
             return result
 
-        # Dictionary lookup (only source allowed to assign C1/C2)
+        # Dictionary lookup with frequency validation
+        # Some dictionary entries have incorrect CEFR levels (e.g., common words marked as C1)
+        # We validate against word frequency to catch obvious misclassifications
         if lemma in self.cefr_wordlist:
             level, source = self.cefr_wordlist[lemma]
+            confidence = 1.0
+
+            # Frequency-based validation for C1/C2 words
+            # If a word is very common (high Zipf), it shouldn't be C1/C2
+            if level in [CEFRLevel.C1, CEFRLevel.C2] and self.has_wordfreq:
+                _, zipf = self._get_frequency_data(lemma)
+                if zipf is not None:
+                    # Very common words (Zipf >= 5.0) should max out at A2
+                    if zipf >= 5.0:
+                        level = CEFRLevel.A2
+                        confidence = 0.85
+                        logger.debug(f"Downgraded '{lemma}' from C1/C2 to A2 (Zipf={zipf:.2f})")
+                    # Common words (Zipf >= 4.0) should max out at B1
+                    elif zipf >= 4.0:
+                        level = CEFRLevel.B1
+                        confidence = 0.85
+                        logger.debug(f"Downgraded '{lemma}' from C1/C2 to B1 (Zipf={zipf:.2f})")
+                    # Moderately common (Zipf >= 3.5) should max out at B2
+                    elif zipf >= 3.5:
+                        level = CEFRLevel.B2
+                        confidence = 0.9
+                        logger.debug(f"Downgraded '{lemma}' from C1/C2 to B2 (Zipf={zipf:.2f})")
+
             result = WordClassification(
                 word=word,
                 lemma=lemma,
                 pos="",
                 cefr_level=level,
-                confidence=1.0,
+                confidence=confidence,
                 source=source
             )
             _GLOBAL_CEFR_CACHE.set(cache_key, result)

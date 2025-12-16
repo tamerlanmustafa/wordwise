@@ -184,7 +184,8 @@ export default function MovieDetailPage() {
           title: movieTitle,
           totalWords: cefrResult.total_words,
           uniqueWords: cefrResult.unique_words,
-          categories: sortedCategories
+          categories: sortedCategories,
+          idioms: cefrResult.idioms
         };
 
         setAnalysis(finalAnalysis);
