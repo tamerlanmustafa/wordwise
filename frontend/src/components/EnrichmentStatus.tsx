@@ -29,6 +29,8 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
       return;
     }
 
+    let intervalId: number | null = null;
+
     const checkStatus = async () => {
       try {
         const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -45,21 +47,15 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
         const data = await response.json();
         setStatus(data.status);
 
-        // If enriching, set up polling
-        if (data.status === 'enriching') {
-          // Poll every 5 seconds while enriching
-          if (!pollInterval) {
-            const interval = window.setInterval(() => {
-              checkStatus();
-            }, 5000);
-            setPollInterval(interval);
-          }
-        } else {
-          // Stop polling once enrichment is ready or failed
-          if (pollInterval) {
-            window.clearInterval(pollInterval);
-            setPollInterval(null);
-          }
+        // If enriching, set up polling (only once)
+        if (data.status === 'enriching' && !intervalId) {
+          intervalId = window.setInterval(checkStatus, 10000); // Poll every 10 seconds (reduced frequency)
+          setPollInterval(intervalId);
+        } else if (data.status !== 'enriching' && intervalId) {
+          // Stop polling once enrichment is complete
+          window.clearInterval(intervalId);
+          intervalId = null;
+          setPollInterval(null);
         }
       } catch (error) {
         console.error('Enrichment status check failed:', error);
@@ -67,15 +63,16 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
       }
     };
 
+    // Initial check
     checkStatus();
 
     // Cleanup on unmount
     return () => {
-      if (pollInterval) {
-        window.clearInterval(pollInterval);
+      if (intervalId) {
+        window.clearInterval(intervalId);
       }
     };
-  }, [movieId, targetLang]);
+  }, [movieId, targetLang]); // Only depend on movieId and targetLang
 
   // Don't show anything if checking or not started
   if (status === 'checking' || status === 'not_started') {
@@ -118,7 +115,7 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
               alignItems: 'center'
             }}
           >
-            Generating sentence examples from movie script... This takes about 1 minute.
+            Generating sentence examples from movie script... This takes 1-2 minutes.
           </Alert>
         </Box>
       </Fade>

@@ -111,7 +111,34 @@ function VocabularyViewBase({
     }, [] as DifficultyCategory[]);
   }, [analysis.categories]);
 
-  // Initialize groups
+  // Create idioms "category" if idioms exist
+  // Store idioms as a map for quick lookup
+  const idiomsMap = useMemo(() => {
+    if (!analysis.idioms) return new Map();
+    return new Map(analysis.idioms.map(idiom => [idiom.phrase, idiom]));
+  }, [analysis.idioms]);
+
+  const idiomsCategory = useMemo(() => {
+    if (!analysis.idioms || analysis.idioms.length === 0) return null;
+
+    // Convert idioms to word format for display consistency
+    const idiomWords: WordFrequency[] = analysis.idioms.map((idiom, idx) => ({
+      word: idiom.phrase,
+      lemma: idiom.phrase,
+      count: 0,
+      frequency: 0,
+      confidence: 1,
+      frequency_rank: idx
+    }));
+
+    return {
+      level: 'IDIOMS' as CEFRLevel,
+      description: 'Phrasal verbs & idioms',
+      words: idiomWords
+    };
+  }, [analysis.idioms]);
+
+  // Initialize groups (including idioms tab if available)
   useEffect(() => {
     const initialGroups: CEFRGroup[] = mergedCategories.map(category => ({
       level: category.level,
@@ -119,8 +146,19 @@ function VocabularyViewBase({
       words: category.words,
       color: LEVEL_COLORS[category.level] || '#4caf50'
     }));
+
+    // Add idioms tab at the end if idioms exist
+    if (idiomsCategory) {
+      initialGroups.push({
+        level: idiomsCategory.level,
+        description: idiomsCategory.description,
+        words: idiomsCategory.words,
+        color: '#9c27b0' // Purple color for idioms
+      });
+    }
+
     setGroups(initialGroups);
-  }, [mergedCategories]);
+  }, [mergedCategories, idiomsCategory]);
 
   // Get active group
   const activeGroup = groups[activeTab];
@@ -337,6 +375,8 @@ function VocabularyViewBase({
               userId={userId}
               isAuthenticated={isAuthenticated}
               idioms={analysis.idioms}
+              idiomsMap={idiomsMap}
+              isIdiomsTab={activeGroup.level === 'IDIOMS'}
               listContainerRef={listContainerRef}
             />
           </Box>

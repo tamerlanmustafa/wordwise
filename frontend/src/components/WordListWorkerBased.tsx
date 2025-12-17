@@ -65,6 +65,8 @@ interface WordListWorkerBasedProps {
 
   // Idioms for context-aware translation
   idioms?: IdiomInfo[];
+  idiomsMap?: Map<string, IdiomInfo>;
+  isIdiomsTab?: boolean;
 
   // Refs (maintained for compatibility)
   listContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -88,6 +90,8 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   userId,
   isAuthenticated,
   idioms = [],
+  idiomsMap,
+  isIdiomsTab = false,
   listContainerRef
 }) => {
   // Worker-based vocabulary feed
@@ -271,6 +275,8 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             targetLang={targetLanguage}
             containerRef={listContainerRef}
             getIdiomsForWord={getIdiomsForWord}
+            idiomsMap={idiomsMap}
+            isIdiomsTab={isIdiomsTab}
           />
         )}
       </Paper>

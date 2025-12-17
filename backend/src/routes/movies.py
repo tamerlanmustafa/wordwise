@@ -221,6 +221,26 @@ async def get_vocabulary_preview(
                 "frequency_rank": word.frequencyRank
             })
 
+    # Detect idioms from script text
+    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms
+
+    idioms = []
+    if script.cleanedScriptText:
+        try:
+            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idioms = [
+                {
+                    "phrase": phrase,
+                    "type": expr_type,
+                    "cefr_level": level,
+                    "words": phrase.split()
+                }
+                for phrase, expr_type, level in idiom_results
+            ]
+        except Exception as e:
+            print(f"Error detecting idioms: {e}")
+            idioms = []
+
     return {
         "movie_id": movie_id,
         "total_words": len(all_words),
@@ -229,6 +249,7 @@ async def get_vocabulary_preview(
         "top_words_by_level": top_words_by_level,
         "average_confidence": sum(w.confidence for w in all_words) / len(all_words) if all_words else 0,
         "wordlist_coverage": 0.0,
+        "idioms": idioms,
         "preview": True
     }
 
@@ -294,6 +315,26 @@ async def get_vocabulary_full(
             reverse=True
         )
 
+    # Detect idioms from script text
+    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms
+
+    idioms = []
+    if script.cleanedScriptText:
+        try:
+            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idioms = [
+                {
+                    "phrase": phrase,
+                    "type": expr_type,
+                    "cefr_level": level,
+                    "words": phrase.split()
+                }
+                for phrase, expr_type, level in idiom_results
+            ]
+        except Exception as e:
+            print(f"Error detecting idioms: {e}")
+            idioms = []
+
     return {
         "movie_id": movie_id,
         "script_id": 0,
@@ -303,6 +344,7 @@ async def get_vocabulary_full(
         "top_words_by_level": top_words_by_level,
         "average_confidence": sum(w.confidence for w in cefr_words) / len(cefr_words) if cefr_words else 0,
         "wordlist_coverage": 0.0,
+        "idioms": idioms,
         "preview": False
     }
 

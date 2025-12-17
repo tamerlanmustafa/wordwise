@@ -98,6 +98,7 @@ interface WordRowProps {
 
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
+  idiomMetadata?: IdiomInfo; // Pre-loaded idiom metadata (for idioms tab)
 
   // Sentence examples enrichment
   movieId?: number;
@@ -127,6 +128,7 @@ export const WordRow = memo<WordRowProps>(({
   onTranslate,
   onExpandChange,
   getIdiomsForWord,
+  idiomMetadata,
   movieId,
   targetLang,
   otherMoviesText
@@ -247,6 +249,17 @@ export const WordRow = memo<WordRowProps>(({
         {/* Word */}
         <span className="word-row__word">
           {word.word}
+          {/* Idiom metadata badges (shown in idioms tab) */}
+          {idiomMetadata && (
+            <>
+              <span className={`word-row__badge word-row__badge--${idiomMetadata.type}`} style={{ marginLeft: '8px' }}>
+                {idiomMetadata.type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
+              </span>
+              <span className="word-row__badge" style={{ marginLeft: '4px', backgroundColor: groupColor }}>
+                {idiomMetadata.cefr_level}
+              </span>
+            </>
+          )}
         </span>
 
         {/* Expand indicator */}

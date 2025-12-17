@@ -72,6 +72,12 @@ class ExampleTranslationService:
                 })
 
             except Exception as e:
+                error_msg = str(e).lower()
+                # If rate limited, add longer delay
+                if 'rate limit' in error_msg or '429' in error_msg:
+                    logger.warning(f"Rate limit hit, waiting 2 seconds before retry...")
+                    await asyncio.sleep(2)
+
                 logger.error(f"Failed to translate sentence: {e}")
                 results.append({
                     'sentence': sentence,

@@ -47,6 +47,8 @@ interface VirtualizedWordListProps {
 
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
+  idiomsMap?: Map<string, IdiomInfo>;
+  isIdiomsTab?: boolean;
 
   // Sentence examples enrichment
   targetLang?: string;
@@ -76,6 +78,8 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   otherMovies,
   movieId,
   getIdiomsForWord,
+  idiomsMap,
+  isIdiomsTab = false,
   targetLang,
   containerRef: _containerRef  // Reserved for scroll sync
 }) => {
@@ -281,6 +285,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 onExpandChange={handleRowExpandChange}
                 otherMoviesText={otherMoviesText}
                 getIdiomsForWord={getIdiomsForWord}
+                idiomMetadata={isIdiomsTab && idiomsMap ? idiomsMap.get(word.word) : undefined}
                 movieId={movieId}
                 targetLang={targetLang}
               />
