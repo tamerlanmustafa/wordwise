@@ -163,14 +163,39 @@ export const TabsHeader = memo<TabsHeaderProps>(({
                     }}
                   >
                     <Stack direction="column" spacing={0} alignItems="center">
-                      <Typography
-                        variant="h5"
-                        sx={{
-                          fontWeight: 700,
-                        }}
-                      >
-                        {group.level}
-                      </Typography>
+                      {group.level === 'IDIOMS' ? (
+                        <>
+                          <Typography
+                            variant="h5"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.85rem',
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            Idioms/
+                          </Typography>
+                          <Typography
+                            variant="h5"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.85rem',
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            Phrases
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography
+                          variant="h5"
+                          sx={{
+                            fontWeight: 700,
+                          }}
+                        >
+                          {group.level}
+                        </Typography>
+                      )}
                     </Stack>
                   </Box>
                 }

@@ -133,7 +133,7 @@ function VocabularyViewBase({
 
     return {
       level: 'IDIOMS' as CEFRLevel,
-      description: 'Phrasal verbs & idioms',
+      description: 'Idioms & phrases',
       words: idiomWords
     };
   }, [analysis.idioms]);
