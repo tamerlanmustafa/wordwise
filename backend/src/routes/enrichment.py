@@ -284,6 +284,69 @@ async def get_movie_examples(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/movies/{movie_id}/status")
+async def get_enrichment_status(
+    movie_id: int,
+    lang: str,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Check enrichment status for a movie + language combination.
+
+    Returns the enrichment status to help UI show appropriate loading states.
+
+    Args:
+        movie_id: Movie ID
+        lang: Target language code (e.g., 'ES', 'FR', 'DE')
+
+    Returns:
+        - 'ready': Examples exist and ready to use
+        - 'enriching': Background enrichment likely in progress
+        - 'not_started': No classification or enrichment exists yet
+    """
+    try:
+        lang_upper = lang.upper()
+
+        # Check if examples exist
+        existing = await db.wordsentenceexample.find_first(
+            where={'movieId': movie_id, 'targetLang': lang_upper}
+        )
+
+        if existing:
+            return {
+                "status": "ready",
+                "movie_id": movie_id,
+                "target_lang": lang_upper,
+                "message": "Sentence examples are ready"
+            }
+
+        # Check if classifications exist (prerequisite for enrichment)
+        script = await db.moviescript.find_first(
+            where={'movieId': movie_id},
+            include={'wordClassifications': True}
+        )
+
+        if not script or not script.wordClassifications:
+            return {
+                "status": "not_started",
+                "movie_id": movie_id,
+                "target_lang": lang_upper,
+                "message": "Movie not yet classified. Classification needed before enrichment."
+            }
+
+        # Classifications exist but no enrichment → likely enriching
+        return {
+            "status": "enriching",
+            "movie_id": movie_id,
+            "target_lang": lang_upper,
+            "message": "Sentence examples are being generated. This typically takes 30-60 seconds."
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to check enrichment status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/movies/{movie_id}/examples/{word}", response_model=WordExamplesResponse)
 async def get_word_examples(
     movie_id: int,

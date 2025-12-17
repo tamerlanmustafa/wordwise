@@ -20,6 +20,7 @@ import {
   type TMDBMetadata
 } from '../services/scriptService';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import axios from 'axios';
 
@@ -39,6 +40,7 @@ export default function MovieDetailPage() {
   const location = useLocation();
   const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number } | null;
   const { isAuthenticated, user, loading: authLoading } = useAuth();
+  const { targetLanguage } = useLanguage();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +110,8 @@ export default function MovieDetailPage() {
         });
         setMovieId(scriptResponse.movie_id);
 
-        // Step 4: Classify vocabulary using CEFR
-        await classifyMovieScript(scriptResponse.movie_id);
+        // Step 4: Classify vocabulary using CEFR and trigger enrichment
+        await classifyMovieScript(scriptResponse.movie_id, targetLanguage);
 
         // Step 5: Fetch vocabulary based on auth status
         let cefrResult;

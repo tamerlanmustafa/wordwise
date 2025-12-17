@@ -216,9 +216,13 @@ export async function fetchMovieScript(movieTitle: string): Promise<ScriptRespon
  * 1. Retrieves the script from database
  * 2. Classifies all words using hybrid CEFR classifier
  * 3. Saves classifications to database
- * 4. Returns level distribution and top words per level
+ * 4. Automatically triggers sentence enrichment for target language (background)
+ * 5. Returns level distribution and top words per level
  */
-export async function classifyMovieScript(movieId: number): Promise<CEFRClassificationResponse> {
+export async function classifyMovieScript(
+  movieId: number,
+  targetLanguage?: string
+): Promise<CEFRClassificationResponse> {
   // console.log('[API REQUEST] /api/cefr/classify-script - movie_id:', movieId);
 
   try {
@@ -226,7 +230,8 @@ export async function classifyMovieScript(movieId: number): Promise<CEFRClassifi
       `${API_BASE_URL}/api/cefr/classify-script`,
       {
         movie_id: movieId,
-        save_to_db: true
+        save_to_db: true,
+        target_language: targetLanguage || 'ES' // Default to Spanish if not provided
       }
     );
 

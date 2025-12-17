@@ -4,12 +4,13 @@ CEFR Classification API Routes
 Endpoints for classifying words and texts with CEFR levels
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from pathlib import Path
 import logging
 import json
+import asyncio
 
 from src.services.cefr_classifier import (
     HybridCEFRClassifier,
@@ -151,6 +152,11 @@ class ScriptClassificationRequest(BaseModel):
     """Request to classify a movie script"""
     movie_id: int = Field(..., description="Movie ID from database")
     save_to_db: bool = Field(True, description="Save classifications to database")
+    target_language: Optional[str] = Field(
+        default='ES',
+        description="Target language for enrichment (e.g., 'ES', 'FR', 'DE'). "
+                   "If provided, sentence examples will be automatically enriched in background."
+    )
 
 
 class IdiomInfo(BaseModel):
@@ -251,9 +257,70 @@ async def classify_text(request: TextClassificationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def auto_enrich_after_classification(movie_id: int, target_lang: str):
+    """
+    Background task: Automatically enrich movie with sentence examples after classification.
+
+    This runs asynchronously and doesn't block the classification response.
+    Only enriches if not already done for this (movie, language) combination.
+
+    Args:
+        movie_id: Movie ID to enrich
+        target_lang: Target language code (e.g., 'ES', 'FR', 'DE')
+    """
+    db = None
+    try:
+        # Create new DB connection for background task
+        db = Prisma()
+        await db.connect()
+
+        # Check if enrichment already exists
+        existing = await db.wordsentenceexample.find_first(
+            where={'movieId': movie_id, 'targetLang': target_lang.upper()}
+        )
+
+        if existing:
+            logger.info(
+                f"⚡ Enrichment already exists for movie {movie_id}, lang {target_lang} - skipping"
+            )
+            return
+
+        # Import enrichment service (lazy import to avoid circular dependency)
+        from src.routes.enrichment import enrich_movie_examples, EnrichExamplesRequest
+
+        logger.info(
+            f"🔄 Starting background enrichment: movie {movie_id}, lang {target_lang}"
+        )
+
+        # Run enrichment
+        await enrich_movie_examples(
+            request=EnrichExamplesRequest(
+                movie_id=movie_id,
+                target_lang=target_lang.upper(),
+                batch_size=25,
+                delay_ms=500
+            ),
+            db=db
+        )
+
+        logger.info(
+            f"✅ Background enrichment complete: movie {movie_id}, lang {target_lang}"
+        )
+
+    except Exception as e:
+        logger.error(
+            f"❌ Background enrichment failed for movie {movie_id}, lang {target_lang}: {e}",
+            exc_info=True
+        )
+    finally:
+        if db:
+            await db.disconnect()
+
+
 @router.post("/classify-script", response_model=ScriptClassificationResponse)
 async def classify_script(
     request: ScriptClassificationRequest,
+    background_tasks: BackgroundTasks,
     db: Prisma = Depends(get_db)
 ):
     """
@@ -262,6 +329,9 @@ async def classify_script(
     PERFORMANCE OPTIMIZATION:
     If classifications already exist in DB, returns cached data immediately
     WITHOUT initializing the CEFR classifier or loading any word lists.
+
+    NEW: Automatically triggers sentence example enrichment in background
+    for the specified target language.
     """
     try:
         movie = await db.movie.find_unique(
@@ -352,6 +422,18 @@ async def classify_script(
                 for phrase, expr_type, level in idiom_results
             ]
             logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
+
+            # NEW: Schedule enrichment in background (for cached classifications)
+            if request.save_to_db and request.target_language:
+                background_tasks.add_task(
+                    auto_enrich_after_classification,
+                    movie_id=request.movie_id,
+                    target_lang=request.target_language
+                )
+                logger.info(
+                    f"📋 Scheduled background enrichment for movie {request.movie_id}, "
+                    f"lang {request.target_language}"
+                )
 
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
@@ -513,6 +595,18 @@ async def classify_script(
             for phrase, expr_type, level in idiom_results
         ]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
+
+        # NEW: Schedule enrichment in background (for new classifications)
+        if request.save_to_db and request.target_language:
+            background_tasks.add_task(
+                auto_enrich_after_classification,
+                movie_id=request.movie_id,
+                target_lang=request.target_language
+            )
+            logger.info(
+                f"📋 Scheduled background enrichment for movie {request.movie_id}, "
+                f"lang {request.target_language}"
+            )
 
         # Final response
         script_word_count = script.cleanedWordCount or 0

@@ -9,6 +9,7 @@ import { TabsHeader } from './TabsHeader';
 import { WordListWorkerBased } from './WordListWorkerBased';
 import { MovieSidebar } from './MovieSidebar';
 import { ScrollToTop } from './ScrollToTop';
+import { EnrichmentStatus } from './EnrichmentStatus';
 import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency, CEFRLevel } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
@@ -302,6 +303,9 @@ function VocabularyViewBase({
             scrolledPastTop={scrolledPastTop}
             showTopBar={showTopBar}
           />
+
+          {/* Enrichment Status Indicator - Shows when sentence examples are being generated */}
+          <EnrichmentStatus movieId={movieId} targetLang={targetLanguage} />
 
           {/* WordListWorkerBased - Worker-based component with numbering */}
           {/* Key ensures remount on tab change, triggering fade-in animation */}

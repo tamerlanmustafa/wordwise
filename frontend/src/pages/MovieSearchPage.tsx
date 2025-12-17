@@ -21,6 +21,7 @@ import {
   type MovieSearchResult,
   type TMDBMetadata
 } from '../services/scriptService';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type ErrorType = 'error' | 'not-found' | null;
 
@@ -43,6 +44,7 @@ const getLevelDescription = (level: string): string => {
 };
 
 export default function MovieSearchPage() {
+  const { targetLanguage } = useLanguage();
   const [searchLoading, setSearchLoading] = useState(false);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
@@ -124,9 +126,9 @@ export default function MovieSearchPage() {
         wordCount: scriptResponse.word_count
       });
 
-      // Classify the script using CEFR classifier
+      // Classify the script using CEFR classifier and trigger enrichment
       // console.log('[CEFR CLASSIFICATION] Starting hybrid CEFR classification...');
-      const cefrResult = await classifyMovieScript(scriptResponse.movie_id);
+      const cefrResult = await classifyMovieScript(scriptResponse.movie_id, targetLanguage);
       // console.log('[CEFR RESULT]', cefrResult);
 
       // Convert CEFR response to ScriptAnalysisResult format

@@ -1,3 +1,29 @@
+## Recent Accomplishments
+
+### ✅ Context-Aware Translation (Completed 2025-12-16)
+- [x] **Level 1: Sentence-aware translation** - Display sentence examples from movie scripts with translations
+  - Added `WordSentenceExample` database model
+  - Created sentence extraction service with intelligent scoring (6-25 word sentences)
+  - Created batch translation service (25 sentences/batch, 500ms delay)
+  - Built enrichment API endpoints (POST for enriching, GET for fetching)
+  - Integrated sentence examples into WordRow UI with expand/collapse
+  - Fixed row overlap issue with dynamic height measurement
+  - **Automatic enrichment**: Background enrichment after classification
+  - **Status tracking**: Real-time enrichment status UI with polling
+  - **Cost-efficient**: ~$0.15 per movie per language, deduplicated
+
+**Technical Implementation:**
+- Backend: FastAPI BackgroundTasks for async enrichment
+- Frontend: EnrichmentStatus component with 5-second polling
+- Database: Prisma ORM with indexed queries
+- Translation: Batch processing with rate limiting
+- UI: TanStack Virtual with dynamic row heights
+
+**Documentation:**
+- [AUTO_ENRICHMENT_IMPLEMENTATION.md](AUTO_ENRICHMENT_IMPLEMENTATION.md) - Complete implementation guide
+- [DYNAMIC_ENRICHMENT_STRATEGY.md](DYNAMIC_ENRICHMENT_STRATEGY.md) - Architecture and strategy
+- [SENTENCE_EXAMPLES_UI_IMPLEMENTATION.md](SENTENCE_EXAMPLES_UI_IMPLEMENTATION.md) - UI implementation
+- [OVERLAP_FIX.md](OVERLAP_FIX.md) - Row height measurement fix
 
 ## Short-Term Priorities (10 Goals)
 

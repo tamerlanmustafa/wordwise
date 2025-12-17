@@ -56,7 +56,7 @@ interface VirtualizedWordListProps {
 }
 
 const ROW_HEIGHT_COLLAPSED = 56;  // Collapsed row height
-const ROW_HEIGHT_EXPANDED = 150;   // Expanded row height (with translation + potential examples)
+// const ROW_HEIGHT_EXPANDED = 150;   // Expanded row height (with translation + potential examples) - kept for reference
 const ROW_HEIGHT_EXPANDED_MAX = 450; // Maximum height for rows with multiple examples
 const OVERSCAN = 8;               // Number of rows to render outside viewport
 
