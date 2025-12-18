@@ -14,16 +14,23 @@ WordWise is a vocabulary learning platform that helps users learn English by ana
   - Contraction fragment filtering
 - **Idiom & Phrasal Verb Detection** - Context-aware translation
   - 350+ idioms and phrasal verbs detected automatically
+  - Dedicated "Idioms" tab showing all detected expressions
   - Shows both literal translation and idiomatic meaning
   - CEFR level badges for expressions (purple=idiom, teal=phrasal verb)
   - O(1) lookup via word→idiom Map in Web Worker
+- **Sentence Examples Enrichment** - Learn words in context
+  - Manual enrichment via "Enrich with sentence examples" button
+  - Extracts representative sentences from movie scripts
+  - Batch translation with rate limiting (~$0.15/movie/language)
+  - Real-time status tracking (not_started → enriching → ready)
 - **Personalized Word Lists** - Learn Later, Favorites, Mastered
 - **Translation System** - Hybrid DeepL + Google Translate with caching
 - **User Language Preferences** - Native language and learning language selection
 - **Google OAuth Authentication** - Secure login without passwords
 - **PostgreSQL + Prisma ORM** - Type-safe database operations
 - **Web Worker Vocabulary Engine** - 10-100x faster rendering with TanStack Virtual
-- **Material-UI** - Beautiful, responsive interface
+- **Material-UI** - Beautiful, responsive interface with smooth animations
+- **MUI-Based Word Rows** - Card design with smooth expand/collapse via MUI Collapse
 
 ## Tech Stack
 
@@ -123,6 +130,7 @@ wordwise/
 │   │   │   ├── scripts.py          # Script fetching
 │   │   │   ├── cefr.py             # CEFR classification
 │   │   │   ├── translation.py      # Translation API
+│   │   │   ├── enrichment.py       # Sentence examples enrichment
 │   │   │   ├── user_words.py       # Saved/learned words
 │   │   │   └── tmdb.py             # TMDB integration
 │   │   ├── services/
@@ -130,6 +138,8 @@ wordwise/
 │   │   │   ├── difficulty_scorer.py # Movie difficulty scoring
 │   │   │   ├── translation_service.py # Translation with caching
 │   │   │   ├── script_ingestion_service.py # Script fetching
+│   │   │   ├── sentence_example_service.py # Sentence extraction
+│   │   │   ├── example_translation_service.py # Batch sentence translation
 │   │   │   └── external/           # External API integrations
 │   │   ├── schemas/                # Pydantic models
 │   │   ├── middleware/             # Auth middleware
@@ -155,6 +165,8 @@ wordwise/
 │   │   │   ├── VocabularyView.tsx  # Main vocabulary display
 │   │   │   ├── WordListWorkerBased.tsx # Worker-powered word list
 │   │   │   ├── VirtualizedWordList.tsx # TanStack Virtual list
+│   │   │   ├── WordRow.tsx         # Expandable word row with MUI Collapse
+│   │   │   ├── EnrichmentStatus.tsx # Sentence enrichment status/button
 │   │   │   ├── TopBar.tsx          # Navigation bar
 │   │   │   └── LanguageSelector.tsx # Language picker
 │   │   ├── workers/
@@ -218,6 +230,12 @@ Once the backend is running, visit:
 - `GET /translate/user/{user_id}/difficult-words` - Get frequently translated words
 - `GET /translate/user/{user_id}/stats` - Get translation statistics
 
+**Enrichment (Sentence Examples):**
+- `GET /api/enrichment/movies/{movie_id}/status` - Check enrichment status
+- `POST /api/enrichment/movies/{movie_id}/start` - Start background enrichment
+- `GET /api/enrichment/movies/{movie_id}/examples` - Get all word examples for movie
+- `GET /api/enrichment/movies/{movie_id}/examples/{word}` - Get examples for specific word
+
 **User Words:**
 - `GET /user/words` - Get all saved words
 - `POST /user/words` - Save a word
@@ -248,6 +266,7 @@ prisma migrate dev --name migration_name
 - **Movie** - Movie metadata from TMDB
 - **MovieScript** - Full script text from subtitles/STANDS4
 - **WordClassification** - CEFR levels for all words in scripts
+- **WordSentenceExample** - Sentence examples with translations for vocabulary words
 - **UserWord** - User's saved words with movie associations
 - **TranslationCache** - Cached translations by language pair
 - **UserTranslationHistory** - Track translations for learning analytics

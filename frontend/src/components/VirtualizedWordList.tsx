@@ -57,10 +57,10 @@ interface VirtualizedWordListProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const ROW_HEIGHT_COLLAPSED = 56;  // Collapsed row height
-// const ROW_HEIGHT_EXPANDED = 150;   // Expanded row height (with translation + potential examples) - kept for reference
-const ROW_HEIGHT_EXPANDED_MAX = 450; // Maximum height for rows with multiple examples
-const OVERSCAN = 8;               // Number of rows to render outside viewport
+const ROW_HEIGHT_COLLAPSED = 60;  // Collapsed row height (includes margin)
+const ROW_HEIGHT_EXPANDED_BASE = 140;   // Base expanded height (translation only)
+const ROW_HEIGHT_EXPANDED_IDIOM = 100; // Smaller height for idioms (no sentence examples)
+const OVERSCAN = 5;               // Number of rows to render outside viewport
 
 export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   words,
@@ -108,12 +108,18 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   const virtualizer = useWindowVirtualizer({
     count: totalCount,
     estimateSize: useCallback((index: number) => {
-      // Use a more generous estimate for expanded rows to prevent overlap
-      return expandedRows.has(index) ? ROW_HEIGHT_EXPANDED_MAX : ROW_HEIGHT_COLLAPSED;
-    }, [expandedRows]),
+      // Use conservative estimates for expanded rows
+      // For idioms tab, use smaller estimate since no sentence examples
+      // For regular tabs, use base estimate (translation only) - will grow if examples load
+      if (expandedRows.has(index)) {
+        return isIdiomsTab ? ROW_HEIGHT_EXPANDED_IDIOM : ROW_HEIGHT_EXPANDED_BASE;
+      }
+      return ROW_HEIGHT_COLLAPSED;
+    }, [expandedRows, isIdiomsTab]),
     overscan: OVERSCAN,
     scrollMargin,
     // Enable dynamic measurements - virtualizer will measure actual DOM height
+    // This will auto-adjust to ROW_HEIGHT_EXPANDED_MAX if sentence examples are present
     measureElement: (el) => el?.getBoundingClientRect().height ?? ROW_HEIGHT_COLLAPSED
   });
 
@@ -131,15 +137,13 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
       return next;
     });
 
-    // Multiple remeasures to handle async content loading:
-    // 1. Initial remeasure for translation/idiom (50ms)
-    setTimeout(() => virtualizer.measure(), 50);
-
-    // 2. Second remeasure for sentence examples (300ms - after API fetch)
-    setTimeout(() => virtualizer.measure(), 300);
-
-    // 3. Final remeasure to ensure everything is settled (600ms)
-    setTimeout(() => virtualizer.measure(), 600);
+    // When collapsing, trigger immediate remeasure so virtualizer uses collapsed height
+    if (!isExpanded) {
+      // Use requestAnimationFrame to ensure state has updated
+      requestAnimationFrame(() => {
+        virtualizer.measure();
+      });
+    }
   }, [virtualizer]);
 
   // ============================================================================
@@ -176,6 +180,12 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // ============================================================================
   // STABLE ROW CALLBACKS
   // ============================================================================
+
+  // Callback when async content (translation/examples) finishes loading
+  const handleContentLoad = useCallback((_index: number) => {
+    // Remeasure the row after content loads
+    requestAnimationFrame(() => virtualizer.measure());
+  }, [virtualizer]);
 
   const handleSaveWord = useCallback((word: string) => {
     onSaveWord(word, movieId);
@@ -264,10 +274,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 top: 0,
                 left: 0,
                 width: '100%',
-                minHeight: `${virtualItem.size}px`,
                 transform: `translateY(${virtualItem.start}px)`,
-                // GPU acceleration
-                willChange: 'transform'
               }}
             >
               <WordRow
@@ -283,6 +290,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 onToggleLearned={handleToggleLearned}
                 onTranslate={onTranslate}
                 onExpandChange={handleRowExpandChange}
+                onContentLoad={handleContentLoad}
                 otherMoviesText={otherMoviesText}
                 getIdiomsForWord={getIdiomsForWord}
                 idiomMetadata={isIdiomsTab && idiomsMap ? idiomsMap.get(word.word) : undefined}

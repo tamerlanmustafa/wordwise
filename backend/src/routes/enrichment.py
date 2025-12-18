@@ -334,16 +334,174 @@ async def get_enrichment_status(
                 "message": "Movie not yet classified. Classification needed before enrichment."
             }
 
-        # Classifications exist but no enrichment → likely enriching
+        # Classifications exist but no enrichment → not started yet
         return {
-            "status": "enriching",
+            "status": "not_started",
             "movie_id": movie_id,
             "target_lang": lang_upper,
-            "message": "Sentence examples are being generated. This typically takes 30-60 seconds."
+            "message": "Ready to enrich. Click 'Enrich with sentence examples' to start."
         }
 
     except Exception as e:
         logger.error(f"Failed to check enrichment status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/movies/{movie_id}/start")
+async def start_enrichment(
+    movie_id: int,
+    lang: str,
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Start background enrichment for a movie + language combination.
+
+    This endpoint triggers enrichment asynchronously and returns immediately.
+    The UI can poll /status to check progress.
+
+    Args:
+        movie_id: Movie ID
+        lang: Target language code (e.g., 'ES', 'FR', 'DE')
+
+    Returns:
+        Confirmation that enrichment has started
+    """
+    try:
+        lang_upper = lang.upper()
+
+        # Check if already enriched
+        existing = await db.wordsentenceexample.find_first(
+            where={'movieId': movie_id, 'targetLang': lang_upper}
+        )
+
+        if existing:
+            return {
+                "status": "already_enriched",
+                "movie_id": movie_id,
+                "target_lang": lang_upper,
+                "message": "Examples already exist for this movie"
+            }
+
+        # Check if classifications exist
+        script = await db.moviescript.find_first(
+            where={'movieId': movie_id},
+            include={'wordClassifications': True}
+        )
+
+        if not script or not script.wordClassifications:
+            raise HTTPException(
+                status_code=400,
+                detail="Movie must be classified before enrichment can start"
+            )
+
+        # Start enrichment in background
+        async def run_enrichment():
+            try:
+                logger.info(f"Background enrichment starting for movie {movie_id}, lang {lang_upper}")
+
+                # Get fresh DB connection for background task
+                from src.database import get_db
+                db_gen = get_db()
+                bg_db = await db_gen.__anext__()
+
+                try:
+                    # Fetch movie and script
+                    movie = await bg_db.movie.find_unique(
+                        where={'id': movie_id},
+                        include={'movieScripts': True}
+                    )
+
+                    if not movie or not movie.movieScripts:
+                        logger.error(f"Movie {movie_id} or script not found")
+                        return
+
+                    script = movie.movieScripts[0]
+
+                    # Get vocabulary
+                    word_classifications = await bg_db.wordclassification.find_many(
+                        where={'scriptId': script.id}
+                    )
+
+                    vocabulary_words = set(wc.word.lower() for wc in word_classifications)
+
+                    # Extract sentences
+                    sentence_service = SentenceExampleService()
+                    word_sentences = sentence_service.extract_word_sentences(
+                        script.cleanedScriptText,
+                        vocabulary_words
+                    )
+
+                    # Get unique sentences
+                    unique_sentences = set()
+                    for sentences_list in word_sentences.values():
+                        for sentence, position in sentences_list:
+                            unique_sentences.add(sentence)
+
+                    # Translate
+                    translation_service = ExampleTranslationService(
+                        db=bg_db,
+                        batch_size=25,
+                        delay_ms=500
+                    )
+
+                    translation_results, stats = await translation_service.translate_all_sentences(
+                        list(unique_sentences),
+                        target_lang=lang_upper,
+                        source_lang="en"
+                    )
+
+                    sentence_to_translation = {
+                        result['sentence']: result['translation']
+                        for result in translation_results
+                    }
+
+                    # Build examples
+                    word_examples = {}
+                    for word, sentences_list in word_sentences.items():
+                        examples = []
+                        word_lower = word.lower()
+                        word_lemma = next(
+                            (wc.lemma for wc in word_classifications if wc.word.lower() == word_lower),
+                            word_lower
+                        )
+
+                        for sentence, position in sentences_list:
+                            translation = sentence_to_translation.get(sentence, sentence)
+                            examples.append((sentence, position, translation, word_lemma))
+
+                        word_examples[word] = examples
+
+                    # Save
+                    await translation_service.save_word_examples(
+                        movie_id=movie_id,
+                        word_examples=word_examples,
+                        target_lang=lang_upper
+                    )
+
+                    logger.info(f"✓ Background enrichment complete for movie {movie_id}")
+
+                finally:
+                    # Disconnect background DB
+                    await bg_db.disconnect()
+
+            except Exception as e:
+                logger.error(f"Background enrichment failed: {e}", exc_info=True)
+
+        # Add to background tasks
+        background_tasks.add_task(run_enrichment)
+
+        return {
+            "status": "started",
+            "movie_id": movie_id,
+            "target_lang": lang_upper,
+            "message": "Enrichment started in background. Poll /status to check progress."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start enrichment: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

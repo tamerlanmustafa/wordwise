@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Alert, CircularProgress, Chip, Fade, Box } from '@mui/material';
+import { Alert, CircularProgress, Chip, Fade, Box, Button } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 interface EnrichmentStatusProps {
   movieId?: number;
@@ -13,15 +14,16 @@ type EnrichmentState = 'checking' | 'not_started' | 'enriching' | 'ready' | 'err
  * EnrichmentStatus Component
  *
  * Shows the current status of sentence example enrichment for a movie.
+ * User must click a button to start enrichment (not automatic).
  * Polls the backend to determine if enrichment is:
- * - not_started: No classification yet
+ * - not_started: No classification yet - shows "Start Enrichment" button
  * - enriching: Background job in progress
  * - ready: Examples available
  * - error: Failed to check status
  */
 export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps) {
   const [status, setStatus] = useState<EnrichmentState>('checking');
-  const [pollInterval, setPollInterval] = useState<number | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     if (!movieId || !targetLang) {
@@ -49,13 +51,11 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
 
         // If enriching, set up polling (only once)
         if (data.status === 'enriching' && !intervalId) {
-          intervalId = window.setInterval(checkStatus, 10000); // Poll every 10 seconds (reduced frequency)
-          setPollInterval(intervalId);
+          intervalId = window.setInterval(checkStatus, 10000); // Poll every 10 seconds
         } else if (data.status !== 'enriching' && intervalId) {
           // Stop polling once enrichment is complete
           window.clearInterval(intervalId);
           intervalId = null;
-          setPollInterval(null);
         }
       } catch (error) {
         console.error('Enrichment status check failed:', error);
@@ -72,16 +72,67 @@ export function EnrichmentStatus({ movieId, targetLang }: EnrichmentStatusProps)
         window.clearInterval(intervalId);
       }
     };
-  }, [movieId, targetLang]); // Only depend on movieId and targetLang
+  }, [movieId, targetLang]);
 
-  // Don't show anything if checking or not started
-  if (status === 'checking' || status === 'not_started') {
+  const handleStartEnrichment = async () => {
+    if (!movieId || !targetLang) return;
+
+    setIsStarting(true);
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(
+        `${API_BASE_URL}/api/enrichment/movies/${movieId}/start?lang=${targetLang}`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        console.error('Failed to start enrichment:', response.statusText);
+        setStatus('error');
+        return;
+      }
+
+      // After starting, check status immediately
+      setStatus('enriching');
+    } catch (error) {
+      console.error('Start enrichment failed:', error);
+      setStatus('error');
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  // Don't show anything if checking
+  if (status === 'checking') {
     return null;
   }
 
   // Don't show anything if there's an error (fail silently)
   if (status === 'error') {
     return null;
+  }
+
+  // Show "Start Enrichment" button
+  if (status === 'not_started') {
+    return (
+      <Fade in timeout={500}>
+        <Box sx={{ mb: 2, px: 1 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<AutoAwesomeIcon />}
+            onClick={handleStartEnrichment}
+            disabled={isStarting}
+            sx={{
+              fontSize: '0.75rem',
+              textTransform: 'none',
+              borderRadius: 2,
+            }}
+          >
+            {isStarting ? 'Starting...' : 'Enrich with sentence examples'}
+          </Button>
+        </Box>
+      </Fade>
+    );
   }
 
   // Show "ready" chip

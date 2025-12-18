@@ -5,6 +5,38 @@ All notable changes to the WordWise project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2025-12-18
+
+### Added
+- **Idioms Tab**
+  - Dedicated tab showing all detected idioms and phrasal verbs in the movie
+  - Purple badge for idioms, teal badge for phrasal verbs
+  - CEFR level badges for each expression
+
+- **Manual Enrichment Control**
+  - "Enrich with sentence examples" button instead of automatic enrichment
+  - User controls when to start sentence extraction and translation
+  - Real-time status tracking: not_started → enriching → ready
+  - Background processing via FastAPI BackgroundTasks
+
+### Changed
+- **MUI-Based Word Rows Redesign**
+  - Complete WordRow redesign using MUI styled() components
+  - Card-based design with subtle borders and backgrounds
+  - Smooth expand/collapse via MUI Collapse component (150ms ease-in-out)
+  - MUI icons replacing inline SVGs
+
+- **Load-Then-Expand Pattern**
+  - On click, show spinner while loading translation + examples in parallel
+  - Wait up to 250ms for content, then expand
+  - Eliminates flickering/glitching when expanding rows
+  - Removed loading skeletons for cleaner UX
+
+- **Backend Enrichment API**
+  - `GET /api/enrichment/movies/{movie_id}/status` - returns not_started/enriching/ready
+  - `POST /api/enrichment/movies/{movie_id}/start` - triggers background enrichment
+  - Fixed status to return "not_started" instead of incorrectly showing "enriching"
+
 ## [2.5.0] - 2025-12-15
 
 ### Added
@@ -22,12 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Purple badge for idioms, teal badge for phrasal verbs
   - No external APIs needed - reuses existing DeepL/Google translation
 
+- **Sentence Examples Enrichment System**
+  - WordSentenceExample database model for storing examples
+  - Sentence extraction service with intelligent scoring (6-25 word sentences)
+  - Batch translation service (25 sentences/batch, 500ms delay)
+  - Enrichment API endpoints for manual triggering and status checking
+  - Cost-efficient: ~$0.15 per movie per language
+
 ### Changed
 - **Click-to-Expand Translation Pattern**
   - Translations only fetched when user clicks a word row
   - Eliminates batch translation overhead entirely
   - Zero initial translation load time, no rate limiting issues
-  - Smooth CSS Grid animation for expand/collapse transitions
 
 - **Memory Management**
   - Backend CEFR caches use LRU with 50k max entries
@@ -247,3 +285,80 @@ Complete rewrite of the application stack for better performance, type safety, a
 - Bcrypt password hashing
 - JWT token-based authentication
 - CORS configuration for allowed origins
+
+---
+
+# Roadmap
+
+## Recent Accomplishments
+
+### Context-Aware Translation (Completed 2025-12-18)
+- [x] **Level 1: Sentence-aware translation** - Display sentence examples from movie scripts with translations
+  - Added `WordSentenceExample` database model
+  - Created sentence extraction service with intelligent scoring (6-25 word sentences)
+  - Created batch translation service (25 sentences/batch, 500ms delay)
+  - Built enrichment API endpoints (POST for enriching, GET for fetching)
+  - Integrated sentence examples into WordRow UI with expand/collapse
+  - Fixed row overlap issue with dynamic height measurement
+  - **Manual enrichment**: User-controlled via button click
+  - **Status tracking**: Real-time enrichment status UI with polling
+  - **Cost-efficient**: ~$0.15 per movie per language, deduplicated
+
+**Technical Implementation:**
+- Backend: FastAPI BackgroundTasks for async enrichment
+- Frontend: EnrichmentStatus component with 10-second polling
+- Database: Prisma ORM with indexed queries
+- Translation: Batch processing with rate limiting
+- UI: TanStack Virtual with dynamic row heights, MUI Collapse for smooth animations
+
+## Short-Term Priorities
+
+### 1. Rate Limiting & Security
+- [ ] Add rate limiting to auth endpoints (prevent brute force)
+- [ ] Add rate limiting to translation endpoints (protect API quotas)
+- [ ] Validate translation input length (max 500 chars)
+- [ ] Implement request timeouts for external APIs
+
+### 2. Error Monitoring
+- [ ] Set up error monitoring (Sentry or similar)
+- [ ] Add graceful error states in UI for failed translations
+- [ ] Improve error messages for common failures
+
+### 3. Search & Filter in Vocabulary
+- [ ] Real-time search within vocabulary lists
+- [ ] Filter by: saved, learned
+- [ ] Sort options: alphabetical, frequency, confidence
+
+### 4. Translation Language Sync
+- [ ] Sync LanguageContext with user's native_language from profile
+- [ ] Auto-set translation target language based on user preferences
+
+### 5. Redis Cache Layer
+- [ ] Replace database-based TranslationCache with Redis
+- [ ] Enable distributed caching for horizontal scaling
+- [ ] Add TTL-based cache expiration (30 days for translations)
+
+### 6. IndexedDB Persistence
+- [ ] Cache translations in IndexedDB (survive page refresh)
+- [ ] Cache vocabulary data for offline access
+- [ ] Sync with server on reconnection
+
+### 7. Progress Dashboard
+- [ ] Visual learning progress tracking
+- [ ] Words learned over time charts
+- [ ] Difficult words analysis (frequently translated)
+
+### 8. Named Entity Recognition
+- [ ] Better detection of proper nouns and character names
+- [ ] Use spaCy NER or similar for accurate detection
+- [ ] Reduce false positives in fantasy content
+
+### 9. Test Suite
+- [ ] Add comprehensive pytest test suite for backend
+- [ ] Add Jest tests for frontend components
+- [ ] Document all API endpoints with examples
+
+### 10. Spaced Repetition System (SRS)
+- [ ] Implement SM-2 or similar algorithm
+- [ ] Schedule word reviews based on retention
+- [ ] Gamification with streaks
