@@ -2,10 +2,10 @@
  * WordRow Component
  *
  * Smooth, polished word row with MUI-based expand/collapse animations.
- * Fetches translation and sentence examples on expand.
+ * Fetches translation and sentence examples BEFORE expanding to prevent flicker.
  */
 
-import { memo, useCallback, useRef, useState, useEffect } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import {
   Box,
   Collapse,
@@ -30,12 +30,10 @@ import type { IdiomInfo } from '../services/scriptService';
 // STYLED COMPONENTS
 // ============================================================================
 
-// Wrapper for the entire row + dropdown
 const RowWrapper = styled(Box)(({ theme }) => ({
   borderBottom: `1px solid ${theme.palette.wordRow.panelBorder}`,
 }));
 
-// The main clickable row - fixed height, never expands
 const RowContainer = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'isExpanded' && prop !== 'groupColor'
 })<{ isExpanded?: boolean; groupColor?: string }>(({ theme, isExpanded }) => ({
@@ -50,14 +48,10 @@ const RowContainer = styled(Box, {
   },
 }));
 
-// The dropdown panel below the row - uses custom theme colors
 const DropdownPanel = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.wordRow.panelBg,
   borderTop: `1px solid ${theme.palette.wordRow.panelBorder}`,
   padding: '16px 20px 20px 56px',
-  // Reserve minimum space to reduce layout shifts during loading
-  minHeight: 80,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '12px 12px 16px 12px',
   },
@@ -69,7 +63,6 @@ const MainRow = styled(Box)(({ theme }) => ({
   padding: '12px 16px',
   gap: 12,
   minHeight: 48,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 8px',
     gap: 8,
@@ -84,7 +77,6 @@ const RowNumber = styled(Typography)(({ theme }) => ({
   minWidth: 32,
   textAlign: 'right',
   fontVariantNumeric: 'tabular-nums',
-  // Mobile responsive - hide row numbers on very small screens
   [theme.breakpoints.down('xs')]: {
     display: 'none',
   },
@@ -98,18 +90,17 @@ const WordText = styled(Typography)(({ theme }) => ({
   fontWeight: 500,
   fontSize: '0.95rem',
   flex: 1,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     fontSize: '0.9rem',
   },
 }));
 
 const ExpandIcon = styled(ExpandMore, {
-  shouldForwardProp: (prop) => prop !== 'isExpanded'
-})<{ isExpanded?: boolean }>(({ isExpanded }) => ({
+  shouldForwardProp: (prop) => prop !== 'isExpanded' && prop !== 'isLoading'
+})<{ isExpanded?: boolean; isLoading?: boolean }>(({ isExpanded, isLoading }) => ({
   transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
   transition: 'transform 0.3s ease',
-  opacity: 0.5,
+  opacity: isLoading ? 0 : 0.5,
 }));
 
 const ActionButton = styled(IconButton)(({ theme }) => ({
@@ -117,14 +108,12 @@ const ActionButton = styled(IconButton)(({ theme }) => ({
   '&:hover': {
     backgroundColor: alpha(theme.palette.primary.main, 0.1),
   },
-  // Mobile responsive - larger touch targets
   [theme.breakpoints.down('sm')]: {
     padding: 8,
     minWidth: 36,
     minHeight: 36,
   },
 }));
-
 
 const TranslationBox = styled(Box)(() => ({
   display: 'flex',
@@ -142,7 +131,6 @@ const ExampleCard = styled(Box)(({ theme }) => ({
   padding: '12px 14px',
   marginTop: 12,
   borderLeft: `3px solid ${theme.palette.info.main}`,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 12px',
     marginTop: 10,
@@ -157,18 +145,16 @@ const IdiomCard = styled(Box)(({ theme }) => ({
   padding: '12px 14px',
   marginTop: 12,
   borderLeft: `3px solid ${theme.palette.warning.main}`,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 12px',
     marginTop: 10,
   },
 }));
 
-const LoadingBox = styled(Box)(() => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '8px 0',
+// Small spinner shown next to expand icon while loading
+const InlineSpinner = styled(CircularProgress)(() => ({
+  position: 'absolute',
+  right: 100,
 }));
 
 // ============================================================================
@@ -181,6 +167,13 @@ interface SentenceExample {
   word_position: number;
 }
 
+interface ContentData {
+  translation: string | null;
+  translationProvider: string | null;
+  sentenceExamples: SentenceExample[];
+  relatedIdioms: IdiomInfo[];
+}
+
 interface WordRowProps {
   word: DisplayWord;
   rowNumber: number;
@@ -190,7 +183,7 @@ interface WordRowProps {
   isSaved: boolean;
   isLearned: boolean;
   canToggleLearned: boolean;
-  isExpanded: boolean;  // Controlled by parent (accordion pattern)
+  isExpanded: boolean;
   onSave: (word: string) => void;
   onToggleLearned: (word: string) => void;
   onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
@@ -229,93 +222,104 @@ export const WordRow = memo<WordRowProps>(({
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Translation state
-  const [translation, setTranslation] = useState<string | null>(word.translation || null);
-  const [translationProvider, setTranslationProvider] = useState<string | null>(word.translationProvider || null);
-  const [isLoadingTranslation, setIsLoadingTranslation] = useState(false);
+  // Content is fetched ONCE and cached
+  const [contentData, setContentData] = useState<ContentData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const fetchedRef = useRef(false);
 
-  // Sentence examples state
-  const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[] | null>(null);
-  const [isLoadingSentences, setIsLoadingSentences] = useState(false);
-  const [hasFetchedSentences, setHasFetchedSentences] = useState(false);
+  // Fetch all content data
+  const fetchContent = useCallback(async (): Promise<ContentData> => {
+    const results: ContentData = {
+      translation: word.translation || null,
+      translationProvider: word.translationProvider || null,
+      sentenceExamples: [],
+      relatedIdioms: [],
+    };
 
-  // Idiom info state (for words that are part of idioms)
-  const [relatedIdioms, setRelatedIdioms] = useState<IdiomInfo[] | null>(null);
+    // Fetch all data in parallel
+    const promises: Promise<void>[] = [];
 
-  // Track if we've already loaded content for this expansion
-  const hasLoadedRef = useRef(false);
-
-  // Fetch translation and sentences when expanded
-  useEffect(() => {
-    if (!isExpanded) {
-      hasLoadedRef.current = false;
-      return;
+    // Translation
+    if (!results.translation) {
+      promises.push(
+        onTranslate(word.word)
+          .then((result) => {
+            if (result) {
+              results.translation = result.translation;
+              results.translationProvider = result.provider || null;
+            }
+          })
+          .catch((err) => console.error('Translation error:', err))
+      );
     }
 
-    if (hasLoadedRef.current) return;
-    hasLoadedRef.current = true;
-
-    // Fetch translation if not already available
-    if (!translation) {
-      setIsLoadingTranslation(true);
-      onTranslate(word.word)
-        .then((result) => {
-          if (result) {
-            setTranslation(result.translation);
-            setTranslationProvider(result.provider || null);
-          }
-        })
-        .catch((err) => {
-          console.error('Translation error:', err);
-        })
-        .finally(() => {
-          setIsLoadingTranslation(false);
-        });
+    // Sentence examples
+    if (movieId && targetLang) {
+      promises.push(
+        fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.examples && Array.isArray(data.examples)) {
+              results.sentenceExamples = data.examples;
+            }
+          })
+          .catch((err) => console.error('Sentence examples error:', err))
+      );
     }
 
-    // Fetch sentence examples if movieId and targetLang are available
-    if (movieId && targetLang && !hasFetchedSentences) {
-      setIsLoadingSentences(true);
-      fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.examples && Array.isArray(data.examples)) {
-            setSentenceExamples(data.examples);
-          }
-          setHasFetchedSentences(true);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch sentence examples:', err);
-          setHasFetchedSentences(true);
-        })
-        .finally(() => {
-          setIsLoadingSentences(false);
-        });
-    }
-
-    // Fetch related idioms if handler is available
+    // Related idioms
     if (getIdiomsForWord && !idiomMetadata) {
-      getIdiomsForWord(word.word)
-        .then((idioms) => {
-          if (idioms && idioms.length > 0) {
-            setRelatedIdioms(idioms);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to fetch idioms:', err);
-        });
+      promises.push(
+        getIdiomsForWord(word.word)
+          .then((idioms) => {
+            if (idioms && idioms.length > 0) {
+              results.relatedIdioms = idioms;
+            }
+          })
+          .catch((err) => console.error('Idioms error:', err))
+      );
     }
-  }, [isExpanded, word.word, translation, onTranslate, movieId, targetLang, getIdiomsForWord, idiomMetadata]);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // Don't toggle if clicking on action buttons
+    await Promise.all(promises);
+    return results;
+  }, [word.word, word.translation, word.translationProvider, onTranslate, movieId, targetLang, getIdiomsForWord, idiomMetadata]);
+
+  const handleClick = useCallback(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.action-button')) {
       return;
     }
 
-    // Toggle expansion - parent controls via accordion pattern
-    onExpandChange(virtualIndex, !isExpanded);
-  }, [isExpanded, virtualIndex, onExpandChange]);
+    // If closing, just close immediately
+    if (isExpanded) {
+      onExpandChange(virtualIndex, false);
+      return;
+    }
+
+    // If we already have content, expand immediately
+    if (contentData || fetchedRef.current) {
+      onExpandChange(virtualIndex, true);
+      return;
+    }
+
+    // First time opening: fetch content first, then expand
+    setIsLoading(true);
+    fetchedRef.current = true;
+
+    try {
+      const data = await fetchContent();
+      setContentData(data);
+      // Small delay to ensure state is updated before expand
+      requestAnimationFrame(() => {
+        onExpandChange(virtualIndex, true);
+        setIsLoading(false);
+      });
+    } catch (err) {
+      console.error('Failed to fetch content:', err);
+      setIsLoading(false);
+      // Still expand even if fetch failed
+      onExpandChange(virtualIndex, true);
+    }
+  }, [isExpanded, contentData, virtualIndex, onExpandChange, fetchContent]);
 
   const handleSave = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -327,7 +331,6 @@ export const WordRow = memo<WordRowProps>(({
     onToggleLearned(word.word);
   }, [onToggleLearned, word.word]);
 
-  // Notify parent when collapse animation completes
   const handleCollapseEntered = useCallback(() => {
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
@@ -336,11 +339,14 @@ export const WordRow = memo<WordRowProps>(({
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
 
-  const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
-  // Only used for translation loading indicator now
-  void isLoadingSentences; // Keep for potential future use
+  // Use cached content or fall back to word data
+  const translation = contentData?.translation ?? word.translation ?? null;
+  const translationProvider = contentData?.translationProvider ?? word.translationProvider ?? null;
+  const sentenceExamples = contentData?.sentenceExamples ?? [];
+  const relatedIdioms = contentData?.relatedIdioms ?? [];
 
-  // Highlight the target word in sentence
+  const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
+
   const highlightWord = (sentence: string, targetWord: string) => {
     const regex = new RegExp(`\\b(${targetWord})\\b`, 'gi');
     const parts = sentence.split(regex);
@@ -363,7 +369,6 @@ export const WordRow = memo<WordRowProps>(({
 
   return (
     <RowWrapper>
-      {/* Main row - fixed height, never changes */}
       <RowContainer
         isExpanded={isExpanded}
         groupColor={groupColor}
@@ -371,10 +376,8 @@ export const WordRow = memo<WordRowProps>(({
       >
         <MainRow>
           <RowNumber>{rowNumber}.</RowNumber>
-
           <WordText>{word.word}</WordText>
 
-          {/* Idiom badges (for idioms tab) */}
           {idiomMetadata && (
             <>
               <Chip
@@ -383,11 +386,8 @@ export const WordRow = memo<WordRowProps>(({
                 sx={{
                   height: 20,
                   fontSize: '0.7rem',
-                  bgcolor: idiomMetadata.type === 'phrasal_verb'
-                    ? 'info.main'
-                    : 'warning.main',
+                  bgcolor: idiomMetadata.type === 'phrasal_verb' ? 'info.main' : 'warning.main',
                   color: 'white',
-                  // Hide on very small screens
                   display: { xs: 'none', sm: 'flex' },
                 }}
               />
@@ -404,7 +404,11 @@ export const WordRow = memo<WordRowProps>(({
             </>
           )}
 
-          <ExpandIcon isExpanded={isExpanded} fontSize="small" />
+          {isLoading ? (
+            <InlineSpinner size={16} />
+          ) : null}
+
+          <ExpandIcon isExpanded={isExpanded} isLoading={isLoading} fontSize="small" />
 
           <ActionButton
             className="action-button"
@@ -427,10 +431,9 @@ export const WordRow = memo<WordRowProps>(({
         </MainRow>
       </RowContainer>
 
-      {/* Dropdown panel - slides down below the row */}
       <Collapse
         in={isExpanded}
-        timeout={250}
+        timeout={200}
         onEntered={handleCollapseEntered}
         onExited={handleCollapseExited}
         unmountOnExit
@@ -438,20 +441,10 @@ export const WordRow = memo<WordRowProps>(({
         <DropdownPanel ref={contentRef}>
           {/* Translation */}
           <TranslationBox>
-            <Typography
-              variant="body2"
-              sx={{ color: 'text.secondary', fontWeight: 300 }}
-            >
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 300 }}>
               —
             </Typography>
-            {isLoadingTranslation ? (
-              <LoadingBox>
-                <CircularProgress size={14} />
-                <Typography variant="body2" color="text.secondary">
-                  Translating...
-                </Typography>
-              </LoadingBox>
-            ) : translation ? (
+            {translation ? (
               <>
                 <Typography
                   variant="body2"
@@ -463,10 +456,7 @@ export const WordRow = memo<WordRowProps>(({
                   {isUntranslatable ? '(same as source)' : translation}
                 </Typography>
                 {translationProvider && (
-                  <Typography
-                    variant="caption"
-                    sx={{ color: 'text.disabled', fontSize: '0.65rem' }}
-                  >
+                  <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
                     via {translationProvider}
                   </Typography>
                 )}
@@ -478,8 +468,8 @@ export const WordRow = memo<WordRowProps>(({
             )}
           </TranslationBox>
 
-          {/* Sentence Examples - no loading state to prevent flicker */}
-          {sentenceExamples && sentenceExamples.length > 0 ? (
+          {/* Sentence Examples */}
+          {sentenceExamples.length > 0 ? (
             sentenceExamples.map((example, idx) => (
               <ExampleCard key={idx}>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
@@ -492,14 +482,14 @@ export const WordRow = memo<WordRowProps>(({
                 )}
               </ExampleCard>
             ))
-          ) : hasFetchedSentences && movieId && (
+          ) : contentData && movieId && (
             <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
               No sentence examples available
             </Typography>
           )}
 
-          {/* Related Idioms (for regular words that appear in idioms) */}
-          {relatedIdioms && relatedIdioms.length > 0 && (
+          {/* Related Idioms */}
+          {relatedIdioms.length > 0 && (
             <>
               <Typography
                 variant="caption"
