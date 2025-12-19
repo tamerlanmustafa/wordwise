@@ -3304,7 +3304,7 @@
     "cefr_level": "A2"
   },
   {
-    "word": "bird’s-eye",
+    "word": "bird\u2019s-eye",
     "cefr_level": "C1"
   },
   {
@@ -4444,7 +4444,7 @@
     "cefr_level": "C1"
   },
   {
-    "word": "café",
+    "word": "caf\u00e9",
     "cefr_level": "A1"
   },
   {
@@ -5400,7 +5400,7 @@
     "cefr_level": "A1"
   },
   {
-    "word": "children’s-wear",
+    "word": "children\u2019s-wear",
     "cefr_level": "B2"
   },
   {
@@ -5756,7 +5756,7 @@
     "cefr_level": "C1"
   },
   {
-    "word": "cliché",
+    "word": "clich\u00e9",
     "cefr_level": "C1"
   },
   {
@@ -7640,7 +7640,7 @@
     "cefr_level": "B2"
   },
   {
-    "word": "crêpe",
+    "word": "cr\u00eape",
     "cefr_level": "C1"
   },
   {
@@ -12032,7 +12032,7 @@
     "cefr_level": "A2"
   },
   {
-    "word": "fiancé",
+    "word": "fianc\u00e9",
     "cefr_level": "B1"
   },
   {
@@ -24068,7 +24068,7 @@
     "cefr_level": "A1"
   },
   {
-    "word": "piñata",
+    "word": "pi\u00f1ata",
     "cefr_level": "B1"
   },
   {
@@ -27412,7 +27412,7 @@
     "cefr_level": "B2"
   },
   {
-    "word": "risqué",
+    "word": "risqu\u00e9",
     "cefr_level": "C1"
   },
   {
@@ -27508,7 +27508,7 @@
     "cefr_level": "A1"
   },
   {
-    "word": "rock’n’roll",
+    "word": "rock\u2019n\u2019roll",
     "cefr_level": "A2"
   },
   {
@@ -27748,7 +27748,7 @@
     "cefr_level": "B2"
   },
   {
-    "word": "résumé",
+    "word": "r\u00e9sum\u00e9",
     "cefr_level": "B2"
   },
   {
@@ -44022,5 +44022,6361 @@
   {
     "word": "zoom",
     "cefr_level": "B2"
+  },
+  {
+    "word": "timid",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "concur",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "marvel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "enviable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "psychiatric",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "corps",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "juvenile",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "juvenile",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "jurisdiction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "accustomed",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "trauma",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "traumatic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "revealing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sanctity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "norms",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quirk",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "oddity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compulsion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "assertion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "psyche",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "conformity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unconventional",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "congregate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "self-conscious",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stoke",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dynamically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "perpetuate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "naturalness",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exhibitionist",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "refreshingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "effortless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "vegetation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "respite",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "suffice",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "purity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "comprise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "darkroom",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "induct",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "induction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "geological",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "geologically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "specimen",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "explanatory",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ordinarily",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "formulate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "resin",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cleanly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "endorsement",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stretching",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "continuity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "shambles",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "claustrophobia",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "headstrong",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tact",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tactful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tactfully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "blister",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "blister",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ego",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "saloon",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "beforehand",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "slob",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unplug",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "subtly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "brainwash",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "brainwashing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "implicate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "malfunction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wayside",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "expire",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "damply",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "washtub",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "apt to",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ornamental",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "placid",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "placidly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unmanageable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "relinquish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tedium",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exert",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "extortion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "elaborate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "elaborate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "elaboration",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "detestable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "suds",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "prowl",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "speculative",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "peacock",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "disdain",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "reenact",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "extravagance",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exploitation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "mechanism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "offspring",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "implicate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "collaborator",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "collaborative",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "showy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wrangle",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "advantageous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "parasite",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fanciful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "poise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insightful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "viciously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "withdrawn",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "torturous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "depiction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "upheaval",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "shortlist",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "shortlist",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pertinent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pertain to",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "blockbuster",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "resonate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sequel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "alignment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "persuasively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "confinement",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "minutiae",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexplicable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexplicably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "harass",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "harassment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "believably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "readable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "persecute",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "persecution",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "smugly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ferociously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hostile",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "methodical",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ruthless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ruthlessness",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "crumb",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rarity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "repel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "repellant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "repellant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "aqua",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insightful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insightfully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flashback",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "self-worth",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "citation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ecstatically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pleasurable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "favorably/favourably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rumble",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rumble",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "neglectful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "roundup",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "indefinite",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "indefinitely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fusion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "robust",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "robustly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dismally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "crave",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "craving",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remotely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bubbly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "chaotically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "apprehensive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "trampoline",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stamina",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ploy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dither",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "overalls",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unison",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "snail",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bliss",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexhaustible",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "heifer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ewe",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "adversary",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "baldly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bearded",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "professionalism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "artistically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "popularization",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pendulum",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "predecessor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ceaseless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ceaselessly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "climax",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "climactic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "anticlimactic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "forfeit",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "twitch",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "twitch",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "intellect",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exodus",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "immortalize",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "genome",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "faction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "physique",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "utensil",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "clammy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dispense",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dispensary",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "diverge",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "divergence",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "divergent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "superficially",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "aesthetically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scrutinize/scrutinise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scrutiny",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quip",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quip",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "criteria",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "plausible",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "plausibility",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "plausibly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "instinctive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "instinctively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stylistic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stylistically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inheritance",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inherent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "spontaneous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "innovate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "connoisseur",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "abstraction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tantrum",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "discard",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hostile",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flatter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flattery",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "aimless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "meaninglessly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "candid",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "candidly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "vitality",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "provocative",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "provocatively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "clench",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "haggle",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scorn",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scornful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scornfully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "animatedly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "obscurely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tediously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "formality",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "mountaineer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "transatlantic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rudiments",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "immense",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "immensely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "advisory",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "trying",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "adrenaline",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tinker",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tinker",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lavatory",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pinnacle",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insecurely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "reassurance",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insensitive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insensitively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "profess",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "overseer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "estimation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "liaison",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stressfully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "loom",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "notwithstanding",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "structural",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "chauffer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "chauffer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sedentary",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rapport",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "consultancy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "retention",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quarry",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "specification",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "contractor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "possessor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "frosty",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "frostily",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impersonal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impersonally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impersonate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impersonator",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impersonation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "buzzer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "desertion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stuffy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stuffily",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stuffiness",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gape",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gape",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "repute",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "toughness",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "glum",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "glumly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gamely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dissect",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dissection",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "commend",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "commendation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "thereby",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flicker",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unenviable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unenviably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "allege",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bribery",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inclusion",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inclusively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unconvincing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unconvincingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "facilitation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "conditional",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "conditionally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "alignment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "supple",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bouquet",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "refurbish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "refurbishment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lethargic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lethargically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stately",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "conservatory",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "disquieting",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "grapefruit",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exotically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flask",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remedial",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "posture",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sedate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sedately",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sedate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "clutch",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "clutch",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "staggering",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dutiful",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dutifully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fabulously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "premises",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "eclectically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "revere",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "harbor/harbour",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "recognizable/recognisable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "recognizably/recognisably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unreliably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "waterfront",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "amply",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "amplification",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "battered",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "battered",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "comply",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compliance",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compliant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compliantly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "blankness",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exuberant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exuberance",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exuberantly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "linear",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "linearly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flourish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "flourish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "anchored",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "domination",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dominant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dominantly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "interject",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "interjection",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gush",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gushing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gush",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gushingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "voracious",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "voraciously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sketchbook",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "imp",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impishly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wickedly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "macabre",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gusto",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tantamount",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "antics",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "relapse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "relapse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impede",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impediment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "taut",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tautly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "jersey",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "jersey",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "startlingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "slackly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unwavering",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unwaveringly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "removed",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "buffoon",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "beguiling",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "beguilingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "blithely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "venerate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "veneration",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "heroine",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "refreshingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "zany",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "devotee",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "salve",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "salvation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "staccato",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "staccato",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "verve",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "motley",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "preach",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "preacher",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "continuity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "justly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wry",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wryly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "poetess",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "confide",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sentient",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sentiment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sentimental",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sentimentally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tangled",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "untangle",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "untangled",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "perceptive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "perceptively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tycoon",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "engross",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "engrossing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "detritus",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "detriment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "detrimental",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "detrimentally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "domestically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "domesticate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "domestication",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "eccentrically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pathos",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tailor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tailor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "personalize/personalise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "personalization/personalisation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "limitless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "apprentice",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "apprentice",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "apprenticeship",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "nondescript",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "negligible",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "negligent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "negligently",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "principally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "altruism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "altruistic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "voluntarily",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "reap",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "paternal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "maternal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "maternalistic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "paternalistic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "provisions",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "injustice",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impoverished",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unsustainable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unsustainably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sustainably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cynic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cynical",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cynically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cynicism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sarcasm",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sarcastic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sarcastically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "misplace",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "symptomatic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "degrade",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "degrading",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "degradation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "discourse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hedgehog",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "nocturnal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "conviction",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "latent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "snooze",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "classy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wrench",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "intuit",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "marginal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "crude",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "crudely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "strapping",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "scoff",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fiddly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fiddler",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unmusical",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unmusically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "repertory",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "concerto",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fanatic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fanatic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fanatically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "acoustically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "acoustic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "acoustics",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "compromised",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "daunt",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "daunting",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "realist",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "realism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "recess",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "recess",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "recessive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "prolific",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "prolifically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "proliferate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fragmentation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "astray",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "naive",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "naively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "naivety",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "impervious",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ludicrous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ludicrously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cost-effective",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gruesomely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "envisage",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "buffer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "buffer",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "irate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "irately",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "docile",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "docilely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fiend",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fiendish",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fiendishly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "transfix",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gypsy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "temperament",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "temperamental",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "temperamentally",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "disillusionment",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "demise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "raunchy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "raunchily",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "overdraft",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "overdraft",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "synopsis",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "renown",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "contested",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "occupational",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ventilate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ventilation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "occupant",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "homely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bureaucratically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "adjustable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "versatility",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "stimuli",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "uninspiring",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "mutually",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "somber/sombre",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "somberly/sombrely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dislodge",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "carpentry",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "transit",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "plummet",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "demography",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "demographically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "prophet",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "prophetic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "paywall",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "firewall",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "invoice",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "demolition",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "socialization",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "antiquated",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "restoration",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "restorative",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "rotate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "coupled",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "itinerary",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "charter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "charter",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "resilience",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "magnetism",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "magnetically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "credibly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "credibility",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "credential",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "acutely",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fissure",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pendulum",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pendulous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "suspension",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "squander",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "adjoin",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "adjoining",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wizened",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "graft",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "orchard",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "seedling",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tract",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "folktale",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sprout",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sprout",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hypocrisy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hypocrite",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hypocritical",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "hypocritically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "midwife",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "commercially",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "uniformity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "numb",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "numb",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tastebud",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "retrace",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insubordinate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insubordination",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "insubordinately",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "subordinate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "primitively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "expedite",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "contextual",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "contextually",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "riveting",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "debut",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "debut",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "turmoil",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unscathing",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "convoluted",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "undaunted",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gutsy",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "deprivation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "farce",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "portrayal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "elude",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "incisor",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "incision",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "chisel",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "chiselled",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "gnaw",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "elongate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "telltale",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cavity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "glean",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "niche",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "somersault",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "somersault",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exhilarate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exhilarating",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exhilaration",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "physicality",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unsettling",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unsettle",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "suburbia",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "dramatist",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "characterization/characterisation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quirky",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "quirky",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "ingenuity",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "panorama",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "panoramic",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "benign",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "benignly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "explosively",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bequeath",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "synthetically",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "lackluster/lacklustre",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "appall/appal",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "appalling",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "appallingly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "pounce",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "abound",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "sap",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "monotonous",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "monotonously",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "monotony",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "turn to",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "plaque",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "neutralize/neutralise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "neutralization/neutralisation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "salivate",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "cessation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remorse",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remorseless",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remorsefully",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "remorselessly",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexcusable",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexcusably",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "inexhaustible",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "unassisted",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "heighten",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "fixture",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bulk",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bulky",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "bulk up",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "digitalize/digitalise",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "digitalization/digitalisation",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "mark-up",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "complementary",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "wares",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "testament",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "succulent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "succulent",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "succulently",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tranquil",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "tranquility",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "spartan",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "peninsula",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "billiards",
+    "cefr_level": "C1"
+  },
+  {
+    "word": "exude",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "envisage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "headmistress",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mien",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "timidity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "concurrence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unpromising",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "teem",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "marvel",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "corpse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "apprentice",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "constrained",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "quirk",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "eccentricity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "locomotive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "locomotion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "individualism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "enthuse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "belligerent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "belligerence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stoicism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recluse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reclusive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "metalled",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "oblique",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "facsimile",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "shamble",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "whir",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blight",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blight",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "puritanical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brood",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brood",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disdainful",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "zoologist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "zoology",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "encumbrance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "encumber",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hypothesis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hypothesize",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hypothetical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "parasitic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "plumage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "utilitarian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "predilection",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "commensurate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "commensurately",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vindicate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vindication",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "poise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "minster",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wrack",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ironic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "predecessor",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "callous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "callously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "derelict",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "derelict",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ferocity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "evokingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "equable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "extant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "denounce",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "denunciation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "requisition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "substantiate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inscrutable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indulgence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indulgently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "laudatory",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "laud",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "glitz",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "athleticism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "daunt",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "daunting",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "acreage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "affectation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "imposition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stipulate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stipulation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "allot",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "anticlimactically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "forfeiture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blitz",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blitz",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "primeval",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tenacity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tenacious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tenaciously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "genomic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "genomically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "capacious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "utilitarian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "utilization/utilisation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unequivocal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unequivocally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "provocation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tedium",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "circumnavigate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "circumnavigation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "liaise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contractual",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contractually",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "repute",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "abject",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "sheaf",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "articulation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "spurious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "spuriously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "posture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "calorific",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fabulate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fabulation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "octogenarian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "voracity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brandish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "repose",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "repose",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "encumber",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "encumbrance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unencumbered",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "buffoonery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gauche",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "domesticity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "accrue",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proliferation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blandishment",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "anthropological",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "anthropologically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "carbonize/carbonise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "monastic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "graft",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "midwifery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "adornment",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conjecture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conjecture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "malleable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "malleability",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ore",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gale",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "promenade",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "testimonial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "distill",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "distillation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "informant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vis-a-vis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "overlay",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nostalgia",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nostalgically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "grievance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deprivation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "residue",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "residual",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "physiological",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "physiologically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "familiarize/familiarise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "methodology",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "methodological",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "methodologically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proportional",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proportionally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "habitation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inartistic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ornate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "modernism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "presuppose",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "presupposition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "centralized/centralised",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "envisage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contextual",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contextually",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "archival",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "diffuse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "diffuse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "egalitarian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "egalitarian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hindsight",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "materialize/materialise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "materialization/materialisation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disperse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dispersal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stabilize/stabilise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pervasive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pervasiveness",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "autonomous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "autonomously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "outmoded",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "notoriously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "notoriety",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "menial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "insular",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "antidote",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "posture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "postural",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "posturing",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "revelatory",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prostrate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prostrate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "haphazard",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "haphazardly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deficient",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deficiently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "delicatessen",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "muscle-bound",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "posit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cocoon",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "chrysalis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ignominious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ignominiously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "euphoria",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "euphorically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "relegate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "succumb",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "treacherous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "treacherously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "treachery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "maggot",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "palate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hermit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hermetic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "irrelevancy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mariner",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "helm",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "autopilot",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "eminence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "eminent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "preeminent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mold/mould",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unsuspected",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "paralyze/paralyse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "paralyzingly/paralysingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "glory in",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "decentralize/decentralise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "preoccupation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "drudgery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pressurize",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pressurization",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "intermediary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hotelier",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "denote",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "denotation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "declination",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vocational",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "spatial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "spatially",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "extracurricular",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "extracurricular",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "encompass",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "all-encompassing",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "accountability",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "frolic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "minefield",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "side-step",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "abundantly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "anarchic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "crystallize/crystallise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "crystallization/crystallisation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prescriptive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "slab",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "retrospective",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "retrospection",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wordage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brevity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "uncanny",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tactical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tactically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gambit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "bauble",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "correlate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "correlation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "correlate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contraption",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mesh",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "enabler",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fluctuate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fluctuation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lyricist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lyrical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lyrically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "bona fide",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "moribund",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "solicit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "philanthropy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "philanthropist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "philanthropic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "philanthropically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "precocious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "precociously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wordsmith",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "connote",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "connotation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "herald",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "herald",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "philistine",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "innuendo",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inducement",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lament",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lamentation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conduit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "chronology",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "chronologically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proposition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "flagging",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "caffeinate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cosmic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "beneficiary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recuperate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recuperation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recuperative",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cultish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "seismic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "irrevocable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "slither",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unnerve",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unnerving",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unnervingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "protrude",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "protrusion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "qualitative",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "procedural",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "procedural",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "demystify",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "demystification",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proprietary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proprietorial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tantamount",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "floodgates",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "imperceptibly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hapless",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "catastrophically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wayward",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blurb",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "provincial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indolent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indolently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indolence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "taste-maker",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deviant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deviant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deviantly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "engender",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emolument",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "munificence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "posterity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "venomous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "venomously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "choreography",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "choreographical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "archetype",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "archetypal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dissension",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "exalted",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "exaltedly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "adept",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "adept",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hitherto",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "angst",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "angsty",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "drabness",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "melodious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "melodiously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "magpie",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "melancholy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "melancholy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "meteorology",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "meteorological",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brink",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unsurpassed",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "topple",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "intrinsic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "intrinsically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "merit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "merit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "promotable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "clinch",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "anonymity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "splinter",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reproach",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disseminate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dissemination",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dissemble",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mangle",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "bereft",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "bereftly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "solipsism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "soliloquize",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mutinous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mutinously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prissy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reptilian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "diminish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "undiminishing",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contagion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "homestead",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "computerize/computerise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incumbent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incumbent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recumbent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nonchalant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nonchalantly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mesmeric",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stultify",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stultifyingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wallow",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ponderous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ponderously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lassitude",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vicinity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ebb",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "antediluvian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ostensible",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ostensibly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interlocking",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "undemonstrative",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "undemonstratively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "menace",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "menacingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "calamity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "calamitous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "calamitously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nigh",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "austere",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "austerely",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "austerity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "idiosyncrasy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "idiosyncratic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "idiomatic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "idiomatically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "kinetic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "kinetically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unmediated",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mediate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unharried",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "figuratively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "exorcism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "exorcist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mundanity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mediocrity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dubiously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "antithesis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "antithetical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "detract",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interrogate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interrogation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interrogative",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interrogatively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "perverse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "perversity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "opaque",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "opacity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "remit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "remittance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "recourse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pedestal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lurid",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "luridly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fallacy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rife",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mercenary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "polysyllabic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "syllabic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "superfluous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "superfluously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "snippet",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "practitioner",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ephemeral",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ephemera",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ephemerality",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "summarily",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "infallibly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "infallible",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "infallibility",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "depravity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "depraved",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deprecate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deprecatingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "revile",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "revulsion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "meager/meagre",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "arcane",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "arcanely",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "porten",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "divination",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "flit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prone",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "scavenger",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vermin",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "totemic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emulate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emulation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "avian",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vestigial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vestigially",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lament",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "lamentation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brouhaha",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "magnate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "magnanimous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "magnanimously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "magnanimity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "whirlwind",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "secular",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "secularly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "euphemism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "euphemistic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "euphemistically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "condensation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "redundancy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "redundantly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "colloquial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "colloquium",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "colloquially",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "allusion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "allude",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disparage",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disparaging",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disparagingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "disparagement",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "topography",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "topographical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "topographically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "confabulate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "confabulation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "surrealism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contrive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "malice",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "maliciously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cinematography",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cinematographer",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "diligently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "turret",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "impressionistic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "impressionistically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "snobbery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "parochial",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gravitate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gravitational",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gravitationally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "consternation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "haughty",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "haughtily",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "axiom",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "axiomatic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "attrition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "enduringly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reissue",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "sulphuric",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "solitary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "solitary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "solitariness",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "adhesion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proscribe",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proscription",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "crony",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingrate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rickety",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "consign",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "consignment",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fete",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dole out",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "opulent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "opulence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "opulently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "plutocrat",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "averse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "edify",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "edification",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "sterility",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rhetoric",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rhetorical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rhetorically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "flighty",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "flightiness",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "brimstone",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "impeccably",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "romp",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "romper",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingratiate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingratiating",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingratiatingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "shimmer",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cull",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "swivel",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "relinquish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "quiver",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "quiver",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "sandwiched",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mottled",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "epoxy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resin",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "sedately",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "angular",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "angularity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dampen",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "buccaneer",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "buccaneer",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conglomerate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cay",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "singe",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cordon",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fabled",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "infernal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "infernally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "presentational",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "plume",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "happenstance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reconciliation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conciliatory",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "conciliation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "preconception",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "baroque",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "virginal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "elephantine",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "condone",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "commode",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unobtrusive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unobtrusively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unobtrusiveness",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "compellingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hauntingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "scholarly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cognitive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "artifact",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "preservationist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "qualm",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "besiege",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cloister",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cloistered",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "annex",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "annex",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resuscitate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resuscitation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ravish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fabrication",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "patchy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "patchily",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resounding",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resoundingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "resound",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ordain",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inchoate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inchoately",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "elated",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "elation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hysteria",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hysterical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hysterically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "jarring",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "suffuse",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "totter",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "pyre",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contemptuous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "contemptuously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "forlorn",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "forlornly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rebuke",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rebuke",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "abhorrent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "abhor",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "abhorrently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "aberration",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emulsify",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emulsification",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "emulsifier",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "additive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "additive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "confection",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proximal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vandalize",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "feign",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "paradoxical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "paradoxically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "laryngitis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stringent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "astringent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "stringently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "standing",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "economize/economise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "breadwinner",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cosset",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "counsel",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "misdemeanor/misdemanour",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "torrential",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "banish",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "banishment",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "knack",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fruition",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tantalize/tantalise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tantalizingly/tantalisingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "maelstrom",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "vortex",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "shoal",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "collide",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "collider",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "edifice",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "thicket",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "leaven",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "leavening",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "exhibitionist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "interweave",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "burgeoning",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indiscrete",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "indiscretion",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "telescopic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "telescopically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "amorphous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "amorphously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hamper",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proliferate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "proliferation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "selectivity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "fractious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mystique",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "assimilate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "assimilation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "verbatim",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "verbatim",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "verily",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "veritable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "verisimilitude",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "artifice",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "advantageous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unfeasible",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unfeasibly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "behest",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "virtuoso",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "virtuosity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "crippling",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "nascent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "smattering",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wheeze",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "neophyte",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "formidably",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "squint",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hoist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "flatout",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "buzzard",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "bogus",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "derision",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "derisive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "derisively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "truism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prurient",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "prurience",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tetchy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "agile",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "agility",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "aghast",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "dwarfism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "etch",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "etching",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rapture",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rapturous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rapturously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ad lib",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ad-lib",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "improvisational",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "acrobatics",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "acrobatically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "acrobatic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "arduous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ardor/ardour",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "arduously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "counterproductive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "counterproductively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "instantaneous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "instantaneously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mull over",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ruminate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "rumination",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ruminant",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ruminative",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "armory/armoury",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "apostle",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blubber",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "blubbery",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "trifle",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "trifle",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "eke out",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "paramount",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "squirm",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "squirmy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "floe",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "embodiment",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wistful",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wistfully",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "mercantile",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "skew",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "subsist",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "subsistence",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "subsidize",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "confrontational",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "confrontationally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "gout",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hinder",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "myriad",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "histrionic",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "histrionically",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "marketability",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "promotable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tacit",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tacitly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "taciturn",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "taciturnity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "surreptitious",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "surreptitiously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "allegory",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "allegorical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "seedy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "punitive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "punitively",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "milieu",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "self-aggrandizement/self-aggrandisement",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unadulterated",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "adulterate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "patronize/patronise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "patronizing/patronising",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "patronizingly/patronisingly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cogent",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "cogently",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "relegate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incongruous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incongruously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incongruity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "deaden",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "attuned",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "attributive",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ecotourism",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "farcical",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incise",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "incipient",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "echolocation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "echolocate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reverb",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "reverberation",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingenuous",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "ingenuously",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "impresario",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "elasticity",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "synthesis",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "salivary",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "hypnotherapy",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "wholly",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "remorseful",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "remonstrate",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "remonstrance",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unexcused",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unexceptionally",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "unexceptional",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inexorable",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inexorably",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "inexorability",
+    "cefr_level": "C2"
+  },
+  {
+    "word": "tranquilize/tranquilise",
+    "cefr_level": "C2"
   }
 ]
