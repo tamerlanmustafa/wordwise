@@ -171,21 +171,6 @@ const LoadingBox = styled(Box)(() => ({
   padding: '8px 0',
 }));
 
-// Skeleton placeholder for sentence examples to prevent layout shifts
-const ExampleSkeleton = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.mode === 'light'
-    ? alpha(theme.palette.action.hover, 0.4)
-    : alpha(theme.palette.action.hover, 0.2),
-  borderRadius: theme.shape.borderRadius,
-  padding: '12px 14px',
-  marginTop: 12,
-  minHeight: 60,
-  borderLeft: `3px solid ${theme.palette.action.disabled}`,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-}));
-
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -252,6 +237,7 @@ export const WordRow = memo<WordRowProps>(({
   // Sentence examples state
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[] | null>(null);
   const [isLoadingSentences, setIsLoadingSentences] = useState(false);
+  const [hasFetchedSentences, setHasFetchedSentences] = useState(false);
 
   // Idiom info state (for words that are part of idioms)
   const [relatedIdioms, setRelatedIdioms] = useState<IdiomInfo[] | null>(null);
@@ -271,13 +257,7 @@ export const WordRow = memo<WordRowProps>(({
 
     // Fetch translation if not already available
     if (!translation) {
-      // Deferred loading state - only show spinner if taking > 150ms
-      let showLoadingTranslation = false;
-      const translationLoadingTimeout = setTimeout(() => {
-        showLoadingTranslation = true;
-        setIsLoadingTranslation(true);
-      }, 150);
-
+      setIsLoadingTranslation(true);
       onTranslate(word.word)
         .then((result) => {
           if (result) {
@@ -289,37 +269,27 @@ export const WordRow = memo<WordRowProps>(({
           console.error('Translation error:', err);
         })
         .finally(() => {
-          clearTimeout(translationLoadingTimeout);
-          if (showLoadingTranslation) {
-            setIsLoadingTranslation(false);
-          }
+          setIsLoadingTranslation(false);
         });
     }
 
     // Fetch sentence examples if movieId and targetLang are available
-    if (movieId && targetLang) {
-      // Deferred loading state - only show spinner if taking > 150ms
-      let showLoadingSentences = false;
-      const sentencesLoadingTimeout = setTimeout(() => {
-        showLoadingSentences = true;
-        setIsLoadingSentences(true);
-      }, 150);
-
+    if (movieId && targetLang && !hasFetchedSentences) {
+      setIsLoadingSentences(true);
       fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.examples && Array.isArray(data.examples)) {
             setSentenceExamples(data.examples);
           }
+          setHasFetchedSentences(true);
         })
         .catch((err) => {
           console.error('Failed to fetch sentence examples:', err);
+          setHasFetchedSentences(true);
         })
         .finally(() => {
-          clearTimeout(sentencesLoadingTimeout);
-          if (showLoadingSentences) {
-            setIsLoadingSentences(false);
-          }
+          setIsLoadingSentences(false);
         });
     }
 
@@ -367,7 +337,8 @@ export const WordRow = memo<WordRowProps>(({
   }, [onContentLoad, virtualIndex]);
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
-  const isLoading = isLoadingTranslation || isLoadingSentences;
+  // Only used for translation loading indicator now
+  void isLoadingSentences; // Keep for potential future use
 
   // Highlight the target word in sentence
   const highlightWord = (sentence: string, targetWord: string) => {
@@ -507,18 +478,8 @@ export const WordRow = memo<WordRowProps>(({
             )}
           </TranslationBox>
 
-          {/* Sentence Examples */}
-          {isLoadingSentences ? (
-            // Show skeleton placeholders to reserve space
-            <>
-              <ExampleSkeleton>
-                <CircularProgress size={14} />
-                <Typography variant="body2" color="text.secondary">
-                  Loading examples...
-                </Typography>
-              </ExampleSkeleton>
-            </>
-          ) : sentenceExamples && sentenceExamples.length > 0 ? (
+          {/* Sentence Examples - no loading state to prevent flicker */}
+          {sentenceExamples && sentenceExamples.length > 0 ? (
             sentenceExamples.map((example, idx) => (
               <ExampleCard key={idx}>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
@@ -531,7 +492,7 @@ export const WordRow = memo<WordRowProps>(({
                 )}
               </ExampleCard>
             ))
-          ) : !isLoading && movieId && (
+          ) : hasFetchedSentences && movieId && (
             <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
               No sentence examples available
             </Typography>
