@@ -55,6 +55,8 @@ const DropdownPanel = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.wordRow.panelBg,
   borderTop: `1px solid ${theme.palette.wordRow.panelBorder}`,
   padding: '16px 20px 20px 56px',
+  // Reserve minimum space to reduce layout shifts during loading
+  minHeight: 80,
   // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '12px 12px 16px 12px',
@@ -167,6 +169,21 @@ const LoadingBox = styled(Box)(() => ({
   alignItems: 'center',
   gap: 8,
   padding: '8px 0',
+}));
+
+// Skeleton placeholder for sentence examples to prevent layout shifts
+const ExampleSkeleton = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.mode === 'light'
+    ? alpha(theme.palette.action.hover, 0.4)
+    : alpha(theme.palette.action.hover, 0.2),
+  borderRadius: theme.shape.borderRadius,
+  padding: '12px 14px',
+  marginTop: 12,
+  minHeight: 60,
+  borderLeft: `3px solid ${theme.palette.action.disabled}`,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
 }));
 
 // ============================================================================
@@ -424,7 +441,7 @@ export const WordRow = memo<WordRowProps>(({
       {/* Dropdown panel - slides down below the row */}
       <Collapse
         in={isExpanded}
-        timeout="auto"
+        timeout={250}
         onEntered={handleCollapseEntered}
         onExited={handleCollapseExited}
         unmountOnExit
@@ -474,12 +491,15 @@ export const WordRow = memo<WordRowProps>(({
 
           {/* Sentence Examples */}
           {isLoadingSentences ? (
-            <LoadingBox>
-              <CircularProgress size={14} />
-              <Typography variant="body2" color="text.secondary">
-                Loading examples...
-              </Typography>
-            </LoadingBox>
+            // Show skeleton placeholders to reserve space
+            <>
+              <ExampleSkeleton>
+                <CircularProgress size={14} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading examples...
+                </Typography>
+              </ExampleSkeleton>
+            </>
           ) : sentenceExamples && sentenceExamples.length > 0 ? (
             sentenceExamples.map((example, idx) => (
               <ExampleCard key={idx}>
