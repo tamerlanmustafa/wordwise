@@ -271,7 +271,13 @@ export const WordRow = memo<WordRowProps>(({
 
     // Fetch translation if not already available
     if (!translation) {
-      setIsLoadingTranslation(true);
+      // Deferred loading state - only show spinner if taking > 150ms
+      let showLoadingTranslation = false;
+      const translationLoadingTimeout = setTimeout(() => {
+        showLoadingTranslation = true;
+        setIsLoadingTranslation(true);
+      }, 150);
+
       onTranslate(word.word)
         .then((result) => {
           if (result) {
@@ -283,13 +289,22 @@ export const WordRow = memo<WordRowProps>(({
           console.error('Translation error:', err);
         })
         .finally(() => {
-          setIsLoadingTranslation(false);
+          clearTimeout(translationLoadingTimeout);
+          if (showLoadingTranslation) {
+            setIsLoadingTranslation(false);
+          }
         });
     }
 
     // Fetch sentence examples if movieId and targetLang are available
     if (movieId && targetLang) {
-      setIsLoadingSentences(true);
+      // Deferred loading state - only show spinner if taking > 150ms
+      let showLoadingSentences = false;
+      const sentencesLoadingTimeout = setTimeout(() => {
+        showLoadingSentences = true;
+        setIsLoadingSentences(true);
+      }, 150);
+
       fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
         .then((res) => res.json())
         .then((data) => {
@@ -301,7 +316,10 @@ export const WordRow = memo<WordRowProps>(({
           console.error('Failed to fetch sentence examples:', err);
         })
         .finally(() => {
-          setIsLoadingSentences(false);
+          clearTimeout(sentencesLoadingTimeout);
+          if (showLoadingSentences) {
+            setIsLoadingSentences(false);
+          }
         });
     }
 
