@@ -92,8 +92,8 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // Track scroll margin to avoid recalculation issues
   const [scrollMargin, setScrollMargin] = useState(0);
 
-  // Track expanded rows for dynamic sizing
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  // Track single expanded row (accordion pattern - only one at a time)
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   // Update scroll margin when parent ref is set
   useEffect(() => {
@@ -108,42 +108,35 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   const virtualizer = useWindowVirtualizer({
     count: totalCount,
     estimateSize: useCallback((index: number) => {
-      // Use conservative estimates for expanded rows
+      // Accordion pattern: only one row expanded at a time
       // For idioms tab, use smaller estimate since no sentence examples
       // For regular tabs, use base estimate (translation only) - will grow if examples load
-      if (expandedRows.has(index)) {
+      if (expandedIndex === index) {
         return isIdiomsTab ? ROW_HEIGHT_EXPANDED_IDIOM : ROW_HEIGHT_EXPANDED_BASE;
       }
       return ROW_HEIGHT_COLLAPSED;
-    }, [expandedRows, isIdiomsTab]),
+    }, [expandedIndex, isIdiomsTab]),
     overscan: OVERSCAN,
     scrollMargin,
     // Enable dynamic measurements - virtualizer will measure actual DOM height
-    // This will auto-adjust to ROW_HEIGHT_EXPANDED_MAX if sentence examples are present
     measureElement: (el) => el?.getBoundingClientRect().height ?? ROW_HEIGHT_COLLAPSED
   });
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Callback to notify when a row expands/collapses
+  // Callback to notify when a row expands/collapses (accordion pattern)
   const handleRowExpandChange = useCallback((index: number, isExpanded: boolean) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev);
-      if (isExpanded) {
-        next.add(index);
-      } else {
-        next.delete(index);
-      }
-      return next;
-    });
+    // Accordion: toggle clicked row, or collapse if clicking the same row
+    setExpandedIndex(prev => isExpanded ? index : (prev === index ? null : prev));
 
-    // When collapsing, trigger immediate remeasure so virtualizer uses collapsed height
-    if (!isExpanded) {
-      // Use requestAnimationFrame to ensure state has updated
-      requestAnimationFrame(() => {
+    // Force remeasure during animation - measure at multiple intervals
+    // to track height changes as MUI Collapse animates
+    const measureTimes = [0, 50, 100, 150, 200, 300];
+    measureTimes.forEach(delay => {
+      setTimeout(() => {
         virtualizer.measure();
-      });
-    }
+      }, delay);
+    });
   }, [virtualizer]);
 
   // ============================================================================
@@ -181,10 +174,16 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   // STABLE ROW CALLBACKS
   // ============================================================================
 
-  // Callback when async content (translation/examples) finishes loading
+  // Callback when async content (translation/examples) finishes loading or animation completes
   const handleContentLoad = useCallback((_index: number) => {
-    // Remeasure the row after content loads
-    requestAnimationFrame(() => virtualizer.measure());
+    // Remeasure the row after content loads or animation completes
+    // Measure at multiple intervals to catch any final layout adjustments
+    const measureTimes = [0, 50, 100, 150];
+    measureTimes.forEach(delay => {
+      setTimeout(() => {
+        virtualizer.measure();
+      }, delay);
+    });
   }, [virtualizer]);
 
   const handleSaveWord = useCallback((word: string) => {
@@ -286,6 +285,7 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 isSaved={isSaved}
                 isLearned={isLearned}
                 canToggleLearned={canToggleLearned}
+                isExpanded={expandedIndex === virtualItem.index}
                 onSave={handleSaveWord}
                 onToggleLearned={handleToggleLearned}
                 onTranslate={onTranslate}

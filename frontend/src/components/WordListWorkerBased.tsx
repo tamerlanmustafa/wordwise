@@ -30,7 +30,7 @@ import {
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import { Link } from 'react-router-dom';
-import { VirtualizedWordList } from './VirtualizedWordList';
+import { SimpleWordList } from './SimpleWordList';
 import { useWorkerVocabularyFeed } from '../hooks/useWorkerVocabularyFeed';
 import { translateText } from '../services/scriptService';
 import type { WordFrequency, CEFRLevel } from '../types/script';
@@ -257,7 +257,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
           </Box>
         ) : (
           /* Worker-based virtualized list */
-          <VirtualizedWordList
+          <SimpleWordList
             words={visibleWords}
             totalCount={totalCount}
             loadedCount={loadedCount}
@@ -273,7 +273,6 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             otherMovies={otherMovies}
             movieId={movieId}
             targetLang={targetLanguage}
-            containerRef={listContainerRef}
             getIdiomsForWord={getIdiomsForWord}
             idiomsMap={idiomsMap}
             isIdiomsTab={isIdiomsTab}
