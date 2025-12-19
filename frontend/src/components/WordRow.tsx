@@ -454,7 +454,7 @@ export const WordRow = memo<WordRowProps>(({
                     fontStyle: isUntranslatable ? 'italic' : 'normal'
                   }}
                 >
-                  {isUntranslatable ? '(same as source)' : translation}
+                  {isUntranslatable ? '(same as source)' : translation.toLowerCase()}
                 </Typography>
                 {translationProvider && (
                   <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
@@ -478,7 +478,7 @@ export const WordRow = memo<WordRowProps>(({
                 </Typography>
                 {example.translation && (
                   <Typography variant="caption" color="text.secondary">
-                    {example.translation}
+                    {example.translation.toLowerCase()}
                   </Typography>
                 )}
               </ExampleCard>
