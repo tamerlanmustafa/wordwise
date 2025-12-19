@@ -348,11 +348,12 @@ export const WordRow = memo<WordRowProps>(({
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
   const highlightWord = (sentence: string, targetWord: string) => {
-    const regex = new RegExp(`\\b(${targetWord})\\b`, 'gi');
-    const parts = sentence.split(regex);
+    const targetLower = targetWord.toLowerCase();
+    const regex = new RegExp(`\\b(${targetLower})\\b`, 'gi');
+    const parts = sentence.toLowerCase().split(regex);
 
     return parts.map((part, i) => {
-      if (part.toLowerCase() === targetWord.toLowerCase()) {
+      if (part === targetLower) {
         return (
           <Typography
             key={i}
