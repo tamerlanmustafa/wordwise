@@ -78,7 +78,12 @@ class ExampleTranslationService:
                     logger.warning(f"Rate limit hit, waiting 2 seconds before retry...")
                     await asyncio.sleep(2)
 
-                logger.error(f"Failed to translate sentence: {e}")
+                # Log translation failures only once to avoid log spam
+                if not hasattr(self, '_translation_error_logged'):
+                    logger.error(f"Failed to translate sentence: {e}")
+                    logger.warning("Further translation errors will be suppressed to avoid log spam")
+                    self._translation_error_logged = True
+
                 results.append({
                     'sentence': sentence,
                     'translation': sentence,  # Fallback to original
