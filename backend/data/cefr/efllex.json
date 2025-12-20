@@ -3304,7 +3304,7 @@
     "cefr": "A2"
   },
   {
-    "word": "bird’s-eye",
+    "word": "bird\u2019s-eye",
     "cefr": "C1"
   },
   {
@@ -4444,7 +4444,7 @@
     "cefr": "C1"
   },
   {
-    "word": "café",
+    "word": "caf\u00e9",
     "cefr": "A1"
   },
   {
@@ -5400,7 +5400,7 @@
     "cefr": "A1"
   },
   {
-    "word": "children’s-wear",
+    "word": "children\u2019s-wear",
     "cefr": "B2"
   },
   {
@@ -5756,7 +5756,7 @@
     "cefr": "C1"
   },
   {
-    "word": "cliché",
+    "word": "clich\u00e9",
     "cefr": "C1"
   },
   {
@@ -7640,7 +7640,7 @@
     "cefr": "B2"
   },
   {
-    "word": "crêpe",
+    "word": "cr\u00eape",
     "cefr": "C1"
   },
   {
@@ -12032,7 +12032,7 @@
     "cefr": "A2"
   },
   {
-    "word": "fiancé",
+    "word": "fianc\u00e9",
     "cefr": "B1"
   },
   {
@@ -24068,7 +24068,7 @@
     "cefr": "A1"
   },
   {
-    "word": "piñata",
+    "word": "pi\u00f1ata",
     "cefr": "B1"
   },
   {
@@ -27412,7 +27412,7 @@
     "cefr": "B2"
   },
   {
-    "word": "risqué",
+    "word": "risqu\u00e9",
     "cefr": "C1"
   },
   {
@@ -27508,7 +27508,7 @@
     "cefr": "A1"
   },
   {
-    "word": "rock’n’roll",
+    "word": "rock\u2019n\u2019roll",
     "cefr": "A2"
   },
   {
@@ -27748,7 +27748,7 @@
     "cefr": "B2"
   },
   {
-    "word": "résumé",
+    "word": "r\u00e9sum\u00e9",
     "cefr": "B2"
   },
   {
@@ -44022,5 +44022,6361 @@
   {
     "word": "zoom",
     "cefr": "B2"
+  },
+  {
+    "word": "timid",
+    "cefr": "C1"
+  },
+  {
+    "word": "concur",
+    "cefr": "C1"
+  },
+  {
+    "word": "marvel",
+    "cefr": "C1"
+  },
+  {
+    "word": "enviable",
+    "cefr": "C1"
+  },
+  {
+    "word": "psychiatric",
+    "cefr": "C1"
+  },
+  {
+    "word": "corps",
+    "cefr": "C1"
+  },
+  {
+    "word": "juvenile",
+    "cefr": "C1"
+  },
+  {
+    "word": "juvenile",
+    "cefr": "C1"
+  },
+  {
+    "word": "jurisdiction",
+    "cefr": "C1"
+  },
+  {
+    "word": "accustomed",
+    "cefr": "C1"
+  },
+  {
+    "word": "trauma",
+    "cefr": "C1"
+  },
+  {
+    "word": "traumatic",
+    "cefr": "C1"
+  },
+  {
+    "word": "revealing",
+    "cefr": "C1"
+  },
+  {
+    "word": "sanctity",
+    "cefr": "C1"
+  },
+  {
+    "word": "norms",
+    "cefr": "C1"
+  },
+  {
+    "word": "quirk",
+    "cefr": "C1"
+  },
+  {
+    "word": "oddity",
+    "cefr": "C1"
+  },
+  {
+    "word": "compel",
+    "cefr": "C1"
+  },
+  {
+    "word": "compulsion",
+    "cefr": "C1"
+  },
+  {
+    "word": "assertion",
+    "cefr": "C1"
+  },
+  {
+    "word": "psyche",
+    "cefr": "C1"
+  },
+  {
+    "word": "conformity",
+    "cefr": "C1"
+  },
+  {
+    "word": "unconventional",
+    "cefr": "C1"
+  },
+  {
+    "word": "congregate",
+    "cefr": "C1"
+  },
+  {
+    "word": "self-conscious",
+    "cefr": "C1"
+  },
+  {
+    "word": "stoke",
+    "cefr": "C1"
+  },
+  {
+    "word": "dynamically",
+    "cefr": "C1"
+  },
+  {
+    "word": "perpetuate",
+    "cefr": "C1"
+  },
+  {
+    "word": "naturalness",
+    "cefr": "C1"
+  },
+  {
+    "word": "exhibitionist",
+    "cefr": "C1"
+  },
+  {
+    "word": "refreshingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "effortless",
+    "cefr": "C1"
+  },
+  {
+    "word": "vegetation",
+    "cefr": "C1"
+  },
+  {
+    "word": "respite",
+    "cefr": "C1"
+  },
+  {
+    "word": "suffice",
+    "cefr": "C1"
+  },
+  {
+    "word": "purity",
+    "cefr": "C1"
+  },
+  {
+    "word": "comprise",
+    "cefr": "C1"
+  },
+  {
+    "word": "darkroom",
+    "cefr": "C1"
+  },
+  {
+    "word": "induct",
+    "cefr": "C1"
+  },
+  {
+    "word": "induction",
+    "cefr": "C1"
+  },
+  {
+    "word": "geological",
+    "cefr": "C1"
+  },
+  {
+    "word": "geologically",
+    "cefr": "C1"
+  },
+  {
+    "word": "specimen",
+    "cefr": "C1"
+  },
+  {
+    "word": "explanatory",
+    "cefr": "C1"
+  },
+  {
+    "word": "ordinarily",
+    "cefr": "C1"
+  },
+  {
+    "word": "formulate",
+    "cefr": "C1"
+  },
+  {
+    "word": "resin",
+    "cefr": "C1"
+  },
+  {
+    "word": "cleanly",
+    "cefr": "C1"
+  },
+  {
+    "word": "endorsement",
+    "cefr": "C1"
+  },
+  {
+    "word": "stretching",
+    "cefr": "C1"
+  },
+  {
+    "word": "continuity",
+    "cefr": "C1"
+  },
+  {
+    "word": "shambles",
+    "cefr": "C1"
+  },
+  {
+    "word": "claustrophobia",
+    "cefr": "C1"
+  },
+  {
+    "word": "headstrong",
+    "cefr": "C1"
+  },
+  {
+    "word": "tact",
+    "cefr": "C1"
+  },
+  {
+    "word": "tactful",
+    "cefr": "C1"
+  },
+  {
+    "word": "tactfully",
+    "cefr": "C1"
+  },
+  {
+    "word": "blister",
+    "cefr": "C1"
+  },
+  {
+    "word": "blister",
+    "cefr": "C1"
+  },
+  {
+    "word": "ego",
+    "cefr": "C1"
+  },
+  {
+    "word": "saloon",
+    "cefr": "C1"
+  },
+  {
+    "word": "beforehand",
+    "cefr": "C1"
+  },
+  {
+    "word": "slob",
+    "cefr": "C1"
+  },
+  {
+    "word": "unplug",
+    "cefr": "C1"
+  },
+  {
+    "word": "subtly",
+    "cefr": "C1"
+  },
+  {
+    "word": "brainwash",
+    "cefr": "C1"
+  },
+  {
+    "word": "brainwashing",
+    "cefr": "C1"
+  },
+  {
+    "word": "implicate",
+    "cefr": "C1"
+  },
+  {
+    "word": "malfunction",
+    "cefr": "C1"
+  },
+  {
+    "word": "wayside",
+    "cefr": "C1"
+  },
+  {
+    "word": "expire",
+    "cefr": "C1"
+  },
+  {
+    "word": "damply",
+    "cefr": "C1"
+  },
+  {
+    "word": "washtub",
+    "cefr": "C1"
+  },
+  {
+    "word": "apt to",
+    "cefr": "C1"
+  },
+  {
+    "word": "ornamental",
+    "cefr": "C1"
+  },
+  {
+    "word": "placid",
+    "cefr": "C1"
+  },
+  {
+    "word": "placidly",
+    "cefr": "C1"
+  },
+  {
+    "word": "unmanageable",
+    "cefr": "C1"
+  },
+  {
+    "word": "relinquish",
+    "cefr": "C1"
+  },
+  {
+    "word": "tedium",
+    "cefr": "C1"
+  },
+  {
+    "word": "exert",
+    "cefr": "C1"
+  },
+  {
+    "word": "extortion",
+    "cefr": "C1"
+  },
+  {
+    "word": "elaborate",
+    "cefr": "C1"
+  },
+  {
+    "word": "elaborate",
+    "cefr": "C1"
+  },
+  {
+    "word": "elaboration",
+    "cefr": "C1"
+  },
+  {
+    "word": "detestable",
+    "cefr": "C1"
+  },
+  {
+    "word": "suds",
+    "cefr": "C1"
+  },
+  {
+    "word": "prowl",
+    "cefr": "C1"
+  },
+  {
+    "word": "speculative",
+    "cefr": "C1"
+  },
+  {
+    "word": "peacock",
+    "cefr": "C1"
+  },
+  {
+    "word": "disdain",
+    "cefr": "C1"
+  },
+  {
+    "word": "reenact",
+    "cefr": "C1"
+  },
+  {
+    "word": "extravagance",
+    "cefr": "C1"
+  },
+  {
+    "word": "exploitation",
+    "cefr": "C1"
+  },
+  {
+    "word": "mechanism",
+    "cefr": "C1"
+  },
+  {
+    "word": "offspring",
+    "cefr": "C1"
+  },
+  {
+    "word": "implicate",
+    "cefr": "C1"
+  },
+  {
+    "word": "collaborator",
+    "cefr": "C1"
+  },
+  {
+    "word": "collaborative",
+    "cefr": "C1"
+  },
+  {
+    "word": "showy",
+    "cefr": "C1"
+  },
+  {
+    "word": "wrangle",
+    "cefr": "C1"
+  },
+  {
+    "word": "advantageous",
+    "cefr": "C1"
+  },
+  {
+    "word": "parasite",
+    "cefr": "C1"
+  },
+  {
+    "word": "fanciful",
+    "cefr": "C1"
+  },
+  {
+    "word": "poise",
+    "cefr": "C1"
+  },
+  {
+    "word": "insightful",
+    "cefr": "C1"
+  },
+  {
+    "word": "viciously",
+    "cefr": "C1"
+  },
+  {
+    "word": "withdrawn",
+    "cefr": "C1"
+  },
+  {
+    "word": "torturous",
+    "cefr": "C1"
+  },
+  {
+    "word": "depiction",
+    "cefr": "C1"
+  },
+  {
+    "word": "upheaval",
+    "cefr": "C1"
+  },
+  {
+    "word": "shortlist",
+    "cefr": "C1"
+  },
+  {
+    "word": "shortlist",
+    "cefr": "C1"
+  },
+  {
+    "word": "pertinent",
+    "cefr": "C1"
+  },
+  {
+    "word": "pertain to",
+    "cefr": "C1"
+  },
+  {
+    "word": "blockbuster",
+    "cefr": "C1"
+  },
+  {
+    "word": "resonate",
+    "cefr": "C1"
+  },
+  {
+    "word": "sequel",
+    "cefr": "C1"
+  },
+  {
+    "word": "alignment",
+    "cefr": "C1"
+  },
+  {
+    "word": "persuasively",
+    "cefr": "C1"
+  },
+  {
+    "word": "compel",
+    "cefr": "C1"
+  },
+  {
+    "word": "confinement",
+    "cefr": "C1"
+  },
+  {
+    "word": "minutiae",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexplicable",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexplicably",
+    "cefr": "C1"
+  },
+  {
+    "word": "harass",
+    "cefr": "C1"
+  },
+  {
+    "word": "harassment",
+    "cefr": "C1"
+  },
+  {
+    "word": "believably",
+    "cefr": "C1"
+  },
+  {
+    "word": "readable",
+    "cefr": "C1"
+  },
+  {
+    "word": "persecute",
+    "cefr": "C1"
+  },
+  {
+    "word": "persecution",
+    "cefr": "C1"
+  },
+  {
+    "word": "smugly",
+    "cefr": "C1"
+  },
+  {
+    "word": "ferociously",
+    "cefr": "C1"
+  },
+  {
+    "word": "hostile",
+    "cefr": "C1"
+  },
+  {
+    "word": "methodical",
+    "cefr": "C1"
+  },
+  {
+    "word": "ruthless",
+    "cefr": "C1"
+  },
+  {
+    "word": "ruthlessness",
+    "cefr": "C1"
+  },
+  {
+    "word": "crumb",
+    "cefr": "C1"
+  },
+  {
+    "word": "rarity",
+    "cefr": "C1"
+  },
+  {
+    "word": "repel",
+    "cefr": "C1"
+  },
+  {
+    "word": "repellant",
+    "cefr": "C1"
+  },
+  {
+    "word": "repellant",
+    "cefr": "C1"
+  },
+  {
+    "word": "aqua",
+    "cefr": "C1"
+  },
+  {
+    "word": "insightful",
+    "cefr": "C1"
+  },
+  {
+    "word": "insightfully",
+    "cefr": "C1"
+  },
+  {
+    "word": "flashback",
+    "cefr": "C1"
+  },
+  {
+    "word": "self-worth",
+    "cefr": "C1"
+  },
+  {
+    "word": "citation",
+    "cefr": "C1"
+  },
+  {
+    "word": "ecstatically",
+    "cefr": "C1"
+  },
+  {
+    "word": "pleasurable",
+    "cefr": "C1"
+  },
+  {
+    "word": "favorably/favourably",
+    "cefr": "C1"
+  },
+  {
+    "word": "rumble",
+    "cefr": "C1"
+  },
+  {
+    "word": "rumble",
+    "cefr": "C1"
+  },
+  {
+    "word": "neglectful",
+    "cefr": "C1"
+  },
+  {
+    "word": "roundup",
+    "cefr": "C1"
+  },
+  {
+    "word": "indefinite",
+    "cefr": "C1"
+  },
+  {
+    "word": "indefinitely",
+    "cefr": "C1"
+  },
+  {
+    "word": "fusion",
+    "cefr": "C1"
+  },
+  {
+    "word": "robust",
+    "cefr": "C1"
+  },
+  {
+    "word": "robustly",
+    "cefr": "C1"
+  },
+  {
+    "word": "dismally",
+    "cefr": "C1"
+  },
+  {
+    "word": "crave",
+    "cefr": "C1"
+  },
+  {
+    "word": "craving",
+    "cefr": "C1"
+  },
+  {
+    "word": "remotely",
+    "cefr": "C1"
+  },
+  {
+    "word": "bubbly",
+    "cefr": "C1"
+  },
+  {
+    "word": "chaotically",
+    "cefr": "C1"
+  },
+  {
+    "word": "apprehensive",
+    "cefr": "C1"
+  },
+  {
+    "word": "trampoline",
+    "cefr": "C1"
+  },
+  {
+    "word": "stamina",
+    "cefr": "C1"
+  },
+  {
+    "word": "ploy",
+    "cefr": "C1"
+  },
+  {
+    "word": "dither",
+    "cefr": "C1"
+  },
+  {
+    "word": "overalls",
+    "cefr": "C1"
+  },
+  {
+    "word": "unison",
+    "cefr": "C1"
+  },
+  {
+    "word": "snail",
+    "cefr": "C1"
+  },
+  {
+    "word": "bliss",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexhaustible",
+    "cefr": "C1"
+  },
+  {
+    "word": "heifer",
+    "cefr": "C1"
+  },
+  {
+    "word": "ewe",
+    "cefr": "C1"
+  },
+  {
+    "word": "adversary",
+    "cefr": "C1"
+  },
+  {
+    "word": "baldly",
+    "cefr": "C1"
+  },
+  {
+    "word": "bearded",
+    "cefr": "C1"
+  },
+  {
+    "word": "professionalism",
+    "cefr": "C1"
+  },
+  {
+    "word": "artistically",
+    "cefr": "C1"
+  },
+  {
+    "word": "popularization",
+    "cefr": "C1"
+  },
+  {
+    "word": "pendulum",
+    "cefr": "C1"
+  },
+  {
+    "word": "predecessor",
+    "cefr": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr": "C1"
+  },
+  {
+    "word": "ceaseless",
+    "cefr": "C1"
+  },
+  {
+    "word": "ceaselessly",
+    "cefr": "C1"
+  },
+  {
+    "word": "climax",
+    "cefr": "C1"
+  },
+  {
+    "word": "climactic",
+    "cefr": "C1"
+  },
+  {
+    "word": "anticlimactic",
+    "cefr": "C1"
+  },
+  {
+    "word": "forfeit",
+    "cefr": "C1"
+  },
+  {
+    "word": "twitch",
+    "cefr": "C1"
+  },
+  {
+    "word": "twitch",
+    "cefr": "C1"
+  },
+  {
+    "word": "intellect",
+    "cefr": "C1"
+  },
+  {
+    "word": "exodus",
+    "cefr": "C1"
+  },
+  {
+    "word": "immortalize",
+    "cefr": "C1"
+  },
+  {
+    "word": "genome",
+    "cefr": "C1"
+  },
+  {
+    "word": "faction",
+    "cefr": "C1"
+  },
+  {
+    "word": "physique",
+    "cefr": "C1"
+  },
+  {
+    "word": "utensil",
+    "cefr": "C1"
+  },
+  {
+    "word": "clammy",
+    "cefr": "C1"
+  },
+  {
+    "word": "dispense",
+    "cefr": "C1"
+  },
+  {
+    "word": "dispensary",
+    "cefr": "C1"
+  },
+  {
+    "word": "diverge",
+    "cefr": "C1"
+  },
+  {
+    "word": "divergence",
+    "cefr": "C1"
+  },
+  {
+    "word": "divergent",
+    "cefr": "C1"
+  },
+  {
+    "word": "superficially",
+    "cefr": "C1"
+  },
+  {
+    "word": "aesthetically",
+    "cefr": "C1"
+  },
+  {
+    "word": "scrutinize/scrutinise",
+    "cefr": "C1"
+  },
+  {
+    "word": "scrutiny",
+    "cefr": "C1"
+  },
+  {
+    "word": "quip",
+    "cefr": "C1"
+  },
+  {
+    "word": "quip",
+    "cefr": "C1"
+  },
+  {
+    "word": "criteria",
+    "cefr": "C1"
+  },
+  {
+    "word": "plausible",
+    "cefr": "C1"
+  },
+  {
+    "word": "plausibility",
+    "cefr": "C1"
+  },
+  {
+    "word": "plausibly",
+    "cefr": "C1"
+  },
+  {
+    "word": "instinctive",
+    "cefr": "C1"
+  },
+  {
+    "word": "instinctively",
+    "cefr": "C1"
+  },
+  {
+    "word": "stylistic",
+    "cefr": "C1"
+  },
+  {
+    "word": "stylistically",
+    "cefr": "C1"
+  },
+  {
+    "word": "inheritance",
+    "cefr": "C1"
+  },
+  {
+    "word": "inherent",
+    "cefr": "C1"
+  },
+  {
+    "word": "spontaneous",
+    "cefr": "C1"
+  },
+  {
+    "word": "innovate",
+    "cefr": "C1"
+  },
+  {
+    "word": "connoisseur",
+    "cefr": "C1"
+  },
+  {
+    "word": "abstraction",
+    "cefr": "C1"
+  },
+  {
+    "word": "tantrum",
+    "cefr": "C1"
+  },
+  {
+    "word": "discard",
+    "cefr": "C1"
+  },
+  {
+    "word": "hostile",
+    "cefr": "C1"
+  },
+  {
+    "word": "flatter",
+    "cefr": "C1"
+  },
+  {
+    "word": "flattery",
+    "cefr": "C1"
+  },
+  {
+    "word": "aimless",
+    "cefr": "C1"
+  },
+  {
+    "word": "meaninglessly",
+    "cefr": "C1"
+  },
+  {
+    "word": "candid",
+    "cefr": "C1"
+  },
+  {
+    "word": "candidly",
+    "cefr": "C1"
+  },
+  {
+    "word": "vitality",
+    "cefr": "C1"
+  },
+  {
+    "word": "provocative",
+    "cefr": "C1"
+  },
+  {
+    "word": "provocatively",
+    "cefr": "C1"
+  },
+  {
+    "word": "clench",
+    "cefr": "C1"
+  },
+  {
+    "word": "haggle",
+    "cefr": "C1"
+  },
+  {
+    "word": "scorn",
+    "cefr": "C1"
+  },
+  {
+    "word": "scornful",
+    "cefr": "C1"
+  },
+  {
+    "word": "scornfully",
+    "cefr": "C1"
+  },
+  {
+    "word": "animatedly",
+    "cefr": "C1"
+  },
+  {
+    "word": "obscurely",
+    "cefr": "C1"
+  },
+  {
+    "word": "tediously",
+    "cefr": "C1"
+  },
+  {
+    "word": "formality",
+    "cefr": "C1"
+  },
+  {
+    "word": "mountaineer",
+    "cefr": "C1"
+  },
+  {
+    "word": "transatlantic",
+    "cefr": "C1"
+  },
+  {
+    "word": "rudiments",
+    "cefr": "C1"
+  },
+  {
+    "word": "immense",
+    "cefr": "C1"
+  },
+  {
+    "word": "immensely",
+    "cefr": "C1"
+  },
+  {
+    "word": "advisory",
+    "cefr": "C1"
+  },
+  {
+    "word": "trying",
+    "cefr": "C1"
+  },
+  {
+    "word": "adrenaline",
+    "cefr": "C1"
+  },
+  {
+    "word": "tinker",
+    "cefr": "C1"
+  },
+  {
+    "word": "tinker",
+    "cefr": "C1"
+  },
+  {
+    "word": "lavatory",
+    "cefr": "C1"
+  },
+  {
+    "word": "pinnacle",
+    "cefr": "C1"
+  },
+  {
+    "word": "insecurely",
+    "cefr": "C1"
+  },
+  {
+    "word": "reassurance",
+    "cefr": "C1"
+  },
+  {
+    "word": "insensitive",
+    "cefr": "C1"
+  },
+  {
+    "word": "insensitively",
+    "cefr": "C1"
+  },
+  {
+    "word": "profess",
+    "cefr": "C1"
+  },
+  {
+    "word": "overseer",
+    "cefr": "C1"
+  },
+  {
+    "word": "estimation",
+    "cefr": "C1"
+  },
+  {
+    "word": "liaison",
+    "cefr": "C1"
+  },
+  {
+    "word": "stressfully",
+    "cefr": "C1"
+  },
+  {
+    "word": "loom",
+    "cefr": "C1"
+  },
+  {
+    "word": "notwithstanding",
+    "cefr": "C1"
+  },
+  {
+    "word": "structural",
+    "cefr": "C1"
+  },
+  {
+    "word": "chauffer",
+    "cefr": "C1"
+  },
+  {
+    "word": "chauffer",
+    "cefr": "C1"
+  },
+  {
+    "word": "sedentary",
+    "cefr": "C1"
+  },
+  {
+    "word": "rapport",
+    "cefr": "C1"
+  },
+  {
+    "word": "consultancy",
+    "cefr": "C1"
+  },
+  {
+    "word": "retention",
+    "cefr": "C1"
+  },
+  {
+    "word": "quarry",
+    "cefr": "C1"
+  },
+  {
+    "word": "specification",
+    "cefr": "C1"
+  },
+  {
+    "word": "contractor",
+    "cefr": "C1"
+  },
+  {
+    "word": "possessor",
+    "cefr": "C1"
+  },
+  {
+    "word": "frosty",
+    "cefr": "C1"
+  },
+  {
+    "word": "frostily",
+    "cefr": "C1"
+  },
+  {
+    "word": "impersonal",
+    "cefr": "C1"
+  },
+  {
+    "word": "impersonally",
+    "cefr": "C1"
+  },
+  {
+    "word": "impersonate",
+    "cefr": "C1"
+  },
+  {
+    "word": "impersonator",
+    "cefr": "C1"
+  },
+  {
+    "word": "impersonation",
+    "cefr": "C1"
+  },
+  {
+    "word": "buzzer",
+    "cefr": "C1"
+  },
+  {
+    "word": "desertion",
+    "cefr": "C1"
+  },
+  {
+    "word": "stuffy",
+    "cefr": "C1"
+  },
+  {
+    "word": "stuffily",
+    "cefr": "C1"
+  },
+  {
+    "word": "stuffiness",
+    "cefr": "C1"
+  },
+  {
+    "word": "gape",
+    "cefr": "C1"
+  },
+  {
+    "word": "gape",
+    "cefr": "C1"
+  },
+  {
+    "word": "repute",
+    "cefr": "C1"
+  },
+  {
+    "word": "toughness",
+    "cefr": "C1"
+  },
+  {
+    "word": "glum",
+    "cefr": "C1"
+  },
+  {
+    "word": "glumly",
+    "cefr": "C1"
+  },
+  {
+    "word": "gamely",
+    "cefr": "C1"
+  },
+  {
+    "word": "dissect",
+    "cefr": "C1"
+  },
+  {
+    "word": "dissection",
+    "cefr": "C1"
+  },
+  {
+    "word": "commend",
+    "cefr": "C1"
+  },
+  {
+    "word": "commendation",
+    "cefr": "C1"
+  },
+  {
+    "word": "thereby",
+    "cefr": "C1"
+  },
+  {
+    "word": "flicker",
+    "cefr": "C1"
+  },
+  {
+    "word": "unenviable",
+    "cefr": "C1"
+  },
+  {
+    "word": "unenviably",
+    "cefr": "C1"
+  },
+  {
+    "word": "allege",
+    "cefr": "C1"
+  },
+  {
+    "word": "bribery",
+    "cefr": "C1"
+  },
+  {
+    "word": "inclusion",
+    "cefr": "C1"
+  },
+  {
+    "word": "inclusively",
+    "cefr": "C1"
+  },
+  {
+    "word": "unconvincing",
+    "cefr": "C1"
+  },
+  {
+    "word": "unconvincingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "facilitation",
+    "cefr": "C1"
+  },
+  {
+    "word": "conditional",
+    "cefr": "C1"
+  },
+  {
+    "word": "conditionally",
+    "cefr": "C1"
+  },
+  {
+    "word": "alignment",
+    "cefr": "C1"
+  },
+  {
+    "word": "supple",
+    "cefr": "C1"
+  },
+  {
+    "word": "bouquet",
+    "cefr": "C1"
+  },
+  {
+    "word": "refurbish",
+    "cefr": "C1"
+  },
+  {
+    "word": "refurbishment",
+    "cefr": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr": "C1"
+  },
+  {
+    "word": "grounds",
+    "cefr": "C1"
+  },
+  {
+    "word": "lethargic",
+    "cefr": "C1"
+  },
+  {
+    "word": "lethargically",
+    "cefr": "C1"
+  },
+  {
+    "word": "stately",
+    "cefr": "C1"
+  },
+  {
+    "word": "conservatory",
+    "cefr": "C1"
+  },
+  {
+    "word": "disquieting",
+    "cefr": "C1"
+  },
+  {
+    "word": "grapefruit",
+    "cefr": "C1"
+  },
+  {
+    "word": "exotically",
+    "cefr": "C1"
+  },
+  {
+    "word": "flask",
+    "cefr": "C1"
+  },
+  {
+    "word": "remedial",
+    "cefr": "C1"
+  },
+  {
+    "word": "posture",
+    "cefr": "C1"
+  },
+  {
+    "word": "sedate",
+    "cefr": "C1"
+  },
+  {
+    "word": "sedately",
+    "cefr": "C1"
+  },
+  {
+    "word": "sedate",
+    "cefr": "C1"
+  },
+  {
+    "word": "clutch",
+    "cefr": "C1"
+  },
+  {
+    "word": "clutch",
+    "cefr": "C1"
+  },
+  {
+    "word": "staggering",
+    "cefr": "C1"
+  },
+  {
+    "word": "dutiful",
+    "cefr": "C1"
+  },
+  {
+    "word": "dutifully",
+    "cefr": "C1"
+  },
+  {
+    "word": "fabulously",
+    "cefr": "C1"
+  },
+  {
+    "word": "premises",
+    "cefr": "C1"
+  },
+  {
+    "word": "eclectically",
+    "cefr": "C1"
+  },
+  {
+    "word": "revere",
+    "cefr": "C1"
+  },
+  {
+    "word": "harbor/harbour",
+    "cefr": "C1"
+  },
+  {
+    "word": "recognizable/recognisable",
+    "cefr": "C1"
+  },
+  {
+    "word": "recognizably/recognisably",
+    "cefr": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr": "C1"
+  },
+  {
+    "word": "batter",
+    "cefr": "C1"
+  },
+  {
+    "word": "unreliably",
+    "cefr": "C1"
+  },
+  {
+    "word": "waterfront",
+    "cefr": "C1"
+  },
+  {
+    "word": "amply",
+    "cefr": "C1"
+  },
+  {
+    "word": "amplification",
+    "cefr": "C1"
+  },
+  {
+    "word": "battered",
+    "cefr": "C1"
+  },
+  {
+    "word": "battered",
+    "cefr": "C1"
+  },
+  {
+    "word": "comply",
+    "cefr": "C1"
+  },
+  {
+    "word": "compliance",
+    "cefr": "C1"
+  },
+  {
+    "word": "compliant",
+    "cefr": "C1"
+  },
+  {
+    "word": "compliantly",
+    "cefr": "C1"
+  },
+  {
+    "word": "blankness",
+    "cefr": "C1"
+  },
+  {
+    "word": "exuberant",
+    "cefr": "C1"
+  },
+  {
+    "word": "exuberance",
+    "cefr": "C1"
+  },
+  {
+    "word": "exuberantly",
+    "cefr": "C1"
+  },
+  {
+    "word": "linear",
+    "cefr": "C1"
+  },
+  {
+    "word": "linearly",
+    "cefr": "C1"
+  },
+  {
+    "word": "flourish",
+    "cefr": "C1"
+  },
+  {
+    "word": "flourish",
+    "cefr": "C1"
+  },
+  {
+    "word": "anchored",
+    "cefr": "C1"
+  },
+  {
+    "word": "domination",
+    "cefr": "C1"
+  },
+  {
+    "word": "dominant",
+    "cefr": "C1"
+  },
+  {
+    "word": "dominantly",
+    "cefr": "C1"
+  },
+  {
+    "word": "interject",
+    "cefr": "C1"
+  },
+  {
+    "word": "interjection",
+    "cefr": "C1"
+  },
+  {
+    "word": "gush",
+    "cefr": "C1"
+  },
+  {
+    "word": "gushing",
+    "cefr": "C1"
+  },
+  {
+    "word": "gush",
+    "cefr": "C1"
+  },
+  {
+    "word": "gushingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "voracious",
+    "cefr": "C1"
+  },
+  {
+    "word": "voraciously",
+    "cefr": "C1"
+  },
+  {
+    "word": "sketchbook",
+    "cefr": "C1"
+  },
+  {
+    "word": "imp",
+    "cefr": "C1"
+  },
+  {
+    "word": "impish",
+    "cefr": "C1"
+  },
+  {
+    "word": "impishly",
+    "cefr": "C1"
+  },
+  {
+    "word": "wickedly",
+    "cefr": "C1"
+  },
+  {
+    "word": "macabre",
+    "cefr": "C1"
+  },
+  {
+    "word": "gusto",
+    "cefr": "C1"
+  },
+  {
+    "word": "tantamount",
+    "cefr": "C1"
+  },
+  {
+    "word": "antics",
+    "cefr": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr": "C1"
+  },
+  {
+    "word": "lapse",
+    "cefr": "C1"
+  },
+  {
+    "word": "relapse",
+    "cefr": "C1"
+  },
+  {
+    "word": "relapse",
+    "cefr": "C1"
+  },
+  {
+    "word": "impede",
+    "cefr": "C1"
+  },
+  {
+    "word": "impediment",
+    "cefr": "C1"
+  },
+  {
+    "word": "taut",
+    "cefr": "C1"
+  },
+  {
+    "word": "tautly",
+    "cefr": "C1"
+  },
+  {
+    "word": "jersey",
+    "cefr": "C1"
+  },
+  {
+    "word": "jersey",
+    "cefr": "C1"
+  },
+  {
+    "word": "startlingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "slackly",
+    "cefr": "C1"
+  },
+  {
+    "word": "unwavering",
+    "cefr": "C1"
+  },
+  {
+    "word": "unwaveringly",
+    "cefr": "C1"
+  },
+  {
+    "word": "removed",
+    "cefr": "C1"
+  },
+  {
+    "word": "buffoon",
+    "cefr": "C1"
+  },
+  {
+    "word": "beguiling",
+    "cefr": "C1"
+  },
+  {
+    "word": "beguilingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "blithely",
+    "cefr": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr": "C1"
+  },
+  {
+    "word": "stray",
+    "cefr": "C1"
+  },
+  {
+    "word": "venerate",
+    "cefr": "C1"
+  },
+  {
+    "word": "veneration",
+    "cefr": "C1"
+  },
+  {
+    "word": "heroine",
+    "cefr": "C1"
+  },
+  {
+    "word": "refreshingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "zany",
+    "cefr": "C1"
+  },
+  {
+    "word": "devotee",
+    "cefr": "C1"
+  },
+  {
+    "word": "salve",
+    "cefr": "C1"
+  },
+  {
+    "word": "salvation",
+    "cefr": "C1"
+  },
+  {
+    "word": "staccato",
+    "cefr": "C1"
+  },
+  {
+    "word": "staccato",
+    "cefr": "C1"
+  },
+  {
+    "word": "verve",
+    "cefr": "C1"
+  },
+  {
+    "word": "motley",
+    "cefr": "C1"
+  },
+  {
+    "word": "preach",
+    "cefr": "C1"
+  },
+  {
+    "word": "preacher",
+    "cefr": "C1"
+  },
+  {
+    "word": "continuity",
+    "cefr": "C1"
+  },
+  {
+    "word": "justly",
+    "cefr": "C1"
+  },
+  {
+    "word": "wry",
+    "cefr": "C1"
+  },
+  {
+    "word": "wryly",
+    "cefr": "C1"
+  },
+  {
+    "word": "poetess",
+    "cefr": "C1"
+  },
+  {
+    "word": "confide",
+    "cefr": "C1"
+  },
+  {
+    "word": "sentient",
+    "cefr": "C1"
+  },
+  {
+    "word": "sentiment",
+    "cefr": "C1"
+  },
+  {
+    "word": "sentimental",
+    "cefr": "C1"
+  },
+  {
+    "word": "sentimentally",
+    "cefr": "C1"
+  },
+  {
+    "word": "tangled",
+    "cefr": "C1"
+  },
+  {
+    "word": "untangle",
+    "cefr": "C1"
+  },
+  {
+    "word": "untangled",
+    "cefr": "C1"
+  },
+  {
+    "word": "perceptive",
+    "cefr": "C1"
+  },
+  {
+    "word": "perceptively",
+    "cefr": "C1"
+  },
+  {
+    "word": "tycoon",
+    "cefr": "C1"
+  },
+  {
+    "word": "engross",
+    "cefr": "C1"
+  },
+  {
+    "word": "engrossing",
+    "cefr": "C1"
+  },
+  {
+    "word": "detritus",
+    "cefr": "C1"
+  },
+  {
+    "word": "detriment",
+    "cefr": "C1"
+  },
+  {
+    "word": "detrimental",
+    "cefr": "C1"
+  },
+  {
+    "word": "detrimentally",
+    "cefr": "C1"
+  },
+  {
+    "word": "domestically",
+    "cefr": "C1"
+  },
+  {
+    "word": "domesticate",
+    "cefr": "C1"
+  },
+  {
+    "word": "domestication",
+    "cefr": "C1"
+  },
+  {
+    "word": "eccentrically",
+    "cefr": "C1"
+  },
+  {
+    "word": "pathos",
+    "cefr": "C1"
+  },
+  {
+    "word": "tailor",
+    "cefr": "C1"
+  },
+  {
+    "word": "tailor",
+    "cefr": "C1"
+  },
+  {
+    "word": "personalize/personalise",
+    "cefr": "C1"
+  },
+  {
+    "word": "personalization/personalisation",
+    "cefr": "C1"
+  },
+  {
+    "word": "limitless",
+    "cefr": "C1"
+  },
+  {
+    "word": "apprentice",
+    "cefr": "C1"
+  },
+  {
+    "word": "apprentice",
+    "cefr": "C1"
+  },
+  {
+    "word": "apprenticeship",
+    "cefr": "C1"
+  },
+  {
+    "word": "nondescript",
+    "cefr": "C1"
+  },
+  {
+    "word": "negligible",
+    "cefr": "C1"
+  },
+  {
+    "word": "negligent",
+    "cefr": "C1"
+  },
+  {
+    "word": "negligently",
+    "cefr": "C1"
+  },
+  {
+    "word": "principally",
+    "cefr": "C1"
+  },
+  {
+    "word": "altruism",
+    "cefr": "C1"
+  },
+  {
+    "word": "altruistic",
+    "cefr": "C1"
+  },
+  {
+    "word": "voluntarily",
+    "cefr": "C1"
+  },
+  {
+    "word": "reap",
+    "cefr": "C1"
+  },
+  {
+    "word": "paternal",
+    "cefr": "C1"
+  },
+  {
+    "word": "maternal",
+    "cefr": "C1"
+  },
+  {
+    "word": "maternalistic",
+    "cefr": "C1"
+  },
+  {
+    "word": "paternalistic",
+    "cefr": "C1"
+  },
+  {
+    "word": "provisions",
+    "cefr": "C1"
+  },
+  {
+    "word": "injustice",
+    "cefr": "C1"
+  },
+  {
+    "word": "impoverished",
+    "cefr": "C1"
+  },
+  {
+    "word": "unsustainable",
+    "cefr": "C1"
+  },
+  {
+    "word": "unsustainably",
+    "cefr": "C1"
+  },
+  {
+    "word": "sustainably",
+    "cefr": "C1"
+  },
+  {
+    "word": "cynic",
+    "cefr": "C1"
+  },
+  {
+    "word": "cynical",
+    "cefr": "C1"
+  },
+  {
+    "word": "cynically",
+    "cefr": "C1"
+  },
+  {
+    "word": "cynicism",
+    "cefr": "C1"
+  },
+  {
+    "word": "sarcasm",
+    "cefr": "C1"
+  },
+  {
+    "word": "sarcastic",
+    "cefr": "C1"
+  },
+  {
+    "word": "sarcastically",
+    "cefr": "C1"
+  },
+  {
+    "word": "misplace",
+    "cefr": "C1"
+  },
+  {
+    "word": "symptomatic",
+    "cefr": "C1"
+  },
+  {
+    "word": "degrade",
+    "cefr": "C1"
+  },
+  {
+    "word": "degrading",
+    "cefr": "C1"
+  },
+  {
+    "word": "degradation",
+    "cefr": "C1"
+  },
+  {
+    "word": "discourse",
+    "cefr": "C1"
+  },
+  {
+    "word": "hedgehog",
+    "cefr": "C1"
+  },
+  {
+    "word": "nocturnal",
+    "cefr": "C1"
+  },
+  {
+    "word": "conviction",
+    "cefr": "C1"
+  },
+  {
+    "word": "latent",
+    "cefr": "C1"
+  },
+  {
+    "word": "snooze",
+    "cefr": "C1"
+  },
+  {
+    "word": "classy",
+    "cefr": "C1"
+  },
+  {
+    "word": "wrench",
+    "cefr": "C1"
+  },
+  {
+    "word": "intuit",
+    "cefr": "C1"
+  },
+  {
+    "word": "marginal",
+    "cefr": "C1"
+  },
+  {
+    "word": "crude",
+    "cefr": "C1"
+  },
+  {
+    "word": "crudely",
+    "cefr": "C1"
+  },
+  {
+    "word": "strapping",
+    "cefr": "C1"
+  },
+  {
+    "word": "scoff",
+    "cefr": "C1"
+  },
+  {
+    "word": "fiddly",
+    "cefr": "C1"
+  },
+  {
+    "word": "fiddler",
+    "cefr": "C1"
+  },
+  {
+    "word": "unmusical",
+    "cefr": "C1"
+  },
+  {
+    "word": "unmusically",
+    "cefr": "C1"
+  },
+  {
+    "word": "repertory",
+    "cefr": "C1"
+  },
+  {
+    "word": "concerto",
+    "cefr": "C1"
+  },
+  {
+    "word": "fanatic",
+    "cefr": "C1"
+  },
+  {
+    "word": "fanatic",
+    "cefr": "C1"
+  },
+  {
+    "word": "fanatically",
+    "cefr": "C1"
+  },
+  {
+    "word": "acoustically",
+    "cefr": "C1"
+  },
+  {
+    "word": "acoustic",
+    "cefr": "C1"
+  },
+  {
+    "word": "acoustics",
+    "cefr": "C1"
+  },
+  {
+    "word": "compromised",
+    "cefr": "C1"
+  },
+  {
+    "word": "daunt",
+    "cefr": "C1"
+  },
+  {
+    "word": "daunting",
+    "cefr": "C1"
+  },
+  {
+    "word": "realist",
+    "cefr": "C1"
+  },
+  {
+    "word": "realism",
+    "cefr": "C1"
+  },
+  {
+    "word": "recess",
+    "cefr": "C1"
+  },
+  {
+    "word": "recess",
+    "cefr": "C1"
+  },
+  {
+    "word": "recessive",
+    "cefr": "C1"
+  },
+  {
+    "word": "prolific",
+    "cefr": "C1"
+  },
+  {
+    "word": "prolifically",
+    "cefr": "C1"
+  },
+  {
+    "word": "proliferate",
+    "cefr": "C1"
+  },
+  {
+    "word": "fragmentation",
+    "cefr": "C1"
+  },
+  {
+    "word": "astray",
+    "cefr": "C1"
+  },
+  {
+    "word": "naive",
+    "cefr": "C1"
+  },
+  {
+    "word": "naively",
+    "cefr": "C1"
+  },
+  {
+    "word": "naivety",
+    "cefr": "C1"
+  },
+  {
+    "word": "impervious",
+    "cefr": "C1"
+  },
+  {
+    "word": "ludicrous",
+    "cefr": "C1"
+  },
+  {
+    "word": "ludicrously",
+    "cefr": "C1"
+  },
+  {
+    "word": "cost-effective",
+    "cefr": "C1"
+  },
+  {
+    "word": "gruesomely",
+    "cefr": "C1"
+  },
+  {
+    "word": "envisage",
+    "cefr": "C1"
+  },
+  {
+    "word": "buffer",
+    "cefr": "C1"
+  },
+  {
+    "word": "buffer",
+    "cefr": "C1"
+  },
+  {
+    "word": "irate",
+    "cefr": "C1"
+  },
+  {
+    "word": "irately",
+    "cefr": "C1"
+  },
+  {
+    "word": "docile",
+    "cefr": "C1"
+  },
+  {
+    "word": "docilely",
+    "cefr": "C1"
+  },
+  {
+    "word": "fiend",
+    "cefr": "C1"
+  },
+  {
+    "word": "fiendish",
+    "cefr": "C1"
+  },
+  {
+    "word": "fiendishly",
+    "cefr": "C1"
+  },
+  {
+    "word": "transfix",
+    "cefr": "C1"
+  },
+  {
+    "word": "gypsy",
+    "cefr": "C1"
+  },
+  {
+    "word": "temperament",
+    "cefr": "C1"
+  },
+  {
+    "word": "temperamental",
+    "cefr": "C1"
+  },
+  {
+    "word": "temperamentally",
+    "cefr": "C1"
+  },
+  {
+    "word": "disillusionment",
+    "cefr": "C1"
+  },
+  {
+    "word": "demise",
+    "cefr": "C1"
+  },
+  {
+    "word": "raunchy",
+    "cefr": "C1"
+  },
+  {
+    "word": "raunchily",
+    "cefr": "C1"
+  },
+  {
+    "word": "overdraft",
+    "cefr": "C1"
+  },
+  {
+    "word": "overdraft",
+    "cefr": "C1"
+  },
+  {
+    "word": "synopsis",
+    "cefr": "C1"
+  },
+  {
+    "word": "renown",
+    "cefr": "C1"
+  },
+  {
+    "word": "contested",
+    "cefr": "C1"
+  },
+  {
+    "word": "occupational",
+    "cefr": "C1"
+  },
+  {
+    "word": "ventilate",
+    "cefr": "C1"
+  },
+  {
+    "word": "ventilation",
+    "cefr": "C1"
+  },
+  {
+    "word": "occupant",
+    "cefr": "C1"
+  },
+  {
+    "word": "homely",
+    "cefr": "C1"
+  },
+  {
+    "word": "bureaucratically",
+    "cefr": "C1"
+  },
+  {
+    "word": "adjustable",
+    "cefr": "C1"
+  },
+  {
+    "word": "versatility",
+    "cefr": "C1"
+  },
+  {
+    "word": "stimuli",
+    "cefr": "C1"
+  },
+  {
+    "word": "uninspiring",
+    "cefr": "C1"
+  },
+  {
+    "word": "mutually",
+    "cefr": "C1"
+  },
+  {
+    "word": "somber/sombre",
+    "cefr": "C1"
+  },
+  {
+    "word": "somberly/sombrely",
+    "cefr": "C1"
+  },
+  {
+    "word": "dislodge",
+    "cefr": "C1"
+  },
+  {
+    "word": "carpentry",
+    "cefr": "C1"
+  },
+  {
+    "word": "transit",
+    "cefr": "C1"
+  },
+  {
+    "word": "plummet",
+    "cefr": "C1"
+  },
+  {
+    "word": "demography",
+    "cefr": "C1"
+  },
+  {
+    "word": "demographically",
+    "cefr": "C1"
+  },
+  {
+    "word": "prophet",
+    "cefr": "C1"
+  },
+  {
+    "word": "prophetic",
+    "cefr": "C1"
+  },
+  {
+    "word": "paywall",
+    "cefr": "C1"
+  },
+  {
+    "word": "firewall",
+    "cefr": "C1"
+  },
+  {
+    "word": "invoice",
+    "cefr": "C1"
+  },
+  {
+    "word": "demolition",
+    "cefr": "C1"
+  },
+  {
+    "word": "socialization",
+    "cefr": "C1"
+  },
+  {
+    "word": "antiquated",
+    "cefr": "C1"
+  },
+  {
+    "word": "restoration",
+    "cefr": "C1"
+  },
+  {
+    "word": "restorative",
+    "cefr": "C1"
+  },
+  {
+    "word": "rotate",
+    "cefr": "C1"
+  },
+  {
+    "word": "coupled",
+    "cefr": "C1"
+  },
+  {
+    "word": "itinerary",
+    "cefr": "C1"
+  },
+  {
+    "word": "charter",
+    "cefr": "C1"
+  },
+  {
+    "word": "charter",
+    "cefr": "C1"
+  },
+  {
+    "word": "resilience",
+    "cefr": "C1"
+  },
+  {
+    "word": "magnetism",
+    "cefr": "C1"
+  },
+  {
+    "word": "magnetically",
+    "cefr": "C1"
+  },
+  {
+    "word": "credibly",
+    "cefr": "C1"
+  },
+  {
+    "word": "credibility",
+    "cefr": "C1"
+  },
+  {
+    "word": "credential",
+    "cefr": "C1"
+  },
+  {
+    "word": "acutely",
+    "cefr": "C1"
+  },
+  {
+    "word": "fissure",
+    "cefr": "C1"
+  },
+  {
+    "word": "pendulum",
+    "cefr": "C1"
+  },
+  {
+    "word": "pendulous",
+    "cefr": "C1"
+  },
+  {
+    "word": "suspension",
+    "cefr": "C1"
+  },
+  {
+    "word": "squander",
+    "cefr": "C1"
+  },
+  {
+    "word": "adjoin",
+    "cefr": "C1"
+  },
+  {
+    "word": "adjoining",
+    "cefr": "C1"
+  },
+  {
+    "word": "wizened",
+    "cefr": "C1"
+  },
+  {
+    "word": "graft",
+    "cefr": "C1"
+  },
+  {
+    "word": "orchard",
+    "cefr": "C1"
+  },
+  {
+    "word": "seedling",
+    "cefr": "C1"
+  },
+  {
+    "word": "tract",
+    "cefr": "C1"
+  },
+  {
+    "word": "folktale",
+    "cefr": "C1"
+  },
+  {
+    "word": "sprout",
+    "cefr": "C1"
+  },
+  {
+    "word": "sprout",
+    "cefr": "C1"
+  },
+  {
+    "word": "hypocrisy",
+    "cefr": "C1"
+  },
+  {
+    "word": "hypocrite",
+    "cefr": "C1"
+  },
+  {
+    "word": "hypocritical",
+    "cefr": "C1"
+  },
+  {
+    "word": "hypocritically",
+    "cefr": "C1"
+  },
+  {
+    "word": "midwife",
+    "cefr": "C1"
+  },
+  {
+    "word": "commercially",
+    "cefr": "C1"
+  },
+  {
+    "word": "uniformity",
+    "cefr": "C1"
+  },
+  {
+    "word": "numb",
+    "cefr": "C1"
+  },
+  {
+    "word": "numb",
+    "cefr": "C1"
+  },
+  {
+    "word": "tastebud",
+    "cefr": "C1"
+  },
+  {
+    "word": "retrace",
+    "cefr": "C1"
+  },
+  {
+    "word": "insubordinate",
+    "cefr": "C1"
+  },
+  {
+    "word": "insubordination",
+    "cefr": "C1"
+  },
+  {
+    "word": "insubordinately",
+    "cefr": "C1"
+  },
+  {
+    "word": "subordinate",
+    "cefr": "C1"
+  },
+  {
+    "word": "primitively",
+    "cefr": "C1"
+  },
+  {
+    "word": "expedite",
+    "cefr": "C1"
+  },
+  {
+    "word": "contextual",
+    "cefr": "C1"
+  },
+  {
+    "word": "contextually",
+    "cefr": "C1"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr": "C1"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr": "C1"
+  },
+  {
+    "word": "riveting",
+    "cefr": "C1"
+  },
+  {
+    "word": "debut",
+    "cefr": "C1"
+  },
+  {
+    "word": "debut",
+    "cefr": "C1"
+  },
+  {
+    "word": "turmoil",
+    "cefr": "C1"
+  },
+  {
+    "word": "unscathing",
+    "cefr": "C1"
+  },
+  {
+    "word": "convoluted",
+    "cefr": "C1"
+  },
+  {
+    "word": "undaunted",
+    "cefr": "C1"
+  },
+  {
+    "word": "gutsy",
+    "cefr": "C1"
+  },
+  {
+    "word": "deprivation",
+    "cefr": "C1"
+  },
+  {
+    "word": "farce",
+    "cefr": "C1"
+  },
+  {
+    "word": "portrayal",
+    "cefr": "C1"
+  },
+  {
+    "word": "elude",
+    "cefr": "C1"
+  },
+  {
+    "word": "incisor",
+    "cefr": "C1"
+  },
+  {
+    "word": "incision",
+    "cefr": "C1"
+  },
+  {
+    "word": "chisel",
+    "cefr": "C1"
+  },
+  {
+    "word": "chiselled",
+    "cefr": "C1"
+  },
+  {
+    "word": "gnaw",
+    "cefr": "C1"
+  },
+  {
+    "word": "elongate",
+    "cefr": "C1"
+  },
+  {
+    "word": "telltale",
+    "cefr": "C1"
+  },
+  {
+    "word": "cavity",
+    "cefr": "C1"
+  },
+  {
+    "word": "glean",
+    "cefr": "C1"
+  },
+  {
+    "word": "niche",
+    "cefr": "C1"
+  },
+  {
+    "word": "somersault",
+    "cefr": "C1"
+  },
+  {
+    "word": "somersault",
+    "cefr": "C1"
+  },
+  {
+    "word": "exhilarate",
+    "cefr": "C1"
+  },
+  {
+    "word": "exhilarating",
+    "cefr": "C1"
+  },
+  {
+    "word": "exhilaration",
+    "cefr": "C1"
+  },
+  {
+    "word": "physicality",
+    "cefr": "C1"
+  },
+  {
+    "word": "unsettling",
+    "cefr": "C1"
+  },
+  {
+    "word": "unsettle",
+    "cefr": "C1"
+  },
+  {
+    "word": "suburbia",
+    "cefr": "C1"
+  },
+  {
+    "word": "dramatist",
+    "cefr": "C1"
+  },
+  {
+    "word": "characterization/characterisation",
+    "cefr": "C1"
+  },
+  {
+    "word": "quirky",
+    "cefr": "C1"
+  },
+  {
+    "word": "quirky",
+    "cefr": "C1"
+  },
+  {
+    "word": "ingenuity",
+    "cefr": "C1"
+  },
+  {
+    "word": "panorama",
+    "cefr": "C1"
+  },
+  {
+    "word": "panoramic",
+    "cefr": "C1"
+  },
+  {
+    "word": "benign",
+    "cefr": "C1"
+  },
+  {
+    "word": "benignly",
+    "cefr": "C1"
+  },
+  {
+    "word": "explosively",
+    "cefr": "C1"
+  },
+  {
+    "word": "bequeath",
+    "cefr": "C1"
+  },
+  {
+    "word": "synthetically",
+    "cefr": "C1"
+  },
+  {
+    "word": "lackluster/lacklustre",
+    "cefr": "C1"
+  },
+  {
+    "word": "appall/appal",
+    "cefr": "C1"
+  },
+  {
+    "word": "appalling",
+    "cefr": "C1"
+  },
+  {
+    "word": "appallingly",
+    "cefr": "C1"
+  },
+  {
+    "word": "pounce",
+    "cefr": "C1"
+  },
+  {
+    "word": "abound",
+    "cefr": "C1"
+  },
+  {
+    "word": "sap",
+    "cefr": "C1"
+  },
+  {
+    "word": "monotonous",
+    "cefr": "C1"
+  },
+  {
+    "word": "monotonously",
+    "cefr": "C1"
+  },
+  {
+    "word": "monotony",
+    "cefr": "C1"
+  },
+  {
+    "word": "turn to",
+    "cefr": "C1"
+  },
+  {
+    "word": "plaque",
+    "cefr": "C1"
+  },
+  {
+    "word": "neutralize/neutralise",
+    "cefr": "C1"
+  },
+  {
+    "word": "neutralization/neutralisation",
+    "cefr": "C1"
+  },
+  {
+    "word": "salivate",
+    "cefr": "C1"
+  },
+  {
+    "word": "cessation",
+    "cefr": "C1"
+  },
+  {
+    "word": "remorse",
+    "cefr": "C1"
+  },
+  {
+    "word": "remorseless",
+    "cefr": "C1"
+  },
+  {
+    "word": "remorsefully",
+    "cefr": "C1"
+  },
+  {
+    "word": "remorselessly",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexcusable",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexcusably",
+    "cefr": "C1"
+  },
+  {
+    "word": "inexhaustible",
+    "cefr": "C1"
+  },
+  {
+    "word": "unassisted",
+    "cefr": "C1"
+  },
+  {
+    "word": "heighten",
+    "cefr": "C1"
+  },
+  {
+    "word": "fixture",
+    "cefr": "C1"
+  },
+  {
+    "word": "bulk",
+    "cefr": "C1"
+  },
+  {
+    "word": "bulky",
+    "cefr": "C1"
+  },
+  {
+    "word": "bulk up",
+    "cefr": "C1"
+  },
+  {
+    "word": "digitalize/digitalise",
+    "cefr": "C1"
+  },
+  {
+    "word": "digitalization/digitalisation",
+    "cefr": "C1"
+  },
+  {
+    "word": "mark-up",
+    "cefr": "C1"
+  },
+  {
+    "word": "complementary",
+    "cefr": "C1"
+  },
+  {
+    "word": "wares",
+    "cefr": "C1"
+  },
+  {
+    "word": "testament",
+    "cefr": "C1"
+  },
+  {
+    "word": "succulent",
+    "cefr": "C1"
+  },
+  {
+    "word": "succulent",
+    "cefr": "C1"
+  },
+  {
+    "word": "succulently",
+    "cefr": "C1"
+  },
+  {
+    "word": "tranquil",
+    "cefr": "C1"
+  },
+  {
+    "word": "tranquility",
+    "cefr": "C1"
+  },
+  {
+    "word": "spartan",
+    "cefr": "C1"
+  },
+  {
+    "word": "peninsula",
+    "cefr": "C1"
+  },
+  {
+    "word": "billiards",
+    "cefr": "C1"
+  },
+  {
+    "word": "exude",
+    "cefr": "C2"
+  },
+  {
+    "word": "envisage",
+    "cefr": "C2"
+  },
+  {
+    "word": "headmistress",
+    "cefr": "C2"
+  },
+  {
+    "word": "mien",
+    "cefr": "C2"
+  },
+  {
+    "word": "timidity",
+    "cefr": "C2"
+  },
+  {
+    "word": "concurrence",
+    "cefr": "C2"
+  },
+  {
+    "word": "unpromising",
+    "cefr": "C2"
+  },
+  {
+    "word": "teem",
+    "cefr": "C2"
+  },
+  {
+    "word": "marvel",
+    "cefr": "C2"
+  },
+  {
+    "word": "corpse",
+    "cefr": "C2"
+  },
+  {
+    "word": "apprentice",
+    "cefr": "C2"
+  },
+  {
+    "word": "constrained",
+    "cefr": "C2"
+  },
+  {
+    "word": "quirk",
+    "cefr": "C2"
+  },
+  {
+    "word": "eccentricity",
+    "cefr": "C2"
+  },
+  {
+    "word": "locomotive",
+    "cefr": "C2"
+  },
+  {
+    "word": "locomotion",
+    "cefr": "C2"
+  },
+  {
+    "word": "individualism",
+    "cefr": "C2"
+  },
+  {
+    "word": "enthuse",
+    "cefr": "C2"
+  },
+  {
+    "word": "belligerent",
+    "cefr": "C2"
+  },
+  {
+    "word": "belligerence",
+    "cefr": "C2"
+  },
+  {
+    "word": "stoicism",
+    "cefr": "C2"
+  },
+  {
+    "word": "recluse",
+    "cefr": "C2"
+  },
+  {
+    "word": "reclusive",
+    "cefr": "C2"
+  },
+  {
+    "word": "metalled",
+    "cefr": "C2"
+  },
+  {
+    "word": "oblique",
+    "cefr": "C2"
+  },
+  {
+    "word": "facsimile",
+    "cefr": "C2"
+  },
+  {
+    "word": "shamble",
+    "cefr": "C2"
+  },
+  {
+    "word": "whir",
+    "cefr": "C2"
+  },
+  {
+    "word": "blight",
+    "cefr": "C2"
+  },
+  {
+    "word": "blight",
+    "cefr": "C2"
+  },
+  {
+    "word": "puritanical",
+    "cefr": "C2"
+  },
+  {
+    "word": "brood",
+    "cefr": "C2"
+  },
+  {
+    "word": "brood",
+    "cefr": "C2"
+  },
+  {
+    "word": "disdainful",
+    "cefr": "C2"
+  },
+  {
+    "word": "zoologist",
+    "cefr": "C2"
+  },
+  {
+    "word": "zoology",
+    "cefr": "C2"
+  },
+  {
+    "word": "encumbrance",
+    "cefr": "C2"
+  },
+  {
+    "word": "encumber",
+    "cefr": "C2"
+  },
+  {
+    "word": "hypothesis",
+    "cefr": "C2"
+  },
+  {
+    "word": "hypothesize",
+    "cefr": "C2"
+  },
+  {
+    "word": "hypothetical",
+    "cefr": "C2"
+  },
+  {
+    "word": "parasitic",
+    "cefr": "C2"
+  },
+  {
+    "word": "plumage",
+    "cefr": "C2"
+  },
+  {
+    "word": "utilitarian",
+    "cefr": "C2"
+  },
+  {
+    "word": "predilection",
+    "cefr": "C2"
+  },
+  {
+    "word": "commensurate",
+    "cefr": "C2"
+  },
+  {
+    "word": "commensurately",
+    "cefr": "C2"
+  },
+  {
+    "word": "vindicate",
+    "cefr": "C2"
+  },
+  {
+    "word": "vindication",
+    "cefr": "C2"
+  },
+  {
+    "word": "poise",
+    "cefr": "C2"
+  },
+  {
+    "word": "minster",
+    "cefr": "C2"
+  },
+  {
+    "word": "wrack",
+    "cefr": "C2"
+  },
+  {
+    "word": "ironic",
+    "cefr": "C2"
+  },
+  {
+    "word": "predecessor",
+    "cefr": "C2"
+  },
+  {
+    "word": "callous",
+    "cefr": "C2"
+  },
+  {
+    "word": "callously",
+    "cefr": "C2"
+  },
+  {
+    "word": "derelict",
+    "cefr": "C2"
+  },
+  {
+    "word": "derelict",
+    "cefr": "C2"
+  },
+  {
+    "word": "ferocity",
+    "cefr": "C2"
+  },
+  {
+    "word": "evokingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "equable",
+    "cefr": "C2"
+  },
+  {
+    "word": "extant",
+    "cefr": "C2"
+  },
+  {
+    "word": "denounce",
+    "cefr": "C2"
+  },
+  {
+    "word": "denunciation",
+    "cefr": "C2"
+  },
+  {
+    "word": "requisition",
+    "cefr": "C2"
+  },
+  {
+    "word": "substantiate",
+    "cefr": "C2"
+  },
+  {
+    "word": "inscrutable",
+    "cefr": "C2"
+  },
+  {
+    "word": "indulgence",
+    "cefr": "C2"
+  },
+  {
+    "word": "indulgently",
+    "cefr": "C2"
+  },
+  {
+    "word": "laudatory",
+    "cefr": "C2"
+  },
+  {
+    "word": "laud",
+    "cefr": "C2"
+  },
+  {
+    "word": "glitz",
+    "cefr": "C2"
+  },
+  {
+    "word": "athleticism",
+    "cefr": "C2"
+  },
+  {
+    "word": "daunt",
+    "cefr": "C2"
+  },
+  {
+    "word": "daunting",
+    "cefr": "C2"
+  },
+  {
+    "word": "acreage",
+    "cefr": "C2"
+  },
+  {
+    "word": "affectation",
+    "cefr": "C2"
+  },
+  {
+    "word": "imposition",
+    "cefr": "C2"
+  },
+  {
+    "word": "stipulate",
+    "cefr": "C2"
+  },
+  {
+    "word": "stipulation",
+    "cefr": "C2"
+  },
+  {
+    "word": "allot",
+    "cefr": "C2"
+  },
+  {
+    "word": "anticlimactically",
+    "cefr": "C2"
+  },
+  {
+    "word": "forfeiture",
+    "cefr": "C2"
+  },
+  {
+    "word": "blitz",
+    "cefr": "C2"
+  },
+  {
+    "word": "blitz",
+    "cefr": "C2"
+  },
+  {
+    "word": "primeval",
+    "cefr": "C2"
+  },
+  {
+    "word": "tenacity",
+    "cefr": "C2"
+  },
+  {
+    "word": "tenacious",
+    "cefr": "C2"
+  },
+  {
+    "word": "tenaciously",
+    "cefr": "C2"
+  },
+  {
+    "word": "genomic",
+    "cefr": "C2"
+  },
+  {
+    "word": "genomically",
+    "cefr": "C2"
+  },
+  {
+    "word": "capacious",
+    "cefr": "C2"
+  },
+  {
+    "word": "utilitarian",
+    "cefr": "C2"
+  },
+  {
+    "word": "utilization/utilisation",
+    "cefr": "C2"
+  },
+  {
+    "word": "unequivocal",
+    "cefr": "C2"
+  },
+  {
+    "word": "unequivocally",
+    "cefr": "C2"
+  },
+  {
+    "word": "provocation",
+    "cefr": "C2"
+  },
+  {
+    "word": "tedium",
+    "cefr": "C2"
+  },
+  {
+    "word": "circumnavigate",
+    "cefr": "C2"
+  },
+  {
+    "word": "circumnavigation",
+    "cefr": "C2"
+  },
+  {
+    "word": "liaise",
+    "cefr": "C2"
+  },
+  {
+    "word": "contractual",
+    "cefr": "C2"
+  },
+  {
+    "word": "contractually",
+    "cefr": "C2"
+  },
+  {
+    "word": "repute",
+    "cefr": "C2"
+  },
+  {
+    "word": "abject",
+    "cefr": "C2"
+  },
+  {
+    "word": "sheaf",
+    "cefr": "C2"
+  },
+  {
+    "word": "articulation",
+    "cefr": "C2"
+  },
+  {
+    "word": "spurious",
+    "cefr": "C2"
+  },
+  {
+    "word": "spuriously",
+    "cefr": "C2"
+  },
+  {
+    "word": "posture",
+    "cefr": "C2"
+  },
+  {
+    "word": "calorific",
+    "cefr": "C2"
+  },
+  {
+    "word": "fabulate",
+    "cefr": "C2"
+  },
+  {
+    "word": "fabulation",
+    "cefr": "C2"
+  },
+  {
+    "word": "octogenarian",
+    "cefr": "C2"
+  },
+  {
+    "word": "voracity",
+    "cefr": "C2"
+  },
+  {
+    "word": "brandish",
+    "cefr": "C2"
+  },
+  {
+    "word": "repose",
+    "cefr": "C2"
+  },
+  {
+    "word": "repose",
+    "cefr": "C2"
+  },
+  {
+    "word": "encumber",
+    "cefr": "C2"
+  },
+  {
+    "word": "encumbrance",
+    "cefr": "C2"
+  },
+  {
+    "word": "unencumbered",
+    "cefr": "C2"
+  },
+  {
+    "word": "buffoonery",
+    "cefr": "C2"
+  },
+  {
+    "word": "gauche",
+    "cefr": "C2"
+  },
+  {
+    "word": "domesticity",
+    "cefr": "C2"
+  },
+  {
+    "word": "accrue",
+    "cefr": "C2"
+  },
+  {
+    "word": "proliferation",
+    "cefr": "C2"
+  },
+  {
+    "word": "blandishment",
+    "cefr": "C2"
+  },
+  {
+    "word": "anthropological",
+    "cefr": "C2"
+  },
+  {
+    "word": "anthropologically",
+    "cefr": "C2"
+  },
+  {
+    "word": "carbonize/carbonise",
+    "cefr": "C2"
+  },
+  {
+    "word": "monastic",
+    "cefr": "C2"
+  },
+  {
+    "word": "graft",
+    "cefr": "C2"
+  },
+  {
+    "word": "midwifery",
+    "cefr": "C2"
+  },
+  {
+    "word": "adornment",
+    "cefr": "C2"
+  },
+  {
+    "word": "conjecture",
+    "cefr": "C2"
+  },
+  {
+    "word": "conjecture",
+    "cefr": "C2"
+  },
+  {
+    "word": "malleable",
+    "cefr": "C2"
+  },
+  {
+    "word": "malleability",
+    "cefr": "C2"
+  },
+  {
+    "word": "ore",
+    "cefr": "C2"
+  },
+  {
+    "word": "gale",
+    "cefr": "C2"
+  },
+  {
+    "word": "promenade",
+    "cefr": "C2"
+  },
+  {
+    "word": "testimonial",
+    "cefr": "C2"
+  },
+  {
+    "word": "distill",
+    "cefr": "C2"
+  },
+  {
+    "word": "distillation",
+    "cefr": "C2"
+  },
+  {
+    "word": "informant",
+    "cefr": "C2"
+  },
+  {
+    "word": "vis-a-vis",
+    "cefr": "C2"
+  },
+  {
+    "word": "overlay",
+    "cefr": "C2"
+  },
+  {
+    "word": "nostalgia",
+    "cefr": "C2"
+  },
+  {
+    "word": "nostalgically",
+    "cefr": "C2"
+  },
+  {
+    "word": "grievance",
+    "cefr": "C2"
+  },
+  {
+    "word": "deprivation",
+    "cefr": "C2"
+  },
+  {
+    "word": "residue",
+    "cefr": "C2"
+  },
+  {
+    "word": "residual",
+    "cefr": "C2"
+  },
+  {
+    "word": "physiological",
+    "cefr": "C2"
+  },
+  {
+    "word": "physiologically",
+    "cefr": "C2"
+  },
+  {
+    "word": "familiarize/familiarise",
+    "cefr": "C2"
+  },
+  {
+    "word": "methodology",
+    "cefr": "C2"
+  },
+  {
+    "word": "methodological",
+    "cefr": "C2"
+  },
+  {
+    "word": "methodologically",
+    "cefr": "C2"
+  },
+  {
+    "word": "proportional",
+    "cefr": "C2"
+  },
+  {
+    "word": "proportionally",
+    "cefr": "C2"
+  },
+  {
+    "word": "habitation",
+    "cefr": "C2"
+  },
+  {
+    "word": "inartistic",
+    "cefr": "C2"
+  },
+  {
+    "word": "ornate",
+    "cefr": "C2"
+  },
+  {
+    "word": "modernism",
+    "cefr": "C2"
+  },
+  {
+    "word": "presuppose",
+    "cefr": "C2"
+  },
+  {
+    "word": "presupposition",
+    "cefr": "C2"
+  },
+  {
+    "word": "centralized/centralised",
+    "cefr": "C2"
+  },
+  {
+    "word": "envisage",
+    "cefr": "C2"
+  },
+  {
+    "word": "contextual",
+    "cefr": "C2"
+  },
+  {
+    "word": "contextually",
+    "cefr": "C2"
+  },
+  {
+    "word": "archival",
+    "cefr": "C2"
+  },
+  {
+    "word": "diffuse",
+    "cefr": "C2"
+  },
+  {
+    "word": "diffuse",
+    "cefr": "C2"
+  },
+  {
+    "word": "egalitarian",
+    "cefr": "C2"
+  },
+  {
+    "word": "egalitarian",
+    "cefr": "C2"
+  },
+  {
+    "word": "hindsight",
+    "cefr": "C2"
+  },
+  {
+    "word": "materialize/materialise",
+    "cefr": "C2"
+  },
+  {
+    "word": "materialization/materialisation",
+    "cefr": "C2"
+  },
+  {
+    "word": "disperse",
+    "cefr": "C2"
+  },
+  {
+    "word": "dispersal",
+    "cefr": "C2"
+  },
+  {
+    "word": "stabilize/stabilise",
+    "cefr": "C2"
+  },
+  {
+    "word": "pervasive",
+    "cefr": "C2"
+  },
+  {
+    "word": "pervasiveness",
+    "cefr": "C2"
+  },
+  {
+    "word": "autonomous",
+    "cefr": "C2"
+  },
+  {
+    "word": "autonomously",
+    "cefr": "C2"
+  },
+  {
+    "word": "outmoded",
+    "cefr": "C2"
+  },
+  {
+    "word": "notoriously",
+    "cefr": "C2"
+  },
+  {
+    "word": "notoriety",
+    "cefr": "C2"
+  },
+  {
+    "word": "menial",
+    "cefr": "C2"
+  },
+  {
+    "word": "insular",
+    "cefr": "C2"
+  },
+  {
+    "word": "antidote",
+    "cefr": "C2"
+  },
+  {
+    "word": "posture",
+    "cefr": "C2"
+  },
+  {
+    "word": "postural",
+    "cefr": "C2"
+  },
+  {
+    "word": "posturing",
+    "cefr": "C2"
+  },
+  {
+    "word": "revelatory",
+    "cefr": "C2"
+  },
+  {
+    "word": "prostrate",
+    "cefr": "C2"
+  },
+  {
+    "word": "prostrate",
+    "cefr": "C2"
+  },
+  {
+    "word": "haphazard",
+    "cefr": "C2"
+  },
+  {
+    "word": "haphazardly",
+    "cefr": "C2"
+  },
+  {
+    "word": "deficient",
+    "cefr": "C2"
+  },
+  {
+    "word": "deficiently",
+    "cefr": "C2"
+  },
+  {
+    "word": "delicatessen",
+    "cefr": "C2"
+  },
+  {
+    "word": "muscle-bound",
+    "cefr": "C2"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr": "C2"
+  },
+  {
+    "word": "maneuver/manoeuvre",
+    "cefr": "C2"
+  },
+  {
+    "word": "posit",
+    "cefr": "C2"
+  },
+  {
+    "word": "cocoon",
+    "cefr": "C2"
+  },
+  {
+    "word": "chrysalis",
+    "cefr": "C2"
+  },
+  {
+    "word": "ignominious",
+    "cefr": "C2"
+  },
+  {
+    "word": "ignominiously",
+    "cefr": "C2"
+  },
+  {
+    "word": "euphoria",
+    "cefr": "C2"
+  },
+  {
+    "word": "euphorically",
+    "cefr": "C2"
+  },
+  {
+    "word": "relegate",
+    "cefr": "C2"
+  },
+  {
+    "word": "succumb",
+    "cefr": "C2"
+  },
+  {
+    "word": "treacherous",
+    "cefr": "C2"
+  },
+  {
+    "word": "treacherously",
+    "cefr": "C2"
+  },
+  {
+    "word": "treachery",
+    "cefr": "C2"
+  },
+  {
+    "word": "maggot",
+    "cefr": "C2"
+  },
+  {
+    "word": "palate",
+    "cefr": "C2"
+  },
+  {
+    "word": "hermit",
+    "cefr": "C2"
+  },
+  {
+    "word": "hermetic",
+    "cefr": "C2"
+  },
+  {
+    "word": "irrelevancy",
+    "cefr": "C2"
+  },
+  {
+    "word": "mariner",
+    "cefr": "C2"
+  },
+  {
+    "word": "helm",
+    "cefr": "C2"
+  },
+  {
+    "word": "autopilot",
+    "cefr": "C2"
+  },
+  {
+    "word": "eminence",
+    "cefr": "C2"
+  },
+  {
+    "word": "eminent",
+    "cefr": "C2"
+  },
+  {
+    "word": "preeminent",
+    "cefr": "C2"
+  },
+  {
+    "word": "mold/mould",
+    "cefr": "C2"
+  },
+  {
+    "word": "unsuspected",
+    "cefr": "C2"
+  },
+  {
+    "word": "paralyze/paralyse",
+    "cefr": "C2"
+  },
+  {
+    "word": "paralyzingly/paralysingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "glory in",
+    "cefr": "C2"
+  },
+  {
+    "word": "decentralize/decentralise",
+    "cefr": "C2"
+  },
+  {
+    "word": "preoccupation",
+    "cefr": "C2"
+  },
+  {
+    "word": "drudgery",
+    "cefr": "C2"
+  },
+  {
+    "word": "pressurize",
+    "cefr": "C2"
+  },
+  {
+    "word": "pressurization",
+    "cefr": "C2"
+  },
+  {
+    "word": "intermediary",
+    "cefr": "C2"
+  },
+  {
+    "word": "hotelier",
+    "cefr": "C2"
+  },
+  {
+    "word": "denote",
+    "cefr": "C2"
+  },
+  {
+    "word": "denotation",
+    "cefr": "C2"
+  },
+  {
+    "word": "declination",
+    "cefr": "C2"
+  },
+  {
+    "word": "vocational",
+    "cefr": "C2"
+  },
+  {
+    "word": "spatial",
+    "cefr": "C2"
+  },
+  {
+    "word": "spatially",
+    "cefr": "C2"
+  },
+  {
+    "word": "extracurricular",
+    "cefr": "C2"
+  },
+  {
+    "word": "extracurricular",
+    "cefr": "C2"
+  },
+  {
+    "word": "encompass",
+    "cefr": "C2"
+  },
+  {
+    "word": "all-encompassing",
+    "cefr": "C2"
+  },
+  {
+    "word": "accountability",
+    "cefr": "C2"
+  },
+  {
+    "word": "frolic",
+    "cefr": "C2"
+  },
+  {
+    "word": "minefield",
+    "cefr": "C2"
+  },
+  {
+    "word": "side-step",
+    "cefr": "C2"
+  },
+  {
+    "word": "abundantly",
+    "cefr": "C2"
+  },
+  {
+    "word": "anarchic",
+    "cefr": "C2"
+  },
+  {
+    "word": "crystallize/crystallise",
+    "cefr": "C2"
+  },
+  {
+    "word": "crystallization/crystallisation",
+    "cefr": "C2"
+  },
+  {
+    "word": "prescriptive",
+    "cefr": "C2"
+  },
+  {
+    "word": "slab",
+    "cefr": "C2"
+  },
+  {
+    "word": "retrospective",
+    "cefr": "C2"
+  },
+  {
+    "word": "retrospection",
+    "cefr": "C2"
+  },
+  {
+    "word": "wordage",
+    "cefr": "C2"
+  },
+  {
+    "word": "brevity",
+    "cefr": "C2"
+  },
+  {
+    "word": "uncanny",
+    "cefr": "C2"
+  },
+  {
+    "word": "tactical",
+    "cefr": "C2"
+  },
+  {
+    "word": "tactically",
+    "cefr": "C2"
+  },
+  {
+    "word": "gambit",
+    "cefr": "C2"
+  },
+  {
+    "word": "bauble",
+    "cefr": "C2"
+  },
+  {
+    "word": "correlate",
+    "cefr": "C2"
+  },
+  {
+    "word": "correlation",
+    "cefr": "C2"
+  },
+  {
+    "word": "correlate",
+    "cefr": "C2"
+  },
+  {
+    "word": "contraption",
+    "cefr": "C2"
+  },
+  {
+    "word": "mesh",
+    "cefr": "C2"
+  },
+  {
+    "word": "enabler",
+    "cefr": "C2"
+  },
+  {
+    "word": "fluctuate",
+    "cefr": "C2"
+  },
+  {
+    "word": "fluctuation",
+    "cefr": "C2"
+  },
+  {
+    "word": "lyricist",
+    "cefr": "C2"
+  },
+  {
+    "word": "lyrical",
+    "cefr": "C2"
+  },
+  {
+    "word": "lyrically",
+    "cefr": "C2"
+  },
+  {
+    "word": "bona fide",
+    "cefr": "C2"
+  },
+  {
+    "word": "moribund",
+    "cefr": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr": "C2"
+  },
+  {
+    "word": "perch",
+    "cefr": "C2"
+  },
+  {
+    "word": "solicit",
+    "cefr": "C2"
+  },
+  {
+    "word": "philanthropy",
+    "cefr": "C2"
+  },
+  {
+    "word": "philanthropist",
+    "cefr": "C2"
+  },
+  {
+    "word": "philanthropic",
+    "cefr": "C2"
+  },
+  {
+    "word": "philanthropically",
+    "cefr": "C2"
+  },
+  {
+    "word": "precocious",
+    "cefr": "C2"
+  },
+  {
+    "word": "precociously",
+    "cefr": "C2"
+  },
+  {
+    "word": "wordsmith",
+    "cefr": "C2"
+  },
+  {
+    "word": "connote",
+    "cefr": "C2"
+  },
+  {
+    "word": "connotation",
+    "cefr": "C2"
+  },
+  {
+    "word": "herald",
+    "cefr": "C2"
+  },
+  {
+    "word": "herald",
+    "cefr": "C2"
+  },
+  {
+    "word": "philistine",
+    "cefr": "C2"
+  },
+  {
+    "word": "innuendo",
+    "cefr": "C2"
+  },
+  {
+    "word": "inducement",
+    "cefr": "C2"
+  },
+  {
+    "word": "lament",
+    "cefr": "C2"
+  },
+  {
+    "word": "lamentation",
+    "cefr": "C2"
+  },
+  {
+    "word": "conduit",
+    "cefr": "C2"
+  },
+  {
+    "word": "chronology",
+    "cefr": "C2"
+  },
+  {
+    "word": "chronologically",
+    "cefr": "C2"
+  },
+  {
+    "word": "proposition",
+    "cefr": "C2"
+  },
+  {
+    "word": "flagging",
+    "cefr": "C2"
+  },
+  {
+    "word": "caffeinate",
+    "cefr": "C2"
+  },
+  {
+    "word": "cosmic",
+    "cefr": "C2"
+  },
+  {
+    "word": "beneficiary",
+    "cefr": "C2"
+  },
+  {
+    "word": "recuperate",
+    "cefr": "C2"
+  },
+  {
+    "word": "recuperation",
+    "cefr": "C2"
+  },
+  {
+    "word": "recuperative",
+    "cefr": "C2"
+  },
+  {
+    "word": "cultish",
+    "cefr": "C2"
+  },
+  {
+    "word": "seismic",
+    "cefr": "C2"
+  },
+  {
+    "word": "irrevocable",
+    "cefr": "C2"
+  },
+  {
+    "word": "slither",
+    "cefr": "C2"
+  },
+  {
+    "word": "unnerve",
+    "cefr": "C2"
+  },
+  {
+    "word": "unnerving",
+    "cefr": "C2"
+  },
+  {
+    "word": "unnervingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "protrude",
+    "cefr": "C2"
+  },
+  {
+    "word": "protrusion",
+    "cefr": "C2"
+  },
+  {
+    "word": "qualitative",
+    "cefr": "C2"
+  },
+  {
+    "word": "procedural",
+    "cefr": "C2"
+  },
+  {
+    "word": "procedural",
+    "cefr": "C2"
+  },
+  {
+    "word": "demystify",
+    "cefr": "C2"
+  },
+  {
+    "word": "demystification",
+    "cefr": "C2"
+  },
+  {
+    "word": "proprietary",
+    "cefr": "C2"
+  },
+  {
+    "word": "proprietorial",
+    "cefr": "C2"
+  },
+  {
+    "word": "tantamount",
+    "cefr": "C2"
+  },
+  {
+    "word": "floodgates",
+    "cefr": "C2"
+  },
+  {
+    "word": "imperceptibly",
+    "cefr": "C2"
+  },
+  {
+    "word": "hapless",
+    "cefr": "C2"
+  },
+  {
+    "word": "catastrophically",
+    "cefr": "C2"
+  },
+  {
+    "word": "wayward",
+    "cefr": "C2"
+  },
+  {
+    "word": "blurb",
+    "cefr": "C2"
+  },
+  {
+    "word": "provincial",
+    "cefr": "C2"
+  },
+  {
+    "word": "indolent",
+    "cefr": "C2"
+  },
+  {
+    "word": "indolently",
+    "cefr": "C2"
+  },
+  {
+    "word": "indolence",
+    "cefr": "C2"
+  },
+  {
+    "word": "taste-maker",
+    "cefr": "C2"
+  },
+  {
+    "word": "deviant",
+    "cefr": "C2"
+  },
+  {
+    "word": "deviant",
+    "cefr": "C2"
+  },
+  {
+    "word": "deviantly",
+    "cefr": "C2"
+  },
+  {
+    "word": "engender",
+    "cefr": "C2"
+  },
+  {
+    "word": "emolument",
+    "cefr": "C2"
+  },
+  {
+    "word": "munificence",
+    "cefr": "C2"
+  },
+  {
+    "word": "posterity",
+    "cefr": "C2"
+  },
+  {
+    "word": "venomous",
+    "cefr": "C2"
+  },
+  {
+    "word": "venomously",
+    "cefr": "C2"
+  },
+  {
+    "word": "choreography",
+    "cefr": "C2"
+  },
+  {
+    "word": "choreographical",
+    "cefr": "C2"
+  },
+  {
+    "word": "archetype",
+    "cefr": "C2"
+  },
+  {
+    "word": "archetypal",
+    "cefr": "C2"
+  },
+  {
+    "word": "dissension",
+    "cefr": "C2"
+  },
+  {
+    "word": "exalted",
+    "cefr": "C2"
+  },
+  {
+    "word": "exaltedly",
+    "cefr": "C2"
+  },
+  {
+    "word": "adept",
+    "cefr": "C2"
+  },
+  {
+    "word": "adept",
+    "cefr": "C2"
+  },
+  {
+    "word": "hitherto",
+    "cefr": "C2"
+  },
+  {
+    "word": "angst",
+    "cefr": "C2"
+  },
+  {
+    "word": "angsty",
+    "cefr": "C2"
+  },
+  {
+    "word": "drabness",
+    "cefr": "C2"
+  },
+  {
+    "word": "melodious",
+    "cefr": "C2"
+  },
+  {
+    "word": "melodiously",
+    "cefr": "C2"
+  },
+  {
+    "word": "magpie",
+    "cefr": "C2"
+  },
+  {
+    "word": "melancholy",
+    "cefr": "C2"
+  },
+  {
+    "word": "melancholy",
+    "cefr": "C2"
+  },
+  {
+    "word": "meteorology",
+    "cefr": "C2"
+  },
+  {
+    "word": "meteorological",
+    "cefr": "C2"
+  },
+  {
+    "word": "brink",
+    "cefr": "C2"
+  },
+  {
+    "word": "unsurpassed",
+    "cefr": "C2"
+  },
+  {
+    "word": "topple",
+    "cefr": "C2"
+  },
+  {
+    "word": "intrinsic",
+    "cefr": "C2"
+  },
+  {
+    "word": "intrinsically",
+    "cefr": "C2"
+  },
+  {
+    "word": "merit",
+    "cefr": "C2"
+  },
+  {
+    "word": "merit",
+    "cefr": "C2"
+  },
+  {
+    "word": "promotable",
+    "cefr": "C2"
+  },
+  {
+    "word": "clinch",
+    "cefr": "C2"
+  },
+  {
+    "word": "anonymity",
+    "cefr": "C2"
+  },
+  {
+    "word": "splinter",
+    "cefr": "C2"
+  },
+  {
+    "word": "reproach",
+    "cefr": "C2"
+  },
+  {
+    "word": "disseminate",
+    "cefr": "C2"
+  },
+  {
+    "word": "dissemination",
+    "cefr": "C2"
+  },
+  {
+    "word": "dissemble",
+    "cefr": "C2"
+  },
+  {
+    "word": "mangle",
+    "cefr": "C2"
+  },
+  {
+    "word": "bereft",
+    "cefr": "C2"
+  },
+  {
+    "word": "bereftly",
+    "cefr": "C2"
+  },
+  {
+    "word": "solipsism",
+    "cefr": "C2"
+  },
+  {
+    "word": "soliloquize",
+    "cefr": "C2"
+  },
+  {
+    "word": "mutinous",
+    "cefr": "C2"
+  },
+  {
+    "word": "mutinously",
+    "cefr": "C2"
+  },
+  {
+    "word": "prissy",
+    "cefr": "C2"
+  },
+  {
+    "word": "reptilian",
+    "cefr": "C2"
+  },
+  {
+    "word": "diminish",
+    "cefr": "C2"
+  },
+  {
+    "word": "undiminishing",
+    "cefr": "C2"
+  },
+  {
+    "word": "contagion",
+    "cefr": "C2"
+  },
+  {
+    "word": "homestead",
+    "cefr": "C2"
+  },
+  {
+    "word": "computerize/computerise",
+    "cefr": "C2"
+  },
+  {
+    "word": "incumbent",
+    "cefr": "C2"
+  },
+  {
+    "word": "incumbent",
+    "cefr": "C2"
+  },
+  {
+    "word": "recumbent",
+    "cefr": "C2"
+  },
+  {
+    "word": "nonchalant",
+    "cefr": "C2"
+  },
+  {
+    "word": "nonchalantly",
+    "cefr": "C2"
+  },
+  {
+    "word": "mesmeric",
+    "cefr": "C2"
+  },
+  {
+    "word": "stultify",
+    "cefr": "C2"
+  },
+  {
+    "word": "stultifyingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "wallow",
+    "cefr": "C2"
+  },
+  {
+    "word": "ponderous",
+    "cefr": "C2"
+  },
+  {
+    "word": "ponderously",
+    "cefr": "C2"
+  },
+  {
+    "word": "lassitude",
+    "cefr": "C2"
+  },
+  {
+    "word": "vicinity",
+    "cefr": "C2"
+  },
+  {
+    "word": "ebb",
+    "cefr": "C2"
+  },
+  {
+    "word": "antediluvian",
+    "cefr": "C2"
+  },
+  {
+    "word": "ostensible",
+    "cefr": "C2"
+  },
+  {
+    "word": "ostensibly",
+    "cefr": "C2"
+  },
+  {
+    "word": "interlocking",
+    "cefr": "C2"
+  },
+  {
+    "word": "undemonstrative",
+    "cefr": "C2"
+  },
+  {
+    "word": "undemonstratively",
+    "cefr": "C2"
+  },
+  {
+    "word": "menace",
+    "cefr": "C2"
+  },
+  {
+    "word": "menacingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "calamity",
+    "cefr": "C2"
+  },
+  {
+    "word": "calamitous",
+    "cefr": "C2"
+  },
+  {
+    "word": "calamitously",
+    "cefr": "C2"
+  },
+  {
+    "word": "nigh",
+    "cefr": "C2"
+  },
+  {
+    "word": "austere",
+    "cefr": "C2"
+  },
+  {
+    "word": "austerely",
+    "cefr": "C2"
+  },
+  {
+    "word": "austerity",
+    "cefr": "C2"
+  },
+  {
+    "word": "idiosyncrasy",
+    "cefr": "C2"
+  },
+  {
+    "word": "idiosyncratic",
+    "cefr": "C2"
+  },
+  {
+    "word": "idiomatic",
+    "cefr": "C2"
+  },
+  {
+    "word": "idiomatically",
+    "cefr": "C2"
+  },
+  {
+    "word": "kinetic",
+    "cefr": "C2"
+  },
+  {
+    "word": "kinetically",
+    "cefr": "C2"
+  },
+  {
+    "word": "unmediated",
+    "cefr": "C2"
+  },
+  {
+    "word": "mediate",
+    "cefr": "C2"
+  },
+  {
+    "word": "unharried",
+    "cefr": "C2"
+  },
+  {
+    "word": "figuratively",
+    "cefr": "C2"
+  },
+  {
+    "word": "exorcism",
+    "cefr": "C2"
+  },
+  {
+    "word": "exorcist",
+    "cefr": "C2"
+  },
+  {
+    "word": "mundanity",
+    "cefr": "C2"
+  },
+  {
+    "word": "mediocrity",
+    "cefr": "C2"
+  },
+  {
+    "word": "dubiously",
+    "cefr": "C2"
+  },
+  {
+    "word": "antithesis",
+    "cefr": "C2"
+  },
+  {
+    "word": "antithetical",
+    "cefr": "C2"
+  },
+  {
+    "word": "detract",
+    "cefr": "C2"
+  },
+  {
+    "word": "interrogate",
+    "cefr": "C2"
+  },
+  {
+    "word": "interrogation",
+    "cefr": "C2"
+  },
+  {
+    "word": "interrogative",
+    "cefr": "C2"
+  },
+  {
+    "word": "interrogatively",
+    "cefr": "C2"
+  },
+  {
+    "word": "perverse",
+    "cefr": "C2"
+  },
+  {
+    "word": "perversity",
+    "cefr": "C2"
+  },
+  {
+    "word": "opaque",
+    "cefr": "C2"
+  },
+  {
+    "word": "opacity",
+    "cefr": "C2"
+  },
+  {
+    "word": "remit",
+    "cefr": "C2"
+  },
+  {
+    "word": "remittance",
+    "cefr": "C2"
+  },
+  {
+    "word": "recourse",
+    "cefr": "C2"
+  },
+  {
+    "word": "pedestal",
+    "cefr": "C2"
+  },
+  {
+    "word": "lurid",
+    "cefr": "C2"
+  },
+  {
+    "word": "luridly",
+    "cefr": "C2"
+  },
+  {
+    "word": "fallacy",
+    "cefr": "C2"
+  },
+  {
+    "word": "rife",
+    "cefr": "C2"
+  },
+  {
+    "word": "mercenary",
+    "cefr": "C2"
+  },
+  {
+    "word": "polysyllabic",
+    "cefr": "C2"
+  },
+  {
+    "word": "syllabic",
+    "cefr": "C2"
+  },
+  {
+    "word": "superfluous",
+    "cefr": "C2"
+  },
+  {
+    "word": "superfluously",
+    "cefr": "C2"
+  },
+  {
+    "word": "snippet",
+    "cefr": "C2"
+  },
+  {
+    "word": "practitioner",
+    "cefr": "C2"
+  },
+  {
+    "word": "ephemeral",
+    "cefr": "C2"
+  },
+  {
+    "word": "ephemera",
+    "cefr": "C2"
+  },
+  {
+    "word": "ephemerality",
+    "cefr": "C2"
+  },
+  {
+    "word": "summarily",
+    "cefr": "C2"
+  },
+  {
+    "word": "infallibly",
+    "cefr": "C2"
+  },
+  {
+    "word": "infallible",
+    "cefr": "C2"
+  },
+  {
+    "word": "infallibility",
+    "cefr": "C2"
+  },
+  {
+    "word": "depravity",
+    "cefr": "C2"
+  },
+  {
+    "word": "depraved",
+    "cefr": "C2"
+  },
+  {
+    "word": "deprecate",
+    "cefr": "C2"
+  },
+  {
+    "word": "deprecatingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "revile",
+    "cefr": "C2"
+  },
+  {
+    "word": "revulsion",
+    "cefr": "C2"
+  },
+  {
+    "word": "meager/meagre",
+    "cefr": "C2"
+  },
+  {
+    "word": "arcane",
+    "cefr": "C2"
+  },
+  {
+    "word": "arcanely",
+    "cefr": "C2"
+  },
+  {
+    "word": "porten",
+    "cefr": "C2"
+  },
+  {
+    "word": "divination",
+    "cefr": "C2"
+  },
+  {
+    "word": "flit",
+    "cefr": "C2"
+  },
+  {
+    "word": "prone",
+    "cefr": "C2"
+  },
+  {
+    "word": "scavenger",
+    "cefr": "C2"
+  },
+  {
+    "word": "vermin",
+    "cefr": "C2"
+  },
+  {
+    "word": "totemic",
+    "cefr": "C2"
+  },
+  {
+    "word": "emulate",
+    "cefr": "C2"
+  },
+  {
+    "word": "emulation",
+    "cefr": "C2"
+  },
+  {
+    "word": "avian",
+    "cefr": "C2"
+  },
+  {
+    "word": "vestigial",
+    "cefr": "C2"
+  },
+  {
+    "word": "vestigially",
+    "cefr": "C2"
+  },
+  {
+    "word": "lament",
+    "cefr": "C2"
+  },
+  {
+    "word": "lamentation",
+    "cefr": "C2"
+  },
+  {
+    "word": "brouhaha",
+    "cefr": "C2"
+  },
+  {
+    "word": "magnate",
+    "cefr": "C2"
+  },
+  {
+    "word": "magnanimous",
+    "cefr": "C2"
+  },
+  {
+    "word": "magnanimously",
+    "cefr": "C2"
+  },
+  {
+    "word": "magnanimity",
+    "cefr": "C2"
+  },
+  {
+    "word": "whirlwind",
+    "cefr": "C2"
+  },
+  {
+    "word": "secular",
+    "cefr": "C2"
+  },
+  {
+    "word": "secularly",
+    "cefr": "C2"
+  },
+  {
+    "word": "euphemism",
+    "cefr": "C2"
+  },
+  {
+    "word": "euphemistic",
+    "cefr": "C2"
+  },
+  {
+    "word": "euphemistically",
+    "cefr": "C2"
+  },
+  {
+    "word": "condensation",
+    "cefr": "C2"
+  },
+  {
+    "word": "redundancy",
+    "cefr": "C2"
+  },
+  {
+    "word": "redundantly",
+    "cefr": "C2"
+  },
+  {
+    "word": "colloquial",
+    "cefr": "C2"
+  },
+  {
+    "word": "colloquium",
+    "cefr": "C2"
+  },
+  {
+    "word": "colloquially",
+    "cefr": "C2"
+  },
+  {
+    "word": "allusion",
+    "cefr": "C2"
+  },
+  {
+    "word": "allude",
+    "cefr": "C2"
+  },
+  {
+    "word": "disparage",
+    "cefr": "C2"
+  },
+  {
+    "word": "disparaging",
+    "cefr": "C2"
+  },
+  {
+    "word": "disparagingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "disparagement",
+    "cefr": "C2"
+  },
+  {
+    "word": "topography",
+    "cefr": "C2"
+  },
+  {
+    "word": "topographical",
+    "cefr": "C2"
+  },
+  {
+    "word": "topographically",
+    "cefr": "C2"
+  },
+  {
+    "word": "confabulate",
+    "cefr": "C2"
+  },
+  {
+    "word": "confabulation",
+    "cefr": "C2"
+  },
+  {
+    "word": "surrealism",
+    "cefr": "C2"
+  },
+  {
+    "word": "contrive",
+    "cefr": "C2"
+  },
+  {
+    "word": "malice",
+    "cefr": "C2"
+  },
+  {
+    "word": "maliciously",
+    "cefr": "C2"
+  },
+  {
+    "word": "cinematography",
+    "cefr": "C2"
+  },
+  {
+    "word": "cinematographer",
+    "cefr": "C2"
+  },
+  {
+    "word": "diligently",
+    "cefr": "C2"
+  },
+  {
+    "word": "turret",
+    "cefr": "C2"
+  },
+  {
+    "word": "impressionistic",
+    "cefr": "C2"
+  },
+  {
+    "word": "impressionistically",
+    "cefr": "C2"
+  },
+  {
+    "word": "snobbery",
+    "cefr": "C2"
+  },
+  {
+    "word": "parochial",
+    "cefr": "C2"
+  },
+  {
+    "word": "gravitate",
+    "cefr": "C2"
+  },
+  {
+    "word": "gravitational",
+    "cefr": "C2"
+  },
+  {
+    "word": "gravitationally",
+    "cefr": "C2"
+  },
+  {
+    "word": "consternation",
+    "cefr": "C2"
+  },
+  {
+    "word": "haughty",
+    "cefr": "C2"
+  },
+  {
+    "word": "haughtily",
+    "cefr": "C2"
+  },
+  {
+    "word": "axiom",
+    "cefr": "C2"
+  },
+  {
+    "word": "axiomatic",
+    "cefr": "C2"
+  },
+  {
+    "word": "attrition",
+    "cefr": "C2"
+  },
+  {
+    "word": "enduringly",
+    "cefr": "C2"
+  },
+  {
+    "word": "reissue",
+    "cefr": "C2"
+  },
+  {
+    "word": "sulphuric",
+    "cefr": "C2"
+  },
+  {
+    "word": "solitary",
+    "cefr": "C2"
+  },
+  {
+    "word": "solitary",
+    "cefr": "C2"
+  },
+  {
+    "word": "solitariness",
+    "cefr": "C2"
+  },
+  {
+    "word": "adhesion",
+    "cefr": "C2"
+  },
+  {
+    "word": "proscribe",
+    "cefr": "C2"
+  },
+  {
+    "word": "proscription",
+    "cefr": "C2"
+  },
+  {
+    "word": "crony",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingrate",
+    "cefr": "C2"
+  },
+  {
+    "word": "prise",
+    "cefr": "C2"
+  },
+  {
+    "word": "rickety",
+    "cefr": "C2"
+  },
+  {
+    "word": "consign",
+    "cefr": "C2"
+  },
+  {
+    "word": "consignment",
+    "cefr": "C2"
+  },
+  {
+    "word": "fete",
+    "cefr": "C2"
+  },
+  {
+    "word": "dole out",
+    "cefr": "C2"
+  },
+  {
+    "word": "opulent",
+    "cefr": "C2"
+  },
+  {
+    "word": "opulence",
+    "cefr": "C2"
+  },
+  {
+    "word": "opulently",
+    "cefr": "C2"
+  },
+  {
+    "word": "plutocrat",
+    "cefr": "C2"
+  },
+  {
+    "word": "averse",
+    "cefr": "C2"
+  },
+  {
+    "word": "edify",
+    "cefr": "C2"
+  },
+  {
+    "word": "edification",
+    "cefr": "C2"
+  },
+  {
+    "word": "sterility",
+    "cefr": "C2"
+  },
+  {
+    "word": "rhetoric",
+    "cefr": "C2"
+  },
+  {
+    "word": "rhetorical",
+    "cefr": "C2"
+  },
+  {
+    "word": "rhetorically",
+    "cefr": "C2"
+  },
+  {
+    "word": "flighty",
+    "cefr": "C2"
+  },
+  {
+    "word": "flightiness",
+    "cefr": "C2"
+  },
+  {
+    "word": "brimstone",
+    "cefr": "C2"
+  },
+  {
+    "word": "impeccably",
+    "cefr": "C2"
+  },
+  {
+    "word": "romp",
+    "cefr": "C2"
+  },
+  {
+    "word": "romper",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingratiate",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingratiating",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingratiatingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "shimmer",
+    "cefr": "C2"
+  },
+  {
+    "word": "cull",
+    "cefr": "C2"
+  },
+  {
+    "word": "swivel",
+    "cefr": "C2"
+  },
+  {
+    "word": "relinquish",
+    "cefr": "C2"
+  },
+  {
+    "word": "quiver",
+    "cefr": "C2"
+  },
+  {
+    "word": "quiver",
+    "cefr": "C2"
+  },
+  {
+    "word": "sandwiched",
+    "cefr": "C2"
+  },
+  {
+    "word": "mottled",
+    "cefr": "C2"
+  },
+  {
+    "word": "epoxy",
+    "cefr": "C2"
+  },
+  {
+    "word": "resin",
+    "cefr": "C2"
+  },
+  {
+    "word": "sedately",
+    "cefr": "C2"
+  },
+  {
+    "word": "angular",
+    "cefr": "C2"
+  },
+  {
+    "word": "angularity",
+    "cefr": "C2"
+  },
+  {
+    "word": "dampen",
+    "cefr": "C2"
+  },
+  {
+    "word": "buccaneer",
+    "cefr": "C2"
+  },
+  {
+    "word": "buccaneer",
+    "cefr": "C2"
+  },
+  {
+    "word": "conglomerate",
+    "cefr": "C2"
+  },
+  {
+    "word": "cay",
+    "cefr": "C2"
+  },
+  {
+    "word": "singe",
+    "cefr": "C2"
+  },
+  {
+    "word": "cordon",
+    "cefr": "C2"
+  },
+  {
+    "word": "fabled",
+    "cefr": "C2"
+  },
+  {
+    "word": "infernal",
+    "cefr": "C2"
+  },
+  {
+    "word": "infernally",
+    "cefr": "C2"
+  },
+  {
+    "word": "presentational",
+    "cefr": "C2"
+  },
+  {
+    "word": "plume",
+    "cefr": "C2"
+  },
+  {
+    "word": "happenstance",
+    "cefr": "C2"
+  },
+  {
+    "word": "reconciliation",
+    "cefr": "C2"
+  },
+  {
+    "word": "conciliatory",
+    "cefr": "C2"
+  },
+  {
+    "word": "conciliation",
+    "cefr": "C2"
+  },
+  {
+    "word": "preconception",
+    "cefr": "C2"
+  },
+  {
+    "word": "baroque",
+    "cefr": "C2"
+  },
+  {
+    "word": "virginal",
+    "cefr": "C2"
+  },
+  {
+    "word": "elephantine",
+    "cefr": "C2"
+  },
+  {
+    "word": "condone",
+    "cefr": "C2"
+  },
+  {
+    "word": "commode",
+    "cefr": "C2"
+  },
+  {
+    "word": "unobtrusive",
+    "cefr": "C2"
+  },
+  {
+    "word": "unobtrusively",
+    "cefr": "C2"
+  },
+  {
+    "word": "unobtrusiveness",
+    "cefr": "C2"
+  },
+  {
+    "word": "compellingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "hauntingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "scholarly",
+    "cefr": "C2"
+  },
+  {
+    "word": "cognitive",
+    "cefr": "C2"
+  },
+  {
+    "word": "artifact",
+    "cefr": "C2"
+  },
+  {
+    "word": "preservationist",
+    "cefr": "C2"
+  },
+  {
+    "word": "qualm",
+    "cefr": "C2"
+  },
+  {
+    "word": "besiege",
+    "cefr": "C2"
+  },
+  {
+    "word": "cloister",
+    "cefr": "C2"
+  },
+  {
+    "word": "cloistered",
+    "cefr": "C2"
+  },
+  {
+    "word": "annex",
+    "cefr": "C2"
+  },
+  {
+    "word": "annex",
+    "cefr": "C2"
+  },
+  {
+    "word": "resuscitate",
+    "cefr": "C2"
+  },
+  {
+    "word": "resuscitation",
+    "cefr": "C2"
+  },
+  {
+    "word": "ravish",
+    "cefr": "C2"
+  },
+  {
+    "word": "fabrication",
+    "cefr": "C2"
+  },
+  {
+    "word": "patchy",
+    "cefr": "C2"
+  },
+  {
+    "word": "patchily",
+    "cefr": "C2"
+  },
+  {
+    "word": "resounding",
+    "cefr": "C2"
+  },
+  {
+    "word": "resoundingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "resound",
+    "cefr": "C2"
+  },
+  {
+    "word": "ordain",
+    "cefr": "C2"
+  },
+  {
+    "word": "inchoate",
+    "cefr": "C2"
+  },
+  {
+    "word": "inchoately",
+    "cefr": "C2"
+  },
+  {
+    "word": "elated",
+    "cefr": "C2"
+  },
+  {
+    "word": "elation",
+    "cefr": "C2"
+  },
+  {
+    "word": "hysteria",
+    "cefr": "C2"
+  },
+  {
+    "word": "hysterical",
+    "cefr": "C2"
+  },
+  {
+    "word": "hysterically",
+    "cefr": "C2"
+  },
+  {
+    "word": "jarring",
+    "cefr": "C2"
+  },
+  {
+    "word": "suffuse",
+    "cefr": "C2"
+  },
+  {
+    "word": "totter",
+    "cefr": "C2"
+  },
+  {
+    "word": "pyre",
+    "cefr": "C2"
+  },
+  {
+    "word": "contemptuous",
+    "cefr": "C2"
+  },
+  {
+    "word": "contemptuously",
+    "cefr": "C2"
+  },
+  {
+    "word": "forlorn",
+    "cefr": "C2"
+  },
+  {
+    "word": "forlornly",
+    "cefr": "C2"
+  },
+  {
+    "word": "rebuke",
+    "cefr": "C2"
+  },
+  {
+    "word": "rebuke",
+    "cefr": "C2"
+  },
+  {
+    "word": "abhorrent",
+    "cefr": "C2"
+  },
+  {
+    "word": "abhor",
+    "cefr": "C2"
+  },
+  {
+    "word": "abhorrently",
+    "cefr": "C2"
+  },
+  {
+    "word": "aberration",
+    "cefr": "C2"
+  },
+  {
+    "word": "emulsify",
+    "cefr": "C2"
+  },
+  {
+    "word": "emulsification",
+    "cefr": "C2"
+  },
+  {
+    "word": "emulsifier",
+    "cefr": "C2"
+  },
+  {
+    "word": "additive",
+    "cefr": "C2"
+  },
+  {
+    "word": "additive",
+    "cefr": "C2"
+  },
+  {
+    "word": "confection",
+    "cefr": "C2"
+  },
+  {
+    "word": "proximal",
+    "cefr": "C2"
+  },
+  {
+    "word": "vandalize",
+    "cefr": "C2"
+  },
+  {
+    "word": "feign",
+    "cefr": "C2"
+  },
+  {
+    "word": "paradoxical",
+    "cefr": "C2"
+  },
+  {
+    "word": "paradoxically",
+    "cefr": "C2"
+  },
+  {
+    "word": "laryngitis",
+    "cefr": "C2"
+  },
+  {
+    "word": "stringent",
+    "cefr": "C2"
+  },
+  {
+    "word": "astringent",
+    "cefr": "C2"
+  },
+  {
+    "word": "stringently",
+    "cefr": "C2"
+  },
+  {
+    "word": "standing",
+    "cefr": "C2"
+  },
+  {
+    "word": "economize/economise",
+    "cefr": "C2"
+  },
+  {
+    "word": "breadwinner",
+    "cefr": "C2"
+  },
+  {
+    "word": "cosset",
+    "cefr": "C2"
+  },
+  {
+    "word": "counsel",
+    "cefr": "C2"
+  },
+  {
+    "word": "misdemeanor/misdemanour",
+    "cefr": "C2"
+  },
+  {
+    "word": "torrential",
+    "cefr": "C2"
+  },
+  {
+    "word": "banish",
+    "cefr": "C2"
+  },
+  {
+    "word": "banishment",
+    "cefr": "C2"
+  },
+  {
+    "word": "knack",
+    "cefr": "C2"
+  },
+  {
+    "word": "fruition",
+    "cefr": "C2"
+  },
+  {
+    "word": "tantalize/tantalise",
+    "cefr": "C2"
+  },
+  {
+    "word": "tantalizingly/tantalisingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "maelstrom",
+    "cefr": "C2"
+  },
+  {
+    "word": "vortex",
+    "cefr": "C2"
+  },
+  {
+    "word": "shoal",
+    "cefr": "C2"
+  },
+  {
+    "word": "collide",
+    "cefr": "C2"
+  },
+  {
+    "word": "collider",
+    "cefr": "C2"
+  },
+  {
+    "word": "edifice",
+    "cefr": "C2"
+  },
+  {
+    "word": "thicket",
+    "cefr": "C2"
+  },
+  {
+    "word": "leaven",
+    "cefr": "C2"
+  },
+  {
+    "word": "leavening",
+    "cefr": "C2"
+  },
+  {
+    "word": "exhibitionist",
+    "cefr": "C2"
+  },
+  {
+    "word": "interweave",
+    "cefr": "C2"
+  },
+  {
+    "word": "burgeoning",
+    "cefr": "C2"
+  },
+  {
+    "word": "indiscrete",
+    "cefr": "C2"
+  },
+  {
+    "word": "indiscretion",
+    "cefr": "C2"
+  },
+  {
+    "word": "telescopic",
+    "cefr": "C2"
+  },
+  {
+    "word": "telescopically",
+    "cefr": "C2"
+  },
+  {
+    "word": "amorphous",
+    "cefr": "C2"
+  },
+  {
+    "word": "amorphously",
+    "cefr": "C2"
+  },
+  {
+    "word": "hamper",
+    "cefr": "C2"
+  },
+  {
+    "word": "proliferate",
+    "cefr": "C2"
+  },
+  {
+    "word": "proliferation",
+    "cefr": "C2"
+  },
+  {
+    "word": "selectivity",
+    "cefr": "C2"
+  },
+  {
+    "word": "fractious",
+    "cefr": "C2"
+  },
+  {
+    "word": "mystique",
+    "cefr": "C2"
+  },
+  {
+    "word": "assimilate",
+    "cefr": "C2"
+  },
+  {
+    "word": "assimilation",
+    "cefr": "C2"
+  },
+  {
+    "word": "verbatim",
+    "cefr": "C2"
+  },
+  {
+    "word": "verbatim",
+    "cefr": "C2"
+  },
+  {
+    "word": "verily",
+    "cefr": "C2"
+  },
+  {
+    "word": "veritable",
+    "cefr": "C2"
+  },
+  {
+    "word": "verisimilitude",
+    "cefr": "C2"
+  },
+  {
+    "word": "artifice",
+    "cefr": "C2"
+  },
+  {
+    "word": "advantageous",
+    "cefr": "C2"
+  },
+  {
+    "word": "unfeasible",
+    "cefr": "C2"
+  },
+  {
+    "word": "unfeasibly",
+    "cefr": "C2"
+  },
+  {
+    "word": "behest",
+    "cefr": "C2"
+  },
+  {
+    "word": "virtuoso",
+    "cefr": "C2"
+  },
+  {
+    "word": "virtuosity",
+    "cefr": "C2"
+  },
+  {
+    "word": "crippling",
+    "cefr": "C2"
+  },
+  {
+    "word": "nascent",
+    "cefr": "C2"
+  },
+  {
+    "word": "smattering",
+    "cefr": "C2"
+  },
+  {
+    "word": "wheeze",
+    "cefr": "C2"
+  },
+  {
+    "word": "neophyte",
+    "cefr": "C2"
+  },
+  {
+    "word": "formidably",
+    "cefr": "C2"
+  },
+  {
+    "word": "squint",
+    "cefr": "C2"
+  },
+  {
+    "word": "hoist",
+    "cefr": "C2"
+  },
+  {
+    "word": "flatout",
+    "cefr": "C2"
+  },
+  {
+    "word": "buzzard",
+    "cefr": "C2"
+  },
+  {
+    "word": "bogus",
+    "cefr": "C2"
+  },
+  {
+    "word": "derision",
+    "cefr": "C2"
+  },
+  {
+    "word": "derisive",
+    "cefr": "C2"
+  },
+  {
+    "word": "derisively",
+    "cefr": "C2"
+  },
+  {
+    "word": "truism",
+    "cefr": "C2"
+  },
+  {
+    "word": "prurient",
+    "cefr": "C2"
+  },
+  {
+    "word": "prurience",
+    "cefr": "C2"
+  },
+  {
+    "word": "tetchy",
+    "cefr": "C2"
+  },
+  {
+    "word": "agile",
+    "cefr": "C2"
+  },
+  {
+    "word": "agility",
+    "cefr": "C2"
+  },
+  {
+    "word": "aghast",
+    "cefr": "C2"
+  },
+  {
+    "word": "dwarfism",
+    "cefr": "C2"
+  },
+  {
+    "word": "etch",
+    "cefr": "C2"
+  },
+  {
+    "word": "etching",
+    "cefr": "C2"
+  },
+  {
+    "word": "rapture",
+    "cefr": "C2"
+  },
+  {
+    "word": "rapturous",
+    "cefr": "C2"
+  },
+  {
+    "word": "rapturously",
+    "cefr": "C2"
+  },
+  {
+    "word": "ad lib",
+    "cefr": "C2"
+  },
+  {
+    "word": "ad-lib",
+    "cefr": "C2"
+  },
+  {
+    "word": "improvisational",
+    "cefr": "C2"
+  },
+  {
+    "word": "acrobatics",
+    "cefr": "C2"
+  },
+  {
+    "word": "acrobatically",
+    "cefr": "C2"
+  },
+  {
+    "word": "acrobatic",
+    "cefr": "C2"
+  },
+  {
+    "word": "arduous",
+    "cefr": "C2"
+  },
+  {
+    "word": "ardor/ardour",
+    "cefr": "C2"
+  },
+  {
+    "word": "arduously",
+    "cefr": "C2"
+  },
+  {
+    "word": "counterproductive",
+    "cefr": "C2"
+  },
+  {
+    "word": "counterproductively",
+    "cefr": "C2"
+  },
+  {
+    "word": "instantaneous",
+    "cefr": "C2"
+  },
+  {
+    "word": "instantaneously",
+    "cefr": "C2"
+  },
+  {
+    "word": "mull over",
+    "cefr": "C2"
+  },
+  {
+    "word": "ruminate",
+    "cefr": "C2"
+  },
+  {
+    "word": "rumination",
+    "cefr": "C2"
+  },
+  {
+    "word": "ruminant",
+    "cefr": "C2"
+  },
+  {
+    "word": "ruminative",
+    "cefr": "C2"
+  },
+  {
+    "word": "armory/armoury",
+    "cefr": "C2"
+  },
+  {
+    "word": "apostle",
+    "cefr": "C2"
+  },
+  {
+    "word": "blubber",
+    "cefr": "C2"
+  },
+  {
+    "word": "blubbery",
+    "cefr": "C2"
+  },
+  {
+    "word": "trifle",
+    "cefr": "C2"
+  },
+  {
+    "word": "trifle",
+    "cefr": "C2"
+  },
+  {
+    "word": "eke out",
+    "cefr": "C2"
+  },
+  {
+    "word": "paramount",
+    "cefr": "C2"
+  },
+  {
+    "word": "squirm",
+    "cefr": "C2"
+  },
+  {
+    "word": "squirmy",
+    "cefr": "C2"
+  },
+  {
+    "word": "floe",
+    "cefr": "C2"
+  },
+  {
+    "word": "embodiment",
+    "cefr": "C2"
+  },
+  {
+    "word": "wistful",
+    "cefr": "C2"
+  },
+  {
+    "word": "wistfully",
+    "cefr": "C2"
+  },
+  {
+    "word": "mercantile",
+    "cefr": "C2"
+  },
+  {
+    "word": "skew",
+    "cefr": "C2"
+  },
+  {
+    "word": "subsist",
+    "cefr": "C2"
+  },
+  {
+    "word": "subsistence",
+    "cefr": "C2"
+  },
+  {
+    "word": "subsidize",
+    "cefr": "C2"
+  },
+  {
+    "word": "confrontational",
+    "cefr": "C2"
+  },
+  {
+    "word": "confrontationally",
+    "cefr": "C2"
+  },
+  {
+    "word": "gout",
+    "cefr": "C2"
+  },
+  {
+    "word": "hinder",
+    "cefr": "C2"
+  },
+  {
+    "word": "myriad",
+    "cefr": "C2"
+  },
+  {
+    "word": "histrionic",
+    "cefr": "C2"
+  },
+  {
+    "word": "histrionically",
+    "cefr": "C2"
+  },
+  {
+    "word": "marketability",
+    "cefr": "C2"
+  },
+  {
+    "word": "promotable",
+    "cefr": "C2"
+  },
+  {
+    "word": "tacit",
+    "cefr": "C2"
+  },
+  {
+    "word": "tacitly",
+    "cefr": "C2"
+  },
+  {
+    "word": "taciturn",
+    "cefr": "C2"
+  },
+  {
+    "word": "taciturnity",
+    "cefr": "C2"
+  },
+  {
+    "word": "surreptitious",
+    "cefr": "C2"
+  },
+  {
+    "word": "surreptitiously",
+    "cefr": "C2"
+  },
+  {
+    "word": "allegory",
+    "cefr": "C2"
+  },
+  {
+    "word": "allegorical",
+    "cefr": "C2"
+  },
+  {
+    "word": "seedy",
+    "cefr": "C2"
+  },
+  {
+    "word": "punitive",
+    "cefr": "C2"
+  },
+  {
+    "word": "punitively",
+    "cefr": "C2"
+  },
+  {
+    "word": "milieu",
+    "cefr": "C2"
+  },
+  {
+    "word": "self-aggrandizement/self-aggrandisement",
+    "cefr": "C2"
+  },
+  {
+    "word": "unadulterated",
+    "cefr": "C2"
+  },
+  {
+    "word": "adulterate",
+    "cefr": "C2"
+  },
+  {
+    "word": "patronize/patronise",
+    "cefr": "C2"
+  },
+  {
+    "word": "patronizing/patronising",
+    "cefr": "C2"
+  },
+  {
+    "word": "patronizingly/patronisingly",
+    "cefr": "C2"
+  },
+  {
+    "word": "cogent",
+    "cefr": "C2"
+  },
+  {
+    "word": "cogently",
+    "cefr": "C2"
+  },
+  {
+    "word": "relegate",
+    "cefr": "C2"
+  },
+  {
+    "word": "incongruous",
+    "cefr": "C2"
+  },
+  {
+    "word": "incongruously",
+    "cefr": "C2"
+  },
+  {
+    "word": "incongruity",
+    "cefr": "C2"
+  },
+  {
+    "word": "deaden",
+    "cefr": "C2"
+  },
+  {
+    "word": "attuned",
+    "cefr": "C2"
+  },
+  {
+    "word": "attributive",
+    "cefr": "C2"
+  },
+  {
+    "word": "ecotourism",
+    "cefr": "C2"
+  },
+  {
+    "word": "farcical",
+    "cefr": "C2"
+  },
+  {
+    "word": "incise",
+    "cefr": "C2"
+  },
+  {
+    "word": "incipient",
+    "cefr": "C2"
+  },
+  {
+    "word": "echolocation",
+    "cefr": "C2"
+  },
+  {
+    "word": "echolocate",
+    "cefr": "C2"
+  },
+  {
+    "word": "reverb",
+    "cefr": "C2"
+  },
+  {
+    "word": "reverberation",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingenuous",
+    "cefr": "C2"
+  },
+  {
+    "word": "ingenuously",
+    "cefr": "C2"
+  },
+  {
+    "word": "impresario",
+    "cefr": "C2"
+  },
+  {
+    "word": "elasticity",
+    "cefr": "C2"
+  },
+  {
+    "word": "synthesis",
+    "cefr": "C2"
+  },
+  {
+    "word": "salivary",
+    "cefr": "C2"
+  },
+  {
+    "word": "hypnotherapy",
+    "cefr": "C2"
+  },
+  {
+    "word": "wholly",
+    "cefr": "C2"
+  },
+  {
+    "word": "remorseful",
+    "cefr": "C2"
+  },
+  {
+    "word": "remonstrate",
+    "cefr": "C2"
+  },
+  {
+    "word": "remonstrance",
+    "cefr": "C2"
+  },
+  {
+    "word": "unexcused",
+    "cefr": "C2"
+  },
+  {
+    "word": "unexceptionally",
+    "cefr": "C2"
+  },
+  {
+    "word": "unexceptional",
+    "cefr": "C2"
+  },
+  {
+    "word": "inexorable",
+    "cefr": "C2"
+  },
+  {
+    "word": "inexorably",
+    "cefr": "C2"
+  },
+  {
+    "word": "inexorability",
+    "cefr": "C2"
+  },
+  {
+    "word": "tranquilize/tranquilise",
+    "cefr": "C2"
   }
 ]

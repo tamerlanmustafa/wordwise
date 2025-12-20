@@ -2,10 +2,10 @@
  * WordRow Component
  *
  * Smooth, polished word row with MUI-based expand/collapse animations.
- * Uses a card-based design with clean transitions.
+ * Fetches translation and sentence examples BEFORE expanding to prevent flicker.
  */
 
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import {
   Box,
   Collapse,
@@ -13,7 +13,8 @@ import {
   Typography,
   Chip,
   alpha,
-  styled
+  styled,
+  CircularProgress
 } from '@mui/material';
 import {
   BookmarkBorder,
@@ -29,12 +30,10 @@ import type { IdiomInfo } from '../services/scriptService';
 // STYLED COMPONENTS
 // ============================================================================
 
-// Wrapper for the entire row + dropdown
 const RowWrapper = styled(Box)(({ theme }) => ({
   borderBottom: `1px solid ${theme.palette.wordRow.panelBorder}`,
 }));
 
-// The main clickable row - fixed height, never expands
 const RowContainer = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'isExpanded' && prop !== 'groupColor'
 })<{ isExpanded?: boolean; groupColor?: string }>(({ theme, isExpanded }) => ({
@@ -49,12 +48,10 @@ const RowContainer = styled(Box, {
   },
 }));
 
-// The dropdown panel below the row - uses custom theme colors
 const DropdownPanel = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.wordRow.panelBg,
   borderTop: `1px solid ${theme.palette.wordRow.panelBorder}`,
   padding: '16px 20px 20px 56px',
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '12px 12px 16px 12px',
   },
@@ -66,7 +63,6 @@ const MainRow = styled(Box)(({ theme }) => ({
   padding: '12px 16px',
   gap: 12,
   minHeight: 48,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 8px',
     gap: 8,
@@ -81,7 +77,6 @@ const RowNumber = styled(Typography)(({ theme }) => ({
   minWidth: 32,
   textAlign: 'right',
   fontVariantNumeric: 'tabular-nums',
-  // Mobile responsive - hide row numbers on very small screens
   [theme.breakpoints.down('xs')]: {
     display: 'none',
   },
@@ -95,18 +90,17 @@ const WordText = styled(Typography)(({ theme }) => ({
   fontWeight: 500,
   fontSize: '0.95rem',
   flex: 1,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     fontSize: '0.9rem',
   },
 }));
 
 const ExpandIcon = styled(ExpandMore, {
-  shouldForwardProp: (prop) => prop !== 'isExpanded'
-})<{ isExpanded?: boolean }>(({ isExpanded }) => ({
+  shouldForwardProp: (prop) => prop !== 'isExpanded' && prop !== 'isLoading'
+})<{ isExpanded?: boolean; isLoading?: boolean }>(({ isExpanded, isLoading }) => ({
   transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
   transition: 'transform 0.3s ease',
-  opacity: 0.5,
+  opacity: isLoading ? 0 : 0.5,
 }));
 
 const ActionButton = styled(IconButton)(({ theme }) => ({
@@ -114,14 +108,12 @@ const ActionButton = styled(IconButton)(({ theme }) => ({
   '&:hover': {
     backgroundColor: alpha(theme.palette.primary.main, 0.1),
   },
-  // Mobile responsive - larger touch targets
   [theme.breakpoints.down('sm')]: {
     padding: 8,
     minWidth: 36,
     minHeight: 36,
   },
 }));
-
 
 const TranslationBox = styled(Box)(() => ({
   display: 'flex',
@@ -139,15 +131,13 @@ const ExampleCard = styled(Box)(({ theme }) => ({
   padding: '12px 14px',
   marginTop: 12,
   borderLeft: `3px solid ${theme.palette.info.main}`,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 12px',
     marginTop: 10,
   },
 }));
 
-// TODO: Will be used when idiom panel is implemented
-const _IdiomCard = styled(Box)(({ theme }) => ({
+const IdiomCard = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'light'
     ? alpha(theme.palette.warning.light, 0.15)
     : alpha(theme.palette.warning.dark, 0.18),
@@ -155,17 +145,34 @@ const _IdiomCard = styled(Box)(({ theme }) => ({
   padding: '12px 14px',
   marginTop: 12,
   borderLeft: `3px solid ${theme.palette.warning.main}`,
-  // Mobile responsive
   [theme.breakpoints.down('sm')]: {
     padding: '10px 12px',
     marginTop: 10,
   },
 }));
-void _IdiomCard;
+
+// Small spinner shown next to expand icon while loading
+const InlineSpinner = styled(CircularProgress)(() => ({
+  position: 'absolute',
+  right: 100,
+}));
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+interface SentenceExample {
+  sentence: string;
+  translation: string;
+  word_position: number;
+}
+
+interface ContentData {
+  translation: string | null;
+  translationProvider: string | null;
+  sentenceExamples: SentenceExample[];
+  relatedIdioms: IdiomInfo[];
+}
 
 interface WordRowProps {
   word: DisplayWord;
@@ -176,7 +183,7 @@ interface WordRowProps {
   isSaved: boolean;
   isLearned: boolean;
   canToggleLearned: boolean;
-  isExpanded: boolean;  // Controlled by parent (accordion pattern)
+  isExpanded: boolean;
   onSave: (word: string) => void;
   onToggleLearned: (word: string) => void;
   onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
@@ -201,35 +208,118 @@ export const WordRow = memo<WordRowProps>(({
   isSaved,
   isLearned,
   canToggleLearned,
-  isExpanded,  // Controlled by parent
+  isExpanded,
   onSave,
   onToggleLearned,
-  onTranslate: _onTranslate,
+  onTranslate,
   onExpandChange,
   onContentLoad,
-  getIdiomsForWord: _getIdiomsForWord,
+  getIdiomsForWord,
   idiomMetadata,
-  movieId: _movieId,
-  targetLang: _targetLang,
+  movieId,
+  targetLang,
   otherMoviesText
 }) => {
-  // TODO: These will be used when translation panel is implemented
-  void _onTranslate;
-  void _getIdiomsForWord;
-  void _movieId;
-  void _targetLang;
-
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // Don't toggle if clicking on action buttons
+  // Content is fetched ONCE and cached
+  const [contentData, setContentData] = useState<ContentData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const fetchedRef = useRef(false);
+
+  // Fetch all content data
+  const fetchContent = useCallback(async (): Promise<ContentData> => {
+    const results: ContentData = {
+      translation: word.translation || null,
+      translationProvider: word.translationProvider || null,
+      sentenceExamples: [],
+      relatedIdioms: [],
+    };
+
+    // Fetch all data in parallel
+    const promises: Promise<void>[] = [];
+
+    // Translation
+    if (!results.translation) {
+      promises.push(
+        onTranslate(word.word)
+          .then((result) => {
+            if (result) {
+              results.translation = result.translation;
+              results.translationProvider = result.provider || null;
+            }
+          })
+          .catch((err) => console.error('Translation error:', err))
+      );
+    }
+
+    // Sentence examples
+    if (movieId && targetLang) {
+      promises.push(
+        fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.examples && Array.isArray(data.examples)) {
+              results.sentenceExamples = data.examples;
+            }
+          })
+          .catch((err) => console.error('Sentence examples error:', err))
+      );
+    }
+
+    // Related idioms
+    if (getIdiomsForWord && !idiomMetadata) {
+      promises.push(
+        getIdiomsForWord(word.word)
+          .then((idioms) => {
+            if (idioms && idioms.length > 0) {
+              results.relatedIdioms = idioms;
+            }
+          })
+          .catch((err) => console.error('Idioms error:', err))
+      );
+    }
+
+    await Promise.all(promises);
+    return results;
+  }, [word.word, word.translation, word.translationProvider, onTranslate, movieId, targetLang, getIdiomsForWord, idiomMetadata]);
+
+  const handleClick = useCallback(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.action-button')) {
       return;
     }
 
-    // Toggle expansion - parent controls via accordion pattern
-    onExpandChange(virtualIndex, !isExpanded);
-  }, [isExpanded, virtualIndex, onExpandChange]);
+    // If closing, just close immediately
+    if (isExpanded) {
+      onExpandChange(virtualIndex, false);
+      return;
+    }
+
+    // If we already have content, expand immediately
+    if (contentData || fetchedRef.current) {
+      onExpandChange(virtualIndex, true);
+      return;
+    }
+
+    // First time opening: fetch content first, then expand
+    setIsLoading(true);
+    fetchedRef.current = true;
+
+    try {
+      const data = await fetchContent();
+      setContentData(data);
+      // Small delay to ensure state is updated before expand
+      requestAnimationFrame(() => {
+        onExpandChange(virtualIndex, true);
+        setIsLoading(false);
+      });
+    } catch (err) {
+      console.error('Failed to fetch content:', err);
+      setIsLoading(false);
+      // Still expand even if fetch failed
+      onExpandChange(virtualIndex, true);
+    }
+  }, [isExpanded, contentData, virtualIndex, onExpandChange, fetchContent]);
 
   const handleSave = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -241,7 +331,6 @@ export const WordRow = memo<WordRowProps>(({
     onToggleLearned(word.word);
   }, [onToggleLearned, word.word]);
 
-  // Notify parent when collapse animation completes
   const handleCollapseEntered = useCallback(() => {
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
@@ -250,13 +339,37 @@ export const WordRow = memo<WordRowProps>(({
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
 
-  // TODO: Will be used when translation panel is implemented
-  const _isUntranslatable = word.translation && word.translation.toLowerCase() === word.word.toLowerCase();
-  void _isUntranslatable;
+  // Use cached content or fall back to word data
+  const translation = contentData?.translation ?? word.translation ?? null;
+  const translationProvider = contentData?.translationProvider ?? word.translationProvider ?? null;
+  const sentenceExamples = contentData?.sentenceExamples ?? [];
+  const relatedIdioms = contentData?.relatedIdioms ?? [];
+
+  const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
+
+  const highlightWord = (sentence: string, targetWord: string) => {
+    const targetLower = targetWord.toLowerCase();
+    const regex = new RegExp(`\\b(${targetLower})\\b`, 'gi');
+    const parts = sentence.toLowerCase().split(regex);
+
+    return parts.map((part, i) => {
+      if (part === targetLower) {
+        return (
+          <Typography
+            key={i}
+            component="span"
+            sx={{ fontWeight: 600, color: 'primary.main' }}
+          >
+            {part}
+          </Typography>
+        );
+      }
+      return part;
+    });
+  };
 
   return (
     <RowWrapper>
-      {/* Main row - fixed height, never changes */}
       <RowContainer
         isExpanded={isExpanded}
         groupColor={groupColor}
@@ -264,10 +377,8 @@ export const WordRow = memo<WordRowProps>(({
       >
         <MainRow>
           <RowNumber>{rowNumber}.</RowNumber>
-
           <WordText>{word.word}</WordText>
 
-          {/* Idiom badges (for idioms tab) */}
           {idiomMetadata && (
             <>
               <Chip
@@ -276,11 +387,8 @@ export const WordRow = memo<WordRowProps>(({
                 sx={{
                   height: 20,
                   fontSize: '0.7rem',
-                  bgcolor: idiomMetadata.type === 'phrasal_verb'
-                    ? 'info.main'
-                    : 'warning.main',
+                  bgcolor: idiomMetadata.type === 'phrasal_verb' ? 'info.main' : 'warning.main',
                   color: 'white',
-                  // Hide on very small screens
                   display: { xs: 'none', sm: 'flex' },
                 }}
               />
@@ -297,7 +405,11 @@ export const WordRow = memo<WordRowProps>(({
             </>
           )}
 
-          <ExpandIcon isExpanded={isExpanded} fontSize="small" />
+          {isLoading ? (
+            <InlineSpinner size={16} />
+          ) : null}
+
+          <ExpandIcon isExpanded={isExpanded} isLoading={isLoading} fontSize="small" />
 
           <ActionButton
             className="action-button"
@@ -320,36 +432,112 @@ export const WordRow = memo<WordRowProps>(({
         </MainRow>
       </RowContainer>
 
-      {/* Dropdown panel - slides down below the row */}
       <Collapse
         in={isExpanded}
-        timeout="auto"
+        timeout={200}
         onEntered={handleCollapseEntered}
         onExited={handleCollapseExited}
         unmountOnExit
       >
         <DropdownPanel ref={contentRef}>
-          {/* TEMPORARY: Static placeholder content for animation testing */}
+          {/* Translation */}
           <TranslationBox>
-            <Typography
-              variant="body2"
-              sx={{ color: 'text.secondary', fontWeight: 300 }}
-            >
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 300 }}>
               —
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.primary' }}>
-              [Translation placeholder]
-            </Typography>
+            {translation ? (
+              <>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: isUntranslatable ? 'text.disabled' : 'text.primary',
+                    fontStyle: isUntranslatable ? 'italic' : 'normal'
+                  }}
+                >
+                  {isUntranslatable ? '(same as source)' : translation.toLowerCase()}
+                </Typography>
+                {translationProvider && (
+                  <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
+                    via {translationProvider}
+                  </Typography>
+                )}
+              </>
+            ) : (
+              <Typography variant="body2" color="text.disabled">
+                No translation available
+              </Typography>
+            )}
           </TranslationBox>
 
-          <ExampleCard>
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              This is a sample sentence from the movie script.
+          {/* Sentence Examples */}
+          {sentenceExamples.length > 0 ? (
+            sentenceExamples.map((example, idx) => (
+              <ExampleCard key={idx}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  {highlightWord(example.sentence, word.word)}
+                </Typography>
+                {example.translation && (
+                  <Typography variant="caption" color="text.secondary">
+                    {example.translation.toLowerCase()}
+                  </Typography>
+                )}
+              </ExampleCard>
+            ))
+          ) : contentData && movieId && (
+            <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
+              No sentence examples available
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              [Sample translation]
-            </Typography>
-          </ExampleCard>
+          )}
+
+          {/* Related Idioms */}
+          {relatedIdioms.length > 0 && (
+            <>
+              <Typography
+                variant="caption"
+                sx={{ mt: 2, mb: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}
+              >
+                Related expressions:
+              </Typography>
+              {relatedIdioms.map((idiom, idx) => (
+                <IdiomCard key={idx}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {idiom.phrase}
+                    </Typography>
+                    <Chip
+                      label={idiom.type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: '0.65rem',
+                        bgcolor: idiom.type === 'phrasal_verb' ? 'info.main' : 'warning.main',
+                        color: 'white',
+                      }}
+                    />
+                    <Chip
+                      label={idiom.cefr_level}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: '0.65rem',
+                        bgcolor: groupColor,
+                        color: 'white',
+                      }}
+                    />
+                  </Box>
+                </IdiomCard>
+              ))}
+            </>
+          )}
+
+          {/* Idiom metadata (for idioms tab items) */}
+          {idiomMetadata && (
+            <IdiomCard>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {idiomMetadata.phrase}
+              </Typography>
+            </IdiomCard>
+          )}
         </DropdownPanel>
       </Collapse>
     </RowWrapper>
@@ -364,7 +552,7 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.isSaved === nextProps.isSaved &&
     prevProps.isLearned === nextProps.isLearned &&
     prevProps.canToggleLearned === nextProps.canToggleLearned &&
-    prevProps.isExpanded === nextProps.isExpanded &&  // Accordion state
+    prevProps.isExpanded === nextProps.isExpanded &&
     prevProps.onSave === nextProps.onSave &&
     prevProps.onToggleLearned === nextProps.onToggleLearned &&
     prevProps.onTranslate === nextProps.onTranslate &&
