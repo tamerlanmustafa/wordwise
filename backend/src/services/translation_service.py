@@ -249,7 +249,11 @@ class TranslationService:
 
             except DeepLQuotaExceededError as e:
                 # Rate limited - fallback to Google Translate
-                logger.warning(f"DeepL rate limited, falling back to Google: {e}")
+                # Log only once to avoid spam
+                if not hasattr(self, '_deepl_quota_error_logged'):
+                    logger.warning(f"DeepL rate limited, falling back to Google: {e}")
+                    logger.info("Further DeepL quota warnings will be suppressed")
+                    self._deepl_quota_error_logged = True
                 pass
 
             except DeepLError as e:
@@ -296,7 +300,10 @@ class TranslationService:
             }
 
         except GoogleTranslateError as e:
-            logger.error(f"Google Translate failed: {e}")
+            # Log only once to avoid spam
+            if not hasattr(self, '_google_translate_error_logged'):
+                logger.error(f"Google Translate failed: {e}")
+                self._google_translate_error_logged = True
             raise
 
     async def batch_translate(

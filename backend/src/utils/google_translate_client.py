@@ -25,15 +25,22 @@ class GoogleTranslateError(Exception):
 class GoogleTranslateClient:
     """Async wrapper for Google Cloud Translate API v2"""
 
+    # Class-level flag to track if credential errors have been logged
+    _credential_error_logged = False
+    _init_warning_logged = False
+
     def __init__(self, credentials_path: Optional[str] = None):
         self.credentials_path = credentials_path or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         self.enabled = os.getenv("GOOGLE_TRANSLATE_ENABLED", "false").lower() == "true"
         self._client = None
 
-        if not self.enabled:
-            logger.warning("Google Translate is disabled - set GOOGLE_TRANSLATE_ENABLED=true to enable")
-        elif not self.credentials_path:
-            logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set - Google Translate will not work")
+        # Log init warnings only once per class (not per instance)
+        if not GoogleTranslateClient._init_warning_logged:
+            if not self.enabled:
+                logger.warning("Google Translate is disabled - set GOOGLE_TRANSLATE_ENABLED=true to enable")
+            elif not self.credentials_path:
+                logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set - Google Translate will not work")
+            GoogleTranslateClient._init_warning_logged = True
 
     def _get_client(self):
         """Lazy initialization of Google Translate client"""
@@ -110,7 +117,11 @@ class GoogleTranslateClient:
             }
 
         except Exception as e:
-            logger.error(f"Google Translate error: {e}")
+            # Log errors only once to avoid spam
+            if not GoogleTranslateClient._credential_error_logged:
+                logger.error(f"Google Translate error: {e}")
+                logger.info("Further Google Translate errors will be suppressed")
+                GoogleTranslateClient._credential_error_logged = True
             raise GoogleTranslateError(f"Translation failed: {str(e)}")
 
     async def translate(
