@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -15,6 +15,13 @@ import {
   TextField,
   InputAdornment,
   Button,
+  Paper,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  ListItemAvatar,
+  ClickAwayListener,
   type SelectChangeEvent
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -24,22 +31,28 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import HistoryIcon from '@mui/icons-material/History';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
+import { useRecentSearches } from '../hooks/useRecentSearches';
 
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
   const { user, logout, isAuthenticated } = useAuth();
   const { showTopBar } = useTopBarVisibility();
+  const { recentSearches, addRecentSearch } = useRecentSearches();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
   const isHomePage = location.pathname === '/';
+  const shouldShowRecent = showRecentDropdown && searchQuery.trim().length === 0 && recentSearches.length > 0;
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -61,8 +74,18 @@ export default function TopBar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      setShowRecentDropdown(false);
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
     }
+  };
+
+  const handleSelectRecentMovie = (id: number, title: string, year: number | null, poster: string | null) => {
+    setSearchQuery(title);
+    setShowRecentDropdown(false);
+    addRecentSearch({ id, title, year, poster });
+    navigate(`/movie/${id}`, {
+      state: { title, year, tmdbId: id }
+    });
   };
 
   return (
@@ -101,74 +124,120 @@ export default function TopBar() {
 
         {/* Center: Search Bar (hidden on homepage) */}
         {!isHomePage && (
-          <Box
-            component="form"
-            onSubmit={handleSearch}
-            sx={{ flexGrow: 1, maxWidth: 500 }}
-          >
-          <TextField
-            size="small"
-            fullWidth
-            placeholder="Search movies..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1, }}>
-                  <Box
-                    onClick={searchQuery.trim() ? handleSearch : undefined}
-                    sx={{
-                      cursor: searchQuery.trim() ? 'pointer' : 'default',
-                      color: searchQuery.trim() ? 'primary.contrastText' : 'text.disabled',
-                      bgcolor: searchQuery.trim() ? 'primary.main' : 'transparent',
-                      fontWeight: 500,
-                      fontSize: '0.75rem',
-                      px: 1.2,
-                      py: 0.2,
-                      borderRadius: 8,
-                      border: '1px solid',
-                      borderColor: searchQuery.trim() ? 'primary.main' : 'divider',
-                      transition: 'all 0.2s',
-                      '&:hover': searchQuery.trim()
-                        ? { bgcolor: 'primary.dark', borderColor: 'primary.dark' }
-                        : {}
-                    }}
+          <ClickAwayListener onClickAway={() => setShowRecentDropdown(false)}>
+            <Box
+              component="form"
+              onSubmit={handleSearch}
+              sx={{ flexGrow: 1, maxWidth: 500, position: 'relative' }}
+            >
+              <TextField
+                size="small"
+                fullWidth
+                inputRef={searchInputRef}
+                placeholder="Search movies..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setShowRecentDropdown(true)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1, }}>
+                      <Box
+                        onClick={searchQuery.trim() ? handleSearch : undefined}
+                        sx={{
+                          cursor: searchQuery.trim() ? 'pointer' : 'default',
+                          color: searchQuery.trim() ? 'primary.contrastText' : 'text.disabled',
+                          bgcolor: searchQuery.trim() ? 'primary.main' : 'transparent',
+                          fontWeight: 500,
+                          fontSize: '0.75rem',
+                          px: 1.2,
+                          py: 0.2,
+                          borderRadius: 8,
+                          border: '1px solid',
+                          borderColor: searchQuery.trim() ? 'primary.main' : 'divider',
+                          transition: 'all 0.2s',
+                          '&:hover': searchQuery.trim()
+                            ? { bgcolor: 'primary.dark', borderColor: 'primary.dark' }
+                            : {}
+                        }}
+                      >
+                        Search
+                      </Box>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 34,
+                    border: 0,
+                    borderRadius: 8,
+                    pr: 0.5,
+                  },
+                  '& .MuiInputBase-input::placeholder': {
+                    fontSize: '0.8rem',
+                    opacity: 0.7,
+                    transition: 'opacity 0.25s ease',
+                  },
+                  '& .Mui-focused .MuiInputBase-input::placeholder': {
+                    opacity: 0,
+                  },
+                  '& .MuiInputBase-input': {
+                    paddingRight: '6px',
+                  },
+                }}
+              />
+
+              {/* Recent Searches Dropdown */}
+              {shouldShowRecent && (
+                <Paper
+                  elevation={8}
+                  sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    mt: 0.5,
+                    maxHeight: 300,
+                    overflow: 'auto',
+                    zIndex: 1300,
+                    borderRadius: 2
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}
                   >
-                    Search
-                  </Box>
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                height: 34,
-                border: 0, 
-                borderRadius: 8,
-                pr: 0.5, // button spacing
-              },
-
-              /* smooth placeholder transition */
-              '& .MuiInputBase-input::placeholder': {
-                fontSize: '0.8rem',
-                opacity: 0.7,
-                transition: 'opacity 0.25s ease',
-              },
-
-              /* fade placeholder ONLY on focus */
-              '& .Mui-focused .MuiInputBase-input::placeholder': {
-                opacity: 0,
-              },
-
-              /* keep input text spacing before button */
-              '& .MuiInputBase-input': {
-                paddingRight: '6px',
-              },
-            }}
-          />
-
-
-
-          </Box>
+                    Recent searches
+                  </Typography>
+                  <List disablePadding dense>
+                    {recentSearches.map((movie) => (
+                      <ListItem key={movie.id} disablePadding>
+                        <ListItemButton onClick={() => handleSelectRecentMovie(movie.id, movie.title, movie.year, movie.poster)}>
+                          <ListItemAvatar sx={{ minWidth: 36 }}>
+                            <HistoryIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                          </ListItemAvatar>
+                          <ListItemAvatar sx={{ minWidth: 44 }}>
+                            <Avatar
+                              src={movie.poster || undefined}
+                              variant="rounded"
+                              sx={{ width: 32, height: 48 }}
+                            >
+                              {!movie.poster && movie.title[0]}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={movie.title}
+                            secondary={movie.year || 'Year unknown'}
+                            primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Paper>
+              )}
+            </Box>
+          </ClickAwayListener>
         )}
 
         {/* Right: Controls */}

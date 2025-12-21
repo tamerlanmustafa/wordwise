@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, InputBase, IconButton, Box, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, CircularProgress, ClickAwayListener } from '@mui/material';
+import { Paper, InputBase, IconButton, Box, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, CircularProgress, ClickAwayListener, Typography } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import HistoryIcon from '@mui/icons-material/History';
 import { useNavigate } from 'react-router-dom';
 import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
+import { useRecentSearches } from '../hooks/useRecentSearches';
 
 interface HeroSearchBarProps {
   onSearch?: (query: string) => void;
@@ -11,13 +13,19 @@ interface HeroSearchBarProps {
 export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const navigate = useNavigate();
   const { suggestions, loading } = useMovieAutocomplete(query);
+  const { recentSearches, addRecentSearch } = useRecentSearches();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Show dropdown: either autocomplete results OR recent searches when focused with empty query
+  const showRecentSearches = isFocused && query.trim().length < 2 && recentSearches.length > 0;
+  const showAutocomplete = suggestions.length > 0 && query.trim().length >= 2;
+
   useEffect(() => {
-    setShowDropdown(suggestions.length > 0 && query.trim().length >= 2);
-  }, [suggestions, query]);
+    setShowDropdown(showAutocomplete || showRecentSearches);
+  }, [showAutocomplete, showRecentSearches]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,9 +39,14 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
     }
   };
 
-  const handleSelectMovie = (id: number, title: string, year: number | null) => {
+  const handleSelectMovie = (id: number, title: string, year: number | null, poster?: string | null) => {
     setQuery(title);
     setShowDropdown(false);
+    setIsFocused(false);
+
+    // Save to recent searches
+    addRecentSearch({ id, title, year, poster: poster || null });
+
     navigate(`/movie/${id}`, {
       state: {
         title,
@@ -53,7 +66,7 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
         px: 2
       }}
     >
-      <ClickAwayListener onClickAway={() => setShowDropdown(false)}>
+      <ClickAwayListener onClickAway={() => { setShowDropdown(false); setIsFocused(false); }}>
         <Box sx={{ width: '100%', maxWidth: 600, position: 'relative' }}>
           <Paper
             component="form"
@@ -82,6 +95,7 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
               placeholder="Search for a movie to analyze..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setIsFocused(true)}
               inputProps={{ 'aria-label': 'search movies' }}
             />
             {loading && <CircularProgress size={20} sx={{ mr: 1 }} />}
@@ -105,28 +119,68 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
                 borderRadius: 2
               }}
             >
-              <List disablePadding>
-                {suggestions.map((movie) => (
-                  <ListItem key={movie.id} disablePadding>
-                    <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year)}>
-                      <ListItemAvatar>
-                        <Avatar
-                          src={movie.poster || undefined}
-                          variant="rounded"
-                          sx={{ width: 40, height: 60 }}
-                        >
-                          {!movie.poster && movie.title[0]}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={movie.title}
-                        secondary={movie.year || 'Year unknown'}
-                        primaryTypographyProps={{ fontWeight: 500 }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
+              {/* Recent Searches */}
+              {showRecentSearches && (
+                <>
+                  <Typography
+                    variant="caption"
+                    sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}
+                  >
+                    Recent searches
+                  </Typography>
+                  <List disablePadding>
+                    {recentSearches.map((movie) => (
+                      <ListItem key={movie.id} disablePadding>
+                        <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year, movie.poster)}>
+                          <ListItemAvatar>
+                            <HistoryIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                          </ListItemAvatar>
+                          <ListItemAvatar>
+                            <Avatar
+                              src={movie.poster || undefined}
+                              variant="rounded"
+                              sx={{ width: 40, height: 60 }}
+                            >
+                              {!movie.poster && movie.title[0]}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={movie.title}
+                            secondary={movie.year || 'Year unknown'}
+                            primaryTypographyProps={{ fontWeight: 500 }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                </>
+              )}
+
+              {/* Autocomplete Results */}
+              {showAutocomplete && (
+                <List disablePadding>
+                  {suggestions.map((movie) => (
+                    <ListItem key={movie.id} disablePadding>
+                      <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year, movie.poster)}>
+                        <ListItemAvatar>
+                          <Avatar
+                            src={movie.poster || undefined}
+                            variant="rounded"
+                            sx={{ width: 40, height: 60 }}
+                          >
+                            {!movie.poster && movie.title[0]}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={movie.title}
+                          secondary={movie.year || 'Year unknown'}
+                          primaryTypographyProps={{ fontWeight: 500 }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Paper>
           )}
         </Box>
