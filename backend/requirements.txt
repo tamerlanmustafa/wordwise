@@ -29,7 +29,7 @@ pypdf==4.0.1
 beautifulsoup4==4.12.3
 lxml==5.1.0
 chardet==5.2.0
-subliminal==2.1.0
+subliminal==2.4.0
 
 # CEFR Classifier Dependencies (using NLTK instead of spaCy for speed)
 nltk==3.8.1
