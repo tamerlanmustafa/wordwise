@@ -45,6 +45,15 @@ logging.basicConfig(
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
 logging.getLogger('prisma').setLevel(logging.WARNING)
+logging.getLogger('subliminal').setLevel(logging.WARNING)
+logging.getLogger('subliminal.core').setLevel(logging.WARNING)
+logging.getLogger('subliminal.score').setLevel(logging.WARNING)
+logging.getLogger('subliminal.providers').setLevel(logging.WARNING)
+
+# Suppress BeautifulSoup warnings
+import warnings
+from bs4 import MarkupResemblesLocatorWarning
+warnings.filterwarnings('ignore', category=MarkupResemblesLocatorWarning)
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'wordwise_recent_searches';
 const MAX_RECENT = 5;
@@ -11,43 +11,58 @@ export interface RecentSearch {
   searchedAt: number;
 }
 
-export function useRecentSearches() {
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+// Helper to get current value from localStorage
+function getStoredSearches(): RecentSearch[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setRecentSearches(JSON.parse(stored));
-      }
-    } catch {
-      // Invalid data, reset
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
+// Subscribers for cross-component sync
+let listeners: Array<() => void> = [];
+
+function subscribe(listener: () => void) {
+  listeners = [...listeners, listener];
+  return () => {
+    listeners = listeners.filter(l => l !== listener);
+  };
+}
+
+function notifyListeners() {
+  listeners.forEach(listener => listener());
+}
+
+export function useRecentSearches() {
+  // Use useSyncExternalStore for cross-component synchronization
+  const recentSearches = useSyncExternalStore(
+    subscribe,
+    getStoredSearches,
+    getStoredSearches
+  );
 
   const addRecentSearch = useCallback((movie: Omit<RecentSearch, 'searchedAt'>) => {
-    setRecentSearches(prev => {
-      // Remove if already exists
-      const filtered = prev.filter(s => s.id !== movie.id);
+    const current = getStoredSearches();
 
-      // Add to front with timestamp
-      const updated = [
-        { ...movie, searchedAt: Date.now() },
-        ...filtered
-      ].slice(0, MAX_RECENT);
+    // Remove if already exists
+    const filtered = current.filter(s => s.id !== movie.id);
 
-      // Persist to localStorage
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    // Add to front with timestamp
+    const updated = [
+      { ...movie, searchedAt: Date.now() },
+      ...filtered
+    ].slice(0, MAX_RECENT);
 
-      return updated;
-    });
+    // Persist to localStorage and notify all subscribers
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    notifyListeners();
   }, []);
 
   const clearRecentSearches = useCallback(() => {
-    setRecentSearches([]);
     localStorage.removeItem(STORAGE_KEY);
+    notifyListeners();
   }, []);
 
   return {
