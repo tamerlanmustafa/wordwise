@@ -22,6 +22,7 @@ import {
   ListItemText,
   ListItemAvatar,
   ClickAwayListener,
+  CircularProgress,
   type SelectChangeEvent
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -37,6 +38,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 import { useRecentSearches } from '../hooks/useRecentSearches';
+import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
 
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
@@ -46,13 +48,15 @@ export default function TopBar() {
   const { recentSearches, addRecentSearch } = useRecentSearches();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const { suggestions, loading } = useMovieAutocomplete(searchQuery);
 
   const isHomePage = location.pathname === '/';
-  const shouldShowRecent = showRecentDropdown && searchQuery.trim().length === 0 && recentSearches.length > 0;
+  const showRecentSearches = showDropdown && searchQuery.trim().length < 2 && recentSearches.length > 0;
+  const showAutocomplete = showDropdown && suggestions.length > 0 && searchQuery.trim().length >= 2;
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -74,15 +78,15 @@ export default function TopBar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      setShowRecentDropdown(false);
+      setShowDropdown(false);
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
-  const handleSelectRecentMovie = (id: number, title: string, year: number | null, poster: string | null) => {
-    setSearchQuery(title);
-    setShowRecentDropdown(false);
-    addRecentSearch({ id, title, year, poster });
+  const handleSelectMovie = (id: number, title: string, year: number | null, poster?: string | null) => {
+    setSearchQuery('');
+    setShowDropdown(false);
+    addRecentSearch({ id, title, year, poster: poster || null });
     navigate(`/movie/${id}`, {
       state: { title, year, tmdbId: id }
     });
@@ -124,7 +128,7 @@ export default function TopBar() {
 
         {/* Center: Search Bar (hidden on homepage) */}
         {!isHomePage && (
-          <ClickAwayListener onClickAway={() => setShowRecentDropdown(false)}>
+          <ClickAwayListener onClickAway={() => setShowDropdown(false)}>
             <Box
               component="form"
               onSubmit={handleSearch}
@@ -137,10 +141,11 @@ export default function TopBar() {
                 placeholder="Search movies..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setShowRecentDropdown(true)}
+                onFocus={() => setShowDropdown(true)}
                 InputProps={{
                   endAdornment: (
-                    <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1, }}>
+                    <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1 }}>
+                      {loading && <CircularProgress size={16} sx={{ mr: 1 }} />}
                       <Box
                         onClick={searchQuery.trim() ? handleSearch : undefined}
                         sx={{
@@ -186,8 +191,8 @@ export default function TopBar() {
                 }}
               />
 
-              {/* Recent Searches Dropdown */}
-              {shouldShowRecent && (
+              {/* Dropdown: Recent Searches or Autocomplete */}
+              {(showRecentSearches || showAutocomplete) && (
                 <Paper
                   elevation={8}
                   sx={{
@@ -202,38 +207,70 @@ export default function TopBar() {
                     borderRadius: 2
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}
-                  >
-                    Recent searches
-                  </Typography>
-                  <List disablePadding dense>
-                    {recentSearches.map((movie) => (
-                      <ListItem key={movie.id} disablePadding>
-                        <ListItemButton onClick={() => handleSelectRecentMovie(movie.id, movie.title, movie.year, movie.poster)}>
-                          <ListItemAvatar sx={{ minWidth: 36 }}>
-                            <HistoryIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                          </ListItemAvatar>
-                          <ListItemAvatar sx={{ minWidth: 44 }}>
-                            <Avatar
-                              src={movie.poster || undefined}
-                              variant="rounded"
-                              sx={{ width: 32, height: 48 }}
-                            >
-                              {!movie.poster && movie.title[0]}
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={movie.title}
-                            secondary={movie.year || 'Year unknown'}
-                            primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
+                  {/* Recent Searches */}
+                  {showRecentSearches && (
+                    <>
+                      <Typography
+                        variant="caption"
+                        sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary', fontWeight: 500 }}
+                      >
+                        Recent searches
+                      </Typography>
+                      <List disablePadding dense>
+                        {recentSearches.map((movie) => (
+                          <ListItem key={movie.id} disablePadding>
+                            <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year, movie.poster)}>
+                              <ListItemAvatar sx={{ minWidth: 36 }}>
+                                <HistoryIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                              </ListItemAvatar>
+                              <ListItemAvatar sx={{ minWidth: 44 }}>
+                                <Avatar
+                                  src={movie.poster || undefined}
+                                  variant="rounded"
+                                  sx={{ width: 32, height: 48 }}
+                                >
+                                  {!movie.poster && movie.title[0]}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={movie.title}
+                                secondary={movie.year || 'Year unknown'}
+                                primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                                secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                              />
+                            </ListItemButton>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </>
+                  )}
+
+                  {/* Autocomplete Results */}
+                  {showAutocomplete && (
+                    <List disablePadding dense>
+                      {suggestions.map((movie) => (
+                        <ListItem key={movie.id} disablePadding>
+                          <ListItemButton onClick={() => handleSelectMovie(movie.id, movie.title, movie.year, movie.poster)}>
+                            <ListItemAvatar sx={{ minWidth: 44 }}>
+                              <Avatar
+                                src={movie.poster || undefined}
+                                variant="rounded"
+                                sx={{ width: 32, height: 48 }}
+                              >
+                                {!movie.poster && movie.title[0]}
+                              </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={movie.title}
+                              secondary={movie.year || 'Year unknown'}
+                              primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                              secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
                 </Paper>
               )}
             </Box>
