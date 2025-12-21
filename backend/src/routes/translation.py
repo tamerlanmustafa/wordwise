@@ -21,6 +21,10 @@ from ..utils.google_translate_client import GoogleTranslateError
 
 logger = logging.getLogger(__name__)
 
+# Module-level flags to suppress repeated error logs
+_google_error_logged = False
+_deepl_quota_error_logged = False
+
 router = APIRouter(prefix="/translate", tags=["translation"])
 
 
@@ -143,7 +147,10 @@ async def translate_text(
         return TranslationResponse(**result)
 
     except DeepLQuotaExceededError as e:
-        logger.error(f"DeepL quota exceeded: {e}")
+        global _deepl_quota_error_logged
+        if not _deepl_quota_error_logged:
+            logger.error(f"DeepL quota exceeded: {e}")
+            _deepl_quota_error_logged = True
         raise HTTPException(
             status_code=429,
             detail="Translation quota exceeded. Please try again later or upgrade your DeepL plan."
@@ -155,7 +162,10 @@ async def translate_text(
             detail=f"Invalid language code: {str(e)}"
         )
     except GoogleTranslateError as e:
-        logger.error(f"Google Translate error: {e}")
+        global _google_error_logged
+        if not _google_error_logged:
+            logger.error(f"Google Translate error: {e}")
+            _google_error_logged = True
         raise HTTPException(
             status_code=500,
             detail=f"Translation failed (Google fallback): {str(e)}"

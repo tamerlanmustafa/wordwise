@@ -423,17 +423,8 @@ async def classify_script(
             ]
             logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
-            # NEW: Schedule enrichment in background (for cached classifications)
-            if request.save_to_db and request.target_language:
-                background_tasks.add_task(
-                    auto_enrich_after_classification,
-                    movie_id=request.movie_id,
-                    target_lang=request.target_language
-                )
-                logger.info(
-                    f"📋 Scheduled background enrichment for movie {request.movie_id}, "
-                    f"lang {request.target_language}"
-                )
+            # NOTE: Auto-enrichment removed - enrichment should only be triggered
+            # via the dedicated /enrich endpoint with explicit user action
 
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
@@ -596,17 +587,8 @@ async def classify_script(
         ]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
-        # NEW: Schedule enrichment in background (for new classifications)
-        if request.save_to_db and request.target_language:
-            background_tasks.add_task(
-                auto_enrich_after_classification,
-                movie_id=request.movie_id,
-                target_lang=request.target_language
-            )
-            logger.info(
-                f"📋 Scheduled background enrichment for movie {request.movie_id}, "
-                f"lang {request.target_language}"
-            )
+        # NOTE: Auto-enrichment removed - enrichment should only be triggered
+        # via the dedicated /enrich endpoint with explicit user action
 
         # Final response
         script_word_count = script.cleanedWordCount or 0
