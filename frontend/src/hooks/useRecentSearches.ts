@@ -11,13 +11,22 @@ export interface RecentSearch {
   searchedAt: number;
 }
 
-// Helper to get current value from localStorage
+// Cached snapshot to avoid infinite loops
+let cachedSearches: RecentSearch[] = [];
+let cachedJson = '';
+
+// Helper to get current value from localStorage (with caching)
 function getStoredSearches(): RecentSearch[] {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    const stored = localStorage.getItem(STORAGE_KEY) || '[]';
+    // Only parse if the string changed
+    if (stored !== cachedJson) {
+      cachedJson = stored;
+      cachedSearches = JSON.parse(stored);
+    }
+    return cachedSearches;
   } catch {
-    return [];
+    return cachedSearches;
   }
 }
 
@@ -55,12 +64,17 @@ export function useRecentSearches() {
       ...filtered
     ].slice(0, MAX_RECENT);
 
-    // Persist to localStorage and notify all subscribers
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    // Update cache and persist
+    const newJson = JSON.stringify(updated);
+    cachedJson = newJson;
+    cachedSearches = updated;
+    localStorage.setItem(STORAGE_KEY, newJson);
     notifyListeners();
   }, []);
 
   const clearRecentSearches = useCallback(() => {
+    cachedJson = '[]';
+    cachedSearches = [];
     localStorage.removeItem(STORAGE_KEY);
     notifyListeners();
   }, []);
