@@ -43,6 +43,7 @@ interface SimpleWordListProps {
   // Other movies
   otherMovies: Record<string, Array<{ movie_id: number; title: string }>>;
   movieId?: number;
+  movieTitle?: string;
 
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
@@ -51,6 +52,9 @@ interface SimpleWordListProps {
 
   // Sentence examples enrichment
   targetLang?: string;
+
+  // Report
+  onReport?: (word: string) => void;
 }
 
 export const SimpleWordList = memo<SimpleWordListProps>(({
@@ -68,10 +72,12 @@ export const SimpleWordList = memo<SimpleWordListProps>(({
   isLoadingMore,
   otherMovies,
   movieId,
+  movieTitle,
   getIdiomsForWord,
   idiomsMap,
   isIdiomsTab = false,
-  targetLang
+  targetLang,
+  onReport
 }) => {
   // Accordion state - only one row expanded at a time
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -175,7 +181,9 @@ export const SimpleWordList = memo<SimpleWordListProps>(({
               getIdiomsForWord={getIdiomsForWord}
               idiomMetadata={isIdiomsTab && idiomsMap ? idiomsMap.get(word.word) : undefined}
               movieId={movieId}
+              movieTitle={movieTitle}
               targetLang={targetLang}
+              onReport={onReport}
             />
           </div>
         );

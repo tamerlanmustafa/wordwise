@@ -57,6 +57,7 @@ interface WordListWorkerBasedProps {
   // Other movies data
   otherMovies: Record<string, Array<{ movie_id: number; title: string }>>;
   movieId?: number;
+  movieTitle?: string;
 
   // Language & auth
   targetLanguage: string;
@@ -70,6 +71,9 @@ interface WordListWorkerBasedProps {
 
   // Refs (maintained for compatibility)
   listContainerRef: React.RefObject<HTMLDivElement | null>;
+
+  // Report
+  onReport?: (word: string) => void;
 }
 
 export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
@@ -86,13 +90,15 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   savedWords,
   otherMovies,
   movieId,
+  movieTitle,
   targetLanguage,
   userId,
   isAuthenticated,
   idioms = [],
   idiomsMap,
   isIdiomsTab = false,
-  listContainerRef
+  listContainerRef,
+  onReport
 }) => {
   // Worker-based vocabulary feed
   const {
@@ -272,10 +278,12 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             isLoadingMore={isLoadingMore}
             otherMovies={otherMovies}
             movieId={movieId}
+            movieTitle={movieTitle}
             targetLang={targetLanguage}
             getIdiomsForWord={getIdiomsForWord}
             idiomsMap={idiomsMap}
             isIdiomsTab={isIdiomsTab}
+            onReport={onReport}
           />
         )}
       </Paper>
