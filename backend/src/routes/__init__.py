@@ -9,5 +9,6 @@ from .tmdb import router as tmdb_router
 from .user_words import router as user_words_router
 from .admin import router as admin_router
 from .enrichment import router as enrichment_router
+from .reports import router as reports_router
 
-__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router"]
+__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router"]

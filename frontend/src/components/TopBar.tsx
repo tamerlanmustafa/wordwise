@@ -33,6 +33,9 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import HistoryIcon from '@mui/icons-material/History';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,7 +46,7 @@ import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin, isViewingAsAdmin, toggleAdminView } = useAuth();
   const { showTopBar } = useTopBarVisibility();
   const { recentSearches, addRecentSearch } = useRecentSearches();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -407,6 +410,31 @@ export default function TopBar() {
                 >
                   Settings
                 </MenuItem>
+                {isAdmin && (
+                  <>
+                    <MenuItem
+                      component={Link}
+                      to="/admin/reports"
+                      onClick={handleUserMenuClose}
+                    >
+                      <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                      Admin Reports
+                    </MenuItem>
+                    <MenuItem onClick={() => { toggleAdminView(); handleUserMenuClose(); }}>
+                      {isViewingAsAdmin ? (
+                        <>
+                          <VisibilityOffIcon sx={{ mr: 1, fontSize: 20 }} />
+                          View as User
+                        </>
+                      ) : (
+                        <>
+                          <VisibilityIcon sx={{ mr: 1, fontSize: 20 }} />
+                          View as Admin
+                        </>
+                      )}
+                    </MenuItem>
+                  </>
+                )}
                 <MenuItem onClick={handleLogout}>Log out</MenuItem>
               </Menu>
             </>

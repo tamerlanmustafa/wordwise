@@ -58,3 +58,13 @@ async def get_current_active_user(
     return current_user
 
 
+async def get_admin_user(
+    current_user = Depends(get_current_active_user)
+):
+    """Get current admin user - requires isAdmin flag"""
+    if not current_user.isAdmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user

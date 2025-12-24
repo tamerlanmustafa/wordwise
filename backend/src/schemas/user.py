@@ -28,6 +28,7 @@ class UserResponse(BaseModel):
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
     is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
     created_at: Optional[datetime] = None
     profile_picture_url: Optional[str] = None
     oauth_provider: Optional[str] = None
@@ -51,6 +52,7 @@ class UserResponse(BaseModel):
                 'learning_language': getattr(obj, 'learningLanguage', None),
                 'proficiency_level': obj.proficiencyLevel,
                 'is_active': obj.isActive,
+                'is_admin': getattr(obj, 'isAdmin', None),
                 'created_at': obj.createdAt,
                 'profile_picture_url': obj.profilePictureUrl,
                 'oauth_provider': obj.oauthProvider

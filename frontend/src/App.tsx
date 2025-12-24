@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import SavedWordsPage from './pages/SavedWordsPage';
 import AllListsPage from './pages/AllListsPage';
 import SettingsPage from './pages/SettingsPage';
+import AdminReportsPage from './pages/AdminReportsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -41,6 +42,7 @@ function App() {
                       <Route path="/lists" element={<AllListsPage />} />
                       <Route path="/lists/:listName" element={<SavedWordsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="/admin/reports" element={<AdminReportsPage />} />
                     </Routes>
                   </Box>
                 </Box>

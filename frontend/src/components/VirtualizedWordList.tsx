@@ -44,6 +44,7 @@ interface VirtualizedWordListProps {
   // Other movies
   otherMovies: Record<string, Array<{ movie_id: number; title: string }>>;
   movieId?: number;
+  movieTitle?: string;
 
   // Idiom lookup
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
@@ -55,6 +56,9 @@ interface VirtualizedWordListProps {
 
   // Container ref
   containerRef?: React.RefObject<HTMLDivElement | null>;
+
+  // Report
+  onReport?: (word: string) => void;
 }
 
 const ROW_HEIGHT_COLLAPSED = 60;  // Collapsed row height (includes margin)
@@ -77,11 +81,13 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
   isLoadingMore,
   otherMovies,
   movieId,
+  movieTitle,
   getIdiomsForWord,
   idiomsMap,
   isIdiomsTab = false,
   targetLang,
-  containerRef: _containerRef  // Reserved for scroll sync
+  containerRef: _containerRef,  // Reserved for scroll sync
+  onReport
 }) => {
   // Scroll container ref
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -295,7 +301,9 @@ export const VirtualizedWordList = memo<VirtualizedWordListProps>(({
                 getIdiomsForWord={getIdiomsForWord}
                 idiomMetadata={isIdiomsTab && idiomsMap ? idiomsMap.get(word.word) : undefined}
                 movieId={movieId}
+                movieTitle={movieTitle}
                 targetLang={targetLang}
+                onReport={onReport}
               />
             </div>
           );

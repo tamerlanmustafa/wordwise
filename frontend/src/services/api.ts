@@ -338,3 +338,50 @@ export async function refreshAuthToken(): Promise<string> {
     throw error;
   }
 }
+
+// ============================================================================
+// REPORT API
+// ============================================================================
+
+import type { ReportReason, WordReport, ReportStats } from '../types/report';
+
+export interface CreateReportData {
+  word: string;
+  movie_id?: number;
+  movie_title?: string;
+  reason: ReportReason;
+  details?: string;
+}
+
+export async function createReport(data: CreateReportData): Promise<{ success: boolean; report_id: number }> {
+  const response = await apiClient.post('/api/reports/', data);
+  return response.data;
+}
+
+export async function getReports(status?: string, limit = 50, offset = 0): Promise<WordReport[]> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  params.append('limit', limit.toString());
+  params.append('offset', offset.toString());
+
+  const response = await apiClient.get(`/api/reports/admin?${params.toString()}`);
+  return response.data;
+}
+
+export async function updateReport(
+  reportId: number,
+  data: { status: string; review_notes?: string }
+): Promise<{ success: boolean }> {
+  const response = await apiClient.patch(`/api/reports/admin/${reportId}`, data);
+  return response.data;
+}
+
+export async function getReportStats(): Promise<ReportStats> {
+  const response = await apiClient.get('/api/reports/admin/stats');
+  return response.data;
+}
+
+export async function deleteReport(reportId: number): Promise<{ success: boolean }> {
+  const response = await apiClient.delete(`/api/reports/admin/${reportId}`);
+  return response.data;
+}

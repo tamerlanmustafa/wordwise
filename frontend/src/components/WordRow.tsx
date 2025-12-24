@@ -21,7 +21,8 @@ import {
   Bookmark,
   CheckCircleOutline,
   CheckCircle,
-  ExpandMore
+  ExpandMore,
+  FlagOutlined
 } from '@mui/icons-material';
 import type { DisplayWord } from '../types/vocabularyWorker';
 import type { IdiomInfo } from '../services/scriptService';
@@ -192,8 +193,10 @@ interface WordRowProps {
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
   idiomMetadata?: IdiomInfo;
   movieId?: number;
+  movieTitle?: string;
   targetLang?: string;
   otherMoviesText?: string;
+  onReport?: (word: string) => void;
 }
 
 // ============================================================================
@@ -217,9 +220,12 @@ export const WordRow = memo<WordRowProps>(({
   getIdiomsForWord,
   idiomMetadata,
   movieId,
+  movieTitle: _movieTitle,
   targetLang,
-  otherMoviesText
+  otherMoviesText,
+  onReport
 }) => {
+  // movieTitle reserved for future use in report dialog
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Content is fetched ONCE and cached
@@ -331,6 +337,11 @@ export const WordRow = memo<WordRowProps>(({
     onToggleLearned(word.word);
   }, [onToggleLearned, word.word]);
 
+  const handleReport = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onReport?.(word.word);
+  }, [onReport, word.word]);
+
   const handleCollapseEntered = useCallback(() => {
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
@@ -429,6 +440,17 @@ export const WordRow = memo<WordRowProps>(({
           >
             {isLearned ? <CheckCircle fontSize="small" /> : <CheckCircleOutline fontSize="small" />}
           </ActionButton>
+
+          {onReport && (
+            <ActionButton
+              className="action-button"
+              onClick={handleReport}
+              title="Report issue"
+              sx={{ color: 'text.disabled', '&:hover': { color: 'warning.main' } }}
+            >
+              <FlagOutlined fontSize="small" />
+            </ActionButton>
+          )}
         </MainRow>
       </RowContainer>
 
@@ -559,7 +581,9 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.onExpandChange === nextProps.onExpandChange &&
     prevProps.idiomMetadata === nextProps.idiomMetadata &&
     prevProps.movieId === nextProps.movieId &&
-    prevProps.targetLang === nextProps.targetLang
+    prevProps.movieTitle === nextProps.movieTitle &&
+    prevProps.targetLang === nextProps.targetLang &&
+    prevProps.onReport === nextProps.onReport
   );
 });
 
