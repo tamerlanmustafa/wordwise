@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .config import get_settings
 from .database import connect_db, disconnect_db
-from .routes import auth_router, movies_router, users_router, oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router
+from .routes import auth_router, movies_router, users_router, oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router
 from .services import fetch_movie_script
 import logging
 
@@ -97,6 +97,7 @@ app.include_router(admin_router)
 app.include_router(enrichment_router)
 app.include_router(reports_router)
 app.include_router(upload_router)
+app.include_router(books_router)
 
 @app.get("/")
 def read_root():

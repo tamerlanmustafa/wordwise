@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import MovieDetailPage from './pages/MovieDetailPage';
+import BookDetailPage from './pages/BookDetailPage';
 import MovieSearchPage from './pages/MovieSearchPage';
 import SignUpPage from './pages/SignUpPage';
 import LoginPage from './pages/LoginPage';
@@ -36,6 +37,7 @@ function App() {
                       <Route path="/" element={<HomePage />} />
                       <Route path="/search" element={<SearchPage />} />
                       <Route path="/movie/:id" element={<MovieDetailPage />} />
+                      <Route path="/book/:id" element={<BookDetailPage />} />
                       <Route path="/analyze" element={<MovieSearchPage />} />
                       <Route path="/signup" element={<SignUpPage />} />
                       <Route path="/login" element={<LoginPage />} />

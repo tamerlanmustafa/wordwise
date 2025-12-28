@@ -11,5 +11,6 @@ from .admin import router as admin_router
 from .enrichment import router as enrichment_router
 from .reports import router as reports_router
 from .upload import router as upload_router
+from .books import router as books_router
 
-__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router"]
+__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router"]

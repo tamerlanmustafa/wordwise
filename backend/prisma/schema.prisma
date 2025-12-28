@@ -49,6 +49,7 @@ model Movie {
   poster_url         String?          @db.VarChar
   createdAt          DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // Relations
   words              Word[]
   movieScripts       MovieScript[]
   aliases            MovieAlias[]
@@ -59,6 +60,73 @@ model Movie {
   @@index([title], map: "ix_movies_title")
   @@index([difficultyLevel], map: "ix_movies_difficulty")
   @@map("movies")
+}
+
+model Book {
+  id                 Int              @id @default(autoincrement())
+  title              String           @db.VarChar
+  author             String?          @db.VarChar
+  year               Int?
+  description        String?          @db.Text
+  coverUrl           String?          @map("cover_url") @db.VarChar
+  // External IDs
+  gutenbergId        Int?             @unique @map("gutenberg_id")
+  openLibraryKey     String?          @map("open_library_key") @db.VarChar
+  isbn               String?          @db.VarChar
+  // Analysis results
+  difficultyLevel    difficultylevel? @map("difficulty_level")
+  difficultyScore    Int?             @map("difficulty_score")
+  cefrDistribution   Json?            @map("cefr_distribution")
+  wordCount          Int?             @map("word_count")
+  // Timestamps
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // Relations
+  bookText           BookText?
+
+  @@index([id], map: "ix_books_id")
+  @@index([title], map: "ix_books_title")
+  @@index([gutenbergId], map: "ix_books_gutenberg_id")
+  @@index([difficultyLevel], map: "ix_books_difficulty")
+  @@map("books")
+}
+
+model BookText {
+  id                  Int                       @id @default(autoincrement())
+  bookId              Int                       @unique @map("book_id")
+  sourceType          booksourcetype            @map("source_type")
+  rawText             String?                   @map("raw_text") @db.Text
+  cleanedText         String?                   @map("cleaned_text") @db.Text
+  cleanedWordCount    Int?                      @map("cleaned_word_count")
+  processingMetadata  Json?                     @map("processing_metadata")
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // Relations
+  book                Book                      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  wordClassifications BookWordClassification[]
+
+  @@index([bookId], map: "ix_book_texts_book_id")
+  @@map("book_texts")
+}
+
+model BookWordClassification {
+  id            Int               @id @default(autoincrement())
+  bookTextId    Int               @map("book_text_id")
+  word          String            @db.VarChar
+  lemma         String            @db.VarChar
+  pos           String?           @db.VarChar
+  cefrLevel     proficiencylevel  @map("cefr_level")
+  confidence    Float
+  source        classificationsource
+  frequencyRank Int?              @map("frequency_rank")
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  bookText      BookText          @relation(fields: [bookTextId], references: [id], onDelete: Cascade)
+
+  @@index([bookTextId], map: "ix_book_word_classifications_book_text_id")
+  @@index([lemma], map: "ix_book_word_classifications_lemma")
+  @@index([cefrLevel], map: "ix_book_word_classifications_cefr_level")
+  @@index([bookTextId, cefrLevel], map: "ix_book_word_classifications_book_cefr")
+  @@map("book_word_classifications")
 }
 
 model MovieScript {
@@ -241,6 +309,12 @@ enum listtype {
   LEARN_LATER
   FAVORITES
   MASTERED
+}
+
+enum booksourcetype {
+  GUTENBERG
+  MANUAL_UPLOAD
+  OPEN_LIBRARY
 }
 
 enum oauthprovider {

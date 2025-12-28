@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Container, Box, Typography, Grid, Paper, Skeleton } from '@mui/material';
+import { Container, Box, Typography, Grid, Paper, Skeleton, Tabs, Tab } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import MovieIcon from '@mui/icons-material/Movie';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 import HeroSearchBar from '../components/HeroSearchBar';
+import BookSearchBar from '../components/BookSearchBar';
 import MovieCarousel from '../components/MovieCarousel';
 import {
   fetchTopRatedMovies,
@@ -12,8 +14,23 @@ import {
   type TMDBGenre
 } from '../services/tmdbService';
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel({ children, value, index }: TabPanelProps) {
+  return (
+    <div role="tabpanel" hidden={value !== index}>
+      {value === index && <Box>{children}</Box>}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0);
   const [topRated, setTopRated] = useState<TMDBMovie[]>([]);
   const [trending, setTrending] = useState<TMDBMovie[]>([]);
   const [genres, setGenres] = useState<TMDBGenre[]>([]);
@@ -49,116 +66,203 @@ export default function HomePage() {
     navigate(`/search?genre=${genreId}&name=${encodeURIComponent(genreName)}`);
   };
 
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
+
   return (
     <Box>
-      {/* Hero Section with Search */}
-      <Box
-        sx={{
-          background: '#FFFDF6)',
-          textAlign: 'center',
-          py: 4
-        }}
-      >
-        <Container maxWidth="lg">
-          <Typography variant="h3" fontWeight="bold" gutterBottom>
-            Discover Movies. Learn Vocabulary.
-          </Typography>
-          <Typography variant="h6" sx={{ mb: 2, opacity: 0.9 }}>
-            Analyze movie scripts and expand your language skills
-          </Typography>
-        </Container>
-      </Box>
-
-      {/* Search Bar */}
+      {/* Tabs */}
       <Container maxWidth="lg">
-        <HeroSearchBar onSearch={handleSearch} />
-      </Container>
-
-      {/* Content Sections */}
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Top Rated Movies - scrolls RIGHT */}
-        <MovieCarousel
-          title="Top Movies of All Time"
-          movies={topRated}
-          loading={loading}
-          index={0}
-        />
-
-        {/* Trending Movies - scrolls LEFT */}
-        <MovieCarousel
-          title="Popular Now"
-          movies={trending}
-          loading={loading}
-          index={1}
-        />
-
-        {/* Genres Section - Responsive Grid */}
-        <Box sx={{ mb: 6 }}>
-          
-          <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
-            Browse by Genre
-          </Typography>
-          {loading ? (
-            <Grid container spacing={2}>
-              {[...Array(12)].map((_, i) => (
-                <Grid item xs={6} sm={4} md={3} lg={2.4} key={i}>
-                  <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
-                </Grid>
-              ))}
-            </Grid>
-          ) : (
-            <Grid container spacing={2}>
-              {genres.map((genre) => (
-                <Grid item xs={6} sm={4} md={3} lg={2.4} key={genre.id}>
-                  <Paper
-                    onClick={() => handleGenreClick(genre.id, genre.name)}
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      '&:hover': {
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        transform: 'translateY(-4px)',
-                        boxShadow: 4
-                      }
-                    }}
-                  >
-                    <MovieIcon sx={{ fontSize: 32 }} />
-                    <Typography variant="body1" fontWeight="medium">
-                      {genre.name}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
-
-        {/* Footer CTA */}
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: 6,
-            borderTop: '1px solid',
-            borderColor: 'divider'
-          }}
-        >
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            Ready to start learning?
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Search for a movie above or browse our collections
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            sx={{
+              '& .MuiTab-root': {
+                minWidth: 120,
+                fontWeight: 600,
+                fontSize: '1rem',
+              }
+            }}
+          >
+            <Tab
+              icon={<MovieIcon />}
+              iconPosition="start"
+              label="Movies"
+            />
+            <Tab
+              icon={<MenuBookIcon />}
+              iconPosition="start"
+              label="Books"
+            />
+          </Tabs>
         </Box>
       </Container>
+
+      {/* Movies Tab */}
+      <TabPanel value={activeTab} index={0}>
+        {/* Search Bar */}
+        <Container maxWidth="lg">
+          <HeroSearchBar onSearch={handleSearch} />
+        </Container>
+
+        {/* Content Sections */}
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          {/* Top Rated Movies - scrolls RIGHT */}
+          <MovieCarousel
+            title="Top Movies of All Time"
+            movies={topRated}
+            loading={loading}
+            index={0}
+          />
+
+          {/* Trending Movies - scrolls LEFT */}
+          <MovieCarousel
+            title="Popular Now"
+            movies={trending}
+            loading={loading}
+            index={1}
+          />
+
+          {/* Genres Section - Responsive Grid */}
+          <Box sx={{ mb: 6 }}>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+              Browse by Genre
+            </Typography>
+            {loading ? (
+              <Grid container spacing={2}>
+                {[...Array(12)].map((_, i) => (
+                  <Grid item xs={6} sm={4} md={3} lg={2.4} key={i}>
+                    <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <Grid container spacing={2}>
+                {genres.map((genre) => (
+                  <Grid item xs={6} sm={4} md={3} lg={2.4} key={genre.id}>
+                    <Paper
+                      onClick={() => handleGenreClick(genre.id, genre.name)}
+                      sx={{
+                        p: 2,
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1,
+                        '&:hover': {
+                          bgcolor: 'primary.main',
+                          color: 'primary.contrastText',
+                          transform: 'translateY(-4px)',
+                          boxShadow: 4
+                        }
+                      }}
+                    >
+                      <MovieIcon sx={{ fontSize: 32 }} />
+                      <Typography variant="body1" fontWeight="medium">
+                        {genre.name}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        </Container>
+      </TabPanel>
+
+      {/* Books Tab */}
+      <TabPanel value={activeTab} index={1}>
+        {/* Search Bar */}
+        <Container maxWidth="lg">
+          <BookSearchBar />
+        </Container>
+
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          {/* Info Section */}
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Typography variant="h5" fontWeight="bold" gutterBottom>
+              Explore Public Domain Literature
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Search thousands of classic books from Project Gutenberg, or upload your own files
+            </Typography>
+          </Box>
+
+          {/* Features Grid */}
+          <Grid container spacing={3} justifyContent="center" sx={{ mb: 4 }}>
+            {[
+              { title: 'Classic Literature', desc: 'Shakespeare, Dickens, Austen & more', icon: '📚' },
+              { title: 'Public Domain', desc: 'Free to read & analyze', icon: '🔓' },
+              { title: 'CEFR Analysis', desc: 'Vocabulary by difficulty level', icon: '📊' },
+              { title: 'Upload Your Own', desc: 'EPUB, PDF, TXT supported', icon: '📤' }
+            ].map((feature) => (
+              <Grid item xs={6} sm={3} key={feature.title}>
+                <Paper
+                  sx={{
+                    p: 3,
+                    textAlign: 'center',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 1
+                  }}
+                >
+                  <Typography variant="h4">{feature.icon}</Typography>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {feature.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {feature.desc}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Footer */}
+          <Box
+            sx={{
+              textAlign: 'center',
+              py: 4,
+              borderTop: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
+            <Typography variant="body1" color="text.secondary">
+              Powered by Project Gutenberg & Open Library
+            </Typography>
+          </Box>
+        </Container>
+      </TabPanel>
+
+      {/* Footer CTA - Only show on Movies tab */}
+      {activeTab === 0 && (
+        <Container maxWidth="lg">
+          <Box
+            sx={{
+              textAlign: 'center',
+              py: 6,
+              borderTop: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Ready to start learning?
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Search for a movie above or browse our collections
+            </Typography>
+          </Box>
+        </Container>
+      )}
     </Box>
   );
 }
