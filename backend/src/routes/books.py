@@ -207,12 +207,12 @@ async def analyze_book(
 
         book_text_entry = await db.booktext.create(
             data={
-                "bookId": book_entry.id,
+                "book": {"connect": {"id": book_entry.id}},
                 "sourceType": booksourcetype.GUTENBERG,
                 "rawText": book_text[:100000],  # Store first 100k chars
                 "cleanedText": book_text,
                 "cleanedWordCount": word_count,
-                "processingMetadata": metadata,
+                "processingMetadata": json.dumps(metadata),
             }
         )
 
@@ -410,7 +410,7 @@ async def get_book_vocabulary(
     # Get word classifications
     classifications = await db.bookwordclassification.find_many(
         where={"bookTextId": book.bookText.id},
-        order_by={"frequencyRank": "asc"}
+        order={"frequencyRank": "asc"}
     )
 
     # Build level distribution and top words by level
@@ -462,7 +462,7 @@ async def get_book_vocabulary_preview(
     # Get word classifications (limited)
     classifications = await db.bookwordclassification.find_many(
         where={"bookTextId": book.bookText.id},
-        order_by={"frequencyRank": "asc"},
+        order={"frequencyRank": "asc"},
         take=100  # Limited for preview
     )
 
