@@ -293,18 +293,19 @@ enum reportstatus {
 }
 
 model WordReport {
-  id          Int          @id @default(autoincrement())
-  word        String       @db.VarChar
-  movieId     Int?         @map("movie_id")
-  movieTitle  String?      @map("movie_title") @db.VarChar
-  reason      reportreason
-  details     String?      @db.Text
-  status      reportstatus @default(PENDING)
-  reporterId  Int          @map("reporter_id")
-  reviewerId  Int?         @map("reviewer_id")
-  reviewNotes String?      @map("review_notes") @db.Text
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                Int          @id @default(autoincrement())
+  word              String       @db.VarChar
+  movieId           Int?         @map("movie_id")
+  movieTitle        String?      @map("movie_title") @db.VarChar
+  reason            reportreason
+  details           String?      @db.Text
+  translationSource String?      @map("translation_source") @db.VarChar
+  status            reportstatus @default(PENDING)
+  reporterId        Int          @map("reporter_id")
+  reviewerId        Int?         @map("reviewer_id")
+  reviewNotes       String?      @map("review_notes") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   reporter    User         @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
   reviewer    User?        @relation("ReviewedBy", fields: [reviewerId], references: [id], onDelete: SetNull)

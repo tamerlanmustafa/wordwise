@@ -33,12 +33,36 @@ interface LanguageProviderProps {
   children: ReactNode;
 }
 
+// Helper to get initial language from user or localStorage
+function getInitialLanguage(): string {
+  // First check localStorage for explicit selection
+  const saved = localStorage.getItem('wordwise_target_language');
+  if (saved) return saved;
+
+  // Then check user's native language preference
+  const userStr = localStorage.getItem('wordwise_user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user.native_language) {
+        // Convert lowercase (es) to uppercase (ES) to match our language codes
+        const upperCode = user.native_language.toUpperCase();
+        // Only use if it's a valid language in our list
+        if (AVAILABLE_LANGUAGES.some(lang => lang.code === upperCode)) {
+          return upperCode;
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Default to Spanish
+  return 'ES';
+}
+
 export function LanguageProvider({ children }: LanguageProviderProps) {
-  // Try to get from localStorage, fallback to Spanish
-  const [targetLanguage, setTargetLanguageState] = useState<string>(() => {
-    const saved = localStorage.getItem('wordwise_target_language');
-    return saved || 'ES';
-  });
+  const [targetLanguage, setTargetLanguageState] = useState<string>(getInitialLanguage);
 
   // Persist to localStorage when changed
   const setTargetLanguage = (lang: string) => {
@@ -46,17 +70,21 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     localStorage.setItem('wordwise_target_language', lang);
   };
 
-  // TODO: Sync with backend user preference when authentication is implemented
+  // Sync with user's native language when user data changes (e.g., after login)
   useEffect(() => {
-    // Future: Fetch user's language preference from backend
-    // const fetchUserPreference = async () => {
-    //   const user = await getCurrentUser();
-    //   if (user?.languagePreference) {
-    //     setTargetLanguage(user.languagePreference);
-    //   }
-    // };
-    // fetchUserPreference();
-  }, []);
+    const handleStorageChange = () => {
+      // Only update if there's no explicit selection saved
+      if (!localStorage.getItem('wordwise_target_language')) {
+        const newLang = getInitialLanguage();
+        if (newLang !== targetLanguage) {
+          setTargetLanguageState(newLang);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [targetLanguage]);
 
   return (
     <LanguageContext.Provider

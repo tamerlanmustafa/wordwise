@@ -10,6 +10,7 @@ class ReportCreate(BaseModel):
     movie_title: Optional[str] = None
     reason: reportreason
     details: Optional[str] = None
+    translation_source: Optional[str] = None
 
 
 class ReportUpdate(BaseModel):
@@ -24,6 +25,7 @@ class ReportResponse(BaseModel):
     movie_title: Optional[str] = None
     reason: reportreason
     details: Optional[str] = None
+    translation_source: Optional[str] = None
     status: reportstatus
     reporter_id: int
     reporter_email: Optional[str] = None
@@ -46,6 +48,7 @@ class ReportResponse(BaseModel):
             'movie_title': report.movieTitle,
             'reason': report.reason,
             'details': report.details,
+            'translation_source': report.translationSource,
             'status': report.status,
             'reporter_id': report.reporterId,
             'reviewer_id': report.reviewerId,

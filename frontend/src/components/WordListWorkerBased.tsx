@@ -73,7 +73,7 @@ interface WordListWorkerBasedProps {
   listContainerRef: React.RefObject<HTMLDivElement | null>;
 
   // Report
-  onReport?: (word: string) => void;
+  onReport?: (word: string, translationSource?: string) => void;
 }
 
 export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({

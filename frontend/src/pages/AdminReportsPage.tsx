@@ -236,6 +236,7 @@ export default function AdminReportsPage() {
             <TableRow>
               <TableCell>Word</TableCell>
               <TableCell>Movie</TableCell>
+              <TableCell>Source</TableCell>
               <TableCell>Reason</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Reporter</TableCell>
@@ -246,13 +247,13 @@ export default function AdminReportsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : reports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">No reports found</Typography>
                 </TableCell>
               </TableRow>
@@ -265,6 +266,11 @@ export default function AdminReportsPage() {
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
                       {report.movie_title || 'N/A'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {report.translation_source || 'N/A'}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -352,6 +358,13 @@ export default function AdminReportsPage() {
                   Movie
                 </Typography>
                 <Typography>{selectedReport.movie_title || 'N/A'}</Typography>
+              </Box>
+
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Translation Source
+                </Typography>
+                <Typography>{selectedReport.translation_source || 'N/A'}</Typography>
               </Box>
 
               <Box>

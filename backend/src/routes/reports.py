@@ -23,6 +23,7 @@ async def create_report(
             "movieTitle": report.movie_title,
             "reason": report.reason,
             "details": report.details,
+            "translationSource": report.translation_source,
             "reporterId": current_user.id,
         }
     )

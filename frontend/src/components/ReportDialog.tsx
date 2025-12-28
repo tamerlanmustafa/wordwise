@@ -25,12 +25,14 @@ interface ReportDialogProps {
   word: string;
   movieId?: number;
   movieTitle?: string;
+  translationSource?: string;
   onSubmit: (data: {
     word: string;
     movie_id?: number;
     movie_title?: string;
     reason: ReportReason;
     details?: string;
+    translation_source?: string;
   }) => Promise<void>;
 }
 
@@ -48,6 +50,7 @@ export function ReportDialog({
   word,
   movieId,
   movieTitle,
+  translationSource,
   onSubmit,
 }: ReportDialogProps) {
   const [reason, setReason] = useState<ReportReason | ''>('');
@@ -76,6 +79,7 @@ export function ReportDialog({
         movie_title: movieTitle,
         reason,
         details: details.trim() || undefined,
+        translation_source: translationSource,
       });
       // Reset and close on success
       setReason('');
@@ -86,7 +90,7 @@ export function ReportDialog({
     } finally {
       setIsSubmitting(false);
     }
-  }, [reason, details, word, movieId, movieTitle, onSubmit, onClose]);
+  }, [reason, details, word, movieId, movieTitle, translationSource, onSubmit, onClose]);
 
   const handleClose = useCallback(() => {
     if (!isSubmitting) {

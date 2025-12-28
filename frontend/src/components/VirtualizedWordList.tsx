@@ -58,7 +58,7 @@ interface VirtualizedWordListProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 
   // Report
-  onReport?: (word: string) => void;
+  onReport?: (word: string, translationSource?: string) => void;
 }
 
 const ROW_HEIGHT_COLLAPSED = 60;  // Collapsed row height (includes margin)

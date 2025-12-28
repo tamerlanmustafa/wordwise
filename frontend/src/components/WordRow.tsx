@@ -196,7 +196,7 @@ interface WordRowProps {
   movieTitle?: string;
   targetLang?: string;
   otherMoviesText?: string;
-  onReport?: (word: string) => void;
+  onReport?: (word: string, translationSource?: string) => void;
 }
 
 // ============================================================================
@@ -339,8 +339,9 @@ export const WordRow = memo<WordRowProps>(({
 
   const handleReport = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onReport?.(word.word);
-  }, [onReport, word.word]);
+    const source = contentData?.translationProvider ?? word.translationProvider;
+    onReport?.(word.word, source ?? undefined);
+  }, [onReport, word.word, contentData?.translationProvider, word.translationProvider]);
 
   const handleCollapseEntered = useCallback(() => {
     onContentLoad?.(virtualIndex);
@@ -441,16 +442,6 @@ export const WordRow = memo<WordRowProps>(({
             {isLearned ? <CheckCircle fontSize="small" /> : <CheckCircleOutline fontSize="small" />}
           </ActionButton>
 
-          {onReport && (
-            <ActionButton
-              className="action-button"
-              onClick={handleReport}
-              title="Report issue"
-              sx={{ color: 'text.disabled', '&:hover': { color: 'warning.main' } }}
-            >
-              <FlagOutlined fontSize="small" />
-            </ActionButton>
-          )}
         </MainRow>
       </RowContainer>
 
@@ -482,6 +473,20 @@ export const WordRow = memo<WordRowProps>(({
                   <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
                     via {translationProvider}
                   </Typography>
+                )}
+                {onReport && (
+                  <ActionButton
+                    onClick={handleReport}
+                    title="Report translation issue"
+                    sx={{
+                      color: 'text.disabled',
+                      '&:hover': { color: 'warning.main' },
+                      ml: 'auto',
+                      padding: '4px'
+                    }}
+                  >
+                    <FlagOutlined sx={{ fontSize: 16 }} />
+                  </ActionButton>
                 )}
               </>
             ) : (

@@ -73,6 +73,7 @@ function VocabularyViewBase({
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportWord, setReportWord] = useState('');
+  const [reportTranslationSource, setReportTranslationSource] = useState<string | undefined>(undefined);
 
   // Scroll reveal for topbar (tabs always stay visible once scrolling starts)
   const { suppressScrollReveal } = useScrollReveal({
@@ -258,14 +259,16 @@ function VocabularyViewBase({
   }, [activeTab, saveScrollPosition]);
 
   // Report handlers
-  const handleOpenReport = useCallback((word: string) => {
+  const handleOpenReport = useCallback((word: string, translationSource?: string) => {
     setReportWord(word);
+    setReportTranslationSource(translationSource);
     setReportDialogOpen(true);
   }, []);
 
   const handleCloseReport = useCallback(() => {
     setReportDialogOpen(false);
     setReportWord('');
+    setReportTranslationSource(undefined);
   }, []);
 
   const handleSubmitReport = useCallback(async (data: {
@@ -274,6 +277,7 @@ function VocabularyViewBase({
     movie_title?: string;
     reason: 'WRONG_TRANSLATION' | 'WRONG_CONTEXT' | 'WRONG_SPELLING' | 'INAPPROPRIATE_CONTENT' | 'OTHER';
     details?: string;
+    translation_source?: string;
   }) => {
     await createReport(data);
   }, []);
@@ -445,6 +449,7 @@ function VocabularyViewBase({
         word={reportWord}
         movieId={movieId}
         movieTitle={tmdbMetadata?.title}
+        translationSource={reportTranslationSource}
         onSubmit={handleSubmitReport}
       />
     </Box>

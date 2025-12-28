@@ -14,6 +14,7 @@ export interface WordReport {
   movie_title?: string;
   reason: ReportReason;
   details?: string;
+  translation_source?: string;
   status: ReportStatus;
   reporter_id: number;
   reporter_email?: string;
