@@ -29,6 +29,7 @@ class UserInfo(BaseModel):
     username: str
     oauth_provider: str
     profile_picture_url: str | None = None
+    is_admin: bool = False
 
     class Config:
         from_attributes = True

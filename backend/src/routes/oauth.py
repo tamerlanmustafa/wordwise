@@ -154,7 +154,8 @@ def _create_user_response(user) -> UserInfo:
         email=user.email,
         username=user.username,
         oauth_provider=user.oauthProvider,
-        profile_picture_url=user.profilePictureUrl
+        profile_picture_url=user.profilePictureUrl,
+        is_admin=user.isAdmin or False
     )
 
 

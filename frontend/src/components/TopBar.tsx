@@ -357,6 +357,25 @@ export default function TopBar() {
             </Select>
           </FormControl>
 
+          {/* Admin Reports Button (visible only to admins) */}
+          {isAdmin && (
+            <Tooltip title="Admin Reports">
+              <IconButton
+                component={Link}
+                to="/admin/reports"
+                color="inherit"
+                sx={{
+                  color: isViewingAsAdmin ? 'warning.main' : 'action.active',
+                  '&:hover': {
+                    color: 'warning.main'
+                  }
+                }}
+              >
+                <AdminPanelSettingsIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+
           {/* Theme Toggle */}
           <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'}>
             <IconButton onClick={toggleTheme} color="inherit">
