@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import {
   Container,
   Box,
@@ -38,7 +38,8 @@ const getLevelDescription = (level: string): string => {
 
 export default function MovieDetailPage() {
   const location = useLocation();
-  const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number } | null;
+  const { id: urlMovieId } = useParams<{ id: string }>();
+  const movieState = location.state as { title?: string; year?: number | null; tmdbId?: number; isUpload?: boolean } | null;
   const { isAuthenticated, user, loading: authLoading } = useAuth();
   const { targetLanguage } = useLanguage();
 
@@ -50,15 +51,162 @@ export default function MovieDetailPage() {
   const [movieId, setMovieId] = useState<number | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<MovieDifficultyResult | null>(null);
   const [difficultyIsMock, setDifficultyIsMock] = useState(false);
+  const [contentTitle, setContentTitle] = useState<string>('');
+
+  // Check if this is a direct navigation to an uploaded file (no state, just URL id)
+  const isDirectNavigation = !movieState?.title && urlMovieId;
 
   // Update preview mode when auth state changes
   useEffect(() => {
     setIsPreview(!isAuthenticated);
   }, [isAuthenticated]);
 
+  // Handle direct navigation to uploaded files by movie ID
+  useEffect(() => {
+    if (authLoading || !isDirectNavigation) return;
+
+    const loadUploadedContent = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const numericMovieId = parseInt(urlMovieId!, 10);
+        if (isNaN(numericMovieId)) {
+          setError('Invalid content ID');
+          setLoading(false);
+          return;
+        }
+
+        setMovieId(numericMovieId);
+
+        // Fetch movie info to get the title
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const movieInfoResponse = await axios.get(`${API_BASE_URL}/movies/${numericMovieId}`);
+        const movieInfo = movieInfoResponse.data;
+
+        setContentTitle(movieInfo.title || 'Uploaded Content');
+
+        // For uploaded files, create a simple metadata object (no TMDB poster)
+        setTmdbMetadata({
+          id: numericMovieId,
+          title: movieInfo.title || 'Uploaded Content',
+          year: movieInfo.year || null,
+          poster: null,
+          overview: movieInfo.description || 'Uploaded file for vocabulary analysis',
+          genres: [],
+          popularity: 0
+        });
+
+        // Classify vocabulary
+        await classifyMovieScript(numericMovieId, targetLanguage);
+
+        // Fetch vocabulary
+        let cefrResult;
+        if (isAuthenticated && user) {
+          cefrResult = await getVocabularyFull(numericMovieId);
+          setIsPreview(false);
+        } else {
+          cefrResult = await getVocabularyPreview(numericMovieId);
+          setIsPreview(true);
+        }
+
+        // Convert to analysis format
+        const rawCategories = Object.entries(cefrResult.level_distribution).map(([level]) => ({
+          level: level as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+          description: getLevelDescription(level),
+          words: cefrResult.top_words_by_level[level]?.map(w => ({
+            word: w.word,
+            lemma: w.lemma,
+            count: Math.round(w.confidence * 100),
+            frequency: w.confidence,
+            confidence: w.confidence,
+            frequency_rank: w.frequency_rank
+          })) || []
+        }));
+
+        // Merge C1 and C2 into "Advanced"
+        const mergedCategories = rawCategories.reduce((acc, category) => {
+          if (category.level === 'C1' || category.level === 'C2') {
+            const advancedIndex = acc.findIndex(c => c.level === 'C1');
+            if (advancedIndex === -1) {
+              acc.push({
+                level: 'C1' as const,
+                description: 'Advanced vocabulary',
+                words: category.words
+              });
+            } else {
+              acc[advancedIndex].words.push(...category.words);
+            }
+          } else {
+            acc.push(category);
+          }
+          return acc;
+        }, [] as typeof rawCategories);
+
+        // Sort Advanced words by frequency_rank
+        const sortedCategories = mergedCategories.map(category => {
+          if (category.level === 'C1') {
+            return {
+              ...category,
+              words: category.words.sort((a, b) => {
+                const aRank = a.frequency_rank ?? 999999;
+                const bRank = b.frequency_rank ?? 999999;
+                return aRank - bRank;
+              })
+            };
+          }
+          return category;
+        });
+
+        const finalAnalysis: ScriptAnalysisResult = {
+          title: movieInfo.title || 'Uploaded Content',
+          totalWords: cefrResult.total_words,
+          uniqueWords: cefrResult.unique_words,
+          categories: sortedCategories,
+          idioms: cefrResult.idioms
+        };
+
+        setAnalysis(finalAnalysis);
+
+        // Fetch difficulty data
+        try {
+          const diffResponse = await axios.get(`${API_BASE_URL}/movies/${numericMovieId}/difficulty`);
+          if (diffResponse.data.difficulty_level && diffResponse.data.difficulty_score !== null) {
+            setDifficulty({
+              level: diffResponse.data.difficulty_level,
+              score: diffResponse.data.difficulty_score,
+              breakdown: diffResponse.data.breakdown || {}
+            });
+            setDifficultyIsMock(false);
+          }
+        } catch (diffErr) {
+          console.error('[DIFFICULTY] Error fetching difficulty:', diffErr);
+        }
+
+      } catch (err: any) {
+        console.error('[UPLOADED CONTENT ERROR]', err);
+        if (err.response?.status === 404) {
+          setError('Content not found. It may have been deleted.');
+        } else {
+          setError(err.response?.data?.detail || 'Failed to load content. Please try again.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUploadedContent();
+  }, [urlMovieId, isDirectNavigation, authLoading, isAuthenticated, user, targetLanguage]);
+
+  // Handle traditional movie navigation (from search)
   useEffect(() => {
     // Wait for auth to finish loading before fetching movie data
     if (authLoading) {
+      return;
+    }
+
+    // Skip if this is direct navigation (handled by the other useEffect)
+    if (isDirectNavigation) {
       return;
     }
 
@@ -251,17 +399,20 @@ export default function MovieDetailPage() {
   }, [movieState, authLoading, isAuthenticated, user]);
 
   if (loading) {
+    const displayTitle = contentTitle || movieState?.title || 'content';
     return (
       <Container maxWidth="lg" sx={{ py: 8 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <CircularProgress size={60} />
           <Typography variant="h6" color="text.secondary">
-            Analyzing "{movieState?.title}"...
+            Analyzing "{displayTitle}"...
           </Typography>
           <Stack spacing={1} sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
-              • Searching for script
-            </Typography>
+            {!isDirectNavigation && (
+              <Typography variant="body2" color="text.secondary">
+                • Searching for script
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary">
               • Extracting vocabulary
             </Typography>
@@ -302,6 +453,7 @@ export default function MovieDetailPage() {
             movieId={movieId}
             difficulty={difficulty}
             difficultyIsMock={difficultyIsMock}
+            isUploadedContent={!!isDirectNavigation}
           />
         </Box>
       </Fade>

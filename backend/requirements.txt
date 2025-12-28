@@ -25,6 +25,9 @@ email-validator==2.3.0
 pdfplumber==0.11.0
 pypdf==4.0.1
 
+# EPUB Processing
+ebooklib==0.18
+
 # Text Processing & NLP
 beautifulsoup4==4.12.3
 lxml==5.1.0

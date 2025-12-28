@@ -10,6 +10,7 @@ import {
   Skeleton
 } from '@mui/material';
 import MovieIcon from '@mui/icons-material/Movie';
+import DescriptionIcon from '@mui/icons-material/Description';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
 import type { TMDBMetadata } from '../services/scriptService';
@@ -20,13 +21,15 @@ interface MovieSidebarProps {
   tmdbMetadata: TMDBMetadata | null;
   difficulty?: MovieDifficultyResult | null;
   difficultyIsMock?: boolean;
+  isUploadedContent?: boolean;
 }
 
 // Memoized MovieSidebar - should NOT re-render when activeTab changes
 export const MovieSidebar = memo<MovieSidebarProps>(({
   tmdbMetadata,
   difficulty,
-  difficultyIsMock = false
+  difficultyIsMock = false,
+  isUploadedContent = false
 }) => {
   if (!tmdbMetadata) {
     return (
@@ -54,7 +57,7 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
           <DifficultyBadge difficulty={difficulty} isMock={difficultyIsMock} size="medium" />
         )}
 
-        {/* Poster */}
+        {/* Poster or Placeholder */}
         {tmdbMetadata.poster ? (
           <CardMedia
             component="img"
@@ -71,13 +74,24 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
             sx={{
               width: '100%',
               aspectRatio: '2/3',
-              bgcolor: 'grey.200',
+              bgcolor: isUploadedContent ? 'primary.main' : 'grey.200',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              gap: 1
             }}
           >
-            <MovieIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+            {isUploadedContent ? (
+              <>
+                <DescriptionIcon sx={{ fontSize: 64, color: 'primary.contrastText' }} />
+                <Typography variant="caption" sx={{ color: 'primary.contrastText', opacity: 0.8 }}>
+                  Uploaded Content
+                </Typography>
+              </>
+            ) : (
+              <MovieIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+            )}
           </Box>
         )}
 
@@ -144,11 +158,12 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
     </Card>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if tmdbMetadata, difficulty, or mock flag changes
+  // Only re-render if tmdbMetadata, difficulty, mock flag, or upload flag changes
   // Since these are static for a given movie, this should almost never re-render
   return prevProps.tmdbMetadata === nextProps.tmdbMetadata &&
          prevProps.difficulty === nextProps.difficulty &&
-         prevProps.difficultyIsMock === nextProps.difficultyIsMock;
+         prevProps.difficultyIsMock === nextProps.difficultyIsMock &&
+         prevProps.isUploadedContent === nextProps.isUploadedContent;
 });
 
 MovieSidebar.displayName = 'MovieSidebar';

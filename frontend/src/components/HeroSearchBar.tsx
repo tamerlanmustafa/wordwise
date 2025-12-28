@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, InputBase, IconButton, Box, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, CircularProgress, ClickAwayListener, Typography } from '@mui/material';
+import { Paper, InputBase, IconButton, Box, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, CircularProgress, ClickAwayListener, Typography, Divider } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import HistoryIcon from '@mui/icons-material/History';
 import { useNavigate } from 'react-router-dom';
 import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
 import { useRecentSearches } from '../hooks/useRecentSearches';
+import { UploadButton } from './UploadButton';
 
 interface HeroSearchBarProps {
   onSearch?: (query: string) => void;
@@ -102,6 +103,8 @@ export default function HeroSearchBar({ onSearch }: HeroSearchBarProps) {
             <IconButton type="submit" sx={{ p: 1.5 }} aria-label="search">
               <SearchIcon fontSize="large" />
             </IconButton>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <UploadButton variant="hero" />
           </Paper>
 
           {showDropdown && (

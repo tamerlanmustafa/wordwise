@@ -42,6 +42,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTopBarVisibility } from '../contexts/TopBarVisibilityContext';
 import { useRecentSearches } from '../hooks/useRecentSearches';
 import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
+import { UploadButton } from './UploadButton';
 
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
@@ -147,8 +148,8 @@ export default function TopBar() {
                 onFocus={() => setShowDropdown(true)}
                 InputProps={{
                   endAdornment: (
-                    <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1 }}>
-                      {loading && <CircularProgress size={16} sx={{ mr: 1 }} />}
+                    <InputAdornment position="end" sx={{ mr: 0.1, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {loading && <CircularProgress size={16} sx={{ mr: 0.5 }} />}
                       <Box
                         onClick={searchQuery.trim() ? handleSearch : undefined}
                         sx={{
@@ -170,6 +171,7 @@ export default function TopBar() {
                       >
                         Search
                       </Box>
+                      <UploadButton variant="compact" />
                     </InputAdornment>
                   ),
                 }}
