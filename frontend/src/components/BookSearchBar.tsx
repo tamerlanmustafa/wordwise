@@ -14,24 +14,38 @@ import {
   ClickAwayListener,
   Typography,
   Divider,
-  Chip
+  Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import PersonIcon from '@mui/icons-material/Person';
+import DownloadIcon from '@mui/icons-material/Download';
+import DescriptionIcon from '@mui/icons-material/Description';
+import CodeIcon from '@mui/icons-material/Code';
+import FindInPageIcon from '@mui/icons-material/FindInPage';
 import { useNavigate } from 'react-router-dom';
 import { useBookAutocomplete } from '../hooks/useBookAutocomplete';
 import { UploadButton } from './UploadButton';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BookSearchBarProps {
   onSearch?: (query: string) => void;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
+  const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { suggestions, loading } = useBookAutocomplete(query);
+  const { isAdmin } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const showAutocomplete = suggestions.length > 0 && query.trim().length >= 2;
@@ -64,6 +78,112 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
         gutenbergId
       }
     });
+  };
+
+  const handleDownloadClick = (e: React.MouseEvent<HTMLElement>, gutenbergId: number) => {
+    e.stopPropagation();
+    setDownloadMenuAnchor(e.currentTarget);
+    setSelectedBookId(gutenbergId);
+  };
+
+  const handleDownloadMenuClose = () => {
+    setDownloadMenuAnchor(null);
+    setSelectedBookId(null);
+  };
+
+  const handleAnalyzePages = async () => {
+    if (!selectedBookId) return;
+
+    const gutenbergId = selectedBookId;
+    handleDownloadMenuClose();
+    setDownloading(gutenbergId);
+
+    try {
+      const token = localStorage.getItem('wordwise_token');
+      const response = await fetch(
+        `${API_BASE_URL}/api/books/gutenberg/${gutenbergId}/pages`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+        throw new Error(error.detail || 'Analysis failed');
+      }
+
+      const data = await response.json();
+
+      // Display results in console and alert
+      console.log('Page Analysis Result:', data);
+      alert(
+        `Page Analysis for "${data.title}"\n\n` +
+        `Method: ${data.method}\n` +
+        `Total Pages: ${data.total_pages}\n` +
+        `Warnings: ${data.warnings.join(', ') || 'None'}\n\n` +
+        `Sample pages:\n${data.sample_pages.map((p: { page_number: number; word_count: number; text_preview: string }) =>
+          `Page ${p.page_number}: ${p.word_count} words`
+        ).join('\n')}`
+      );
+    } catch (error) {
+      console.error('Page analysis failed:', error);
+      alert(error instanceof Error ? error.message : 'Page analysis failed');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleDownload = async (format: 'txt' | 'epub' | 'html') => {
+    if (!selectedBookId) return;
+
+    const gutenbergId = selectedBookId;
+    handleDownloadMenuClose();
+    setDownloading(gutenbergId);
+
+    try {
+      const token = localStorage.getItem('wordwise_token');
+      const response = await fetch(
+        `${API_BASE_URL}/api/books/gutenberg/${gutenbergId}/download?format=${format}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Download failed' }));
+        throw new Error(error.detail || 'Download failed');
+      }
+
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `book_${gutenbergId}.${format}`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/);
+        if (match) {
+          filename = match[1];
+        }
+      }
+
+      // Create download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert(error instanceof Error ? error.message : 'Download failed');
+    } finally {
+      setDownloading(null);
+    }
   };
 
   return (
@@ -139,7 +259,27 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
               </Typography>
               <List disablePadding>
                 {suggestions.map((book) => (
-                  <ListItem key={book.gutenberg_id} disablePadding>
+                  <ListItem
+                    key={book.gutenberg_id}
+                    disablePadding
+                    secondaryAction={
+                      isAdmin && (
+                        <IconButton
+                          edge="end"
+                          aria-label="download"
+                          onClick={(e) => handleDownloadClick(e, book.gutenberg_id)}
+                          disabled={downloading === book.gutenberg_id}
+                          sx={{ mr: 1 }}
+                        >
+                          {downloading === book.gutenberg_id ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <DownloadIcon />
+                          )}
+                        </IconButton>
+                      )
+                    }
+                  >
                     <ListItemButton
                       onClick={() => handleSelectBook(book.gutenberg_id, book.title, book.author)}
                     >
@@ -155,7 +295,7 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
                       <ListItemText
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography fontWeight={500} noWrap sx={{ maxWidth: 300 }}>
+                            <Typography fontWeight={500} noWrap sx={{ maxWidth: isAdmin ? 250 : 300 }}>
                               {book.title}
                             </Typography>
                             {book.year && (
@@ -186,6 +326,40 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
           )}
         </Box>
       </ClickAwayListener>
+
+      {/* Download format menu */}
+      <Menu
+        anchorEl={downloadMenuAnchor}
+        open={Boolean(downloadMenuAnchor)}
+        onClose={handleDownloadMenuClose}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <MenuItem onClick={() => handleDownload('txt')}>
+          <ListItemIcon>
+            <DescriptionIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Plain Text (.txt)" secondary="No page numbers" />
+        </MenuItem>
+        <MenuItem onClick={() => handleDownload('epub')}>
+          <ListItemIcon>
+            <MenuBookIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="EPUB (.epub)" secondary="May have page markers" />
+        </MenuItem>
+        <MenuItem onClick={() => handleDownload('html')}>
+          <ListItemIcon>
+            <CodeIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="HTML (.html)" secondary="May have chapter markers" />
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleAnalyzePages}>
+          <ListItemIcon>
+            <FindInPageIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Analyze Pages" secondary="Check for page markers" />
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

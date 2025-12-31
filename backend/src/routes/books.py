@@ -16,7 +16,9 @@ from prisma import Prisma
 from prisma.enums import booksourcetype
 
 from ..database import get_db
-from ..middleware.auth import get_current_active_user
+from fastapi.responses import PlainTextResponse
+
+from ..middleware.auth import get_current_active_user, get_admin_user
 from ..services.book_ingestion_service import get_book_ingestion_service
 from ..services.gutendex_client import get_gutendex_client
 from ..services.open_library_client import get_open_library_client
@@ -85,6 +87,188 @@ async def get_gutenberg_book(gutenberg_id: int):
         raise HTTPException(status_code=404, detail="Book not found")
 
     return book
+
+
+@router.get("/gutenberg/{gutenberg_id}/download")
+async def download_gutenberg_book(
+    gutenberg_id: int,
+    format: str = Query("txt", description="Download format: txt, epub, or html"),
+    current_user=Depends(get_admin_user)
+):
+    """
+    Download a Gutenberg book in various formats (admin only).
+
+    Formats:
+    - txt: Plain text (cleaned, no page numbers)
+    - epub: EPUB format (may contain page markers)
+    - html: HTML format (may contain page/chapter markers)
+    """
+    from fastapi.responses import Response
+
+    client = get_gutendex_client()
+    book = await client.get_book(gutenberg_id)
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    # Create a safe filename
+    safe_title = re.sub(r'[^\w\s-]', '', book.title)[:50].strip()
+
+    if format == "txt":
+        # Download plain text
+        text = await client.download_text(book)
+        if not text:
+            raise HTTPException(status_code=404, detail="Plain text not available for this book")
+
+        return PlainTextResponse(
+            content=text,
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_title}_{gutenberg_id}.txt"'
+            }
+        )
+
+    elif format == "epub":
+        # Download EPUB
+        epub_url = book.epub_url
+        if not epub_url:
+            raise HTTPException(status_code=404, detail="EPUB not available for this book")
+
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(epub_url) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=404, detail="Failed to download EPUB")
+                content = await response.read()
+
+        return Response(
+            content=content,
+            media_type="application/epub+zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_title}_{gutenberg_id}.epub"'
+            }
+        )
+
+    elif format == "html":
+        # Download HTML
+        html_url = book.html_url
+        if not html_url:
+            raise HTTPException(status_code=404, detail="HTML not available for this book")
+
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(html_url) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=404, detail="Failed to download HTML")
+                content = await response.text()
+
+        return PlainTextResponse(
+            content=content,
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_title}_{gutenberg_id}.html"'
+            }
+        )
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid format: {format}. Use txt, epub, or html")
+
+
+@router.get("/gutenberg/{gutenberg_id}/pages")
+async def analyze_book_pages(
+    gutenberg_id: int,
+    current_user=Depends(get_admin_user)
+):
+    """
+    Analyze page structure of a Gutenberg book (admin only).
+
+    Tries to extract page markers from the book in this order:
+    1. EPUB file (most likely to have page markers)
+    2. HTML file (may have page comments/anchors)
+    3. Plain text (may have [Page X] markers)
+    4. Falls back to word-count estimation
+
+    Returns information about detected pages without the full text.
+    """
+    from ..services.page_extractor import get_page_extractor
+    import aiohttp
+
+    client = get_gutendex_client()
+    book = await client.get_book(gutenberg_id)
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    extractor = get_page_extractor()
+    result = None
+
+    # Try EPUB first (most likely to have page markers)
+    if book.epub_url:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(book.epub_url) as response:
+                    if response.status == 200:
+                        epub_content = await response.read()
+                        result = await extractor.extract_from_epub(epub_content)
+                        if result.success and 'estimated' not in result.method:
+                            # Found real page markers in EPUB
+                            pass
+                        else:
+                            result = None  # Try other formats
+        except Exception as e:
+            logger.warning(f"[Books] EPUB page extraction failed: {e}")
+
+    # Try HTML if EPUB didn't work
+    if result is None and book.html_url:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(book.html_url) as response:
+                    if response.status == 200:
+                        html_content = await response.text()
+                        result = await extractor.extract_from_html(html_content)
+                        if result.success and 'estimated' not in result.method:
+                            pass
+                        else:
+                            result = None
+        except Exception as e:
+            logger.warning(f"[Books] HTML page extraction failed: {e}")
+
+    # Try plain text
+    if result is None:
+        try:
+            text = await client.download_text(book)
+            if text:
+                result = await extractor.extract_from_text(text)
+        except Exception as e:
+            logger.warning(f"[Books] Text page extraction failed: {e}")
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not extract page information from any format"
+        )
+
+    # Return summary (not full text to keep response small)
+    return {
+        "gutenberg_id": gutenberg_id,
+        "title": book.title,
+        "success": result.success,
+        "method": result.method,
+        "total_pages": result.total_pages,
+        "warnings": result.warnings,
+        "sample_pages": [
+            {
+                "page_number": p.page_number,
+                "text_preview": p.text[:200] + "..." if len(p.text) > 200 else p.text,
+                "word_count": len(p.text.split())
+            }
+            for p in result.pages[:5]  # First 5 pages as sample
+        ],
+        "available_formats": {
+            "epub": book.epub_url is not None,
+            "html": book.html_url is not None,
+            "txt": book.plain_text_url is not None
+        }
+    }
 
 
 @router.get("/by-gutenberg/{gutenberg_id}")
@@ -176,6 +360,61 @@ async def analyze_book(
 
     logger.info(f"[Books] Downloaded book text: {word_count} words")
 
+    # Extract page information
+    from ..services.page_extractor import get_page_extractor
+    import aiohttp
+
+    extractor = get_page_extractor()
+    page_result = None
+    page_data = None
+
+    # Try to get page markers from different formats
+    client = get_gutendex_client()
+    gutenberg_book = await client.get_book(gutenberg_id)
+
+    if gutenberg_book:
+        # Try EPUB first
+        if gutenberg_book.epub_url:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(gutenberg_book.epub_url) as response:
+                        if response.status == 200:
+                            epub_content = await response.read()
+                            page_result = await extractor.extract_from_epub(epub_content)
+                            if not page_result.success or 'estimated' in page_result.method:
+                                page_result = None
+            except Exception as e:
+                logger.warning(f"[Books] EPUB page extraction failed: {e}")
+
+        # Try HTML if EPUB didn't work
+        if page_result is None and gutenberg_book.html_url:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(gutenberg_book.html_url) as response:
+                        if response.status == 200:
+                            html_content = await response.text()
+                            page_result = await extractor.extract_from_html(html_content)
+                            if not page_result.success or 'estimated' in page_result.method:
+                                page_result = None
+            except Exception as e:
+                logger.warning(f"[Books] HTML page extraction failed: {e}")
+
+    # Fall back to text-based extraction or estimation
+    if page_result is None:
+        page_result = await extractor.extract_from_text(book_text)
+
+    if page_result and page_result.success:
+        # Store page boundaries for later lookup
+        page_data = [
+            {
+                "page": p.page_number,
+                "start": p.start_position,
+                "end": p.end_position
+            }
+            for p in page_result.pages
+        ]
+        logger.info(f"[Books] Extracted {page_result.total_pages} pages using {page_result.method}")
+
     # Create book entry
     try:
         # Determine year from author death year or first publish year
@@ -213,6 +452,9 @@ async def analyze_book(
                 "cleanedText": book_text,
                 "cleanedWordCount": word_count,
                 "processingMetadata": json.dumps(metadata),
+                "totalPages": page_result.total_pages if page_result else None,
+                "pageExtractionMethod": page_result.method if page_result else None,
+                "pageData": json.dumps(page_data) if page_data else None,
             }
         )
 
@@ -222,6 +464,21 @@ async def analyze_book(
         try:
             classifier = get_classifier()
             classifications = classifier.classify_text(book_text)
+
+            # Build a helper to find page number for a word position
+            def find_page_for_word(word: str) -> Optional[int]:
+                """Find which page a word first appears on"""
+                if not page_data:
+                    return None
+                # Find first occurrence of word in text
+                pos = book_text.lower().find(word.lower())
+                if pos == -1:
+                    return None
+                # Find which page this position falls into
+                for page_info in page_data:
+                    if page_info["start"] <= pos < page_info["end"]:
+                        return page_info["page"]
+                return None
 
             # Compute statistics
             level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
@@ -243,6 +500,9 @@ async def analyze_book(
 
             cls_list = list(unique.values())
 
+            # Pre-compute page numbers for all words
+            word_pages = {cls.word: find_page_for_word(cls.word) for cls in cls_list}
+
             batch_size = 200
             for i in range(0, len(cls_list), batch_size):
                 batch = cls_list[i:i + batch_size]
@@ -257,6 +517,7 @@ async def analyze_book(
                             'confidence': cls.confidence,
                             'source': cls.source.value,
                             'frequencyRank': cls.frequency_rank,
+                            'pageNumber': word_pages.get(cls.word),
                         }
                         for cls in batch
                     ],
@@ -491,4 +752,105 @@ async def get_book_vocabulary_preview(
         "top_words_by_level": top_words_by_level,
         "idioms": [],
         "is_preview": True
+    }
+
+
+@router.get("/{book_id}/pages")
+async def get_book_page_info(
+    book_id: int,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Get page information for a book.
+    Returns total pages and extraction method used.
+    """
+    book = await db.book.find_unique(
+        where={"id": book_id},
+        include={"bookText": True}
+    )
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    if not book.bookText:
+        raise HTTPException(status_code=404, detail="Book text not found")
+
+    return {
+        "book_id": book.id,
+        "title": book.title,
+        "total_pages": book.bookText.totalPages,
+        "extraction_method": book.bookText.pageExtractionMethod,
+        "has_page_data": book.bookText.pageData is not None
+    }
+
+
+@router.get("/{book_id}/vocabulary/pages")
+async def get_book_vocabulary_by_pages(
+    book_id: int,
+    start_page: int = Query(..., ge=1, description="Start page number"),
+    end_page: int = Query(..., ge=1, description="End page number"),
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    """
+    Get vocabulary for a specific page range.
+    Useful for learning words before reading specific pages.
+    Requires authentication.
+    """
+    if end_page < start_page:
+        raise HTTPException(status_code=400, detail="end_page must be >= start_page")
+
+    book = await db.book.find_unique(
+        where={"id": book_id},
+        include={"bookText": True}
+    )
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    if not book.bookText:
+        raise HTTPException(status_code=404, detail="Book text not found")
+
+    if not book.bookText.totalPages:
+        raise HTTPException(
+            status_code=400,
+            detail="This book doesn't have page information. Re-analyze the book to extract pages."
+        )
+
+    # Get word classifications for the page range
+    classifications = await db.bookwordclassification.find_many(
+        where={
+            "bookTextId": book.bookText.id,
+            "pageNumber": {
+                "gte": start_page,
+                "lte": end_page
+            }
+        },
+        order={"pageNumber": "asc"}
+    )
+
+    # Build level distribution and words by level
+    level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
+    words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
+
+    for cls in classifications:
+        level = cls.cefrLevel
+        level_distribution[level] = level_distribution.get(level, 0) + 1
+
+        words_by_level[level].append({
+            "word": cls.word,
+            "lemma": cls.lemma,
+            "confidence": cls.confidence,
+            "frequency_rank": cls.frequencyRank,
+            "page_number": cls.pageNumber
+        })
+
+    return {
+        "book_id": book.id,
+        "title": book.title,
+        "page_range": {"start": start_page, "end": end_page},
+        "total_pages": book.bookText.totalPages,
+        "words_in_range": len(classifications),
+        "level_distribution": level_distribution,
+        "words_by_level": words_by_level
     }

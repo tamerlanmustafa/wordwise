@@ -99,6 +99,10 @@ model BookText {
   cleanedText         String?                   @map("cleaned_text") @db.Text
   cleanedWordCount    Int?                      @map("cleaned_word_count")
   processingMetadata  Json?                     @map("processing_metadata")
+  // Page extraction info
+  totalPages          Int?                      @map("total_pages")
+  pageExtractionMethod String?                  @map("page_extraction_method") @db.VarChar(50)
+  pageData            Json?                     @map("page_data") // Stores page boundaries
   createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations
@@ -119,6 +123,7 @@ model BookWordClassification {
   confidence    Float
   source        classificationsource
   frequencyRank Int?              @map("frequency_rank")
+  pageNumber    Int?              @map("page_number") // Page where this word first appears
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   bookText      BookText          @relation(fields: [bookTextId], references: [id], onDelete: Cascade)
 
@@ -126,6 +131,7 @@ model BookWordClassification {
   @@index([lemma], map: "ix_book_word_classifications_lemma")
   @@index([cefrLevel], map: "ix_book_word_classifications_cefr_level")
   @@index([bookTextId, cefrLevel], map: "ix_book_word_classifications_book_cefr")
+  @@index([pageNumber], map: "ix_book_word_classifications_page")
   @@map("book_word_classifications")
 }
 

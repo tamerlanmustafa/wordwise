@@ -8,8 +8,13 @@ import {
   Alert,
   Stack,
   Fade,
-  Button
+  Button,
+  Paper,
+  TextField,
+  Slider,
+  Collapse
 } from '@mui/material';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import VocabularyView from '../components/VocabularyView';
 import type { ScriptAnalysisResult } from '../types/script';
@@ -58,6 +63,16 @@ export default function BookDetailPage() {
   const [difficulty, setDifficulty] = useState<MovieDifficultyResult | null>(null);
   const [bookInfo, setBookInfo] = useState<BookSearchResult | null>(null);
   const [needsAnalysis, setNeedsAnalysis] = useState(false);
+
+  // Page filtering state
+  const [pageInfo, setPageInfo] = useState<{
+    totalPages: number | null;
+    extractionMethod: string | null;
+    hasPageData: boolean;
+  } | null>(null);
+  const [showPageFilter, setShowPageFilter] = useState(false);
+  const [pageRange, setPageRange] = useState<[number, number]>([1, 10]);
+  const [loadingPageVocab, setLoadingPageVocab] = useState(false);
 
   // Update preview mode when auth state changes
   useEffect(() => {
@@ -200,7 +215,7 @@ export default function BookDetailPage() {
         if (category.level === 'C1') {
           return {
             ...category,
-            words: category.words.sort((a, b) => {
+            words: category.words.sort((a: { frequency_rank?: number | null }, b: { frequency_rank?: number | null }) => {
               const aRank = a.frequency_rank ?? 999999;
               const bRank = b.frequency_rank ?? 999999;
               return aRank - bRank;
@@ -237,10 +252,108 @@ export default function BookDetailPage() {
 
       setLoading(false);
 
+      // Also fetch page info
+      try {
+        const pageResponse = await axios.get(`${API_BASE_URL}/api/books/${bookId}/pages`);
+        setPageInfo({
+          totalPages: pageResponse.data.total_pages,
+          extractionMethod: pageResponse.data.extraction_method,
+          hasPageData: pageResponse.data.has_page_data
+        });
+        if (pageResponse.data.total_pages) {
+          setPageRange([1, Math.min(10, pageResponse.data.total_pages)]);
+        }
+      } catch (pageErr) {
+        console.log('[BookDetail] No page info available');
+      }
+
     } catch (err: any) {
       console.error('[BookDetail] Error loading vocabulary:', err);
       setError(err.message || 'Failed to load vocabulary');
       setLoading(false);
+    }
+  };
+
+  const loadPageVocabulary = async (startPage: number, endPage: number) => {
+    if (!bookId || !isAuthenticated) return;
+
+    setLoadingPageVocab(true);
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/books/${bookId}/vocabulary/pages?start_page=${startPage}&end_page=${endPage}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('wordwise_token')}`
+          }
+        }
+      );
+
+      const cefrResult = response.data;
+
+      // Convert to analysis format
+      const rawCategories = Object.entries(cefrResult.level_distribution).map(([level]) => ({
+        level: level as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+        description: getLevelDescription(level),
+        words: cefrResult.words_by_level[level]?.map((w: { word: string; lemma: string; confidence: number; frequency_rank: number | null; page_number: number }) => ({
+          word: w.word,
+          lemma: w.lemma,
+          count: Math.round(w.confidence * 100),
+          frequency: w.confidence,
+          confidence: w.confidence,
+          frequency_rank: w.frequency_rank,
+          page_number: w.page_number
+        })) || []
+      }));
+
+      // Merge C1 and C2 into "Advanced"
+      const mergedCategories = rawCategories.reduce((acc, category) => {
+        if (category.level === 'C1' || category.level === 'C2') {
+          const advancedIndex = acc.findIndex(c => c.level === 'C1');
+          if (advancedIndex === -1) {
+            acc.push({
+              level: 'C1' as const,
+              description: 'Advanced vocabulary',
+              words: category.words
+            });
+          } else {
+            acc[advancedIndex].words.push(...category.words);
+          }
+        } else {
+          acc.push(category);
+        }
+        return acc;
+      }, [] as typeof rawCategories);
+
+      const pageAnalysis: ScriptAnalysisResult = {
+        title: `${bookMetadata?.title || 'Book'} (Pages ${startPage}-${endPage})`,
+        totalWords: cefrResult.words_in_range,
+        uniqueWords: cefrResult.words_in_range,
+        categories: mergedCategories,
+        idioms: []
+      };
+
+      setAnalysis(pageAnalysis);
+      setIsPreview(false);
+
+    } catch (err: any) {
+      console.error('[BookDetail] Error loading page vocabulary:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to load page vocabulary');
+    } finally {
+      setLoadingPageVocab(false);
+    }
+  };
+
+  const handleApplyPageFilter = () => {
+    loadPageVocabulary(pageRange[0], pageRange[1]);
+  };
+
+  const handleClearPageFilter = async () => {
+    if (bookId) {
+      setShowPageFilter(false);
+      // Reload full vocabulary
+      const book = await axios.get(`${API_BASE_URL}/api/books/${bookId}`);
+      await loadVocabulary(bookId, book.data);
     }
   };
 
@@ -427,6 +540,91 @@ export default function BookDetailPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Page Filter Section */}
+      {pageInfo?.totalPages && isAuthenticated && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FilterListIcon color="primary" />
+              <Typography variant="subtitle1" fontWeight="medium">
+                Filter by Pages
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                ({pageInfo.totalPages} pages • {pageInfo.extractionMethod?.includes('estimated') ? 'estimated' : 'detected'})
+              </Typography>
+            </Box>
+            <Button
+              size="small"
+              onClick={() => setShowPageFilter(!showPageFilter)}
+            >
+              {showPageFilter ? 'Hide' : 'Show'} Filter
+            </Button>
+          </Box>
+
+          <Collapse in={showPageFilter}>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Select page range to study vocabulary before reading:
+              </Typography>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
+                <TextField
+                  label="Start Page"
+                  type="number"
+                  size="small"
+                  value={pageRange[0]}
+                  onChange={(e) => setPageRange([Math.max(1, parseInt(e.target.value) || 1), pageRange[1]])}
+                  inputProps={{ min: 1, max: pageInfo.totalPages }}
+                  sx={{ width: 100 }}
+                />
+                <Typography>to</Typography>
+                <TextField
+                  label="End Page"
+                  type="number"
+                  size="small"
+                  value={pageRange[1]}
+                  onChange={(e) => setPageRange([pageRange[0], Math.min(pageInfo.totalPages!, parseInt(e.target.value) || pageRange[1])])}
+                  inputProps={{ min: 1, max: pageInfo.totalPages }}
+                  sx={{ width: 100 }}
+                />
+              </Box>
+
+              <Box sx={{ px: 1, mt: 2 }}>
+                <Slider
+                  value={pageRange}
+                  onChange={(_, newValue) => setPageRange(newValue as [number, number])}
+                  valueLabelDisplay="auto"
+                  min={1}
+                  max={pageInfo.totalPages}
+                  marks={[
+                    { value: 1, label: '1' },
+                    { value: Math.floor(pageInfo.totalPages / 2), label: String(Math.floor(pageInfo.totalPages / 2)) },
+                    { value: pageInfo.totalPages, label: String(pageInfo.totalPages) }
+                  ]}
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleApplyPageFilter}
+                  disabled={loadingPageVocab}
+                  startIcon={loadingPageVocab ? <CircularProgress size={16} /> : undefined}
+                >
+                  {loadingPageVocab ? 'Loading...' : `Show Words for Pages ${pageRange[0]}-${pageRange[1]}`}
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleClearPageFilter}
+                >
+                  Show All Words
+                </Button>
+              </Box>
+            </Box>
+          </Collapse>
+        </Paper>
+      )}
+
       <Fade in={!!analysis}>
         <Box>
           <VocabularyView
