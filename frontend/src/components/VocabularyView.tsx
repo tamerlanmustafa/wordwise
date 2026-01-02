@@ -31,6 +31,7 @@ interface VocabularyViewProps {
   difficulty?: MovieDifficultyResult | null;
   difficultyIsMock?: boolean;
   isUploadedContent?: boolean;
+  gutenbergId?: number;
 }
 
 interface CEFRGroup {
@@ -63,7 +64,8 @@ function VocabularyViewBase({
   movieId,
   difficulty,
   difficultyIsMock = false,
-  isUploadedContent = false
+  isUploadedContent = false,
+  gutenbergId
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
@@ -419,7 +421,7 @@ function VocabularyViewBase({
 
         {/* Right Column: TMDB Metadata Sidebar - Isolated component */}
         <Grid item xs={12} md={3}>
-          <MovieSidebar tmdbMetadata={tmdbMetadata} difficulty={difficulty} difficultyIsMock={difficultyIsMock} isUploadedContent={isUploadedContent} />
+          <MovieSidebar tmdbMetadata={tmdbMetadata} difficulty={difficulty} difficultyIsMock={difficultyIsMock} isUploadedContent={isUploadedContent} gutenbergId={gutenbergId} />
         </Grid>
       </Grid>
 

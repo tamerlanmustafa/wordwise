@@ -636,6 +636,7 @@ export default function BookDetailPage() {
             difficulty={difficulty}
             difficultyIsMock={false}
             isUploadedContent={false}
+            gutenbergId={bookInfo?.gutenberg_id}
           />
         </Box>
       </Fade>

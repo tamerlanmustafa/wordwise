@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import MovieDetailPage from './pages/MovieDetailPage';
 import BookDetailPage from './pages/BookDetailPage';
+import BookSearchPage from './pages/BookSearchPage';
 import MovieSearchPage from './pages/MovieSearchPage';
 import SignUpPage from './pages/SignUpPage';
 import LoginPage from './pages/LoginPage';
@@ -28,7 +29,7 @@ function App() {
         <LanguageProvider>
           <AuthProvider>
             <TopBarVisibilityProvider>
-              <Router basename="/wordwise/">
+              <Router>
                 <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
                   <TopBar />
                   <Box component="main" sx={{ flexGrow: 1 }}>
@@ -38,6 +39,7 @@ function App() {
                       <Route path="/search" element={<SearchPage />} />
                       <Route path="/movie/:id" element={<MovieDetailPage />} />
                       <Route path="/book/:id" element={<BookDetailPage />} />
+                      <Route path="/books/search" element={<BookSearchPage />} />
                       <Route path="/analyze" element={<MovieSearchPage />} />
                       <Route path="/signup" element={<SignUpPage />} />
                       <Route path="/login" element={<LoginPage />} />

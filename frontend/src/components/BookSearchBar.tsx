@@ -294,8 +294,8 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
                       </ListItemAvatar>
                       <ListItemText
                         primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography fontWeight={500} noWrap sx={{ maxWidth: isAdmin ? 250 : 300 }}>
+                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography component="span" fontWeight={500} noWrap sx={{ maxWidth: isAdmin ? 250 : 300 }}>
                               {book.title}
                             </Typography>
                             {book.year && (
@@ -309,9 +309,9 @@ export default function BookSearchBar({ onSearch }: BookSearchBarProps) {
                         }
                         secondary={
                           book.author && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                               <PersonIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                              <Typography variant="body2" color="text.secondary" noWrap>
+                              <Typography component="span" variant="body2" color="text.secondary" noWrap>
                                 {book.author}
                               </Typography>
                             </Box>
