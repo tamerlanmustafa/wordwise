@@ -173,6 +173,79 @@ async def download_gutenberg_book(
         raise HTTPException(status_code=400, detail=f"Invalid format: {format}. Use txt, epub, or html")
 
 
+@router.get("/gutenberg/{gutenberg_id}/epub")
+async def stream_gutenberg_epub(
+    gutenberg_id: int,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Stream EPUB content for in-browser reading.
+
+    This endpoint serves cached EPUB from our database if available,
+    otherwise fetches from Gutenberg, caches it, and serves it.
+    This avoids CORS issues and speeds up subsequent loads.
+    """
+    from fastapi.responses import Response
+
+    # First, check if we have the EPUB cached in our database
+    book_record = await db.book.find_first(
+        where={"gutenbergId": gutenberg_id},
+        include={"bookText": True}
+    )
+
+    if book_record and book_record.bookText and book_record.bookText.epubContent:
+        # Serve from cache
+        logger.info(f"[EPUB] Serving cached EPUB for gutenberg_id={gutenberg_id}")
+        return Response(
+            content=bytes(book_record.bookText.epubContent),
+            media_type="application/epub+zip",
+            headers={
+                "Cache-Control": "public, max-age=604800",  # Cache for 1 week
+                "X-Cache": "HIT"
+            }
+        )
+
+    # Not cached - fetch from Gutenberg
+    client = get_gutendex_client()
+    gutenberg_book = await client.get_book(gutenberg_id)
+
+    if not gutenberg_book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    epub_url = gutenberg_book.epub_url
+    if not epub_url:
+        raise HTTPException(status_code=404, detail="EPUB not available for this book")
+
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
+        async with session.get(epub_url) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=404, detail="Failed to fetch EPUB")
+            content = await response.read()
+
+    logger.info(f"[EPUB] Fetched EPUB from Gutenberg for gutenberg_id={gutenberg_id}, size={len(content)} bytes")
+
+    # Cache the EPUB if the book exists in our database
+    if book_record and book_record.bookText:
+        try:
+            await db.booktext.update(
+                where={"id": book_record.bookText.id},
+                data={"epubContent": content}
+            )
+            logger.info(f"[EPUB] Cached EPUB for book_id={book_record.id}")
+        except Exception as e:
+            logger.warning(f"[EPUB] Failed to cache EPUB: {e}")
+
+    return Response(
+        content=content,
+        media_type="application/epub+zip",
+        headers={
+            "Cache-Control": "public, max-age=86400",  # Cache for 1 day
+            "X-Cache": "MISS"
+        }
+    )
+
+
 @router.get("/gutenberg/{gutenberg_id}/pages")
 async def analyze_book_pages(
     gutenberg_id: int,

@@ -13,6 +13,7 @@ import SavedWordsPage from './pages/SavedWordsPage';
 import AllListsPage from './pages/AllListsPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminReportsPage from './pages/AdminReportsPage';
+import BookReaderPage from './pages/BookReaderPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -39,6 +40,7 @@ function App() {
                       <Route path="/search" element={<SearchPage />} />
                       <Route path="/movie/:id" element={<MovieDetailPage />} />
                       <Route path="/book/:id" element={<BookDetailPage />} />
+                      <Route path="/book/:id/read" element={<BookReaderPage />} />
                       <Route path="/books/search" element={<BookSearchPage />} />
                       <Route path="/analyze" element={<MovieSearchPage />} />
                       <Route path="/signup" element={<SignUpPage />} />

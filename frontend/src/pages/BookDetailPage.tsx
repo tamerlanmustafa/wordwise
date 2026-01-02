@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import VocabularyView from '../components/VocabularyView';
 import type { ScriptAnalysisResult } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
@@ -496,15 +497,27 @@ export default function BookDetailPage() {
               This book hasn't been analyzed yet. Click the button below to download and analyze the vocabulary.
             </Alert>
 
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              startIcon={analyzing ? <CircularProgress size={20} color="inherit" /> : <MenuBookIcon />}
-            >
-              {analyzing ? 'Analyzing...' : 'Analyze Vocabulary'}
-            </Button>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                size="large"
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                startIcon={analyzing ? <CircularProgress size={20} color="inherit" /> : <MenuBookIcon />}
+              >
+                {analyzing ? 'Analyzing...' : 'Analyze Vocabulary'}
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={() => navigate(`/book/${bookInfo.gutenberg_id}/read`, {
+                  state: { title: bookInfo.title, author: bookInfo.author, gutenbergId: bookInfo.gutenberg_id }
+                })}
+                startIcon={<AutoStoriesIcon />}
+              >
+                Read Book
+              </Button>
+            </Stack>
 
             {analyzing && (
               <Box sx={{ mt: 3 }}>

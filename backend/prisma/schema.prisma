@@ -99,6 +99,8 @@ model BookText {
   cleanedText         String?                   @map("cleaned_text") @db.Text
   cleanedWordCount    Int?                      @map("cleaned_word_count")
   processingMetadata  Json?                     @map("processing_metadata")
+  // Original EPUB file content (for reader)
+  epubContent         Bytes?                    @map("epub_content")
   // Page extraction info
   totalPages          Int?                      @map("total_pages")
   pageExtractionMethod String?                  @map("page_extraction_method") @db.VarChar(50)

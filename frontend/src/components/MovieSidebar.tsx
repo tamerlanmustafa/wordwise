@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -22,10 +23,10 @@ import CategoryIcon from '@mui/icons-material/Category';
 import DownloadIcon from '@mui/icons-material/Download';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CodeIcon from '@mui/icons-material/Code';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import { DifficultyBadge } from './DifficultyBadge';
-import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -45,7 +46,7 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
   isUploadedContent = false,
   gutenbergId
 }) => {
-  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -221,9 +222,21 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
             </Box>
           )}
 
-          {/* Download Button for Books */}
+          {/* Read Book Button */}
           {gutenbergId && (
             <Box sx={{ mt: 2 }}>
+              <Button
+                variant="contained"
+                size="small"
+                fullWidth
+                startIcon={<AutoStoriesIcon />}
+                onClick={() => navigate(`/book/${gutenbergId}/read`, {
+                  state: { title: tmdbMetadata?.title, gutenbergId }
+                })}
+                sx={{ mb: 1 }}
+              >
+                Read Book
+              </Button>
               <Button
                 variant="outlined"
                 size="small"
