@@ -1,18 +1,9 @@
 import { memo } from 'react';
-import {
-  Box,
-  IconButton,
-  Typography,
-  Slider,
-  Tooltip,
-  Paper
-} from '@mui/material';
+import { Box, IconButton, Typography, Slider, Tooltip } from '@mui/material';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import TextIncreaseIcon from '@mui/icons-material/TextIncrease';
-import TextDecreaseIcon from '@mui/icons-material/TextDecrease';
-import FirstPageIcon from '@mui/icons-material/FirstPage';
-import LastPageIcon from '@mui/icons-material/LastPage';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 
 interface ReaderControlsProps {
   currentPage: number;
@@ -32,154 +23,120 @@ function ReaderControlsBase({
   disabled = false
 }: ReaderControlsProps) {
   const handlePrevPage = () => {
-    if (currentPage > 1) {
-      onPageChange(currentPage - 1);
-    }
+    if (currentPage > 1) onPageChange(currentPage - 1);
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      onPageChange(currentPage + 1);
-    }
-  };
-
-  const handleFirstPage = () => {
-    onPageChange(1);
-  };
-
-  const handleLastPage = () => {
-    onPageChange(totalPages);
+    if (currentPage < totalPages) onPageChange(currentPage + 1);
   };
 
   const handleSliderChange = (_: Event, value: number | number[]) => {
     onPageChange(value as number);
   };
 
-  const handleFontIncrease = () => {
-    if (fontSize < 200) {
-      onFontSizeChange(fontSize + 10);
-    }
-  };
-
-  const handleFontDecrease = () => {
-    if (fontSize > 50) {
-      onFontSizeChange(fontSize - 10);
-    }
-  };
-
   return (
-    <Paper
-      elevation={2}
+    <Box
       sx={{
         display: 'flex',
         alignItems: 'center',
         gap: 2,
         px: 2,
-        py: 1,
-        borderRadius: 2
+        py: 0.75,
+        bgcolor: 'background.paper',
+        borderRadius: 1.5,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
       }}
     >
-      {/* Font Size Controls */}
+      {/* Font Size */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Tooltip title="Decrease font size">
+        <Tooltip title="Smaller text">
           <span>
             <IconButton
               size="small"
-              onClick={handleFontDecrease}
+              onClick={() => fontSize > 50 && onFontSizeChange(fontSize - 10)}
               disabled={disabled || fontSize <= 50}
+              sx={{ p: 0.5 }}
             >
-              <TextDecreaseIcon fontSize="small" />
+              <RemoveIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </span>
         </Tooltip>
-        <Typography variant="caption" sx={{ minWidth: 40, textAlign: 'center' }}>
+        <Typography
+          variant="caption"
+          sx={{
+            minWidth: 32,
+            textAlign: 'center',
+            color: 'text.secondary',
+            fontWeight: 500
+          }}
+        >
           {fontSize}%
         </Typography>
-        <Tooltip title="Increase font size">
+        <Tooltip title="Larger text">
           <span>
             <IconButton
               size="small"
-              onClick={handleFontIncrease}
+              onClick={() => fontSize < 200 && onFontSizeChange(fontSize + 10)}
               disabled={disabled || fontSize >= 200}
+              sx={{ p: 0.5 }}
             >
-              <TextIncreaseIcon fontSize="small" />
+              <AddIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </span>
         </Tooltip>
       </Box>
 
       {/* Divider */}
-      <Box sx={{ height: 24, width: 1, bgcolor: 'divider' }} />
+      <Box sx={{ width: 1, height: 20, bgcolor: 'divider' }} />
 
-      {/* Page Navigation */}
+      {/* Navigation */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-        <Tooltip title="First page">
-          <span>
-            <IconButton
-              size="small"
-              onClick={handleFirstPage}
-              disabled={disabled || currentPage <= 1}
-            >
-              <FirstPageIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Previous page">
-          <span>
-            <IconButton
-              onClick={handlePrevPage}
-              disabled={disabled || currentPage <= 1}
-            >
-              <NavigateBeforeIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <IconButton
+          onClick={handlePrevPage}
+          disabled={disabled || currentPage <= 1}
+          size="small"
+        >
+          <NavigateBeforeIcon />
+        </IconButton>
 
-        {/* Page Slider */}
-        <Box sx={{ flex: 1, mx: 2 }}>
-          <Slider
-            value={currentPage}
-            min={1}
-            max={totalPages || 1}
-            onChange={handleSliderChange}
-            disabled={disabled || totalPages <= 1}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(value) => `Page ${value}`}
-            size="small"
-          />
-        </Box>
+        <Slider
+          value={currentPage}
+          min={1}
+          max={totalPages || 1}
+          onChange={handleSliderChange}
+          disabled={disabled || totalPages <= 1}
+          size="small"
+          sx={{
+            flex: 1,
+            mx: 1,
+            '& .MuiSlider-thumb': {
+              width: 14,
+              height: 14
+            }
+          }}
+        />
 
-        <Tooltip title="Next page">
-          <span>
-            <IconButton
-              onClick={handleNextPage}
-              disabled={disabled || currentPage >= totalPages}
-            >
-              <NavigateNextIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Last page">
-          <span>
-            <IconButton
-              size="small"
-              onClick={handleLastPage}
-              disabled={disabled || currentPage >= totalPages}
-            >
-              <LastPageIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <IconButton
+          onClick={handleNextPage}
+          disabled={disabled || currentPage >= totalPages}
+          size="small"
+        >
+          <NavigateNextIcon />
+        </IconButton>
 
-        {/* Page Counter */}
         <Typography
           variant="body2"
-          sx={{ minWidth: 100, textAlign: 'right', color: 'text.secondary' }}
+          sx={{
+            minWidth: 80,
+            textAlign: 'right',
+            color: 'text.secondary',
+            fontSize: '0.8rem'
+          }}
         >
-          Page {currentPage} of {totalPages}
+          {currentPage} / {totalPages || '–'}
         </Typography>
       </Box>
-    </Paper>
+    </Box>
   );
 }
 

@@ -2,20 +2,16 @@ import { useState, useEffect, memo } from 'react';
 import {
   Box,
   Typography,
-  List,
-  ListItem,
-  ListItemText,
   Chip,
   CircularProgress,
   Alert,
   Collapse,
   IconButton,
-  Divider,
-  Paper
+  Button
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import SchoolIcon from '@mui/icons-material/School';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -29,28 +25,19 @@ interface Word {
 }
 
 interface PageVocabularyProps {
-  bookId: number;
+  bookId: number | null;
   currentPage: number;
   totalPages: number;
   onWordClick?: (word: string) => void;
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  A1: '#4caf50',
-  A2: '#8bc34a',
-  B1: '#ffc107',
-  B2: '#ff9800',
-  C1: '#f44336',
-  C2: '#9c27b0'
-};
-
-const LEVEL_LABELS: Record<string, string> = {
-  A1: 'Beginner',
-  A2: 'Elementary',
-  B1: 'Intermediate',
-  B2: 'Upper Intermediate',
-  C1: 'Advanced',
-  C2: 'Proficient'
+  A1: '#22c55e',
+  A2: '#84cc16',
+  B1: '#eab308',
+  B2: '#f97316',
+  C1: '#ef4444',
+  C2: '#a855f7'
 };
 
 interface LevelGroup {
@@ -70,7 +57,6 @@ function PageVocabularyBase({
   const [levelGroups, setLevelGroups] = useState<LevelGroup[]>([]);
   const [totalWords, setTotalWords] = useState(0);
 
-  // Fetch vocabulary for current page
   useEffect(() => {
     if (!bookId || currentPage < 1) return;
 
@@ -83,39 +69,30 @@ function PageVocabularyBase({
         const response = await axios.get(
           `${API_BASE_URL}/api/books/${bookId}/vocabulary/pages`,
           {
-            params: {
-              start_page: currentPage,
-              end_page: currentPage
-            },
+            params: { start_page: currentPage, end_page: currentPage },
             headers: token ? { Authorization: `Bearer ${token}` } : {}
           }
         );
 
         const data = response.data;
-
-        // Group words by CEFR level
         const groups: Record<string, Word[]> = {};
         const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-        levels.forEach(level => {
-          groups[level] = [];
-        });
+        levels.forEach(level => { groups[level] = []; });
 
-        // Process words from response
         if (data.words_by_level) {
           Object.entries(data.words_by_level).forEach(([level, words]) => {
             if (groups[level]) {
-              groups[level] = (words as Word[]).slice(0, 20); // Limit to 20 words per level
+              groups[level] = (words as Word[]).slice(0, 15);
             }
           });
         }
 
-        // Create level groups with expansion state
         const newGroups: LevelGroup[] = levels
           .map(level => ({
             level,
             words: groups[level] || [],
-            expanded: groups[level]?.length > 0 && (level === 'B1' || level === 'B2' || level === 'C1')
+            expanded: groups[level]?.length > 0 && ['B1', 'B2', 'C1'].includes(level)
           }))
           .filter(g => g.words.length > 0);
 
@@ -139,23 +116,36 @@ function PageVocabularyBase({
 
   const toggleLevel = (level: string) => {
     setLevelGroups(prev =>
-      prev.map(g =>
-        g.level === level ? { ...g, expanded: !g.expanded } : g
-      )
+      prev.map(g => g.level === level ? { ...g, expanded: !g.expanded } : g)
     );
   };
+
+  // Not analyzed state
+  if (!bookId) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <AutoStoriesIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Analyze this book to see vocabulary for each page.
+        </Typography>
+        <Button variant="outlined" size="small" href={`/book/${bookId}`}>
+          Go to Analysis
+        </Button>
+      </Box>
+    );
+  }
 
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <CircularProgress size={32} />
+        <CircularProgress size={28} />
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="info" sx={{ m: 2 }}>
+      <Alert severity="info" sx={{ m: 2, fontSize: '0.85rem' }}>
         {error}
       </Alert>
     );
@@ -163,40 +153,47 @@ function PageVocabularyBase({
 
   if (levelGroups.length === 0) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <SchoolIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-        <Typography color="text.secondary">
-          No vocabulary data for this page
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          No vocabulary for this page
         </Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ height: '100%', overflow: 'auto' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <Paper elevation={0} sx={{ p: 2, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-        <Typography variant="subtitle1" fontWeight="bold">
+      <Box
+        sx={{
+          px: 2,
+          py: 1.5,
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: 'grey.50'
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600}>
           Page {currentPage} of {totalPages}
         </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.9 }}>
+        <Typography variant="caption" color="text.secondary">
           {totalWords} words to learn
         </Typography>
-      </Paper>
+      </Box>
 
-      {/* Level Groups */}
-      <List disablePadding>
-        {levelGroups.map((group, index) => (
-          <Box key={group.level}>
-            {index > 0 && <Divider />}
-
+      {/* Word Groups */}
+      <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
+        {levelGroups.map((group) => (
+          <Box key={group.level} sx={{ mb: 0.5 }}>
             {/* Level Header */}
-            <ListItem
-              component="div"
+            <Box
               onClick={() => toggleLevel(group.level)}
               sx={{
+                display: 'flex',
+                alignItems: 'center',
+                px: 2,
+                py: 1,
                 cursor: 'pointer',
-                bgcolor: 'background.paper',
                 '&:hover': { bgcolor: 'action.hover' }
               }}
             >
@@ -206,66 +203,54 @@ function PageVocabularyBase({
                 sx={{
                   bgcolor: LEVEL_COLORS[group.level],
                   color: 'white',
-                  fontWeight: 'bold',
-                  mr: 1
+                  fontWeight: 700,
+                  fontSize: '0.7rem',
+                  height: 22,
+                  mr: 1.5
                 }}
               />
-              <ListItemText
-                primary={LEVEL_LABELS[group.level]}
-                secondary={`${group.words.length} words`}
-              />
-              <IconButton size="small">
-                {group.expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              <Typography variant="body2" sx={{ flex: 1 }}>
+                {group.words.length} words
+              </Typography>
+              <IconButton size="small" sx={{ p: 0.25 }}>
+                {group.expanded ? (
+                  <ExpandLessIcon fontSize="small" />
+                ) : (
+                  <ExpandMoreIcon fontSize="small" />
+                )}
               </IconButton>
-            </ListItem>
+            </Box>
 
-            {/* Word List */}
+            {/* Words */}
             <Collapse in={group.expanded}>
-              <List disablePadding sx={{ pl: 2, pr: 1, pb: 1 }}>
-                {group.words.map((word, wordIndex) => (
-                  <ListItem
-                    key={`${word.word}-${wordIndex}`}
-                    component="div"
-                    dense
+              <Box sx={{ px: 2, pb: 1, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {group.words.map((word, i) => (
+                  <Chip
+                    key={`${word.word}-${i}`}
+                    label={word.word}
+                    size="small"
+                    variant="outlined"
                     onClick={() => onWordClick?.(word.word)}
                     sx={{
+                      fontSize: '0.75rem',
+                      height: 26,
                       cursor: onWordClick ? 'pointer' : 'default',
-                      borderRadius: 1,
-                      '&:hover': onWordClick ? { bgcolor: 'action.hover' } : {}
+                      borderColor: 'divider',
+                      '&:hover': onWordClick ? {
+                        bgcolor: 'action.hover',
+                        borderColor: LEVEL_COLORS[group.level]
+                      } : {}
                     }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" fontWeight={500}>
-                          {word.word}
-                        </Typography>
-                      }
-                      secondary={
-                        word.lemma !== word.word ? (
-                          <Typography variant="caption" color="text.secondary">
-                            → {word.lemma}
-                          </Typography>
-                        ) : null
-                      }
-                    />
-                    {word.frequency_rank && (
-                      <Chip
-                        label={`#${word.frequency_rank}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: '0.65rem', height: 18 }}
-                      />
-                    )}
-                  </ListItem>
+                  />
                 ))}
-              </List>
+              </Box>
             </Collapse>
           </Box>
         ))}
-      </List>
+      </Box>
 
-      {/* Study Tip */}
-      <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
+      {/* Footer tip */}
+      <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
         <Typography variant="caption" color="text.secondary">
           Review these words before reading to improve comprehension.
         </Typography>

@@ -8,7 +8,6 @@ interface EPUBReaderProps {
   onPageChange: (page: number, totalPages: number) => void;
   onReady: (totalPages: number) => void;
   fontSize: number;
-  highlightWords?: Map<string, string>; // word -> color
 }
 
 export default function EPUBReader({
@@ -16,19 +15,17 @@ export default function EPUBReader({
   currentPage,
   onPageChange,
   onReady,
-  fontSize,
-  highlightWords
+  fontSize
 }: EPUBReaderProps) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
   const renditionRef = useRef<Rendition | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState('Initializing...');
+  const [loadingStatus, setLoadingStatus] = useState('Loading...');
   const [error, setError] = useState<string | null>(null);
   const isInitializedRef = useRef(false);
   const currentPageRef = useRef(currentPage);
 
-  // Keep ref updated
   currentPageRef.current = currentPage;
 
   // Initialize EPUB
@@ -41,34 +38,28 @@ export default function EPUBReader({
         setError(null);
         setLoadingStatus('Fetching book...');
 
-        console.log('[EPUBReader] Starting to load:', url);
-
-        // Fetch the EPUB as binary data first
+        // Fetch EPUB as binary
         const response = await fetch(url);
         if (!response.ok) {
-          throw new Error(`Failed to fetch EPUB: ${response.status} ${response.statusText}`);
+          throw new Error(`Failed to fetch: ${response.status}`);
         }
         const arrayBuffer = await response.arrayBuffer();
-        console.log('[EPUBReader] EPUB fetched, size:', arrayBuffer.byteLength);
 
-        // Create book instance from ArrayBuffer
+        // Create book from ArrayBuffer
         const book = ePub(arrayBuffer);
         bookRef.current = book;
 
-        // Wait for book to be ready
-        setLoadingStatus('Parsing EPUB...');
+        setLoadingStatus('Parsing...');
         await book.ready;
-        console.log('[EPUBReader] Book ready');
 
-        // Get table of contents (optional, don't fail if missing)
+        // Load navigation (optional)
         try {
-          const navigation = await book.loaded.navigation;
-          console.log('[EPUBReader] TOC loaded:', navigation.toc.length, 'items');
-        } catch (navErr) {
-          console.warn('[EPUBReader] No navigation/TOC:', navErr);
+          await book.loaded.navigation;
+        } catch {
+          // No TOC is fine
         }
 
-        // Create rendition
+        // Render
         setLoadingStatus('Rendering...');
         const rendition = book.renderTo(viewerRef.current!, {
           width: '100%',
@@ -79,51 +70,38 @@ export default function EPUBReader({
 
         renditionRef.current = rendition;
 
-        // Set initial font size
+        // Styles
         rendition.themes.fontSize(`${fontSize}%`);
-
-        // Apply default styles
         rendition.themes.default({
           body: {
-            'font-family': '"Georgia", serif',
-            'line-height': '1.6',
-            'padding': '20px'
+            'font-family': 'Georgia, serif',
+            'line-height': '1.7',
+            'padding': '24px',
+            'color': '#1a1a1a'
           },
-          p: {
-            'margin-bottom': '1em'
-          }
+          p: { 'margin-bottom': '1em' }
         });
 
-        // Display the book first
-        setLoadingStatus('Displaying content...');
         await rendition.display();
-        console.log('[EPUBReader] Content displayed');
-
-        // Now that content is displayed, hide loading and generate locations in background
         isInitializedRef.current = true;
         setLoading(false);
 
-        // Generate locations for pagination in background (this can be slow)
-        console.log('[EPUBReader] Generating locations...');
+        // Generate locations in background
         try {
-          await book.locations.generate(1024); // Use larger chunks for faster generation
+          await book.locations.generate(1024);
           const numPages = book.locations.length();
-          console.log('[EPUBReader] Locations generated:', numPages, 'pages');
           onReady(numPages);
 
-          // Handle page changes
-          rendition.on('relocated', (location: { start: { percentage: number; location: number } }) => {
+          rendition.on('relocated', (location: { start: { location: number } }) => {
             const page = location.start.location || 1;
             onPageChange(page, numPages);
           });
-        } catch (locErr) {
-          console.warn('[EPUBReader] Failed to generate locations:', locErr);
-          // Still usable, just without page numbers
+        } catch {
           onReady(0);
         }
 
       } catch (err) {
-        console.error('[EPUBReader] Failed to load EPUB:', err);
+        console.error('[EPUBReader] Error:', err);
         setError(err instanceof Error ? err.message : 'Failed to load book');
         setLoading(false);
       }
@@ -141,14 +119,14 @@ export default function EPUBReader({
     };
   }, [url]);
 
-  // Handle font size changes
+  // Font size changes
   useEffect(() => {
     if (renditionRef.current) {
       renditionRef.current.themes.fontSize(`${fontSize}%`);
     }
   }, [fontSize]);
 
-  // Handle page navigation
+  // Page navigation
   useEffect(() => {
     if (!renditionRef.current || !bookRef.current || loading) return;
 
@@ -161,27 +139,15 @@ export default function EPUBReader({
     }
   }, [currentPage, loading]);
 
-  // Apply word highlighting (placeholder for future implementation)
-  useEffect(() => {
-    if (!renditionRef.current || !highlightWords || highlightWords.size === 0) return;
-    // Word highlighting will be implemented in a future phase
-    // This requires injecting CSS into the EPUB iframe
-  }, [highlightWords]);
-
-  // Navigation methods exposed via ref
+  // Keyboard navigation
   const goToNextPage = useCallback(() => {
-    if (renditionRef.current) {
-      renditionRef.current.next();
-    }
+    renditionRef.current?.next();
   }, []);
 
   const goToPrevPage = useCallback(() => {
-    if (renditionRef.current) {
-      renditionRef.current.prev();
-    }
+    renditionRef.current?.prev();
   }, []);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === 'PageDown') {
@@ -204,10 +170,11 @@ export default function EPUBReader({
           alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
-          gap: 2
+          gap: 1,
+          p: 3
         }}
       >
-        <Typography color="error" variant="h6">
+        <Typography color="error" variant="body1" fontWeight={500}>
           Failed to load book
         </Typography>
         <Typography color="text.secondary" variant="body2">
@@ -223,21 +190,20 @@ export default function EPUBReader({
         <Box
           sx={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            inset: 0,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'background.paper',
             zIndex: 10,
-            gap: 2
+            gap: 1.5
           }}
         >
-          <CircularProgress size={48} />
-          <Typography color="text.secondary">{loadingStatus}</Typography>
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            {loadingStatus}
+          </Typography>
         </Box>
       )}
       <Box
@@ -245,9 +211,7 @@ export default function EPUBReader({
         sx={{
           width: '100%',
           height: '100%',
-          '& iframe': {
-            border: 'none'
-          }
+          '& iframe': { border: 'none' }
         }}
       />
     </Box>

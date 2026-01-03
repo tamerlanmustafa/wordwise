@@ -6,6 +6,8 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import HeroSearchBar from '../components/HeroSearchBar';
 import BookSearchBar from '../components/BookSearchBar';
 import MovieCarousel from '../components/MovieCarousel';
+import BookCarousel from '../components/BookCarousel';
+import { POPULAR_BOOKS, CLASSIC_AUTHORS } from '../data/popularBooks';
 import {
   fetchTopRatedMovies,
   fetchTrendingMovies,
@@ -184,59 +186,67 @@ export default function HomePage() {
         </Container>
 
         <Container maxWidth="lg" sx={{ py: 4 }}>
-          {/* Info Section */}
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography variant="h5" fontWeight="bold" gutterBottom>
-              Explore Public Domain Literature
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Search thousands of classic books from Project Gutenberg, or upload your own files
-            </Typography>
-          </Box>
+          {/* Popular Books Carousel - scrolls RIGHT */}
+          <BookCarousel
+            title="Most Popular Books"
+            books={POPULAR_BOOKS}
+            index={0}
+          />
+
+          {/* Classic Authors Carousel - scrolls LEFT */}
+          <BookCarousel
+            title="Classic Literature"
+            books={CLASSIC_AUTHORS}
+            index={1}
+          />
 
           {/* Features Grid */}
-          <Grid container spacing={3} justifyContent="center" sx={{ mb: 4 }}>
-            {[
-              { title: 'Classic Literature', desc: 'Shakespeare, Dickens, Austen & more', icon: '📚' },
-              { title: 'Public Domain', desc: 'Free to read & analyze', icon: '🔓' },
-              { title: 'CEFR Analysis', desc: 'Vocabulary by difficulty level', icon: '📊' },
-              { title: 'Upload Your Own', desc: 'EPUB, PDF, TXT supported', icon: '📤' }
-            ].map((feature) => (
-              <Grid item xs={6} sm={3} key={feature.title}>
-                <Paper
-                  sx={{
-                    p: 3,
-                    textAlign: 'center',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 1
-                  }}
-                >
-                  <Typography variant="h4">{feature.icon}</Typography>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {feature.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {feature.desc}
-                  </Typography>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+              Why Read with WordWise?
+            </Typography>
+            <Grid container spacing={3}>
+              {[
+                { title: 'Public Domain', desc: 'Free classic literature from Project Gutenberg', icon: '📚' },
+                { title: 'CEFR Analysis', desc: 'Words organized by difficulty level', icon: '📊' },
+                { title: 'Page-by-Page', desc: 'Learn vocabulary before you read', icon: '📖' },
+                { title: 'Upload Your Own', desc: 'EPUB, PDF, TXT supported', icon: '📤' }
+              ].map((feature) => (
+                <Grid item xs={6} sm={3} key={feature.title}>
+                  <Paper
+                    sx={{
+                      p: 2.5,
+                      textAlign: 'center',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 1
+                    }}
+                  >
+                    <Typography variant="h4">{feature.icon}</Typography>
+                    <Typography variant="subtitle2" fontWeight="bold">
+                      {feature.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {feature.desc}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
 
           {/* Footer */}
           <Box
             sx={{
               textAlign: 'center',
-              py: 4,
+              py: 3,
               borderTop: '1px solid',
               borderColor: 'divider'
             }}
           >
-            <Typography variant="body1" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
               Powered by Project Gutenberg & Open Library
             </Typography>
           </Box>

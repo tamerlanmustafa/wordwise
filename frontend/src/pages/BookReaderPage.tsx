@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
-  Container,
-  Paper,
   Typography,
   CircularProgress,
   Alert,
-  Button,
   IconButton,
   Drawer,
   useMediaQuery,
@@ -15,7 +12,6 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import ListAltIcon from '@mui/icons-material/ListAlt';
 import EPUBReader from '../components/reader/EPUBReader';
 import ReaderControls from '../components/reader/ReaderControls';
 import PageVocabulary from '../components/reader/PageVocabulary';
@@ -29,21 +25,13 @@ interface BookInfo {
   title: string;
   author: string | null;
   epub_url: string | null;
-  cover_url?: string | null;
 }
 
 export default function BookReaderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  const bookState = location.state as {
-    title?: string;
-    author?: string;
-    gutenbergId?: number;
-  } | null;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +44,8 @@ export default function BookReaderPage() {
   const [fontSize, setFontSize] = useState(100);
   const [vocabDrawerOpen, setVocabDrawerOpen] = useState(!isMobile);
 
-  // Parse gutenberg ID from URL
   const gutenbergId = id ? parseInt(id, 10) : null;
 
-  // Load book info and get EPUB URL
   useEffect(() => {
     if (!gutenbergId || isNaN(gutenbergId)) {
       setError('Invalid book ID');
@@ -72,18 +58,17 @@ export default function BookReaderPage() {
       setError(null);
 
       try {
-        // First check if book is already analyzed (to get book ID for vocabulary)
+        // Check if book is analyzed
         try {
           const analyzedResponse = await axios.get(
             `${API_BASE_URL}/api/books/by-gutenberg/${gutenbergId}`
           );
           setBookId(analyzedResponse.data.id);
-        } catch (err) {
-          // Book not analyzed yet, that's okay - we can still read it
-          console.log('Book not analyzed yet, vocabulary will be limited');
+        } catch {
+          console.log('Book not analyzed yet');
         }
 
-        // Get book details including EPUB URL
+        // Get book details
         const response = await axios.get(
           `${API_BASE_URL}/api/books/gutenberg/${gutenbergId}`
         );
@@ -96,16 +81,14 @@ export default function BookReaderPage() {
           return;
         }
 
-        // Use our proxy endpoint to avoid CORS issues with Gutenberg
         const proxyEpubUrl = `${API_BASE_URL}/api/books/gutenberg/${gutenbergId}/epub`;
 
         setBookInfo({
           id: data.id,
           gutenberg_id: data.gutenberg_id,
-          title: data.title || bookState?.title || 'Unknown Book',
-          author: data.author || bookState?.author || null,
-          epub_url: proxyEpubUrl,
-          cover_url: data.cover_url
+          title: data.title || 'Unknown Book',
+          author: data.author || null,
+          epub_url: proxyEpubUrl
         });
 
         setLoading(false);
@@ -117,7 +100,7 @@ export default function BookReaderPage() {
     };
 
     loadBookInfo();
-  }, [gutenbergId, bookState]);
+  }, [gutenbergId]);
 
   const handlePageChange = useCallback((page: number, total: number) => {
     setCurrentPage(page);
@@ -140,10 +123,6 @@ export default function BookReaderPage() {
     navigate(`/book/${gutenbergId}`);
   };
 
-  const toggleVocabDrawer = () => {
-    setVocabDrawerOpen(!vocabDrawerOpen);
-  };
-
   if (loading) {
     return (
       <Box
@@ -156,83 +135,74 @@ export default function BookReaderPage() {
           gap: 2
         }}
       >
-        <CircularProgress size={48} />
+        <CircularProgress size={40} />
         <Typography color="text.secondary">Loading book...</Typography>
       </Box>
     );
   }
 
-  if (error) {
+  if (error || !bookInfo?.epub_url) {
     return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+      <Box sx={{ p: 4, maxWidth: 600, mx: 'auto' }}>
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error || 'This book is not available for reading.'}
         </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={handleBack}
-        >
-          Back to Book Details
-        </Button>
-      </Container>
+        <IconButton onClick={handleBack} sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography component="span" color="text.secondary">
+          Back to book details
+        </Typography>
+      </Box>
     );
   }
 
-  if (!bookInfo || !bookInfo.epub_url) {
-    return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Alert severity="warning">
-          This book is not available for reading. Please try another book.
-        </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/books/search')}
-          sx={{ mt: 2 }}
-        >
-          Search Books
-        </Button>
-      </Container>
-    );
-  }
-
-  const vocabPanelWidth = 320;
+  const vocabWidth = 300;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Header */}
-      <Paper
-        elevation={1}
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      bgcolor: 'grey.50'
+    }}>
+      {/* Minimal Header */}
+      <Box
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 2,
+          gap: 1.5,
           px: 2,
           py: 1,
-          borderRadius: 0
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider'
         }}
       >
         <IconButton onClick={handleBack} size="small">
-          <ArrowBackIcon />
+          <ArrowBackIcon fontSize="small" />
         </IconButton>
-        <MenuBookIcon color="primary" />
+        <MenuBookIcon sx={{ color: 'primary.main', fontSize: 20 }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" fontWeight="bold" noWrap>
+          <Typography variant="body2" fontWeight={600} noWrap>
             {bookInfo.title}
           </Typography>
           {bookInfo.author && (
-            <Typography variant="caption" color="text.secondary" noWrap>
-              by {bookInfo.author}
+            <Typography variant="caption" color="text.secondary" noWrap component="div">
+              {bookInfo.author}
             </Typography>
           )}
         </Box>
         {isMobile && (
-          <IconButton onClick={toggleVocabDrawer} color="primary">
-            <ListAltIcon />
+          <IconButton
+            onClick={() => setVocabDrawerOpen(!vocabDrawerOpen)}
+            size="small"
+            color={vocabDrawerOpen ? 'primary' : 'default'}
+          >
+            <MenuBookIcon fontSize="small" />
           </IconButton>
         )}
-      </Paper>
+      </Box>
 
       {/* Main Content */}
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -243,12 +213,12 @@ export default function BookReaderPage() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            mr: !isMobile && vocabDrawerOpen ? `${vocabPanelWidth}px` : 0,
-            transition: 'margin 0.3s ease'
+            transition: 'margin 0.2s ease',
+            mr: !isMobile && vocabDrawerOpen ? `${vocabWidth}px` : 0
           }}
         >
           {/* Controls */}
-          <Box sx={{ p: 1 }}>
+          <Box sx={{ px: 2, py: 1 }}>
             <ReaderControls
               currentPage={currentPage}
               totalPages={totalPages}
@@ -260,7 +230,17 @@ export default function BookReaderPage() {
           </Box>
 
           {/* EPUB Reader */}
-          <Box sx={{ flex: 1, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'hidden',
+              mx: 2,
+              mb: 2,
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              boxShadow: 1
+            }}
+          >
             <EPUBReader
               url={bookInfo.epub_url}
               currentPage={currentPage}
@@ -271,73 +251,43 @@ export default function BookReaderPage() {
           </Box>
         </Box>
 
-        {/* Vocabulary Panel - Drawer on mobile, fixed on desktop */}
+        {/* Vocabulary Panel */}
         {isMobile ? (
           <Drawer
             anchor="right"
             open={vocabDrawerOpen}
             onClose={() => setVocabDrawerOpen(false)}
-            PaperProps={{
-              sx: { width: vocabPanelWidth }
-            }}
+            PaperProps={{ sx: { width: vocabWidth } }}
           >
-            {bookId ? (
+            <PageVocabulary
+              bookId={bookId}
+              currentPage={currentPage}
+              totalPages={totalPages}
+            />
+          </Drawer>
+        ) : (
+          vocabDrawerOpen && (
+            <Box
+              sx={{
+                position: 'fixed',
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: vocabWidth,
+                bgcolor: 'background.paper',
+                borderLeft: 1,
+                borderColor: 'divider',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
               <PageVocabulary
                 bookId={bookId}
                 currentPage={currentPage}
                 totalPages={totalPages}
               />
-            ) : (
-              <Box sx={{ p: 2, textAlign: 'center' }}>
-                <Alert severity="info">
-                  Analyze this book first to see vocabulary for each page.
-                </Alert>
-                <Button
-                  variant="contained"
-                  onClick={handleBack}
-                  sx={{ mt: 2 }}
-                >
-                  Go to Analysis
-                </Button>
-              </Box>
-            )}
-          </Drawer>
-        ) : (
-          vocabDrawerOpen && (
-            <Paper
-              elevation={2}
-              sx={{
-                position: 'fixed',
-                right: 0,
-                top: 64,
-                bottom: 0,
-                width: vocabPanelWidth,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                borderRadius: 0
-              }}
-            >
-              {bookId ? (
-                <PageVocabulary
-                  bookId={bookId}
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                />
-              ) : (
-                <Box sx={{ p: 2, textAlign: 'center' }}>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    Analyze this book first to see vocabulary for each page.
-                  </Alert>
-                  <Button
-                    variant="contained"
-                    onClick={handleBack}
-                  >
-                    Go to Analysis
-                  </Button>
-                </Box>
-              )}
-            </Paper>
+            </Box>
           )
         )}
       </Box>
