@@ -156,6 +156,14 @@ async def update_user_profile(
     if user_update.proficiency_level is not None:
         update_data["proficiencyLevel"] = user_update.proficiency_level
 
+    if user_update.default_tab is not None:
+        if user_update.default_tab not in ["movies", "books"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid default_tab: {user_update.default_tab}. Must be 'movies' or 'books'"
+            )
+        update_data["defaultTab"] = user_update.default_tab
+
     if not update_data:
         return current_user
 

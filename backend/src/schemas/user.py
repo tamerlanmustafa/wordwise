@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     native_language: Optional[str] = None
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
+    default_tab: Optional[str] = "movies"
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None
     created_at: Optional[datetime] = None
@@ -51,6 +52,7 @@ class UserResponse(BaseModel):
                 'native_language': getattr(obj, 'nativeLanguage', None),
                 'learning_language': getattr(obj, 'learningLanguage', None),
                 'proficiency_level': obj.proficiencyLevel,
+                'default_tab': getattr(obj, 'defaultTab', 'movies'),
                 'is_active': obj.isActive,
                 'is_admin': getattr(obj, 'isAdmin', None),
                 'created_at': obj.createdAt,
@@ -68,6 +70,7 @@ class UserUpdate(BaseModel):
     native_language: Optional[str] = None
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
+    default_tab: Optional[str] = None  # "movies" or "books"
 
 
 class Token(BaseModel):

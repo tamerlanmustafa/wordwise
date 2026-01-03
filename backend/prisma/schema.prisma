@@ -17,6 +17,7 @@ model User {
   nativeLanguage     String?                   @default("en") @map("native_language") @db.VarChar(10)
   learningLanguage   String?                   @default("en") @map("learning_language") @db.VarChar(10)
   proficiencyLevel   proficiencylevel?         @map("proficiency_level")
+  defaultTab         String?                   @default("movies") @map("default_tab") @db.VarChar(10)
   isActive           Boolean?                  @map("is_active")
   isAdmin            Boolean?                  @map("is_admin")
   createdAt          DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)

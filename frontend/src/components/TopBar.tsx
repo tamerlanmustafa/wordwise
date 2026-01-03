@@ -111,14 +111,18 @@ export default function TopBar() {
       <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
         {/* Left: WordWise Logo */}
         <Box
-          component={Link}
-          to="/"
+          onClick={() => {
+            // Navigate to home with user's default tab preference
+            const defaultTab = user?.default_tab === 'books' ? 1 : 0;
+            navigate('/', { state: { defaultTab } });
+          }}
           sx={{
             textDecoration: 'none',
             color: 'primary.main',
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
+            cursor: 'pointer',
             '&:hover': {
               opacity: 0.8
             }

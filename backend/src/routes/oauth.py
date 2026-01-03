@@ -155,6 +155,10 @@ def _create_user_response(user) -> UserInfo:
         username=user.username,
         oauth_provider=user.oauthProvider,
         profile_picture_url=user.profilePictureUrl,
+        native_language=user.nativeLanguage,
+        learning_language=user.learningLanguage,
+        proficiency_level=user.proficiencyLevel.value if hasattr(user.proficiencyLevel, 'value') else user.proficiencyLevel,
+        default_tab=user.defaultTab or "movies",
         is_admin=user.isAdmin or False
     )
 

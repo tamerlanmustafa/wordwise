@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Container, Box, Typography, Grid, Paper, Skeleton, Tabs, Tab } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import MovieIcon from '@mui/icons-material/Movie';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import HeroSearchBar from '../components/HeroSearchBar';
@@ -8,6 +8,7 @@ import BookSearchBar from '../components/BookSearchBar';
 import MovieCarousel from '../components/MovieCarousel';
 import BookCarousel from '../components/BookCarousel';
 import { POPULAR_BOOKS, CLASSIC_AUTHORS } from '../data/popularBooks';
+import { useAuth } from '../contexts/AuthContext';
 import {
   fetchTopRatedMovies,
   fetchTrendingMovies,
@@ -32,11 +33,39 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
+  const { user } = useAuth();
+
+  // Set initial tab based on user preference
+  const getInitialTab = () => {
+    // Check if navigated with explicit tab preference (from logo click)
+    const stateTab = (location.state as { defaultTab?: number })?.defaultTab;
+    if (stateTab !== undefined) return stateTab;
+    // Otherwise use user's saved preference
+    if (user?.default_tab === 'books') return 1;
+    return 0;
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [topRated, setTopRated] = useState<TMDBMovie[]>([]);
   const [trending, setTrending] = useState<TMDBMovie[]>([]);
   const [genres, setGenres] = useState<TMDBGenre[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Update tab when navigating to home with state (e.g., clicking logo)
+  useEffect(() => {
+    const stateTab = (location.state as { defaultTab?: number })?.defaultTab;
+    if (stateTab !== undefined) {
+      setActiveTab(stateTab);
+    }
+  }, [location.state]);
+
+  // Update tab when user preference changes
+  useEffect(() => {
+    if (user?.default_tab) {
+      setActiveTab(user.default_tab === 'books' ? 1 : 0);
+    }
+  }, [user?.default_tab]);
 
   useEffect(() => {
     const loadData = async () => {
