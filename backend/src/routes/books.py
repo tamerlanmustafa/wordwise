@@ -22,7 +22,8 @@ from ..middleware.auth import get_current_active_user, get_admin_user
 from ..services.book_ingestion_service import get_book_ingestion_service
 from ..services.gutendex_client import get_gutendex_client
 from ..services.open_library_client import get_open_library_client
-from .cefr import get_classifier
+from .cefr import get_classifier, should_keep_word
+from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms
 
 logger = logging.getLogger(__name__)
 
@@ -747,21 +748,52 @@ async def get_book_vocabulary(
         order={"frequencyRank": "asc"}
     )
 
-    # Build level distribution and top words by level
+    # Build level distribution and top words by level, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
     top_words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
 
     for cls in classifications:
         level = cls.cefrLevel
+
+        # Filter out ultra-common A1 words (pronouns, articles, etc.)
+        if not should_keep_word(cls.word, cls.lemma, level):
+            continue
+
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
-        if len(top_words_by_level[level]) < 50:
-            top_words_by_level[level].append({
-                "word": cls.word,
-                "lemma": cls.lemma,
-                "confidence": cls.confidence,
-                "frequency_rank": cls.frequencyRank
-            })
+        top_words_by_level[level].append({
+            "word": cls.word,
+            "lemma": cls.lemma,
+            "confidence": cls.confidence,
+            "frequency_rank": cls.frequencyRank
+        })
+
+    # Sort by frequency rank (most important words first) and limit to 50 per level
+    for level in top_words_by_level:
+        top_words_by_level[level].sort(
+            key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999)
+        )
+        top_words_by_level[level] = top_words_by_level[level][:50]
+
+    # Detect idioms and phrasal verbs from book text
+    idioms = []
+    if book.bookText.cleanedText:
+        try:
+            # Use first 50k chars to avoid performance issues with long books
+            sample_text = book.bookText.cleanedText[:50000]
+            idiom_results = detect_phrasal_verbs_and_idioms(sample_text)
+            idioms = [
+                {
+                    "phrase": phrase,
+                    "type": expr_type,
+                    "cefr_level": level,
+                    "words": phrase.split()
+                }
+                for phrase, expr_type, level in idiom_results
+            ]
+        except Exception as e:
+            logger.warning(f"Error detecting idioms: {e}")
+            idioms = []
 
     return {
         "book_id": book.id,
@@ -770,7 +802,8 @@ async def get_book_vocabulary(
         "unique_words": len(classifications),
         "level_distribution": level_distribution,
         "top_words_by_level": top_words_by_level,
-        "idioms": []
+        "average_confidence": sum(c.confidence for c in classifications) / len(classifications) if classifications else 0,
+        "idioms": idioms
     }
 
 
@@ -800,21 +833,52 @@ async def get_book_vocabulary_preview(
         take=100  # Limited for preview
     )
 
-    # Build level distribution
+    # Build level distribution, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
     top_words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
 
     for cls in classifications:
         level = cls.cefrLevel
+
+        # Filter out ultra-common A1 words (pronouns, articles, etc.)
+        if not should_keep_word(cls.word, cls.lemma, level):
+            continue
+
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
-        if len(top_words_by_level[level]) < 10:  # Limited for preview
-            top_words_by_level[level].append({
-                "word": cls.word,
-                "lemma": cls.lemma,
-                "confidence": cls.confidence,
-                "frequency_rank": cls.frequencyRank
-            })
+        top_words_by_level[level].append({
+            "word": cls.word,
+            "lemma": cls.lemma,
+            "confidence": cls.confidence,
+            "frequency_rank": cls.frequencyRank
+        })
+
+    # Sort by frequency rank and limit to 3 per level for preview
+    for level in top_words_by_level:
+        top_words_by_level[level].sort(
+            key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999)
+        )
+        top_words_by_level[level] = top_words_by_level[level][:3]
+
+    # Detect idioms and phrasal verbs from book text
+    idioms = []
+    if book.bookText.cleanedText:
+        try:
+            # Use first 20k chars for preview to keep it fast
+            sample_text = book.bookText.cleanedText[:20000]
+            idiom_results = detect_phrasal_verbs_and_idioms(sample_text)
+            idioms = [
+                {
+                    "phrase": phrase,
+                    "type": expr_type,
+                    "cefr_level": level,
+                    "words": phrase.split()
+                }
+                for phrase, expr_type, level in idiom_results
+            ]
+        except Exception as e:
+            logger.warning(f"Error detecting idioms: {e}")
+            idioms = []
 
     return {
         "book_id": book.id,
@@ -823,8 +887,9 @@ async def get_book_vocabulary_preview(
         "unique_words": len(classifications),
         "level_distribution": level_distribution,
         "top_words_by_level": top_words_by_level,
-        "idioms": [],
-        "is_preview": True
+        "average_confidence": sum(c.confidence for c in classifications) / len(classifications) if classifications else 0,
+        "idioms": idioms,
+        "preview": True
     }
 
 
@@ -902,12 +967,19 @@ async def get_book_vocabulary_by_pages(
         order={"pageNumber": "asc"}
     )
 
-    # Build level distribution and words by level
+    # Build level distribution and words by level, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
     words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
+    filtered_count = 0
 
     for cls in classifications:
         level = cls.cefrLevel
+
+        # Filter out ultra-common A1 words (pronouns, articles, etc.)
+        if not should_keep_word(cls.word, cls.lemma, level):
+            continue
+
+        filtered_count += 1
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
         words_by_level[level].append({
@@ -923,7 +995,7 @@ async def get_book_vocabulary_by_pages(
         "title": book.title,
         "page_range": {"start": start_page, "end": end_page},
         "total_pages": book.bookText.totalPages,
-        "words_in_range": len(classifications),
+        "words_in_range": filtered_count,
         "level_distribution": level_distribution,
         "words_by_level": words_by_level
     }
