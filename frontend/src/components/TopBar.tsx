@@ -433,31 +433,30 @@ export default function TopBar() {
                 >
                   Settings
                 </MenuItem>
-                {isAdmin && (
-                  <>
-                    <MenuItem
-                      component={Link}
-                      to="/admin/reports"
-                      onClick={handleUserMenuClose}
-                    >
-                      <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
-                      Admin Reports
-                    </MenuItem>
-                    <MenuItem onClick={() => { toggleAdminView(); handleUserMenuClose(); }}>
-                      {isViewingAsAdmin ? (
-                        <>
-                          <VisibilityOffIcon sx={{ mr: 1, fontSize: 20 }} />
-                          View as User
-                        </>
-                      ) : (
-                        <>
-                          <VisibilityIcon sx={{ mr: 1, fontSize: 20 }} />
-                          View as Admin
-                        </>
-                      )}
-                    </MenuItem>
-                  </>
-                )}
+                {isAdmin && [
+                  <MenuItem
+                    key="admin-reports"
+                    component={Link}
+                    to="/admin/reports"
+                    onClick={handleUserMenuClose}
+                  >
+                    <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Admin Reports
+                  </MenuItem>,
+                  <MenuItem key="admin-view-toggle" onClick={() => { toggleAdminView(); handleUserMenuClose(); }}>
+                    {isViewingAsAdmin ? (
+                      <>
+                        <VisibilityOffIcon sx={{ mr: 1, fontSize: 20 }} />
+                        View as User
+                      </>
+                    ) : (
+                      <>
+                        <VisibilityIcon sx={{ mr: 1, fontSize: 20 }} />
+                        View as Admin
+                      </>
+                    )}
+                  </MenuItem>
+                ]}
                 <MenuItem onClick={handleLogout}>Log out</MenuItem>
               </Menu>
             </>

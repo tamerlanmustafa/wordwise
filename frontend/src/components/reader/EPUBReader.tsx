@@ -25,6 +25,8 @@ export default function EPUBReader({
   const [error, setError] = useState<string | null>(null);
   const isInitializedRef = useRef(false);
   const currentPageRef = useRef(currentPage);
+  const isNavigatingRef = useRef(false);
+  const lastReportedPageRef = useRef(currentPage);
 
   currentPageRef.current = currentPage;
 
@@ -94,7 +96,12 @@ export default function EPUBReader({
 
           rendition.on('relocated', (location: { start: { location: number } }) => {
             const page = location.start.location || 1;
-            onPageChange(page, numPages);
+            // Only report if page actually changed and we're not in the middle of programmatic navigation
+            if (page !== lastReportedPageRef.current && !isNavigatingRef.current) {
+              lastReportedPageRef.current = page;
+              onPageChange(page, numPages);
+            }
+            isNavigatingRef.current = false;
           });
         } catch {
           onReady(0);
@@ -126,14 +133,18 @@ export default function EPUBReader({
     }
   }, [fontSize]);
 
-  // Page navigation
+  // Page navigation - only when user explicitly requests a page (e.g., from controls)
   useEffect(() => {
     if (!renditionRef.current || !bookRef.current || loading) return;
+    // Don't navigate if we're already on this page
+    if (currentPage === lastReportedPageRef.current) return;
 
     const locations = bookRef.current.locations;
     if (locations && locations.length() > 0) {
       const cfi = locations.cfiFromLocation(currentPage);
       if (cfi) {
+        isNavigatingRef.current = true;
+        lastReportedPageRef.current = currentPage;
         renditionRef.current.display(cfi);
       }
     }
