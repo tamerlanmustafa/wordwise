@@ -1,0 +1,34 @@
+{
+  "name": "WordWiseMobile",
+  "displayName": "WordWise",
+  "expo": {
+    "name": "WordWise",
+    "slug": "wordwise-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "wordwise",
+    "splash": {
+      "backgroundColor": "#2196F3"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wordwise.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2196F3"
+      },
+      "package": "com.wordwise.mobile"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "wordwise-mobile"
+      }
+    }
+  }
+}
