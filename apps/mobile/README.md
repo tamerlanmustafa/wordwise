@@ -7,18 +7,65 @@ React Native mobile app for WordWise - learn vocabulary from movies and books.
 ### Prerequisites
 - Node.js 20+
 - npm or yarn
-- Expo Go app on your phone (for testing)
+- Expo Go app on your phone (from Play Store / App Store)
+- Python 3.10+ (for backend)
 
-### Run the App
+### Development Setup (WSL2 + Physical Device)
+
+If you're developing on WSL2 and testing on a physical Android device, follow these steps:
+
+#### One-time Setup
+
+1. **Set up port forwarding** (run in Windows PowerShell as Administrator):
+   ```powershell
+   # Get your WSL IP first (run in WSL): hostname -I | awk '{print $1}'
+   # Then set up port forwarding (replace WSL_IP with your actual IP):
+   netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=WSL_IP
+
+   # Add firewall rule
+   netsh advfirewall firewall add rule name="WSL Backend 8000" dir=in action=allow protocol=TCP localport=8000
+   ```
+
+2. **Update API URL** in `src/config/env.ts`:
+   ```typescript
+   // Find your Windows WiFi IP: ipconfig (look for "Wireless LAN adapter Wi-Fi" IPv4)
+   development: {
+     API_URL: 'http://YOUR_WINDOWS_IP:8000',
+   },
+   ```
+
+#### Starting Development
+
+**Terminal 1 - Backend:**
+```bash
+cd ~/projects/wordwise/backend
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 - Expo:**
+```bash
+cd ~/projects/wordwise/apps/mobile
+npx expo start
+```
+
+Then scan the QR code with Expo Go on your phone.
+
+#### Alternative: Combined Command
 
 ```bash
-# Install dependencies
-npm install
+cd ~/projects/wordwise/apps/mobile
+npm run start:full
+```
 
-# Start with Expo (easiest way to test)
-npx expo start --tunnel
+Note: With `start:full`, you won't see the QR code. Open Expo Go and your project should appear under "Development servers".
 
-# Scan QR code with Expo Go app on your phone
+### Emulator Setup
+
+For Android Emulator (no port forwarding needed), update `src/config/env.ts`:
+```typescript
+development: {
+  API_URL: 'http://10.0.2.2:8000',  // Android emulator -> host localhost
+},
 ```
 
 ## Project Structure

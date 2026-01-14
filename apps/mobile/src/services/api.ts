@@ -1,20 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { config } from '../config/env';
 
-// API Base URL - adjust for your development environment
-// Android Emulator uses 10.0.2.2 to reach host machine's localhost
-// iOS Simulator can use localhost directly
-import { Platform } from 'react-native';
-
-const getDevApiUrl = () => {
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000';  // Android Emulator -> host localhost
-  }
-  return 'http://localhost:8000';  // iOS Simulator
-};
-
-const API_BASE_URL = __DEV__
-  ? getDevApiUrl()
-  : 'https://api.wordwise.app';  // Production
+// Use centralized config for API URL
+const API_BASE_URL = config.API_URL;
 
 // TMDB API Key (same as web app)
 const TMDB_API_KEY = '9dece7a38786ac0c58794d6db4af3d51';

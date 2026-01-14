@@ -22,7 +22,7 @@ type Environment = 'development' | 'staging' | 'production';
 
 const configs = {
   development: {
-    API_URL: 'http://10.0.2.2:8000', // Android emulator localhost
+    API_URL: 'http://192.168.1.168:8000', // Windows IP for physical device testing
     DEBUG: true,
   },
   staging: {
