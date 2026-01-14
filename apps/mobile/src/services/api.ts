@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../config/env';
+import { tokenStorage } from './auth/tokenStorage';
 
 // Use centralized config for API URL
 const API_BASE_URL = config.API_URL;
@@ -111,8 +111,11 @@ export interface TranslationResponse {
 // Helper to get auth token
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem('wordwise_access_token');
-  } catch {
+    const token = await tokenStorage.getAccessToken();
+    console.log('[API] getAuthToken result:', token ? `${token.substring(0, 30)}...` : 'null');
+    return token;
+  } catch (err) {
+    console.log('[API] getAuthToken error:', err);
     return null;
   }
 };
@@ -120,6 +123,9 @@ const getAuthToken = async (): Promise<string | null> => {
 // Helper for authenticated requests
 const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const token = await getAuthToken();
+  console.log('[API] authFetch called for:', url);
+  console.log('[API] Token available:', !!token);
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -127,9 +133,14 @@ const authFetch = async (url: string, options: RequestInit = {}): Promise<Respon
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('[API] Authorization header set');
+  } else {
+    console.log('[API] WARNING: No token, request will be unauthenticated');
   }
 
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+  console.log('[API] Response status:', response.status);
+  return response;
 };
 
 // TMDB API
@@ -219,8 +230,14 @@ export const wordwiseApi = {
 
   // Get full vocabulary (auth required)
   getVocabularyFull: async (movieId: number): Promise<VocabularyResponse> => {
+    console.log('[API] getVocabularyFull called for movie:', movieId);
     const res = await authFetch(`${API_BASE_URL}/movies/${movieId}/vocabulary/full`);
-    if (!res.ok) throw new Error('Failed to get vocabulary');
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.log('[API] getVocabularyFull failed:', res.status, errorText);
+      throw new Error(`Failed to get vocabulary: ${res.status}`);
+    }
+    console.log('[API] getVocabularyFull succeeded');
     return res.json();
   },
 

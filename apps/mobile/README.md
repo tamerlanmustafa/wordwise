@@ -235,7 +235,7 @@ npx expo start --clear
 
 ## Next Steps
 
-1. [ ] Implement Google OAuth
+1. [x] Implement Google OAuth
 2. [ ] Add vocabulary download for offline access
 3. [ ] Build saved words with sync
 4. [ ] Add translation caching

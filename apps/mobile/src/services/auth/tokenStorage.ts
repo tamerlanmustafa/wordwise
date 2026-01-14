@@ -26,21 +26,27 @@ const storage = Platform.OS === 'web' ? webStorage : SecureStore;
 
 export const tokenStorage = {
   async saveTokens(access: string, refresh: string): Promise<void> {
+    console.log('[TokenStorage] Saving tokens, access:', access ? `${access.substring(0, 30)}...` : 'null');
     await storage.setItemAsync(TOKEN_KEY, JSON.stringify({ access, refresh }));
+    console.log('[TokenStorage] Tokens saved successfully');
   },
 
   async getTokens(): Promise<StoredTokens | null> {
     try {
       const result = await storage.getItemAsync(TOKEN_KEY);
+      console.log('[TokenStorage] getTokens raw result:', result ? `${result.substring(0, 50)}...` : 'null');
       if (!result) return null;
       return JSON.parse(result) as StoredTokens;
-    } catch {
+    } catch (err) {
+      console.log('[TokenStorage] getTokens error:', err);
       return null;
     }
   },
 
   async getAccessToken(): Promise<string | null> {
+    console.log('[TokenStorage] getAccessToken called');
     const tokens = await this.getTokens();
+    console.log('[TokenStorage] getAccessToken result:', tokens?.access ? 'has token' : 'no token');
     return tokens?.access ?? null;
   },
 

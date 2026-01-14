@@ -38,6 +38,13 @@ def _verify_and_get_google_user_info(id_token: str) -> dict:
         except Exception:
             pass
 
+    # Try mobile client ID if others failed
+    if not google_user_info and settings.google_client_id_mobile:
+        try:
+            google_user_info = verify_google_token(id_token, settings.google_client_id_mobile)
+        except Exception:
+            pass
+
     if not google_user_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

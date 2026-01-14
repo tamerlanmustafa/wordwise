@@ -47,10 +47,10 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
         }
     )
 
-    # Create access token
+    # Create access token (sub must be a string for JWT compliance)
     access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
     access_token = create_access_token(
-        data={"sub": new_user.id, "email": new_user.email},
+        data={"sub": str(new_user.id), "email": new_user.email},
         expires_delta=access_token_expires
     )
 
@@ -63,6 +63,7 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
 @router.post("/login", response_model=AuthResponse)
 async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
     """Login user and return JWT token"""
+    print(f"[AUTH] Login attempt for email: {credentials.email}")
     user = await db.user.find_unique(where={"email": credentials.email})
 
     if not user or not user.passwordHash or not verify_password(credentials.password, user.passwordHash):
@@ -78,10 +79,10 @@ async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
             detail="Inactive user"
         )
 
-    # Create access token
+    # Create access token (sub must be a string for JWT compliance)
     access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email},
+        data={"sub": str(user.id), "email": user.email},
         expires_delta=access_token_expires
     )
 

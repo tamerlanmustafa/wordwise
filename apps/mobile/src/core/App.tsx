@@ -12,10 +12,17 @@ import {
   Dimensions,
   FlatList,
   Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
+import { GOOGLE_CLIENT_ID } from '../config/env';
+
+// Required for Google Auth to work properly
+WebBrowser.maybeCompleteAuthSession();
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = 130;
@@ -72,7 +79,86 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Google Auth setup
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_CLIENT_ID,
+    webClientId: GOOGLE_CLIENT_ID,
+    scopes: ['profile', 'email'],
+  });
+
+  // Handle Google auth response
+  useEffect(() => {
+    const handleGoogleResponse = async () => {
+      if (response?.type === 'success') {
+        setGoogleLoading(true);
+        setError('');
+        try {
+          const { authentication } = response;
+          if (!authentication?.accessToken) {
+            throw new Error('No access token received');
+          }
+
+          // Get user info from Google
+          const userInfoResponse = await fetch(
+            'https://www.googleapis.com/userinfo/v2/me',
+            { headers: { Authorization: `Bearer ${authentication.accessToken}` } }
+          );
+          const googleUser = await userInfoResponse.json();
+
+          // Send to backend for login/registration
+          const { config } = await import('../config/env');
+          const backendResponse = await fetch(`${config.API_URL}/auth/google/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_token: authentication.idToken || authentication.accessToken,
+              email: googleUser.email,
+              name: googleUser.name,
+              picture: googleUser.picture,
+              google_id: googleUser.id,
+            }),
+          });
+
+          const data = await backendResponse.json();
+
+          if (!backendResponse.ok) {
+            throw new Error(data.detail || 'Google login failed');
+          }
+
+          // Map backend user format to app user format
+          const user = {
+            id: data.user.id,
+            email: data.user.email,
+            username: data.user.username,
+            profile_picture_url: data.user.profile_picture_url || data.user.profilePictureUrl,
+            native_language: data.user.native_language || data.user.nativeLanguage || 'en',
+            learning_language: data.user.learning_language || data.user.learningLanguage || 'es',
+            proficiency_level: data.user.proficiency_level || data.user.proficiencyLevel || 'B1',
+            default_tab: (data.user.default_tab || data.user.defaultTab || 'movies') as 'movies' | 'books',
+            is_admin: data.user.is_admin || data.user.isAdmin || false,
+          };
+
+          onLogin(user, data.access_token || data.token);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Google login failed');
+        } finally {
+          setGoogleLoading(false);
+        }
+      } else if (response?.type === 'error') {
+        setError('Google sign-in was cancelled or failed');
+      }
+    };
+
+    handleGoogleResponse();
+  }, [response]);
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    await promptAsync();
+  };
 
   const handleAuth = async () => {
     if (!email || !password || (!isLoginMode && !username)) {
@@ -87,18 +173,21 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
       const { config } = await import('../config/env');
       const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
       const body = isLoginMode
-        ? { email, password }
-        : { email, password, username, language_preference: 'en' };
+        ? { email: email.trim(), password }
+        : { email: email.trim(), password, username: username.trim(), language_preference: 'en' };
 
-      const response = await fetch(`${config.API_URL}${endpoint}`, {
+      console.log('Sending auth request:', endpoint, JSON.stringify(body));
+
+      const authResponse = await fetch(`${config.API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      const data = await authResponse.json();
+      console.log('Auth response:', authResponse.status, data);
 
-      if (!response.ok) {
+      if (!authResponse.ok) {
         throw new Error(data.detail || 'Authentication failed');
       }
 
@@ -123,6 +212,8 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
     }
   };
 
+  const isLoading = loading || googleLoading;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.loginContent}>
@@ -130,6 +221,28 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
         <Text style={styles.tagline}>Learn vocabulary from movies & books</Text>
 
         <View style={styles.formContainer}>
+          {/* Google Sign-In Button */}
+          <TouchableOpacity
+            style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+            onPress={handleGoogleSignIn}
+            disabled={!request || isLoading}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           {!isLoginMode && (
             <TextInput
               style={styles.input}
@@ -161,9 +274,9 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
           {error ? <Text style={styles.loginError}>{error}</Text> : null}
 
           <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
             onPress={handleAuth}
-            disabled={loading}
+            disabled={isLoading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -827,10 +940,14 @@ const MovieDetailScreen = ({
       // Step 4: Try to get full vocabulary first, fall back to preview
       let vocabResult: VocabularyResponse;
       try {
+        console.log('[MovieDetail] Attempting to get full vocabulary...');
         vocabResult = await wordwiseApi.getVocabularyFull(scriptResult.movie_id);
-      } catch {
+        console.log('[MovieDetail] Got full vocabulary successfully');
+      } catch (fullErr) {
+        console.log('[MovieDetail] Full vocabulary failed, falling back to preview:', fullErr);
         // Fall back to preview if full vocabulary requires auth
         vocabResult = await wordwiseApi.getVocabularyPreview(scriptResult.movie_id);
+        console.log('[MovieDetail] Got preview vocabulary');
       }
       setVocabulary(vocabResult);
 
@@ -1102,6 +1219,42 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     gap: 12,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.paper,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 10,
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    color: colors.textSecondary,
+    fontSize: 14,
   },
   input: {
     backgroundColor: colors.paper,
