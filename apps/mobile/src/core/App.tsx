@@ -66,24 +66,129 @@ const cefrLabels: Record<string, string> = {
 };
 
 // Login Screen
-const LoginScreen = ({ onLogin }: { onLogin: () => void }) => (
-  <SafeAreaView style={styles.container}>
-    <View style={styles.loginContent}>
-      <Text style={styles.logo}>WordWise</Text>
-      <Text style={styles.tagline}>Learn vocabulary from movies & books</Text>
+const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void }) => {
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-      <View style={styles.buttonGroup}>
-        <TouchableOpacity style={styles.primaryButton} onPress={onLogin}>
-          <Text style={styles.primaryButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
+  const handleAuth = async () => {
+    if (!email || !password || (!isLoginMode && !username)) {
+      setError('Please fill in all fields');
+      return;
+    }
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={onLogin}>
-          <Text style={styles.secondaryButtonText}>Skip Login (Dev)</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </SafeAreaView>
-);
+    setLoading(true);
+    setError('');
+
+    try {
+      const { config } = await import('../config/env');
+      const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
+      const body = isLoginMode
+        ? { email, password }
+        : { email, password, username, language_preference: 'en' };
+
+      const response = await fetch(`${config.API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Authentication failed');
+      }
+
+      // Map backend user format to app user format
+      const user = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        profile_picture_url: data.user.profilePictureUrl,
+        native_language: data.user.nativeLanguage || 'en',
+        learning_language: data.user.learningLanguage || 'es',
+        proficiency_level: data.user.proficiencyLevel || 'B1',
+        default_tab: (data.user.defaultTab || 'movies') as 'movies' | 'books',
+        is_admin: data.user.isAdmin,
+      };
+
+      onLogin(user, data.token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.loginContent}>
+        <Text style={styles.logo}>WordWise</Text>
+        <Text style={styles.tagline}>Learn vocabulary from movies & books</Text>
+
+        <View style={styles.formContainer}>
+          {!isLoginMode && (
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor={colors.textSecondary}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          )}
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={colors.textSecondary}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={colors.textSecondary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          {error ? <Text style={styles.loginError}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleAuth}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {isLoginMode ? 'Login' : 'Register'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={() => setIsLoginMode(!isLoginMode)}
+          >
+            <Text style={styles.switchButtonText}>
+              {isLoginMode
+                ? "Don't have an account? Register"
+                : 'Already have an account? Login'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
 // Movie Card Component
 const MovieCard = ({ movie, onPress }: { movie: any; onPress: () => void }) => (
@@ -926,22 +1031,8 @@ export default function App() {
     initialize();
   }, [initialize]);
 
-  const handleLogin = async () => {
-    await login(
-      {
-        id: 1,
-        email: 'dev@wordwise.app',
-        username: 'Developer',
-        profile_picture_url: null,
-        native_language: 'tr',
-        learning_language: 'en',
-        proficiency_level: 'B1',
-        default_tab: 'movies' as const,
-        is_admin: false,
-      },
-      'mock-token',
-      'mock-refresh'
-    );
+  const handleLogin = async (user: any, token: string) => {
+    await login(user, token, token);
   };
 
   const navigateToMovie = (movie: MovieData) => {
@@ -1008,20 +1099,47 @@ const styles = StyleSheet.create({
     marginBottom: 48,
     textAlign: 'center',
   },
-  buttonGroup: {
+  formContainer: {
     width: '100%',
     gap: 12,
+  },
+  input: {
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: colors.text,
   },
   primaryButton: {
     backgroundColor: colors.primary,
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   primaryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  switchButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  switchButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+  },
+  loginError: {
+    color: colors.error,
+    fontSize: 14,
+    textAlign: 'center',
   },
   secondaryButton: {
     backgroundColor: colors.paper,
