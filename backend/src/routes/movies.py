@@ -179,7 +179,7 @@ async def get_vocabulary_preview(
 ) -> Dict[str, Any]:
     """
     Get a preview of the movie vocabulary (PUBLIC - no auth required).
-    Returns only 3 sample words from each CEFR level, no translations.
+    Returns sample words from each CEFR level (3 per level), no translations.
     """
     # Check if movie exists
     movie = await db.movie.find_unique(where={"id": movie_id})
@@ -261,7 +261,7 @@ async def get_vocabulary_full(
     db: Prisma = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Get the complete movie vocabulary (PROTECTED - auth required).
+    Get the complete movie vocabulary.
     Returns all words with CEFR levels, supports translations.
     """
     # Check if movie exists

@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'wordwise_tokens';
 
@@ -7,14 +8,30 @@ interface StoredTokens {
   refresh: string;
 }
 
+// Web fallback using localStorage
+const webStorage = {
+  async setItemAsync(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
+  },
+  async getItemAsync(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  },
+  async deleteItemAsync(key: string): Promise<void> {
+    localStorage.removeItem(key);
+  },
+};
+
+// Use SecureStore on native, localStorage on web
+const storage = Platform.OS === 'web' ? webStorage : SecureStore;
+
 export const tokenStorage = {
   async saveTokens(access: string, refresh: string): Promise<void> {
-    await SecureStore.setItemAsync(TOKEN_KEY, JSON.stringify({ access, refresh }));
+    await storage.setItemAsync(TOKEN_KEY, JSON.stringify({ access, refresh }));
   },
 
   async getTokens(): Promise<StoredTokens | null> {
     try {
-      const result = await SecureStore.getItemAsync(TOKEN_KEY);
+      const result = await storage.getItemAsync(TOKEN_KEY);
       if (!result) return null;
       return JSON.parse(result) as StoredTokens;
     } catch {
@@ -33,6 +50,6 @@ export const tokenStorage = {
   },
 
   async clearTokens(): Promise<void> {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await storage.deleteItemAsync(TOKEN_KEY);
   },
 };

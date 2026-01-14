@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  Animated,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../stores/authStore';
-import { wordwiseApi, type VocabularyResponse, type WordInfo } from '../services/api';
+import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = 130;
@@ -61,6 +62,7 @@ const cefrLabels: Record<string, string> = {
   B1: 'Intermediate',
   B2: 'Upper Int.',
   C1: 'Advanced',
+  IDIOMS: 'Idioms & Phrases',
 };
 
 // Login Screen
@@ -557,27 +559,94 @@ const CEFRTab = ({
   active: boolean;
   color: string;
   onPress: () => void;
-}) => (
-  <TouchableOpacity
-    style={[
-      styles.cefrTab,
-      active && styles.cefrTabActive,
-      active && { backgroundColor: `${color}15` }, // 15% opacity of the level color
-    ]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <Text
+}) => {
+  const isIdioms = level === 'IDIOMS';
+  const displayColor = isIdioms ? colors.warning : color;
+
+  return (
+    <TouchableOpacity
       style={[
-        styles.cefrTabLevel,
-        active && { color: color },
-        !active && styles.cefrTabInactive,
+        styles.cefrTab,
+        active && styles.cefrTabActive,
+        active && { backgroundColor: `${displayColor}20` }, // 20% opacity of the level color
       ]}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
-      {level}
-    </Text>
-  </TouchableOpacity>
-);
+      {isIdioms ? (
+        <View style={styles.idiomTabContent}>
+          <Text
+            style={[
+              styles.idiomTabText,
+              active && { color: displayColor },
+              !active && styles.cefrTabInactive,
+            ]}
+          >
+            Idioms
+          </Text>
+        </View>
+      ) : (
+        <Text
+          style={[
+            styles.cefrTabLevel,
+            active && { color: displayColor },
+            !active && styles.cefrTabInactive,
+          ]}
+        >
+          {level}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+// Idiom Row Component - for the Idioms tab
+const IdiomRow = ({
+  idiom,
+  index,
+  rowNumber,
+}: {
+  idiom: IdiomInfo;
+  index: number;
+  rowNumber: number;
+}) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={styles.wordRowWrapper}>
+      <TouchableOpacity
+        style={[styles.wordRow, expanded && styles.wordRowExpanded]}
+        onPress={() => setExpanded(!expanded)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.wordRowMain}>
+          <Text style={styles.rowNumber}>{rowNumber}.</Text>
+          <Text style={styles.wordText}>{idiom.phrase}</Text>
+          <View style={[styles.idiomTypeBadge, idiom.type === 'phrasal_verb' ? styles.phrasalVerbBadge : styles.idiomBadge]}>
+            <Text style={styles.idiomTypeText}>
+              {idiom.type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
+            </Text>
+          </View>
+          <View style={[styles.cefrBadge, { backgroundColor: cefrColors[idiom.cefr_level] || colors.primary }]}>
+            <Text style={styles.cefrBadgeText}>{idiom.cefr_level}</Text>
+          </View>
+          <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>▼</Text>
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={[styles.dropdownPanel, { borderLeftColor: colors.warning }]}>
+          <View style={styles.translationBox}>
+            <Text style={styles.translationDash}>—</Text>
+            <Text style={styles.idiomWordsText}>
+              Words: {idiom.words.join(', ')}
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+};
 
 // Movie Detail Screen
 const MovieDetailScreen = ({
@@ -592,6 +661,30 @@ const MovieDetailScreen = ({
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [movieId, setMovieId] = useState<number | null>(null);
+
+  // Animation for tab switching
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const prevLevelRef = useRef<string>(activeLevel);
+
+  // Animate when level changes
+  useEffect(() => {
+    if (prevLevelRef.current !== activeLevel) {
+      // Fade out and in
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      prevLevelRef.current = activeLevel;
+    }
+  }, [activeLevel, fadeAnim]);
 
   useEffect(() => {
     loadVocabulary();
@@ -626,8 +719,14 @@ const MovieDetailScreen = ({
       // Step 3: Classify vocabulary
       await wordwiseApi.classifyVocabulary(scriptResult.movie_id, 'TR');
 
-      // Step 4: Get vocabulary (use preview for now - doesn't require auth)
-      const vocabResult = await wordwiseApi.getVocabularyPreview(scriptResult.movie_id);
+      // Step 4: Try to get full vocabulary first, fall back to preview
+      let vocabResult: VocabularyResponse;
+      try {
+        vocabResult = await wordwiseApi.getVocabularyFull(scriptResult.movie_id);
+      } catch {
+        // Fall back to preview if full vocabulary requires auth
+        vocabResult = await wordwiseApi.getVocabularyPreview(scriptResult.movie_id);
+      }
       setVocabulary(vocabResult);
 
       // Set initial active level to the one with most words
@@ -642,12 +741,12 @@ const MovieDetailScreen = ({
     }
   };
 
-  // Merge C1 and C2 into Advanced
-  const getMergedLevels = () => {
+  // Merge C1 and C2 into Advanced, and add Idioms tab
+  const mergedLevels = useMemo(() => {
     if (!vocabulary) return [];
 
     const levels = ['A1', 'A2', 'B1', 'B2', 'C1'];
-    return levels.map((level) => {
+    const result = levels.map((level) => {
       if (level === 'C1') {
         // Merge C1 and C2
         const c1Count = vocabulary.level_distribution.C1 || 0;
@@ -661,6 +760,7 @@ const MovieDetailScreen = ({
           words: [...c1Words, ...c2Words].sort(
             (a, b) => (a.frequency_rank || 999999) - (b.frequency_rank || 999999)
           ),
+          isIdioms: false,
         };
       }
       return {
@@ -668,12 +768,28 @@ const MovieDetailScreen = ({
         label: cefrLabels[level] || level,
         count: vocabulary.level_distribution[level as keyof typeof vocabulary.level_distribution] || 0,
         words: vocabulary.top_words_by_level[level] || [],
+        isIdioms: false,
       };
     });
-  };
 
-  const mergedLevels = getMergedLevels();
-  const activeWords = mergedLevels.find((l) => l.level === activeLevel)?.words || [];
+    // Add idioms tab if idioms exist
+    if (vocabulary.idioms && vocabulary.idioms.length > 0) {
+      result.push({
+        level: 'IDIOMS',
+        label: 'Idioms',
+        count: vocabulary.idioms.length,
+        words: [], // We'll use idioms separately
+        isIdioms: true,
+      });
+    }
+
+    return result;
+  }, [vocabulary]);
+
+  const activeData = mergedLevels.find((l) => l.level === activeLevel);
+  const activeWords = activeData?.words || [];
+  const isIdiomsTab = activeData?.isIdioms || false;
+  const idioms = vocabulary?.idioms || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -746,28 +862,50 @@ const MovieDetailScreen = ({
 
           {/* Level Description */}
           <View style={styles.levelDescription}>
-            <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] }]} />
+            <View style={[styles.levelDot, { backgroundColor: isIdiomsTab ? colors.warning : (cefrColors[activeLevel] || colors.primary) }]} />
             <Text style={styles.levelDescText}>
-              {cefrLabels[activeLevel] || 'Advanced'}
+              {isIdiomsTab ? 'Idioms & Phrases' : (cefrLabels[activeLevel] || 'Advanced')}
             </Text>
-            <Text style={styles.levelWordCount}>{activeWords.length} words</Text>
+            <Text style={styles.levelWordCount}>
+              {isIdiomsTab ? idioms.length : activeWords.length} {isIdiomsTab ? 'phrases' : 'words'}
+            </Text>
           </View>
 
-          {/* Word List */}
-          <FlatList
-            data={activeWords}
-            keyExtractor={(item, index) => `${item.word}-${index}`}
-            renderItem={({ item, index }) => (
-              <WordRow
-                word={item}
-                index={index}
-                rowNumber={index + 1}
-                groupColor={cefrColors[activeLevel] || colors.primary}
+          {/* Animated Word/Idiom List */}
+          <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+            {isIdiomsTab ? (
+              /* Idioms List */
+              <FlatList
+                data={idioms}
+                keyExtractor={(item, index) => `idiom-${item.phrase}-${index}`}
+                renderItem={({ item, index }) => (
+                  <IdiomRow
+                    idiom={item}
+                    index={index}
+                    rowNumber={index + 1}
+                  />
+                )}
+                contentContainerStyle={styles.wordList}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              /* Word List */
+              <FlatList
+                data={activeWords}
+                keyExtractor={(item, index) => `${item.word}-${index}`}
+                renderItem={({ item, index }) => (
+                  <WordRow
+                    word={item}
+                    index={index}
+                    rowNumber={index + 1}
+                    groupColor={cefrColors[activeLevel] || colors.primary}
+                  />
+                )}
+                contentContainerStyle={styles.wordList}
+                showsVerticalScrollIndicator={false}
               />
             )}
-            contentContainerStyle={styles.wordList}
-            showsVerticalScrollIndicator={false}
-          />
+          </Animated.View>
         </>
       ) : null}
     </SafeAreaView>
@@ -1265,5 +1403,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     fontStyle: 'italic',
+  },
+  // Idiom Tab styles
+  idiomTabContent: {
+    alignItems: 'center',
+  },
+  idiomTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  // Idiom Row styles
+  idiomTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  phrasalVerbBadge: {
+    backgroundColor: '#2196F3', // Blue for phrasal verbs
+  },
+  idiomBadge: {
+    backgroundColor: colors.warning, // Orange for idioms
+  },
+  idiomTypeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  cefrBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 4,
+  },
+  cefrBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  idiomWordsText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    flex: 1,
   },
 });

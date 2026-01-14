@@ -15,10 +15,17 @@
     "shell:db": "psql -U wordwise_user -d wordwise_db"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@types/react": "~19.1.10",
+    "concurrently": "^8.2.2",
+    "typescript": "~5.9.2"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "expo": "^54.0.31",
+    "react-dom": "19.1.0",
+    "react-native-web": "^0.21.0"
   }
 }

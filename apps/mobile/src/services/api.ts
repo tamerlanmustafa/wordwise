@@ -1,9 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // API Base URL - adjust for your development environment
-// Using localtunnel for easy phone testing
+// Android Emulator uses 10.0.2.2 to reach host machine's localhost
+// iOS Simulator can use localhost directly
+import { Platform } from 'react-native';
+
+const getDevApiUrl = () => {
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000';  // Android Emulator -> host localhost
+  }
+  return 'http://localhost:8000';  // iOS Simulator
+};
+
 const API_BASE_URL = __DEV__
-  ? 'https://curly-crabs-rush.loca.lt'  // localtunnel URL
+  ? getDevApiUrl()
   : 'https://api.wordwise.app';  // Production
 
 // TMDB API Key (same as web app)
