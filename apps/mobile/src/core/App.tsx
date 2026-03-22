@@ -19,7 +19,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
-import { GOOGLE_CLIENT_ID } from '../config/env';
+import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_IOS } from '../config/env';
 
 // Required for Google Auth to work properly
 WebBrowser.maybeCompleteAuthSession();
@@ -83,9 +83,13 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   const [error, setError] = useState('');
 
   // Google Auth setup
+  // Note: Using webClientId for all platforms in Expo Go (web-based auth flow)
+  // For production builds, use platform-specific client IDs
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: GOOGLE_CLIENT_ID,
-    webClientId: GOOGLE_CLIENT_ID,
+    expoClientId: GOOGLE_CLIENT_ID_WEB,
+    iosClientId: GOOGLE_CLIENT_ID_WEB,  // Use web client for Expo Go
+    androidClientId: GOOGLE_CLIENT_ID_WEB,
+    webClientId: GOOGLE_CLIENT_ID_WEB,
     scopes: ['profile', 'email'],
   });
 

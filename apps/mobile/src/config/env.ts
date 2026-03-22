@@ -20,12 +20,15 @@ export const storage = {
 
 type Environment = 'development' | 'staging' | 'production';
 
-// Google OAuth Client ID (Web application type for Expo)
-export const GOOGLE_CLIENT_ID = '400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com';
+// Google OAuth Client IDs
+export const GOOGLE_CLIENT_ID_WEB = '400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID_IOS = '400446242104-a9laa57dook0og2k93g9amjgieqo2mj7.apps.googleusercontent.com';
+// For backwards compatibility
+export const GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_WEB;
 
 const configs = {
   development: {
-    API_URL: 'http://192.168.1.168:8000', // Windows IP for physical device testing
+    API_URL: 'http://172.24.63.201:8000', // Local IP for physical device testing
     DEBUG: true,
   },
   staging: {
