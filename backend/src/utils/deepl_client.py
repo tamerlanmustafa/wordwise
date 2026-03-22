@@ -103,14 +103,13 @@ class DeepLClient:
         # Prepare request
         url = f"{self.base_url}/translate"
         data = {
-            "auth_key": self.api_key,  
-            "text": text,
+            "text": [text],  # DeepL JSON API requires text as array
             "target_lang": target_lang,
-            "enable_beta_languages": "true",
         }
 
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Authorization": f"DeepL-Auth-Key {self.api_key}",
+            "Content-Type": "application/json"
         }
 
         if source_lang != "auto":
@@ -121,7 +120,7 @@ class DeepLClient:
                 async with session.post(
                     url,
                     headers=headers,
-                    data=data,
+                    json=data,
                     timeout=aiohttp.ClientTimeout(total=self.timeout)
                 ) as response:
                     # Check content type before parsing JSON
