@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
@@ -85,12 +86,20 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   // Google Auth setup
   // Note: Using webClientId for all platforms in Expo Go (web-based auth flow)
   // For production builds, use platform-specific client IDs
+  //
+  // IMPORTANT: For Expo Go, we must use the auth.expo.io proxy
+  // The proxy URL format is: https://auth.expo.io/@username/slug
+  const redirectUri = 'https://auth.expo.io/@tamerleinn/wordwise-mobile';
+
+  console.log('[Google Auth] Redirect URI:', redirectUri);
+
   const [request, response, promptAsync] = Google.useAuthRequest({
     expoClientId: GOOGLE_CLIENT_ID_WEB,
     iosClientId: GOOGLE_CLIENT_ID_WEB,  // Use web client for Expo Go
     androidClientId: GOOGLE_CLIENT_ID_WEB,
     webClientId: GOOGLE_CLIENT_ID_WEB,
     scopes: ['profile', 'email'],
+    redirectUri,
   });
 
   // Handle Google auth response

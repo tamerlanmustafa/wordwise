@@ -28,8 +28,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "wordwise-mobile"
+        "projectId": "672b17ee-a16a-4162-8666-f93b98681c5f"
       }
-    }
+    },
+    "owner": "tamerleinn"
   }
 }
