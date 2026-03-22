@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # Google OAuth
     google_client_id: str
     google_client_id_prod: str = ""
+    google_client_id_mobile: str = ""
     google_client_secret: str
     google_redirect_uri: str = "http://localhost:3000/auth/callback"
 
