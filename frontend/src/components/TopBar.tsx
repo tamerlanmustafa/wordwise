@@ -33,6 +33,9 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import HistoryIcon from '@mui/icons-material/History';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,7 +46,7 @@ import { useMovieAutocomplete } from '../hooks/useMovieAutocomplete';
 export default function TopBar() {
   const { mode, toggleTheme } = useTheme();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin, isViewingAsAdmin, toggleAdminView } = useAuth();
   const { showTopBar } = useTopBarVisibility();
   const { recentSearches, addRecentSearch } = useRecentSearches();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -108,14 +111,18 @@ export default function TopBar() {
       <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
         {/* Left: WordWise Logo */}
         <Box
-          component={Link}
-          to="/"
+          onClick={() => {
+            // Navigate to home with user's default tab preference
+            const defaultTab = user?.default_tab === 'books' ? 1 : 0;
+            navigate('/', { state: { defaultTab } });
+          }}
           sx={{
             textDecoration: 'none',
             color: 'primary.main',
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
+            cursor: 'pointer',
             '&:hover': {
               opacity: 0.8
             }
@@ -354,6 +361,25 @@ export default function TopBar() {
             </Select>
           </FormControl>
 
+          {/* Admin Reports Button (visible only to admins) */}
+          {isAdmin && (
+            <Tooltip title="Admin Reports">
+              <IconButton
+                component={Link}
+                to="/admin/reports"
+                color="inherit"
+                sx={{
+                  color: isViewingAsAdmin ? 'warning.main' : 'action.active',
+                  '&:hover': {
+                    color: 'warning.main'
+                  }
+                }}
+              >
+                <AdminPanelSettingsIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+
           {/* Theme Toggle */}
           <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'}>
             <IconButton onClick={toggleTheme} color="inherit">
@@ -407,6 +433,30 @@ export default function TopBar() {
                 >
                   Settings
                 </MenuItem>
+                {isAdmin && [
+                  <MenuItem
+                    key="admin-reports"
+                    component={Link}
+                    to="/admin/reports"
+                    onClick={handleUserMenuClose}
+                  >
+                    <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Admin Reports
+                  </MenuItem>,
+                  <MenuItem key="admin-view-toggle" onClick={() => { toggleAdminView(); handleUserMenuClose(); }}>
+                    {isViewingAsAdmin ? (
+                      <>
+                        <VisibilityOffIcon sx={{ mr: 1, fontSize: 20 }} />
+                        View as User
+                      </>
+                    ) : (
+                      <>
+                        <VisibilityIcon sx={{ mr: 1, fontSize: 20 }} />
+                        View as Admin
+                      </>
+                    )}
+                  </MenuItem>
+                ]}
                 <MenuItem onClick={handleLogout}>Log out</MenuItem>
               </Menu>
             </>

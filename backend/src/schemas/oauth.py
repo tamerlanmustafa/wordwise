@@ -29,6 +29,11 @@ class UserInfo(BaseModel):
     username: str
     oauth_provider: str
     profile_picture_url: str | None = None
+    native_language: str | None = None
+    learning_language: str | None = None
+    proficiency_level: str | None = None
+    default_tab: str | None = "movies"
+    is_admin: bool = False
 
     class Config:
         from_attributes = True

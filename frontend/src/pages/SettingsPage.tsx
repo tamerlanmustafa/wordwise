@@ -20,7 +20,8 @@ import {
 import {
   Person as PersonIcon,
   Language as LanguageIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Home as HomeIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import type { SelectChangeEvent } from '@mui/material';
@@ -76,7 +77,8 @@ export default function SettingsPage() {
     username: '',
     nativeLanguage: '',
     learningLanguage: '',
-    proficiencyLevel: ''
+    proficiencyLevel: '',
+    defaultTab: 'movies' as 'movies' | 'books'
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -109,7 +111,8 @@ export default function SettingsPage() {
         username: user.username || '',
         nativeLanguage: user.native_language || '',
         learningLanguage: user.learning_language || 'en',
-        proficiencyLevel: user.proficiency_level || 'A1'
+        proficiencyLevel: user.proficiency_level || 'A1',
+        defaultTab: user.default_tab || 'movies'
       });
     }
   }, [user]);
@@ -149,7 +152,8 @@ export default function SettingsPage() {
         username: formData.username,
         native_language: formData.nativeLanguage,
         learning_language: formData.learningLanguage,
-        proficiency_level: formData.proficiencyLevel
+        proficiency_level: formData.proficiencyLevel,
+        default_tab: formData.defaultTab
       });
       setSuccess('Settings updated successfully!');
     } catch (err: any) {
@@ -286,6 +290,29 @@ export default function SettingsPage() {
                     </Select>
                   </FormControl>
                 </Stack>
+              </Box>
+
+              <Divider />
+
+              {/* Home Tab Section */}
+              <Box>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <HomeIcon sx={{ mr: 1 }} />
+                  Default Home Tab
+                </Typography>
+
+                <FormControl fullWidth>
+                  <InputLabel>Default Tab</InputLabel>
+                  <Select
+                    name="defaultTab"
+                    value={formData.defaultTab}
+                    label="Default Tab"
+                    onChange={handleSelectChange}
+                  >
+                    <MenuItem value="movies">Movies</MenuItem>
+                    <MenuItem value="books">Books</MenuItem>
+                  </Select>
+                </FormControl>
               </Box>
 
               <Box sx={{ pt: 2 }}>

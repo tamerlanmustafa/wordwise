@@ -27,7 +27,7 @@ export function useTranslationQueue(targetLanguage: string, userId?: number) {
   const processingRef = useRef(false);
   const pendingWordsRef = useRef<Set<string>>(new Set()); // Dedupe
   const translatedWordsRef = useRef<Set<string>>(new Set()); // Already translated
-  const batchTimerRef = useRef<number | null>(null);
+  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingBatchRef = useRef<{
     words: string[];
     priority: 'high' | 'low';

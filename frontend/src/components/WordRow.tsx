@@ -21,7 +21,8 @@ import {
   Bookmark,
   CheckCircleOutline,
   CheckCircle,
-  ExpandMore
+  ExpandMore,
+  FlagOutlined
 } from '@mui/icons-material';
 import type { DisplayWord } from '../types/vocabularyWorker';
 import type { IdiomInfo } from '../services/scriptService';
@@ -192,8 +193,10 @@ interface WordRowProps {
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
   idiomMetadata?: IdiomInfo;
   movieId?: number;
+  movieTitle?: string;
   targetLang?: string;
   otherMoviesText?: string;
+  onReport?: (word: string, translationSource?: string) => void;
 }
 
 // ============================================================================
@@ -217,9 +220,12 @@ export const WordRow = memo<WordRowProps>(({
   getIdiomsForWord,
   idiomMetadata,
   movieId,
+  movieTitle: _movieTitle,
   targetLang,
-  otherMoviesText
+  otherMoviesText,
+  onReport
 }) => {
+  // movieTitle reserved for future use in report dialog
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Content is fetched ONCE and cached
@@ -331,6 +337,12 @@ export const WordRow = memo<WordRowProps>(({
     onToggleLearned(word.word);
   }, [onToggleLearned, word.word]);
 
+  const handleReport = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const source = contentData?.translationProvider ?? word.translationProvider;
+    onReport?.(word.word, source ?? undefined);
+  }, [onReport, word.word, contentData?.translationProvider, word.translationProvider]);
+
   const handleCollapseEntered = useCallback(() => {
     onContentLoad?.(virtualIndex);
   }, [onContentLoad, virtualIndex]);
@@ -429,6 +441,7 @@ export const WordRow = memo<WordRowProps>(({
           >
             {isLearned ? <CheckCircle fontSize="small" /> : <CheckCircleOutline fontSize="small" />}
           </ActionButton>
+
         </MainRow>
       </RowContainer>
 
@@ -460,6 +473,20 @@ export const WordRow = memo<WordRowProps>(({
                   <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
                     via {translationProvider}
                   </Typography>
+                )}
+                {onReport && (
+                  <ActionButton
+                    onClick={handleReport}
+                    title="Report translation issue"
+                    sx={{
+                      color: 'text.disabled',
+                      '&:hover': { color: 'warning.main' },
+                      ml: 'auto',
+                      padding: '4px'
+                    }}
+                  >
+                    <FlagOutlined sx={{ fontSize: 16 }} />
+                  </ActionButton>
                 )}
               </>
             ) : (
@@ -559,7 +586,9 @@ export const WordRow = memo<WordRowProps>(({
     prevProps.onExpandChange === nextProps.onExpandChange &&
     prevProps.idiomMetadata === nextProps.idiomMetadata &&
     prevProps.movieId === nextProps.movieId &&
-    prevProps.targetLang === nextProps.targetLang
+    prevProps.movieTitle === nextProps.movieTitle &&
+    prevProps.targetLang === nextProps.targetLang &&
+    prevProps.onReport === nextProps.onReport
   );
 });
 

@@ -38,6 +38,13 @@ def _verify_and_get_google_user_info(id_token: str) -> dict:
         except Exception:
             pass
 
+    # Try mobile client ID if others failed
+    if not google_user_info and settings.google_client_id_mobile:
+        try:
+            google_user_info = verify_google_token(id_token, settings.google_client_id_mobile)
+        except Exception:
+            pass
+
     if not google_user_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -154,7 +161,12 @@ def _create_user_response(user) -> UserInfo:
         email=user.email,
         username=user.username,
         oauth_provider=user.oauthProvider,
-        profile_picture_url=user.profilePictureUrl
+        profile_picture_url=user.profilePictureUrl,
+        native_language=user.nativeLanguage,
+        learning_language=user.learningLanguage,
+        proficiency_level=user.proficiencyLevel.value if hasattr(user.proficiencyLevel, 'value') else user.proficiencyLevel,
+        default_tab=user.defaultTab or "movies",
+        is_admin=user.isAdmin or False
     )
 
 

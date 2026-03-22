@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -7,27 +8,96 @@ import {
   Typography,
   Stack,
   Chip,
-  Skeleton
+  Skeleton,
+  Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress
 } from '@mui/material';
 import MovieIcon from '@mui/icons-material/Movie';
+import DescriptionIcon from '@mui/icons-material/Description';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CategoryIcon from '@mui/icons-material/Category';
+import DownloadIcon from '@mui/icons-material/Download';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import CodeIcon from '@mui/icons-material/Code';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import { DifficultyBadge } from './DifficultyBadge';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface MovieSidebarProps {
   tmdbMetadata: TMDBMetadata | null;
   difficulty?: MovieDifficultyResult | null;
   difficultyIsMock?: boolean;
+  isUploadedContent?: boolean;
+  gutenbergId?: number;
 }
 
 // Memoized MovieSidebar - should NOT re-render when activeTab changes
 export const MovieSidebar = memo<MovieSidebarProps>(({
   tmdbMetadata,
   difficulty,
-  difficultyIsMock = false
+  difficultyIsMock = false,
+  isUploadedContent = false,
+  gutenbergId
 }) => {
+  const navigate = useNavigate();
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async (format: 'txt' | 'epub' | 'html') => {
+    if (!gutenbergId) return;
+
+    setDownloadMenuAnchor(null);
+    setDownloading(true);
+
+    try {
+      const token = localStorage.getItem('wordwise_token');
+      const response = await fetch(
+        `${API_BASE_URL}/api/books/gutenberg/${gutenbergId}/download?format=${format}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Download failed' }));
+        throw new Error(error.detail || 'Download failed');
+      }
+
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `book_${gutenbergId}.${format}`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/);
+        if (match) {
+          filename = match[1];
+        }
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert(error instanceof Error ? error.message : 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (!tmdbMetadata) {
     return (
       <Card elevation={2}>
@@ -54,7 +124,7 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
           <DifficultyBadge difficulty={difficulty} isMock={difficultyIsMock} size="medium" />
         )}
 
-        {/* Poster */}
+        {/* Poster or Placeholder */}
         {tmdbMetadata.poster ? (
           <CardMedia
             component="img"
@@ -71,13 +141,24 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
             sx={{
               width: '100%',
               aspectRatio: '2/3',
-              bgcolor: 'grey.200',
+              bgcolor: isUploadedContent ? 'primary.main' : 'grey.200',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              gap: 1
             }}
           >
-            <MovieIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+            {isUploadedContent ? (
+              <>
+                <DescriptionIcon sx={{ fontSize: 64, color: 'primary.contrastText' }} />
+                <Typography variant="caption" sx={{ color: 'primary.contrastText', opacity: 0.8 }}>
+                  Uploaded Content
+                </Typography>
+              </>
+            ) : (
+              <MovieIcon sx={{ fontSize: 64, color: 'grey.400' }} />
+            )}
           </Box>
         )}
 
@@ -140,15 +221,69 @@ export const MovieSidebar = memo<MovieSidebarProps>(({
               </Typography>
             </Box>
           )}
+
+          {/* Read Book Button */}
+          {gutenbergId && (
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="contained"
+                size="small"
+                fullWidth
+                startIcon={<AutoStoriesIcon />}
+                onClick={() => navigate(`/book/${gutenbergId}/read`, {
+                  state: { title: tmdbMetadata?.title, gutenbergId }
+                })}
+                sx={{ mb: 1 }}
+              >
+                Read Book
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                fullWidth
+                startIcon={downloading ? <CircularProgress size={16} /> : <DownloadIcon />}
+                onClick={(e) => setDownloadMenuAnchor(e.currentTarget)}
+                disabled={downloading}
+              >
+                {downloading ? 'Downloading...' : 'Download Book'}
+              </Button>
+              <Menu
+                anchorEl={downloadMenuAnchor}
+                open={Boolean(downloadMenuAnchor)}
+                onClose={() => setDownloadMenuAnchor(null)}
+              >
+                <MenuItem onClick={() => handleDownload('txt')}>
+                  <ListItemIcon>
+                    <DescriptionIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Plain Text (.txt)" />
+                </MenuItem>
+                <MenuItem onClick={() => handleDownload('epub')}>
+                  <ListItemIcon>
+                    <MenuBookIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="EPUB (.epub)" />
+                </MenuItem>
+                <MenuItem onClick={() => handleDownload('html')}>
+                  <ListItemIcon>
+                    <CodeIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="HTML (.html)" />
+                </MenuItem>
+              </Menu>
+            </Box>
+          )}
         </CardContent>
     </Card>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if tmdbMetadata, difficulty, or mock flag changes
-  // Since these are static for a given movie, this should almost never re-render
+  // Only re-render if tmdbMetadata, difficulty, mock flag, upload flag, or gutenbergId changes
+  // Since these are static for a given movie/book, this should almost never re-render
   return prevProps.tmdbMetadata === nextProps.tmdbMetadata &&
          prevProps.difficulty === nextProps.difficulty &&
-         prevProps.difficultyIsMock === nextProps.difficultyIsMock;
+         prevProps.difficultyIsMock === nextProps.difficultyIsMock &&
+         prevProps.isUploadedContent === nextProps.isUploadedContent &&
+         prevProps.gutenbergId === nextProps.gutenbergId;
 });
 
 MovieSidebar.displayName = 'MovieSidebar';

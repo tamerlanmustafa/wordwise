@@ -12,6 +12,8 @@ interface User {
   native_language?: string;
   learning_language?: string;
   proficiency_level?: string;
+  default_tab?: 'movies' | 'books';
+  is_admin?: boolean;
 }
 
 interface LanguagePreferences {
@@ -24,6 +26,7 @@ interface UserUpdateData {
   native_language?: string;
   learning_language?: string;
   proficiency_level?: string;
+  default_tab?: 'movies' | 'books';
 }
 
 interface AuthContextType {
@@ -34,13 +37,22 @@ interface AuthContextType {
   updateUser: (data: UserUpdateData) => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  isViewingAsAdmin: boolean;
+  toggleAdminView: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ADMIN_VIEW_KEY = 'wordwise_admin_view';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isViewingAsAdmin, setIsViewingAsAdmin] = useState(() => {
+    const stored = localStorage.getItem(ADMIN_VIEW_KEY);
+    return stored === 'true';
+  });
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -52,6 +64,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, []);
+
+  // Toggle admin view mode
+  const toggleAdminView = () => {
+    setIsViewingAsAdmin(prev => {
+      const newValue = !prev;
+      localStorage.setItem(ADMIN_VIEW_KEY, String(newValue));
+      return newValue;
+    });
+  };
+
+  const isAdmin = !!user?.is_admin;
 
   const handleGoogleLogin = async (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => {
     try {
@@ -71,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(userData);
 
-      // Redirect to home page
-      window.location.href = '/wordwise/';
+      // Redirect to home page using base URL
+      window.location.href = import.meta.env.BASE_URL || '/';
     } catch (error) {
       console.error('Login failed:', error);
       if (error instanceof Error && 'response' in error) {
@@ -87,8 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('wordwise_token');
     setUser(null);
 
-    // Redirect to home page
-    window.location.href = '/wordwise/';
+    // Redirect to home page using base URL
+    window.location.href = import.meta.env.BASE_URL || '/';
   };
 
   const refreshUser = async () => {
@@ -133,6 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateUser,
         refreshUser,
         isAuthenticated: !!user,
+        isAdmin,
+        isViewingAsAdmin: isAdmin && isViewingAsAdmin,
+        toggleAdminView,
       }}
     >
       {children}
