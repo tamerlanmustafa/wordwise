@@ -67,7 +67,7 @@ export default function LoginPage() {
       localStorage.setItem('wordwise_token', data.token);
 
       // Redirect to home (use full reload to update auth state)
-      window.location.href = '/wordwise/';
+      window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
@@ -88,7 +88,7 @@ export default function LoginPage() {
       // Store user and token
       localStorage.setItem('wordwise_user', JSON.stringify(userData));
       localStorage.setItem('wordwise_token', token);
-      window.location.href = '/wordwise/';
+      window.location.href = '/';
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Google login failed. Please try again.');
     }
