@@ -18,7 +18,16 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.wordwise.mobile"
+      "bundleIdentifier": "com.wordwise.mobile",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.400446242104-a9laa57dook0og2k93g9amjgieqo2mj7"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {

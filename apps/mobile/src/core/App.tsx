@@ -83,24 +83,16 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Google Auth setup
-  // Note: Using webClientId for all platforms in Expo Go (web-based auth flow)
-  // For production builds, use platform-specific client IDs
-  //
-  // IMPORTANT: For Expo Go, we must use the auth.expo.io proxy
-  // The proxy URL format is: https://auth.expo.io/@username/slug
-  const redirectUri = 'https://auth.expo.io/@tamerleinn/wordwise-mobile';
-
-  console.log('[Google Auth] Redirect URI:', redirectUri);
+  // Google Auth setup - iOS uses reversed client ID as redirect scheme
+  const redirectUri = `com.googleusercontent.apps.400446242104-a9laa57dook0og2k93g9amjgieqo2mj7:/oauthredirect`;
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: GOOGLE_CLIENT_ID_WEB,
-    iosClientId: GOOGLE_CLIENT_ID_WEB,  // Use web client for Expo Go
-    androidClientId: GOOGLE_CLIENT_ID_WEB,
-    webClientId: GOOGLE_CLIENT_ID_WEB,
-    scopes: ['profile', 'email'],
+    iosClientId: GOOGLE_CLIENT_ID_IOS,
     redirectUri,
+    scopes: ['profile', 'email'],
   });
+
+  console.log('[Google Auth] Redirect URI:', redirectUri);
 
   // Handle Google auth response
   useEffect(() => {
