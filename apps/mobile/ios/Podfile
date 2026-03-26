@@ -5,6 +5,8 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+require_relative '../node_modules/expo/scripts/autolinking'
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
@@ -15,6 +17,7 @@ if linkage != nil
 end
 
 target 'WordWiseMobile' do
+  use_expo_modules!
   config = use_native_modules!
 
   use_react_native!(
@@ -30,5 +33,18 @@ target 'WordWiseMobile' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Fix fmt consteval compilation issue with Xcode 16+
+    # Patch the fmt base.h header to force disable consteval
+    fmt_base_h = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base_h)
+      content = File.read(fmt_base_h)
+      patched_content = content.gsub(
+        /\/\/ Detect consteval.*?#define FMT_USE_CONSTEVAL 0\n#endif/m,
+        "// Detect consteval, C++20 constexpr extensions and std::is_constant_evaluated.\n// Force disable consteval due to Xcode 16+ compatibility issues\n#define FMT_USE_CONSTEVAL 0"
+      )
+      File.write(fmt_base_h, patched_content)
+      Pod::UI.puts "[fmt] Patched base.h to disable consteval".green
+    end
   end
 end

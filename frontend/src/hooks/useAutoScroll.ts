@@ -1,81 +1,122 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 
 interface UseAutoScrollOptions {
   speed?: number;
   direction?: "left" | "right";
-  pauseOnHover?: boolean;
+  resumeDelay?: number;
 }
 
 export function useAutoScroll({
-  speed = 30,
+  speed = 0.5,
   direction = "right",
-  pauseOnHover = true,
+  resumeDelay = 2500,
 }: UseAutoScrollOptions = {}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const targetSpeedRef = useRef(speed);
-  const currentSpeedRef = useRef(speed);
+  const isInteractingRef = useRef(false);
+  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const setSpeed = (newSpeed: number) => {
-    targetSpeedRef.current = newSpeed;
-  };
-
+  // Auto-scroll loop
   useEffect(() => {
-    let animationId: number;
-    let lastTime = 0;
-    let isInitialized = false;
+    let raf: number;
+    let initialized = false;
 
-    const scroll = (timestamp: number) => {
+    const loop = () => {
       const el = containerRef.current;
       if (!el) {
-        animationId = requestAnimationFrame(scroll);
+        raf = requestAnimationFrame(loop);
         return;
       }
 
-      // Initialize starting position once
-      if (!isInitialized) {
-        isInitialized = true;
+      // Initialize position for left-scrolling carousels
+      if (!initialized) {
+        initialized = true;
         if (direction === "left") {
-          el.scrollLeft = el.scrollWidth - el.clientWidth;
+          el.scrollLeft = el.scrollWidth / 2;
         }
       }
 
-      if (!lastTime) lastTime = timestamp;
-      const delta = timestamp - lastTime;
-      lastTime = timestamp;
-
-      // Smoothly transition speed
-      const speedDiff = targetSpeedRef.current - currentSpeedRef.current;
-      if (Math.abs(speedDiff) > 0.1) {
-        currentSpeedRef.current += speedDiff * 0.1; // Smooth transition
-      } else {
-        currentSpeedRef.current = targetSpeedRef.current;
-      }
-
-      const distance = (currentSpeedRef.current * delta) / 1000;
-
-      if (direction === "right") {
-        el.scrollLeft += distance;
-        const max = el.scrollWidth - el.clientWidth;
-        if (el.scrollLeft >= max / 2) {
-          el.scrollLeft = 0;
-        }
-      } else {
-        el.scrollLeft -= distance;
-        const max = el.scrollWidth - el.clientWidth;
-        if (el.scrollLeft <= max / 2) {
-          el.scrollLeft = max;
+      // Only auto-scroll when not interacting
+      if (!isInteractingRef.current) {
+        if (direction === "right") {
+          el.scrollLeft += speed;
+          // Infinite loop: reset when halfway through duplicated content
+          if (el.scrollLeft >= el.scrollWidth / 2) {
+            el.scrollLeft = 0;
+          }
+        } else {
+          el.scrollLeft -= speed;
+          if (el.scrollLeft <= 0) {
+            el.scrollLeft = el.scrollWidth / 2;
+          }
         }
       }
 
-      animationId = requestAnimationFrame(scroll);
+      raf = requestAnimationFrame(loop);
     };
 
-    animationId = requestAnimationFrame(scroll);
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [speed, direction]);
+
+  // Interaction handlers
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const stop = () => {
+      isInteractingRef.current = true;
+      if (resumeTimeoutRef.current) {
+        clearTimeout(resumeTimeoutRef.current);
+        resumeTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleResume = () => {
+      if (resumeTimeoutRef.current) {
+        clearTimeout(resumeTimeoutRef.current);
+      }
+      resumeTimeoutRef.current = setTimeout(() => {
+        isInteractingRef.current = false;
+        resumeTimeoutRef.current = null;
+      }, resumeDelay);
+    };
+
+    // Pointer events: unified touch + mouse
+    el.addEventListener("pointerdown", stop);
+    el.addEventListener("pointerup", scheduleResume);
+    el.addEventListener("pointerleave", scheduleResume);
+
+    // Scroll event: catches momentum scrolling on iOS
+    el.addEventListener("scroll", stop);
 
     return () => {
-      if (animationId) cancelAnimationFrame(animationId);
+      el.removeEventListener("pointerdown", stop);
+      el.removeEventListener("pointerup", scheduleResume);
+      el.removeEventListener("pointerleave", scheduleResume);
+      el.removeEventListener("scroll", stop);
+      if (resumeTimeoutRef.current) {
+        clearTimeout(resumeTimeoutRef.current);
+      }
     };
-  }, [speed, direction, pauseOnHover]);
+  }, [resumeDelay]);
 
-  return { containerRef, setSpeed };
+  // Ref callback
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
+  }, []);
+
+  // Manual controls (for hover on desktop)
+  const pause = useCallback(() => {
+    isInteractingRef.current = true;
+    if (resumeTimeoutRef.current) {
+      clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resume = useCallback(() => {
+    isInteractingRef.current = false;
+  }, []);
+
+  return { containerRef: setContainerRef, pause, resume };
 }

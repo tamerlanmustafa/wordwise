@@ -1,5 +1,6 @@
 import { Card, CardMedia, CardContent, Typography, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 export interface BookCardData {
@@ -16,21 +17,59 @@ interface BookCardProps {
 export default function BookCard({ book }: BookCardProps) {
   const navigate = useNavigate();
 
-  const handleClick = () => {
+  // Track if this was a scroll gesture to prevent click
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const wasScrollingRef = useRef(false);
+
+  const navigateToBook = () => {
     navigate(`/book/${book.gutenbergId}`);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    wasScrollingRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    // If moved more than 10px, it's a scroll
+    if (deltaX > 10 || deltaY > 10) {
+      wasScrollingRef.current = true;
+    }
+  };
+
+  const handleClick = () => {
+    // Only navigate if we weren't scrolling
+    if (!wasScrollingRef.current) {
+      navigateToBook();
+    }
+    // Reset for next interaction
+    wasScrollingRef.current = false;
+    touchStartRef.current = null;
   };
 
   return (
     <Card
       onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       sx={{
         minWidth: 180,
         maxWidth: 180,
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
+        WebkitTapHighlightColor: 'transparent',
+        userSelect: 'none',
         '&:hover': {
           transform: 'translateY(-8px)',
           boxShadow: 6
+        },
+        '&:active': {
+          transform: 'scale(0.98)',
         }
       }}
     >
