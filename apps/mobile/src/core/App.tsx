@@ -9,10 +9,8 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Animated,
-  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Google from 'expo-auth-session/providers/google';
@@ -24,10 +22,6 @@ import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_IOS } from '../config/env';
 
 // Required for Google Auth to work properly
 WebBrowser.maybeCompleteAuthSession();
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_WIDTH = 130;
-const CARD_MARGIN = 12;
 
 // Types for navigation
 type Screen = 'home' | 'movieDetail';
@@ -332,99 +326,22 @@ const BookCard = ({ book, onPress }: { book: any; onPress: () => void }) => (
   </TouchableOpacity>
 );
 
-// Auto-scrolling Carousel Component with manual scroll support
-const AutoScrollCarousel = ({
+// Simple Manual Carousel Component
+const Carousel = ({
   data,
   renderItem,
-  direction = 'right'
 }: {
   data: any[];
   renderItem: (item: any) => React.ReactNode;
-  direction?: 'left' | 'right';
 }) => {
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [contentWidth, setContentWidth] = useState(0);
-  const isPausedRef = useRef(false);
-  const currentPositionRef = useRef(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Duplicate data for infinite scroll effect
-  const duplicatedData = [...data, ...data, ...data];
-
-  useEffect(() => {
-    if (data.length === 0 || contentWidth === 0) return;
-
-    const itemWidth = CARD_WIDTH + CARD_MARGIN;
-    const singleSetWidth = data.length * itemWidth;
-    const startPosition = direction === 'right' ? 0 : singleSetWidth;
-
-    // Set initial position
-    currentPositionRef.current = startPosition;
-    scrollViewRef.current?.scrollTo({ x: startPosition, animated: false });
-
-    const speed = 0.5; // pixels per frame
-
-    const animate = () => {
-      if (isPausedRef.current) return;
-
-      if (direction === 'right') {
-        currentPositionRef.current += speed;
-        if (currentPositionRef.current >= singleSetWidth * 2) {
-          currentPositionRef.current = singleSetWidth;
-          scrollViewRef.current?.scrollTo({ x: currentPositionRef.current, animated: false });
-        }
-      } else {
-        currentPositionRef.current -= speed;
-        if (currentPositionRef.current <= 0) {
-          currentPositionRef.current = singleSetWidth;
-          scrollViewRef.current?.scrollTo({ x: currentPositionRef.current, animated: false });
-        }
-      }
-      scrollViewRef.current?.scrollTo({ x: currentPositionRef.current, animated: false });
-    };
-
-    intervalRef.current = setInterval(animate, 16); // ~60fps
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [data.length, contentWidth, direction]);
-
-  // Pause auto-scroll when user starts dragging
-  const handleScrollBeginDrag = () => {
-    isPausedRef.current = true;
-  };
-
-  // Resume auto-scroll after user stops scrolling
-  const handleScrollEndDrag = () => {
-    // Resume after a short delay to allow momentum to settle
-    setTimeout(() => {
-      isPausedRef.current = false;
-    }, 2000);
-  };
-
-  // Update position reference when user scrolls manually
-  const handleScroll = (event: any) => {
-    if (isPausedRef.current) {
-      currentPositionRef.current = event.nativeEvent.contentOffset.x;
-    }
-  };
-
   if (data.length === 0) return null;
 
   return (
     <ScrollView
-      ref={scrollViewRef}
       horizontal
       showsHorizontalScrollIndicator={false}
-      scrollEnabled={true}
-      onContentSizeChange={(w) => setContentWidth(w)}
-      onScrollBeginDrag={handleScrollBeginDrag}
-      onScrollEndDrag={handleScrollEndDrag}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
     >
-      {duplicatedData.map((item, index) => (
+      {data.map((item, index) => (
         <View key={`${item.id}-${index}`}>
           {renderItem(item)}
         </View>
@@ -548,15 +465,13 @@ const HomeScreen = ({
 
         {activeTab === 'movies' ? (
           <>
-            {/* Top Rated Movies Section - auto scroll right */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
               {loading ? (
                 <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
               ) : (
-                <AutoScrollCarousel
+                <Carousel
                   data={topRatedMovies}
-                  direction="right"
                   renderItem={(movie) => (
                     <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
                   )}
@@ -564,15 +479,13 @@ const HomeScreen = ({
               )}
             </View>
 
-            {/* Trending Movies Section - auto scroll left */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
               {loading ? (
                 <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
               ) : (
-                <AutoScrollCarousel
+                <Carousel
                   data={trendingMovies}
-                  direction="left"
                   renderItem={(movie) => (
                     <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
                   )}
@@ -604,24 +517,20 @@ const HomeScreen = ({
           </>
         ) : (
           <>
-            {/* Popular Books Section - auto scroll right */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>📖 Popular Books</Text>
-              <AutoScrollCarousel
+              <Carousel
                 data={popularBooks}
-                direction="right"
                 renderItem={(book) => (
                   <BookCard book={book} onPress={() => handleBookPress(book)} />
                 )}
               />
             </View>
 
-            {/* Classic Books Section - auto scroll left */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>📚 Classic Literature</Text>
-              <AutoScrollCarousel
+              <Carousel
                 data={classicBooks}
-                direction="left"
                 renderItem={(book) => (
                   <BookCard book={book} onPress={() => handleBookPress(book)} />
                 )}
