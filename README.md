@@ -113,6 +113,24 @@ cp .env.example .env
 npm run dev
 ```
 
+#### Mobile App (iOS)
+
+Requires Xcode installed.
+
+**Terminal 1 - Start backend:**
+```bash
+cd backend
+uvicorn src.main:app --reload --port 8000
+```
+
+**Terminal 2 - Run iOS app:**
+```bash
+cd apps/mobile
+npx expo run:ios
+```
+
+The first build takes a few minutes (compiling native code). Subsequent runs are fast since the build is cached. Press `r` in Metro to reload JS changes, or `i` to reopen the iOS simulator.
+
 ## Project Structure
 
 ```

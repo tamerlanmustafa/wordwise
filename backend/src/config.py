@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     google_translate_api_key: str = ""
 
     # STANDS4 Scripts API
-    user_id: str = ""
-    token: str = ""
+    stands4_user_id: str = ""
+    stands4_token: str = ""
     scripts_url: str = "https://www.stands4.com/services/v2/scripts.php"
 
     # DeepL Translation API

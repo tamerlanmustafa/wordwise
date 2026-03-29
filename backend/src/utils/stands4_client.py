@@ -47,8 +47,8 @@ class STANDS4Client:
             token: STANDS4 API token (from env if not provided)
             scripts_url: STANDS4 scripts API URL (from env if not provided)
         """
-        self.user_id = user_id or os.getenv("USER_ID")
-        self.token = token or os.getenv("TOKEN")
+        self.user_id = user_id or os.getenv("STANDS4_USER_ID")
+        self.token = token or os.getenv("STANDS4_TOKEN")
         self.scripts_url = scripts_url or os.getenv("SCRIPTS_URL", "https://www.stands4.com/services/v2/scripts.php")
 
         if not self.user_id or not self.token:

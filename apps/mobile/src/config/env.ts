@@ -28,7 +28,7 @@ export const GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_WEB;
 
 const configs = {
   development: {
-    API_URL: 'http://192.168.1.202:8000', // Local IP for physical device testing
+    API_URL: 'http://localhost:8000', // localhost works for iOS simulator
     DEBUG: true,
   },
   staging: {
