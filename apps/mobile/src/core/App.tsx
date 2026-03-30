@@ -1108,11 +1108,7 @@ const MovieDetailScreen = ({
           <View style={styles.cefrTabsWrapper}>
             <View style={styles.cefrTabsGradientBorder}>
               <View style={styles.cefrTabsInner}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cefrTabsContent}
-                >
+                <View style={styles.cefrTabsContent}>
                   {mergedLevels.map((levelData) => (
                     <CEFRTab
                       key={levelData.level}
@@ -1124,7 +1120,7 @@ const MovieDetailScreen = ({
                       onPress={() => setActiveLevel(levelData.level)}
                     />
                   ))}
-                </ScrollView>
+                </View>
               </View>
             </View>
           </View>
@@ -1696,24 +1692,24 @@ const styles = StyleSheet.create({
   },
   cefrTabsContent: {
     flexDirection: 'row',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingVertical: 4,
   },
   cefrTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginHorizontal: 2,
-    borderRadius: 12,
+    flex: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    marginHorizontal: 1,
+    borderRadius: 10,
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 56,
   },
   cefrTabActive: {
     // Background color is set dynamically with level color
   },
   cefrTabLevel: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.text,
   },
@@ -1839,7 +1835,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   idiomTabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.text,
   },
