@@ -13,15 +13,21 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
-import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_IOS } from '../config/env';
+import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 
-// Required for Google Auth to work properly
-WebBrowser.maybeCompleteAuthSession();
+// Configure Google Sign-In
+console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
+GoogleSignin.configure({
+  iosClientId: GOOGLE_CLIENT_ID_IOS,
+  scopes: ['profile', 'email'],
+});
+console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
 type Screen = 'home' | 'movieDetail';
@@ -77,86 +83,95 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Google Auth setup - iOS uses reversed client ID as redirect scheme
-  const redirectUri = `com.googleusercontent.apps.400446242104-a9laa57dook0og2k93g9amjgieqo2mj7:/oauthredirect`;
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: GOOGLE_CLIENT_ID_IOS,
-    redirectUri,
-    scopes: ['profile', 'email'],
-  });
-
-  console.log('[Google Auth] Redirect URI:', redirectUri);
-
-  // Handle Google auth response
-  useEffect(() => {
-    const handleGoogleResponse = async () => {
-      if (response?.type === 'success') {
-        setGoogleLoading(true);
-        setError('');
-        try {
-          const { authentication } = response;
-          if (!authentication?.accessToken) {
-            throw new Error('No access token received');
-          }
-
-          // Get user info from Google
-          const userInfoResponse = await fetch(
-            'https://www.googleapis.com/userinfo/v2/me',
-            { headers: { Authorization: `Bearer ${authentication.accessToken}` } }
-          );
-          const googleUser = await userInfoResponse.json();
-
-          // Send to backend for login/registration
-          const { config } = await import('../config/env');
-          const backendResponse = await fetch(`${config.API_URL}/auth/google/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id_token: authentication.idToken || authentication.accessToken,
-              email: googleUser.email,
-              name: googleUser.name,
-              picture: googleUser.picture,
-              google_id: googleUser.id,
-            }),
-          });
-
-          const data = await backendResponse.json();
-
-          if (!backendResponse.ok) {
-            throw new Error(data.detail || 'Google login failed');
-          }
-
-          // Map backend user format to app user format
-          const user = {
-            id: data.user.id,
-            email: data.user.email,
-            username: data.user.username,
-            profile_picture_url: data.user.profile_picture_url || data.user.profilePictureUrl,
-            native_language: data.user.native_language || data.user.nativeLanguage || 'en',
-            learning_language: data.user.learning_language || data.user.learningLanguage || 'es',
-            proficiency_level: data.user.proficiency_level || data.user.proficiencyLevel || 'B1',
-            default_tab: (data.user.default_tab || data.user.defaultTab || 'movies') as 'movies' | 'books',
-            is_admin: data.user.is_admin || data.user.isAdmin || false,
-          };
-
-          onLogin(user, data.access_token || data.token);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Google login failed');
-        } finally {
-          setGoogleLoading(false);
-        }
-      } else if (response?.type === 'error') {
-        setError('Google sign-in was cancelled or failed');
-      }
-    };
-
-    handleGoogleResponse();
-  }, [response]);
-
   const handleGoogleSignIn = async () => {
+    console.log('[Google Sign-In] Button pressed, starting sign-in flow...');
     setError('');
-    await promptAsync();
+    setGoogleLoading(true);
+
+    try {
+      console.log('[Google Sign-In] Calling GoogleSignin.signIn()...');
+      // Sign in with Google (no hasPlayServices check needed for iOS)
+      const signInResult = await GoogleSignin.signIn();
+      console.log('[Google Sign-In] signIn() completed');
+
+      console.log('[Google Sign-In] Result:', JSON.stringify(signInResult, null, 2));
+
+      // Handle different response formats from the library
+      const userData = signInResult.data?.user || signInResult.user || signInResult.data;
+      if (!userData) {
+        throw new Error('No user data received from Google');
+      }
+
+      // Get the ID token - try multiple approaches
+      let idToken = signInResult.data?.idToken || signInResult.idToken;
+
+      // If no idToken in result, try to get tokens separately
+      if (!idToken) {
+        try {
+          const tokens = await GoogleSignin.getTokens();
+          idToken = tokens.idToken || tokens.accessToken;
+        } catch (tokenErr) {
+          console.log('[Google Sign-In] Could not get tokens separately:', tokenErr);
+        }
+      }
+
+      const email = userData.email;
+      const name = userData.name || userData.givenName;
+      const photo = userData.photo;
+      const googleId = userData.id;
+
+      console.log('[Google Sign-In] User data:', { email, name, photo, googleId, hasIdToken: !!idToken });
+
+      // Send to backend for login/registration
+      const { config } = await import('../config/env');
+      console.log('[Google Sign-In] Calling backend:', `${config.API_URL}/auth/google/login`);
+
+      const backendResponse = await fetch(`${config.API_URL}/auth/google/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_token: idToken,
+          email,
+          name,
+          picture: photo,
+          google_id: googleId,
+        }),
+      });
+
+      console.log('[Google Sign-In] Backend response status:', backendResponse.status);
+      const data = await backendResponse.json();
+      console.log('[Google Sign-In] Backend response data:', data);
+
+      if (!backendResponse.ok) {
+        throw new Error(data.detail || 'Google login failed');
+      }
+
+      // Map backend user format to app user format
+      const user = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        profile_picture_url: data.user.profile_picture_url || data.user.profilePictureUrl,
+        native_language: data.user.native_language || data.user.nativeLanguage || 'en',
+        learning_language: data.user.learning_language || data.user.learningLanguage || 'es',
+        proficiency_level: data.user.proficiency_level || data.user.proficiencyLevel || 'B1',
+        default_tab: (data.user.default_tab || data.user.defaultTab || 'movies') as 'movies' | 'books',
+        is_admin: data.user.is_admin || data.user.isAdmin || false,
+      };
+
+      onLogin(user, data.access_token || data.token);
+    } catch (err: any) {
+      console.log('[Google Sign-In] Error:', err.code, err.message, err);
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        setError('Sign-in cancelled');
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        setError('Sign-in already in progress');
+      } else {
+        setError(err.message || 'Google sign-in failed');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleAuth = async () => {
@@ -224,7 +239,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
           <TouchableOpacity
             style={[styles.googleButton, isLoading && styles.buttonDisabled]}
             onPress={handleGoogleSignIn}
-            disabled={!request || isLoading}
+            disabled={isLoading}
           >
             {googleLoading ? (
               <ActivityIndicator color={colors.text} />

@@ -28,7 +28,7 @@ export const GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_WEB;
 
 const configs = {
   development: {
-    API_URL: 'http://localhost:8000', // localhost works for iOS simulator
+    API_URL: 'http://localhost:8000', // Local backend for development
     DEBUG: true,
   },
   staging: {
