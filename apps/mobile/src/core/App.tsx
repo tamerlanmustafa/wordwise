@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StatusBar,
   TextInput,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   ActivityIndicator,
   FlatList,
   Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -365,19 +367,40 @@ const Carousel = ({
   );
 };
 
+// Available Languages (same as web app)
+const AVAILABLE_LANGUAGES = [
+  { code: 'ES', name: 'Spanish', nativeName: 'Español' },
+  { code: 'FR', name: 'French', nativeName: 'Français' },
+  { code: 'DE', name: 'German', nativeName: 'Deutsch' },
+  { code: 'IT', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'PT', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'RU', name: 'Russian', nativeName: 'Русский' },
+  { code: 'TR', name: 'Turkish', nativeName: 'Türkçe' },
+  { code: 'JA', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ZH', name: 'Chinese', nativeName: '中文' },
+  { code: 'NL', name: 'Dutch', nativeName: 'Nederlands' },
+  { code: 'PL', name: 'Polish', nativeName: 'Polski' },
+  { code: 'AZ', name: 'Azerbaijani', nativeName: 'Azərbaycan' },
+];
+
 // Home Screen
 const HomeScreen = ({
   onLogout,
   onMoviePress,
+  user,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
+  user: any;
 }) => {
   const [activeTab, setActiveTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
   const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState(user?.native_language?.toUpperCase() || 'ES');
 
   // Sample popular books data
   const popularBooks = [
@@ -436,15 +459,110 @@ const HomeScreen = ({
     console.log('Book pressed:', book.title);
   };
 
+  const currentLang = AVAILABLE_LANGUAGES.find(l => l.code === targetLanguage) || AVAILABLE_LANGUAGES[0];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>WordWise</Text>
-        <TouchableOpacity onPress={onLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+
+        <View style={styles.headerRight}>
+          {/* Language Selector */}
+          <TouchableOpacity
+            style={styles.languageButton}
+            onPress={() => setShowLanguageMenu(!showLanguageMenu)}
+          >
+            <Text style={styles.languageButtonText}>{currentLang.code}</Text>
+            <Text style={styles.languageDropdownIcon}>▼</Text>
+          </TouchableOpacity>
+
+          {/* User Avatar */}
+          <TouchableOpacity
+            style={styles.avatarButton}
+            onPress={() => setShowUserMenu(!showUserMenu)}
+          >
+            {user?.profile_picture_url ? (
+              <Image
+                source={{ uri: user.profile_picture_url }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Language Menu Dropdown */}
+      {showLanguageMenu && (
+        <View style={styles.dropdownMenu}>
+          <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            {AVAILABLE_LANGUAGES.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.dropdownItem,
+                  lang.code === targetLanguage && styles.dropdownItemActive
+                ]}
+                onPress={() => {
+                  setTargetLanguage(lang.code);
+                  setShowLanguageMenu(false);
+                }}
+              >
+                <Text style={styles.dropdownItemCode}>{lang.code}</Text>
+                <Text style={styles.dropdownItemText}>{lang.nativeName}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* User Menu Dropdown */}
+      {showUserMenu && (
+        <View style={[styles.dropdownMenu, styles.userDropdownMenu]}>
+          <View style={styles.dropdownUserInfo}>
+            <Text style={styles.dropdownUserName}>{user?.username || 'User'}</Text>
+            <Text style={styles.dropdownUserEmail}>{user?.email}</Text>
+          </View>
+          <View style={styles.dropdownDivider} />
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              // TODO: Navigate to settings
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>⚙️</Text>
+            <Text style={styles.dropdownItemText}>Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              // TODO: Navigate to word lists
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>📚</Text>
+            <Text style={styles.dropdownItemText}>My Lists</Text>
+          </TouchableOpacity>
+          <View style={styles.dropdownDivider} />
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onLogout();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>🚪</Text>
+            <Text style={[styles.dropdownItemText, { color: colors.error }]}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
@@ -1065,6 +1183,7 @@ const MovieDetailScreen = ({
 
 export default function App() {
   const status = useAuthStore((s) => s.status);
+  const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const logout = useAuthStore((s) => s.logout);
   const initialize = useAuthStore((s) => s.initialize);
@@ -1109,7 +1228,7 @@ export default function App() {
         currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} user={user} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -1254,6 +1373,117 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  languageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  languageButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  languageDropdownIcon: {
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
+  avatarButton: {
+    padding: 2,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 1000,
+    minWidth: 180,
+    maxHeight: 300,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  userDropdownMenu: {
+    right: 16,
+  },
+  dropdownScroll: {
+    maxHeight: 280,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  dropdownItemActive: {
+    backgroundColor: colors.background,
+  },
+  dropdownItemCode: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+    width: 28,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  dropdownItemIcon: {
+    fontSize: 16,
+  },
+  dropdownUserInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  dropdownUserName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  dropdownUserEmail: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
   },
   tabContainer: {
     flexDirection: 'row',
