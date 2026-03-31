@@ -975,12 +975,14 @@ const MovieDetailScreen = ({
 
     try {
       // Step 1: Search for the movie script
-      let searchResult = await wordwiseApi.searchMovies(movie.title);
+      // Clean title: strip quotes and extra whitespace
+      const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
+      let searchResult = await wordwiseApi.searchMovies(cleanTitle);
 
       // If no results, retry with simplified title (strip subtitle after : or -)
       if (!searchResult.results || searchResult.results.length === 0) {
-        const simplified = movie.title.split(/[:\-–—]/)[0].trim();
-        if (simplified && simplified !== movie.title) {
+        const simplified = cleanTitle.split(/[:\-–—]/)[0].trim();
+        if (simplified && simplified !== cleanTitle) {
           console.log(`[MovieDetail] Retrying search with simplified title: "${simplified}"`);
           searchResult = await wordwiseApi.searchMovies(simplified);
         }
@@ -1096,6 +1098,47 @@ const MovieDetailScreen = ({
         <View style={{ width: 60 }} />
       </View>
 
+      {/* Movie Info - always visible */}
+      <View style={styles.movieInfoBar}>
+        <Image
+          source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+          style={styles.detailPoster}
+        />
+        <View style={styles.movieInfoText}>
+          <Text style={styles.movieInfoTitle}>{movie.title}</Text>
+          <View style={styles.movieMetaRow}>
+            <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+            {movie.vote_average != null && (
+              <Text style={styles.movieRating}>⭐ {movie.vote_average.toFixed(1)}</Text>
+            )}
+            {movie.original_language && (
+              <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+            )}
+          </View>
+          {movie.genre_ids && movie.genre_ids.length > 0 && (
+            <View style={styles.genreRow}>
+              {movie.genre_ids.slice(0, 3).map((id) => (
+                <View key={id} style={styles.genreChip}>
+                  <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {vocabulary && (
+            <Text style={styles.movieInfoStats}>
+              {vocabulary.unique_words} unique words
+            </Text>
+          )}
+        </View>
+      </View>
+      {/* Overview */}
+      {movie.overview ? (
+        <View style={styles.overviewSection}>
+          <Text style={styles.overviewTitle}>Overview</Text>
+          <Text style={styles.overviewText}>{movie.overview}</Text>
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={[styles.container, styles.centered]}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -1104,52 +1147,14 @@ const MovieDetailScreen = ({
           <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
         </View>
       ) : error ? (
-        <View style={[styles.container, styles.centered]}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={onBack}>
-            <Text style={styles.primaryButtonText}>Go Back</Text>
+        <View style={styles.scriptErrorBox}>
+          <Text style={styles.scriptErrorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
+            <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : vocabulary ? (
         <>
-          {/* Movie Info */}
-          <View style={styles.movieInfoBar}>
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-              style={styles.detailPoster}
-            />
-            <View style={styles.movieInfoText}>
-              <Text style={styles.movieInfoTitle}>{movie.title}</Text>
-              <View style={styles.movieMetaRow}>
-                <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
-                {movie.vote_average != null && (
-                  <Text style={styles.movieRating}>⭐ {movie.vote_average.toFixed(1)}</Text>
-                )}
-                {movie.original_language && (
-                  <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
-                )}
-              </View>
-              {movie.genre_ids && movie.genre_ids.length > 0 && (
-                <View style={styles.genreRow}>
-                  {movie.genre_ids.slice(0, 3).map((id) => (
-                    <View key={id} style={styles.genreChip}>
-                      <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-              <Text style={styles.movieInfoStats}>
-                {vocabulary.unique_words} unique words
-              </Text>
-            </View>
-          </View>
-          {/* Overview */}
-          {movie.overview ? (
-            <View style={styles.overviewSection}>
-              <Text style={styles.overviewTitle}>Overview</Text>
-              <Text style={styles.overviewText}>{movie.overview}</Text>
-            </View>
-          ) : null}
 
           {/* CEFR Level Tabs - Gradient border container */}
           <View style={styles.cefrTabsWrapper}>
@@ -1762,6 +1767,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  scriptErrorBox: {
+    margin: 16,
+    padding: 16,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  scriptErrorText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   movieInfoStats: {
     fontSize: 13,
