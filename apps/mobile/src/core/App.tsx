@@ -20,8 +20,9 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
-import { wordwiseApi, tmdbApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
+import { wordwiseApi, tmdbApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
+import { EnrichmentStatus } from '../features/vocabulary/components/EnrichmentStatus';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -32,7 +33,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings';
 interface MovieData {
   id: number;
   title: string;
@@ -400,11 +401,17 @@ const HomeScreen = ({
   onMoviePress,
   onSearch,
   user,
+  targetLanguage,
+  setTargetLanguage,
+  onNavigateToSettings,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
   onSearch: (query: string) => void;
   user: any;
+  targetLanguage: string;
+  setTargetLanguage: (lang: string) => void;
+  onNavigateToSettings: () => void;
 }) => {
   const [activeTab, setActiveTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
@@ -417,7 +424,6 @@ const HomeScreen = ({
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
-  const [targetLanguage, setTargetLanguage] = useState(user?.native_language?.toUpperCase() || 'ES');
 
   // Sample popular books data
   const popularBooks = [
@@ -583,7 +589,7 @@ const HomeScreen = ({
             style={styles.dropdownItem}
             onPress={() => {
               setShowUserMenu(false);
-              // TODO: Navigate to settings
+              onNavigateToSettings();
             }}
           >
             <Text style={styles.dropdownItemIcon}>⚙️</Text>
@@ -805,6 +811,541 @@ const HomeScreen = ({
   );
 };
 
+// Supported languages (same as web app SettingsPage)
+const SUPPORTED_LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'da', name: 'Danish' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'el', name: 'Greek' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'th', name: 'Thai' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'bg', name: 'Bulgarian' },
+];
+
+const PROFICIENCY_LEVELS = [
+  { code: 'A1', name: 'A1 - Beginner' },
+  { code: 'A2', name: 'A2 - Elementary' },
+  { code: 'B1', name: 'B1 - Intermediate' },
+  { code: 'B2', name: 'B2 - Upper Intermediate' },
+  { code: 'C1', name: 'C1 - Advanced' },
+  { code: 'C2', name: 'C2 - Proficient' },
+];
+
+// Settings Screen
+const SettingsScreen = ({
+  onBack,
+  user,
+  onUserUpdated,
+}: {
+  onBack: () => void;
+  user: any;
+  onUserUpdated: (user: any) => void;
+}) => {
+  const [username, setUsername] = useState(user?.username || '');
+  const [nativeLanguage, setNativeLanguage] = useState(user?.native_language || 'en');
+  const [learningLanguage, setLearningLanguage] = useState(user?.learning_language || 'en');
+  const [proficiencyLevel, setProficiencyLevel] = useState(user?.proficiency_level || 'A1');
+  const [defaultTab, setDefaultTab] = useState<'movies' | 'books'>(user?.default_tab || 'movies');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const [showNativeLangPicker, setShowNativeLangPicker] = useState(false);
+  const [showLearningLangPicker, setShowLearningLangPicker] = useState(false);
+  const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
+
+  const handleSave = async () => {
+    if (!username.trim()) {
+      setError('Username is required');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const token = await (await import('../services/auth/tokenStorage')).tokenStorage.getAccessToken();
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          native_language: nativeLanguage,
+          learning_language: learningLanguage,
+          proficiency_level: proficiencyLevel,
+          default_tab: defaultTab,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to update settings');
+      }
+
+      const updatedUser = await response.json();
+      onUserUpdated(updatedUser);
+      setSuccess('Settings updated successfully!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to update settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getLangName = (code: string) =>
+    SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code;
+
+  const getProfName = (code: string) =>
+    PROFICIENCY_LEVELS.find((l) => l.code === code)?.name || code;
+
+  const renderPicker = (
+    visible: boolean,
+    onClose: () => void,
+    items: { code: string; name: string }[],
+    selected: string,
+    onSelect: (code: string) => void,
+    title: string,
+  ) => {
+    if (!visible) return null;
+    return (
+      <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
+        <View style={settingsStyles.modalOverlay}>
+          <View style={settingsStyles.modalContent}>
+            <View style={settingsStyles.modalHeader}>
+              <Text style={settingsStyles.modalTitle}>{title}</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={settingsStyles.modalClose}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={settingsStyles.modalScroll}>
+              {items.map((item) => (
+                <TouchableOpacity
+                  key={item.code}
+                  style={[
+                    settingsStyles.modalItem,
+                    item.code === selected && settingsStyles.modalItemSelected,
+                  ]}
+                  onPress={() => {
+                    onSelect(item.code);
+                    onClose();
+                  }}
+                >
+                  <Text
+                    style={[
+                      settingsStyles.modalItemText,
+                      item.code === selected && settingsStyles.modalItemTextSelected,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                  {item.code === selected && <Text style={settingsStyles.checkmark}>✓</Text>}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  return (
+    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+      {/* Header */}
+      <View style={settingsStyles.header}>
+        <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
+          <Text style={settingsStyles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={settingsStyles.headerTitle}>Settings</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={settingsStyles.scrollContainer}>
+        {/* Avatar + Email */}
+        <View style={settingsStyles.profileHeader}>
+          {user?.profile_picture_url ? (
+            <Image source={{ uri: user.profile_picture_url }} style={settingsStyles.avatar} />
+          ) : (
+            <View style={settingsStyles.avatarPlaceholder}>
+              <Text style={settingsStyles.avatarInitial}>
+                {user?.username?.[0]?.toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
+          <View style={settingsStyles.profileInfo}>
+            <Text style={settingsStyles.profileTitle}>Account Settings</Text>
+            <Text style={settingsStyles.profileEmail}>{user?.email}</Text>
+          </View>
+        </View>
+
+        <View style={settingsStyles.divider} />
+
+        {/* Alerts */}
+        {error && (
+          <View style={settingsStyles.alertError}>
+            <Text style={settingsStyles.alertErrorText}>{error}</Text>
+          </View>
+        )}
+        {success && (
+          <View style={settingsStyles.alertSuccess}>
+            <Text style={settingsStyles.alertSuccessText}>{success}</Text>
+          </View>
+        )}
+
+        {/* Profile Section */}
+        <Text style={settingsStyles.sectionTitle}>Profile</Text>
+        <View style={settingsStyles.inputContainer}>
+          <Text style={settingsStyles.inputLabel}>Username</Text>
+          <TextInput
+            style={settingsStyles.textInput}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Enter username"
+            placeholderTextColor={colors.textSecondary}
+          />
+        </View>
+
+        <View style={settingsStyles.divider} />
+
+        {/* Language Preferences Section */}
+        <Text style={settingsStyles.sectionTitle}>Language Preferences</Text>
+
+        <TouchableOpacity
+          style={settingsStyles.selectButton}
+          onPress={() => setShowNativeLangPicker(true)}
+        >
+          <Text style={settingsStyles.selectLabel}>Native Language</Text>
+          <Text style={settingsStyles.selectValue}>{getLangName(nativeLanguage)} ▼</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={settingsStyles.selectButton}
+          onPress={() => setShowLearningLangPicker(true)}
+        >
+          <Text style={settingsStyles.selectLabel}>Learning Language</Text>
+          <Text style={settingsStyles.selectValue}>{getLangName(learningLanguage)} ▼</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={settingsStyles.selectButton}
+          onPress={() => setShowProficiencyPicker(true)}
+        >
+          <Text style={settingsStyles.selectLabel}>Proficiency Level</Text>
+          <Text style={settingsStyles.selectValue}>{getProfName(proficiencyLevel)} ▼</Text>
+        </TouchableOpacity>
+
+        <View style={settingsStyles.divider} />
+
+        {/* Default Home Tab */}
+        <Text style={settingsStyles.sectionTitle}>Default Home Tab</Text>
+        <View style={settingsStyles.tabToggle}>
+          <TouchableOpacity
+            style={[settingsStyles.tabOption, defaultTab === 'movies' && settingsStyles.tabOptionActive]}
+            onPress={() => setDefaultTab('movies')}
+          >
+            <Text style={[settingsStyles.tabOptionText, defaultTab === 'movies' && settingsStyles.tabOptionTextActive]}>
+              Movies
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[settingsStyles.tabOption, defaultTab === 'books' && settingsStyles.tabOptionActive]}
+            onPress={() => setDefaultTab('books')}
+          >
+            <Text style={[settingsStyles.tabOptionText, defaultTab === 'books' && settingsStyles.tabOptionTextActive]}>
+              Books
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Save Button */}
+        <TouchableOpacity
+          style={[settingsStyles.saveButton, saving && settingsStyles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+          activeOpacity={0.7}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={settingsStyles.saveButtonText}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Pickers */}
+      {renderPicker(showNativeLangPicker, () => setShowNativeLangPicker(false), SUPPORTED_LANGUAGES, nativeLanguage, setNativeLanguage, 'Native Language')}
+      {renderPicker(showLearningLangPicker, () => setShowLearningLangPicker(false), SUPPORTED_LANGUAGES, learningLanguage, setLearningLanguage, 'Learning Language')}
+      {renderPicker(showProficiencyPicker, () => setShowProficiencyPicker(false), PROFICIENCY_LEVELS, proficiencyLevel, setProficiencyLevel, 'Proficiency Level')}
+    </SafeAreaView>
+  );
+};
+
+const settingsStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.paper,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  backButton: {
+    width: 60,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  profileInfo: {
+    marginLeft: 16,
+  },
+  profileTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  profileEmail: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: 20,
+  },
+  alertError: {
+    backgroundColor: '#FDEAEA',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  alertErrorText: {
+    color: colors.error,
+    fontSize: 14,
+  },
+  alertSuccess: {
+    backgroundColor: '#E8F5E9',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  alertSuccessText: {
+    color: colors.success,
+    fontSize: 14,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  inputContainer: {
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  selectButton: {
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  selectValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  tabToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  tabOption: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabOptionActive: {
+    backgroundColor: colors.primary,
+  },
+  tabOptionText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  tabOptionTextActive: {
+    color: '#fff',
+  },
+  saveButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 28,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  modalClose: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  modalScroll: {
+    paddingBottom: 30,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  modalItemSelected: {
+    backgroundColor: `${colors.primary}10`,
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  modalItemTextSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  checkmark: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+});
+
 // Loading Screen
 const LoadingScreen = () => (
   <View style={[styles.container, styles.centered]}>
@@ -814,42 +1355,69 @@ const LoadingScreen = () => (
 );
 
 // Word Row Component - Polished design matching web app
+interface SentenceExample {
+  sentence: string;
+  translation: string;
+  word_position: number;
+}
+
 const WordRow = ({
   word,
   index,
   rowNumber,
   groupColor,
+  movieId,
+  targetLang,
 }: {
   word: WordInfo;
   index: number;
   rowNumber: number;
   groupColor: string;
+  movieId?: number | null;
+  targetLang?: string;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
 
   const handlePress = async () => {
-    // If already expanded, just collapse
     if (expanded) {
       setExpanded(false);
       return;
     }
 
-    // If translation already fetched, just expand
     if (translation) {
       setExpanded(true);
       return;
     }
 
-    // Fetch translation first, then expand
     setTranslating(true);
     try {
-      const result = await wordwiseApi.translate(word.word, 'TR'); // Turkish as default
-      setTranslation(result.translated);
-      setExpanded(true);
-    } catch (error) {
-      setTranslation('Translation failed');
+      const promises: Promise<void>[] = [];
+
+      // Fetch translation
+      promises.push(
+        wordwiseApi.translate(word.word, targetLang || 'ES')
+          .then((result) => setTranslation(result.translated))
+          .catch(() => setTranslation('Translation failed'))
+      );
+
+      // Fetch sentence examples
+      if (movieId && targetLang) {
+        promises.push(
+          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.examples && Array.isArray(data.examples)) {
+                setSentenceExamples(data.examples);
+              }
+            })
+            .catch(() => {})
+        );
+      }
+
+      await Promise.all(promises);
       setExpanded(true);
     } finally {
       setTranslating(false);
@@ -857,6 +1425,23 @@ const WordRow = ({
   };
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
+
+  // Highlight the target word in a sentence
+  const renderHighlightedSentence = (sentence: string, targetWord: string) => {
+    const regex = new RegExp(`(${targetWord})`, 'gi');
+    const parts = sentence.split(regex);
+    return (
+      <Text style={styles.exampleSentence}>
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <Text key={i} style={styles.highlightedWord}>{part}</Text>
+          ) : (
+            <Text key={i}>{part}</Text>
+          )
+        )}
+      </Text>
+    );
+  };
 
   return (
     <View style={styles.wordRowWrapper}>
@@ -866,13 +1451,8 @@ const WordRow = ({
         activeOpacity={0.7}
       >
         <View style={styles.wordRowMain}>
-          {/* Row Number */}
           <Text style={styles.rowNumber}>{rowNumber}.</Text>
-
-          {/* Word Text */}
           <Text style={styles.wordText}>{word.word}</Text>
-
-          {/* Loading Spinner (inline) */}
           {translating && (
             <ActivityIndicator
               size="small"
@@ -880,18 +1460,15 @@ const WordRow = ({
               style={styles.inlineSpinner}
             />
           )}
-
-          {/* Expand Icon */}
           <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>
             ▼
           </Text>
         </View>
       </TouchableOpacity>
 
-      {/* Dropdown Panel */}
       {expanded && (
         <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
-          {/* Translation with dash prefix */}
+          {/* Translation */}
           <View style={styles.translationBox}>
             <Text style={styles.translationDash}>—</Text>
             {translation ? (
@@ -907,6 +1484,22 @@ const WordRow = ({
               <Text style={styles.noTranslation}>No translation available</Text>
             )}
           </View>
+
+          {/* Sentence Examples */}
+          {sentenceExamples.length > 0 ? (
+            sentenceExamples.map((example, idx) => (
+              <View key={idx} style={styles.exampleCard}>
+                {renderHighlightedSentence(example.sentence, word.word)}
+                {example.translation && (
+                  <Text style={styles.exampleTranslation}>
+                    {example.translation.toLowerCase()}
+                  </Text>
+                )}
+              </View>
+            ))
+          ) : movieId ? (
+            <Text style={styles.noExamples}>No sentence examples available</Text>
+          ) : null}
         </View>
       )}
     </View>
@@ -1151,10 +1744,13 @@ const SearchResultsScreen = ({
 const MovieDetailScreen = ({
   movie,
   onBack,
+  targetLanguage,
 }: {
   movie: MovieData;
   onBack: () => void;
+  targetLanguage: string;
 }) => {
+  const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
@@ -1208,7 +1804,7 @@ const MovieDetailScreen = ({
       setMovieId(scriptResult.movie_id);
 
       // Step 3: Classify vocabulary
-      await wordwiseApi.classifyVocabulary(scriptResult.movie_id, 'TR');
+      await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang);
 
       // Step 4: Try to get full vocabulary first, fall back to preview
       let vocabResult: VocabularyResponse;
@@ -1378,6 +1974,11 @@ const MovieDetailScreen = ({
             </View>
           </View>
 
+          {/* Enrichment Status */}
+          {movieId && (
+            <EnrichmentStatus movieId={movieId} targetLang={targetLang} />
+          )}
+
           {/* Level Description */}
           <View style={styles.levelDescription}>
             <View style={[styles.levelDot, { backgroundColor: isIdiomsTab ? colors.warning : (cefrColors[activeLevel] || colors.primary) }]} />
@@ -1417,6 +2018,8 @@ const MovieDetailScreen = ({
                     index={index}
                     rowNumber={index + 1}
                     groupColor={cefrColors[activeLevel] || colors.primary}
+                    movieId={movieId}
+                    targetLang={targetLang}
                   />
                 )}
                 contentContainerStyle={styles.wordList}
@@ -1441,6 +2044,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
+  const [targetLanguage, setTargetLanguage] = useState(user?.native_language?.toUpperCase() || 'ES');
 
   useEffect(() => {
     initialize();
@@ -1466,6 +2070,14 @@ export default function App() {
     setCurrentScreen('searchResults');
   };
 
+  const navigateToSettings = () => {
+    setCurrentScreen('settings');
+  };
+
+  const handleUserUpdated = (updatedUser: any) => {
+    useAuthStore.getState().setUser(updatedUser);
+  };
+
   if (status === 'loading') {
     return (
       <SafeAreaProvider>
@@ -1481,12 +2093,14 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
       {isAuthenticated ? (
-        currentScreen === 'movieDetail' && selectedMovie ? (
-          <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} />
+        currentScreen === 'settings' ? (
+          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} />
+        ) : currentScreen === 'movieDetail' && selectedMovie ? (
+          <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -2309,5 +2923,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     flex: 1,
+  },
+  exampleCard: {
+    backgroundColor: '#e3f2fd',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  exampleSentence: {
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  highlightedWord: {
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  exampleTranslation: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  noExamples: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

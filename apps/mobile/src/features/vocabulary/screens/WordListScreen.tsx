@@ -7,6 +7,8 @@ import type { Word } from '../../../types';
 import type { MainScreenProps } from '../../../navigation/types';
 import { useVocabulary } from '../hooks/useVocabulary';
 import { WordRow, WORD_ROW_HEIGHT } from '../components/WordRow';
+import { EnrichmentStatus } from '../components/EnrichmentStatus';
+import { useAuthStore } from '../../../stores/authStore';
 import { colors, typography, spacing } from '../../../theme';
 
 type RouteProps = MainScreenProps<'WordList'>['route'];
@@ -16,6 +18,8 @@ const keyExtractor = (item: Word) => String(item.id);
 export const WordListScreen = () => {
   const route = useRoute<RouteProps>();
   const { contentId, contentType, title } = route.params;
+  const user = useAuthStore((s) => s.user);
+  const targetLang = user?.native_language || 'ES';
 
   const { words, isLoading, error, fetchMore, hasMore, total } = useVocabulary({
     contentId,
@@ -33,11 +37,16 @@ export const WordListScreen = () => {
   );
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <Text style={styles.headerSubtitle}>
-        {total > 0 ? `${total} words` : 'Loading...'}
-      </Text>
+    <View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        <Text style={styles.headerSubtitle}>
+          {total > 0 ? `${total} words` : 'Loading...'}
+        </Text>
+      </View>
+      {contentType === 'movie' && (
+        <EnrichmentStatus movieId={contentId} targetLang={targetLang} />
+      )}
     </View>
   );
 

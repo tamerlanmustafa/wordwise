@@ -428,8 +428,7 @@ async def start_enrichment(
 
                 # Get fresh DB connection for background task
                 from src.database import get_db
-                db_gen = get_db()
-                bg_db = await db_gen.__anext__()
+                bg_db = await get_db()
 
                 try:
                     # Fetch movie and script
