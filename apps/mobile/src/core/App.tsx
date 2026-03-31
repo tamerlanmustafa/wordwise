@@ -636,66 +636,68 @@ const HomeScreen = ({
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={onSearchTextChange}
-            onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
-              <Text style={styles.searchClearText}>✕</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.searchInputWrapper}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={onSearchTextChange}
+              onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
+                <Text style={styles.searchClearText}>✕</Text>
+              </TouchableOpacity>
+            )}
+            {/* Autocomplete Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.autocompleteDropdown}>
+                {suggestions.map((movie: any) => (
+                  <TouchableOpacity
+                    key={movie.id}
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      handleMoviePress(movie);
+                      clearSearch();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {movie.poster_path ? (
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                        style={styles.searchResultPoster}
+                      />
+                    ) : (
+                      <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                    )}
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
+                      <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {allResults.length > 5 && (
+                  <TouchableOpacity
+                    style={styles.seeAllButton}
+                    onPress={() => {
+                      onSearch(searchQuery.trim());
+                      clearSearch();
+                    }}
+                  >
+                    <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
           <TouchableOpacity
             style={styles.searchButton}
             onPress={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
           >
             <Text style={styles.searchButtonText}>🔍</Text>
           </TouchableOpacity>
-          {/* Autocomplete Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
-            <View style={styles.autocompleteDropdown}>
-              {suggestions.map((movie: any) => (
-                <TouchableOpacity
-                  key={movie.id}
-                  style={styles.searchResultItem}
-                  onPress={() => {
-                    handleMoviePress(movie);
-                    clearSearch();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  {movie.poster_path ? (
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
-                      style={styles.searchResultPoster}
-                    />
-                  ) : (
-                    <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
-                  )}
-                  <View style={styles.searchResultInfo}>
-                    <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
-                    <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              {allResults.length > 5 && (
-                <TouchableOpacity
-                  style={styles.seeAllButton}
-                  onPress={() => {
-                    onSearch(searchQuery.trim());
-                    clearSearch();
-                  }}
-                >
-                  <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
         </View>
 
         {activeTab === 'movies' ? (
@@ -1789,11 +1791,16 @@ const styles = StyleSheet.create({
   searchButtonText: {
     fontSize: 18,
   },
+  searchInputWrapper: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 100,
+  },
   autocompleteDropdown: {
     position: 'absolute',
     top: '100%',
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
     backgroundColor: colors.paper,
     borderRadius: 12,
     borderWidth: 1,
