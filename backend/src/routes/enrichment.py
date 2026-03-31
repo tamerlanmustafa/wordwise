@@ -13,6 +13,7 @@ from src.database import get_db
 from prisma import Prisma
 from src.services.sentence_example_service import SentenceExampleService
 from src.services.example_translation_service import ExampleTranslationService
+from src.services.sentence_bank_service import populate_sentence_bank
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,31 @@ async def enrich_movie_examples(
                 examples.append((sentence, position, translation, word_lemma))
 
             word_examples[word] = examples
+
+        # Step 6b: V2 DUAL-WRITE — Populate SentenceBank + SentenceLemmaLink
+        try:
+            # Build word -> lemma mapping from classifications
+            word_to_lemma = {}
+            for wc in word_classifications:
+                word_to_lemma[wc.word.lower()] = wc.lemma.lower()
+
+            # Get lemma_id_map from Lemma registry
+            lemma_strs = list(set(word_to_lemma.values()))
+            lemma_records = await db.lemma.find_many(
+                where={"lemma": {"in": lemma_strs}}
+            )
+            lemma_id_map = {lr.lemma: lr.id for lr in lemma_records}
+
+            await populate_sentence_bank(
+                db=db,
+                movie_id=request.movie_id,
+                word_sentences=word_sentences,
+                lemma_id_map=lemma_id_map,
+                word_to_lemma=word_to_lemma,
+            )
+        except Exception as e:
+            # Non-fatal: V2 failure should not break V1 enrichment
+            logger.error(f"V2 SentenceBank population failed (non-fatal): {e}", exc_info=True)
 
         # Step 7: Save to database
         examples_saved = await translation_service.save_word_examples(
@@ -471,6 +497,28 @@ async def start_enrichment(
                             examples.append((sentence, position, translation, word_lemma))
 
                         word_examples[word] = examples
+
+                    # V2 DUAL-WRITE — SentenceBank + SentenceLemmaLink
+                    try:
+                        word_to_lemma = {}
+                        for wc in word_classifications:
+                            word_to_lemma[wc.word.lower()] = wc.lemma.lower()
+
+                        lemma_strs = list(set(word_to_lemma.values()))
+                        lemma_records = await bg_db.lemma.find_many(
+                            where={"lemma": {"in": lemma_strs}}
+                        )
+                        lemma_id_map = {lr.lemma: lr.id for lr in lemma_records}
+
+                        await populate_sentence_bank(
+                            db=bg_db,
+                            movie_id=movie_id,
+                            word_sentences=word_sentences,
+                            lemma_id_map=lemma_id_map,
+                            word_to_lemma=word_to_lemma,
+                        )
+                    except Exception as e:
+                        logger.error(f"V2 SentenceBank population failed (non-fatal): {e}", exc_info=True)
 
                     # Save
                     await translation_service.save_word_examples(

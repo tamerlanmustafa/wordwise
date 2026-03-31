@@ -1331,12 +1331,12 @@ async def migrate_existing_data():
 - [x] Migration script: backfill Lemma table from existing WordClassification — `POST /api/cefr/v2/backfill-lemmas`
 - [ ] Tests
 
-### Phase 2: Sentence Deduplication
+### Phase 2: Sentence Deduplication ✅
 **Dependencies:** Phase 1
 **Deliverables:**
-- [ ] `SentenceBankService` class (hash, deduplicate, store)
-- [ ] `SentenceLemmaLink` creation during sentence extraction
-- [ ] Integration with enrichment pipeline (dual-write to SentenceBank + WordSentenceExample)
+- [x] `SentenceBankService` class (hash, deduplicate, store) — `backend/src/services/sentence_bank_service.py`
+- [x] `SentenceLemmaLink` creation during sentence extraction — created in `populate_sentence_bank()`
+- [x] Integration with enrichment pipeline (dual-write to SentenceBank + WordSentenceExample) — `backend/src/routes/enrichment.py` (both sync + async paths)
 - [ ] Tests
 
 ### Phase 3: Sense Clustering + MiniLM Reuse Validation
