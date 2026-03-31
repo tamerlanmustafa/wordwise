@@ -32,7 +32,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail';
+type Screen = 'home' | 'movieDetail' | 'searchResults';
 interface MovieData {
   id: number;
   title: string;
@@ -398,10 +398,12 @@ const AVAILABLE_LANGUAGES = [
 const HomeScreen = ({
   onLogout,
   onMoviePress,
+  onSearch,
   user,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
+  onSearch: (query: string) => void;
   user: any;
 }) => {
   const [activeTab, setActiveTab] = useState<'movies' | 'books'>('movies');
@@ -409,7 +411,6 @@ const HomeScreen = ({
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [allResults, setAllResults] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showAllResults, setShowAllResults] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
   const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
@@ -487,7 +488,6 @@ const HomeScreen = ({
     setSuggestions([]);
     setAllResults([]);
     setShowSuggestions(false);
-    setShowAllResults(false);
   };
 
   const handleMoviePress = (movie: any) => {
@@ -642,6 +642,7 @@ const HomeScreen = ({
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={onSearchTextChange}
+            onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
@@ -649,6 +650,12 @@ const HomeScreen = ({
               <Text style={styles.searchClearText}>✕</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
+          >
+            <Text style={styles.searchButtonText}>🔍</Text>
+          </TouchableOpacity>
           {/* Autocomplete Dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <View style={styles.autocompleteDropdown}>
@@ -680,8 +687,8 @@ const HomeScreen = ({
                 <TouchableOpacity
                   style={styles.seeAllButton}
                   onPress={() => {
-                    setShowSuggestions(false);
-                    setShowAllResults(true);
+                    onSearch(searchQuery.trim());
+                    clearSearch();
                   }}
                 >
                   <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
@@ -691,37 +698,7 @@ const HomeScreen = ({
           )}
         </View>
 
-        {/* Full Search Results */}
-        {showAllResults && allResults.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.searchResultsList}>
-              {allResults.map((movie: any) => (
-                <TouchableOpacity
-                  key={movie.id}
-                  style={styles.searchResultItem}
-                  onPress={() => {
-                    handleMoviePress(movie);
-                    clearSearch();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  {movie.poster_path ? (
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
-                      style={styles.searchResultPoster}
-                    />
-                  ) : (
-                    <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
-                  )}
-                  <View style={styles.searchResultInfo}>
-                    <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
-                    <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : activeTab === 'movies' ? (
+        {activeTab === 'movies' ? (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
@@ -1038,6 +1015,136 @@ const IdiomRow = ({
   );
 };
 
+// Search Results Screen
+const SearchResultsScreen = ({
+  query,
+  onBack,
+  onMoviePress,
+}: {
+  query: string;
+  onBack: () => void;
+  onMoviePress: (movie: MovieData) => void;
+}) => {
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const searchPage = async (pageNum: number) => {
+    try {
+      const res = await fetch(
+        `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`
+      );
+      const data = await res.json();
+      return {
+        movies: data.results || [],
+        totalPages: data.total_pages || 1,
+      };
+    } catch {
+      return { movies: [], totalPages: 1 };
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { movies, totalPages } = await searchPage(1);
+      setResults(movies);
+      setHasMore(1 < totalPages);
+      setPage(1);
+      setLoading(false);
+    })();
+  }, [query]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const { movies, totalPages } = await searchPage(nextPage);
+    setResults((prev) => [...prev, ...movies]);
+    setPage(nextPage);
+    setHasMore(nextPage < totalPages);
+    setLoadingMore(false);
+  };
+
+  const handlePress = (movie: any) => {
+    onMoviePress({
+      id: movie.id,
+      title: movie.title,
+      poster_path: movie.poster_path,
+      release_date: movie.release_date,
+      overview: movie.overview,
+      genre_ids: movie.genre_ids,
+      vote_average: movie.vote_average,
+      original_language: movie.original_language,
+    });
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+          Results for "{query}"
+        </Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {loading ? (
+        <View style={[styles.container, styles.centered]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.searchResultItem}
+              onPress={() => handlePress(item)}
+              activeOpacity={0.7}
+            >
+              {item.poster_path ? (
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w92${item.poster_path}` }}
+                  style={styles.searchResultPoster}
+                />
+              ) : (
+                <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+              )}
+              <View style={styles.searchResultInfo}>
+                <Text style={styles.searchResultTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.searchResultYear}>
+                  {item.release_date?.slice(0, 4)}
+                  {item.vote_average ? `  ⭐ ${item.vote_average.toFixed(1)}` : ''}
+                </Text>
+                {item.overview ? (
+                  <Text style={styles.searchResultOverview} numberOfLines={2}>{item.overview}</Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator size="small" color={colors.primary} style={{ padding: 16 }} />
+            ) : hasMore ? (
+              <TouchableOpacity style={styles.seeAllButton} onPress={loadMore}>
+                <Text style={styles.seeAllText}>Load more</Text>
+              </TouchableOpacity>
+            ) : null
+          }
+        />
+      )}
+    </SafeAreaView>
+  );
+};
+
 // Movie Detail Screen
 const MovieDetailScreen = ({
   movie,
@@ -1331,6 +1438,7 @@ export default function App() {
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
+  const [searchQueryNav, setSearchQueryNav] = useState('');
 
   useEffect(() => {
     initialize();
@@ -1347,7 +1455,13 @@ export default function App() {
 
   const navigateToHome = () => {
     setSelectedMovie(null);
+    setSearchQueryNav('');
     setCurrentScreen('home');
+  };
+
+  const navigateToSearch = (query: string) => {
+    setSearchQueryNav(query);
+    setCurrentScreen('searchResults');
   };
 
   if (status === 'loading') {
@@ -1367,8 +1481,10 @@ export default function App() {
       {isAuthenticated ? (
         currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} />
+        ) : currentScreen === 'searchResults' && searchQueryNav ? (
+          <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} user={user} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -1658,6 +1774,20 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     position: 'relative',
     zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchButton: {
+    backgroundColor: colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchButtonText: {
+    fontSize: 18,
   },
   autocompleteDropdown: {
     position: 'absolute',
@@ -1727,7 +1857,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  searchResultOverview: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
+  },
   searchInput: {
+    flex: 1,
     backgroundColor: colors.paper,
     borderRadius: 12,
     paddingHorizontal: 16,
