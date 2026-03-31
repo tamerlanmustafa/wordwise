@@ -20,7 +20,7 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
-import { wordwiseApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
+import { wordwiseApi, tmdbApi, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 
 // Configure Google Sign-In
@@ -406,6 +406,11 @@ const HomeScreen = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [allResults, setAllResults] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showAllResults, setShowAllResults] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
   const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -453,6 +458,36 @@ const HomeScreen = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const onSearchTextChange = (text: string) => {
+    setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await tmdbApi.searchMovies(text.trim());
+        setSuggestions(results.slice(0, 5));
+        setAllResults(results);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error('Autocomplete failed:', err);
+      }
+    }, 300);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSuggestions([]);
+    setAllResults([]);
+    setShowSuggestions(false);
+    setShowAllResults(false);
   };
 
   const handleMoviePress = (movie: any) => {
@@ -606,11 +641,87 @@ const HomeScreen = ({
             placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={onSearchTextChange}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
+              <Text style={styles.searchClearText}>✕</Text>
+            </TouchableOpacity>
+          )}
+          {/* Autocomplete Dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <View style={styles.autocompleteDropdown}>
+              {suggestions.map((movie: any) => (
+                <TouchableOpacity
+                  key={movie.id}
+                  style={styles.searchResultItem}
+                  onPress={() => {
+                    handleMoviePress(movie);
+                    clearSearch();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {movie.poster_path ? (
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                      style={styles.searchResultPoster}
+                    />
+                  ) : (
+                    <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                  )}
+                  <View style={styles.searchResultInfo}>
+                    <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
+                    <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {allResults.length > 5 && (
+                <TouchableOpacity
+                  style={styles.seeAllButton}
+                  onPress={() => {
+                    setShowSuggestions(false);
+                    setShowAllResults(true);
+                  }}
+                >
+                  <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
-        {activeTab === 'movies' ? (
+        {/* Full Search Results */}
+        {showAllResults && allResults.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.searchResultsList}>
+              {allResults.map((movie: any) => (
+                <TouchableOpacity
+                  key={movie.id}
+                  style={styles.searchResultItem}
+                  onPress={() => {
+                    handleMoviePress(movie);
+                    clearSearch();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {movie.poster_path ? (
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                      style={styles.searchResultPoster}
+                    />
+                  ) : (
+                    <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                  )}
+                  <View style={styles.searchResultInfo}>
+                    <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
+                    <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : activeTab === 'movies' ? (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
@@ -1545,6 +1656,76 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+    position: 'relative',
+    zIndex: 100,
+  },
+  autocompleteDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 16,
+    right: 16,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    zIndex: 100,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  seeAllButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  searchClear: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  searchClearText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  searchResultsList: {
+    paddingHorizontal: 16,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultPoster: {
+    width: 46,
+    height: 69,
+    borderRadius: 4,
+  },
+  searchResultInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  searchResultTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  searchResultYear: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   searchInput: {
     backgroundColor: colors.paper,
