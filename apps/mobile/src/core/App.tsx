@@ -39,7 +39,18 @@ interface MovieData {
   poster_path: string | null;
   release_date: string;
   overview?: string;
+  genre_ids?: number[];
+  vote_average?: number;
+  original_language?: string;
 }
+
+// TMDB genre ID to name mapping
+const tmdbGenres: Record<number, string> = {
+  28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
+  99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
+  27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance',
+  878: 'Sci-Fi', 10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western',
+};
 
 // Colors from web app
 const colors = {
@@ -451,6 +462,9 @@ const HomeScreen = ({
       poster_path: movie.poster_path,
       release_date: movie.release_date,
       overview: movie.overview,
+      genre_ids: movie.genre_ids,
+      vote_average: movie.vote_average,
+      original_language: movie.original_language,
     });
   };
 
@@ -1097,12 +1111,36 @@ const MovieDetailScreen = ({
             />
             <View style={styles.movieInfoText}>
               <Text style={styles.movieInfoTitle}>{movie.title}</Text>
-              <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+              <View style={styles.movieMetaRow}>
+                <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+                {movie.vote_average != null && (
+                  <Text style={styles.movieRating}>⭐ {movie.vote_average.toFixed(1)}</Text>
+                )}
+                {movie.original_language && (
+                  <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+                )}
+              </View>
+              {movie.genre_ids && movie.genre_ids.length > 0 && (
+                <View style={styles.genreRow}>
+                  {movie.genre_ids.slice(0, 3).map((id) => (
+                    <View key={id} style={styles.genreChip}>
+                      <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
               <Text style={styles.movieInfoStats}>
                 {vocabulary.unique_words} unique words
               </Text>
             </View>
           </View>
+          {/* Overview */}
+          {movie.overview ? (
+            <View style={styles.overviewSection}>
+              <Text style={styles.overviewTitle}>Overview</Text>
+              <Text style={styles.overviewText}>{movie.overview}</Text>
+            </View>
+          ) : null}
 
           {/* CEFR Level Tabs - Gradient border container */}
           <View style={styles.cefrTabsWrapper}>
@@ -1658,10 +1696,63 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  movieMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
   movieInfoYear: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 8,
+  },
+  movieRating: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  movieLanguage: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    backgroundColor: colors.border,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  genreRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 6,
+  },
+  genreChip: {
+    backgroundColor: colors.primaryLight + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  genreChipText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  overviewSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.paper,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  overviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  overviewText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   movieInfoStats: {
     fontSize: 13,
