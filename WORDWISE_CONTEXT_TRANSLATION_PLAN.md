@@ -1319,16 +1319,16 @@ async def migrate_existing_data():
 
 ## 13. Implementation Phases
 
-### Phase 1: Lemmatization Layer + Schema
+### Phase 1: Lemmatization Layer + Schema ✅
 **Dependencies:** spaCy installation
 **Deliverables:**
-- [ ] Install spaCy + en_core_web_sm + scikit-learn
-- [ ] Prisma schema: add ALL new models (Lemma, WordSense, TranslationMemory, MovieLemmaMapping, SentenceBank, SentenceLemmaLink)
-- [ ] Run migration
-- [ ] `LemmatizationService` class (spaCy tokenize + lemmatize + POS + MWE detection)
-- [ ] Integration with classification pipeline (dual-write to Lemma + WordClassification)
-- [ ] `priorityScore` computation (hybrid: frequency + CEFR + click rate)
-- [ ] Migration script: backfill Lemma table from existing WordClassification
+- [x] Install spaCy + en_core_web_sm + scikit-learn
+- [x] Prisma schema: add ALL new models (Lemma, WordSense, TranslationMemory, MovieLemmaMapping, SentenceBank, SentenceLemmaLink)
+- [x] Run migration (`prisma db push` — tables created)
+- [x] `LemmatizationService` class (spaCy tokenize + lemmatize + POS + MWE detection) — `backend/src/services/lemmatization_service.py`
+- [x] Integration with classification pipeline (dual-write to Lemma + WordClassification) — `backend/src/routes/cefr.py` SLOW PATH
+- [x] `priorityScore` computation (hybrid: frequency + CEFR + click rate) — `compute_priority_score()` in lemmatization_service.py
+- [x] Migration script: backfill Lemma table from existing WordClassification — `POST /api/cefr/v2/backfill-lemmas`
 - [ ] Tests
 
 ### Phase 2: Sentence Deduplication

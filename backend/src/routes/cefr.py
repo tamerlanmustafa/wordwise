@@ -19,6 +19,11 @@ from src.services.cefr_classifier import (
     WordClassification,
     detect_phrasal_verbs_and_idioms
 )
+from src.services.lemmatization_service import (
+    lemmatize_script,
+    populate_lemma_registry,
+    backfill_lemmas_from_classifications,
+)
 from src.database import get_db
 from prisma import Prisma
 
@@ -532,6 +537,36 @@ async def classify_script(
 
             logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
+            # ================================================================
+            # V2 DUAL-WRITE: Populate Lemma registry + MovieLemmaMapping
+            # ================================================================
+            try:
+                lemma_result = lemmatize_script(script.cleanedScriptText)
+
+                # Build classification lookup for the lemmatization service
+                cls_lookup = {}
+                for cls in cls_list:
+                    cls_lookup[cls.lemma] = {
+                        "cefr_level": cls.cefr_level.value,
+                        "confidence": cls.confidence,
+                        "source": cls.source.value,
+                        "frequency_rank": cls.frequency_rank,
+                        "pos": cls.pos,
+                    }
+
+                lemma_id_map = await populate_lemma_registry(
+                    db=db,
+                    movie_id=request.movie_id,
+                    lemma_result=lemma_result,
+                    classifications=cls_lookup,
+                )
+                logger.info(
+                    f"✓ V2 Lemma registry: {len(lemma_id_map)} lemmas for movie {request.movie_id}"
+                )
+            except Exception as e:
+                # Non-fatal: V2 pipeline failure should not break V1
+                logger.error(f"V2 Lemma registry population failed (non-fatal): {e}", exc_info=True)
+
             # Compute difficulty using advanced algorithm with ALL words (no cap)
             # The 50-word cap is applied ONLY to API response, not to scoring
             from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
@@ -708,3 +743,25 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail="Classifier not available")
+
+
+@router.post("/v2/backfill-lemmas")
+async def backfill_lemmas(
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db),
+):
+    """
+    Migration endpoint: Backfill the Lemma table from existing WordClassification data.
+    Runs as a background task. Safe to call multiple times (upserts).
+    """
+    async def _run_backfill():
+        backfill_db = Prisma()
+        await backfill_db.connect()
+        try:
+            count = await backfill_lemmas_from_classifications(backfill_db)
+            logger.info(f"Backfill complete: {count} lemmas")
+        finally:
+            await backfill_db.disconnect()
+
+    background_tasks.add_task(_run_backfill)
+    return {"status": "started", "message": "Lemma backfill running in background"}
