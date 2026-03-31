@@ -14,6 +14,7 @@ from functools import lru_cache
 
 import spacy
 from prisma import Prisma
+from prisma import Json
 
 from src.services.cefr_classifier import PHRASAL_VERBS, COMMON_IDIOMS
 
@@ -239,7 +240,7 @@ async def populate_lemma_registry(
                     "confidence": confidence,
                     "source": source,
                     "frequencyRank": frequency_rank,
-                    "wordForms": word_forms,
+                    "wordForms": Json(word_forms),
                     "isMultiWord": False,
                     "priorityScore": priority,
                     "totalMovieCount": 1,
@@ -307,7 +308,7 @@ async def populate_lemma_registry(
                     "confidence": confidence,
                     "source": source,
                     "frequencyRank": None,
-                    "wordForms": word_forms,
+                    "wordForms": Json(word_forms),
                     "isMultiWord": True,
                     "priorityScore": priority,
                     "totalMovieCount": 1,
@@ -346,7 +347,7 @@ async def backfill_lemmas_from_classifications(db: Prisma) -> int:
 
     # Get all unique (lemma, cefrLevel) combos with highest confidence
     all_classifications = await db.wordclassification.find_many(
-        order_by={"confidence": "desc"}
+        order={"confidence": "desc"}
     )
 
     # Group by lemma, keep highest confidence
@@ -386,25 +387,30 @@ async def backfill_lemmas_from_classifications(db: Prisma) -> int:
         )
 
         try:
-            await db.lemma.upsert(
-                where={"lemma": lemma_str},
-                create={
-                    "lemma": lemma_str,
-                    "pos": data["pos"],
-                    "cefrLevel": data["cefr_level"],
-                    "confidence": data["confidence"],
-                    "source": data["source"],
-                    "frequencyRank": data["frequency_rank"],
-                    "wordForms": [lemma_str],
-                    "isMultiWord": " " in lemma_str,
-                    "priorityScore": priority,
-                    "totalMovieCount": movie_count,
-                },
-                update={
-                    "totalMovieCount": movie_count,
-                    "priorityScore": priority,
-                },
-            )
+            existing = await db.lemma.find_unique(where={"lemma": lemma_str})
+            if existing:
+                await db.lemma.update(
+                    where={"id": existing.id},
+                    data={
+                        "totalMovieCount": movie_count,
+                        "priorityScore": priority,
+                    },
+                )
+            else:
+                await db.lemma.create(
+                    data={
+                        "lemma": lemma_str,
+                        "pos": data["pos"],
+                        "cefrLevel": data["cefr_level"],
+                        "confidence": data["confidence"],
+                        "source": data["source"],
+                        "frequencyRank": data["frequency_rank"],
+                        "wordForms": Json([lemma_str]),
+                        "isMultiWord": " " in lemma_str,
+                        "priorityScore": priority,
+                        "totalMovieCount": movie_count,
+                    }
+                )
             created_count += 1
         except Exception as e:
             logger.warning(f"Failed to upsert lemma '{lemma_str}': {e}")
@@ -414,7 +420,7 @@ async def backfill_lemmas_from_classifications(db: Prisma) -> int:
 
     # Now backfill MovieLemmaMapping
     # Get script -> movie mapping
-    scripts = await db.moviescript.find_many(select={"id": True, "movieId": True})
+    scripts = await db.moviescript.find_many()
     script_to_movie = {s.id: s.movieId for s in scripts}
 
     mapping_count = 0
