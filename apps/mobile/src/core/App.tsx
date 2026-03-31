@@ -974,29 +974,10 @@ const MovieDetailScreen = ({
     setError(null);
 
     try {
-      // Step 1: Search for the movie script
-      // Clean title: strip quotes and extra whitespace
+      // Go straight to fetch - the backend tries all sources (DB, subtitles, STANDS4 PDF/API)
+      // Search is only needed for user-typed queries in the search bar
       const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
-      let searchResult = await wordwiseApi.searchMovies(cleanTitle);
-
-      // If no results, retry with simplified title (strip subtitle after : or -)
-      if (!searchResult.results || searchResult.results.length === 0) {
-        const simplified = cleanTitle.split(/[:\-–—]/)[0].trim();
-        if (simplified && simplified !== cleanTitle) {
-          console.log(`[MovieDetail] Retrying search with simplified title: "${simplified}"`);
-          searchResult = await wordwiseApi.searchMovies(simplified);
-        }
-      }
-
-      if (!searchResult.results || searchResult.results.length === 0) {
-        setError(`No script found for "${movie.title}"`);
-        setLoading(false);
-        return;
-      }
-
-      // Step 2: Fetch the script
-      const scriptId = searchResult.results[0].id;
-      const scriptResult = await wordwiseApi.fetchScript(scriptId, movie.title);
+      const scriptResult = await wordwiseApi.fetchScript('', cleanTitle);
 
       if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
         setError('Script too short or not found');
