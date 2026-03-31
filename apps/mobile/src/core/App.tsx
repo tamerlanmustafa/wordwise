@@ -975,7 +975,16 @@ const MovieDetailScreen = ({
 
     try {
       // Step 1: Search for the movie script
-      const searchResult = await wordwiseApi.searchMovies(movie.title);
+      let searchResult = await wordwiseApi.searchMovies(movie.title);
+
+      // If no results, retry with simplified title (strip subtitle after : or -)
+      if (!searchResult.results || searchResult.results.length === 0) {
+        const simplified = movie.title.split(/[:\-–—]/)[0].trim();
+        if (simplified && simplified !== movie.title) {
+          console.log(`[MovieDetail] Retrying search with simplified title: "${simplified}"`);
+          searchResult = await wordwiseApi.searchMovies(simplified);
+        }
+      }
 
       if (!searchResult.results || searchResult.results.length === 0) {
         setError(`No script found for "${movie.title}"`);
