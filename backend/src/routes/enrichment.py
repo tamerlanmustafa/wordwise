@@ -14,6 +14,7 @@ from prisma import Prisma
 from src.services.sentence_example_service import SentenceExampleService
 from src.services.example_translation_service import ExampleTranslationService
 from src.services.sentence_bank_service import populate_sentence_bank
+from src.services.sense_clustering_service import cluster_and_store_senses
 
 logger = logging.getLogger(__name__)
 
@@ -206,9 +207,16 @@ async def enrich_movie_examples(
                 lemma_id_map=lemma_id_map,
                 word_to_lemma=word_to_lemma,
             )
+
+            # Step 6c: V2 — Sense Clustering (Phase 3)
+            await cluster_and_store_senses(
+                db=db,
+                movie_id=request.movie_id,
+                lemma_id_map=lemma_id_map,
+            )
         except Exception as e:
             # Non-fatal: V2 failure should not break V1 enrichment
-            logger.error(f"V2 SentenceBank population failed (non-fatal): {e}", exc_info=True)
+            logger.error(f"V2 pipeline failed (non-fatal): {e}", exc_info=True)
 
         # Step 7: Save to database
         examples_saved = await translation_service.save_word_examples(
@@ -516,8 +524,14 @@ async def start_enrichment(
                             lemma_id_map=lemma_id_map,
                             word_to_lemma=word_to_lemma,
                         )
+
+                        await cluster_and_store_senses(
+                            db=bg_db,
+                            movie_id=movie_id,
+                            lemma_id_map=lemma_id_map,
+                        )
                     except Exception as e:
-                        logger.error(f"V2 SentenceBank population failed (non-fatal): {e}", exc_info=True)
+                        logger.error(f"V2 pipeline failed (non-fatal): {e}", exc_info=True)
 
                     # Save
                     await translation_service.save_word_examples(

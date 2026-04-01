@@ -1339,17 +1339,17 @@ async def migrate_existing_data():
 - [x] Integration with enrichment pipeline (dual-write to SentenceBank + WordSentenceExample) — `backend/src/routes/enrichment.py` (both sync + async paths)
 - [ ] Tests
 
-### Phase 3: Sense Clustering + MiniLM Reuse Validation
+### Phase 3: Sense Clustering + MiniLM Reuse Validation ✅
 **Dependencies:** Phase 2, MiniLM model (all-MiniLM-L6-v2, ~80MB)
 **Deliverables:**
-- [ ] `SenseClusteringService` class (TF-IDF + agglomerative, threshold 0.6)
-- [ ] POS-aware sense separation
-- [ ] MiniLM integration for cross-movie sense reuse validation (targeted, not full clustering)
-- [ ] Sense reuse logic (MiniLM cosine similarity > 0.85 → reuse existing sense)
-- [ ] Sense labeling (keyword extraction from TF-IDF top terms)
-- [ ] Representative sentence selection (highest score, prefer shorter sentences)
-- [ ] Runtime sense selection: TF-IDF comparison of clicked sentence vs sense representatives
-- [ ] Integration with enrichment pipeline
+- [x] `SenseClusteringService` class (TF-IDF + agglomerative, threshold 0.6) — `backend/src/services/sense_clustering_service.py`
+- [x] POS-aware sense separation (lemmas already POS-tagged from Phase 1, senses grouped per lemma)
+- [x] MiniLM integration for cross-movie sense reuse validation (targeted, not full clustering) — `find_reusable_sense()`
+- [x] Sense reuse logic (MiniLM cosine similarity > 0.85 → reuse existing sense) — `compute_minilm_similarity()`
+- [x] Sense labeling (keyword extraction from TF-IDF top terms) — `label_sense()`
+- [x] Representative sentence selection (highest score, prefer shorter sentences, length penalty 0.05/word over 12) — `select_representative()`
+- [x] Runtime sense selection: TF-IDF comparison of clicked sentence vs sense representatives — `select_sense_at_runtime()`
+- [x] Integration with enrichment pipeline — dual-write in `enrichment.py` (both sync + async paths)
 - [ ] Tests
 
 ### Phase 4: Translation Memory + Lazy Translation

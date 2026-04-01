@@ -41,6 +41,7 @@ wordfreq==3.1.1
 # V2 Context-Aware Translation Pipeline
 spacy>=3.5.0
 scikit-learn>=1.2.0
+sentence-transformers>=2.2.0
 
 # Translation Service
 aiohttp==3.9.1
