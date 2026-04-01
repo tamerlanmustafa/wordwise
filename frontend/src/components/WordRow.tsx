@@ -187,7 +187,7 @@ interface WordRowProps {
   isExpanded: boolean;
   onSave: (word: string) => void;
   onToggleLearned: (word: string) => void;
-  onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
+  onTranslate: (word: string, movieId?: number) => Promise<{ translation: string; provider?: string } | null>;
   onExpandChange: (index: number, isExpanded: boolean) => void;
   onContentLoad?: (index: number) => void;
   getIdiomsForWord?: (word: string) => Promise<IdiomInfo[]>;
@@ -248,7 +248,7 @@ export const WordRow = memo<WordRowProps>(({
     // Translation
     if (!results.translation) {
       promises.push(
-        onTranslate(word.word)
+        onTranslate(word.word, movieId)
           .then((result) => {
             if (result) {
               results.translation = result.translation;

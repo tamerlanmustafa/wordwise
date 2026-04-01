@@ -290,17 +290,23 @@ export async function translateText(
   text: string,
   targetLang: string,
   sourceLang: string = 'auto',
-  userId?: number
+  userId?: number,
+  movieId?: number,
+  sentence?: string
 ): Promise<TranslationResponse> {
   try {
+    const body: Record<string, unknown> = {
+      text,
+      target_lang: targetLang,
+      source_lang: sourceLang,
+      user_id: userId
+    };
+    if (movieId) body.movie_id = movieId;
+    if (sentence) body.sentence = sentence;
+
     const response = await axios.post<TranslationResponse>(
       `${API_BASE_URL}/translate`,
-      {
-        text,
-        target_lang: targetLang,
-        source_lang: sourceLang,
-        user_id: userId
-      }
+      body
     );
 
     return response.data;

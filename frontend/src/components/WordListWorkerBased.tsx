@@ -135,9 +135,9 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   }, [requestMore]);
 
   // On-demand translation callback (called when user clicks to expand a word)
-  const handleTranslate = useCallback(async (word: string): Promise<{ translation: string; provider?: string } | null> => {
+  const handleTranslate = useCallback(async (word: string, wordMovieId?: number): Promise<{ translation: string; provider?: string } | null> => {
     try {
-      const result = await translateText(word, targetLanguage, 'en', userId);
+      const result = await translateText(word, targetLanguage, 'en', userId, wordMovieId || movieId);
       return {
         translation: result.translated,
         provider: result.provider || (result.cached ? 'cache' : undefined)
@@ -146,7 +146,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
       console.error('Translation error:', error);
       return null;
     }
-  }, [targetLanguage, userId]);
+  }, [targetLanguage, userId, movieId]);
 
   // Memoize preview words
   const previewWords = useMemo(() => {

@@ -34,7 +34,7 @@ interface SimpleWordListProps {
   // Actions (must be stable)
   onSaveWord: (word: string, movieId?: number) => void;
   onToggleLearned: (word: string) => void;
-  onTranslate: (word: string) => Promise<{ translation: string; provider?: string } | null>;
+  onTranslate: (word: string, movieId?: number) => Promise<{ translation: string; provider?: string } | null>;
 
   // Batch loading
   onRequestBatch: (startIndex: number, count: number) => void;
