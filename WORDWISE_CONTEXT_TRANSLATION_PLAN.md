@@ -1368,17 +1368,18 @@ async def migrate_existing_data():
 - [x] V2 API endpoints — `POST /v2/movies/{id}/start`, `GET /v2/translation-memory/word/{word}`, `POST /v2/translation-memory/{id}/report`, `GET /v2/translation-memory/stats`
 - [ ] Tests
 
-### Phase 5: Optimization & Quality
+### Phase 5: Optimization & Quality ✅
 **Dependencies:** Phase 4
 **Deliverables:**
-- [ ] Backfill script: process all existing movies through V2 pipeline
-- [ ] Migrate existing TranslationCache entries → TranslationMemory where possible
-- [ ] MiniLM hybrid clustering upgrade: use MiniLM within clusters for split/merge refinement (Phase 3 only uses it for cross-movie reuse)
-- [ ] `priorityScore` recalculation job: periodically recompute scores with fresh click rate data
-- [ ] Cost monitoring: cache hit rates, API call counts, provider breakdown
-- [ ] Quality metrics: reportCount analysis, sense accuracy spot-checks, auto-retranslation audit
-- [ ] Performance benchmarks (pipeline throughput, runtime latency)
-- [ ] Cleanup: remove dual-write for fully-migrated tables
+- [x] Backfill script: process all existing movies through V2 pipeline — `POST /api/enrichment/v2/backfill` (background)
+- [x] Migrate existing TranslationCache entries → TranslationMemory where possible — `POST /api/enrichment/v2/migrate-cache`
+- [x] MiniLM hybrid clustering upgrade: use MiniLM within clusters for split/merge refinement — `POST /api/enrichment/v2/refine-clusters`
+- [x] `priorityScore` recalculation job: recompute scores with fresh click rate data — `POST /api/enrichment/v2/recalculate-priorities`
+- [x] Cost monitoring: cache hit rates, API call counts, provider breakdown — `GET /api/enrichment/v2/cost-monitoring`
+- [x] Quality metrics: reportCount analysis, sense accuracy spot-checks, auto-retranslation audit — `GET /api/enrichment/v2/quality-metrics`
+- [x] Performance benchmarks (pipeline throughput, runtime latency) — `GET /api/enrichment/v2/benchmarks`
+- [x] Cleanup: migration readiness check — `GET /api/enrichment/v2/migration-readiness` (dual-write stays until readiness check passes)
+- [ ] Tests
 
 ---
 

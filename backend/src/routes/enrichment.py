@@ -16,6 +16,7 @@ from src.services.example_translation_service import ExampleTranslationService
 from src.services.sentence_bank_service import populate_sentence_bank
 from src.services.sense_clustering_service import cluster_and_store_senses
 from src.services.translation_memory_service import TranslationMemoryService
+from src.services.v2_optimization_service import V2OptimizationService
 
 logger = logging.getLogger(__name__)
 
@@ -820,4 +821,170 @@ async def get_tm_stats(
         return await tm_service.get_translation_memory_stats(target_lang=lang)
     except Exception as e:
         logger.error(f"TM stats failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================================
+# V2 Phase 5 Endpoints — Optimization & Quality
+# ================================================================
+
+
+@router.post("/v2/backfill")
+async def backfill_all_movies(
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Backfill all existing movies through V2 Stage A pipeline
+    (lemmatization, sentence bank, sense clustering).
+    Skips movies that already have MovieLemmaMapping entries.
+    Runs in background.
+    """
+    async def run_backfill():
+        from src.database import get_db as get_bg_db
+        bg_db = await get_bg_db()
+        try:
+            service = V2OptimizationService(bg_db)
+            stats = await service.backfill_all_movies()
+            logger.info(f"Backfill complete: {stats}")
+        finally:
+            await bg_db.disconnect()
+
+    background_tasks.add_task(run_backfill)
+    return {"status": "started", "message": "V2 backfill started in background. Check logs for progress."}
+
+
+@router.post("/v2/migrate-cache")
+async def migrate_translation_cache(
+    lang: Optional[str] = None,
+    background_tasks: BackgroundTasks = None,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Migrate V1 TranslationCache entries into TranslationMemory.
+    Matches cached translations to lemmas/senses and creates TM entries.
+    """
+    try:
+        service = V2OptimizationService(db)
+        stats = await service.migrate_translation_cache(target_lang=lang)
+        return stats
+    except Exception as e:
+        logger.error(f"Cache migration failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/v2/refine-clusters")
+async def refine_clusters_minilm(
+    lemma_id: Optional[int] = None,
+    merge_threshold: float = 0.88,
+    background_tasks: BackgroundTasks = None,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Run MiniLM hybrid clustering refinement.
+    Merges senses that are semantically identical (MiniLM similarity > threshold).
+    Optionally restrict to a single lemma by ID.
+    """
+    async def run_refinement():
+        from src.database import get_db as get_bg_db
+        bg_db = await get_bg_db()
+        try:
+            service = V2OptimizationService(bg_db)
+            stats = await service.refine_clusters_with_minilm(
+                lemma_id=lemma_id,
+                similarity_merge_threshold=merge_threshold,
+            )
+            logger.info(f"MiniLM refinement complete: {stats}")
+        finally:
+            await bg_db.disconnect()
+
+    background_tasks.add_task(run_refinement)
+    return {
+        "status": "started",
+        "message": "MiniLM cluster refinement started in background.",
+        "lemma_id": lemma_id,
+        "merge_threshold": merge_threshold,
+    }
+
+
+@router.post("/v2/recalculate-priorities")
+async def recalculate_priority_scores(
+    db: Prisma = Depends(get_db)
+):
+    """
+    Recompute priorityScore for all lemmas using fresh usage data.
+    Incorporates click rate from TranslationMemory usageCount.
+    """
+    try:
+        service = V2OptimizationService(db)
+        stats = await service.recalculate_priority_scores()
+        return stats
+    except Exception as e:
+        logger.error(f"Priority recalculation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/cost-monitoring")
+async def get_cost_monitoring(
+    lang: Optional[str] = None,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Get cost monitoring dashboard: cache hit rates, API call counts,
+    provider breakdown, eager/lazy coverage.
+    """
+    try:
+        service = V2OptimizationService(db)
+        return await service.get_cost_monitoring_stats(target_lang=lang)
+    except Exception as e:
+        logger.error(f"Cost monitoring failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/quality-metrics")
+async def get_quality_metrics(
+    lang: Optional[str] = None,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Get quality metrics: reported translations, retranslation candidates,
+    provider quality comparison, sense distribution.
+    """
+    try:
+        service = V2OptimizationService(db)
+        return await service.get_quality_metrics(target_lang=lang)
+    except Exception as e:
+        logger.error(f"Quality metrics failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/benchmarks")
+async def run_benchmarks(
+    db: Prisma = Depends(get_db)
+):
+    """
+    Run performance benchmarks: TM lookup, sense selection, spaCy lemmatization.
+    Returns average latencies in milliseconds.
+    """
+    try:
+        service = V2OptimizationService(db)
+        return await service.run_performance_benchmarks()
+    except Exception as e:
+        logger.error(f"Benchmarks failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/migration-readiness")
+async def check_migration_readiness(
+    db: Prisma = Depends(get_db)
+):
+    """
+    Check whether V2 is ready to fully replace V1 dual-write.
+    Returns readiness status with specific blockers if not ready.
+    """
+    try:
+        service = V2OptimizationService(db)
+        return await service.check_migration_readiness()
+    except Exception as e:
+        logger.error(f"Migration readiness check failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
