@@ -15,6 +15,7 @@ from src.services.sentence_example_service import SentenceExampleService
 from src.services.example_translation_service import ExampleTranslationService
 from src.services.sentence_bank_service import populate_sentence_bank
 from src.services.sense_clustering_service import cluster_and_store_senses
+from src.services.translation_memory_service import TranslationMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,21 @@ async def enrich_movie_examples(
                 movie_id=request.movie_id,
                 lemma_id_map=lemma_id_map,
             )
+
+            # Step 6d: V2 — Stage B: Eager Translation (Phase 4)
+            tm_service = TranslationMemoryService(db)
+            tm_stats = await tm_service.translate_movie_eager(
+                movie_id=request.movie_id,
+                target_lang=request.target_lang,
+            )
+            logger.info(f"V2 Stage B (sync): {tm_stats}")
+
+            # Step 6e: V2 — Propagation to WordSentenceExample
+            prop_count = await tm_service.propagate_to_word_sentence_examples(
+                movie_id=request.movie_id,
+                target_lang=request.target_lang,
+            )
+            logger.info(f"V2 propagated {prop_count} entries to WordSentenceExample")
         except Exception as e:
             # Non-fatal: V2 failure should not break V1 enrichment
             logger.error(f"V2 pipeline failed (non-fatal): {e}", exc_info=True)
@@ -530,6 +546,21 @@ async def start_enrichment(
                             movie_id=movie_id,
                             lemma_id_map=lemma_id_map,
                         )
+
+                        # V2 Stage B: Eager Translation (Phase 4)
+                        tm_service = TranslationMemoryService(bg_db)
+                        tm_stats = await tm_service.translate_movie_eager(
+                            movie_id=movie_id,
+                            target_lang=lang_upper,
+                        )
+                        logger.info(f"V2 Stage B (async): {tm_stats}")
+
+                        # V2 Propagation
+                        prop_count = await tm_service.propagate_to_word_sentence_examples(
+                            movie_id=movie_id,
+                            target_lang=lang_upper,
+                        )
+                        logger.info(f"V2 propagated {prop_count} entries to WordSentenceExample")
                     except Exception as e:
                         logger.error(f"V2 pipeline failed (non-fatal): {e}", exc_info=True)
 
@@ -624,4 +655,169 @@ async def get_word_examples(
         raise
     except Exception as e:
         logger.error(f"Failed to fetch word examples: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================================
+# V2 API Endpoints (Phase 4 — Context-Aware Translation)
+# ================================================================
+
+
+class V2EnrichRequest(BaseModel):
+    """Request for V2 enrichment (Stage B: Translation)"""
+    target_lang: str = Field(..., description="Target language code")
+
+
+@router.post("/v2/movies/{movie_id}/start")
+async def start_v2_enrichment(
+    movie_id: int,
+    request: V2EnrichRequest,
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Start V2 enrichment Stage B (translation) for a movie.
+    Assumes Stage A (NLP: lemmatization, sentence extraction, sense clustering) is done.
+    Translates eager senses and propagates to WordSentenceExample.
+    """
+    try:
+        target = request.target_lang.upper()
+
+        # Verify NLP stage is done (lemma mappings exist)
+        mapping_count = await db.movielemmamapping.count(
+            where={"movieId": movie_id}
+        )
+        if mapping_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Movie has no lemma mappings. Run V1 enrichment (Stage A) first."
+            )
+
+        async def run_v2_translation():
+            from src.database import get_db as get_bg_db
+            bg_db = await get_bg_db()
+            try:
+                tm_service = TranslationMemoryService(bg_db)
+                stats = await tm_service.translate_movie_eager(
+                    movie_id=movie_id, target_lang=target
+                )
+                logger.info(f"V2 Stage B complete for movie {movie_id}: {stats}")
+
+                prop_count = await tm_service.propagate_to_word_sentence_examples(
+                    movie_id=movie_id, target_lang=target
+                )
+                logger.info(f"V2 propagated {prop_count} WordSentenceExample entries")
+            finally:
+                await bg_db.disconnect()
+
+        background_tasks.add_task(run_v2_translation)
+
+        return {
+            "status": "started",
+            "movie_id": movie_id,
+            "target_lang": target,
+            "estimated_eager_lemmas": mapping_count,
+            "message": "V2 translation pipeline started in background."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"V2 enrichment start failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/translation-memory/word/{word}")
+async def get_translation_memory_word(
+    word: str,
+    lang: str,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Look up all sense-aware translations for a word from TranslationMemory.
+
+    Returns all senses with their translations for the given target language.
+    """
+    try:
+        target = lang.upper()
+
+        # Find lemma
+        from src.services.lemmatization_service import get_nlp
+        nlp = get_nlp()
+        doc = nlp(word.lower().strip())
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"Cannot lemmatize '{word}'")
+        lemma_text = doc[0].lemma_
+
+        lemma = await db.lemma.find_first(where={"lemma": lemma_text})
+        if not lemma:
+            raise HTTPException(status_code=404, detail=f"Lemma '{lemma_text}' not found")
+
+        # Get all senses with translations
+        senses = await db.wordsense.find_many(
+            where={"lemmaId": lemma.id},
+            include={"translations": {"where": {"targetLang": target}}}
+        )
+
+        sense_list = []
+        for sense in senses:
+            tm = sense.translations[0] if sense.translations else None
+            sense_list.append({
+                "sense_id": sense.id,
+                "sense_index": sense.senseIndex,
+                "label": sense.label,
+                "representative_sentence": sense.representativeSentence,
+                "translation": tm.translatedWord if tm else None,
+                "sentence_translation": tm.translatedSentence if tm else None,
+                "provider": tm.wordProvider if tm else None,
+                "usage_count": tm.usageCount if tm else 0,
+                "report_count": tm.reportCount if tm else 0,
+            })
+
+        return {
+            "lemma": lemma.lemma,
+            "pos": lemma.pos,
+            "cefr_level": lemma.cefrLevel,
+            "priority_score": lemma.priorityScore,
+            "target_lang": target,
+            "senses": sense_list,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"V2 TM lookup failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/v2/translation-memory/{tm_id}/report")
+async def report_translation(
+    tm_id: int,
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Report a bad translation. Increments reportCount.
+    If report rate exceeds 10% (with min 5 usages), triggers auto-retranslation with DeepL.
+    """
+    try:
+        tm_service = TranslationMemoryService(db)
+        result = await tm_service.report_translation(tm_id)
+        return result
+    except Exception as e:
+        logger.error(f"Report failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/v2/translation-memory/stats")
+async def get_tm_stats(
+    lang: Optional[str] = None,
+    db: Prisma = Depends(get_db)
+):
+    """Get TranslationMemory statistics."""
+    try:
+        tm_service = TranslationMemoryService(db)
+        return await tm_service.get_translation_memory_stats(target_lang=lang)
+    except Exception as e:
+        logger.error(f"TM stats failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

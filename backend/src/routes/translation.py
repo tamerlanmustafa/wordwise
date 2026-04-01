@@ -35,6 +35,8 @@ class TranslationRequest(BaseModel):
     target_lang: str = Field(..., description="Target language code (e.g., 'DE', 'FR', 'ES')")
     source_lang: str = Field(default="auto", description="Source language or 'auto' for detection")
     user_id: Optional[int] = Field(None, description="User ID for tracking translation attempts")
+    sentence: Optional[str] = Field(None, description="Context sentence (for V2 sense-aware translation)")
+    movie_id: Optional[int] = Field(None, description="Movie ID (for V2 dominant sense fallback)")
 
     @validator('text')
     def validate_text(cls, v):
@@ -86,6 +88,11 @@ class TranslationResponse(BaseModel):
     cached: bool = Field(..., description="Whether result came from cache")
     provider: Optional[str] = Field(None, description="Translation provider used (deepl, google, cache)")
     created_at: Optional[str] = Field(None, description="Cache entry timestamp (ISO format)")
+    # V2 fields (optional, present when sense-aware translation is used)
+    lemma: Optional[str] = Field(None, description="Lemma form of the word")
+    sense_id: Optional[int] = Field(None, description="WordSense ID used for translation")
+    sense_label: Optional[str] = Field(None, description="Human-readable sense label")
+    translated_sentence: Optional[str] = Field(None, description="Translation of the representative sentence")
 
 
 class BatchTranslationResponse(BaseModel):
@@ -136,6 +143,34 @@ async def translate_text(
     - Check DeepL documentation for latest limits
     """
     try:
+        # V2: Try TranslationMemory first (sense-aware, zero API cost)
+        if request.sentence or request.movie_id:
+            try:
+                from ..services.translation_memory_service import TranslationMemoryService
+                tm_service = TranslationMemoryService(db)
+                v2_result = await tm_service.translate_on_demand(
+                    word=request.text,
+                    clicked_sentence=request.sentence,
+                    target_lang=request.target_lang,
+                    movie_id=request.movie_id,
+                )
+                if v2_result:
+                    return TranslationResponse(
+                        source=request.text,
+                        translated=v2_result["translated_word"],
+                        target_lang=v2_result["target_lang"],
+                        source_lang="EN",
+                        cached=True,
+                        provider=v2_result["provider"],
+                        lemma=v2_result["lemma"],
+                        sense_id=v2_result["sense_id"],
+                        sense_label=v2_result.get("sense_label"),
+                        translated_sentence=v2_result.get("translated_sentence"),
+                    )
+            except Exception as e:
+                logger.debug(f"V2 translation lookup failed (non-fatal): {e}")
+
+        # V1 fallback: standard translation flow
         service = TranslationService(db)
         result = await service.get_translation(
             text=request.text,

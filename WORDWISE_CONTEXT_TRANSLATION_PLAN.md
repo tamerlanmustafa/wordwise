@@ -1352,20 +1352,20 @@ async def migrate_existing_data():
 - [x] Integration with enrichment pipeline — dual-write in `enrichment.py` (both sync + async paths)
 - [ ] Tests
 
-### Phase 4: Translation Memory + Lazy Translation
+### Phase 4: Translation Memory + Lazy Translation ✅
 **Dependencies:** Phase 3
 **Deliverables:**
-- [ ] `TranslationMemoryService` class
-- [ ] Dual-call translation (word + sentence, separate API calls)
-- [ ] Tiered provider logic (Cache → Google for A1/A2 → DeepL for B2+)
-- [ ] Lazy translation: only high-priority lemmas in background
-- [ ] On-demand translation path: user clicks → translate → cache in TranslationMemory
-- [ ] Modify `POST /translate` to check TranslationMemory first (lemmatize → lookup → fallback)
-- [ ] V2 enrichment pipeline (Stage A: NLP, Stage B: Translation)
-- [ ] Backward-compatible WordSentenceExample population (propagation step)
-- [ ] `usageCount` / `reportCount` tracking
-- [ ] Auto-retranslation: retranslate with DeepL when reportCount/usageCount > 0.1
-- [ ] V2 API endpoints (include sentence context in word click requests)
+- [x] `TranslationMemoryService` class — `backend/src/services/translation_memory_service.py`
+- [x] Dual-call translation (word + sentence, separate API calls) — `translate_sense()` makes 2 calls
+- [x] Tiered provider logic (Cache → Google for A1/A2 → DeepL for B2+) — `_select_provider()`, Tier 0/1/2/3 in `translate_sense()`
+- [x] Lazy translation: only high-priority lemmas in background — `translate_movie_eager()` filters by `priorityScore >= 0.4`
+- [x] On-demand translation path: user clicks → translate → cache in TranslationMemory — `translate_on_demand()`
+- [x] Modify `POST /translate` to check TranslationMemory first — `translation.py` tries V2 when `sentence` or `movie_id` provided
+- [x] V2 enrichment pipeline (Stage A: NLP, Stage B: Translation) — dual-write in `enrichment.py` (sync + async paths)
+- [x] Backward-compatible WordSentenceExample population (propagation step) — `propagate_to_word_sentence_examples()`
+- [x] `usageCount` / `reportCount` tracking — incremented in `translate_on_demand()` and `report_translation()`
+- [x] Auto-retranslation: retranslate with DeepL when reportCount/usageCount > 0.1 — `_retranslate_with_deepl()`
+- [x] V2 API endpoints — `POST /v2/movies/{id}/start`, `GET /v2/translation-memory/word/{word}`, `POST /v2/translation-memory/{id}/report`, `GET /v2/translation-memory/stats`
 - [ ] Tests
 
 ### Phase 5: Optimization & Quality
