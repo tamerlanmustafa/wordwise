@@ -606,12 +606,59 @@ async def get_word_sentences(
     db: Prisma = Depends(get_db)
 ):
     """
-    Extract sentences containing a word from the movie script.
-    Lightweight, no translation, no DB writes.
-    Returns up to max_examples sentences sorted by quality.
+    Get sentences containing a word from a movie.
+    Fast path: query pre-extracted SentenceBank (populated during enrichment).
+    Slow path: parse script on-the-fly if SentenceBank has no data.
+    No translation, no API calls.
     """
     try:
-        # Get movie script
+        from src.services.lemmatization_service import get_nlp
+        nlp = get_nlp()
+        doc = nlp(word.lower().strip())
+        lemma_text = doc[0].lemma_ if doc else word.lower()
+
+        # Fast path: check SentenceBank via lemma link
+        lemma_record = await db.lemma.find_first(where={"lemma": lemma_text})
+
+        if lemma_record:
+            links = await db.sentencelemmalink.find_many(
+                where={
+                    "lemmaId": lemma_record.id,
+                    "sentence": {"movieId": movie_id},
+                },
+                include={"sentence": True},
+                order={"score": "desc"},
+                take=max_examples,
+            )
+
+            if links:
+                results = []
+                for link in links:
+                    sent = link.sentence.sentence
+                    # Find the matched form in the sentence
+                    sent_doc = nlp(sent)
+                    matched_form = word.lower()
+                    for token in sent_doc:
+                        if token.lemma_.lower() == lemma_text:
+                            matched_form = token.text
+                            break
+
+                    results.append({
+                        "sentence": sent,
+                        "word_position": link.wordPosition or 0,
+                        "matched_form": matched_form,
+                    })
+
+                return {
+                    "movie_id": movie_id,
+                    "word": word.lower(),
+                    "lemma": lemma_text,
+                    "source": "sentence_bank",
+                    "sentences": results,
+                    "total": len(results),
+                }
+
+        # Slow path: parse script on-the-fly
         movie = await db.movie.find_unique(
             where={'id': movie_id},
             include={'movieScripts': True}
@@ -624,13 +671,6 @@ async def get_word_sentences(
         if not script.cleanedScriptText:
             raise HTTPException(status_code=400, detail="Script has no cleaned text")
 
-        # Lemmatize the search word
-        from src.services.lemmatization_service import get_nlp
-        nlp = get_nlp()
-        doc = nlp(word.lower().strip())
-        lemma_text = doc[0].lemma_ if doc else word.lower()
-
-        # Extract sentences using lemma-aware matching
         sentence_service = SentenceExampleService()
         sentences = sentence_service.extract_word_sentences_by_lemma(
             script.cleanedScriptText,
@@ -643,6 +683,7 @@ async def get_word_sentences(
             "movie_id": movie_id,
             "word": word.lower(),
             "lemma": lemma_text,
+            "source": "script_parse",
             "sentences": [
                 {"sentence": sent, "word_position": pos, "matched_form": form}
                 for sent, pos, form in sentences
