@@ -256,17 +256,21 @@ export const wordwiseApi = {
   translate: async (
     text: string,
     targetLang: string,
-    userId?: number
+    userId?: number,
+    movieId?: number | null
   ): Promise<TranslationResponse> => {
+    const body: Record<string, unknown> = {
+      text,
+      target_lang: targetLang,
+      source_lang: 'auto',
+      user_id: userId,
+    };
+    if (movieId) body.movie_id = movieId;
+
     const res = await fetch(`${API_BASE_URL}/translate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        target_lang: targetLang,
-        source_lang: 'auto',
-        user_id: userId,
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('Failed to translate');
     return res.json();

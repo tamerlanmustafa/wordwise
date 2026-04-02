@@ -598,6 +598,58 @@ async def start_enrichment(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/movies/{movie_id}/sentences/{word}")
+async def get_word_sentences(
+    movie_id: int,
+    word: str,
+    max_examples: int = 3,
+    db: Prisma = Depends(get_db)
+):
+    """
+    Extract sentences containing a word from the movie script.
+    Lightweight, no translation, no DB writes.
+    Returns up to max_examples sentences sorted by quality.
+    """
+    try:
+        # Get movie script
+        movie = await db.movie.find_unique(
+            where={'id': movie_id},
+            include={'movieScripts': True}
+        )
+
+        if not movie or not movie.movieScripts:
+            raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found or has no script")
+
+        script = movie.movieScripts[0]
+        if not script.cleanedScriptText:
+            raise HTTPException(status_code=400, detail="Script has no cleaned text")
+
+        # Extract sentences on-the-fly
+        sentence_service = SentenceExampleService()
+        word_sentences = sentence_service.extract_word_sentences(
+            script.cleanedScriptText,
+            {word.lower()}
+        )
+
+        sentences = word_sentences.get(word.lower(), [])
+
+        return {
+            "movie_id": movie_id,
+            "word": word.lower(),
+            "sentences": [
+                {"sentence": sent, "word_position": pos}
+                for sent, pos in sentences[:max_examples]
+            ],
+            "total": len(sentences[:max_examples]),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to extract sentences for '{word}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/movies/{movie_id}/examples/{word}", response_model=WordExamplesResponse)
 async def get_word_examples(
     movie_id: int,

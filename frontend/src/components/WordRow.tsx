@@ -164,7 +164,7 @@ const InlineSpinner = styled(CircularProgress)(() => ({
 
 interface SentenceExample {
   sentence: string;
-  translation: string;
+  translation?: string;
   word_position: number;
 }
 
@@ -259,14 +259,14 @@ export const WordRow = memo<WordRowProps>(({
       );
     }
 
-    // Sentence examples
-    if (movieId && targetLang) {
+    // Sentence examples (extracted from script, no translation)
+    if (movieId) {
       promises.push(
-        fetch(`/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
+        fetch(`/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}`)
           .then((res) => res.json())
           .then((data) => {
-            if (data.examples && Array.isArray(data.examples)) {
-              results.sentenceExamples = data.examples;
+            if (data.sentences && Array.isArray(data.sentences)) {
+              results.sentenceExamples = data.sentences;
             }
           })
           .catch((err) => console.error('Sentence examples error:', err))

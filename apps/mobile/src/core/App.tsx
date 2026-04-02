@@ -1396,21 +1396,21 @@ const WordRow = ({
     try {
       const promises: Promise<void>[] = [];
 
-      // Fetch translation
+      // Fetch translation (with movieId for V2 sense-aware path)
       promises.push(
-        wordwiseApi.translate(word.word, targetLang || 'ES')
+        wordwiseApi.translate(word.word, targetLang || 'ES', undefined, movieId)
           .then((result) => setTranslation(result.translated))
           .catch(() => setTranslation('Translation failed'))
       );
 
-      // Fetch sentence examples
-      if (movieId && targetLang) {
+      // Fetch sentence examples (extracted from script, no translation)
+      if (movieId) {
         promises.push(
-          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/examples/${encodeURIComponent(word.word)}?lang=${targetLang}`)
+          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}`)
             .then((res) => res.json())
             .then((data) => {
-              if (data.examples && Array.isArray(data.examples)) {
-                setSentenceExamples(data.examples);
+              if (data.sentences && Array.isArray(data.sentences)) {
+                setSentenceExamples(data.sentences);
               }
             })
             .catch(() => {})
