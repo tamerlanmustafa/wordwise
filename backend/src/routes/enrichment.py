@@ -644,8 +644,8 @@ async def get_word_sentences(
             "word": word.lower(),
             "lemma": lemma_text,
             "sentences": [
-                {"sentence": sent, "word_position": pos}
-                for sent, pos in sentences
+                {"sentence": sent, "word_position": pos, "matched_form": form}
+                for sent, pos, form in sentences
             ],
             "total": len(sentences),
         }

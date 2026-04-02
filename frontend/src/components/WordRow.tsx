@@ -166,6 +166,7 @@ interface SentenceExample {
   sentence: string;
   translation?: string;
   word_position: number;
+  matched_form?: string;
 }
 
 interface ContentData {
@@ -359,13 +360,16 @@ export const WordRow = memo<WordRowProps>(({
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
-  const highlightWord = (sentence: string, targetWord: string) => {
-    const targetLower = targetWord.toLowerCase();
-    const regex = new RegExp(`\\b(${targetLower})\\b`, 'gi');
-    const parts = sentence.toLowerCase().split(regex);
+  const highlightWord = (sentence: string, targetWord: string, matchedForm?: string) => {
+    // Build regex that matches the exact word AND the matched form from lemma matching
+    const words = new Set([targetWord.toLowerCase()]);
+    if (matchedForm) words.add(matchedForm.toLowerCase());
+    const escaped = [...words].map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
+    const parts = sentence.split(regex);
 
     return parts.map((part, i) => {
-      if (part === targetLower) {
+      if (words.has(part.toLowerCase())) {
         return (
           <Typography
             key={i}
@@ -501,7 +505,7 @@ export const WordRow = memo<WordRowProps>(({
             sentenceExamples.map((example, idx) => (
               <ExampleCard key={idx}>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  {highlightWord(example.sentence, word.word)}
+                  {highlightWord(example.sentence, word.word, example.matched_form)}
                 </Typography>
                 {example.translation && (
                   <Typography variant="caption" color="text.secondary">

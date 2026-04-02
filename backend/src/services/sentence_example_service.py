@@ -217,15 +217,16 @@ class SentenceExampleService:
         target_lemma: str,
         nlp,
         max_examples: int = 3,
-    ) -> List[Tuple[str, int]]:
+    ) -> List[Tuple[str, int, str]]:
         """
         Extract sentences where any token lemmatizes to target_lemma.
         Catches all irregular forms (ran→run, went→go, etc.).
 
-        Returns list of (sentence, word_position) tuples, sorted by score.
+        Returns list of (sentence, word_position, matched_form) tuples, sorted by score.
+        matched_form is the actual word as it appears in the sentence (e.g., "sell", "sold", "selling").
         """
         sentences = self.split_into_sentences(script_text)
-        candidates: List[Tuple[str, float, int, int]] = []
+        candidates: List[Tuple[str, float, int, int, str]] = []
 
         for sentence_idx, sentence in enumerate(sentences):
             tokens = self.tokenize_sentence(sentence)
@@ -237,11 +238,13 @@ class SentenceExampleService:
             # Lemmatize tokens to find matches
             doc = nlp(sentence)
             match_positions = []
+            matched_form = target_lemma
             for i, spacy_token in enumerate(doc):
                 if spacy_token.is_punct or spacy_token.is_space:
                     continue
                 if spacy_token.lemma_.lower() == target_lemma:
                     token_text = spacy_token.text.lower()
+                    matched_form = spacy_token.text  # preserve original casing
                     pos = next(
                         (j for j, t in enumerate(tokens) if t == token_text),
                         0
@@ -286,14 +289,14 @@ class SentenceExampleService:
             )
 
             if score > 0:
-                candidates.append((actual_sentence, score, sentence_idx, word_position))
+                candidates.append((actual_sentence, score, sentence_idx, word_position, matched_form))
 
         # Sort by score descending, then position ascending
         candidates.sort(key=lambda x: (-x[1], x[2]))
 
         return [
-            (sent, pos)
-            for sent, _score, _idx, pos in candidates[:max_examples]
+            (sent, pos, form)
+            for sent, _score, _idx, pos, form in candidates[:max_examples]
         ]
 
     def filter_by_word_list(

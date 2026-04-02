@@ -1426,14 +1426,17 @@ const WordRow = ({
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
-  // Highlight the target word in a sentence
-  const renderHighlightedSentence = (sentence: string, targetWord: string) => {
-    const regex = new RegExp(`(${targetWord})`, 'gi');
+  // Highlight the target word (and its lemma form) in a sentence
+  const renderHighlightedSentence = (sentence: string, targetWord: string, matchedForm?: string) => {
+    const words = new Set([targetWord.toLowerCase()]);
+    if (matchedForm) words.add(matchedForm.toLowerCase());
+    const escaped = [...words].map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
     const parts = sentence.split(regex);
     return (
       <Text style={styles.exampleSentence}>
         {parts.map((part, i) =>
-          regex.test(part) ? (
+          words.has(part.toLowerCase()) ? (
             <Text key={i} style={styles.highlightedWord}>{part}</Text>
           ) : (
             <Text key={i}>{part}</Text>
@@ -1489,7 +1492,7 @@ const WordRow = ({
           {sentenceExamples.length > 0 ? (
             sentenceExamples.map((example, idx) => (
               <View key={idx} style={styles.exampleCard}>
-                {renderHighlightedSentence(example.sentence, word.word)}
+                {renderHighlightedSentence(example.sentence, word.word, example.matched_form)}
                 {example.translation && (
                   <Text style={styles.exampleTranslation}>
                     {example.translation.toLowerCase()}
