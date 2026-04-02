@@ -602,7 +602,7 @@ async def start_enrichment(
 async def get_word_sentences(
     movie_id: int,
     word: str,
-    max_examples: int = 3,
+    max_examples: int = 1,
     db: Prisma = Depends(get_db)
 ):
     """
