@@ -624,23 +624,30 @@ async def get_word_sentences(
         if not script.cleanedScriptText:
             raise HTTPException(status_code=400, detail="Script has no cleaned text")
 
-        # Extract sentences on-the-fly
-        sentence_service = SentenceExampleService()
-        word_sentences = sentence_service.extract_word_sentences(
-            script.cleanedScriptText,
-            {word.lower()}
-        )
+        # Lemmatize the search word
+        from src.services.lemmatization_service import get_nlp
+        nlp = get_nlp()
+        doc = nlp(word.lower().strip())
+        lemma_text = doc[0].lemma_ if doc else word.lower()
 
-        sentences = word_sentences.get(word.lower(), [])
+        # Extract sentences using lemma-aware matching
+        sentence_service = SentenceExampleService()
+        sentences = sentence_service.extract_word_sentences_by_lemma(
+            script.cleanedScriptText,
+            lemma_text,
+            nlp,
+            max_examples,
+        )
 
         return {
             "movie_id": movie_id,
             "word": word.lower(),
+            "lemma": lemma_text,
             "sentences": [
                 {"sentence": sent, "word_position": pos}
-                for sent, pos in sentences[:max_examples]
+                for sent, pos in sentences
             ],
-            "total": len(sentences[:max_examples]),
+            "total": len(sentences),
         }
 
     except HTTPException:

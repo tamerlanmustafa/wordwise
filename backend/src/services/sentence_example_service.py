@@ -211,6 +211,91 @@ class SentenceExampleService:
 
         return result
 
+    def extract_word_sentences_by_lemma(
+        self,
+        script_text: str,
+        target_lemma: str,
+        nlp,
+        max_examples: int = 3,
+    ) -> List[Tuple[str, int]]:
+        """
+        Extract sentences where any token lemmatizes to target_lemma.
+        Catches all irregular forms (ran→run, went→go, etc.).
+
+        Returns list of (sentence, word_position) tuples, sorted by score.
+        """
+        sentences = self.split_into_sentences(script_text)
+        candidates: List[Tuple[str, float, int, int]] = []
+
+        for sentence_idx, sentence in enumerate(sentences):
+            tokens = self.tokenize_sentence(sentence)
+            word_count = len(tokens)
+
+            if word_count > self.MAX_SENTENCE_WORDS:
+                continue
+
+            # Lemmatize tokens to find matches
+            doc = nlp(sentence)
+            match_positions = []
+            for i, spacy_token in enumerate(doc):
+                if spacy_token.is_punct or spacy_token.is_space:
+                    continue
+                if spacy_token.lemma_.lower() == target_lemma:
+                    token_text = spacy_token.text.lower()
+                    pos = next(
+                        (j for j, t in enumerate(tokens) if t == token_text),
+                        0
+                    )
+                    match_positions.append(pos)
+
+            if not match_positions:
+                continue
+
+            # If sentence is too short, prepend previous sentence(s) for context
+            actual_sentence = sentence
+            if word_count < self.MIN_SENTENCE_WORDS:
+                combined = sentence
+                for lookback in range(1, 3):  # Try up to 2 previous sentences
+                    prev_idx = sentence_idx - lookback
+                    if prev_idx < 0:
+                        break
+                    combined = sentences[prev_idx].strip() + " " + combined
+                    combined_tokens = self.tokenize_sentence(combined)
+                    if len(combined_tokens) > self.MAX_SENTENCE_WORDS:
+                        break  # Too long, stop adding
+                    actual_sentence = combined
+                    tokens = combined_tokens
+                    word_count = len(tokens)
+                    if word_count >= self.MIN_SENTENCE_WORDS:
+                        break  # Good enough
+
+                if word_count < self.MIN_SENTENCE_WORDS:
+                    continue  # Still too short, skip
+
+                # Recalculate word position in combined sentence
+                target_token = doc[match_positions[0]].text.lower() if match_positions else target_lemma
+                match_positions[0] = next(
+                    (j for j, t in enumerate(tokens) if t == target_token),
+                    match_positions[0]
+                )
+
+            word_position = match_positions[0]
+            score = self.score_sentence(
+                actual_sentence, tokens, tokens[word_position] if word_position < len(tokens) else target_lemma,
+                sentence_idx
+            )
+
+            if score > 0:
+                candidates.append((actual_sentence, score, sentence_idx, word_position))
+
+        # Sort by score descending, then position ascending
+        candidates.sort(key=lambda x: (-x[1], x[2]))
+
+        return [
+            (sent, pos)
+            for sent, _score, _idx, pos in candidates[:max_examples]
+        ]
+
     def filter_by_word_list(
         self,
         word_sentences: Dict[str, List[Tuple[str, int]]],
