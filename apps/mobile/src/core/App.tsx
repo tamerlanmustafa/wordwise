@@ -1357,8 +1357,8 @@ const LoadingScreen = () => (
 // Word Row Component - Polished design matching web app
 interface SentenceExample {
   sentence: string;
-  translation: string;
   word_position: number;
+  matched_form?: string;
 }
 
 const WordRow = ({
@@ -1380,6 +1380,8 @@ const WordRow = ({
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
+  const [sentenceTranslation, setSentenceTranslation] = useState<string | null>(null);
+  const [sentenceTranslationLoading, setSentenceTranslationLoading] = useState(false);
 
   const handlePress = async () => {
     if (expanded) {
@@ -1411,6 +1413,25 @@ const WordRow = ({
             .then((data) => {
               if (data.sentences && Array.isArray(data.sentences)) {
                 setSentenceExamples(data.sentences);
+                // Fire off sentence translation (don't await — show skeleton while loading)
+                if (data.sentences.length > 0 && targetLang) {
+                  setSentenceTranslationLoading(true);
+                  fetch(`${API_BASE_URL}/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      text: data.sentences[0].sentence,
+                      target_lang: targetLang || 'ES',
+                      source_lang: 'en',
+                    }),
+                  })
+                    .then((res) => res.json())
+                    .then((result) => {
+                      if (result.translated) setSentenceTranslation(result.translated);
+                    })
+                    .catch(() => {})
+                    .finally(() => setSentenceTranslationLoading(false));
+                }
               }
             })
             .catch(() => {})
@@ -1493,11 +1514,13 @@ const WordRow = ({
             sentenceExamples.map((example, idx) => (
               <View key={idx} style={styles.exampleCard}>
                 {renderHighlightedSentence(example.sentence, word.word, example.matched_form)}
-                {example.translation && (
+                {sentenceTranslationLoading ? (
+                  <View style={styles.sentenceTranslationSkeleton} />
+                ) : sentenceTranslation ? (
                   <Text style={styles.exampleTranslation}>
-                    {example.translation.toLowerCase()}
+                    {sentenceTranslation.toLowerCase()}
                   </Text>
-                )}
+                ) : null}
               </View>
             ))
           ) : movieId ? (
@@ -2950,6 +2973,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  sentenceTranslationSkeleton: {
+    height: 12,
+    width: '60%',
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    marginTop: 6,
+    opacity: 0.5,
   },
   noExamples: {
     fontSize: 12,
