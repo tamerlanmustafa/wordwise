@@ -618,22 +618,14 @@ const HomeScreen = ({
         </View>
       )}
 
-      {/* Tabs */}
+      {/* Tabs - Books tab disabled for now */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'movies' && styles.tabActive]}
+          style={[styles.tab, styles.tabActive]}
           onPress={() => setActiveTab('movies')}
         >
-          <Text style={[styles.tabText, activeTab === 'movies' && styles.tabTextActive]}>
+          <Text style={[styles.tabText, styles.tabTextActive]}>
             🎬 Movies
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'books' && styles.tabActive]}
-          onPress={() => setActiveTab('books')}
-        >
-          <Text style={[styles.tabText, activeTab === 'books' && styles.tabTextActive]}>
-            📚 Books
           </Text>
         </TouchableOpacity>
       </View>
@@ -705,103 +697,55 @@ const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        {activeTab === 'movies' ? (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
-              {loading ? (
-                <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-              ) : (
-                <Carousel
-                  data={topRatedMovies}
-                  renderItem={(movie) => (
-                    <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
-                  )}
-                />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : (
+            <Carousel
+              data={topRatedMovies}
+              renderItem={(movie) => (
+                <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
               )}
-            </View>
+            />
+          )}
+        </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
-              {loading ? (
-                <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-              ) : (
-                <Carousel
-                  data={trendingMovies}
-                  renderItem={(movie) => (
-                    <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
-                  )}
-                />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : (
+            <Carousel
+              data={trendingMovies}
+              renderItem={(movie) => (
+                <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
               )}
-            </View>
+            />
+          )}
+        </View>
 
-            {/* Features */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>How it works</Text>
-              <View style={styles.featureGrid}>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>🎬</Text>
-                  <Text style={styles.featureTitle}>Pick a Movie</Text>
-                  <Text style={styles.featureDesc}>Search any film</Text>
-                </View>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>📝</Text>
-                  <Text style={styles.featureTitle}>Get Words</Text>
-                  <Text style={styles.featureDesc}>CEFR-graded vocab</Text>
-                </View>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>🎯</Text>
-                  <Text style={styles.featureTitle}>Learn</Text>
-                  <Text style={styles.featureDesc}>Before watching</Text>
-                </View>
-              </View>
+        {/* Features */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>How it works</Text>
+          <View style={styles.featureGrid}>
+            <View style={styles.featureCard}>
+              <Text style={styles.featureIcon}>🎬</Text>
+              <Text style={styles.featureTitle}>Pick a Movie</Text>
+              <Text style={styles.featureDesc}>Search any film</Text>
             </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>📖 Popular Books</Text>
-              <Carousel
-                data={popularBooks}
-                renderItem={(book) => (
-                  <BookCard book={book} onPress={() => handleBookPress(book)} />
-                )}
-              />
+            <View style={styles.featureCard}>
+              <Text style={styles.featureIcon}>📝</Text>
+              <Text style={styles.featureTitle}>Get Words</Text>
+              <Text style={styles.featureDesc}>CEFR-graded vocab</Text>
             </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>📚 Classic Literature</Text>
-              <Carousel
-                data={classicBooks}
-                renderItem={(book) => (
-                  <BookCard book={book} onPress={() => handleBookPress(book)} />
-                )}
-              />
+            <View style={styles.featureCard}>
+              <Text style={styles.featureIcon}>🎯</Text>
+              <Text style={styles.featureTitle}>Learn</Text>
+              <Text style={styles.featureDesc}>Before watching</Text>
             </View>
-
-            {/* Book Features */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Why Read with WordWise?</Text>
-              <View style={styles.featureGrid}>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>📚</Text>
-                  <Text style={styles.featureTitle}>Free Classics</Text>
-                  <Text style={styles.featureDesc}>Public domain</Text>
-                </View>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>📊</Text>
-                  <Text style={styles.featureTitle}>CEFR Levels</Text>
-                  <Text style={styles.featureDesc}>A1 to C2</Text>
-                </View>
-                <View style={styles.featureCard}>
-                  <Text style={styles.featureIcon}>📤</Text>
-                  <Text style={styles.featureTitle}>Upload</Text>
-                  <Text style={styles.featureDesc}>EPUB, PDF</Text>
-                </View>
-              </View>
-            </View>
-          </>
-        )}
+          </View>
+        </View>
 
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />
