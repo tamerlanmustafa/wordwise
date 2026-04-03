@@ -571,17 +571,25 @@ def compute_difficulty_advanced(
     if not words:
         return difficultylevel.BEGINNER, 0, {}
 
-    # CEFR gap weights
-    CEFR_GAP_WEIGHTS = {
-        'A1': 0,
-        'A2': 1.0,
-        'B1': 1.4,
-        'B2': 2.0,
-        'C1': 3.0,
-        'C2': 4.0
-    }
+    # Filter out likely misclassified words (slang contractions, non-English, gibberish)
+    # These inflate C1/C2 counts in casual/kids movies
+    def is_suspect_advanced(w: str, level: str) -> bool:
+        """Check if a C1/C2 classification is likely wrong."""
+        if level not in ('C1', 'C2'):
+            return False
+        wl = w.lower()
+        # Slang contractions: "cheatin", "cruisin", "drivin"
+        if wl.endswith("in") and len(wl) > 4 and wl[-3] not in 'aeiou':
+            return True
+        # Very short gibberish
+        if len(wl) <= 2:
+            return True
+        # Words with no vowels (not real English)
+        if not any(c in wl for c in 'aeiouy'):
+            return True
+        return False
 
-    # Count words by level
+    # Count words by level (with filtering)
     level_counts = {'A1': 0, 'A2': 0, 'B1': 0, 'B2': 0, 'C1': 0, 'C2': 0}
     total_syllables = 0
     phrasal_verb_count = 0
@@ -589,12 +597,15 @@ def compute_difficulty_advanced(
 
     for word in words:
         level = word.cefr_level
+        if word.word and is_suspect_advanced(word.word, level):
+            level = 'B1'  # Downgrade suspect C1/C2 to B1
+
         level_counts[level] = level_counts.get(level, 0) + 1
 
         if word.word:
             unique_words_set.add(word.word.lower())
             syllables = count_syllables(word.word)
-            if syllables > 0:  # Only count non-proper nouns
+            if syllables > 0:
                 total_syllables += syllables
             if detect_phrasal_verb(word.word):
                 phrasal_verb_count += 1
@@ -602,142 +613,132 @@ def compute_difficulty_advanced(
     total_words = len(words)
     unique_word_count = len(unique_words_set)
 
-    # Calculate true CEFR percentages from full vocabulary
+    # CONTENT WORD PERCENTAGES: Exclude A1 function words from denominator.
+    # Every movie has ~40% A1 words (the, is, he, she, a, etc.) — they don't
+    # differentiate difficulty. Score based on A2+ content word distribution.
+    content_words = total_words - level_counts.get('A1', 0)
+    if content_words <= 0:
+        content_words = total_words  # fallback
+
+    # Content word distribution (A2+ only)
+    cpct_A2 = level_counts.get('A2', 0) / content_words
+    cpct_B1 = level_counts.get('B1', 0) / content_words
+    cpct_B2 = level_counts.get('B2', 0) / content_words
+    cpct_C1 = level_counts.get('C1', 0) / content_words
+    cpct_C2 = level_counts.get('C2', 0) / content_words
+
+    # Full distribution (for breakdown output and band clamping)
     pct_A1 = level_counts.get('A1', 0) / total_words if total_words > 0 else 0
-    pct_A2 = level_counts.get('A2', 0) / total_words if total_words > 0 else 0
-    pct_B1 = level_counts.get('B1', 0) / total_words if total_words > 0 else 0
     pct_B2 = level_counts.get('B2', 0) / total_words if total_words > 0 else 0
     pct_C1 = level_counts.get('C1', 0) / total_words if total_words > 0 else 0
     pct_C2 = level_counts.get('C2', 0) / total_words if total_words > 0 else 0
 
-    # Normalize percentages to sum to 1.0
-    total_pct = pct_A1 + pct_A2 + pct_B1 + pct_B2 + pct_C1 + pct_C2
-    if total_pct > 0:
-        pct_A1 /= total_pct
-        pct_A2 /= total_pct
-        pct_B1 /= total_pct
-        pct_B2 /= total_pct
-        pct_C1 /= total_pct
-        pct_C2 /= total_pct
-
-    # 1. Complex word ratio (A2+ percentage) - 30%
-    complex_words = sum(level_counts.get(lvl, 0) for lvl in ['A2', 'B1', 'B2', 'C1', 'C2'])
-
-    # Weight by level using real percentages: B1 > A2, B2 > B1, etc.
+    # 1. Content word complexity — weighted B1+ ratio among non-A1 words
+    # Higher B2/C1/C2 concentration = harder movie
     weighted_complex = (
-        pct_A2 * 1.0 +
-        pct_B1 * 1.2 +
-        pct_B2 * 1.5 +
-        pct_C1 * 2.0 +
-        pct_C2 * 2.5
+        cpct_A2 * 0.3 +   # A2 is easy, low weight
+        cpct_B1 * 1.0 +   # B1 starts to matter
+        cpct_B2 * 2.0 +   # B2 is genuinely challenging
+        cpct_C1 * 3.5 +   # C1 is advanced
+        cpct_C2 * 4.5     # C2 is expert-level
     )
+    # Normalize: max possible is ~4.5 (all C2), typical range 0.5-2.0
+    weighted_complex = min(weighted_complex / 2.5, 1.0)
 
-    # 2. Lexical diversity - 8%
+    # 2. Lexical diversity
     lexical_diversity = compute_lexical_diversity(words)
 
-    # 3. Average syllables per word - 7%
+    # 3. Average syllables per word
     avg_syllables = total_syllables / total_words if total_words > 0 else 0
-    # Normalize to 0-1 range (assume 1-4 syllables typical)
     syllable_score = min(avg_syllables / 4.0, 1.0)
 
-    # 4. CEFR weighted gap score with adjusted B2 weight
-    # B2 is upper-intermediate, NOT advanced - reduced from 2.0 → 1.2
-    CEFR_GAP_WEIGHTS_ADJUSTED = {
-        'A1': 0, 'A2': 1.0, 'B1': 1.4, 'B2': 1.2, 'C1': 3.0, 'C2': 4.0
-    }
-    cefr_gap_score = (
-        pct_A2 * CEFR_GAP_WEIGHTS_ADJUSTED['A2'] +
-        pct_B1 * CEFR_GAP_WEIGHTS_ADJUSTED['B1'] +
-        pct_B2 * CEFR_GAP_WEIGHTS_ADJUSTED['B2'] +
-        pct_C1 * CEFR_GAP_WEIGHTS_ADJUSTED['C1'] +
-        pct_C2 * CEFR_GAP_WEIGHTS_ADJUSTED['C2']
-    )
-    # Normalize to 0-1 (max weight is 4.0)
-    cefr_gap_score = min(cefr_gap_score / 4.0, 1.0)
+    # 4. Hard word concentration: what % of content words are B2+?
+    # This is the single most important metric for a language learner
+    hard_pct = cpct_B2 + cpct_C1 + cpct_C2
+    # Normalize: 10% B2+ content words = low (0.2), 30%+ = high (1.0)
+    hard_word_score = min(hard_pct / 0.35, 1.0)
 
-    # Advanced-level safety threshold: if C1+C2 < 2%, reduce their weight drastically
-    pct_advanced = pct_C1 + pct_C2
-    if pct_advanced < 0.02:  # Less than 2%
-        cefr_gap_score *= 0.25  # Reduce impact of rare advanced words
-
-    # 5. Phrasal verb density - 5%
+    # 5. Phrasal verb density
     idiom_density = phrasal_verb_count / total_words if total_words > 0 else 0
 
-    # 6. Median CEFR level (unique words only) - normalized to 0-1
+    # 6. Median CEFR level (unique words only)
     median_cefr = compute_median_cefr_level(words)
-    median_score = (median_cefr - 1.0) / 5.0  # Map 1-6 to 0-1
+    median_score = (median_cefr - 1.0) / 5.0
 
-    # 7. Repetition ratio (unique/total) - higher = more complex vocabulary
+    # 7. Repetition ratio
     repetition_ratio = unique_word_count / total_words if total_words > 0 else 0
 
-    # 8. CEFR spread (max - min level) with noise filtering - normalized to 0-1
+    # 8. CEFR spread
     spread = compute_cefr_spread(level_counts, total_words)
-    spread_score = spread / 5.0  # Max spread is 5 (C2 - A1)
+    spread_score = spread / 5.0
 
-    # 9. Average Zipf score (vocabulary rarity) - normalized to 0-1
-    # Zipf 7 = very common (score 0), Zipf 0 = very rare (score 1)
+    # 9. Average Zipf score
     avg_zipf = compute_average_zipf(words)
     zipf_rarity_score = max(0.0, min(1.0, (7.0 - avg_zipf) / 7.0))
 
-    # 10. Flesch Reading Ease (if text provided) - normalized to 0-1
-    # FRE 100 = easiest (score 0), FRE 0 = hardest (score 1)
-    readability_score = 0.5  # Default middle value
+    # 10. Flesch Reading Ease
+    readability_score = 0.5
     if text:
         fre = compute_flesch_reading_ease(text, words)
         readability_score = max(0.0, min(1.0, (100.0 - fre) / 100.0))
 
-    # 11. Domain vocabulary density - normalized to 0-1
-    # Detects specialized jargon (finance, legal, medical, military, etc.)
-    # Even B1/B2 words become much harder when they're domain-specific
+    # 11. Sentence length complexity (if text provided)
+    sentence_length_score = 0.4  # Default
+    if text:
+        num_sentences = count_sentences(text)
+        avg_sentence_len = total_words / num_sentences if num_sentences > 0 else 10
+        # Normalize: 8 words/sentence = easy (0.0), 20+ = hard (1.0)
+        sentence_length_score = max(0.0, min(1.0, (avg_sentence_len - 8.0) / 12.0))
+
+    # 12. Domain vocabulary density
     domain_density, _domain_breakdown = compute_domain_density(words)
-    # Scale: 0% domain = 0.0, 3%+ domain = 1.0 (most movies are 0-3%)
-    domain_score = min(domain_density / 0.03, 1.0)
 
     # Final weights (sum = 100%)
-    #   - weighted_complex:   25% (core vocabulary complexity)
-    #   - cefr_gap_score:     15% (CEFR distribution spread)
-    #   - domain_score:       15% (domain-specific jargon density)
-    #   - median_score:       10% (median CEFR level)
-    #   - zipf_rarity_score:  10% (vocabulary rarity via Zipf)
-    #   - lexical_diversity:   7% (vocabulary richness)
-    #   - readability_score:   6% (Flesch reading ease)
-    #   - spread_score:        5% (CEFR level range)
-    #   - syllable_score:      3% (word length proxy)
-    #   - idiom_density:       2% (phrasal complexity)
-    #   - repetition_ratio:    2% (lexical variation)
+    #   - weighted_complex:      22% (content word complexity)
+    #   - hard_word_score:       20% (B2+ concentration among content words)
+    #   - zipf_rarity_score:     10% (vocabulary rarity via Zipf)
+    #   - median_score:           8% (median CEFR level)
+    #   - readability_score:      8% (Flesch reading ease)
+    #   - sentence_length_score:  8% (avg words per sentence)
+    #   - lexical_diversity:      7% (vocabulary richness)
+    #   - spread_score:           5% (CEFR level range)
+    #   - syllable_score:         4% (word length proxy)
+    #   - repetition_ratio:       4% (lexical variation)
+    #   - idiom_density:          4% (phrasal complexity)
     difficulty_score = (
-        0.25 * weighted_complex +           # Core vocab complexity
-        0.15 * cefr_gap_score +             # CEFR distribution spread
-        0.15 * domain_score +               # Domain jargon density
-        0.10 * median_score +               # Median CEFR level
-        0.10 * zipf_rarity_score +          # Vocabulary rarity (Zipf)
-        0.07 * lexical_diversity +          # Vocabulary richness
-        0.06 * readability_score +          # Flesch reading ease
-        0.05 * spread_score +               # Level range
-        0.03 * syllable_score +             # Word length proxy
-        0.02 * idiom_density +              # Phrasal complexity
-        0.02 * repetition_ratio             # Lexical variation
+        0.22 * weighted_complex +
+        0.20 * hard_word_score +
+        0.10 * zipf_rarity_score +
+        0.08 * median_score +
+        0.08 * readability_score +
+        0.08 * sentence_length_score +
+        0.07 * lexical_diversity +
+        0.05 * spread_score +
+        0.04 * syllable_score +
+        0.04 * repetition_ratio +
+        0.04 * idiom_density
     )
 
-    # CRITICAL: Global CEFR vocabulary safety rule
-    # No movie can be C1/C2 without meaningful advanced vocabulary
-    if pct_advanced < 0.01:  # Less than 1% C1+C2
-        difficulty_score = min(difficulty_score, 0.55)  # Cap at upper B2
+    # DOMAIN MULTIPLIER: Applied on top, not additive.
+    # Domain jargon makes the whole movie harder, not just one signal.
+    # 0% domain = 1.0x (no change), 1.5%+ domain = up to 1.25x boost
+    if domain_density > 0.005:  # More than 0.5% domain words
+        domain_multiplier = 1.0 + min(domain_density / 0.02, 0.25)
+        difficulty_score *= domain_multiplier
 
-    # Vocabulary-based band clamping (prevents stylistic metrics from overriding vocab)
-    if pct_advanced > 0.07:  # 7%+ C1/C2
+    # Vocabulary-based band clamping
+    pct_advanced = pct_C1 + pct_C2
+    if pct_advanced > 0.07:
         base_band = "C1+"
-    elif pct_B2 > 0.08:  # 8%+ B2
+    elif pct_B2 > 0.08:
         base_band = "B"
     else:
         base_band = "A"
 
-    # Enforce band boundaries BEFORE genre adjustment
-    if base_band == "A":
-        difficulty_score = min(difficulty_score, 0.40)  # Max A2
+    if base_band == "A" and domain_density < 0.005:
+        difficulty_score = min(difficulty_score, 0.40)
     elif base_band == "B":
-        difficulty_score = max(0.35, min(difficulty_score, 0.70))  # B1-B2 range
-    # C1+ band has no upper clamp
+        difficulty_score = max(0.35, min(difficulty_score, 0.75))
 
     # Clamp negative values at 0 before scaling
     difficulty_score = max(0.0, difficulty_score)
