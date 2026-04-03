@@ -7,7 +7,6 @@ import type { Word } from '../../../types';
 import type { MainScreenProps } from '../../../navigation/types';
 import { useVocabulary } from '../hooks/useVocabulary';
 import { WordRow, WORD_ROW_HEIGHT } from '../components/WordRow';
-import { EnrichmentStatus } from '../components/EnrichmentStatus';
 import { useAuthStore } from '../../../stores/authStore';
 import { colors, typography, spacing } from '../../../theme';
 
@@ -44,9 +43,6 @@ export const WordListScreen = () => {
           {total > 0 ? `${total} words` : 'Loading...'}
         </Text>
       </View>
-      {contentType === 'movie' && (
-        <EnrichmentStatus movieId={contentId} targetLang={targetLang} />
-      )}
     </View>
   );
 

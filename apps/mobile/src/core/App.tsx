@@ -22,7 +22,6 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, tmdbApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
-import { EnrichmentStatus } from '../features/vocabulary/components/EnrichmentStatus';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -1979,10 +1978,6 @@ const MovieDetailScreen = ({
             </View>
           </View>
 
-          {/* Enrichment Status */}
-          {movieId && (
-            <EnrichmentStatus movieId={movieId} targetLang={targetLang} />
-          )}
 
           {/* Level Description */}
           <View style={styles.levelDescription}>
