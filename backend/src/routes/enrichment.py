@@ -602,20 +602,23 @@ async def start_enrichment(
 async def get_word_sentences(
     movie_id: int,
     word: str,
+    target_lang: str = None,
     max_examples: int = 1,
     db: Prisma = Depends(get_db)
 ):
     """
-    Get sentences containing a word from a movie.
+    Get sentences containing a word from a movie, with optional cached translation.
     Fast path: query pre-extracted SentenceBank (populated during enrichment).
     Slow path: parse script on-the-fly if SentenceBank has no data.
-    No translation, no API calls.
+    If target_lang is provided, returns cached translation or translates on-demand and caches.
     """
     try:
         from src.services.lemmatization_service import get_nlp
         nlp = get_nlp()
         doc = nlp(word.lower().strip())
         lemma_text = doc[0].lemma_ if doc else word.lower()
+
+        raw_sentences = []
 
         # Fast path: check SentenceBank via lemma link
         lemma_record = await db.lemma.find_first(where={"lemma": lemma_text})
@@ -632,63 +635,66 @@ async def get_word_sentences(
             )
 
             if links:
-                results = []
                 for link in links:
                     sent = link.sentence.sentence
-                    # Find the matched form in the sentence
                     sent_doc = nlp(sent)
                     matched_form = word.lower()
                     for token in sent_doc:
                         if token.lemma_.lower() == lemma_text:
                             matched_form = token.text
                             break
-
-                    results.append({
+                    raw_sentences.append({
                         "sentence": sent,
                         "word_position": link.wordPosition or 0,
                         "matched_form": matched_form,
                     })
 
-                return {
-                    "movie_id": movie_id,
-                    "word": word.lower(),
-                    "lemma": lemma_text,
-                    "source": "sentence_bank",
-                    "sentences": results,
-                    "total": len(results),
-                }
-
         # Slow path: parse script on-the-fly
-        movie = await db.movie.find_unique(
-            where={'id': movie_id},
-            include={'movieScripts': True}
-        )
+        if not raw_sentences:
+            movie = await db.movie.find_unique(
+                where={'id': movie_id},
+                include={'movieScripts': True}
+            )
 
-        if not movie or not movie.movieScripts:
-            raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found or has no script")
+            if not movie or not movie.movieScripts:
+                raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found or has no script")
 
-        script = movie.movieScripts[0]
-        if not script.cleanedScriptText:
-            raise HTTPException(status_code=400, detail="Script has no cleaned text")
+            script = movie.movieScripts[0]
+            if not script.cleanedScriptText:
+                raise HTTPException(status_code=400, detail="Script has no cleaned text")
 
-        sentence_service = SentenceExampleService()
-        sentences = sentence_service.extract_word_sentences_by_lemma(
-            script.cleanedScriptText,
-            lemma_text,
-            nlp,
-            max_examples,
-        )
+            sentence_service = SentenceExampleService()
+            sentences = sentence_service.extract_word_sentences_by_lemma(
+                script.cleanedScriptText,
+                lemma_text,
+                nlp,
+                max_examples,
+            )
+            for sent, pos, form in sentences:
+                raw_sentences.append({
+                    "sentence": sent,
+                    "word_position": pos,
+                    "matched_form": form,
+                })
+
+        # Look up or create translations if target_lang provided
+        if target_lang and raw_sentences:
+            from src.services.translation_service import TranslationService
+            ts = TranslationService(db)
+            for item in raw_sentences:
+                try:
+                    result = await ts.get_translation(item["sentence"], target_lang.upper(), "en")
+                    if result and result.get("translated"):
+                        item["translation"] = result["translated"]
+                except Exception as tx_err:
+                    logger.warning(f"Sentence translation failed: {tx_err}")
 
         return {
             "movie_id": movie_id,
             "word": word.lower(),
             "lemma": lemma_text,
-            "source": "script_parse",
-            "sentences": [
-                {"sentence": sent, "word_position": pos, "matched_form": form}
-                for sent, pos, form in sentences
-            ],
-            "total": len(sentences),
+            "sentences": raw_sentences,
+            "total": len(raw_sentences),
         }
 
     except HTTPException:

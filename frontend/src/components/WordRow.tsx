@@ -12,7 +12,6 @@ import {
   IconButton,
   Typography,
   Chip,
-  Skeleton,
   alpha,
   styled,
   CircularProgress
@@ -167,14 +166,13 @@ interface SentenceExample {
   sentence: string;
   word_position: number;
   matched_form?: string;
+  translation?: string;
 }
 
 interface ContentData {
   translation: string | null;
   translationProvider: string | null;
   sentenceExamples: SentenceExample[];
-  sentenceTranslation: string | null;
-  sentenceTranslationLoading: boolean;
   relatedIdioms: IdiomInfo[];
 }
 
@@ -236,46 +234,12 @@ export const WordRow = memo<WordRowProps>(({
   const [isLoading, setIsLoading] = useState(false);
   const fetchedRef = useRef(false);
 
-  // Translate the sentence after it's been fetched and displayed
-  const translateSentence = useCallback(async (sentence: string) => {
-    if (!targetLang) return;
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiBase}/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: sentence,
-          target_lang: targetLang,
-          source_lang: 'en',
-        }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.translated) {
-        setContentData(prev => prev ? {
-          ...prev,
-          sentenceTranslation: data.translated,
-          sentenceTranslationLoading: false,
-        } : prev);
-      }
-    } catch (err) {
-      console.error('Sentence translation error:', err);
-      setContentData(prev => prev ? {
-        ...prev,
-        sentenceTranslationLoading: false,
-      } : prev);
-    }
-  }, [targetLang]);
-
   // Fetch all content data
   const fetchContent = useCallback(async (): Promise<ContentData> => {
     const results: ContentData = {
       translation: word.translation || null,
       translationProvider: word.translationProvider || null,
       sentenceExamples: [],
-      sentenceTranslation: null,
-      sentenceTranslationLoading: false,
       relatedIdioms: [],
     };
 
@@ -296,18 +260,15 @@ export const WordRow = memo<WordRowProps>(({
       );
     }
 
-    // Sentence examples (extracted from script, no translation)
+    // Sentence examples + translation in one call
     if (movieId) {
+      const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
       promises.push(
-        fetch(`/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}`)
+        fetch(`/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
           .then((res) => res.json())
           .then((data) => {
             if (data.sentences && Array.isArray(data.sentences)) {
               results.sentenceExamples = data.sentences;
-              // If we got a sentence, mark translation as loading so we show skeleton
-              if (data.sentences.length > 0) {
-                results.sentenceTranslationLoading = true;
-              }
             }
           })
           .catch((err) => console.error('Sentence examples error:', err))
@@ -328,14 +289,8 @@ export const WordRow = memo<WordRowProps>(({
     }
 
     await Promise.all(promises);
-
-    // Fire off sentence translation (async, don't await — renders skeleton while loading)
-    if (results.sentenceExamples.length > 0 && targetLang) {
-      translateSentence(results.sentenceExamples[0].sentence);
-    }
-
     return results;
-  }, [word.word, word.translation, word.translationProvider, onTranslate, movieId, targetLang, getIdiomsForWord, idiomMetadata, translateSentence]);
+  }, [word.word, word.translation, word.translationProvider, onTranslate, movieId, targetLang, getIdiomsForWord, idiomMetadata]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.action-button')) {
@@ -402,8 +357,6 @@ export const WordRow = memo<WordRowProps>(({
   const translation = contentData?.translation ?? word.translation ?? null;
   const translationProvider = contentData?.translationProvider ?? word.translationProvider ?? null;
   const sentenceExamples = contentData?.sentenceExamples ?? [];
-  const sentenceTranslation = contentData?.sentenceTranslation ?? null;
-  const sentenceTranslationLoading = contentData?.sentenceTranslationLoading ?? false;
   const relatedIdioms = contentData?.relatedIdioms ?? [];
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
@@ -555,13 +508,11 @@ export const WordRow = memo<WordRowProps>(({
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
                   {highlightWord(example.sentence, word.word, example.matched_form)}
                 </Typography>
-                {sentenceTranslationLoading ? (
-                  <Skeleton variant="text" width="60%" sx={{ mt: 0.5 }} />
-                ) : sentenceTranslation ? (
+                {example.translation && (
                   <Typography variant="caption" color="text.secondary">
-                    {sentenceTranslation.toLowerCase()}
+                    {example.translation.toLowerCase()}
                   </Typography>
-                ) : null}
+                )}
               </ExampleCard>
             ))
           ) : contentData && movieId && (
