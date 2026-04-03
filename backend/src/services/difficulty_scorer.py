@@ -49,6 +49,123 @@ def detect_phrasal_verb(word: str) -> bool:
     return word.lower() in particles
 
 
+# Domain-specific vocabulary lists
+# Words that signal specialized knowledge required for comprehension
+DOMAIN_VOCABULARY = {
+    "finance": {
+        "mortgage", "equity", "bond", "derivative", "collateral", "leverage",
+        "securities", "subprime", "hedge", "portfolio", "dividend", "recession",
+        "inflation", "deficit", "asset", "liability", "interest", "yield",
+        "capital", "stock", "share", "commodity", "broker", "trader",
+        "bankruptcy", "foreclosure", "audit", "fiscal", "monetary", "subsidy",
+        "depreciation", "amortization", "liquidity", "solvency", "valuation",
+        "acquisition", "merger", "ipo", "revenue", "profit", "margin",
+        "volatility", "speculation", "arbitrage", "underwriting", "premium",
+        "debenture", "fiduciary", "collateralized", "securitize", "tranche",
+        "swap", "option", "futures", "index", "benchmark", "maturity",
+        "coupon", "principal", "creditor", "debtor", "insolvency",
+        "deregulation", "bailout", "stimulus", "quantitative", "austerity",
+    },
+    "legal": {
+        "plaintiff", "defendant", "verdict", "jurisdiction", "statute",
+        "litigation", "amendment", "constitution", "prosecution", "testimony",
+        "allegation", "indictment", "acquittal", "conviction", "sentencing",
+        "parole", "probation", "injunction", "subpoena", "affidavit",
+        "deposition", "arbitration", "mediation", "tort", "felony",
+        "misdemeanor", "warrant", "custody", "bail", "plea", "appeal",
+        "precedent", "jurisprudence", "legislation", "regulatory",
+        "compliance", "liability", "negligence", "malpractice", "sovereign",
+        "extradition", "clemency", "tribunal", "adjudicate",
+    },
+    "medical": {
+        "diagnosis", "symptom", "chronic", "prescription", "malignant",
+        "benign", "prognosis", "pathology", "syndrome", "therapy",
+        "pharmaceutical", "clinical", "surgical", "anesthesia", "biopsy",
+        "chemotherapy", "radiation", "transplant", "infectious", "immune",
+        "antibody", "vaccine", "epidemic", "pandemic", "quarantine",
+        "contagious", "tumor", "lesion", "inflammation", "hemorrhage",
+        "cardiac", "pulmonary", "neurological", "psychiatric", "trauma",
+        "rehabilitation", "palliative", "remission", "relapse", "dosage",
+        "contraindication", "autopsy", "organ", "tissue", "cellular",
+    },
+    "military": {
+        "battalion", "artillery", "reconnaissance", "deployment", "casualties",
+        "infantry", "cavalry", "ammunition", "barracks", "garrison",
+        "fortification", "siege", "offensive", "defensive", "flank",
+        "regiment", "brigade", "division", "platoon", "squadron",
+        "lieutenant", "colonel", "sergeant", "admiral", "commanding",
+        "intelligence", "surveillance", "missile", "warhead", "nuclear",
+        "strategic", "tactical", "guerrilla", "insurgent", "ceasefire",
+        "armistice", "occupation", "liberation", "conscription", "draft",
+        "tribunal", "martial", "counterintelligence", "espionage",
+    },
+    "science": {
+        "hypothesis", "molecular", "quantum", "synthesis", "catalyst",
+        "organism", "species", "evolution", "genome", "chromosome",
+        "mutation", "protein", "enzyme", "metabolism", "photosynthesis",
+        "ecosystem", "biodiversity", "conservation", "extinction",
+        "theoretical", "empirical", "variable", "correlation", "statistical",
+        "particle", "electron", "neutron", "radioactive", "isotope",
+        "thermodynamic", "velocity", "acceleration", "gravitational",
+        "electromagnetic", "spectrum", "wavelength", "frequency",
+        "phenomenon", "paradigm", "methodology", "peer", "journal",
+    },
+    "politics": {
+        "democracy", "authoritarian", "totalitarian", "ideology", "propaganda",
+        "geopolitical", "diplomacy", "sanction", "embargo", "sovereignty",
+        "imperialism", "colonialism", "nationalism", "bureaucracy",
+        "bipartisan", "filibuster", "referendum", "constituency",
+        "incumbent", "opposition", "coalition", "caucus", "lobby",
+        "campaign", "electoral", "ballot", "delegate", "veto",
+        "ratification", "executive", "legislative", "judicial",
+        "corruption", "transparency", "accountability", "reform",
+        "revolution", "coup", "regime", "dictatorship", "oligarchy",
+    },
+    "technology": {
+        "algorithm", "encryption", "bandwidth", "server", "database",
+        "protocol", "firmware", "malware", "cybersecurity", "firewall",
+        "authentication", "cryptocurrency", "blockchain", "neural",
+        "artificial", "autonomous", "robotics", "nanotechnology",
+        "biotechnology", "semiconductor", "processor", "interface",
+        "virtualization", "infrastructure", "scalability", "latency",
+        "debugging", "repository", "deployment", "iteration",
+        "optimization", "simulation", "telemetry", "biometric",
+    },
+}
+
+# Flatten all domain words for quick lookup
+ALL_DOMAIN_WORDS = set()
+for domain_words in DOMAIN_VOCABULARY.values():
+    ALL_DOMAIN_WORDS.update(domain_words)
+
+
+def compute_domain_density(words: List['WordData']) -> tuple[float, dict[str, float]]:
+    """
+    Compute domain-specific vocabulary density.
+
+    Returns:
+        - total_density: fraction of unique words that are domain-specific (0.0-1.0)
+        - domain_breakdown: density per domain
+    """
+    unique_words = set(w.word.lower() for w in words if w.word)
+    if not unique_words:
+        return 0.0, {}
+
+    domain_hits: dict[str, int] = {}
+    total_hits = 0
+
+    for domain, vocab in DOMAIN_VOCABULARY.items():
+        hits = unique_words & vocab
+        if hits:
+            domain_hits[domain] = len(hits)
+            total_hits += len(hits)
+
+    total_density = total_hits / len(unique_words)
+    domain_breakdown = {d: c / len(unique_words) for d, c in domain_hits.items()}
+
+    return total_density, domain_breakdown
+
+
 def count_sentences(text: str) -> int:
     """Count sentences in text using common sentence terminators."""
     # Match sentence-ending punctuation followed by space/end
@@ -569,28 +686,36 @@ def compute_difficulty_advanced(
         fre = compute_flesch_reading_ease(text, words)
         readability_score = max(0.0, min(1.0, (100.0 - fre) / 100.0))
 
+    # 11. Domain vocabulary density - normalized to 0-1
+    # Detects specialized jargon (finance, legal, medical, military, etc.)
+    # Even B1/B2 words become much harder when they're domain-specific
+    domain_density, _domain_breakdown = compute_domain_density(words)
+    # Scale: 0% domain = 0.0, 3%+ domain = 1.0 (most movies are 0-3%)
+    domain_score = min(domain_density / 0.03, 1.0)
+
     # Final weights (sum = 100%)
-    # Weights redistributed to include Zipf and readability:
-    #   - weighted_complex:   30% (core vocabulary complexity - most important)
-    #   - cefr_gap_score:     18% (CEFR distribution spread)
-    #   - median_score:       12% (median CEFR level)
+    #   - weighted_complex:   25% (core vocabulary complexity)
+    #   - cefr_gap_score:     15% (CEFR distribution spread)
+    #   - domain_score:       15% (domain-specific jargon density)
+    #   - median_score:       10% (median CEFR level)
     #   - zipf_rarity_score:  10% (vocabulary rarity via Zipf)
-    #   - lexical_diversity:   8% (vocabulary richness)
-    #   - readability_score:   7% (Flesch reading ease)
-    #   - spread_score:        6% (CEFR level range)
-    #   - syllable_score:      4% (word length proxy)
-    #   - idiom_density:       3% (phrasal complexity)
+    #   - lexical_diversity:   7% (vocabulary richness)
+    #   - readability_score:   6% (Flesch reading ease)
+    #   - spread_score:        5% (CEFR level range)
+    #   - syllable_score:      3% (word length proxy)
+    #   - idiom_density:       2% (phrasal complexity)
     #   - repetition_ratio:    2% (lexical variation)
     difficulty_score = (
-        0.30 * weighted_complex +           # Core vocab complexity
-        0.18 * cefr_gap_score +             # CEFR distribution spread
-        0.12 * median_score +               # Median CEFR level
+        0.25 * weighted_complex +           # Core vocab complexity
+        0.15 * cefr_gap_score +             # CEFR distribution spread
+        0.15 * domain_score +               # Domain jargon density
+        0.10 * median_score +               # Median CEFR level
         0.10 * zipf_rarity_score +          # Vocabulary rarity (Zipf)
-        0.08 * lexical_diversity +          # Vocabulary richness
-        0.07 * readability_score +          # Flesch reading ease
-        0.06 * spread_score +               # Level range
-        0.04 * syllable_score +             # Word length proxy
-        0.03 * idiom_density +              # Phrasal complexity
+        0.07 * lexical_diversity +          # Vocabulary richness
+        0.06 * readability_score +          # Flesch reading ease
+        0.05 * spread_score +               # Level range
+        0.03 * syllable_score +             # Word length proxy
+        0.02 * idiom_density +              # Phrasal complexity
         0.02 * repetition_ratio             # Lexical variation
     )
 

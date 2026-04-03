@@ -207,7 +207,7 @@ export const wordwiseApi = {
   },
 
   // Classify movie vocabulary with CEFR levels
-  classifyVocabulary: async (movieId: number, targetLanguage: string = 'ES'): Promise<VocabularyResponse> => {
+  classifyVocabulary: async (movieId: number, targetLanguage: string = 'ES', genres?: string[]): Promise<VocabularyResponse> => {
     const res = await fetch(`${API_BASE_URL}/api/cefr/classify-script`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -215,6 +215,7 @@ export const wordwiseApi = {
         movie_id: movieId,
         save_to_db: true,
         target_language: targetLanguage,
+        ...(genres && genres.length > 0 ? { genres } : {}),
       }),
     });
     if (!res.ok) throw new Error('Failed to classify vocabulary');

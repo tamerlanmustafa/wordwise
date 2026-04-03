@@ -259,7 +259,8 @@ export default function MovieDetailPage() {
         setMovieId(scriptResponse.movie_id);
 
         // Step 4: Classify vocabulary using CEFR and trigger enrichment
-        await classifyMovieScript(scriptResponse.movie_id, targetLanguage);
+        const tmdbGenres = searchResponse.tmdb_metadata?.genres;
+        await classifyMovieScript(scriptResponse.movie_id, targetLanguage, tmdbGenres);
 
         // Step 5: Fetch vocabulary based on auth status
         let cefrResult;

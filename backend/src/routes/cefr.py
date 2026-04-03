@@ -162,6 +162,11 @@ class ScriptClassificationRequest(BaseModel):
         description="Target language for enrichment (e.g., 'ES', 'FR', 'DE'). "
                    "If provided, sentence examples will be automatically enriched in background."
     )
+    genres: Optional[List[str]] = Field(
+        default=None,
+        description="TMDB genre names (e.g., ['Animation', 'Family']). "
+                   "Saved to movie and used for difficulty genre normalization."
+    )
 
 
 class IdiomInfo(BaseModel):
@@ -428,8 +433,36 @@ async def classify_script(
             ]
             logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
-            # NOTE: Auto-enrichment removed - enrichment should only be triggered
-            # via the dedicated /enrich endpoint with explicit user action
+            # If genres provided and movie has no genre or no difficulty, update now
+            if request.genres and (not movie.genre or movie.difficultyScore is None):
+                try:
+                    await db.movie.update(
+                        where={'id': request.movie_id},
+                        data={'genre': json.dumps(request.genres)}
+                    )
+                    # Recompute difficulty with genres
+                    from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
+                    word_data_list = [
+                        WordData(
+                            cefr_level=cls.cefrLevel if isinstance(cls.cefrLevel, str) else cls.cefrLevel.value,
+                            confidence=cls.confidence,
+                            frequency_rank=cls.frequencyRank,
+                            word=cls.word
+                        )
+                        for cls in existing_classifications
+                    ]
+                    level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=request.genres)
+                    await db.movie.update(
+                        where={'id': request.movie_id},
+                        data={
+                            'difficultyLevel': level,
+                            'difficultyScore': score,
+                            'cefrDistribution': json.dumps(breakdown) if breakdown else None
+                        }
+                    )
+                    logger.info(f"✓ Updated difficulty with genres {request.genres}: {level.value}, score: {score}")
+                except Exception as e:
+                    logger.warning(f"Failed to update difficulty with genres: {e}")
 
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
@@ -452,11 +485,21 @@ async def classify_script(
             f"for movie {request.movie_id} ({script.cleanedWordCount} words)..."
         )
 
-        # Extract genres for genre-aware classification
+        # Extract genres: prefer request genres (from TMDB), fall back to DB
         genres = []
-        if movie and hasattr(movie, 'genres') and movie.genres:
+        if request.genres:
+            genres = request.genres
+            # Save genres to movie for future use
             try:
-                genres = json.loads(movie.genres) if isinstance(movie.genres, str) else movie.genres
+                await db.movie.update(
+                    where={'id': request.movie_id},
+                    data={'genre': json.dumps(genres)}
+                )
+            except Exception:
+                pass
+        elif movie and movie.genre:
+            try:
+                genres = json.loads(movie.genre) if isinstance(movie.genre, str) else movie.genre
             except:
                 genres = []
 
@@ -582,14 +625,7 @@ async def classify_script(
                 for cls in classifications
             ]
 
-            # Extract genres from TMDB metadata for genre normalization
-            genres = []
-            if movie and hasattr(movie, 'genres') and movie.genres:
-                try:
-                    genres = json.loads(movie.genres) if isinstance(movie.genres, str) else movie.genres
-                except:
-                    genres = []
-
+            # genres already extracted above (from request or DB)
             level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=genres)
 
             # Convert dict to JSON string for Prisma Json field

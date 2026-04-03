@@ -1704,6 +1704,7 @@ const MovieDetailScreen = ({
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [movieId, setMovieId] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
 
   // Animation for tab switching
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -1751,8 +1752,22 @@ const MovieDetailScreen = ({
 
       setMovieId(scriptResult.movie_id);
 
-      // Step 3: Classify vocabulary
-      await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang);
+      // Step 3: Classify vocabulary (pass genre names for difficulty scoring)
+      const genreNames = movie.genre_ids?.map(id => tmdbGenres[id]).filter(Boolean) || [];
+      await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang, genreNames);
+
+      // Step 3b: Fetch difficulty score
+      try {
+        const diffRes = await fetch(`${API_BASE_URL}/movies/${scriptResult.movie_id}/difficulty`);
+        if (diffRes.ok) {
+          const diffData = await diffRes.json();
+          if (diffData.difficulty_score != null) {
+            setDifficulty({ level: diffData.difficulty_level, score: diffData.difficulty_score });
+          }
+        }
+      } catch (diffErr) {
+        console.log('[MovieDetail] Difficulty fetch failed:', diffErr);
+      }
 
       // Step 4: Try to get full vocabulary first, fall back to preview
       let vocabResult: VocabularyResponse;
@@ -1867,6 +1882,13 @@ const MovieDetailScreen = ({
                   <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
                 </View>
               ))}
+            </View>
+          )}
+          {difficulty && (
+            <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
+              <Text style={styles.difficultyChipText}>
+                {difficulty.level} · {difficulty.score}%
+              </Text>
             </View>
           )}
           {vocabulary && (
@@ -2613,6 +2635,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.primary,
     fontWeight: '600',
+  },
+  difficultyChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  difficultyChipText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '700',
   },
   overviewSection: {
     paddingHorizontal: 16,

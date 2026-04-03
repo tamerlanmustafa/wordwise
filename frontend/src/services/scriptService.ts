@@ -221,17 +221,17 @@ export async function fetchMovieScript(movieTitle: string): Promise<ScriptRespon
  */
 export async function classifyMovieScript(
   movieId: number,
-  targetLanguage?: string
+  targetLanguage?: string,
+  genres?: string[]
 ): Promise<CEFRClassificationResponse> {
-  // console.log('[API REQUEST] /api/cefr/classify-script - movie_id:', movieId);
-
   try {
     const response = await axios.post<CEFRClassificationResponse>(
       `${API_BASE_URL}/api/cefr/classify-script`,
       {
         movie_id: movieId,
         save_to_db: true,
-        target_language: targetLanguage || 'ES' // Default to Spanish if not provided
+        target_language: targetLanguage || 'ES',
+        ...(genres && genres.length > 0 ? { genres } : {})
       }
     );
 
