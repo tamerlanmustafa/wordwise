@@ -146,8 +146,9 @@ def analyze_morphosyntax(text: str, max_chars: int = 500_000) -> MorphosyntaxRes
                 total_coordinate_clauses += 1
 
     avg_clauses_per_sentence = (total_subordinate_clauses + total_coordinate_clauses) / num_sentences
-    # Normalize: 0 extra clauses = 0.0, 3+ extra clauses/sentence = 1.0
-    clause_density = min(avg_clauses_per_sentence / 3.0, 1.0)
+    # Normalize for movie scripts (dialogue-heavy): 0 = 0.0, 1.0+ clauses/sentence = 1.0
+    # General text might need 3.0, but movie subtitles rarely exceed 0.8
+    clause_density = min(avg_clauses_per_sentence / 1.0, 1.0)
 
     # ── 2. Syntactic Depth ──
     # Average maximum tree depth per sentence
@@ -161,8 +162,9 @@ def analyze_morphosyntax(text: str, max_chars: int = 500_000) -> MorphosyntaxRes
         total_max_depth += max_depth
 
     avg_max_depth = total_max_depth / num_sentences
-    # Normalize: depth 2 = 0.0, depth 8+ = 1.0
-    syntactic_depth = max(0.0, min((avg_max_depth - 2.0) / 6.0, 1.0))
+    # Normalize for movie scripts: depth 2 = 0.0, depth 5+ = 1.0
+    # Subtitle sentences are short; depth 3+ already signals complexity
+    syntactic_depth = max(0.0, min((avg_max_depth - 2.0) / 3.0, 1.0))
 
     # ── 3. Passive Voice Ratio ──
     # Count sentences containing at least one passive construction
@@ -182,8 +184,9 @@ def analyze_morphosyntax(text: str, max_chars: int = 500_000) -> MorphosyntaxRes
             passive_sentence_count += 1
 
     passive_ratio_raw = passive_sentence_count / num_sentences
-    # Normalize: 0% = 0.0, 25%+ = 1.0
-    passive_ratio = min(passive_ratio_raw / 0.25, 1.0)
+    # Normalize for movie scripts: 0% = 0.0, 12%+ = 1.0
+    # Most movies have <3% passive; 7%+ is distinctly formal
+    passive_ratio = min(passive_ratio_raw / 0.12, 1.0)
 
     # ── 4. Nominalization Density ──
     # Count nouns that are likely derived from verbs/adjectives via productive morphology
@@ -208,8 +211,9 @@ def analyze_morphosyntax(text: str, max_chars: int = 500_000) -> MorphosyntaxRes
                     break
 
     nominalization_ratio = nominalization_count / total_nouns if total_nouns > 0 else 0
-    # Normalize: 5% = 0.0, 25%+ = 1.0
-    nominalization_density = max(0.0, min((nominalization_ratio - 0.05) / 0.20, 1.0))
+    # Normalize for movie scripts: 3% = 0.0, 12%+ = 1.0
+    # Casual dialogue has ~2-3% nominalizations; formal speech hits 8-12%
+    nominalization_density = max(0.0, min((nominalization_ratio - 0.03) / 0.09, 1.0))
 
     # ── Composite Score ──
     composite = (
