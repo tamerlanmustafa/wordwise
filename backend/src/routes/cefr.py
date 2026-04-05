@@ -451,7 +451,7 @@ async def classify_script(
                         )
                         for cls in existing_classifications
                     ]
-                    level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=request.genres)
+                    level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=request.genres, text=script.cleanedScriptText)
                     await db.movie.update(
                         where={'id': request.movie_id},
                         data={
@@ -626,7 +626,7 @@ async def classify_script(
             ]
 
             # genres already extracted above (from request or DB)
-            level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=genres)
+            level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=genres, text=script.cleanedScriptText)
 
             # Convert dict to JSON string for Prisma Json field
             await db.movie.update(

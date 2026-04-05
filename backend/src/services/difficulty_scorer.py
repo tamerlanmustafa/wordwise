@@ -166,12 +166,56 @@ def compute_domain_density(words: List['WordData']) -> tuple[float, dict[str, fl
     return total_density, domain_breakdown
 
 
+def split_sentences(text: str) -> List[str]:
+    """Split text into sentences, filtering empty ones."""
+    parts = re.split(r'[.!?]+(?:\s|$)', text)
+    return [s.strip() for s in parts if s.strip()]
+
+
 def count_sentences(text: str) -> int:
     """Count sentences in text using common sentence terminators."""
-    # Match sentence-ending punctuation followed by space/end
-    sentences = re.split(r'[.!?]+(?:\s|$)', text)
-    # Filter empty strings
-    return max(1, len([s for s in sentences if s.strip()]))
+    return max(1, len(split_sentences(text)))
+
+
+def compute_sentence_length_buckets(text: str) -> dict:
+    """
+    Categorize sentences by word count into CEFR-aligned difficulty buckets.
+
+    Buckets (based on CEFR reading descriptors):
+      - short:  ≤10 words  (A1-A2 level sentences)
+      - medium: 11-15 words (B1 level)
+      - long:   16-20 words (B2 level)
+      - complex: 21+ words  (C1+ level)
+
+    Returns dict with counts and percentages per bucket.
+    """
+    sentences = split_sentences(text)
+    if not sentences:
+        return {"short": 0, "medium": 0, "long": 0, "complex": 0,
+                "pct_short": 0.0, "pct_medium": 0.0, "pct_long": 0.0, "pct_complex": 0.0,
+                "total": 0}
+
+    short = medium = long = complex_count = 0
+    for sent in sentences:
+        word_count = len(sent.split())
+        if word_count <= 10:
+            short += 1
+        elif word_count <= 15:
+            medium += 1
+        elif word_count <= 20:
+            long += 1
+        else:
+            complex_count += 1
+
+    total = len(sentences)
+    return {
+        "short": short, "medium": medium, "long": long, "complex": complex_count,
+        "pct_short": short / total,
+        "pct_medium": medium / total,
+        "pct_long": long / total,
+        "pct_complex": complex_count / total,
+        "total": total,
+    }
 
 
 def compute_flesch_kincaid_grade(text: str, words: List[WordData]) -> float:
@@ -682,13 +726,20 @@ def compute_difficulty_advanced(
         fre = compute_flesch_reading_ease(text, words)
         readability_score = max(0.0, min(1.0, (100.0 - fre) / 100.0))
 
-    # 11. Sentence length complexity (if text provided)
-    sentence_length_score = 0.4  # Default
+    # 11. Sentence length complexity (bucket approach)
+    # Instead of a flat average, measure what % of sentences are hard (16+ words)
+    # A movie with many long sentences is harder even if average is "medium"
+    sentence_length_score = 0.3  # Default
     if text:
-        num_sentences = count_sentences(text)
-        avg_sentence_len = total_words / num_sentences if num_sentences > 0 else 10
-        # Normalize: 8 words/sentence = easy (0.0), 20+ = hard (1.0)
-        sentence_length_score = max(0.0, min(1.0, (avg_sentence_len - 8.0) / 12.0))
+        buckets = compute_sentence_length_buckets(text)
+        # Score = weighted sum of hard sentence percentages
+        # B2-length (16-20 words) sentences count, C1+ (21+) count more
+        sentence_length_score = (
+            buckets["pct_long"] * 0.5 +      # 16-20 word sentences
+            buckets["pct_complex"] * 1.0      # 21+ word sentences
+        )
+        # Normalize: 0% hard = 0.0, 40%+ hard sentences = 1.0
+        sentence_length_score = min(sentence_length_score / 0.40, 1.0)
 
     # 12. Domain vocabulary density
     domain_density, _domain_breakdown = compute_domain_density(words)
