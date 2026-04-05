@@ -1102,8 +1102,20 @@ class HybridCEFRClassifier:
 
         if lemma_results:
             # Prefer noun lemma for words ending in -s/-es (likely plurals)
+            # BUT validate it — if noun lemma isn't in our wordlist, try verb
+            # (e.g., "dies" → noun:"dy" is garbage, verb:"die" is correct)
             if word_lower.endswith('s') and 'n' in lemma_results:
-                result = lemma_results['n']
+                noun_lemma = lemma_results['n']
+                verb_lemma = lemma_results.get('v')
+                if noun_lemma in self.cefr_wordlist:
+                    result = noun_lemma
+                elif verb_lemma and verb_lemma in self.cefr_wordlist:
+                    result = verb_lemma
+                elif verb_lemma:
+                    # Neither in wordlist — prefer the longer/more plausible lemma
+                    result = noun_lemma if len(noun_lemma) >= len(verb_lemma) else verb_lemma
+                else:
+                    result = noun_lemma
             # Prefer verb lemma for -ing/-ed words
             elif (word_lower.endswith('ing') or word_lower.endswith('ed')) and 'v' in lemma_results:
                 result = lemma_results['v']
