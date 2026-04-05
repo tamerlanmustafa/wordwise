@@ -1159,10 +1159,16 @@ class HybridCEFRClassifier:
         elif zipf >= 2.0:
             level = CEFRLevel.C1
             confidence = 0.45
-        else:
-            # Very rare words (Zipf < 2.0) → C2
+        elif zipf > 0:
+            # Genuinely rare words (Zipf 0.01-2.0) — they exist in corpora but are rare → C2
             level = CEFRLevel.C2
             confidence = 0.35
+        else:
+            # Zipf = 0.0 — word not found in any corpus at all
+            # More likely a typo, dialect, foreign word, or niche term than true C2
+            # Downgrade to B2 (benefit of the doubt)
+            level = CEFRLevel.B2
+            confidence = 0.20
 
         return WordClassification(
             word=word,
@@ -1425,6 +1431,64 @@ class HybridCEFRClassifier:
         cleaned_text = self.aggressive_preclean(text)
         words = cleaned_text.split()
         valid_words = [w for w in words if is_valid_token(w)]
+
+        # ── Word Normalization: dialect, foreign, compound ──
+        # Normalize nonstandard spellings and filter non-English words
+        # BEFORE deduplication and lemmatization.
+        try:
+            from .word_normalizer import normalize_batch
+
+            # Build is_known_english check from our CEFR wordlists + wordfreq
+            def _is_known_english(w: str) -> bool:
+                wl = w.lower()
+                if wl in self.cefr_wordlist:
+                    return True
+                # Check lemma too (e.g., "backstabbing" might not be listed but "backstab" is)
+                lemma = self.lemmatizer.lemmatize(wl, pos='v')
+                if lemma != wl and lemma in self.cefr_wordlist:
+                    return True
+                lemma_n = self.lemmatizer.lemmatize(wl, pos='n')
+                if lemma_n != wl and lemma_n in self.cefr_wordlist:
+                    return True
+                # Check wordfreq — Zipf > 0 means it exists in English corpora
+                _, zipf = self._get_frequency_data(wl)
+                if zipf and zipf > 2.0:
+                    return True
+                return False
+
+            def _get_zipf(w: str) -> float:
+                _, zipf = self._get_frequency_data(w.lower())
+                return zipf if zipf else 0.0
+
+            norm_results = normalize_batch(valid_words, _is_known_english, _get_zipf)
+
+            # Apply normalization: replace words and filter foreign
+            normalized_words = []
+            normalization_map = {}
+            foreign_excluded = []
+            for result in norm_results:
+                if result.is_foreign:
+                    foreign_excluded.append(result.original)
+                    continue
+                if result.normalization_type != "none":
+                    normalization_map[result.original.lower()] = result.normalized
+                normalized_words.append(result.normalized)
+
+            valid_words = normalized_words
+
+            if normalization_map or foreign_excluded:
+                logger.info(
+                    f"Normalization: {len(normalization_map)} words remapped, "
+                    f"{len(foreign_excluded)} foreign words excluded"
+                )
+                if logger.isEnabledFor(logging.DEBUG):
+                    for orig, norm in list(normalization_map.items())[:20]:
+                        logger.debug(f"  {orig} → {norm}")
+                    for fw in foreign_excluded[:20]:
+                        logger.debug(f"  [foreign] {fw}")
+        except Exception as e:
+            logger.warning(f"Word normalization failed, proceeding without: {e}")
+
         unique_words = list(set(valid_words))
 
         if logger.isEnabledFor(logging.DEBUG):
