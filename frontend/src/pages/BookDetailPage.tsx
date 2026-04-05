@@ -192,39 +192,8 @@ export default function BookDetailPage() {
         })) || []
       }));
 
-      // Merge C1 and C2 into "Advanced"
-      const mergedCategories = rawCategories.reduce((acc, category) => {
-        if (category.level === 'C1' || category.level === 'C2') {
-          const advancedIndex = acc.findIndex(c => c.level === 'C1');
-          if (advancedIndex === -1) {
-            acc.push({
-              level: 'C1' as const,
-              description: 'Advanced vocabulary',
-              words: category.words
-            });
-          } else {
-            acc[advancedIndex].words.push(...category.words);
-          }
-        } else {
-          acc.push(category);
-        }
-        return acc;
-      }, [] as typeof rawCategories);
-
-      // Sort Advanced words by frequency_rank
-      const sortedCategories = mergedCategories.map(category => {
-        if (category.level === 'C1') {
-          return {
-            ...category,
-            words: category.words.sort((a: { frequency_rank?: number | null }, b: { frequency_rank?: number | null }) => {
-              const aRank = a.frequency_rank ?? 999999;
-              const bRank = b.frequency_rank ?? 999999;
-              return aRank - bRank;
-            })
-          };
-        }
-        return category;
-      });
+      // Show all CEFR levels including C2 separately
+      const sortedCategories = rawCategories;
 
       const finalAnalysis: ScriptAnalysisResult = {
         title: bookData.title || 'Unknown Book',
@@ -307,30 +276,12 @@ export default function BookDetailPage() {
         })) || []
       }));
 
-      // Merge C1 and C2 into "Advanced"
-      const mergedCategories = rawCategories.reduce((acc, category) => {
-        if (category.level === 'C1' || category.level === 'C2') {
-          const advancedIndex = acc.findIndex(c => c.level === 'C1');
-          if (advancedIndex === -1) {
-            acc.push({
-              level: 'C1' as const,
-              description: 'Advanced vocabulary',
-              words: category.words
-            });
-          } else {
-            acc[advancedIndex].words.push(...category.words);
-          }
-        } else {
-          acc.push(category);
-        }
-        return acc;
-      }, [] as typeof rawCategories);
-
+      // Show all CEFR levels including C2 separately
       const pageAnalysis: ScriptAnalysisResult = {
         title: `${bookMetadata?.title || 'Book'} (Pages ${startPage}-${endPage})`,
         totalWords: cefrResult.words_in_range,
         uniqueWords: cefrResult.words_in_range,
-        categories: mergedCategories,
+        categories: rawCategories,
         idioms: []
       };
 

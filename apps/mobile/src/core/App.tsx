@@ -83,6 +83,7 @@ const cefrLabels: Record<string, string> = {
   B1: 'Intermediate',
   B2: 'Upper Int.',
   C1: 'Advanced',
+  C2: 'Mastery',
   IDIOMS: 'Idioms & Phrases',
 };
 
@@ -1849,36 +1850,18 @@ const MovieDetailScreen = ({
     }
   };
 
-  // Merge C1 and C2 into Advanced, and add Idioms tab
+  // Show all CEFR levels including C2, and add Idioms tab
   const mergedLevels = useMemo(() => {
     if (!vocabulary) return [];
 
-    const levels = ['A1', 'A2', 'B1', 'B2', 'C1'];
-    const result = levels.map((level) => {
-      if (level === 'C1') {
-        // Merge C1 and C2
-        const c1Count = vocabulary.level_distribution.C1 || 0;
-        const c2Count = vocabulary.level_distribution.C2 || 0;
-        const c1Words = vocabulary.top_words_by_level['C1'] || [];
-        const c2Words = vocabulary.top_words_by_level['C2'] || [];
-        return {
-          level: 'C1',
-          label: 'Advanced',
-          count: c1Count + c2Count,
-          words: [...c1Words, ...c2Words].sort(
-            (a, b) => (a.frequency_rank || 999999) - (b.frequency_rank || 999999)
-          ),
-          isIdioms: false,
-        };
-      }
-      return {
-        level,
-        label: cefrLabels[level] || level,
-        count: vocabulary.level_distribution[level as keyof typeof vocabulary.level_distribution] || 0,
-        words: vocabulary.top_words_by_level[level] || [],
-        isIdioms: false,
-      };
-    });
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const result = levels.map((level) => ({
+      level,
+      label: cefrLabels[level] || level,
+      count: vocabulary.level_distribution[level as keyof typeof vocabulary.level_distribution] || 0,
+      words: vocabulary.top_words_by_level[level] || [],
+      isIdioms: false,
+    }));
 
     // Add idioms tab if idioms exist
     if (vocabulary.idioms && vocabulary.idioms.length > 0) {

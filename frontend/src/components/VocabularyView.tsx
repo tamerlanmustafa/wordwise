@@ -100,25 +100,9 @@ function VocabularyViewBase({
   const gridItemRef = useRef<HTMLDivElement | null>(null);
   const [fadeMaskStyle, setFadeMaskStyle] = useState({ left: 0, width: '100%' });
 
-  // Merge C1 and C2 into single "Advanced" category
+  // Show all CEFR levels including C2 separately
   const mergedCategories = useMemo(() => {
-    return analysis.categories.reduce((acc, category) => {
-      if (category.level === 'C1' || category.level === 'C2') {
-        const advancedIndex = acc.findIndex(c => c.level === 'C1');
-        if (advancedIndex === -1) {
-          acc.push({
-            ...category,
-            level: 'C1' as const,
-            description: 'Advanced vocabulary (C1 & C2)'
-          });
-        } else {
-          acc[advancedIndex].words.push(...category.words);
-        }
-      } else {
-        acc.push(category);
-      }
-      return acc;
-    }, [] as DifficultyCategory[]);
+    return analysis.categories;
   }, [analysis.categories]);
 
   // Create idioms "category" if idioms exist

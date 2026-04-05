@@ -146,53 +146,8 @@ export default function MovieSearchPage() {
         })) || []
       }));
 
-      // Merge C1 and C2 into "Advanced" category
-      const mergedCategories = rawCategories.reduce((acc, category) => {
-        if (category.level === 'C1') {
-          // Create or update Advanced category
-          const advancedIndex = acc.findIndex(c => c.level === 'C1');
-          if (advancedIndex === -1) {
-            acc.push({
-              level: 'C1' as const,
-              description: 'Advanced vocabulary',
-              words: category.words
-            });
-          } else {
-            acc[advancedIndex].words.push(...category.words);
-          }
-        } else if (category.level === 'C2') {
-          // Merge C2 words into Advanced (C1)
-          const advancedIndex = acc.findIndex(c => c.level === 'C1');
-          if (advancedIndex === -1) {
-            acc.push({
-              level: 'C1' as const,
-              description: 'Advanced vocabulary',
-              words: category.words
-            });
-          } else {
-            acc[advancedIndex].words.push(...category.words);
-          }
-        } else {
-          // Keep A1, A2, B1, B2 as-is
-          acc.push(category);
-        }
-        return acc;
-      }, [] as typeof rawCategories);
-
-      // Sort combined Advanced words by frequency_rank (easier to harder)
-      const sortedCategories = mergedCategories.map(category => {
-        if (category.level === 'C1') {
-          return {
-            ...category,
-            words: category.words.sort((a, b) => {
-              const aRank = a.frequency_rank ?? 999999;
-              const bRank = b.frequency_rank ?? 999999;
-              return aRank - bRank;
-            })
-          };
-        }
-        return category;
-      });
+      // Show all CEFR levels including C2 separately
+      const sortedCategories = rawCategories;
 
       const analysis: ScriptAnalysisResult = {
         title: movie.title,

@@ -124,39 +124,8 @@ export default function MovieDetailPage() {
           })) || []
         }));
 
-        // Merge C1 and C2 into "Advanced"
-        const mergedCategories = rawCategories.reduce((acc, category) => {
-          if (category.level === 'C1' || category.level === 'C2') {
-            const advancedIndex = acc.findIndex(c => c.level === 'C1');
-            if (advancedIndex === -1) {
-              acc.push({
-                level: 'C1' as const,
-                description: 'Advanced vocabulary',
-                words: category.words
-              });
-            } else {
-              acc[advancedIndex].words.push(...category.words);
-            }
-          } else {
-            acc.push(category);
-          }
-          return acc;
-        }, [] as typeof rawCategories);
-
-        // Sort Advanced words by frequency_rank
-        const sortedCategories = mergedCategories.map(category => {
-          if (category.level === 'C1') {
-            return {
-              ...category,
-              words: category.words.sort((a, b) => {
-                const aRank = a.frequency_rank ?? 999999;
-                const bRank = b.frequency_rank ?? 999999;
-                return aRank - bRank;
-              })
-            };
-          }
-          return category;
-        });
+        // Show all CEFR levels including C2 separately
+        const sortedCategories = rawCategories;
 
         const finalAnalysis: ScriptAnalysisResult = {
           title: movieInfo.title || 'Uploaded Content',
@@ -286,50 +255,8 @@ export default function MovieDetailPage() {
           })) || []
         }));
 
-        // Merge C1 and C2 into "Advanced"
-        const mergedCategories = rawCategories.reduce((acc, category) => {
-          if (category.level === 'C1') {
-            const advancedIndex = acc.findIndex(c => c.level === 'C1');
-            if (advancedIndex === -1) {
-              acc.push({
-                level: 'C1' as const,
-                description: 'Advanced vocabulary',
-                words: category.words
-              });
-            } else {
-              acc[advancedIndex].words.push(...category.words);
-            }
-          } else if (category.level === 'C2') {
-            const advancedIndex = acc.findIndex(c => c.level === 'C1');
-            if (advancedIndex === -1) {
-              acc.push({
-                level: 'C1' as const,
-                description: 'Advanced vocabulary',
-                words: category.words
-              });
-            } else {
-              acc[advancedIndex].words.push(...category.words);
-            }
-          } else {
-            acc.push(category);
-          }
-          return acc;
-        }, [] as typeof rawCategories);
-
-        // Sort Advanced words by frequency_rank
-        const sortedCategories = mergedCategories.map(category => {
-          if (category.level === 'C1') {
-            return {
-              ...category,
-              words: category.words.sort((a, b) => {
-                const aRank = a.frequency_rank ?? 999999;
-                const bRank = b.frequency_rank ?? 999999;
-                return aRank - bRank;
-              })
-            };
-          }
-          return category;
-        });
+        // Show all CEFR levels including C2 separately
+        const sortedCategories = rawCategories;
 
         const finalAnalysis: ScriptAnalysisResult = {
           title: movieTitle,

@@ -65,25 +65,9 @@ export default function VocabularyTabs({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Merge C1 and C2 into single "Advanced" category
+  // Show all CEFR levels including C2 separately
   const mergedCategories = useMemo(() => {
-    return categories.reduce((acc, category) => {
-      if (category.level === 'C1' || category.level === 'C2') {
-        const advancedIndex = acc.findIndex(c => c.level === 'C1');
-        if (advancedIndex === -1) {
-          acc.push({
-            ...category,
-            level: 'C1' as const,
-            description: 'Advanced vocabulary (C1 & C2)'
-          });
-        } else {
-          acc[advancedIndex].words.push(...category.words);
-        }
-      } else {
-        acc.push(category);
-      }
-      return acc;
-    }, [] as DifficultyCategory[]);
+    return categories;
   }, [categories]);
 
   // Initialize groups with pagination info
