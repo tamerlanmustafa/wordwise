@@ -867,9 +867,9 @@ def compute_difficulty_advanced(
         base_band = "A"
 
     if base_band == "A" and domain_density < 0.005:
-        difficulty_score = min(difficulty_score, 0.40)
+        difficulty_score = min(difficulty_score, 0.35)
     elif base_band == "B":
-        difficulty_score = max(0.35, min(difficulty_score, 0.75))
+        difficulty_score = max(0.35, min(difficulty_score, 0.65))
 
     # Clamp negative values at 0 before scaling
     difficulty_score = max(0.0, difficulty_score)
@@ -885,16 +885,16 @@ def compute_difficulty_advanced(
         score = int(score * genre_multiplier)
         score = max(0, min(100, score))
 
-    # Overhauled thresholds optimized for realistic classification
-    if score < 25:
+    # CEFR thresholds: 0-20 A1, 20-35 A2, 35-50 B1, 50-65 B2, 65-80 C1, 80-100 C2
+    if score < 20:
         level = difficultylevel.ELEMENTARY  # A1
-    elif score < 40:
+    elif score < 35:
         level = difficultylevel.ELEMENTARY  # A2
-    elif score < 55:
+    elif score < 50:
         level = difficultylevel.INTERMEDIATE  # B1
-    elif score < 70:
+    elif score < 65:
         level = difficultylevel.INTERMEDIATE  # B2
-    elif score < 85:
+    elif score < 80:
         level = difficultylevel.ADVANCED  # C1
     else:
         level = difficultylevel.PROFICIENT  # C2
