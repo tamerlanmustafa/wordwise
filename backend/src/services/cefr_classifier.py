@@ -1058,24 +1058,95 @@ class HybridCEFRClassifier:
 
         word_lower = word.lower()
 
-        # Special case: irregular plurals that lemmatize incorrectly
-        irregular_plurals = {
+        # ── Stage 1: Irregular forms that NLTK gets wrong ──
+        # NLTK returns archaic/wrong lemmas for these
+        irregular_overrides = {
+            # Irregular plurals (-ves → -f/-fe)
             'thieves': 'thief', 'knives': 'knife', 'wives': 'wife',
             'lives': 'life', 'leaves': 'leaf', 'wolves': 'wolf',
             'halves': 'half', 'calves': 'calf', 'shelves': 'shelf',
             'loaves': 'loaf', 'elves': 'elf', 'scarves': 'scarf',
+            # Irregular plurals (vowel change / -en)
+            'mice': 'mouse', 'lice': 'louse', 'dice': 'die',
+            'geese': 'goose', 'teeth': 'tooth', 'feet': 'foot',
+            'children': 'child', 'oxen': 'ox', 'men': 'man',
+            'women': 'woman', 'brethren': 'brother',
+            # -oes plurals NLTK doesn't handle
+            'heroes': 'hero', 'potatoes': 'potato', 'tomatoes': 'tomato',
+            'echoes': 'echo', 'torpedoes': 'torpedo', 'vetoes': 'veto',
+            'mosquitoes': 'mosquito', 'volcanoes': 'volcano',
+            # NLTK returns archaic spellings (cooky, pixy, hippy)
+            'cookies': 'cookie', 'cookys': 'cookie',
+            'hippies': 'hippie', 'yuppies': 'yuppie',
+            'pixies': 'pixie', 'brownies': 'brownie',
+            'zombies': 'zombie', 'movies': 'movie',
+            'smoothies': 'smoothie', 'selfies': 'selfie',
+            'goodies': 'goodie', 'birdies': 'birdie',
+            'rookies': 'rookie', 'groupies': 'groupie',
+            'veggies': 'veggie', 'hoodies': 'hoodie',
+            'undies': 'undie', 'wedgies': 'wedgie',
         }
-        if word_lower in irregular_plurals:
-            result = irregular_plurals[word_lower]
+        if word_lower in irregular_overrides:
+            result = irregular_overrides[word_lower]
             _GLOBAL_LEMMA_CACHE.set(word, result)
             return result
 
-        # Try verb lemmatization first (handles -ing, -ed), then noun, adj
-        for pos in ['v', 'n', 'a', 'r']:
+        # ── Stage 2: Try NLTK lemmatizer (noun first for plurals, then verb) ──
+        # Changed order: try noun first to avoid "lives"→"live" (verb) instead of "life" (noun)
+        # Then verb for -ing/-ed forms, then adj/adv
+        lemma_results = {}
+        for pos in ['n', 'v', 'a', 'r']:
             lemma = self.lemmatizer.lemmatize(word_lower, pos=pos)
             if lemma != word_lower:
-                _GLOBAL_LEMMA_CACHE.set(word, lemma)
-                return lemma
+                lemma_results[pos] = lemma
+
+        if lemma_results:
+            # Prefer noun lemma for words ending in -s/-es (likely plurals)
+            if word_lower.endswith('s') and 'n' in lemma_results:
+                result = lemma_results['n']
+            # Prefer verb lemma for -ing/-ed words
+            elif (word_lower.endswith('ing') or word_lower.endswith('ed')) and 'v' in lemma_results:
+                result = lemma_results['v']
+            else:
+                # Take first available (noun > verb > adj > adv)
+                result = next(iter(lemma_results.values()))
+
+            # ── Stage 3: Fix NLTK archaic lemmas ──
+            # NLTK sometimes returns archaic forms (cooky, pixy, hippy)
+            # If the lemma ends in 'y' and the modern '-ie' form is in our wordlist,
+            # prefer the modern spelling
+            if result.endswith('y') and len(result) >= 4:
+                modern = result[:-1] + 'ie'
+                if modern in self.cefr_wordlist and result not in self.cefr_wordlist:
+                    result = modern
+
+            _GLOBAL_LEMMA_CACHE.set(word, result)
+            return result
+
+        # ── Stage 4: Simple plural stripping fallback ──
+        # For words NLTK couldn't lemmatize at all (e.g., uncommon nouns)
+        if word_lower.endswith('ies') and len(word_lower) > 4:
+            candidate = word_lower[:-3] + 'y'
+            if candidate in self.cefr_wordlist:
+                _GLOBAL_LEMMA_CACHE.set(word, candidate)
+                return candidate
+        elif word_lower.endswith('es') and len(word_lower) > 3:
+            # tries → try (already handled), boxes → box
+            candidate = word_lower[:-2]
+            if candidate in self.cefr_wordlist:
+                _GLOBAL_LEMMA_CACHE.set(word, candidate)
+                return candidate
+            # Also try dropping just -s: houses → house
+            candidate = word_lower[:-1]
+            if candidate in self.cefr_wordlist:
+                _GLOBAL_LEMMA_CACHE.set(word, candidate)
+                return candidate
+        elif word_lower.endswith('s') and len(word_lower) > 3:
+            candidate = word_lower[:-1]
+            if candidate in self.cefr_wordlist:
+                _GLOBAL_LEMMA_CACHE.set(word, candidate)
+                return candidate
+
         _GLOBAL_LEMMA_CACHE.set(word, word_lower)
         return word_lower
 
