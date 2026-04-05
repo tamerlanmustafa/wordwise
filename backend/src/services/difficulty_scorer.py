@@ -744,30 +744,110 @@ def compute_difficulty_advanced(
     # 12. Domain vocabulary density
     domain_density, _domain_breakdown = compute_domain_density(words)
 
+    # 13-17. Advanced linguistic analysis (if text available)
+    morphosyntax_score = 0.3  # Default
+    semantic_score = 0.3
+    lexical_soph_score = 0.2
+    discourse_score = 0.1
+    cognitive_score = 0.3
+
+    if text:
+        try:
+            from .syntactic_analyzer import analyze_morphosyntax
+            morpho_result = analyze_morphosyntax(text)
+            morphosyntax_score = morpho_result.composite_score
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Morphosyntax analysis failed: {e}")
+
+        try:
+            from .semantic_analyzer import analyze_semantics
+            word_strs = list(set(w.word.lower() for w in words if w.word))
+            semantic_result = analyze_semantics(text=text, word_list=word_strs)
+            semantic_score = semantic_result.composite_score
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Semantic analysis failed: {e}")
+
+        try:
+            from .lexical_analyzer import analyze_lexical_sophistication
+            word_strs = list(set(w.word.lower() for w in words if w.word))
+            lexical_result = analyze_lexical_sophistication(text=text, word_list=word_strs)
+            lexical_soph_score = lexical_result.composite_score
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Lexical analysis failed: {e}")
+
+        try:
+            from .discourse_analyzer import analyze_discourse
+            discourse_result = analyze_discourse(text=text)
+            discourse_score = discourse_result.composite_score
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Discourse analysis failed: {e}")
+
+        try:
+            from .cognitive_analyzer import analyze_cognitive_load
+            cognitive_result = analyze_cognitive_load(text=text)
+            cognitive_score = cognitive_result.composite_score
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Cognitive analysis failed: {e}")
+
     # Final weights (sum = 100%)
-    #   - weighted_complex:      22% (content word complexity)
-    #   - hard_word_score:       20% (B2+ concentration among content words)
-    #   - zipf_rarity_score:     10% (vocabulary rarity via Zipf)
-    #   - median_score:           8% (median CEFR level)
-    #   - readability_score:      8% (Flesch reading ease)
-    #   - sentence_length_score:  8% (avg words per sentence)
-    #   - lexical_diversity:      7% (vocabulary richness)
-    #   - spread_score:           5% (CEFR level range)
-    #   - syllable_score:         4% (word length proxy)
-    #   - repetition_ratio:       4% (lexical variation)
-    #   - idiom_density:          4% (phrasal complexity)
+    # ── Vocabulary complexity (35%) ──
+    #   - weighted_complex:      18% (content word CEFR distribution)
+    #   - hard_word_score:       17% (B2+ concentration)
+    # ── Lexical sophistication (7%) ──
+    #   - lexical_soph_score:     7% (collocations, MWEs, rare morphology)
+    # ── Syntactic complexity (8%) ──
+    #   - morphosyntax_score:     8% (clause density, tree depth, passive, nominalizations)
+    # ── Readability & structure (10%) ──
+    #   - readability_score:      5% (Flesch reading ease)
+    #   - sentence_length_score:  5% (sentence length buckets)
+    # ── Frequency & diversity (10%) ──
+    #   - zipf_rarity_score:      5% (vocabulary rarity)
+    #   - lexical_diversity:      3% (vocabulary richness)
+    #   - repetition_ratio:       2% (unique/total ratio)
+    # ── Semantic complexity (7%) ──
+    #   - semantic_score:         7% (abstractness, polysemy, density, referential)
+    # ── Pragmatic & discourse (5%) ──
+    #   - discourse_score:        5% (indirect speech, cohesion, cultural refs)
+    # ── Cognitive load (3%) ──
+    #   - cognitive_score:        3% (surprisal, topic shifts)
+    # ── Other (15%) ──
+    #   - median_score:           5% (median CEFR level)
+    #   - spread_score:           3% (CEFR level range)
+    #   - syllable_score:         2% (word length proxy)
+    #   - idiom_density:          2% (phrasal verb density — original signal)
+
     difficulty_score = (
-        0.22 * weighted_complex +
-        0.20 * hard_word_score +
-        0.10 * zipf_rarity_score +
-        0.08 * median_score +
-        0.08 * readability_score +
-        0.08 * sentence_length_score +
-        0.07 * lexical_diversity +
-        0.05 * spread_score +
-        0.04 * syllable_score +
-        0.04 * repetition_ratio +
-        0.04 * idiom_density
+        # Vocabulary complexity (35%)
+        0.18 * weighted_complex +
+        0.17 * hard_word_score +
+        # Lexical sophistication (7%)
+        0.07 * lexical_soph_score +
+        # Syntactic complexity (8%)
+        0.08 * morphosyntax_score +
+        # Readability & structure (10%)
+        0.05 * readability_score +
+        0.05 * sentence_length_score +
+        # Frequency & diversity (10%)
+        0.06 * zipf_rarity_score +
+        0.04 * lexical_diversity +
+        0.02 * repetition_ratio +
+        # Semantic complexity (7%)
+        0.07 * semantic_score +
+        # Pragmatic & discourse (5%)
+        0.05 * discourse_score +
+        # Cognitive load (3%)
+        0.03 * cognitive_score +
+        # Other (15%)
+        0.06 * median_score +
+        0.03 * spread_score +
+        0.02 * syllable_score +
+        0.02 * idiom_density
+        # Total: 18+17+7+8+5+5+6+4+2+7+5+3+6+3+2+2 = 100%
     )
 
     # DOMAIN MULTIPLIER: Applied on top, not additive.
