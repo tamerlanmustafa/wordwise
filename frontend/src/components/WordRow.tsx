@@ -198,6 +198,7 @@ interface WordRowProps {
   targetLang?: string;
   otherMoviesText?: string;
   onReport?: (word: string, translationSource?: string) => void;
+  logInteraction?: (word: string, interactionType: string, movieId?: number, metadata?: Record<string, unknown>) => void;
 }
 
 // ============================================================================
@@ -224,7 +225,8 @@ export const WordRow = memo<WordRowProps>(({
   movieTitle: _movieTitle,
   targetLang,
   otherMoviesText,
-  onReport
+  onReport,
+  logInteraction
 }) => {
   // movieTitle reserved for future use in report dialog
   const contentRef = useRef<HTMLDivElement>(null);
@@ -303,6 +305,9 @@ export const WordRow = memo<WordRowProps>(({
       return;
     }
 
+    // Log row click interaction (fire-and-forget)
+    logInteraction?.(word.word, 'ROW_CLICK', movieId);
+
     // If we already have content, expand immediately
     if (contentData || fetchedRef.current) {
       onExpandChange(virtualIndex, true);
@@ -327,7 +332,7 @@ export const WordRow = memo<WordRowProps>(({
       // Still expand even if fetch failed
       onExpandChange(virtualIndex, true);
     }
-  }, [isExpanded, contentData, virtualIndex, onExpandChange, fetchContent]);
+  }, [isExpanded, contentData, virtualIndex, onExpandChange, fetchContent, logInteraction, word.word, movieId]);
 
   const handleSave = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

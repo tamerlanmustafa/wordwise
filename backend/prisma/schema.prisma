@@ -28,6 +28,7 @@ model User {
   wordLists          UserWordList[]
   translationHistory UserTranslationHistory[]
   userWords          UserWord[]
+  wordInteractions   UserWordInteraction[]
   reportsMade        WordReport[]              @relation("ReportedBy")
   reportsReviewed    WordReport[]              @relation("ReviewedBy")
 
@@ -58,6 +59,7 @@ model Movie {
   wordReports        WordReport[]
   lemmaMappings      MovieLemmaMapping[]
   sentences          SentenceBank[]
+  wordInteractions   UserWordInteraction[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
@@ -287,6 +289,24 @@ model UserWord {
   @@map("user_words")
 }
 
+model UserWordInteraction {
+  id              Int             @id @default(autoincrement())
+  userId          Int             @map("user_id")
+  word            String          @db.VarChar
+  movieId         Int?            @map("movie_id")
+  interactionType interactiontype @map("interaction_type")
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie Movie? @relation(fields: [movieId], references: [id], onDelete: SetNull)
+
+  @@index([userId, word], map: "ix_user_word_interactions_user_word")
+  @@index([userId, createdAt], map: "ix_user_word_interactions_user_date")
+  @@index([word], map: "ix_user_word_interactions_word")
+  @@map("user_word_interactions")
+}
+
 model WordSentenceExample {
   id           Int              @id @default(autoincrement())
   movieId      Int              @map("movie_id")
@@ -360,6 +380,14 @@ enum classificationsource {
   frequency_backoff
   embedding_classifier
   fallback
+}
+
+enum interactiontype {
+  ROW_CLICK
+  TRANSLATION_VIEW
+  DEFINITION_VIEW
+  WORD_SAVE
+  WORD_UNSAVE
 }
 
 enum reportreason {

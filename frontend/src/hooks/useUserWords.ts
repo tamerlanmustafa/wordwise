@@ -139,6 +139,17 @@ export function useUserWords() {
     return savedWordMoviePairs.has(`${word}:${movieId}`);
   }, [savedWords, savedWordMoviePairs]);
 
+  const logInteraction = useCallback((word: string, interactionType: string, movieId?: number, metadata?: Record<string, unknown>) => {
+    if (!isAuthenticated) return;
+    // Fire-and-forget — don't await, don't let failures affect UX
+    apiClient.post('/user/interactions', {
+      word,
+      interaction_type: interactionType,
+      movie_id: movieId,
+      metadata,
+    }).catch(() => {});
+  }, [isAuthenticated]);
+
   return {
     savedWords,
     learnedWords,
@@ -146,6 +157,7 @@ export function useUserWords() {
     saveWord,
     toggleLearned,
     refetch: fetchUserWords,
-    isWordSavedInMovie
+    isWordSavedInMovie,
+    logInteraction,
   };
 }

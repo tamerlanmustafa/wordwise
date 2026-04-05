@@ -276,6 +276,40 @@ export const wordwiseApi = {
     if (!res.ok) throw new Error('Failed to translate');
     return res.json();
   },
+
+  // Save/unsave a word (toggle)
+  saveWord: async (word: string, movieId?: number | null): Promise<{ saved: boolean; word: string }> => {
+    const res = await authFetch(`${API_BASE_URL}/user/words/save`, {
+      method: 'POST',
+      body: JSON.stringify({ word, movie_id: movieId || undefined }),
+    });
+    if (!res.ok) throw new Error('Failed to save word');
+    return res.json();
+  },
+
+  // Get all saved words for the user
+  getSavedWords: async (): Promise<Array<{ id: number; word: string; movie_id: number | null; is_learned: boolean }>> => {
+    const res = await authFetch(`${API_BASE_URL}/user/words`);
+    if (!res.ok) throw new Error('Failed to get saved words');
+    return res.json();
+  },
+
+  // Log a user interaction (fire-and-forget)
+  logInteraction: async (word: string, interactionType: string, movieId?: number | null, metadata?: Record<string, unknown>): Promise<void> => {
+    try {
+      await authFetch(`${API_BASE_URL}/user/interactions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          word,
+          movie_id: movieId || undefined,
+          interaction_type: interactionType,
+          metadata: metadata || undefined,
+        }),
+      });
+    } catch {
+      // Fire-and-forget: don't let tracking failures affect UX
+    }
+  },
 };
 
 export { API_BASE_URL };

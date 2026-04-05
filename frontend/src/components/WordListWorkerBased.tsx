@@ -74,6 +74,9 @@ interface WordListWorkerBasedProps {
 
   // Report
   onReport?: (word: string, translationSource?: string) => void;
+
+  // Interaction tracking
+  logInteraction?: (word: string, interactionType: string, movieId?: number, metadata?: Record<string, unknown>) => void;
 }
 
 export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
@@ -98,7 +101,8 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
   idiomsMap,
   isIdiomsTab = false,
   listContainerRef,
-  onReport
+  onReport,
+  logInteraction
 }) => {
   // Worker-based vocabulary feed
   const {
@@ -284,6 +288,7 @@ export const WordListWorkerBased = memo<WordListWorkerBasedProps>(({
             idiomsMap={idiomsMap}
             isIdiomsTab={isIdiomsTab}
             onReport={onReport}
+            logInteraction={logInteraction}
           />
         )}
       </Paper>

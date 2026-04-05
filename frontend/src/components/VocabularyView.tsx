@@ -68,7 +68,7 @@ function VocabularyViewBase({
 }: VocabularyViewProps) {
   const { targetLanguage } = useLanguage();
   const { isAuthenticated } = useAuth();
-  const { savedWords, learnedWords, saveWord, toggleLearned, isWordSavedInMovie } = useUserWords();
+  const { savedWords, learnedWords, saveWord, toggleLearned, isWordSavedInMovie, logInteraction } = useUserWords();
   const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
@@ -412,6 +412,7 @@ function VocabularyViewBase({
               isIdiomsTab={activeGroup.level === 'IDIOMS'}
               listContainerRef={listContainerRef}
               onReport={isAuthenticated ? handleOpenReport : undefined}
+              logInteraction={logInteraction}
             />
           </Box>
         </Grid>

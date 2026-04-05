@@ -55,6 +55,9 @@ interface SimpleWordListProps {
 
   // Report
   onReport?: (word: string, translationSource?: string) => void;
+
+  // Interaction tracking
+  logInteraction?: (word: string, interactionType: string, movieId?: number, metadata?: Record<string, unknown>) => void;
 }
 
 export const SimpleWordList = memo<SimpleWordListProps>(({
@@ -77,7 +80,8 @@ export const SimpleWordList = memo<SimpleWordListProps>(({
   idiomsMap,
   isIdiomsTab = false,
   targetLang,
-  onReport
+  onReport,
+  logInteraction
 }) => {
   // Accordion state - only one row expanded at a time
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -184,6 +188,7 @@ export const SimpleWordList = memo<SimpleWordListProps>(({
               movieTitle={movieTitle}
               targetLang={targetLang}
               onReport={onReport}
+              logInteraction={logInteraction}
             />
           </div>
         );

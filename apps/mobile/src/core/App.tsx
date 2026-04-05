@@ -1312,6 +1312,9 @@ const WordRow = ({
   groupColor,
   movieId,
   targetLang,
+  isSaved,
+  onSave,
+  isAuthenticated,
 }: {
   word: WordInfo;
   index: number;
@@ -1319,6 +1322,9 @@ const WordRow = ({
   groupColor: string;
   movieId?: number | null;
   targetLang?: string;
+  isSaved?: boolean;
+  onSave?: (word: string) => void;
+  isAuthenticated?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [translation, setTranslation] = useState<string | null>(null);
@@ -1329,6 +1335,11 @@ const WordRow = ({
     if (expanded) {
       setExpanded(false);
       return;
+    }
+
+    // Log interaction (fire-and-forget)
+    if (isAuthenticated) {
+      wordwiseApi.logInteraction(word.word, 'ROW_CLICK', movieId);
     }
 
     if (translation) {
@@ -1411,6 +1422,17 @@ const WordRow = ({
           <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>
             ▼
           </Text>
+          {isAuthenticated && onSave && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); onSave(word.word); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.bookmarkButton}
+            >
+              <Text style={[styles.bookmarkIcon, isSaved && styles.bookmarkIconActive]}>
+                {isSaved ? '★' : '☆'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -1705,6 +1727,8 @@ const MovieDetailScreen = ({
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
+  const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
+  const isAuthenticated = useAuthStore((s) => s.status) === 'authenticated' || useAuthStore((s) => s.status) === 'offline_authenticated';
 
   // Animation for tab switching
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -1783,6 +1807,16 @@ const MovieDetailScreen = ({
       }
       setVocabulary(vocabResult);
 
+      // Fetch saved words if authenticated
+      if (isAuthenticated) {
+        try {
+          const saved = await wordwiseApi.getSavedWords();
+          setSavedWords(new Set(saved.map(w => w.word)));
+        } catch {
+          // Non-critical: don't block vocabulary display
+        }
+      }
+
       // Set initial active level to the one with most words
       const levels = Object.entries(vocabResult.level_distribution);
       const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
@@ -1792,6 +1826,26 @@ const MovieDetailScreen = ({
       setError(err.message || 'Failed to load vocabulary');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveWord = async (word: string) => {
+    if (!isAuthenticated) return;
+    try {
+      const result = await wordwiseApi.saveWord(word, movieId);
+      setSavedWords(prev => {
+        const next = new Set(prev);
+        if (result.saved) {
+          next.add(word);
+        } else {
+          next.delete(word);
+        }
+        return next;
+      });
+      // Log the interaction
+      wordwiseApi.logInteraction(word, result.saved ? 'WORD_SAVE' : 'WORD_UNSAVE', movieId);
+    } catch {
+      // Silently fail — don't interrupt UX
     }
   };
 
@@ -1986,6 +2040,9 @@ const MovieDetailScreen = ({
                     groupColor={cefrColors[activeLevel] || colors.primary}
                     movieId={movieId}
                     targetLang={targetLang}
+                    isSaved={savedWords.has(item.word)}
+                    onSave={handleSaveWord}
+                    isAuthenticated={isAuthenticated}
                   />
                 )}
                 contentContainerStyle={styles.wordList}
@@ -2825,6 +2882,19 @@ const styles = StyleSheet.create({
   },
   expandIconRotated: {
     transform: [{ rotate: '180deg' }],
+  },
+  bookmarkButton: {
+    marginLeft: 4,
+    padding: 4,
+  },
+  bookmarkIcon: {
+    fontSize: 18,
+    color: colors.textSecondary,
+    opacity: 0.5,
+  },
+  bookmarkIconActive: {
+    color: colors.primary,
+    opacity: 1,
   },
   // Dropdown Panel
   dropdownPanel: {
