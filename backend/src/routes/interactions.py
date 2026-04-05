@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import List, Optional
-from prisma import Prisma
+from prisma import Prisma, Json
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 import logging
@@ -37,15 +37,17 @@ async def log_interaction(
             detail=f"Invalid interaction_type. Must be one of: {VALID_TYPES}"
         )
 
-    await db.userwordinteraction.create(
-        data={
-            "userId": current_user.id,
-            "word": request.word,
-            "movieId": request.movie_id,
-            "interactionType": request.interaction_type,
-            "metadata": request.metadata,
-        }
-    )
+    data = {
+        "user": {"connect": {"id": current_user.id}},
+        "word": request.word,
+        "interactionType": request.interaction_type,
+    }
+    if request.movie_id is not None:
+        data["movie"] = {"connect": {"id": request.movie_id}}
+    if request.metadata is not None:
+        data["metadata"] = Json(request.metadata)
+
+    await db.userwordinteraction.create(data=data)
 
     return {"ok": True}
 
@@ -61,15 +63,17 @@ async def log_interactions_batch(
     for interaction in request.interactions[:50]:  # Cap at 50 per batch
         if interaction.interaction_type not in VALID_TYPES:
             continue
-        await db.userwordinteraction.create(
-            data={
-                "userId": current_user.id,
-                "word": interaction.word,
-                "movieId": interaction.movie_id,
-                "interactionType": interaction.interaction_type,
-                "metadata": interaction.metadata,
-            }
-        )
+        data = {
+            "user": {"connect": {"id": current_user.id}},
+            "word": interaction.word,
+            "interactionType": interaction.interaction_type,
+        }
+        if interaction.movie_id is not None:
+            data["movie"] = {"connect": {"id": interaction.movie_id}}
+        if interaction.metadata is not None:
+            data["metadata"] = Json(interaction.metadata)
+
+        await db.userwordinteraction.create(data=data)
         created += 1
 
     return {"ok": True, "created": created}
