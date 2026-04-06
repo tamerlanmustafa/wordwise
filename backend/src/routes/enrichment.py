@@ -664,12 +664,25 @@ async def get_word_sentences(
                 raise HTTPException(status_code=400, detail="Script has no cleaned text")
 
             sentence_service = SentenceExampleService()
+            surface_form = word.lower().strip()
             sentences = sentence_service.extract_word_sentences_by_lemma(
                 script.cleanedScriptText,
                 lemma_text,
                 nlp,
                 max_examples,
+                target_surface=surface_form,
             )
+            # Fallback: if bare-word lemma disagrees with in-context lemma
+            # (e.g., spaCy gives "unimpaire" for "unimpaired" in isolation),
+            # retry treating the surface form itself as the lemma target.
+            if not sentences and surface_form != lemma_text:
+                sentences = sentence_service.extract_word_sentences_by_lemma(
+                    script.cleanedScriptText,
+                    surface_form,
+                    nlp,
+                    max_examples,
+                    target_surface=surface_form,
+                )
             for sent, pos, form in sentences:
                 raw_sentences.append({
                     "sentence": sent,

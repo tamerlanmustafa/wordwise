@@ -217,16 +217,23 @@ class SentenceExampleService:
         target_lemma: str,
         nlp,
         max_examples: int = 3,
+        target_surface: str = None,
     ) -> List[Tuple[str, int, str]]:
         """
         Extract sentences where any token lemmatizes to target_lemma.
         Catches all irregular forms (ran→run, went→go, etc.).
+
+        If target_surface is provided, also matches tokens whose literal text
+        equals target_surface — used as a fallback when spaCy's bare-word
+        lemmatization disagrees with its in-context lemmatization (e.g.,
+        "unimpaired" → "unimpaire" in isolation but "unimpaired" as adjective).
 
         Returns list of (sentence, word_position, matched_form) tuples, sorted by score.
         matched_form is the actual word as it appears in the sentence (e.g., "sell", "sold", "selling").
         """
         sentences = self.split_into_sentences(script_text)
         candidates: List[Tuple[str, float, int, int, str]] = []
+        surface_lower = target_surface.lower() if target_surface else None
 
         for sentence_idx, sentence in enumerate(sentences):
             tokens = self.tokenize_sentence(sentence)
@@ -242,7 +249,11 @@ class SentenceExampleService:
             for i, spacy_token in enumerate(doc):
                 if spacy_token.is_punct or spacy_token.is_space:
                     continue
-                if spacy_token.lemma_.lower() == target_lemma:
+                token_lemma = spacy_token.lemma_.lower()
+                token_text_lower = spacy_token.text.lower()
+                if token_lemma == target_lemma or (
+                    surface_lower and token_text_lower == surface_lower
+                ):
                     token_text = spacy_token.text.lower()
                     matched_form = spacy_token.text  # preserve original casing
                     pos = next(
