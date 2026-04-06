@@ -389,9 +389,9 @@ function VocabularyViewBase({
                   }
                 }}
               >
-                <ToggleButton value="levels">Levels</ToggleButton>
+                <ToggleButton value="levels">Words</ToggleButton>
                 <ToggleButton value="idioms">
-                  Idioms ({idiomsGroup.words.length})
+                  Expressions ({idiomsGroup.words.length})
                 </ToggleButton>
               </ToggleButtonGroup>
             </Box>

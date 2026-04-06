@@ -1965,7 +1965,7 @@ const MovieDetailScreen = ({
                 onPress={() => setViewMode('levels')}
               >
                 <Text style={[styles.viewModeToggleText, viewMode === 'levels' && styles.viewModeToggleTextActive]}>
-                  Levels
+                  Words
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1973,7 +1973,7 @@ const MovieDetailScreen = ({
                 onPress={() => setViewMode('idioms')}
               >
                 <Text style={[styles.viewModeToggleText, viewMode === 'idioms' && styles.viewModeToggleTextActive]}>
-                  Idioms ({idioms.length})
+                  Expressions ({idioms.length})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2007,10 +2007,10 @@ const MovieDetailScreen = ({
           <View style={styles.levelDescription}>
             <View style={[styles.levelDot, { backgroundColor: isIdiomsTab ? colors.warning : (cefrColors[activeLevel] || colors.primary) }]} />
             <Text style={styles.levelDescText}>
-              {isIdiomsTab ? 'Idioms & Phrases' : (cefrLabels[activeLevel] || 'Advanced')}
+              {isIdiomsTab ? 'Expressions' : (cefrLabels[activeLevel] || 'Advanced')}
             </Text>
             <Text style={styles.levelWordCount}>
-              {isIdiomsTab ? idioms.length : activeWords.length} {isIdiomsTab ? 'phrases' : 'words'}
+              {isIdiomsTab ? idioms.length : activeWords.length} {isIdiomsTab ? 'expressions' : 'words'}
             </Text>
           </View>
 
