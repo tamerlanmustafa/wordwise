@@ -3,7 +3,9 @@ import {
   Box,
   Grid,
   Skeleton,
-  Stack
+  Stack,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import { TabsHeader } from './TabsHeader';
 import { WordListWorkerBased } from './WordListWorkerBased';
@@ -70,6 +72,7 @@ function VocabularyViewBase({
   const { isAuthenticated } = useAuth();
   const { savedWords, learnedWords, saveWord, toggleLearned, isWordSavedInMovie, logInteraction } = useUserWords();
   const [activeTab, setActiveTab] = useState(0);
+  const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [groups, setGroups] = useState<CEFRGroup[]>([]);
   const [otherMovies, setOtherMovies] = useState<Record<string, Array<{ movie_id: number; title: string }>>>({});
 
@@ -132,7 +135,7 @@ function VocabularyViewBase({
     };
   }, [analysis.idioms]);
 
-  // Initialize groups (including idioms tab if available)
+  // Initialize groups (CEFR levels only — idioms are now a separate top-level view)
   useEffect(() => {
     const initialGroups: CEFRGroup[] = mergedCategories.map(category => ({
       level: category.level,
@@ -141,21 +144,29 @@ function VocabularyViewBase({
       color: LEVEL_COLORS[category.level] || '#4caf50'
     }));
 
-    // Add idioms tab at the end if idioms exist
-    if (idiomsCategory) {
-      initialGroups.push({
-        level: idiomsCategory.level,
-        description: idiomsCategory.description,
-        words: idiomsCategory.words,
-        color: '#9c27b0' // Purple color for idioms
-      });
-    }
-
     setGroups(initialGroups);
-  }, [mergedCategories, idiomsCategory]);
+  }, [mergedCategories]);
 
-  // Get active group
-  const activeGroup = groups[activeTab];
+  // Idioms group (rendered when viewMode === 'idioms')
+  const idiomsGroup: CEFRGroup | null = useMemo(() => {
+    if (!idiomsCategory) return null;
+    return {
+      level: idiomsCategory.level,
+      description: idiomsCategory.description,
+      words: idiomsCategory.words,
+      color: '#9c27b0'
+    };
+  }, [idiomsCategory]);
+
+  // If user switches to 'idioms' view but there are no idioms, fall back to 'levels'
+  useEffect(() => {
+    if (viewMode === 'idioms' && !idiomsGroup) {
+      setViewMode('levels');
+    }
+  }, [viewMode, idiomsGroup]);
+
+  // Get active group — either current CEFR tab, or the idioms group
+  const activeGroup = viewMode === 'idioms' && idiomsGroup ? idiomsGroup : groups[activeTab];
 
   // Memoize groups data for TabsHeader
   const tabsHeaderGroups = useMemo(() =>
@@ -351,14 +362,51 @@ function VocabularyViewBase({
             }}
           />
 
-          {/* TabsHeader - Isolated component, only re-renders on activeTab/scroll changes */}
-          <TabsHeader
-            groups={tabsHeaderGroups}
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            scrolledPastTop={scrolledPastTop}
-            showTopBar={showTopBar}
-          />
+          {/* Levels / Idioms top-level toggle */}
+          {idiomsGroup && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(_, val) => {
+                  if (val) setViewMode(val);
+                }}
+                size="small"
+                sx={{
+                  bgcolor: 'background.paper',
+                  borderRadius: '12px',
+                  '& .MuiToggleButton-root': {
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 3,
+                    py: 0.75,
+                    '&.Mui-selected': {
+                      bgcolor: '#9c27b015',
+                      color: '#9c27b0',
+                      '&:hover': { bgcolor: '#9c27b020' }
+                    }
+                  }
+                }}
+              >
+                <ToggleButton value="levels">Levels</ToggleButton>
+                <ToggleButton value="idioms">
+                  Idioms ({idiomsGroup.words.length})
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          )}
+
+          {/* TabsHeader - only shown in 'levels' mode */}
+          {viewMode === 'levels' && (
+            <TabsHeader
+              groups={tabsHeaderGroups}
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              scrolledPastTop={scrolledPastTop}
+              showTopBar={showTopBar}
+            />
+          )}
 
 
           {/* WordListWorkerBased - Worker-based component with numbering */}

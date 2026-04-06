@@ -1726,6 +1726,7 @@ const MovieDetailScreen = ({
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
+  const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -1850,37 +1851,33 @@ const MovieDetailScreen = ({
     }
   };
 
-  // Show all CEFR levels including C2, and add Idioms tab
+  // Show all CEFR levels including C2 (idioms are now a separate top-level view)
   const mergedLevels = useMemo(() => {
     if (!vocabulary) return [];
 
     const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-    const result = levels.map((level) => ({
+    return levels.map((level) => ({
       level,
       label: cefrLabels[level] || level,
       count: vocabulary.level_distribution[level as keyof typeof vocabulary.level_distribution] || 0,
       words: vocabulary.top_words_by_level[level] || [],
       isIdioms: false,
     }));
-
-    // Add idioms tab if idioms exist
-    if (vocabulary.idioms && vocabulary.idioms.length > 0) {
-      result.push({
-        level: 'IDIOMS',
-        label: 'Idioms',
-        count: vocabulary.idioms.length,
-        words: [], // We'll use idioms separately
-        isIdioms: true,
-      });
-    }
-
-    return result;
   }, [vocabulary]);
 
+  const idioms = vocabulary?.idioms || [];
+  const hasIdioms = idioms.length > 0;
+
+  // If user is in idioms view but there are no idioms, fall back to levels
+  useEffect(() => {
+    if (viewMode === 'idioms' && !hasIdioms) {
+      setViewMode('levels');
+    }
+  }, [viewMode, hasIdioms]);
+
+  const isIdiomsTab = viewMode === 'idioms';
   const activeData = mergedLevels.find((l) => l.level === activeLevel);
   const activeWords = activeData?.words || [];
-  const isIdiomsTab = activeData?.isIdioms || false;
-  const idioms = vocabulary?.idioms || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -1960,26 +1957,50 @@ const MovieDetailScreen = ({
       ) : vocabulary ? (
         <>
 
-          {/* CEFR Level Tabs - Gradient border container */}
-          <View style={styles.cefrTabsWrapper}>
-            <View style={styles.cefrTabsGradientBorder}>
-              <View style={styles.cefrTabsInner}>
-                <View style={styles.cefrTabsContent}>
-                  {mergedLevels.map((levelData) => (
-                    <CEFRTab
-                      key={levelData.level}
-                      level={levelData.level}
-                      label={levelData.label}
-                      count={levelData.count}
-                      active={activeLevel === levelData.level}
-                      color={cefrColors[levelData.level] || colors.primary}
-                      onPress={() => setActiveLevel(levelData.level)}
-                    />
-                  ))}
+          {/* Levels / Idioms top-level toggle */}
+          {hasIdioms && (
+            <View style={styles.viewModeToggleWrapper}>
+              <TouchableOpacity
+                style={[styles.viewModeToggleBtn, viewMode === 'levels' && styles.viewModeToggleBtnActive]}
+                onPress={() => setViewMode('levels')}
+              >
+                <Text style={[styles.viewModeToggleText, viewMode === 'levels' && styles.viewModeToggleTextActive]}>
+                  Levels
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.viewModeToggleBtn, viewMode === 'idioms' && styles.viewModeToggleBtnActive]}
+                onPress={() => setViewMode('idioms')}
+              >
+                <Text style={[styles.viewModeToggleText, viewMode === 'idioms' && styles.viewModeToggleTextActive]}>
+                  Idioms ({idioms.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* CEFR Level Tabs - only shown in 'levels' mode */}
+          {viewMode === 'levels' && (
+            <View style={styles.cefrTabsWrapper}>
+              <View style={styles.cefrTabsGradientBorder}>
+                <View style={styles.cefrTabsInner}>
+                  <View style={styles.cefrTabsContent}>
+                    {mergedLevels.map((levelData) => (
+                      <CEFRTab
+                        key={levelData.level}
+                        level={levelData.level}
+                        label={levelData.label}
+                        count={levelData.count}
+                        active={activeLevel === levelData.level}
+                        color={cefrColors[levelData.level] || colors.primary}
+                        onPress={() => setActiveLevel(levelData.level)}
+                      />
+                    ))}
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
+          )}
 
 
           {/* Level Description */}
@@ -2911,6 +2932,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     fontStyle: 'italic',
+  },
+  // Levels/Idioms top-level toggle
+  viewModeToggleWrapper: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  viewModeToggleBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  viewModeToggleBtnActive: {
+    backgroundColor: '#9c27b015',
+  },
+  viewModeToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  viewModeToggleTextActive: {
+    color: '#9c27b0',
   },
   // Idiom Tab styles
   idiomTabContent: {
