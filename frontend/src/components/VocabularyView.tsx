@@ -3,9 +3,7 @@ import {
   Box,
   Grid,
   Skeleton,
-  Stack,
-  ToggleButtonGroup,
-  ToggleButton
+  Stack
 } from '@mui/material';
 import { TabsHeader } from './TabsHeader';
 import { WordListWorkerBased } from './WordListWorkerBased';
@@ -115,25 +113,34 @@ function VocabularyViewBase({
     return new Map(analysis.idioms.map(idiom => [idiom.phrase, idiom]));
   }, [analysis.idioms]);
 
-  const idiomsCategory = useMemo(() => {
-    if (!analysis.idioms || analysis.idioms.length === 0) return null;
+  // Idioms grouped by CEFR level — same shape as `groups`, so it can drive the SAME TabsHeader
+  const idiomsGroups: CEFRGroup[] = useMemo(() => {
+    if (!analysis.idioms || analysis.idioms.length === 0) return [];
 
-    // Convert idioms to word format for display consistency
-    const idiomWords: WordFrequency[] = analysis.idioms.map((idiom, idx) => ({
-      word: idiom.phrase,
-      lemma: idiom.phrase,
-      count: 0,
-      frequency: 0,
-      confidence: 1,
-      frequency_rank: idx
+    const byLevel: Record<string, WordFrequency[]> = {};
+    analysis.idioms.forEach((idiom, idx) => {
+      const lvl = (idiom.cefr_level || 'C1').toUpperCase();
+      if (!byLevel[lvl]) byLevel[lvl] = [];
+      byLevel[lvl].push({
+        word: idiom.phrase,
+        lemma: idiom.phrase,
+        count: 0,
+        frequency: 0,
+        confidence: 1,
+        frequency_rank: idx
+      });
+    });
+
+    const allLevels: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    return allLevels.map(level => ({
+      level,
+      description: mergedCategories.find(c => c.level === level)?.description || '',
+      words: byLevel[level] || [],
+      color: LEVEL_COLORS[level] || '#9c27b0'
     }));
+  }, [analysis.idioms, mergedCategories]);
 
-    return {
-      level: 'IDIOMS' as CEFRLevel,
-      description: 'Idioms & phrases',
-      words: idiomWords
-    };
-  }, [analysis.idioms]);
+  const hasIdioms = idiomsGroups.some(g => g.words.length > 0);
 
   // Initialize groups (CEFR levels only — idioms are now a separate top-level view)
   useEffect(() => {
@@ -147,53 +154,43 @@ function VocabularyViewBase({
     setGroups(initialGroups);
   }, [mergedCategories]);
 
-  // Idioms group (rendered when viewMode === 'idioms')
-  const idiomsGroup: CEFRGroup | null = useMemo(() => {
-    if (!idiomsCategory) return null;
-    return {
-      level: idiomsCategory.level,
-      description: idiomsCategory.description,
-      words: idiomsCategory.words,
-      color: '#9c27b0'
-    };
-  }, [idiomsCategory]);
-
   // If user switches to 'idioms' view but there are no idioms, fall back to 'levels'
   useEffect(() => {
-    if (viewMode === 'idioms' && !idiomsGroup) {
+    if (viewMode === 'idioms' && !hasIdioms) {
       setViewMode('levels');
     }
-  }, [viewMode, idiomsGroup]);
+  }, [viewMode, hasIdioms]);
 
-  // Get active group — either current CEFR tab, or the idioms group
-  const activeGroup = viewMode === 'idioms' && idiomsGroup ? idiomsGroup : groups[activeTab];
+  // Pick which set of groups drives the tabs based on viewMode
+  const activeGroups = viewMode === 'idioms' ? idiomsGroups : groups;
+  const activeGroup = activeGroups[activeTab];
 
-  // Memoize groups data for TabsHeader
+  // Memoize groups data for TabsHeader (always reflects the current view's groups)
   const tabsHeaderGroups = useMemo(() =>
-    groups.map(g => ({
+    activeGroups.map(g => ({
       level: g.level,
       description: g.description,
       color: g.color,
       wordCount: g.words.length
     })),
-    [groups]
+    [activeGroups]
   );
 
-  // Save scroll position before tab change
+  // Save scroll position before tab change (key includes viewMode to avoid Words/Expressions clash)
   const saveScrollPosition = useCallback(() => {
     if (activeGroup && listContainerRef.current) {
       const scrollTop = window.scrollY;
-      scrollStateRef.current[activeGroup.level] = {
+      scrollStateRef.current[`${viewMode}-${activeGroup.level}`] = {
         scrollTop,
         loadedCount: 0  // Worker handles loading internally
       };
     }
-  }, [activeGroup]);
+  }, [activeGroup, viewMode]);
 
   // Restore scroll position after tab change
   const restoreScrollPosition = useCallback(() => {
     if (activeGroup && listContainerRef.current) {
-      const savedState = scrollStateRef.current[activeGroup.level];
+      const savedState = scrollStateRef.current[`${viewMode}-${activeGroup.level}`];
       if (savedState && savedState.scrollTop > 0) {
         isRestoringScrollRef.current = true;
 
@@ -208,7 +205,7 @@ function VocabularyViewBase({
         }, 50);
       }
     }
-  }, [activeGroup, suppressScrollReveal]);
+  }, [activeGroup, viewMode, suppressScrollReveal]);
 
   // Restore scroll when tab changes
   useEffect(() => {
@@ -362,59 +359,83 @@ function VocabularyViewBase({
             }}
           />
 
-          {/* Levels / Idioms top-level toggle */}
-          {idiomsGroup && (
+          {/* Words / Expressions top-level toggle with sliding indicator */}
+          {hasIdioms && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={(_, val) => {
-                  if (val) setViewMode(val);
-                }}
-                size="small"
+              <Box
                 sx={{
+                  position: 'relative',
+                  display: 'inline-flex',
                   bgcolor: 'background.paper',
                   borderRadius: '12px',
-                  '& .MuiToggleButton-root': {
-                    border: '1px solid rgba(0,0,0,0.08)',
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 3,
-                    py: 0.75,
-                    '&.Mui-selected': {
-                      bgcolor: '#9c27b015',
-                      color: '#9c27b0',
-                      '&:hover': { bgcolor: '#9c27b020' }
-                    }
-                  }
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  padding: '4px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
               >
-                <ToggleButton value="levels">Words</ToggleButton>
-                <ToggleButton value="idioms">
-                  Expressions ({idiomsGroup.words.length})
-                </ToggleButton>
-              </ToggleButtonGroup>
+                {/* Sliding background indicator */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: '4px',
+                    left: '4px',
+                    width: 'calc(50% - 4px)',
+                    height: 'calc(100% - 8px)',
+                    bgcolor: '#9c27b015',
+                    borderRadius: '8px',
+                    transform: viewMode === 'idioms' ? 'translateX(100%)' : 'translateX(0)',
+                    transition: 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+                    willChange: 'transform',
+                    zIndex: 0,
+                  }}
+                />
+                {(['levels', 'idioms'] as const).map((mode) => {
+                  const isActive = viewMode === mode;
+                  const totalIdioms = idiomsGroups.reduce((sum, g) => sum + g.words.length, 0);
+                  const label = mode === 'levels' ? 'Words' : `Expressions (${totalIdioms})`;
+                  return (
+                    <Box
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      sx={{
+                        position: 'relative',
+                        zIndex: 1,
+                        px: 3,
+                        py: 0.75,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        color: isActive ? '#9c27b0' : 'text.secondary',
+                        transition: 'color 0.25s ease',
+                        textAlign: 'center',
+                        minWidth: 110,
+                      }}
+                    >
+                      {label}
+                    </Box>
+                  );
+                })}
+              </Box>
             </Box>
           )}
 
-          {/* TabsHeader - only shown in 'levels' mode */}
-          {viewMode === 'levels' && (
-            <TabsHeader
-              groups={tabsHeaderGroups}
-              activeTab={activeTab}
-              onTabChange={handleTabChange}
-              scrolledPastTop={scrolledPastTop}
-              showTopBar={showTopBar}
-            />
-          )}
+          {/* TabsHeader - same component drives both Words and Expressions views */}
+          <TabsHeader
+            groups={tabsHeaderGroups}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            scrolledPastTop={scrolledPastTop}
+            showTopBar={showTopBar}
+          />
 
 
           {/* WordListWorkerBased - Worker-based component with numbering */}
-          {/* Key ensures remount on tab change, triggering fade-in animation */}
+          {/* Key ensures remount on tab change or viewMode switch, triggering fade-in animation */}
           <Box
-            key={activeGroup.level}
+            key={`${viewMode}-${activeGroup.level}`}
             sx={{
-              animation: 'fadeIn 0.25s ease-out',
+              animation: 'fadeIn 0.3s ease-out',
               '@keyframes fadeIn': {
                 from: { opacity: 0, transform: 'translateY(8px)' },
                 to: { opacity: 1, transform: 'translateY(0)' }
@@ -441,7 +462,7 @@ function VocabularyViewBase({
               isAuthenticated={isAuthenticated}
               idioms={analysis.idioms}
               idiomsMap={idiomsMap}
-              isIdiomsTab={activeGroup.level === 'IDIOMS'}
+              isIdiomsTab={viewMode === 'idioms'}
               listContainerRef={listContainerRef}
               onReport={isAuthenticated ? handleOpenReport : undefined}
               logInteraction={logInteraction}
