@@ -33,22 +33,17 @@ interface LanguageProviderProps {
   children: ReactNode;
 }
 
-// Helper to get initial language from user or localStorage
+// Helper to get initial language from user settings or localStorage fallback
 function getInitialLanguage(): string {
-  // First check localStorage for explicit selection
-  const saved = localStorage.getItem('wordwise_target_language');
-  if (saved) return saved;
-
-  // Then check user's native language preference
+  // User's learning_language is the translation target — check it first
   const userStr = localStorage.getItem('wordwise_user');
   if (userStr) {
     try {
       const user = JSON.parse(userStr);
-      if (user.native_language) {
-        // Convert lowercase (es) to uppercase (ES) to match our language codes
-        const upperCode = user.native_language.toUpperCase();
-        // Only use if it's a valid language in our list
-        if (AVAILABLE_LANGUAGES.some(lang => lang.code === upperCode)) {
+      const lang = user.learning_language || user.native_language;
+      if (lang) {
+        const upperCode = lang.toUpperCase();
+        if (AVAILABLE_LANGUAGES.some(l => l.code === upperCode)) {
           return upperCode;
         }
       }
@@ -57,7 +52,10 @@ function getInitialLanguage(): string {
     }
   }
 
-  // Default to Spanish
+  // Fall back to explicit localStorage selection (legacy / manual override)
+  const saved = localStorage.getItem('wordwise_target_language');
+  if (saved && AVAILABLE_LANGUAGES.some(l => l.code === saved)) return saved;
+
   return 'ES';
 }
 
@@ -70,11 +68,10 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     localStorage.setItem('wordwise_target_language', lang);
   };
 
-  // Sync with user's native language when user data changes (e.g., after login)
+  // Re-sync when user data changes in localStorage (e.g., after login or settings save)
   useEffect(() => {
-    const handleStorageChange = () => {
-      // Only update if there's no explicit selection saved
-      if (!localStorage.getItem('wordwise_target_language')) {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'wordwise_user') {
         const newLang = getInitialLanguage();
         if (newLang !== targetLanguage) {
           setTargetLanguageState(newLang);

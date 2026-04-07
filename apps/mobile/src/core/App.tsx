@@ -2246,11 +2246,18 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
-  const [targetLanguage, setTargetLanguage] = useState(user?.native_language?.toUpperCase() || 'ES');
+  const [targetLanguage, setTargetLanguage] = useState(user?.learning_language?.toUpperCase() || 'ES');
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Sync targetLanguage once auth finishes loading (user is null during initialize())
+  useEffect(() => {
+    if (user?.learning_language) {
+      setTargetLanguage(user.learning_language.toUpperCase());
+    }
+  }, [user?.learning_language]);
 
   const handleLogin = async (user: any, token: string) => {
     await login(user, token, token);
