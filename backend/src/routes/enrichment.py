@@ -615,10 +615,55 @@ async def get_word_sentences(
     try:
         from src.services.lemmatization_service import get_nlp
         nlp = get_nlp()
-        doc = nlp(word.lower().strip())
-        lemma_text = doc[0].lemma_ if doc else word.lower()
 
         raw_sentences = []
+        is_phrase = ' ' in word.strip()
+
+        # Phrase path: skip lemma lookup, use phrase-aware extraction directly
+        if is_phrase:
+            movie = await db.movie.find_unique(
+                where={'id': movie_id},
+                include={'movieScripts': True}
+            )
+            if not movie or not movie.movieScripts or not movie.movieScripts[0].cleanedScriptText:
+                raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found or has no script")
+
+            sentence_service = SentenceExampleService()
+            sentences = sentence_service.extract_phrase_sentences(
+                movie.movieScripts[0].cleanedScriptText,
+                word,
+                nlp,
+                max_examples,
+            )
+            for sent, pos, form in sentences:
+                raw_sentences.append({
+                    "sentence": sent,
+                    "word_position": pos,
+                    "matched_form": form,
+                })
+
+            # Translate sentences if requested
+            if target_lang and raw_sentences:
+                from src.services.translation_service import TranslationService
+                ts = TranslationService(db)
+                for item in raw_sentences:
+                    try:
+                        result = await ts.get_translation(item["sentence"], target_lang.upper(), "en")
+                        if result and result.get("translated"):
+                            item["translation"] = result["translated"]
+                    except Exception as tx_err:
+                        logger.warning(f"Sentence translation failed: {tx_err}")
+
+            return {
+                "movie_id": movie_id,
+                "word": word.lower(),
+                "lemma": word.lower(),
+                "sentences": raw_sentences,
+                "total": len(raw_sentences),
+            }
+
+        doc = nlp(word.lower().strip())
+        lemma_text = doc[0].lemma_ if doc else word.lower()
 
         # Fast path: check SentenceBank via lemma link
         lemma_record = await db.lemma.find_first(where={"lemma": lemma_text})

@@ -310,6 +310,126 @@ class SentenceExampleService:
             for sent, _score, _idx, pos, form in candidates[:max_examples]
         ]
 
+    def extract_phrase_sentences(
+        self,
+        script_text: str,
+        phrase: str,
+        nlp,
+        max_examples: int = 3,
+    ) -> List[Tuple[str, int, str]]:
+        """
+        Extract sentences containing a multi-word phrase (e.g., phrasal verbs, idioms).
+
+        Strategy:
+        1. Direct substring match on the phrase (case-insensitive).
+        2. For two-token phrasal-verb-like phrases (verb + particle), also detect
+           split forms via spaCy where the verb's lemma matches the first token
+           and the particle text matches the second, allowing intervening tokens
+           (e.g., "give it up" matches "give up").
+
+        Returns list of (sentence, word_position, matched_form) tuples.
+        matched_form is the literal substring that matched in the sentence.
+        """
+        sentences = self.split_into_sentences(script_text)
+        phrase_lower = phrase.lower().strip()
+        phrase_tokens = phrase_lower.split()
+
+        # Build a regex for direct substring match (word-boundary aware)
+        escaped = re.escape(phrase_lower)
+        # Allow flexible whitespace between phrase tokens
+        flex_pattern = r'\b' + r'\s+'.join(re.escape(t) for t in phrase_tokens) + r'\b'
+        direct_re = re.compile(flex_pattern, re.IGNORECASE)
+
+        candidates: List[Tuple[str, float, int, int, str]] = []
+        is_two_token_pv = len(phrase_tokens) == 2
+
+        for sentence_idx, sentence in enumerate(sentences):
+            tokens = self.tokenize_sentence(sentence)
+            word_count = len(tokens)
+            if word_count > self.MAX_SENTENCE_WORDS:
+                continue
+
+            matched_form = None
+            word_position = 0
+
+            # Step 1: direct substring match
+            m = direct_re.search(sentence)
+            if m:
+                matched_form = m.group(0)
+                # Approximate word_position: find first phrase token in tokens
+                first_tok = phrase_tokens[0]
+                for j, t in enumerate(tokens):
+                    if t == first_tok:
+                        word_position = j
+                        break
+
+            # Step 2: split phrasal verb (verb ... particle) via spaCy
+            elif is_two_token_pv:
+                try:
+                    doc = nlp(sentence)
+                    verb_lemma, particle_text = phrase_tokens[0], phrase_tokens[1]
+                    for i, tok in enumerate(doc):
+                        if tok.lemma_.lower() != verb_lemma:
+                            continue
+                        # Look at the next ~3 non-punct tokens for the particle
+                        seen = 0
+                        for k in range(i + 1, min(i + 5, len(doc))):
+                            nxt = doc[k]
+                            if nxt.is_punct or nxt.is_space:
+                                continue
+                            if nxt.text.lower() == particle_text and (
+                                nxt.dep_ == 'prt' or seen <= 3
+                            ):
+                                matched_form = f"{tok.text} {nxt.text}"
+                                tok_text_lower = tok.text.lower()
+                                for j, t in enumerate(tokens):
+                                    if t == tok_text_lower:
+                                        word_position = j
+                                        break
+                                break
+                            seen += 1
+                        if matched_form:
+                            break
+                except Exception:
+                    pass
+
+            if not matched_form:
+                continue
+
+            actual_sentence = sentence
+            if word_count < self.MIN_SENTENCE_WORDS:
+                combined = sentence
+                for lookback in range(1, 3):
+                    prev_idx = sentence_idx - lookback
+                    if prev_idx < 0:
+                        break
+                    combined = sentences[prev_idx].strip() + " " + combined
+                    combined_tokens = self.tokenize_sentence(combined)
+                    if len(combined_tokens) > self.MAX_SENTENCE_WORDS:
+                        break
+                    actual_sentence = combined
+                    tokens = combined_tokens
+                    word_count = len(tokens)
+                    if word_count >= self.MIN_SENTENCE_WORDS:
+                        break
+                if word_count < self.MIN_SENTENCE_WORDS:
+                    continue
+
+            score = self.score_sentence(
+                actual_sentence,
+                tokens,
+                phrase_tokens[0],
+                sentence_idx,
+            )
+            if score > 0:
+                candidates.append((actual_sentence, score, sentence_idx, word_position, matched_form))
+
+        candidates.sort(key=lambda x: (-x[1], x[2]))
+        return [
+            (sent, pos, form)
+            for sent, _score, _idx, pos, form in candidates[:max_examples]
+        ]
+
     def filter_by_word_list(
         self,
         word_sentences: Dict[str, List[Tuple[str, int]]],

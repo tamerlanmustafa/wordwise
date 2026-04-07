@@ -401,32 +401,6 @@ export const WordRow = memo<WordRowProps>(({
           <RowNumber>{rowNumber}.</RowNumber>
           <WordText>{word.word}</WordText>
 
-          {idiomMetadata && (
-            <>
-              <Chip
-                label={idiomMetadata.type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: '0.7rem',
-                  bgcolor: idiomMetadata.type === 'phrasal_verb' ? 'info.main' : 'warning.main',
-                  color: 'white',
-                  display: { xs: 'none', sm: 'flex' },
-                }}
-              />
-              <Chip
-                label={idiomMetadata.cefr_level}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: '0.7rem',
-                  bgcolor: groupColor,
-                  color: 'white',
-                }}
-              />
-            </>
-          )}
-
           {isLoading ? (
             <InlineSpinner size={16} />
           ) : null}
@@ -567,14 +541,6 @@ export const WordRow = memo<WordRowProps>(({
             </>
           )}
 
-          {/* Idiom metadata (for idioms tab items) */}
-          {idiomMetadata && (
-            <IdiomCard>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {idiomMetadata.phrase}
-              </Typography>
-            </IdiomCard>
-          )}
         </DropdownPanel>
       </Collapse>
     </RowWrapper>

@@ -1533,48 +1533,166 @@ const CEFRTab = ({
   );
 };
 
-// Idiom Row Component - for the Idioms tab
+// Idiom Row Component - for the Expressions tab
+// Mirrors WordRow: fetches translation + sentence examples on click and supports bookmarking.
 const IdiomRow = ({
   idiom,
-  index,
   rowNumber,
+  groupColor,
+  movieId,
+  targetLang,
+  isSaved,
+  onSave,
+  isAuthenticated,
 }: {
   idiom: IdiomInfo;
   index: number;
   rowNumber: number;
+  groupColor: string;
+  movieId?: number | null;
+  targetLang?: string;
+  isSaved?: boolean;
+  onSave?: (word: string) => void;
+  isAuthenticated?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
+
+  const phrase = idiom.phrase;
+
+  const handlePress = async () => {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+
+    if (isAuthenticated) {
+      wordwiseApi.logInteraction(phrase, 'ROW_CLICK', movieId);
+    }
+
+    if (translation) {
+      setExpanded(true);
+      return;
+    }
+
+    setTranslating(true);
+    try {
+      const promises: Promise<void>[] = [];
+
+      promises.push(
+        wordwiseApi.translate(phrase, targetLang || 'ES', undefined, movieId)
+          .then((result) => setTranslation(result.translated))
+          .catch(() => setTranslation('Translation failed'))
+      );
+
+      if (movieId) {
+        const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
+        promises.push(
+          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(phrase)}?max_examples=1${langParam}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.sentences && Array.isArray(data.sentences)) {
+                setSentenceExamples(data.sentences);
+              }
+            })
+            .catch(() => {})
+        );
+      }
+
+      await Promise.all(promises);
+      setExpanded(true);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const isUntranslatable = translation && translation.toLowerCase() === phrase.toLowerCase();
+
+  const renderHighlightedSentence = (sentence: string, target: string, matchedForm?: string) => {
+    const words = new Set([target.toLowerCase()]);
+    if (matchedForm) words.add(matchedForm.toLowerCase());
+    const escaped = [...words].map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+    const parts = sentence.split(regex);
+    return (
+      <Text style={styles.exampleSentence}>
+        {parts.map((part, i) =>
+          words.has(part.toLowerCase()) ? (
+            <Text key={i} style={styles.highlightedWord}>{part}</Text>
+          ) : (
+            <Text key={i}>{part}</Text>
+          )
+        )}
+      </Text>
+    );
+  };
 
   return (
     <View style={styles.wordRowWrapper}>
       <TouchableOpacity
         style={[styles.wordRow, expanded && styles.wordRowExpanded]}
-        onPress={() => setExpanded(!expanded)}
+        onPress={handlePress}
         activeOpacity={0.7}
       >
         <View style={styles.wordRowMain}>
           <Text style={styles.rowNumber}>{rowNumber}.</Text>
-          <Text style={styles.wordText}>{idiom.phrase}</Text>
-          <View style={[styles.idiomTypeBadge, idiom.type === 'phrasal_verb' ? styles.phrasalVerbBadge : styles.idiomBadge]}>
-            <Text style={styles.idiomTypeText}>
-              {idiom.type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
-            </Text>
-          </View>
-          <View style={[styles.cefrBadge, { backgroundColor: cefrColors[idiom.cefr_level] || colors.primary }]}>
-            <Text style={styles.cefrBadgeText}>{idiom.cefr_level}</Text>
-          </View>
+          <Text style={styles.wordText}>{phrase}</Text>
+          {translating && (
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+              style={styles.inlineSpinner}
+            />
+          )}
           <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>▼</Text>
+          {isAuthenticated && onSave && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); onSave(phrase); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.bookmarkButton}
+            >
+              <Text style={[styles.bookmarkIcon, isSaved && styles.bookmarkIconActive]}>
+                {isSaved ? '★' : '☆'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
 
       {expanded && (
-        <View style={[styles.dropdownPanel, { borderLeftColor: colors.warning }]}>
+        <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
           <View style={styles.translationBox}>
             <Text style={styles.translationDash}>—</Text>
-            <Text style={styles.idiomWordsText}>
-              Words: {idiom.words.join(', ')}
-            </Text>
+            {translation ? (
+              <Text
+                style={[
+                  styles.translationText,
+                  isUntranslatable && styles.translationUntranslatable,
+                ]}
+              >
+                {isUntranslatable ? '(same as source)' : translation.toLowerCase()}
+              </Text>
+            ) : (
+              <Text style={styles.noTranslation}>No translation available</Text>
+            )}
           </View>
+
+          {sentenceExamples.length > 0 ? (
+            sentenceExamples.map((example, idx) => (
+              <View key={idx} style={styles.exampleCard}>
+                {renderHighlightedSentence(example.sentence, phrase, example.matched_form)}
+                {example.translation && (
+                  <Text style={styles.exampleTranslation}>
+                    {example.translation.toLowerCase()}
+                  </Text>
+                )}
+              </View>
+            ))
+          ) : movieId ? (
+            <Text style={styles.noExamples}>No sentence examples available</Text>
+          ) : null}
         </View>
       )}
     </View>
@@ -2077,6 +2195,12 @@ const MovieDetailScreen = ({
                     idiom={item}
                     index={index}
                     rowNumber={index + 1}
+                    groupColor={cefrColors[activeLevel] || colors.primary}
+                    movieId={movieId}
+                    targetLang={targetLang}
+                    isSaved={savedWords.has(item.phrase)}
+                    onSave={handleSaveWord}
+                    isAuthenticated={isAuthenticated}
                   />
                 )}
                 contentContainerStyle={styles.wordList}
