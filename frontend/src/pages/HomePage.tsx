@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Container, Box, Typography, Grid, Paper, Skeleton } from '@mui/material';
+import { Container, Box, Typography, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import HeroSearchBar from '../components/HeroSearchBar';
-import MovieCarousel from '../components/MovieCarousel';
+import HeroSection from '../components/HeroSection';
+import TrendingRow from '../components/TrendingRow';
+import TopRatedList from '../components/TopRatedList';
+import QuickStartRow from '../components/QuickStartRow';
 import {
   fetchTopRatedMovies,
   fetchTrendingMovies,
-  fetchGenres,
   type TMDBMovie,
-  type TMDBGenre
 } from '../services/tmdbService';
 
 export default function HomePage() {
@@ -16,109 +17,69 @@ export default function HomePage() {
 
   const [topRated, setTopRated] = useState<TMDBMovie[]>([]);
   const [trending, setTrending] = useState<TMDBMovie[]>([]);
-  const [genres, setGenres] = useState<TMDBGenre[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
+    const load = async () => {
       try {
-        const [topRatedRes, trendingRes, genresRes] = await Promise.all([
+        const [topRes, trendRes] = await Promise.all([
           fetchTopRatedMovies(1),
           fetchTrendingMovies('day'),
-          fetchGenres()
         ]);
-
-        setTopRated(topRatedRes.results.slice(0, 20));
-        setTrending(trendingRes.results.slice(0, 20));
-        setGenres(genresRes.genres);
-      } catch (error) {
-        console.error('Failed to load homepage data:', error);
+        setTopRated(topRes.results.slice(0, 20));
+        setTrending(trendRes.results.slice(0, 20));
+      } catch (err) {
+        console.error('Failed to load homepage data:', err);
       } finally {
         setLoading(false);
       }
     };
-
-    loadData();
+    load();
   }, []);
 
-  const handleSearch = (query: string) => {
-    navigate(`/search?q=${encodeURIComponent(query)}`);
-  };
-
-  const handleGenreClick = (genreId: number, genreName: string) => {
-    navigate(`/search?genre=${genreId}&name=${encodeURIComponent(genreName)}`);
-  };
+  // Hero = highest-rated movie that has a backdrop
+  const heroMovie =
+    topRated.find((m) => m.backdrop_path) ?? topRated[0] ?? null;
 
   return (
     <Box>
-      {/* Tabs */}
-      {/* Search Bar */}
+      {/* Hero */}
+      <HeroSection movie={heroMovie} loading={loading} />
+
+      {/* Search bar below hero */}
       <Container maxWidth="lg">
-        <HeroSearchBar onSearch={handleSearch} />
+        <HeroSearchBar />
       </Container>
 
-      {/* Content Sections */}
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <MovieCarousel
-          title="Top Movies of All Time"
-          movies={topRated}
-          loading={loading}
-          index={0}
-        />
+        {/* Quick Start */}
+        <QuickStartRow />
 
-        <MovieCarousel
-          title="Popular Now"
-          movies={trending}
-          loading={loading}
-          index={1}
-        />
+        {/* Trending Now */}
+        <TrendingRow movies={trending} loading={loading} />
 
-        {/* Genres Section */}
-        <Box sx={{ mb: 6 }}>
-          <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
-            Browse by Genre
+        {/* Top Rated for Learning */}
+        <TopRatedList movies={topRated} loading={loading} />
+
+        {/* Explore all */}
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            Looking for something specific?
           </Typography>
-          {loading ? (
-            <Grid container spacing={2}>
-              {[...Array(12)].map((_, i) => (
-                <Grid item xs={6} sm={4} md={3} lg={2.4} key={i}>
-                  <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
-                </Grid>
-              ))}
-            </Grid>
-          ) : (
-            <Grid container spacing={2}>
-              {genres.map((genre) => (
-                <Grid item xs={6} sm={4} md={3} lg={2.4} key={genre.id}>
-                  <Paper
-                    onClick={() => handleGenreClick(genre.id, genre.name)}
-                    sx={{
-                      p: 2,
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      '&:hover': {
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        transform: 'translateY(-4px)',
-                        boxShadow: 4
-                      }
-                    }}
-                  >
-                    <Typography variant="body1" fontWeight="medium">
-                      {genre.name}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          )}
+          <Button
+            variant="outlined"
+            size="large"
+            onClick={() => navigate('/search')}
+            sx={{
+              borderRadius: 2,
+              px: 4,
+              fontWeight: 600,
+              textTransform: 'none',
+              fontSize: '1rem',
+            }}
+          >
+            Browse All Movies →
+          </Button>
         </Box>
       </Container>
     </Box>

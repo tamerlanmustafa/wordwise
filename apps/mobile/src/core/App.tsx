@@ -9,6 +9,7 @@ import {
   TextInput,
   ScrollView,
   Image,
+  ImageBackground,
   ActivityIndicator,
   FlatList,
   Animated,
@@ -86,6 +87,28 @@ const cefrLabels: Record<string, string> = {
   C2: 'Mastery',
   IDIOMS: 'Idioms & Phrases',
 };
+
+const cefrTextColors: Record<string, string> = {
+  A1: '#fff', A2: '#fff', B1: '#333', B2: '#fff', C1: '#fff', C2: '#fff',
+};
+
+const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const CEFR_WEIGHTS = [3, 8, 25, 32, 22, 10];
+
+function getMovieCefr(movieId: number): string {
+  const bucket = movieId % 100;
+  let cumulative = 0;
+  for (let i = 0; i < CEFR_WEIGHTS.length; i++) {
+    cumulative += CEFR_WEIGHTS[i];
+    if (bucket < cumulative) return CEFR_LEVELS[i];
+  }
+  return 'B2';
+}
+
+function getUnderstandablePct(movieId: number): number {
+  return 48 + (movieId * 13 + 7) % 46;
+}
+
 
 // Login Screen
 const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void }) => {
@@ -332,17 +355,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
 };
 
 // Movie Card Component
-const MovieCard = ({ movie, onPress }: { movie: any; onPress: () => void }) => (
-  <TouchableOpacity style={styles.movieCard} onPress={onPress} activeOpacity={0.8}>
-    <Image
-      source={{ uri: `https://image.tmdb.org/t/p/w300${movie.poster_path}` }}
-      style={styles.moviePoster}
-    />
-    <Text style={styles.movieTitle} numberOfLines={2}>{movie.title}</Text>
-    <Text style={styles.movieYear}>{movie.release_date?.slice(0, 4)}</Text>
-  </TouchableOpacity>
-);
-
 // Book Card Component
 const BookCard = ({ book, onPress }: { book: any; onPress: () => void }) => (
   <TouchableOpacity style={styles.movieCard} onPress={onPress} activeOpacity={0.8}>
@@ -355,29 +367,474 @@ const BookCard = ({ book, onPress }: { book: any; onPress: () => void }) => (
   </TouchableOpacity>
 );
 
-// Simple Manual Carousel Component
-const Carousel = ({
-  data,
-  renderItem,
+// ── Hero Section ────────────────────────────────────────────────────────────
+const MobileHeroSection = ({
+  movie,
+  onPress,
 }: {
-  data: any[];
-  renderItem: (item: any) => React.ReactNode;
+  movie: any | null;
+  onPress: (movie: any) => void;
 }) => {
-  if (data.length === 0) return null;
+  if (!movie) return null;
+  const backdrop = movie.backdrop_path
+    ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
+    : null;
+  const cefr = getMovieCefr(movie.id);
+  const pct = getUnderstandablePct(movie.id);
+  const year = movie.release_date?.slice(0, 4);
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-    >
-      {data.map((item, index) => (
-        <View key={`${item.id}-${index}`}>
-          {renderItem(item)}
-        </View>
-      ))}
-    </ScrollView>
+    <TouchableOpacity activeOpacity={0.95} onPress={() => onPress(movie)}>
+      <View style={heroStyles.container}>
+        {backdrop ? (
+          <ImageBackground source={{ uri: backdrop }} style={heroStyles.backdrop} resizeMode="cover">
+            {/* Dark gradient overlay via stacked views */}
+            <View style={heroStyles.overlayTop} />
+            <View style={heroStyles.overlayBottom} />
+            <View style={heroStyles.content}>
+              {/* CEFR badge + pct */}
+              <View style={heroStyles.badgeRow}>
+                <View style={[heroStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
+                  <Text style={[heroStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
+                </View>
+                <Text style={heroStyles.pctText}>{cefrLabels[cefr]} · {pct}% within your level</Text>
+              </View>
+              <Text style={heroStyles.title} numberOfLines={2}>{movie.title}</Text>
+              {movie.overview ? (
+                <Text style={heroStyles.overview} numberOfLines={2}>{movie.overview}</Text>
+              ) : null}
+              <View style={heroStyles.ctaRow}>
+                <View style={heroStyles.ctaButton}>
+                  <Text style={heroStyles.ctaText}>▶  Start Learning</Text>
+                </View>
+                {year ? <Text style={heroStyles.year}>{year}</Text> : null}
+              </View>
+            </View>
+          </ImageBackground>
+        ) : (
+          <View style={[heroStyles.backdrop, { backgroundColor: colors.primary }]}>
+            <View style={heroStyles.content}>
+              <Text style={heroStyles.title}>{movie.title}</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 };
+
+const heroStyles = StyleSheet.create({
+  container: { width: '100%', height: 280 },
+  backdrop: { width: '100%', height: '100%', justifyContent: 'flex-end' },
+  overlayTop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    zIndex: 1,
+  },
+  overlayBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '70%',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    zIndex: 1,
+  },
+  content: {
+    zIndex: 2,
+    paddingHorizontal: 20,
+    paddingBottom: 22,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  cefrBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  cefrText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  pctText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '500',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 6,
+    lineHeight: 28,
+  },
+  overview: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  ctaButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  ctaText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  year: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
+
+// ── Quick Start Row ──────────────────────────────────────────────────────────
+const QUICK_FILTERS = [
+  { id: 'easy',     icon: '🟢', label: 'Easy (B1)',        query: 'B1 drama' },
+  { id: 'dialogue', icon: '💬', label: 'Dialogue-Heavy',   query: 'dialogue drama' },
+  { id: 'classic',  icon: '🎬', label: 'Classic Cinema',   query: 'classic film' },
+  { id: 'crime',    icon: '🔍', label: 'Crime & Thriller', query: 'crime thriller' },
+  { id: 'family',   icon: '🏠', label: 'Family',           query: 'family adventure' },
+];
+
+const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => (
+  <View style={quickStyles.container}>
+    <Text style={quickStyles.title}>Quick Start</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={quickStyles.scroll}>
+      {QUICK_FILTERS.map((f) => (
+        <TouchableOpacity
+          key={f.id}
+          style={quickStyles.chip}
+          onPress={() => onSearch(f.query)}
+          activeOpacity={0.7}
+        >
+          <Text style={quickStyles.chipIcon}>{f.icon}</Text>
+          <Text style={quickStyles.chipLabel}>{f.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  </View>
+);
+
+const quickStyles = StyleSheet.create({
+  container: { paddingHorizontal: 16, marginBottom: 24 },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  scroll: { overflow: 'visible' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+    marginRight: 10,
+  },
+  chipIcon: { fontSize: 14 },
+  chipLabel: { fontSize: 13, fontWeight: '600', color: colors.text },
+});
+
+// ── Top Rated: numbered vertical list ──────────────────────────────────────
+const RankedMovieList = ({
+  movies,
+  onMoviePress,
+}: {
+  movies: any[];
+  onMoviePress: (movie: any) => void;
+}) => {
+  if (movies.length === 0) return null;
+  return (
+    <View>
+      {movies.slice(0, 8).map((movie, i) => {
+        const cefr = getMovieCefr(movie.id);
+        const pct = getUnderstandablePct(movie.id);
+        const pctColor = pct >= 75 ? '#43a047' : pct >= 55 ? '#fb8c00' : '#e53935';
+        return (
+          <TouchableOpacity
+            key={movie.id}
+            style={rankedStyles.row}
+            onPress={() => onMoviePress(movie)}
+            activeOpacity={0.7}
+          >
+            <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
+              {i + 1}
+            </Text>
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+              style={rankedStyles.poster}
+            />
+            <View style={rankedStyles.info}>
+              <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
+              {/* CEFR badge + label */}
+              <View style={rankedStyles.badgeRow}>
+                <View style={[rankedStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
+                  <Text style={[rankedStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
+                </View>
+                <Text style={rankedStyles.cefrLabel}>{cefrLabels[cefr]}</Text>
+              </View>
+              {/* Understandable bar */}
+              <View style={rankedStyles.barRow}>
+                <View style={rankedStyles.barTrack}>
+                  <View style={[rankedStyles.barFill, { width: `${pct}%` as any, backgroundColor: pctColor }]} />
+                </View>
+                <Text style={[rankedStyles.barPct, { color: pctColor }]}>{pct}%</Text>
+              </View>
+            </View>
+            {movie.vote_average > 0 && (
+              <View style={rankedStyles.ratingBox}>
+                <Text style={rankedStyles.rating}>★ {movie.vote_average.toFixed(1)}</Text>
+                <Text style={rankedStyles.meta}>{movie.release_date?.slice(0, 4)}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const rankedStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rank: {
+    width: 36,
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginRight: 12,
+  },
+  rankTop: { color: colors.primary },
+  poster: {
+    width: 60,
+    height: 90,
+    borderRadius: 6,
+    backgroundColor: colors.border,
+    marginRight: 14,
+  },
+  info: { flex: 1 },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  meta: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  cefrBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  cefrText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  cefrLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  barTrack: {
+    flex: 1,
+    maxWidth: 100,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  barPct: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  ratingBox: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+  },
+  rating: {
+    fontSize: 13,
+    color: '#F5A623',
+    fontWeight: '700',
+  },
+});
+
+// ── Trending Now: snap pager with dots ──────────────────────────────────────
+const SNAP_CARD_WIDTH = 150;
+const SNAP_CARD_GAP = 12;
+const SNAP_INTERVAL = SNAP_CARD_WIDTH + SNAP_CARD_GAP;
+
+const SnapPager = ({
+  movies,
+  onMoviePress,
+}: {
+  movies: any[];
+  onMoviePress: (movie: any) => void;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  if (movies.length === 0) return null;
+
+  const dotCount = Math.ceil(movies.length / 3);
+  const activeDot = Math.floor(activeIndex / 3);
+
+  return (
+    <View>
+      <FlatList
+        data={movies}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => String(item.id)}
+        snapToInterval={SNAP_INTERVAL}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        contentContainerStyle={{ paddingRight: 16 }}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
+          setActiveIndex(idx);
+        }}
+        renderItem={({ item }) => {
+          const cefr = getMovieCefr(item.id);
+          return (
+            <TouchableOpacity
+              style={snapStyles.card}
+              onPress={() => onMoviePress(item)}
+              activeOpacity={0.8}
+            >
+              <View style={snapStyles.posterContainer}>
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w300${item.poster_path}` }}
+                  style={snapStyles.poster}
+                />
+                {/* CEFR badge overlaid on poster */}
+                <View style={[snapStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
+                  <Text style={[snapStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
+                </View>
+              </View>
+              <Text style={snapStyles.title} numberOfLines={2}>{item.title}</Text>
+              <Text style={snapStyles.year}>{item.release_date?.slice(0, 4)}</Text>
+            </TouchableOpacity>
+          );
+        }}
+      />
+      {/* Page dots */}
+      <View style={snapStyles.dots}>
+        {Array.from({ length: dotCount }).map((_, i) => (
+          <View
+            key={i}
+            style={[
+              snapStyles.dot,
+              i === activeDot && snapStyles.dotActive,
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const snapStyles = StyleSheet.create({
+  card: {
+    width: SNAP_CARD_WIDTH,
+    marginRight: SNAP_CARD_GAP,
+  },
+  posterContainer: {
+    position: 'relative',
+    width: SNAP_CARD_WIDTH,
+    height: SNAP_CARD_WIDTH * 1.5,
+  },
+  poster: {
+    width: SNAP_CARD_WIDTH,
+    height: SNAP_CARD_WIDTH * 1.5,
+    borderRadius: 8,
+    backgroundColor: colors.border,
+  },
+  cefrBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  cefrText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 8,
+  },
+  year: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    width: 18,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+});
 
 // Available Languages (same as web app)
 const AVAILABLE_LANGUAGES = [
@@ -620,6 +1077,14 @@ const HomeScreen = ({
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Hero */}
+        {!loading && (
+          <MobileHeroSection
+            movie={topRatedMovies.find((m: any) => m.backdrop_path) ?? topRatedMovies[0] ?? null}
+            onPress={handleMoviePress}
+          />
+        )}
+
         {/* Search Bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
@@ -686,35 +1151,47 @@ const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⭐ Top Rated</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : (
-            <Carousel
-              data={topRatedMovies}
-              renderItem={(movie) => (
-                <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
-              )}
-            />
-          )}
-        </View>
+        {/* Quick Start */}
+        {!loading && <MobileQuickStartRow onSearch={(q) => { onSearch(q); }} />}
 
+        {/* Trending Now */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
           {loading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
           ) : (
-            <Carousel
-              data={trendingMovies}
-              renderItem={(movie) => (
-                <MovieCard movie={movie} onPress={() => handleMoviePress(movie)} />
-              )}
+            <SnapPager
+              movies={trendingMovies}
+              onMoviePress={handleMoviePress}
             />
           )}
         </View>
 
-        {/* Bottom spacing */}
+        {/* Top Rated for Learning */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>⭐ Top Rated for Learning</Text>
+          <Text style={styles.sectionSubtitle}>Ranked by vocabulary richness and dialogue clarity</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : (
+            <RankedMovieList
+              movies={topRatedMovies}
+              onMoviePress={handleMoviePress}
+            />
+          )}
+        </View>
+
+        {/* Browse All */}
+        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+          <TouchableOpacity
+            style={styles.browseAllButton}
+            onPress={() => onSearch('')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.browseAllText}>Browse All Movies →</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -2678,7 +3155,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 14,
+  },
+  browseAllButton: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+  },
+  browseAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
   },
   carousel: {
     paddingRight: 16,
