@@ -361,6 +361,74 @@ PHRASAL_VERBS = {
     'toddle off': 'C2', 'cotton on to': 'C2', 'fess up': 'C2', 'gad about': 'C2',
     'moulder away': 'C2', 'potter about': 'C2', 'rabbit on': 'C2', 'swan around': 'C2',
     'tootle along': 'C2', 'waltz in': 'C2', 'wheedle out of': 'C2', 'witter on': 'C2',
+
+    # ---- Expansion: high-value missing entries ----
+    # B1 additions (everyday phrasal verbs)
+    'figure out': 'B1', 'pass out': 'B1', 'point out': 'B1',
+    'set off': 'B1', 'set out': 'B1', 'take over': 'B1', 'take on': 'B1',
+    'turn out': 'B1', 'turn down': 'B1', 'turn into': 'B1',
+    'pull over': 'B1', 'pull out': 'B1', 'put off': 'B1', 'put out': 'B1',
+    'put up': 'B1', 'put up with': 'B1', 'look forward to': 'B1',
+    'come up with': 'B1', 'get along with': 'B1', 'get away with': 'B1',
+    'get rid of': 'B1', 'get over': 'B1', 'go through': 'B1', 'go over': 'B1',
+    'hand in': 'B1', 'hand out': 'B1', 'hand over': 'B1', 'hold back': 'B1',
+    'keep up with': 'B1', 'let down': 'B1', 'make out': 'B1', 'pay off': 'B1',
+    'pick out': 'B1', 'run into': 'B1', 'run over': 'B1', 'show off': 'B1',
+    'split up': 'B1', 'stand out': 'B1', 'take after': 'B1',
+    'take apart': 'B1', 'take back': 'B1', 'take down': 'B1', 'take in': 'B1',
+    'throw away': 'B1', 'throw up': 'B1', 'try out': 'B1', 'work on': 'B1',
+    # B2 additions (intermediate/upper-intermediate)
+    'back down': 'B2', 'back off': 'B2', 'back out': 'B2', 'back up': 'B2',
+    'bring about': 'B2', 'bring back': 'B2', 'bring down': 'B2', 'bring forward': 'B2',
+    'bring in': 'B2', 'bring on': 'B2', 'bring out': 'B2', 'call back': 'B2',
+    'call for': 'B2', 'call in': 'B2', 'carry off': 'B2', 'carry out': 'B2',
+    'come about': 'B2', 'come around': 'B2', 'come by': 'B2', 'come down to': 'B2',
+    'come into': 'B2', 'come off': 'B2', 'come through': 'B2', 'come up against': 'B2',
+    'cut back': 'B2', 'cut down': 'B2', 'cut off': 'B2', 'cut out': 'B2',
+    'die down': 'B2', 'die out': 'B2', 'do away with': 'B2', 'do up': 'B2',
+    'draw on': 'B2', 'draw out': 'B2', 'draw up': 'B2', 'drop in': 'B2',
+    'drop out': 'B2', 'face up to': 'B2', 'fall apart': 'B2', 'fall back on': 'B2',
+    'fall behind': 'B2', 'fall for': 'B2', 'fall out': 'B2', 'fall through': 'B2',
+    'fight back': 'B2', 'fight off': 'B2', 'follow through': 'B2', 'follow up': 'B2',
+    'get across': 'B2', 'get around': 'B2', 'get at': 'B2', 'get by': 'B2',
+    'get into': 'B2', 'give in': 'B2', 'give out': 'B2', 'give way': 'B2',
+    'go after': 'B2', 'go ahead': 'B2', 'go along with': 'B2', 'go for': 'B2',
+    'go in for': 'B2', 'go off': 'B2', 'hold off': 'B2', 'hold out': 'B2',
+    'hold up': 'B2', 'jump at': 'B2', 'keep back': 'B2', 'keep off': 'B2',
+    'lay down': 'B2', 'lay off': 'B2', 'lay out': 'B2', 'let off': 'B2',
+    'let out': 'B2', 'live up to': 'B2', 'look down on': 'B2', 'look into': 'B2',
+    'look on': 'B2', 'look over': 'B2', 'look up to': 'B2', 'make up for': 'B2',
+    'pass away': 'B2', 'pass on': 'B2', 'pick on': 'B2', 'piece together': 'B2',
+    'pin down': 'B2', 'play down': 'B2', 'pull through': 'B2', 'push for': 'B2',
+    'push through': 'B2', 'put across': 'B2', 'put forward': 'B2',
+    'put in': 'B2', 'put through': 'B2', 'reach out': 'B2',
+    'run down': 'B2', 'run off': 'B2', 'run up': 'B2', 'see off': 'B2',
+    'see through': 'B2', 'send off': 'B2', 'set aside': 'B2', 'set back': 'B2',
+    'set down': 'B2', 'set in': 'B2', 'settle down': 'B2', 'settle for': 'B2',
+    'shake off': 'B2', 'shake up': 'B2', 'shoot down': 'B2',
+    'speed up': 'B2', 'spell out': 'B2', 'stand by': 'B2', 'stand for': 'B2',
+    'step down': 'B2', 'step in': 'B2', 'step up': 'B2', 'stick out': 'B2',
+    'stick to': 'B2', 'stick up for': 'B2', 'stick with': 'B2', 'stir up': 'B2',
+    'sum up': 'B2', 'take to': 'B2', 'take up': 'B2',
+    'talk back': 'B2', 'talk into': 'B2', 'talk out of': 'B2', 'talk over': 'B2',
+    'tear apart': 'B2', 'tear down': 'B2', 'tell off': 'B2', 'think over': 'B2',
+    'think through': 'B2', 'think up': 'B2', 'throw out': 'B2', 'tie up': 'B2',
+    'turn against': 'B2', 'use up': 'B2', 'walk out': 'B2',
+    'wear down': 'B2', 'wear off': 'B2', 'wear out': 'B2', 'wind up': 'B2',
+    'wrap up': 'B2', 'write off': 'B2',
+    # C1 additions (advanced/literary)
+    'beat down': 'C1', 'belt out': 'C1', 'blurt out': 'C1',
+    'botch up': 'C1', 'brush aside': 'C1', 'buckle down': 'C1', 'buckle under': 'C1',
+    'cash in on': 'C1', 'churn out': 'C1', 'conjure up': 'C1', 'cordon off': 'C1',
+    'crack down on': 'C1', 'dredge up': 'C1', 'drown out': 'C1', 'eke out': 'C1',
+    'fend off': 'C1', 'ferret out': 'C1', 'gloss over': 'C1', 'hammer out': 'C1',
+    'hold forth': 'C1', 'iron out': 'C1', 'jot down': 'C1', 'knuckle down': 'C1',
+    'mete out': 'C1', 'mull over': 'C1', 'nail down': 'C1', 'palm off': 'C1',
+    'paper over': 'C1', 'rake in': 'C1', 'rake up': 'C1', 'rattle off': 'C1',
+    'reel off': 'C1', 'root out': 'C1', 'shrug off': 'C1', 'sift through': 'C1',
+    'simmer down': 'C1', 'spirit away': 'C1', 'square up': 'C1', 'stack up': 'C1',
+    'stoke up': 'C1', 'tone down': 'C1', 'tot up': 'C1',
+    'usher out': 'C1', 'whisk away': 'C1', 'wriggle out of': 'C1',
 }
 
 # Common idioms with CEFR levels
@@ -522,6 +590,36 @@ COMMON_IDIOMS = {
     'have a field day': 'C2', 'hear it through the grapevine': 'C2',
     'in like flynn': 'C2', 'in the buff': 'C2', 'ivory tower': 'C2',
     'jump ship': 'C2', 'kangaroo court': 'C2', 'keep a stiff upper lip': 'C2',
+
+    # ---- Expansion: high-value missing entries ----
+    # A2 additions
+    'thank you': 'A2', 'see you': 'A2', 'how come': 'A2',
+    'all right': 'A2', 'you know': 'A2', 'i mean': 'A2', 'come here': 'A2',
+    'over there': 'A2', 'right away': 'A2', 'all day': 'A2', 'all night': 'A2',
+    # B1 additions
+    'on purpose': 'B1', 'by mistake': 'B1', 'in general': 'B1',
+    'for example': 'B1', 'in addition': 'B1', 'as a result': 'B1',
+    'a lot of': 'B1', 'plenty of': 'B1', 'lots of': 'B1', 'a couple of': 'B1',
+    'on second thought': 'B1', 'pay attention': 'B1', 'change your mind': 'B1',
+    'make up your mind': 'B1', 'in a hurry': 'B1', 'first of all': 'B1',
+    'as usual': 'B1', 'every other day': 'B1',
+    # B2 additions
+    'cut to the chase': 'B2', 'get the hang of': 'B2', 'jump to conclusions': 'B2',
+    'on the same page': 'B2', 'play it by ear': 'B2', 'pull yourself together': 'B2',
+    'take it easy': 'B2', 'take it with a grain of salt': 'B2', 'the best of both worlds': 'B2',
+    'the icing on the cake': 'B2', 'a blessing in disguise': 'B2',
+    'beat around the bush': 'B2', 'cost an arm and a leg': 'B2',
+    'every cloud has a silver lining': 'B2', 'go the extra mile': 'B2',
+    'in the nick of time': 'B2', 'on cloud nine': 'B2', 'speak of the devil': 'B2',
+    'spill the beans': 'B2', 'the ball is in your court': 'B2',
+    'the last straw': 'B2', 'time is money': 'B2', 'twist someones arm': 'B2',
+    'you cant judge a book by its cover': 'B2', 'a dime a dozen': 'B2',
+    'add fuel to the fire': 'B2', 'between a rock and a hard place': 'B2',
+    'crack of dawn': 'B2', 'easier said than done': 'B2', 'food for thought': 'B2',
+    'get out of hand': 'B2', 'in hot water': 'B2', 'kill two birds with one stone': 'B2',
+    'last but not least': 'B2', 'long story short': 'B2', 'miss the boat': 'B2',
+    'put all your eggs in one basket': 'B2', 'take with a pinch of salt': 'B2',
+    'turn over a new leaf': 'B2', 'when pigs fly': 'B2',
 }
 
 
@@ -614,9 +712,97 @@ class WordClassification:
     alternatives: Optional[List[Tuple[CEFRLevel, float]]] = None
 
 
+def _zipf_to_cefr(word: str) -> str:
+    """
+    Map a word's Zipf frequency to a CEFR level.
+
+    Used as a fallback when a phrasal verb is detected by spaCy in context but
+    is not present in the curated PHRASAL_VERBS dictionary. The verb's Zipf
+    score is the dominant signal — particles like 'up'/'down'/'out' all have
+    near-saturation Zipf scores (~6.4) and don't discriminate.
+    """
+    try:
+        from wordfreq import zipf_frequency
+        z = zipf_frequency(word, 'en')
+    except Exception:
+        return 'C1'  # safe default for unknowns
+    if z >= 5.5:
+        return 'A2'
+    if z >= 4.7:
+        return 'B1'
+    if z >= 4.0:
+        return 'B2'
+    if z >= 3.0:
+        return 'C1'
+    return 'C2'
+
+
+def _detect_phrasal_verbs_spacy(text: str) -> List[Tuple[str, str]]:
+    """
+    Use spaCy dependency parsing to detect verb+particle phrasal verbs in
+    context — eliminating false positives like 'her makeup' matching 'make up'.
+
+    spaCy marks the particle of a phrasal verb construction with dep_='prt',
+    so we walk the parse tree and pair each particle with its head verb's lemma.
+
+    For each detected phrase:
+    - If it's in PHRASAL_VERBS, use the curated CEFR level.
+    - Otherwise, derive a level from the verb's Zipf frequency.
+
+    Returns list of (phrase, cefr_level) tuples (deduplicated).
+    Returns [] if spaCy can't be loaded — caller should fall back to the
+    substring-based detection path.
+    """
+    try:
+        from .lemmatization_service import get_nlp
+        nlp = get_nlp()
+    except Exception:
+        return []
+
+    try:
+        doc = nlp(text)
+    except Exception:
+        return []
+
+    found: Dict[str, str] = {}
+    for token in doc:
+        # spaCy particle dep marks the particle of a phrasal verb construction
+        if token.dep_ != 'prt':
+            continue
+        head = token.head
+        if head.pos_ != 'VERB':
+            continue
+        verb_lemma = head.lemma_.lower()
+        particle = token.text.lower()
+        if not verb_lemma.isalpha() or not particle.isalpha():
+            continue
+        phrase = f"{verb_lemma} {particle}"
+        if phrase in found:
+            continue
+        # Curated dictionary takes precedence over frequency-derived level
+        if phrase in PHRASAL_VERBS:
+            found[phrase] = PHRASAL_VERBS[phrase]
+        else:
+            found[phrase] = _zipf_to_cefr(verb_lemma)
+
+    return list(found.items())
+
+
 def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
     """
     Detect phrasal verbs and idioms in text.
+
+    Detection strategy:
+    1. Idioms — substring match against curated COMMON_IDIOMS dictionary.
+       (No reliable way to discover novel idioms without an LLM.)
+    2. Phrasal verbs — spaCy dependency parsing finds verb+particle pairs in
+       context, eliminating false positives like "her makeup" → "make up".
+       Detected phrases get their CEFR level from PHRASAL_VERBS if curated,
+       or from a Zipf-frequency fallback otherwise.
+    3. Multi-word phrasal verbs (3+ tokens like "look forward to", "put up with")
+       fall through to substring matching, since spaCy's prt dep is binary.
+    4. If spaCy is unavailable, falls back to pure substring matching for
+       single+multi-word phrasal verbs.
 
     Args:
         text: The input text to analyze
@@ -626,17 +812,41 @@ def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
         where type is 'phrasal_verb' or 'idiom'
     """
     text_lower = text.lower()
-    detected = []
+    detected: List[Tuple[str, str, str]] = []
 
-    # Check for phrasal verbs (sorted by length to match longer ones first)
-    for pv, level in sorted(PHRASAL_VERBS.items(), key=lambda x: -len(x[0])):
-        if pv in text_lower:
-            detected.append((pv, 'phrasal_verb', level))
-
-    # Check for idioms (sorted by length to match longer ones first)
+    # 1. Idioms — curated dictionary, longest match first
+    seen_idioms = set()
     for idiom, level in sorted(COMMON_IDIOMS.items(), key=lambda x: -len(x[0])):
-        if idiom in text_lower:
+        if idiom in text_lower and idiom not in seen_idioms:
             detected.append((idiom, 'idiom', level))
+            seen_idioms.add(idiom)
+
+    # 2. Phrasal verbs — spaCy in-context detection (preferred)
+    seen_pvs = set()
+    spacy_pvs = _detect_phrasal_verbs_spacy(text)
+    for phrase, level in spacy_pvs:
+        if phrase not in seen_pvs:
+            detected.append((phrase, 'phrasal_verb', level))
+            seen_pvs.add(phrase)
+
+    # 3. Multi-word phrasal verbs (3+ tokens) — substring fallback for ones
+    # spaCy can't detect via single-particle dep parsing
+    for pv, level in sorted(PHRASAL_VERBS.items(), key=lambda x: -len(x[0])):
+        if len(pv.split()) < 3:
+            continue
+        if pv in text_lower and pv not in seen_pvs:
+            detected.append((pv, 'phrasal_verb', level))
+            seen_pvs.add(pv)
+
+    # 4. Fallback: if spaCy returned nothing (e.g., model not loaded),
+    # use substring matching for 2-word phrasal verbs too
+    if not spacy_pvs:
+        for pv, level in sorted(PHRASAL_VERBS.items(), key=lambda x: -len(x[0])):
+            if len(pv.split()) != 2:
+                continue
+            if pv in text_lower and pv not in seen_pvs:
+                detected.append((pv, 'phrasal_verb', level))
+                seen_pvs.add(pv)
 
     return detected
 
