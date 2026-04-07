@@ -413,7 +413,7 @@ const HomeScreen = ({
   setTargetLanguage: (lang: string) => void;
   onNavigateToSettings: () => void;
 }) => {
-  const [activeTab, setActiveTab] = useState<'movies' | 'books'>('movies');
+  const [activeTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [allResults, setAllResults] = useState<any[]>([]);
@@ -619,18 +619,6 @@ const HomeScreen = ({
         </View>
       )}
 
-      {/* Tabs - Books tab disabled for now */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, styles.tabActive]}
-          onPress={() => setActiveTab('movies')}
-        >
-          <Text style={[styles.tabText, styles.tabTextActive]}>
-            🎬 Movies
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Search Bar */}
         <View style={styles.searchContainer}>
@@ -724,28 +712,6 @@ const HomeScreen = ({
               )}
             />
           )}
-        </View>
-
-        {/* Features */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How it works</Text>
-          <View style={styles.featureGrid}>
-            <View style={styles.featureCard}>
-              <Text style={styles.featureIcon}>🎬</Text>
-              <Text style={styles.featureTitle}>Pick a Movie</Text>
-              <Text style={styles.featureDesc}>Search any film</Text>
-            </View>
-            <View style={styles.featureCard}>
-              <Text style={styles.featureIcon}>📝</Text>
-              <Text style={styles.featureTitle}>Get Words</Text>
-              <Text style={styles.featureDesc}>CEFR-graded vocab</Text>
-            </View>
-            <View style={styles.featureCard}>
-              <Text style={styles.featureIcon}>🎯</Text>
-              <Text style={styles.featureTitle}>Learn</Text>
-              <Text style={styles.featureDesc}>Before watching</Text>
-            </View>
-          </View>
         </View>
 
         {/* Bottom spacing */}
