@@ -342,11 +342,14 @@ class SentenceExampleService:
 
         candidates: List[Tuple[str, float, int, int, str]] = []
         is_two_token_pv = len(phrase_tokens) == 2
+        # Phrases are rarer than single words, so be much more permissive on
+        # sentence length than the single-word path.
+        PHRASE_MAX_WORDS = 60
 
         for sentence_idx, sentence in enumerate(sentences):
             tokens = self.tokenize_sentence(sentence)
             word_count = len(tokens)
-            if word_count > self.MAX_SENTENCE_WORDS:
+            if word_count > PHRASE_MAX_WORDS:
                 continue
 
             matched_form = None
@@ -364,32 +367,39 @@ class SentenceExampleService:
                         break
 
             # Step 2: split phrasal verb (verb ... particle) via spaCy
+            # Strict: the particle must be parsed as dep_=='prt' AND its head
+            # must be the verb token. This avoids false positives like
+            # "Maybe I could help. -You're out, Tom." where 'out' is in a
+            # different clause / sentence and not a particle of 'help'.
             elif is_two_token_pv:
                 try:
                     doc = nlp(sentence)
                     verb_lemma, particle_text = phrase_tokens[0], phrase_tokens[1]
-                    for i, tok in enumerate(doc):
-                        if tok.lemma_.lower() != verb_lemma:
+                    for tok in doc:
+                        # Find the particle token first (cheaper filter)
+                        if tok.text.lower() != particle_text:
                             continue
-                        # Look at the next ~3 non-punct tokens for the particle
-                        seen = 0
-                        for k in range(i + 1, min(i + 5, len(doc))):
-                            nxt = doc[k]
-                            if nxt.is_punct or nxt.is_space:
-                                continue
-                            if nxt.text.lower() == particle_text and (
-                                nxt.dep_ == 'prt' or seen <= 3
-                            ):
-                                matched_form = f"{tok.text} {nxt.text}"
-                                tok_text_lower = tok.text.lower()
-                                for j, t in enumerate(tokens):
-                                    if t == tok_text_lower:
-                                        word_position = j
-                                        break
+                        if tok.dep_ != 'prt':
+                            continue
+                        head = tok.head
+                        if head is None or head.lemma_.lower() != verb_lemma:
+                            continue
+                        # Reject if a sentence-ending punct sits between them
+                        lo, hi = (head.i, tok.i) if head.i < tok.i else (tok.i, head.i)
+                        bad_break = False
+                        for k in range(lo + 1, hi):
+                            if doc[k].text in {'.', '!', '?', ';', '—', '–', '--'}:
+                                bad_break = True
                                 break
-                            seen += 1
-                        if matched_form:
-                            break
+                        if bad_break:
+                            continue
+                        matched_form = f"{head.text} {tok.text}"
+                        head_text_lower = head.text.lower()
+                        for j, t in enumerate(tokens):
+                            if t == head_text_lower:
+                                word_position = j
+                                break
+                        break
                 except Exception:
                     pass
 
@@ -397,6 +407,8 @@ class SentenceExampleService:
                 continue
 
             actual_sentence = sentence
+            # If short, try prepending prior sentences for context — but never
+            # drop the candidate just because it's short.
             if word_count < self.MIN_SENTENCE_WORDS:
                 combined = sentence
                 for lookback in range(1, 3):
@@ -405,24 +417,26 @@ class SentenceExampleService:
                         break
                     combined = sentences[prev_idx].strip() + " " + combined
                     combined_tokens = self.tokenize_sentence(combined)
-                    if len(combined_tokens) > self.MAX_SENTENCE_WORDS:
+                    if len(combined_tokens) > PHRASE_MAX_WORDS:
                         break
                     actual_sentence = combined
                     tokens = combined_tokens
                     word_count = len(tokens)
                     if word_count >= self.MIN_SENTENCE_WORDS:
                         break
-                if word_count < self.MIN_SENTENCE_WORDS:
-                    continue
 
-            score = self.score_sentence(
-                actual_sentence,
-                tokens,
-                phrase_tokens[0],
-                sentence_idx,
+            # Always accept the match — phrase extractions are intentional and
+            # rare, so a low scoring or short sentence is still useful.
+            score = max(
+                1,
+                self.score_sentence(
+                    actual_sentence,
+                    tokens,
+                    phrase_tokens[0],
+                    sentence_idx,
+                ),
             )
-            if score > 0:
-                candidates.append((actual_sentence, score, sentence_idx, word_position, matched_form))
+            candidates.append((actual_sentence, score, sentence_idx, word_position, matched_form))
 
         candidates.sort(key=lambda x: (-x[1], x[2]))
         return [
