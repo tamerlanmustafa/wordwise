@@ -289,7 +289,7 @@ export const wordwiseApi = {
 
   // Get all saved words for the user
   getSavedWords: async (): Promise<Array<{ id: number; word: string; movie_id: number | null; is_learned: boolean }>> => {
-    const res = await authFetch(`${API_BASE_URL}/user/words`);
+    const res = await authFetch(`${API_BASE_URL}/user/words/`);
     if (!res.ok) throw new Error('Failed to get saved words');
     return res.json();
   },
