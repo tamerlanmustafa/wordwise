@@ -5,15 +5,18 @@ interface QuickFilter {
   id: string;
   icon: string;
   label: string;
-  search: string; // query string appended to /search
+  // TMDB genre id (or pipe-joined ids for OR matching) + display name
+  genreId: string;
+  genreName: string;
 }
 
 const FILTERS: QuickFilter[] = [
-  { id: 'easy',      icon: '🟢', label: 'Easy  (B1)',       search: '?difficulty=B1' },
-  { id: 'dialogue',  icon: '💬', label: 'Dialogue-Heavy',   search: '?q=dialogue+drama' },
-  { id: 'classic',   icon: '🎬', label: 'Classic Cinema',   search: '?q=classic+film' },
-  { id: 'crime',     icon: '🔍', label: 'Crime & Thriller', search: '?q=crime+thriller' },
-  { id: 'family',    icon: '🏠', label: 'Family Friendly',  search: '?q=family+adventure' },
+  { id: 'drama',     icon: '🎭', label: 'Drama',            genreId: '18',    genreName: 'Drama' },
+  { id: 'comedy',    icon: '😂', label: 'Comedy',           genreId: '35',    genreName: 'Comedy' },
+  { id: 'crime',     icon: '🔍', label: 'Crime & Thriller', genreId: '80|53', genreName: 'Crime & Thriller' },
+  { id: 'family',    icon: '🏠', label: 'Family Friendly',  genreId: '10751', genreName: 'Family' },
+  { id: 'romance',   icon: '💞', label: 'Romance',          genreId: '10749', genreName: 'Romance' },
+  { id: 'animation', icon: '🎨', label: 'Animation',        genreId: '16',    genreName: 'Animation' },
 ];
 
 export default function QuickStartRow() {
@@ -38,7 +41,11 @@ export default function QuickStartRow() {
         {FILTERS.map((f) => (
           <ButtonBase
             key={f.id}
-            onClick={() => navigate(`/search${f.search}`)}
+            onClick={() =>
+              navigate(
+                `/search?genre=${encodeURIComponent(f.genreId)}&name=${encodeURIComponent(f.genreName)}&sort=top_rated`
+              )
+            }
             sx={{
               display: 'inline-flex',
               alignItems: 'center',

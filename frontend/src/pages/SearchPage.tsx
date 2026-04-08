@@ -20,6 +20,7 @@ export default function SearchPage() {
   const query = searchParams.get('q');
   const genreId = searchParams.get('genre');
   const genreName = searchParams.get('name');
+  const sort = searchParams.get('sort') === 'top_rated' ? 'top_rated' : 'popularity';
 
   const [movies, setMovies] = useState<TMDBMovie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,7 @@ export default function SearchPage() {
       try {
         let response;
         if (genreId) {
-          response = await fetchMoviesByGenre(parseInt(genreId), 1);
+          response = await fetchMoviesByGenre(genreId, 1, sort);
         } else if (query) {
           response = await searchTMDBMovies(query, 1);
         } else {
@@ -52,10 +53,12 @@ export default function SearchPage() {
     };
 
     loadMovies();
-  }, [query, genreId]);
+  }, [query, genreId, sort]);
 
   const getTitle = () => {
-    if (genreName) return `${genreName} Movies`;
+    if (genreName) {
+      return sort === 'top_rated' ? `Top Rated · ${genreName}` : `${genreName} Movies`;
+    }
     if (query) return `Search results for "${query}"`;
     return 'Search Results';
   };

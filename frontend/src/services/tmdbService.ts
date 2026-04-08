@@ -71,15 +71,26 @@ export async function fetchGenres(): Promise<TMDBGenresResponse> {
 }
 
 // Fetch movies by genre
-export async function fetchMoviesByGenre(genreId: number, page: number = 1): Promise<TMDBMoviesResponse> {
+export async function fetchMoviesByGenre(
+  genreId: number | string,
+  page: number = 1,
+  sort: 'popularity' | 'top_rated' = 'popularity'
+): Promise<TMDBMoviesResponse> {
+  // For top-rated: apply a vote_count floor so single-rating obscurities
+  // don't dominate. For popularity: no floor needed.
+  const params: Record<string, string | number> = {
+    api_key: TMDB_API_KEY,
+    language: 'en-US',
+    with_genres: genreId,
+    page,
+    sort_by: sort === 'top_rated' ? 'vote_average.desc' : 'popularity.desc',
+    include_adult: 'false',
+  };
+  if (sort === 'top_rated') {
+    params['vote_count.gte'] = 200;
+  }
   const response = await axios.get<TMDBMoviesResponse>(`${TMDB_BASE_URL}/discover/movie`, {
-    params: {
-      api_key: TMDB_API_KEY,
-      language: 'en-US',
-      with_genres: genreId,
-      page,
-      sort_by: 'popularity.desc'
-    }
+    params,
   });
   return response.data;
 }
