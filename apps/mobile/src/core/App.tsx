@@ -2022,10 +2022,10 @@ const SearchResultsScreen = ({
 
   const searchPage = async (pageNum: number) => {
     try {
-      // For genre quick-start: top-rated within genre, with a vote_count
-      // floor so single-rating obscurities don't dominate the top.
+      // For genre quick-start: top-rated within genre, restricted to widely
+      // rated films (>=90k votes) so only well-known titles surface.
       const url = isGenre
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&sort_by=vote_average.desc&vote_count.gte=200&include_adult=false&page=${pageNum}`
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
         : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`;
       const res = await fetch(url);
       const data = await res.json();

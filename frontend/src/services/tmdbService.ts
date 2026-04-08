@@ -87,7 +87,9 @@ export async function fetchMoviesByGenre(
     include_adult: 'false',
   };
   if (sort === 'top_rated') {
-    params['vote_count.gte'] = 200;
+    // Restrict to widely-rated films so only well-known titles surface.
+    // ~5k is a sweet spot: filters obscurities, keeps any notable release.
+    params['vote_count.gte'] = 5000;
   }
   const response = await axios.get<TMDBMoviesResponse>(`${TMDB_BASE_URL}/discover/movie`, {
     params,
