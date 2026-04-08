@@ -88,27 +88,6 @@ const cefrLabels: Record<string, string> = {
   IDIOMS: 'Idioms & Phrases',
 };
 
-const cefrTextColors: Record<string, string> = {
-  A1: '#fff', A2: '#fff', B1: '#333', B2: '#fff', C1: '#fff', C2: '#fff',
-};
-
-const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const CEFR_WEIGHTS = [3, 8, 25, 32, 22, 10];
-
-function getMovieCefr(movieId: number): string {
-  const bucket = movieId % 100;
-  let cumulative = 0;
-  for (let i = 0; i < CEFR_WEIGHTS.length; i++) {
-    cumulative += CEFR_WEIGHTS[i];
-    if (bucket < cumulative) return CEFR_LEVELS[i];
-  }
-  return 'B2';
-}
-
-function getUnderstandablePct(movieId: number): number {
-  return 48 + (movieId * 13 + 7) % 46;
-}
-
 
 // Login Screen
 const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void }) => {
@@ -379,36 +358,28 @@ const MobileHeroSection = ({
   const backdrop = movie.backdrop_path
     ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
     : null;
-  const cefr = getMovieCefr(movie.id);
-  const pct = getUnderstandablePct(movie.id);
-  const year = movie.release_date?.slice(0, 4);
 
   return (
     <TouchableOpacity activeOpacity={0.95} onPress={() => onPress(movie)}>
       <View style={heroStyles.container}>
         {backdrop ? (
           <ImageBackground source={{ uri: backdrop }} style={heroStyles.backdrop} resizeMode="cover">
-            {/* Dark gradient overlay via stacked views */}
-            <View style={heroStyles.overlayTop} />
+            {/* Gradient overlay — darkens bottom 38% so the backdrop stays visible */}
             <View style={heroStyles.overlayBottom} />
             <View style={heroStyles.content}>
-              {/* CEFR badge + pct */}
-              <View style={heroStyles.badgeRow}>
-                <View style={[heroStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
-                  <Text style={[heroStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
-                </View>
-                <Text style={heroStyles.pctText}>{cefrLabels[cefr]} · {pct}% within your level</Text>
-              </View>
-              <Text style={heroStyles.title} numberOfLines={2}>{movie.title}</Text>
+              <Text style={heroStyles.title} numberOfLines={1}>{movie.title}</Text>
               {movie.overview ? (
-                <Text style={heroStyles.overview} numberOfLines={2}>{movie.overview}</Text>
+                <Text style={heroStyles.overview} numberOfLines={1}>
+                  {movie.overview}
+                </Text>
               ) : null}
-              <View style={heroStyles.ctaRow}>
-                <View style={heroStyles.ctaButton}>
-                  <Text style={heroStyles.ctaText}>▶  Start Learning</Text>
-                </View>
-                {year ? <Text style={heroStyles.year}>{year}</Text> : null}
-              </View>
+              <TouchableOpacity
+                style={heroStyles.ctaButton}
+                onPress={() => onPress(movie)}
+                activeOpacity={0.85}
+              >
+                <Text style={heroStyles.ctaText}>▶  Start Learning</Text>
+              </TouchableOpacity>
             </View>
           </ImageBackground>
         ) : (
@@ -424,67 +395,40 @@ const MobileHeroSection = ({
 };
 
 const heroStyles = StyleSheet.create({
-  container: { width: '100%', height: 280 },
+  container: { width: '100%', height: 360 },
   backdrop: { width: '100%', height: '100%', justifyContent: 'flex-end' },
-  overlayTop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    zIndex: 1,
-  },
   overlayBottom: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: '70%',
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    height: '38%',
+    backgroundColor: 'rgba(0,0,0,0.78)',
     zIndex: 1,
   },
   content: {
     zIndex: 2,
     paddingHorizontal: 20,
-    paddingBottom: 22,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  cefrBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  cefrText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  pctText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
+    paddingBottom: 18,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: '#fff',
-    marginBottom: 6,
-    lineHeight: 28,
+    marginBottom: 4,
+    lineHeight: 27,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   overview: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    lineHeight: 16,
+    marginBottom: 10,
   },
   ctaButton: {
+    alignSelf: 'flex-start',
     backgroundColor: colors.primary,
     borderRadius: 8,
     paddingHorizontal: 18,
@@ -495,20 +439,19 @@ const heroStyles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  year: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
 });
 
 // ── Quick Start Row ──────────────────────────────────────────────────────────
+// Genre-based filters using TMDB genre IDs. Encoded as `genre:<id>:<name>`
+// so SearchResultsScreen can detect and route to the discover endpoint
+// (sorted by popularity) instead of the title text-search endpoint.
 const QUICK_FILTERS = [
-  { id: 'easy',     icon: '🟢', label: 'Easy (B1)',        query: 'B1 drama' },
-  { id: 'dialogue', icon: '💬', label: 'Dialogue-Heavy',   query: 'dialogue drama' },
-  { id: 'classic',  icon: '🎬', label: 'Classic Cinema',   query: 'classic film' },
-  { id: 'crime',    icon: '🔍', label: 'Crime & Thriller', query: 'crime thriller' },
-  { id: 'family',   icon: '🏠', label: 'Family',           query: 'family adventure' },
+  { id: 'drama',     icon: '🎭', label: 'Drama',            query: 'genre:18:Drama' },
+  { id: 'comedy',    icon: '😂', label: 'Comedy',           query: 'genre:35:Comedy' },
+  { id: 'crime',     icon: '🔍', label: 'Crime & Thriller', query: 'genre:80|53:Crime & Thriller' },
+  { id: 'family',    icon: '🏠', label: 'Family Friendly',  query: 'genre:10751:Family' },
+  { id: 'romance',   icon: '💞', label: 'Romance',          query: 'genre:10749:Romance' },
+  { id: 'animation', icon: '🎨', label: 'Animation',        query: 'genre:16:Animation' },
 ];
 
 const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => (
@@ -566,50 +509,31 @@ const RankedMovieList = ({
   if (movies.length === 0) return null;
   return (
     <View>
-      {movies.slice(0, 8).map((movie, i) => {
-        const cefr = getMovieCefr(movie.id);
-        const pct = getUnderstandablePct(movie.id);
-        const pctColor = pct >= 75 ? '#43a047' : pct >= 55 ? '#fb8c00' : '#e53935';
-        return (
-          <TouchableOpacity
-            key={movie.id}
-            style={rankedStyles.row}
-            onPress={() => onMoviePress(movie)}
-            activeOpacity={0.7}
-          >
-            <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
-              {i + 1}
-            </Text>
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-              style={rankedStyles.poster}
-            />
-            <View style={rankedStyles.info}>
-              <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
-              {/* CEFR badge + label */}
-              <View style={rankedStyles.badgeRow}>
-                <View style={[rankedStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
-                  <Text style={[rankedStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
-                </View>
-                <Text style={rankedStyles.cefrLabel}>{cefrLabels[cefr]}</Text>
-              </View>
-              {/* Understandable bar */}
-              <View style={rankedStyles.barRow}>
-                <View style={rankedStyles.barTrack}>
-                  <View style={[rankedStyles.barFill, { width: `${pct}%` as any, backgroundColor: pctColor }]} />
-                </View>
-                <Text style={[rankedStyles.barPct, { color: pctColor }]}>{pct}%</Text>
-              </View>
+      {movies.slice(0, 8).map((movie, i) => (
+        <TouchableOpacity
+          key={movie.id}
+          style={rankedStyles.row}
+          onPress={() => onMoviePress(movie)}
+          activeOpacity={0.7}
+        >
+          <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
+            {i + 1}
+          </Text>
+          <Image
+            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+            style={rankedStyles.poster}
+          />
+          <View style={rankedStyles.info}>
+            <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
+            <Text style={rankedStyles.meta}>{movie.release_date?.slice(0, 4)}</Text>
+          </View>
+          {movie.vote_average > 0 && (
+            <View style={rankedStyles.ratingBox}>
+              <Text style={rankedStyles.rating}>★ {movie.vote_average.toFixed(1)}</Text>
             </View>
-            {movie.vote_average > 0 && (
-              <View style={rankedStyles.ratingBox}>
-                <Text style={rankedStyles.rating}>★ {movie.vote_average.toFixed(1)}</Text>
-                <Text style={rankedStyles.meta}>{movie.release_date?.slice(0, 4)}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      })}
+          )}
+        </TouchableOpacity>
+      ))}
     </View>
   );
 };
@@ -643,53 +567,11 @@ const rankedStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   meta: {
     fontSize: 12,
     color: colors.textSecondary,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  cefrBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  cefrText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  cefrLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  barRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  barTrack: {
-    flex: 1,
-    maxWidth: 100,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  barPct: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   ratingBox: {
     alignItems: 'flex-end',
@@ -735,29 +617,20 @@ const SnapPager = ({
           const idx = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
           setActiveIndex(idx);
         }}
-        renderItem={({ item }) => {
-          const cefr = getMovieCefr(item.id);
-          return (
-            <TouchableOpacity
-              style={snapStyles.card}
-              onPress={() => onMoviePress(item)}
-              activeOpacity={0.8}
-            >
-              <View style={snapStyles.posterContainer}>
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w300${item.poster_path}` }}
-                  style={snapStyles.poster}
-                />
-                {/* CEFR badge overlaid on poster */}
-                <View style={[snapStyles.cefrBadge, { backgroundColor: cefrColors[cefr] }]}>
-                  <Text style={[snapStyles.cefrText, { color: cefrTextColors[cefr] }]}>{cefr}</Text>
-                </View>
-              </View>
-              <Text style={snapStyles.title} numberOfLines={2}>{item.title}</Text>
-              <Text style={snapStyles.year}>{item.release_date?.slice(0, 4)}</Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={snapStyles.card}
+            onPress={() => onMoviePress(item)}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w300${item.poster_path}` }}
+              style={snapStyles.poster}
+            />
+            <Text style={snapStyles.title} numberOfLines={2}>{item.title}</Text>
+            <Text style={snapStyles.year}>{item.release_date?.slice(0, 4)}</Text>
+          </TouchableOpacity>
+        )}
       />
       {/* Page dots */}
       <View style={snapStyles.dots}>
@@ -780,29 +653,11 @@ const snapStyles = StyleSheet.create({
     width: SNAP_CARD_WIDTH,
     marginRight: SNAP_CARD_GAP,
   },
-  posterContainer: {
-    position: 'relative',
-    width: SNAP_CARD_WIDTH,
-    height: SNAP_CARD_WIDTH * 1.5,
-  },
   poster: {
     width: SNAP_CARD_WIDTH,
     height: SNAP_CARD_WIDTH * 1.5,
     borderRadius: 8,
     backgroundColor: colors.border,
-  },
-  cefrBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  cefrText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
   },
   title: {
     fontSize: 13,
@@ -2158,11 +2013,19 @@ const SearchResultsScreen = ({
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Detect special "genre:<id>:<displayName>" prefix → use TMDB discover
+  // endpoint with sort_by=popularity.desc instead of title text search.
+  const genreMatch = query.match(/^genre:([\d|]+):(.+)$/);
+  const isGenre = !!genreMatch;
+  const genreIds = genreMatch?.[1] ?? '';
+  const displayTitle = isGenre ? (genreMatch![2]) : `Results for "${query}"`;
+
   const searchPage = async (pageNum: number) => {
     try {
-      const res = await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`
-      );
+      const url = isGenre
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&sort_by=popularity.desc&include_adult=false&page=${pageNum}`
+        : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`;
+      const res = await fetch(url);
       const data = await res.json();
       return {
         movies: data.results || [],
@@ -2215,7 +2078,7 @@ const SearchResultsScreen = ({
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-          Results for "{query}"
+          {displayTitle}
         </Text>
         <View style={{ width: 60 }} />
       </View>
