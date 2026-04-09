@@ -23,6 +23,16 @@ async def get_admin_stats(
     movies_processed = await db.moviescript.count(where={"isPreprocessed": True})
     users_total = await db.user.count()
 
+    # Distribution across CEFR-ish difficulty buckets. Any movie with a
+    # non-null difficulty_level has been fully scored by our classifier,
+    # so this doubles as "how many are actually usable".
+    level_rows = await db.query_raw(
+        "SELECT difficulty_level::text AS level, COUNT(*)::int AS n "
+        "FROM movies WHERE difficulty_level IS NOT NULL "
+        "GROUP BY difficulty_level"
+    )
+    movies_by_level = {r["level"]: r["n"] for r in level_rows}
+
     # Worker queue progress (best-effort — table may not exist if the worker
     # subsystem hasn't been bootstrapped yet on this environment).
     queue_done = None
@@ -45,6 +55,7 @@ async def get_admin_stats(
         "movies_total": movies_total,
         "movies_processed": movies_processed,
         "users_total": users_total,
+        "movies_by_level": movies_by_level,
         "queue": {
             "done": queue_done,
             "pending": queue_pending,

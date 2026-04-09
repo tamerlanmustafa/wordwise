@@ -355,6 +355,7 @@ export interface AdminStats {
   movies_total: number;
   movies_processed: number;
   users_total: number;
+  movies_by_level: Record<string, number>;
   queue: {
     done: number | null;
     pending: number | null;

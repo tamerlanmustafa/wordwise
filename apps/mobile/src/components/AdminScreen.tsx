@@ -60,6 +60,35 @@ const STATUS_TABS: Array<ReportStatus | 'ALL'> = [
   'DISMISSED',
 ];
 
+// Difficulty buckets (Prisma `difficultylevel` enum). Ordered easiest → hardest
+// so the grid reads left-to-right the way a learner thinks about progression.
+const LEVEL_ORDER = [
+  'BEGINNER',
+  'ELEMENTARY',
+  'INTERMEDIATE',
+  'UPPER_INTERMEDIATE',
+  'ADVANCED',
+  'PROFICIENT',
+] as const;
+
+const LEVEL_LABELS: Record<string, string> = {
+  BEGINNER: 'Beginner',
+  ELEMENTARY: 'Elementary',
+  INTERMEDIATE: 'Intermediate',
+  UPPER_INTERMEDIATE: 'Upper int.',
+  ADVANCED: 'Advanced',
+  PROFICIENT: 'Proficient',
+};
+
+const LEVEL_COLORS: Record<string, string> = {
+  BEGINNER: '#4CAF50',
+  ELEMENTARY: '#8BC34A',
+  INTERMEDIATE: '#FFC107',
+  UPPER_INTERMEDIATE: '#FF9800',
+  ADVANCED: '#F44336',
+  PROFICIENT: '#9C27B0',
+};
+
 export interface AdminScreenProps {
   onBack: () => void;
 }
@@ -212,6 +241,23 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
             color={COLORS.info}
           />
         </View>
+
+        {/* By difficulty level */}
+        {adminStats?.movies_by_level && Object.keys(adminStats.movies_by_level).length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Movies by difficulty</Text>
+            <View style={styles.statsGrid}>
+              {LEVEL_ORDER.filter((lv) => (adminStats.movies_by_level[lv] ?? 0) > 0).map((lv) => (
+                <StatCard
+                  key={lv}
+                  label={LEVEL_LABELS[lv]}
+                  value={`${adminStats.movies_by_level[lv] ?? 0}`}
+                  color={LEVEL_COLORS[lv]}
+                />
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Worker queue */}
         {adminStats?.queue?.done != null && (
