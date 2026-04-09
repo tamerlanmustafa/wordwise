@@ -181,15 +181,6 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     }
   };
 
-  const handleQuickStatus = async (id: number, status: ReportStatus) => {
-    try {
-      await reportsApi.update(id, { status });
-      fetchAll(false);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to update report');
-    }
-  };
-
   const tabCounts = useMemo(
     () => ({
       ALL: reportStats?.total ?? 0,
@@ -340,22 +331,6 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
                 >
                   <Text style={styles.actionBtnGhostText}>Details</Text>
                 </TouchableOpacity>
-                {report.status === 'PENDING' && (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: COLORS.success }]}
-                      onPress={() => handleQuickStatus(report.id, 'RESOLVED')}
-                    >
-                      <Text style={styles.actionBtnText}>Resolve</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: COLORS.textTertiary }]}
-                      onPress={() => handleQuickStatus(report.id, 'DISMISSED')}
-                    >
-                      <Text style={styles.actionBtnText}>Dismiss</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
               </View>
             </View>
           ))

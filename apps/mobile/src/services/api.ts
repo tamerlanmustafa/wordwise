@@ -401,11 +401,15 @@ export const reportsApi = {
   },
 
   // Admin: list reports, optionally filtered.
+  // NOTE: avoid `new URL(...)` — React Native's URL polyfill is incomplete
+  // and silently produces malformed URLs on iOS. Stick to string concat.
   listAdmin: async (statusFilter?: ReportStatus): Promise<WordReport[]> => {
-    const url = new URL(`${API_BASE_URL}/api/reports/admin`);
-    if (statusFilter) url.searchParams.set('status', statusFilter);
-    const res = await authFetch(url.toString());
-    if (!res.ok) throw new Error('Failed to fetch reports');
+    const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
+    const res = await authFetch(`${API_BASE_URL}/api/reports/admin${qs}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /api/reports/admin → ${res.status} ${body.slice(0, 120)}`);
+    }
     return res.json();
   },
 
