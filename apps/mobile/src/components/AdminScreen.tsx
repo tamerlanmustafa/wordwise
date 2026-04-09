@@ -86,9 +86,19 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
       try {
         const statusFilter = activeTab === 'ALL' ? undefined : activeTab;
         const [admin, rs, list] = await Promise.all([
-          adminApi.stats().catch(() => null),
-          reportsApi.stats().catch(() => null),
-          reportsApi.listAdmin(statusFilter),
+          adminApi.stats().catch((e) => {
+            console.warn('[AdminScreen] adminApi.stats failed:', e?.message);
+            setError(`Stats: ${e?.message || 'failed'}`);
+            return null;
+          }),
+          reportsApi.stats().catch((e) => {
+            console.warn('[AdminScreen] reportsApi.stats failed:', e?.message);
+            return null;
+          }),
+          reportsApi.listAdmin(statusFilter).catch((e) => {
+            console.warn('[AdminScreen] reportsApi.listAdmin failed:', e?.message);
+            return [];
+          }),
         ]);
         setAdminStats(admin);
         setReportStats(rs);

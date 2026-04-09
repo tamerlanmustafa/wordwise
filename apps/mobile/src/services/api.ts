@@ -442,7 +442,10 @@ export const adminApi = {
   // Aggregate platform stats: movies/users/queue progress.
   stats: async (): Promise<AdminStats> => {
     const res = await authFetch(`${API_BASE_URL}/admin/stats`);
-    if (!res.ok) throw new Error('Failed to fetch admin stats');
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/stats → ${res.status} ${body.slice(0, 120)}`);
+    }
     return res.json();
   },
 };
