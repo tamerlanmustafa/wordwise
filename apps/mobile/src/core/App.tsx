@@ -572,7 +572,10 @@ const quickStyles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'visible',
   },
-  scroll: { flex: 1, overflow: 'visible' },
+  // Clip scrolling chips to the ScrollView's bounds so they don't slide
+  // over the pinned level chip on the left. (The dropdown menu is rendered
+  // as a sibling of the ScrollView, so this clip doesn't affect it.)
+  scroll: { flex: 1, overflow: 'hidden' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
