@@ -14,6 +14,7 @@ import {
   FlatList,
   Animated,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -2209,13 +2210,18 @@ const SearchResultsScreen = ({
             };
           })
         );
-        return { movies: enriched, totalPages: 1 };
+        // Drop non-English films — WordWise can't process their subtitles
+        // yet, so surfacing them in Quick Start would be misleading.
+        const englishOnly = enriched.filter((m) => (m.original_language || 'en') === 'en');
+        return { movies: englishOnly, totalPages: 1 };
       }
 
       // For genre quick-start: top-rated within genre, restricted to widely
-      // rated films (>=90k votes) so only well-known titles surface.
+      // rated films (>=5k votes) and English originals only — WordWise can
+      // only process English subtitles right now, so foreign titles would
+      // just dead-end at script fetch.
       const url = isGenre
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&with_original_language=en&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
         : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -2763,6 +2769,19 @@ export default function App() {
   };
 
   const navigateToMovie = (movie: MovieData) => {
+    // WordWise currently only processes English subtitles. If the user taps
+    // a film whose original language isn't English, warn them up front
+    // instead of letting them hit a script-fetch failure deep in the flow.
+    // (Multi-language support is on the roadmap.)
+    const lang = (movie.original_language || '').toLowerCase();
+    if (lang && lang !== 'en') {
+      Alert.alert(
+        'Not yet supported',
+        "WordWise currently only processes English-language films. We're working on support for other languages — check back soon!",
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
     setSelectedMovie(movie);
     setCurrentScreen('movieDetail');
   };

@@ -49,6 +49,7 @@ model Movie {
   wordCount          Int?             @map("word_count")
   description        String?
   poster_url         String?          @db.VarChar
+  tmdbId             Int?             @unique @map("tmdb_id")
   createdAt          DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations

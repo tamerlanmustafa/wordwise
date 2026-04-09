@@ -58,15 +58,14 @@ async def list_movies_by_level(
 
     rows = await db.query_raw(
         """
-        SELECT m.id            AS movie_id,
-               m.title         AS title,
-               m.year          AS year,
-               m.poster_url    AS poster_url,
-               m.description   AS description,
+        SELECT m.id               AS movie_id,
+               m.title            AS title,
+               m.year             AS year,
+               m.poster_url       AS poster_url,
+               m.description      AS description,
                m.difficulty_score AS difficulty_score,
-               mj.tmdb_id      AS tmdb_id
+               m.tmdb_id          AS tmdb_id
         FROM movies m
-        LEFT JOIN movie_jobs mj ON mj.movie_id = m.id
         WHERE m.difficulty_level::text = $1
         ORDER BY m.difficulty_score ASC NULLS LAST, m.id ASC
         LIMIT $2
