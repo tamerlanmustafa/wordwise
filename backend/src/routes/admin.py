@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from prisma import Prisma
 from src.database import get_db
-from src.middleware.auth import get_current_active_user
+from src.middleware.auth import get_current_active_user, get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.difficulty_scorer import compute_difficulty
 from pathlib import Path
@@ -9,6 +9,49 @@ import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("/stats")
+async def get_admin_stats(
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """Aggregate counts for the admin dashboard."""
+    # "Processed" means we have a script row tied to the movie. Movies that
+    # exist but never got their script fetched don't count yet.
+    movies_total = await db.movie.count()
+    movies_processed = await db.moviescript.count(where={"isPreprocessed": True})
+    users_total = await db.user.count()
+
+    # Worker queue progress (best-effort — table may not exist if the worker
+    # subsystem hasn't been bootstrapped yet on this environment).
+    queue_done = None
+    queue_pending = None
+    queue_running = None
+    queue_dead = None
+    try:
+        rows = await db.query_raw(
+            "SELECT status, COUNT(*)::int AS n FROM movie_jobs GROUP BY status"
+        )
+        counts = {r["status"]: r["n"] for r in rows}
+        queue_done = counts.get("done", 0)
+        queue_pending = counts.get("pending", 0)
+        queue_running = counts.get("running", 0)
+        queue_dead = counts.get("dead", 0)
+    except Exception as e:
+        logger.debug(f"movie_jobs not available: {e}")
+
+    return {
+        "movies_total": movies_total,
+        "movies_processed": movies_processed,
+        "users_total": users_total,
+        "queue": {
+            "done": queue_done,
+            "pending": queue_pending,
+            "running": queue_running,
+            "dead": queue_dead,
+        },
+    }
 
 _classifier = None
 

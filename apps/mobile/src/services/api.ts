@@ -312,4 +312,139 @@ export const wordwiseApi = {
   },
 };
 
+// =====================================================================
+// Reports + Admin
+// =====================================================================
+
+export type ReportReason =
+  | 'WRONG_TRANSLATION'
+  | 'WRONG_CONTEXT'
+  | 'WRONG_SPELLING'
+  | 'INAPPROPRIATE_CONTENT'
+  | 'OTHER';
+
+export type ReportStatus = 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
+
+export interface WordReport {
+  id: number;
+  word: string;
+  movie_id?: number;
+  movie_title?: string;
+  reason: ReportReason;
+  details?: string;
+  translation_source?: string;
+  status: ReportStatus;
+  reporter_id: number;
+  reporter_email?: string;
+  reviewer_id?: number;
+  reviewer_email?: string;
+  review_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportStats {
+  pending: number;
+  reviewed: number;
+  resolved: number;
+  dismissed: number;
+  total: number;
+}
+
+export interface AdminStats {
+  movies_total: number;
+  movies_processed: number;
+  users_total: number;
+  queue: {
+    done: number | null;
+    pending: number | null;
+    running: number | null;
+    dead: number | null;
+  };
+}
+
+export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
+  WRONG_TRANSLATION: 'Wrong translation',
+  WRONG_CONTEXT: "Doesn't match context",
+  WRONG_SPELLING: 'Wrong spelling',
+  INAPPROPRIATE_CONTENT: 'Inappropriate content',
+  OTHER: 'Other issue',
+};
+
+export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
+  PENDING: 'Pending',
+  REVIEWED: 'Reviewed',
+  RESOLVED: 'Resolved',
+  DISMISSED: 'Dismissed',
+};
+
+export const reportsApi = {
+  // User-facing: submit a new report.
+  create: async (data: {
+    word: string;
+    movie_id?: number;
+    movie_title?: string;
+    reason: ReportReason;
+    details?: string;
+    translation_source?: string;
+  }): Promise<{ success: boolean; report_id: number }> => {
+    const res = await authFetch(`${API_BASE_URL}/api/reports/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Failed to submit report: ${res.status} ${text}`);
+    }
+    return res.json();
+  },
+
+  // Admin: list reports, optionally filtered.
+  listAdmin: async (statusFilter?: ReportStatus): Promise<WordReport[]> => {
+    const url = new URL(`${API_BASE_URL}/api/reports/admin`);
+    if (statusFilter) url.searchParams.set('status', statusFilter);
+    const res = await authFetch(url.toString());
+    if (!res.ok) throw new Error('Failed to fetch reports');
+    return res.json();
+  },
+
+  // Admin: update status / notes.
+  update: async (
+    id: number,
+    update: { status: ReportStatus; review_notes?: string }
+  ): Promise<{ success: boolean; report_id: number; status: ReportStatus }> => {
+    const res = await authFetch(`${API_BASE_URL}/api/reports/admin/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    });
+    if (!res.ok) throw new Error('Failed to update report');
+    return res.json();
+  },
+
+  // Admin: aggregate counts for the dashboard.
+  stats: async (): Promise<ReportStats> => {
+    const res = await authFetch(`${API_BASE_URL}/api/reports/admin/stats`);
+    if (!res.ok) throw new Error('Failed to fetch report stats');
+    return res.json();
+  },
+
+  // Admin: hard-delete (rare; usually we just status=DISMISSED).
+  remove: async (id: number): Promise<{ success: boolean; deleted_id: number }> => {
+    const res = await authFetch(`${API_BASE_URL}/api/reports/admin/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete report');
+    return res.json();
+  },
+};
+
+export const adminApi = {
+  // Aggregate platform stats: movies/users/queue progress.
+  stats: async (): Promise<AdminStats> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/stats`);
+    if (!res.ok) throw new Error('Failed to fetch admin stats');
+    return res.json();
+  },
+};
+
 export { API_BASE_URL };

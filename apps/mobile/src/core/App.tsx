@@ -23,6 +23,8 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { wordwiseApi, tmdbApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
+import { ReportDialog } from '../components/ReportDialog';
+import { AdminScreen } from '../components/AdminScreen';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -33,7 +35,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin';
 interface MovieData {
   id: number;
   title: string;
@@ -716,6 +718,7 @@ const HomeScreen = ({
   targetLanguage,
   setTargetLanguage,
   onNavigateToSettings,
+  onNavigateToAdmin,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -724,6 +727,7 @@ const HomeScreen = ({
   targetLanguage: string;
   setTargetLanguage: (lang: string) => void;
   onNavigateToSettings: () => void;
+  onNavigateToAdmin: () => void;
 }) => {
   const [activeTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
@@ -835,6 +839,16 @@ const HomeScreen = ({
         <Text style={styles.headerTitle}>WordWise</Text>
 
         <View style={styles.headerRight}>
+          {/* Admin button (admin-only) */}
+          {user?.is_admin && (
+            <TouchableOpacity
+              style={styles.adminButton}
+              onPress={onNavigateToAdmin}
+            >
+              <Text style={styles.adminButtonText}>⚙</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Language Selector */}
           <TouchableOpacity
             style={styles.languageButton}
@@ -1610,6 +1624,7 @@ const WordRow = ({
   rowNumber,
   groupColor,
   movieId,
+  movieTitle,
   targetLang,
   isSaved,
   onSave,
@@ -1620,6 +1635,7 @@ const WordRow = ({
   rowNumber: number;
   groupColor: string;
   movieId?: number | null;
+  movieTitle?: string;
   targetLang?: string;
   isSaved?: boolean;
   onSave?: (word: string) => void;
@@ -1629,6 +1645,7 @@ const WordRow = ({
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const handlePress = async () => {
     if (expanded) {
@@ -1732,8 +1749,25 @@ const WordRow = ({
               </Text>
             </TouchableOpacity>
           )}
+          {isAuthenticated && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); setReportOpen(true); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.flagButton}
+            >
+              <Text style={styles.flagIcon}>⚑</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
+
+      <ReportDialog
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        word={word.word}
+        movieId={movieId ?? undefined}
+        movieTitle={movieTitle}
+      />
 
       {expanded && (
         <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
@@ -2526,6 +2560,7 @@ const MovieDetailScreen = ({
                     rowNumber={index + 1}
                     groupColor={cefrColors[activeLevel] || colors.primary}
                     movieId={movieId}
+                    movieTitle={movie.title}
                     targetLang={targetLang}
                     isSaved={savedWords.has(item.word)}
                     onSave={handleSaveWord}
@@ -2591,6 +2626,10 @@ export default function App() {
     setCurrentScreen('settings');
   };
 
+  const navigateToAdmin = () => {
+    setCurrentScreen('admin');
+  };
+
   const handleUserUpdated = (updatedUser: any) => {
     useAuthStore.getState().setUser(updatedUser);
   };
@@ -2612,12 +2651,14 @@ export default function App() {
       {isAuthenticated ? (
         currentScreen === 'settings' ? (
           <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} />
+        ) : currentScreen === 'admin' ? (
+          <AdminScreen onBack={navigateToHome} />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -2778,6 +2819,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     gap: 6,
+  },
+  adminButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminButtonText: {
+    fontSize: 18,
+    color: colors.primary,
+    fontWeight: '600',
   },
   languageButtonText: {
     fontSize: 14,
@@ -3406,6 +3462,15 @@ const styles = StyleSheet.create({
   bookmarkIconActive: {
     color: colors.primary,
     opacity: 1,
+  },
+  flagButton: {
+    marginLeft: 4,
+    padding: 4,
+  },
+  flagIcon: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    opacity: 0.5,
   },
   // Dropdown Panel
   dropdownPanel: {
