@@ -86,7 +86,13 @@ async def fetch_script(
     except Exception as e:
         logger.error(f"[API] Script fetch failed for '{request.movie_title}': {str(e)}", exc_info=True)
 
-        if "not found" in str(e).lower() or "no results" in str(e).lower():
+        # "Not found" signals: we searched every source and nothing had this
+        # movie. This is permanent — the worker should park the job as dead,
+        # not retry on backoff. Anything else (parse error, timeout, etc.)
+        # is treated as a transient server error and will be retried.
+        err_lower = str(e).lower()
+        not_found_signals = ("not found", "no results", "all sources failed")
+        if any(sig in err_lower for sig in not_found_signals):
             raise HTTPException(
                 status_code=404,
                 detail=f"Script not found for movie '{request.movie_title}': {str(e)}"

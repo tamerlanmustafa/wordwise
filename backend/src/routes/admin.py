@@ -64,6 +64,46 @@ async def get_admin_stats(
         },
     }
 
+
+@router.get("/queue/dead")
+async def list_dead_jobs(
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """Movies that exhausted all script sources or crashed too many times.
+    Surfaced on the admin dashboard so we can eyeball what our ingestion
+    coverage is missing.
+    """
+    try:
+        rows = await db.query_raw(
+            """
+            SELECT id, tmdb_id, title, year, attempts, last_error,
+                   EXTRACT(EPOCH FROM finished_at)::bigint AS finished_at
+              FROM movie_jobs
+             WHERE status = 'dead'
+             ORDER BY finished_at DESC NULLS LAST, id DESC
+             LIMIT 500
+            """
+        )
+    except Exception as e:
+        logger.debug(f"movie_jobs not available: {e}")
+        return {"jobs": []}
+
+    return {
+        "jobs": [
+            {
+                "id": r["id"],
+                "tmdb_id": r["tmdb_id"],
+                "title": r["title"],
+                "year": r["year"],
+                "attempts": r["attempts"],
+                "last_error": r["last_error"],
+                "finished_at": r["finished_at"],
+            }
+            for r in rows
+        ]
+    }
+
 _classifier = None
 
 

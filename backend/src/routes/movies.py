@@ -38,6 +38,61 @@ async def list_movies(
     }
 
 
+@router.get("/by-level")
+async def list_movies_by_level(
+    level: str = Query(..., description="Difficulty level: ELEMENTARY, INTERMEDIATE, ADVANCED, etc."),
+    limit: int = Query(50, ge=1, le=200),
+    db: Prisma = Depends(get_db),
+):
+    """
+    List processed movies filtered by their stored CEFR difficulty level.
+    Joined with movie_jobs to surface tmdb_id (when available) so the
+    mobile client can lazily fetch poster/overview from TMDB.
+    """
+    try:
+        target = level.upper()
+        # Validate against enum
+        difficultylevel(target)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid level: {level}")
+
+    rows = await db.query_raw(
+        """
+        SELECT m.id            AS movie_id,
+               m.title         AS title,
+               m.year          AS year,
+               m.poster_url    AS poster_url,
+               m.description   AS description,
+               m.difficulty_score AS difficulty_score,
+               mj.tmdb_id      AS tmdb_id
+        FROM movies m
+        LEFT JOIN movie_jobs mj ON mj.movie_id = m.id
+        WHERE m.difficulty_level::text = $1
+        ORDER BY m.difficulty_score ASC NULLS LAST, m.id ASC
+        LIMIT $2
+        """,
+        target,
+        limit,
+    )
+
+    return {
+        "level": target,
+        "movies": [
+            {
+                "movie_id": r["movie_id"],
+                "tmdb_id": r["tmdb_id"],
+                "title": r["title"],
+                "year": r["year"],
+                "poster_url": r["poster_url"],
+                "description": r["description"],
+                "difficulty_score": r["difficulty_score"],
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @router.get("/{movie_id}", response_model=MovieResponse)
 async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
     """Get a specific movie by ID"""

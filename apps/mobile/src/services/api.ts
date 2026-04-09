@@ -242,6 +242,32 @@ export const wordwiseApi = {
     return res.json();
   },
 
+  // List processed movies filtered by CEFR difficulty (no auth required).
+  // Backend joins movie_jobs to surface tmdb_id so the client can lazily
+  // fetch poster/overview from TMDB.
+  getMoviesByLevel: async (level: string, limit: number = 50): Promise<{
+    level: string;
+    total: number;
+    movies: Array<{
+      movie_id: number;
+      tmdb_id: number | null;
+      title: string;
+      year: number | null;
+      poster_url: string | null;
+      description: string | null;
+      difficulty_score: number | null;
+    }>;
+  }> => {
+    const res = await fetch(
+      `${API_BASE_URL}/movies/by-level?level=${encodeURIComponent(level)}&limit=${limit}`
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /movies/by-level → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
   // Get movie difficulty
   getMovieDifficulty: async (movieId: number): Promise<{
     difficulty_level: string;
@@ -351,6 +377,16 @@ export interface ReportStats {
   total: number;
 }
 
+export interface DeadJob {
+  id: number;
+  tmdb_id: number;
+  title: string;
+  year: number | null;
+  attempts: number;
+  last_error: string | null;
+  finished_at: number | null;
+}
+
 export interface AdminStats {
   movies_total: number;
   movies_processed: number;
@@ -452,6 +488,17 @@ export const adminApi = {
       throw new Error(`GET /admin/stats → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
+  },
+
+  // Jobs that exhausted all script sources or crashed past the retry cap.
+  deadJobs: async (): Promise<DeadJob[]> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/queue/dead`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/queue/dead → ${res.status} ${body.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return data.jobs || [];
   },
 };
 

@@ -17,6 +17,7 @@ import {
   REPORT_REASON_LABELS,
   REPORT_STATUS_LABELS,
   type AdminStats,
+  type DeadJob,
   type ReportStats,
   type ReportStatus,
   type WordReport,
@@ -93,7 +94,12 @@ export interface AdminScreenProps {
   onBack: () => void;
 }
 
+type AdminView = 'main' | 'dead';
+
 export function AdminScreen({ onBack }: AdminScreenProps) {
+  const [view, setView] = useState<AdminView>('main');
+  const [deadJobs, setDeadJobs] = useState<DeadJob[] | null>(null);
+  const [deadLoading, setDeadLoading] = useState(false);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [reports, setReports] = useState<WordReport[]>([]);
@@ -181,6 +187,33 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     }
   };
 
+  const openDeadJobs = useCallback(async () => {
+    setView('dead');
+    if (deadJobs !== null) return; // already fetched
+    setDeadLoading(true);
+    try {
+      const jobs = await adminApi.deadJobs();
+      setDeadJobs(jobs);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load dead jobs');
+      setDeadJobs([]);
+    } finally {
+      setDeadLoading(false);
+    }
+  }, [deadJobs]);
+
+  const refreshDeadJobs = useCallback(async () => {
+    setDeadLoading(true);
+    try {
+      const jobs = await adminApi.deadJobs();
+      setDeadJobs(jobs);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load dead jobs');
+    } finally {
+      setDeadLoading(false);
+    }
+  }, []);
+
   const tabCounts = useMemo(
     () => ({
       ALL: reportStats?.total ?? 0,
@@ -191,6 +224,75 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     }),
     [reportStats]
   );
+
+  if (view === 'dead') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setView('main')}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backText}>← Admin</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Dead jobs</Text>
+          <TouchableOpacity onPress={refreshDeadJobs} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        </View>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)}>
+              <Text style={styles.errorBannerClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {deadLoading && deadJobs === null ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : !deadJobs || deadJobs.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No dead jobs</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={styles.deadIntro}>
+              These {deadJobs.length} movies couldn't be ingested — every script
+              source (STANDS4 PDF, STANDS4 API, OpenSubtitles) returned nothing.
+              Typically this is foreign-language films, shorts, or TV specials
+              with no English subtitles available.
+            </Text>
+            {deadJobs.map((job) => (
+              <View key={job.id} style={styles.deadCard}>
+                <View style={styles.deadTopRow}>
+                  <Text style={styles.deadTitle} numberOfLines={2}>
+                    {job.title}
+                  </Text>
+                  {job.year ? <Text style={styles.deadYear}>{job.year}</Text> : null}
+                </View>
+                <Text style={styles.deadMeta}>
+                  TMDB #{job.tmdb_id} · {job.attempts} attempt{job.attempts === 1 ? '' : 's'}
+                  {job.finished_at
+                    ? ` · ${new Date(job.finished_at * 1000).toLocaleDateString()}`
+                    : ''}
+                </Text>
+                {job.last_error ? (
+                  <Text style={styles.deadError} numberOfLines={3}>
+                    {job.last_error}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -258,7 +360,12 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
               <StatCard label="Done" value={`${adminStats.queue.done ?? 0}`} color={COLORS.success} />
               <StatCard label="Pending" value={`${adminStats.queue.pending ?? 0}`} color={COLORS.warning} />
               <StatCard label="Running" value={`${adminStats.queue.running ?? 0}`} color={COLORS.info} />
-              <StatCard label="Dead" value={`${adminStats.queue.dead ?? 0}`} color={COLORS.error} />
+              <StatCard
+                label="Dead"
+                value={`${adminStats.queue.dead ?? 0}`}
+                color={COLORS.error}
+                onPress={(adminStats.queue.dead ?? 0) > 0 ? openDeadJobs : undefined}
+              />
             </View>
           </>
         )}
@@ -435,19 +542,33 @@ function StatCard({
   value,
   sublabel,
   color,
+  onPress,
 }: {
   label: string;
   value: string;
   sublabel?: string;
   color: string;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
+  const body = (
+    <>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
       {sublabel ? <Text style={styles.statSublabel}>{sublabel}</Text> : null}
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={[styles.statCard, { borderLeftColor: color }]}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        {body}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={[styles.statCard, { borderLeftColor: color }]}>{body}</View>;
 }
 
 function DetailRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
@@ -781,5 +902,52 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  deadIntro: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  deadCard: {
+    backgroundColor: COLORS.paper,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.error,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  deadTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 4,
+  },
+  deadTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+    flex: 1,
+  },
+  deadYear: {
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+  },
+  deadMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  deadError: {
+    fontSize: 12,
+    color: COLORS.error,
+    fontFamily: 'Menlo',
+    backgroundColor: COLORS.background,
+    padding: 8,
+    borderRadius: 6,
   },
 });

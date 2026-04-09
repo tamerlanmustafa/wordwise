@@ -444,9 +444,10 @@ const heroStyles = StyleSheet.create({
 });
 
 // ── Quick Start Row ──────────────────────────────────────────────────────────
-// Genre-based filters using TMDB genre IDs. Encoded as `genre:<id>:<name>`
-// so SearchResultsScreen can detect and route to the discover endpoint
-// (sorted by popularity) instead of the title text-search endpoint.
+// Genre filters use TMDB genre IDs, encoded as `genre:<id>:<name>` so
+// SearchResultsScreen routes to TMDB discover. The first chip is a CEFR
+// difficulty dropdown (Elementary / Intermediate / Advanced) backed by our
+// own DB via `/movies/by-level`, encoded as `level:<LEVEL>:<displayName>`.
 const QUICK_FILTERS = [
   { id: 'drama',     icon: '🎭', label: 'Drama',            query: 'genre:18:Drama' },
   { id: 'comedy',    icon: '😂', label: 'Comedy',           query: 'genre:35:Comedy' },
@@ -456,34 +457,121 @@ const QUICK_FILTERS = [
   { id: 'animation', icon: '🎨', label: 'Animation',        query: 'genre:16:Animation' },
 ];
 
-const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => (
-  <View style={quickStyles.container}>
-    <Text style={quickStyles.title}>Quick Start</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={quickStyles.scroll}>
-      {QUICK_FILTERS.map((f) => (
+const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
+  { value: 'ELEMENTARY',   label: 'Elementary',   icon: '🟢' },
+  { value: 'INTERMEDIATE', label: 'Intermediate', icon: '🟡' },
+  { value: 'ADVANCED',     label: 'Advanced',     icon: '🔴' },
+];
+
+const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => {
+  const [selectedLevel, setSelectedLevel] = useState<string>('ELEMENTARY');
+  const [levelOpen, setLevelOpen] = useState(false);
+  // Captured via onLayout so the menu can center under the chip regardless
+  // of the selected label's width.
+  const [chipLayout, setChipLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  const currentLevel = LEVEL_OPTIONS.find((o) => o.value === selectedLevel) ?? LEVEL_OPTIONS[0];
+
+  const MENU_WIDTH = 130;
+  const menuLeft = chipLayout
+    ? Math.max(0, chipLayout.x + chipLayout.width / 2 - MENU_WIDTH / 2)
+    : 0;
+  // Sit the menu directly below the chip, with a small 6px gap.
+  const menuTop = chipLayout ? chipLayout.y + chipLayout.height + 6 : 0;
+
+  const pickLevel = (value: string) => {
+    setSelectedLevel(value);
+    setLevelOpen(false);
+    const opt = LEVEL_OPTIONS.find((o) => o.value === value)!;
+    onSearch(`level:${opt.value}:${opt.label}`);
+  };
+
+  return (
+    <View style={quickStyles.container}>
+      <Text style={quickStyles.title}>Quick Start</Text>
+      <View style={quickStyles.row}>
+        {/* Level dropdown chip — pinned outside the ScrollView so its
+            absolute menu isn't clipped by horizontal overflow. */}
         <TouchableOpacity
-          key={f.id}
-          style={quickStyles.chip}
-          onPress={() => onSearch(f.query)}
+          style={[quickStyles.chip, quickStyles.levelChip]}
+          onPress={() => setLevelOpen((o) => !o)}
           activeOpacity={0.7}
+          onLayout={(e) => {
+            const { x, y, width, height } = e.nativeEvent.layout;
+            setChipLayout({ x, y, width, height });
+          }}
         >
-          <Text style={quickStyles.chipIcon}>{f.icon}</Text>
-          <Text style={quickStyles.chipLabel}>{f.label}</Text>
+          <Text style={quickStyles.chipIcon}>{currentLevel.icon}</Text>
+          <Text style={quickStyles.chipLabel}>{currentLevel.label}</Text>
+          <Text style={quickStyles.chipChevron}>{levelOpen ? '▲' : '▼'}</Text>
         </TouchableOpacity>
-      ))}
-    </ScrollView>
-  </View>
-);
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={quickStyles.scroll}
+        >
+          {QUICK_FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.id}
+              style={quickStyles.chip}
+              onPress={() => onSearch(f.query)}
+              activeOpacity={0.7}
+            >
+              <Text style={quickStyles.chipIcon}>{f.icon}</Text>
+              <Text style={quickStyles.chipLabel}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {levelOpen && (
+          <View
+            style={[
+              quickStyles.levelMenu,
+              { left: menuLeft, top: menuTop, width: MENU_WIDTH },
+            ]}
+          >
+          {LEVEL_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[
+                quickStyles.levelItem,
+                opt.value === selectedLevel && quickStyles.levelItemActive,
+              ]}
+              onPress={() => pickLevel(opt.value)}
+              activeOpacity={0.7}
+            >
+              <Text style={quickStyles.levelItemIcon}>{opt.icon}</Text>
+              <Text style={quickStyles.levelItemText}>{opt.label}</Text>
+            </TouchableOpacity>
+          ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
 
 const quickStyles = StyleSheet.create({
-  container: { paddingHorizontal: 16, marginBottom: 24 },
+  container: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+    // Don't clip the absolutely-positioned level menu.
+    overflow: 'visible',
+    zIndex: 100,
+  },
   title: {
     fontSize: 17,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 12,
   },
-  scroll: { overflow: 'visible' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'visible',
+  },
+  scroll: { flex: 1, overflow: 'visible' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -496,8 +584,39 @@ const quickStyles = StyleSheet.create({
     backgroundColor: colors.paper,
     marginRight: 10,
   },
+  levelChip: {
+    borderColor: colors.primary,
+  },
   chipIcon: { fontSize: 14 },
   chipLabel: { fontSize: 13, fontWeight: '600', color: colors.text },
+  chipChevron: { fontSize: 10, color: colors.textSecondary, marginLeft: 2 },
+  levelMenu: {
+    position: 'absolute',
+    // `left`, `top`, and `width` are set inline from the chip's measured
+    // layout so the menu stays centered directly below it.
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+  },
+  levelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  levelItemActive: { backgroundColor: colors.background },
+  levelItemIcon: { fontSize: 14, marginRight: 10 },
+  levelItemText: { fontSize: 14, fontWeight: '500', color: colors.text },
 });
 
 // ── Top Rated: numbered vertical list ──────────────────────────────────────
@@ -2047,15 +2166,52 @@ const SearchResultsScreen = ({
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Detect special "genre:<id>:<displayName>" prefix → use TMDB discover
-  // endpoint with sort_by=popularity.desc instead of title text search.
+  // Routing prefixes:
+  //  - `genre:<id>:<displayName>` → TMDB discover endpoint (legacy quick-start)
+  //  - `level:<LEVEL>:<displayName>` → our backend `/movies/by-level`, with
+  //    a per-row TMDB lookup to enrich poster_path/overview for rendering.
+  //  - anything else → TMDB title text search.
+  const levelMatch = query.match(/^level:([A-Z_]+):(.+)$/);
   const genreMatch = query.match(/^genre:([\d|]+):(.+)$/);
-  const isGenre = !!genreMatch;
+  const isLevel = !!levelMatch;
+  const isGenre = !isLevel && !!genreMatch;
+  const levelValue = levelMatch?.[1] ?? '';
   const genreIds = genreMatch?.[1] ?? '';
-  const displayTitle = isGenre ? (genreMatch![2]) : `Results for "${query}"`;
+  const displayTitle = isLevel
+    ? `${levelMatch![2]} movies`
+    : isGenre
+    ? genreMatch![2]
+    : `Results for "${query}"`;
 
   const searchPage = async (pageNum: number) => {
     try {
+      if (isLevel) {
+        // DB-backed: list once (no pagination — backend caps at limit).
+        if (pageNum > 1) return { movies: [], totalPages: 1 };
+        const data = await wordwiseApi.getMoviesByLevel(levelValue, 100);
+        // Enrich each row with TMDB metadata when tmdb_id is known. We don't
+        // store poster_path locally, so without TMDB the cards would be blank.
+        const enriched = await Promise.all(
+          (data.movies || []).map(async (m) => {
+            let tmdb: any = null;
+            if (m.tmdb_id) {
+              try { tmdb = await tmdbApi.getMovieDetails(m.tmdb_id); } catch { tmdb = null; }
+            }
+            return {
+              id: tmdb?.id ?? m.tmdb_id ?? -m.movie_id,
+              title: tmdb?.title ?? m.title,
+              poster_path: tmdb?.poster_path ?? null,
+              release_date: tmdb?.release_date ?? (m.year ? `${m.year}-01-01` : ''),
+              overview: tmdb?.overview ?? (m.description ?? ''),
+              genre_ids: tmdb?.genre_ids ?? [],
+              vote_average: tmdb?.vote_average ?? 0,
+              original_language: tmdb?.original_language ?? 'en',
+            };
+          })
+        );
+        return { movies: enriched, totalPages: 1 };
+      }
+
       // For genre quick-start: top-rated within genre, restricted to widely
       // rated films (>=90k votes) so only well-known titles surface.
       const url = isGenre
