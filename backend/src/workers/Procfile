@@ -1,0 +1,2 @@
+controller: python -m src.workers.controller
+worker:     python -m src.workers.worker
