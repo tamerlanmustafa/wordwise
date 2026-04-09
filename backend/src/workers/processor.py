@@ -167,12 +167,15 @@ async def process_job(
 
     genres = [g["name"] for g in tmdb_meta.get("genres") or []]
 
-    # 3. Fetch the script. The /scripts/fetch endpoint goes through
-    #    STANDS4/OpenSubtitles in priority order with its own caching, so
-    #    we treat the entire call as one external operation. The internal
-    #    server-to-server hop is local, but the upstream API call counts.
+    # 3. Fetch the script. The /scripts/fetch endpoint is a LOCAL hop
+    #    that internally fans out to STANDS4/OpenSubtitles. Its 500s could
+    #    mean upstream is angry OR our route hit a code/data bug — we
+    #    can't tell from here. We still gate it with the token bucket
+    #    (so a slow upstream naturally backpressures us) but we DO NOT
+    #    record_event() — feeding ambiguous signals into AIMD lets a
+    #    single bad movie collapse target_qps for the whole pool.
+    #    TMDB direct calls (step 2) remain the clean backpressure signal.
     await rate.acquire_token(pool)
-    t0 = time.monotonic()
     try:
         resp = await client.post(
             f"{API_BASE_URL}/api/scripts/fetch",
@@ -185,21 +188,8 @@ async def process_job(
             timeout=120.0,
         )
         resp.raise_for_status()
-        await rate.record_event(
-            pool,
-            success=True,
-            status_code=resp.status_code,
-            latency_ms=int((time.monotonic() - t0) * 1000),
-        )
     except Exception as exc:
-        kind, transient = _classify_http_error(exc)
-        await rate.record_event(
-            pool,
-            success=False,
-            status_code=getattr(getattr(exc, "response", None), "status_code", None),
-            latency_ms=int((time.monotonic() - t0) * 1000),
-            error_kind=kind,
-        )
+        _, transient = _classify_http_error(exc)
         if transient:
             raise TransientError(f"script fetch failed: {exc}") from exc
         raise PermanentError(f"script fetch failed: {exc}") from exc
