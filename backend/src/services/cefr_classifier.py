@@ -1802,6 +1802,23 @@ class HybridCEFRClassifier:
         if rank is None or zipf is None:
             return None
 
+        # Foreign-language guard: even with lang='en', wordfreq's English
+        # corpus picks up German/French/Spanish/Italian tokens at low Zipf
+        # (~1-2) when they appear in lyrics, quotes, or imported subtitles.
+        # Without this check, words like "ihm", "viel", "kein" leak into
+        # the C2 bucket as fake "rare English" vocabulary. If the word is
+        # noticeably more common in another European language than in
+        # English, it's almost certainly not English — drop it.
+        if zipf < 3.0:
+            try:
+                import wordfreq
+                for other_lang in ('de', 'fr', 'es', 'it'):
+                    other_zipf = wordfreq.zipf_frequency(lemma, other_lang)
+                    if other_zipf >= zipf + 1.5:
+                        return None
+            except Exception:
+                pass
+
         # Use Zipf score for more accurate CEFR mapping
         # Zipf scale: 0-7, where higher = more common
         if zipf >= 6.0:

@@ -18,6 +18,7 @@ import {
   REPORT_STATUS_LABELS,
   type AdminStats,
   type DeadJob,
+  type ProcessedMovie,
   type ReportStats,
   type ReportStatus,
   type WordReport,
@@ -94,12 +95,15 @@ export interface AdminScreenProps {
   onBack: () => void;
 }
 
-type AdminView = 'main' | 'dead';
+type AdminView = 'main' | 'dead' | 'processed';
 
 export function AdminScreen({ onBack }: AdminScreenProps) {
   const [view, setView] = useState<AdminView>('main');
   const [deadJobs, setDeadJobs] = useState<DeadJob[] | null>(null);
   const [deadLoading, setDeadLoading] = useState(false);
+  const [processedMovies, setProcessedMovies] = useState<ProcessedMovie[] | null>(null);
+  const [processedLoading, setProcessedLoading] = useState(false);
+  const [processedFilter, setProcessedFilter] = useState<string | null>(null);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [reports, setReports] = useState<WordReport[]>([]);
@@ -202,6 +206,34 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     }
   }, [deadJobs]);
 
+  const openProcessed = useCallback(async (level?: string) => {
+    setView('processed');
+    setProcessedFilter(level ?? null);
+    setProcessedMovies(null);
+    setProcessedLoading(true);
+    try {
+      const movies = await adminApi.processedMovies(level);
+      setProcessedMovies(movies);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load processed movies');
+      setProcessedMovies([]);
+    } finally {
+      setProcessedLoading(false);
+    }
+  }, []);
+
+  const refreshProcessed = useCallback(async () => {
+    setProcessedLoading(true);
+    try {
+      const movies = await adminApi.processedMovies(processedFilter ?? undefined);
+      setProcessedMovies(movies);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load processed movies');
+    } finally {
+      setProcessedLoading(false);
+    }
+  }, [processedFilter]);
+
   const refreshDeadJobs = useCallback(async () => {
     setDeadLoading(true);
     try {
@@ -224,6 +256,81 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     }),
     [reportStats]
   );
+
+  if (view === 'processed') {
+    const headerLabel = processedFilter
+      ? `${LEVEL_LABELS[processedFilter] ?? processedFilter} movies`
+      : 'Processed movies';
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setView('main')}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backText}>← Admin</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {headerLabel}
+          </Text>
+          <TouchableOpacity onPress={refreshProcessed} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        </View>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)}>
+              <Text style={styles.errorBannerClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {processedLoading && processedMovies === null ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : !processedMovies || processedMovies.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No movies</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={styles.deadIntro}>
+              {processedMovies.length} movie{processedMovies.length === 1 ? '' : 's'}, ordered by TMDB vote count (most-rated first).
+            </Text>
+            {processedMovies.map((m) => {
+              const lvColor = m.difficulty_level ? LEVEL_COLORS[m.difficulty_level] : COLORS.textTertiary;
+              const lvLabel = m.difficulty_level ? LEVEL_LABELS[m.difficulty_level] ?? m.difficulty_level : '—';
+              return (
+                <View key={m.movie_id} style={[styles.deadCard, { borderLeftColor: lvColor }]}>
+                  <View style={styles.deadTopRow}>
+                    <Text style={styles.deadTitle} numberOfLines={2}>
+                      {m.title}
+                    </Text>
+                    {m.year ? <Text style={styles.deadYear}>{m.year}</Text> : null}
+                  </View>
+                  <View style={styles.processedMetaRow}>
+                    <View style={[styles.statusChip, { backgroundColor: lvColor }]}>
+                      <Text style={styles.statusChipText}>{lvLabel}</Text>
+                    </View>
+                    {m.vote_average != null ? (
+                      <Text style={styles.processedMetaText}>★ {m.vote_average.toFixed(1)}</Text>
+                    ) : null}
+                    {m.vote_count != null ? (
+                      <Text style={styles.processedMetaText}>{m.vote_count.toLocaleString()} votes</Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   if (view === 'dead') {
     return (
@@ -327,6 +434,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
             value={adminStats ? `${adminStats.movies_processed}` : '—'}
             sublabel={adminStats ? `of ${adminStats.movies_total} total` : undefined}
             color={COLORS.primary}
+            onPress={() => openProcessed()}
           />
           <StatCard
             label="Users"
@@ -346,6 +454,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
                   label={LEVEL_LABELS[lv]}
                   value={`${adminStats.movies_by_level[lv] ?? 0}`}
                   color={LEVEL_COLORS[lv]}
+                  onPress={() => openProcessed(lv)}
                 />
               ))}
             </View>
@@ -941,6 +1050,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginBottom: 6,
+  },
+  processedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 6,
+  },
+  processedMetaText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
   deadError: {
     fontSize: 12,

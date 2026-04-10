@@ -83,12 +83,21 @@ async def _ensure_movie_row(
     our own API.
     """
     async with pool.acquire() as conn:
-        # Match by (title, year). The TMDB id isn't on the Movie table yet,
-        # so this is the closest unique signal we have.
+        # Prefer matching by tmdb_id (the only truly unique key). Fall back
+        # to (title, year) for legacy rows created before tmdb_id was tracked,
+        # and backfill tmdb_id on those so the next lookup is unambiguous.
+        existing = await conn.fetchrow(
+            "SELECT id FROM movies WHERE tmdb_id = $1 LIMIT 1",
+            tmdb_id,
+        )
+        if existing:
+            return existing["id"]
+
         existing = await conn.fetchrow(
             """
             SELECT id FROM movies
-             WHERE LOWER(title) = LOWER($1)
+             WHERE tmdb_id IS NULL
+               AND LOWER(title) = LOWER($1)
                AND year = $2
              LIMIT 1
             """,
@@ -96,16 +105,22 @@ async def _ensure_movie_row(
             year,
         )
         if existing:
+            await conn.execute(
+                "UPDATE movies SET tmdb_id = $1, updated_at = now() WHERE id = $2",
+                tmdb_id,
+                existing["id"],
+            )
             return existing["id"]
 
         row = await conn.fetchrow(
             """
-            INSERT INTO movies (title, year, created_at, updated_at)
-            VALUES ($1, $2, now(), now())
+            INSERT INTO movies (title, year, tmdb_id, created_at, updated_at)
+            VALUES ($1, $2, $3, now(), now())
             RETURNING id
             """,
             title,
             year,
+            tmdb_id,
         )
         return row["id"]
 
@@ -166,6 +181,24 @@ async def process_job(
         raise PermanentError(f"tmdb fetch failed: {exc}") from exc
 
     genres = [g["name"] for g in tmdb_meta.get("genres") or []]
+
+    # Persist TMDB popularity / rating signals on the movie row so the admin
+    # browser and ranking queries don't have to re-fetch from TMDB later.
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE movies
+               SET tmdb_popularity   = $1,
+                   tmdb_vote_average = $2,
+                   tmdb_vote_count   = $3,
+                   updated_at        = now()
+             WHERE id = $4
+            """,
+            tmdb_meta.get("popularity"),
+            tmdb_meta.get("vote_average"),
+            tmdb_meta.get("vote_count"),
+            movie_id,
+        )
 
     # 3. Fetch the script. The /scripts/fetch endpoint is a LOCAL hop
     #    that internally fans out to STANDS4/OpenSubtitles. Its 500s could

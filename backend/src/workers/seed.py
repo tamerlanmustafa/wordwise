@@ -5,9 +5,14 @@ Usage:
     python -m src.workers.seed                  # default: top_rated, 13 pages (250)
     python -m src.workers.seed --pages 50       # bigger backlog
     python -m src.workers.seed --backlog        # popular discover, priority=1
+    python -m src.workers.seed --discover --pages 50
+                                                # /discover sorted by
+                                                # vote_count.desc, English
+                                                # originals only, priority=2
 
 Top 250 are inserted with priority=0 so the worker pool burns through
-the high-value catalog first. Backlog rows go in at priority=1.
+the high-value catalog first. Backlog rows go in at priority=1, discover
+expansion at priority=2.
 
 Idempotent: if a (tmdb_id) already exists in movie_jobs we leave it alone.
 You can re-run this safely after a crash, after adding more pages, etc.
@@ -38,6 +43,31 @@ async def _fetch_tmdb_page(client: httpx.AsyncClient, endpoint: str, page: int) 
     resp = await client.get(
         f"https://api.themoviedb.org/3/movie/{endpoint}",
         params={"api_key": TMDB_API_KEY, "language": "en-US", "page": page},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("results", [])
+
+
+async def _fetch_discover_page(client: httpx.AsyncClient, page: int) -> list[dict]:
+    """
+    Discover endpoint sorted by vote_count.desc, English originals only.
+    Use this to grow the catalog past the 250 top-rated films — it surfaces
+    well-known popular titles that didn't make the all-time top list.
+    """
+    if not TMDB_API_KEY:
+        raise RuntimeError("TMDB_API_KEY not set")
+    resp = await client.get(
+        "https://api.themoviedb.org/3/discover/movie",
+        params={
+            "api_key": TMDB_API_KEY,
+            "language": "en-US",
+            "sort_by": "vote_count.desc",
+            "with_original_language": "en",
+            "include_adult": "false",
+            "vote_count.gte": 1000,
+            "page": page,
+        },
         timeout=30,
     )
     resp.raise_for_status()
@@ -84,6 +114,7 @@ async def seed(
     endpoint: str,
     pages: int,
     priority: int,
+    discover: bool = False,
 ) -> None:
     pool = await get_pool()
 
@@ -109,7 +140,10 @@ async def seed(
     async with httpx.AsyncClient() as client:
         for page in range(1, pages + 1):
             try:
-                movies = await _fetch_tmdb_page(client, endpoint, page)
+                if discover:
+                    movies = await _fetch_discover_page(client, page)
+                else:
+                    movies = await _fetch_tmdb_page(client, endpoint, page)
             except Exception as exc:
                 logger.warning("[seed] page %d failed: %s", page, exc)
                 continue
@@ -135,13 +169,32 @@ def main() -> None:
         action="store_true",
         help="Pull from /movie/popular at priority=1 instead of /movie/top_rated at priority=0.",
     )
+    parser.add_argument(
+        "--discover",
+        action="store_true",
+        help="Pull from /discover/movie sorted by vote_count.desc, English "
+             "originals only, at priority=2. Use this to grow the catalog "
+             "past the top 250 (50 pages ≈ 1000 well-known films).",
+    )
     args = parser.parse_args()
 
-    endpoint = "popular" if args.backlog else "top_rated"
-    priority = 1 if args.backlog else 0
+    if args.discover:
+        endpoint = "discover"
+        priority = 2
+    elif args.backlog:
+        endpoint = "popular"
+        priority = 1
+    else:
+        endpoint = "top_rated"
+        priority = 0
 
     try:
-        asyncio.run(seed(endpoint=endpoint, pages=args.pages, priority=priority))
+        asyncio.run(seed(
+            endpoint=endpoint,
+            pages=args.pages,
+            priority=priority,
+            discover=args.discover,
+        ))
     except KeyboardInterrupt:
         sys.exit(0)
 

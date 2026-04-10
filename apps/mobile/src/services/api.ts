@@ -377,6 +377,18 @@ export interface ReportStats {
   total: number;
 }
 
+export interface ProcessedMovie {
+  movie_id: number;
+  tmdb_id: number | null;
+  title: string;
+  year: number | null;
+  difficulty_level: string | null;
+  difficulty_score: number | null;
+  popularity: number | null;
+  vote_average: number | null;
+  vote_count: number | null;
+}
+
 export interface DeadJob {
   id: number;
   tmdb_id: number;
@@ -488,6 +500,19 @@ export const adminApi = {
       throw new Error(`GET /admin/stats → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
+  },
+
+  // Processed movie browser, ordered by TMDB popularity desc. Pass `level`
+  // to scope to a single CEFR difficulty bucket.
+  processedMovies: async (level?: string): Promise<ProcessedMovie[]> => {
+    const qs = level ? `?level=${encodeURIComponent(level)}` : '';
+    const res = await authFetch(`${API_BASE_URL}/admin/movies/processed${qs}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/movies/processed → ${res.status} ${body.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return data.movies || [];
   },
 
   // Jobs that exhausted all script sources or crashed past the retry cap.

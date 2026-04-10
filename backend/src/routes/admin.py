@@ -65,6 +65,64 @@ async def get_admin_stats(
     }
 
 
+@router.get("/movies/processed")
+async def list_processed_movies(
+    level: str | None = None,
+    limit: int = 500,
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """
+    Admin browser: every fully-processed movie (has a preprocessed script)
+    with TMDB metadata, ordered by popularity desc. Optionally filtered by
+    difficulty level (ELEMENTARY, INTERMEDIATE, ADVANCED, etc.).
+    """
+    where_sql = "WHERE EXISTS (SELECT 1 FROM movie_scripts s WHERE s.movie_id = m.id AND s.is_preprocessed = true)"
+    args: list = []
+    if level:
+        where_sql += " AND m.difficulty_level::text = $1"
+        args.append(level.upper())
+    args.append(min(max(limit, 1), 1000))
+    limit_pos = len(args)
+
+    rows = await db.query_raw(
+        f"""
+        SELECT m.id                AS movie_id,
+               m.tmdb_id           AS tmdb_id,
+               m.title             AS title,
+               m.year              AS year,
+               m.difficulty_level::text AS difficulty_level,
+               m.difficulty_score  AS difficulty_score,
+               m.tmdb_popularity   AS popularity,
+               m.tmdb_vote_average AS vote_average,
+               m.tmdb_vote_count   AS vote_count
+          FROM movies m
+          {where_sql}
+         ORDER BY m.tmdb_vote_count DESC NULLS LAST, m.id DESC
+         LIMIT ${limit_pos}
+        """,
+        *args,
+    )
+    return {
+        "level": level,
+        "total": len(rows),
+        "movies": [
+            {
+                "movie_id": r["movie_id"],
+                "tmdb_id": r["tmdb_id"],
+                "title": r["title"],
+                "year": r["year"],
+                "difficulty_level": r["difficulty_level"],
+                "difficulty_score": r["difficulty_score"],
+                "popularity": r["popularity"],
+                "vote_average": r["vote_average"],
+                "vote_count": r["vote_count"],
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/queue/dead")
 async def list_dead_jobs(
     admin_user = Depends(get_admin_user),
