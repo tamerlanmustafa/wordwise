@@ -21,7 +21,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   status: 'loading',
   user: null,
 
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    set({ user });
+    // Persist so settings edits (proficiency, languages, username, ...)
+    // survive a cold start. Without this, initialize() re-reads the stale
+    // cached user on next launch and the edit appears to have reverted.
+    AsyncStorage.setItem('user', JSON.stringify(user)).catch((e) =>
+      console.warn('[AuthStore] Failed to persist user:', e)
+    );
+  },
 
   setStatus: (status) => set({ status }),
 

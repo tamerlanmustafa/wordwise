@@ -2836,17 +2836,41 @@ export default function App() {
   };
 
   const handleUserUpdated = (updatedUser: any) => {
-    // PATCH /auth/me returns a partial camelCase payload that doesn't always
-    // include profilePictureUrl, so a naive replace wipes the Google avatar.
-    // Merge into the current user and normalize the avatar key both ways.
-    const current = useAuthStore.getState().user || {};
+    // PATCH /auth/me returns a camelCase payload but the app reads snake_case
+    // everywhere. Normalize every field we care about so the merged user has
+    // the right keys — otherwise edits look like they save but reload back
+    // to the old value because `proficiencyLevel` never overwrote
+    // `proficiency_level`, the Google avatar vanishes, etc.
+    const current: any = useAuthStore.getState().user || {};
     const merged = {
       ...current,
-      ...updatedUser,
+      id: updatedUser.id ?? current.id,
+      email: updatedUser.email ?? current.email,
+      username: updatedUser.username ?? current.username,
       profile_picture_url:
         updatedUser.profile_picture_url ??
         updatedUser.profilePictureUrl ??
         current.profile_picture_url,
+      native_language:
+        updatedUser.native_language ??
+        updatedUser.nativeLanguage ??
+        current.native_language,
+      learning_language:
+        updatedUser.learning_language ??
+        updatedUser.learningLanguage ??
+        current.learning_language,
+      proficiency_level:
+        updatedUser.proficiency_level ??
+        updatedUser.proficiencyLevel ??
+        current.proficiency_level,
+      default_tab:
+        updatedUser.default_tab ??
+        updatedUser.defaultTab ??
+        current.default_tab,
+      is_admin:
+        updatedUser.is_admin ??
+        updatedUser.isAdmin ??
+        current.is_admin,
     };
     useAuthStore.getState().setUser(merged);
   };
@@ -3179,7 +3203,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     position: 'relative',
-    zIndex: 100,
+    zIndex: 200,
+    overflow: 'visible',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
