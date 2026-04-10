@@ -22,15 +22,38 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Iterable
 
 import asyncpg
 import httpx
 
 from .db import close_pool, get_pool
+
+# Persistent cursor for the discover walk. Lives alongside the backend so it
+# survives restarts but is not checked into git. Each entry keeps the next
+# page to fetch for a given (endpoint, filter) key — lets us grow the catalog
+# incrementally across worker restarts without re-hitting pages we've already
+# drained.
+_CURSOR_PATH = Path(__file__).resolve().parent.parent.parent / ".seed_cursor.json"
+
+
+def _load_cursor() -> dict:
+    try:
+        return json.loads(_CURSOR_PATH.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_cursor(cursor: dict) -> None:
+    try:
+        _CURSOR_PATH.write_text(json.dumps(cursor, indent=2))
+    except OSError as exc:
+        logger.warning("[seed] failed to persist cursor: %s", exc)
 
 logger = logging.getLogger("wordwise.seed")
 
@@ -109,18 +132,12 @@ async def _insert_jobs(
     return inserted
 
 
-async def seed(
-    *,
-    endpoint: str,
-    pages: int,
-    priority: int,
-    discover: bool = False,
-) -> None:
-    pool = await get_pool()
-
-    # Insurance: enforce uniqueness on tmdb_id so the ON CONFLICT above
-    # is meaningful. Doing it here keeps schema.sql declarative and lets
-    # us re-seed without manual DDL.
+async def _ensure_unique_constraint(pool: asyncpg.Pool) -> None:
+    """
+    Idempotently add the UNIQUE (tmdb_id) constraint that makes our
+    ON CONFLICT DO NOTHING meaningful. Split out so both the CLI seeder
+    and the auto-seeder called from the worker can reuse it.
+    """
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -135,6 +152,79 @@ async def seed(
             END$$;
             """
         )
+
+
+async def seed_discover_until(
+    target: int,
+    *,
+    priority: int = 2,
+    max_pages: int = 500,
+) -> int:
+    """
+    Walk the TMDB /discover endpoint (English originals, vote_count.desc)
+    starting from the persistent page cursor and insert rows until `target`
+    NEW jobs have been queued — or we've exhausted the available pages.
+
+    Idempotent: conflicts on tmdb_id are silently skipped. The cursor advances
+    only after a page completes, so a crash mid-walk simply re-reads that
+    page next time (harmless, deduped).
+    """
+    if target <= 0:
+        return 0
+
+    pool = await get_pool()
+    await _ensure_unique_constraint(pool)
+
+    cursor = _load_cursor()
+    key = "discover_en_vote_count_desc_gte1000"
+    start_page = max(1, int(cursor.get(key, 1)))
+
+    inserted = 0
+    page = start_page
+    pages_walked = 0
+    async with httpx.AsyncClient() as client:
+        while inserted < target and pages_walked < max_pages:
+            try:
+                movies = await _fetch_discover_page(client, page)
+            except Exception as exc:
+                logger.warning("[seed] discover page %d failed: %s", page, exc)
+                page += 1
+                pages_walked += 1
+                continue
+
+            if not movies:
+                logger.info("[seed] discover exhausted at page %d", page)
+                break
+
+            n = await _insert_jobs(pool, movies, priority)
+            inserted += n
+            logger.info(
+                "[seed] auto page=%d +%d (running total %d/%d)",
+                page,
+                n,
+                inserted,
+                target,
+            )
+            page += 1
+            pages_walked += 1
+
+            # Persist after each page so a crash doesn't redo the walk.
+            cursor[key] = page
+            _save_cursor(cursor)
+
+    logger.info("[seed] auto-seed done. %d new jobs queued (target=%d).", inserted, target)
+    return inserted
+
+
+async def seed(
+    *,
+    endpoint: str,
+    pages: int,
+    priority: int,
+    discover: bool = False,
+) -> None:
+    pool = await get_pool()
+    await _ensure_unique_constraint(pool)
 
     total_inserted = 0
     async with httpx.AsyncClient() as client:

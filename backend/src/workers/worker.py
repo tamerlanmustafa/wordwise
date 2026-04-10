@@ -29,10 +29,17 @@ import httpx
 from . import queue as q
 from .db import close_pool, get_pool
 from .processor import PermanentError, TransientError, process_job
+from .seed import seed_discover_until
 
 logger = logging.getLogger("wordwise.worker")
 
 EMPTY_QUEUE_SLEEP = float(os.environ.get("WORKER_IDLE_SLEEP", "5"))
+
+# How many fresh popular English films to auto-seed on every worker start.
+# Walks TMDB /discover sorted by vote_count.desc from a persistent page
+# cursor (.seed_cursor.json) so each restart grows the catalog without
+# re-fetching pages we've already drained. Set to 0 to disable.
+WORKER_SEED_ON_START = int(os.environ.get("WORKER_SEED_ON_START", "500"))
 
 
 async def run_worker() -> None:
@@ -41,6 +48,16 @@ async def run_worker() -> None:
 
     pool = await get_pool()
     stop = asyncio.Event()
+
+    # Top up the queue before starting the claim loop so the worker always
+    # has work to do on restart. Safe to run on every start — it's
+    # idempotent (unique tmdb_id) and the page cursor prevents re-walks.
+    if WORKER_SEED_ON_START > 0:
+        try:
+            n = await seed_discover_until(WORKER_SEED_ON_START)
+            logger.info("[worker] auto-seeded %d new jobs", n)
+        except Exception as exc:
+            logger.warning("[worker] auto-seed failed (continuing anyway): %s", exc)
 
     def _handle_signal(*_):
         logger.info("[worker] shutdown signal received")

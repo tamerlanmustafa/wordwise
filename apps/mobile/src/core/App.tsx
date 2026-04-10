@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -2754,18 +2755,44 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
-  const [targetLanguage, setTargetLanguage] = useState(user?.learning_language?.toUpperCase() || 'ES');
+  // Header dropdown's chosen translation language. Persisted to AsyncStorage
+  // (key: targetLanguage) so the user's last pick survives app restarts
+  // instead of snapping back to user.learning_language every cold start.
+  const [targetLanguage, _setTargetLanguage] = useState(user?.learning_language?.toUpperCase() || 'ES');
+  const [targetLanguageLoaded, setTargetLanguageLoaded] = useState(false);
+
+  const setTargetLanguage = useCallback((lang: string) => {
+    _setTargetLanguage(lang);
+    AsyncStorage.setItem('targetLanguage', lang).catch((e) =>
+      console.warn('Failed to persist targetLanguage:', e)
+    );
+  }, []);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  // Sync targetLanguage once auth finishes loading (user is null during initialize())
+  // On first mount, try to restore the last chosen target language before
+  // letting user.learning_language win. If there's a saved value, lock it
+  // in and ignore the profile default.
   useEffect(() => {
-    if (user?.learning_language) {
-      setTargetLanguage(user.learning_language.toUpperCase());
-    }
-  }, [user?.learning_language]);
+    AsyncStorage.getItem('targetLanguage').then((saved) => {
+      if (saved) _setTargetLanguage(saved);
+      setTargetLanguageLoaded(true);
+    });
+  }, []);
+
+  // Only fall back to user.learning_language if the user hasn't made a
+  // local override yet. Otherwise the header would reset to 'ES' on every
+  // auth hydration.
+  useEffect(() => {
+    if (!targetLanguageLoaded) return;
+    AsyncStorage.getItem('targetLanguage').then((saved) => {
+      if (!saved && user?.learning_language) {
+        _setTargetLanguage(user.learning_language.toUpperCase());
+      }
+    });
+  }, [user?.learning_language, targetLanguageLoaded]);
 
   const handleLogin = async (user: any, token: string) => {
     await login(user, token, token);
@@ -2809,7 +2836,19 @@ export default function App() {
   };
 
   const handleUserUpdated = (updatedUser: any) => {
-    useAuthStore.getState().setUser(updatedUser);
+    // PATCH /auth/me returns a partial camelCase payload that doesn't always
+    // include profilePictureUrl, so a naive replace wipes the Google avatar.
+    // Merge into the current user and normalize the avatar key both ways.
+    const current = useAuthStore.getState().user || {};
+    const merged = {
+      ...current,
+      ...updatedUser,
+      profile_picture_url:
+        updatedUser.profile_picture_url ??
+        updatedUser.profilePictureUrl ??
+        current.profile_picture_url,
+    };
+    useAuthStore.getState().setUser(merged);
   };
 
   if (status === 'loading') {
