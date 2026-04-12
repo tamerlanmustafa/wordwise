@@ -92,6 +92,71 @@ async def list_movies_by_level(
     }
 
 
+CEFR_SCORE_RANGES = {
+    "A1": (0, 24),
+    "A2": (25, 34),
+    "B1": (35, 44),
+    "B2": (45, 54),
+    "C1": (55, 69),
+    "C2": (70, 100),
+}
+
+
+@router.get("/by-cefr")
+async def list_movies_by_cefr(
+    level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
+    limit: int = Query(15, ge=1, le=100),
+    db: Prisma = Depends(get_db),
+):
+    """List movies whose difficulty score falls within a CEFR level range."""
+    key = level.upper()
+    if key not in CEFR_SCORE_RANGES:
+        raise HTTPException(status_code=400, detail=f"Invalid CEFR level: {level}")
+
+    lo, hi = CEFR_SCORE_RANGES[key]
+
+    rows = await db.query_raw(
+        """
+        SELECT m.id                AS movie_id,
+               m.title             AS title,
+               m.year              AS year,
+               m.poster_url        AS poster_url,
+               m.description       AS description,
+               m.difficulty_score  AS difficulty_score,
+               m.tmdb_id           AS tmdb_id,
+               m.tmdb_vote_average AS vote_average,
+               m.tmdb_vote_count   AS vote_count
+        FROM movies m
+        WHERE m.difficulty_score >= $1
+          AND m.difficulty_score <= $2
+        ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
+        LIMIT $3
+        """,
+        lo,
+        hi,
+        limit,
+    )
+
+    return {
+        "level": key,
+        "movies": [
+            {
+                "movie_id": r["movie_id"],
+                "tmdb_id": r["tmdb_id"],
+                "title": r["title"],
+                "year": r["year"],
+                "poster_url": r["poster_url"],
+                "description": r["description"],
+                "difficulty_score": r["difficulty_score"],
+                "vote_average": r["vote_average"],
+                "vote_count": r["vote_count"],
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @router.get("/{movie_id}", response_model=MovieResponse)
 async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
     """Get a specific movie by ID"""

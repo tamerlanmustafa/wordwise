@@ -49,7 +49,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms' | 'levelMovies';
 interface MovieData {
   id: number;
   title: string;
@@ -636,7 +636,49 @@ const quickStyles = StyleSheet.create({
   levelItemText: { fontSize: 14, fontWeight: '500', color: colors.text },
 });
 
-// ── Top Rated: numbered vertical list ──────────────────────────────────────
+// ── Helpers for level movies ────────────────────────────────────────────────
+const formatVoteCount = (count: number): string => {
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+  return `${count}`;
+};
+
+const tmdbPosterCache: Record<number, string | null> = {};
+
+const TmdbPoster = ({ tmdbId, style }: { tmdbId: number; style: any }) => {
+  const [uri, setUri] = useState<string | null>(tmdbPosterCache[tmdbId] ?? null);
+  const [loaded, setLoaded] = useState(!!tmdbPosterCache[tmdbId]);
+
+  useEffect(() => {
+    if (tmdbPosterCache[tmdbId] !== undefined) {
+      setUri(tmdbPosterCache[tmdbId]);
+      setLoaded(true);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
+        const data = await res.json();
+        const posterPath = data.poster_path ? `https://image.tmdb.org/t/p/w185${data.poster_path}` : null;
+        tmdbPosterCache[tmdbId] = posterPath;
+        setUri(posterPath);
+      } catch {
+        tmdbPosterCache[tmdbId] = null;
+      }
+      setLoaded(true);
+    })();
+  }, [tmdbId]);
+
+  if (!loaded) return <View style={[style, { backgroundColor: colors.border }]} />;
+  if (!uri) return (
+    <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+      <Text style={{ fontSize: 24 }}>🎬</Text>
+    </View>
+  );
+  return <Image source={{ uri }} style={style} />;
+};
+
+// ── Top Rated for Your Level: numbered vertical list ───────────────────────
+
 const RankedMovieList = ({
   movies,
   onMoviePress,
@@ -644,34 +686,58 @@ const RankedMovieList = ({
   movies: any[];
   onMoviePress: (movie: any) => void;
 }) => {
-  if (movies.length === 0) return null;
+  if (movies.length === 0) return (
+    <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
+      No classified movies found for this level yet.
+    </Text>
+  );
   return (
     <View>
-      {movies.slice(0, 8).map((movie, i) => (
-        <TouchableOpacity
-          key={movie.id}
-          style={rankedStyles.row}
-          onPress={() => onMoviePress(movie)}
-          activeOpacity={0.7}
-        >
-          <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
-            {i + 1}
-          </Text>
-          <Image
-            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-            style={rankedStyles.poster}
-          />
-          <View style={rankedStyles.info}>
-            <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
-            <Text style={rankedStyles.meta}>{movie.release_date?.slice(0, 4)}</Text>
-          </View>
-          {movie.vote_average > 0 && (
-            <View style={rankedStyles.ratingBox}>
-              <Text style={rankedStyles.rating}>★ {movie.vote_average.toFixed(1)}</Text>
+      {movies.slice(0, 10).map((movie, i) => {
+        const posterUri = movie.poster_path
+          ? `https://image.tmdb.org/t/p/w185${movie.poster_path}`
+          : movie.poster_url
+            ? movie.poster_url
+            : movie.tmdb_id
+              ? `https://image.tmdb.org/t/p/w185/${movie.tmdb_id}.jpg`
+              : undefined;
+        const tmdbPoster = movie.tmdb_id && !movie.poster_path && !movie.poster_url;
+        return (
+          <TouchableOpacity
+            key={movie.id || movie.movie_id}
+            style={rankedStyles.row}
+            onPress={() => onMoviePress(movie)}
+            activeOpacity={0.7}
+          >
+            <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
+              {i + 1}
+            </Text>
+            {(posterUri && !tmdbPoster) ? (
+              <Image source={{ uri: posterUri }} style={rankedStyles.poster} />
+            ) : movie.tmdb_id ? (
+              <TmdbPoster tmdbId={movie.tmdb_id} style={rankedStyles.poster} />
+            ) : (
+              <View style={[rankedStyles.poster, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 24 }}>🎬</Text>
+              </View>
+            )}
+            <View style={rankedStyles.info}>
+              <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
+              <Text style={rankedStyles.meta}>
+                {movie.release_date?.slice(0, 4) || movie.year || ''}
+              </Text>
             </View>
-          )}
-        </TouchableOpacity>
-      ))}
+            {(movie.vote_average > 0 || movie.vote_average > 0) && (
+              <View style={rankedStyles.ratingBox}>
+                <Text style={rankedStyles.rating}>★ {Number(movie.vote_average || 0).toFixed(1)}</Text>
+                {movie.vote_count > 0 && (
+                  <Text style={rankedStyles.voteCount}>{formatVoteCount(movie.vote_count)}</Text>
+                )}
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -720,7 +786,112 @@ const rankedStyles = StyleSheet.create({
     color: '#F5A623',
     fontWeight: '700',
   },
+  voteCount: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
 });
+
+// ── Level Movies: full-page list for a CEFR level ──────────────────────────
+const LevelMoviesScreen = ({
+  level,
+  onBack,
+  onMoviePress,
+}: {
+  level: string;
+  onBack: () => void;
+  onMoviePress: (movie: any) => void;
+}) => {
+  const [movies, setMovies] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=100`);
+        if (res.ok) {
+          const data = await res.json();
+          setMovies((data.movies || []).map((m: any) => ({ ...m, id: m.tmdb_id || m.movie_id })));
+        }
+      } catch {}
+      setLoading(false);
+    })();
+  }, [level]);
+
+  const handlePress = (movie: any) => {
+    onMoviePress({
+      id: movie.id || movie.tmdb_id || movie.movie_id,
+      title: movie.title,
+      poster_path: movie.poster_path,
+      release_date: movie.year ? `${movie.year}-01-01` : undefined,
+      overview: movie.description,
+      original_language: 'en',
+    });
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity onPress={onBack} hitSlop={8}>
+          <Text style={{ fontSize: 24, color: colors.text }}>←</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginLeft: 12 }}>
+          Movies for {level}
+        </Text>
+        <Text style={{ fontSize: 13, color: colors.textSecondary, marginLeft: 8 }}>
+          ({movies.length})
+        </Text>
+      </View>
+      {loading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+      ) : movies.length === 0 ? (
+        <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 14, paddingVertical: 40 }}>
+          No classified movies found for {level} yet.
+        </Text>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+          {movies.map((movie, i) => {
+            const hasPoster = movie.poster_path || movie.poster_url;
+            return (
+              <TouchableOpacity
+                key={movie.id || movie.movie_id}
+                style={rankedStyles.row}
+                onPress={() => handlePress(movie)}
+                activeOpacity={0.7}
+              >
+                <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
+                  {i + 1}
+                </Text>
+                {hasPoster ? (
+                  <Image source={{ uri: movie.poster_path ? `https://image.tmdb.org/t/p/w185${movie.poster_path}` : movie.poster_url }} style={rankedStyles.poster} />
+                ) : movie.tmdb_id ? (
+                  <TmdbPoster tmdbId={movie.tmdb_id} style={rankedStyles.poster} />
+                ) : (
+                  <View style={[rankedStyles.poster, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ fontSize: 24 }}>🎬</Text>
+                  </View>
+                )}
+                <View style={rankedStyles.info}>
+                  <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
+                  <Text style={rankedStyles.meta}>{movie.year || ''}</Text>
+                </View>
+                {movie.vote_average > 0 && (
+                  <View style={rankedStyles.ratingBox}>
+                    <Text style={rankedStyles.rating}>★ {Number(movie.vote_average).toFixed(1)}</Text>
+                    {movie.vote_count > 0 && (
+                      <Text style={rankedStyles.voteCount}>{formatVoteCount(movie.vote_count)}</Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+};
 
 // ── Trending Now: snap pager with dots ──────────────────────────────────────
 const SNAP_CARD_WIDTH = 150;
@@ -860,6 +1031,7 @@ const HomeScreen = ({
   onNavigateToNotebook,
   onNavigateToAchievements,
   onNavigateToLeaderboard,
+  onNavigateToLevelMovies,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -874,6 +1046,7 @@ const HomeScreen = ({
   onNavigateToNotebook: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
+  onNavigateToLevelMovies: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
@@ -936,18 +1109,25 @@ const HomeScreen = ({
     fetchMovies();
   }, []);
 
+  const userLevel = user?.proficiency_level || 'B1';
+
   const fetchMovies = async () => {
     try {
-      const [trendingRes, topRatedRes] = await Promise.all([
-        fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51'),
-        fetch('https://api.themoviedb.org/3/movie/top_rated?api_key=9dece7a38786ac0c58794d6db4af3d51'),
-      ]);
-      const [trendingData, topRatedData] = await Promise.all([
-        trendingRes.json(),
-        topRatedRes.json(),
-      ]);
+      const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
+      const trendingData = await trendingRes.json();
       setTrendingMovies(trendingData.results?.slice(0, 15) || []);
-      setTopRatedMovies(topRatedData.results?.slice(0, 15) || []);
+
+      try {
+        const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${userLevel}&limit=15`);
+        if (levelRes.ok) {
+          const levelData = await levelRes.json();
+          const movies = (levelData.movies || []).map((m: any) => ({
+            ...m,
+            id: m.tmdb_id || m.movie_id,
+          }));
+          setTopRatedMovies(movies);
+        }
+      } catch {}
     } catch (error) {
       console.error('Failed to fetch movies:', error);
     } finally {
@@ -986,14 +1166,14 @@ const HomeScreen = ({
 
   const handleMoviePress = (movie: any) => {
     onMoviePress({
-      id: movie.id,
+      id: movie.id || movie.tmdb_id || movie.movie_id,
       title: movie.title,
       poster_path: movie.poster_path,
-      release_date: movie.release_date,
-      overview: movie.overview,
+      release_date: movie.release_date || (movie.year ? `${movie.year}-01-01` : undefined),
+      overview: movie.overview || movie.description,
       genre_ids: movie.genre_ids,
       vote_average: movie.vote_average,
-      original_language: movie.original_language,
+      original_language: movie.original_language || 'en',
     });
   };
 
@@ -1132,7 +1312,7 @@ const HomeScreen = ({
         {/* Hero */}
         {!loading && (
           <MobileHeroSection
-            movie={topRatedMovies.find((m: any) => m.backdrop_path) ?? topRatedMovies[0] ?? null}
+            movie={trendingMovies.find((m: any) => m.backdrop_path) ?? trendingMovies[0] ?? null}
             onPress={handleMoviePress}
           />
         )}
@@ -1305,17 +1485,28 @@ const HomeScreen = ({
           </View>
         )}
 
-        {/* Top Rated for Learning */}
+        {/* Top Rated for Your Level */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⭐ Top Rated for Learning</Text>
-          <Text style={styles.sectionSubtitle}>Ranked by vocabulary richness and dialogue clarity</Text>
+          <Text style={styles.sectionTitle}>⭐ Top Rated for Your Level ({userLevel})</Text>
+          <Text style={styles.sectionSubtitle}>Movies matched to your proficiency level</Text>
           {loading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
           ) : (
-            <RankedMovieList
-              movies={topRatedMovies}
-              onMoviePress={handleMoviePress}
-            />
+            <>
+              <RankedMovieList
+                movies={topRatedMovies}
+                onMoviePress={handleMoviePress}
+              />
+              {topRatedMovies.length > 0 && (
+                <TouchableOpacity
+                  style={styles.seeAllBtn}
+                  onPress={onNavigateToLevelMovies}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.seeAllBtnText}>See All {userLevel} Movies →</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
 
@@ -3207,6 +3398,10 @@ export default function App() {
     setCurrentScreen('leaderboard');
   };
 
+  const navigateToLevelMovies = () => {
+    setCurrentScreen('levelMovies');
+  };
+
   const navigateToFamilyPlan = () => {
     setCurrentScreen('familyPlan');
   };
@@ -3288,6 +3483,12 @@ export default function App() {
           <NotebookScreen onBack={navigateToHome} />
         ) : currentScreen === 'achievements' ? (
           <AchievementsScreen onBack={navigateToHome} />
+        ) : currentScreen === 'levelMovies' ? (
+          <LevelMoviesScreen
+            level={user?.proficiency_level || 'B1'}
+            onBack={navigateToHome}
+            onMoviePress={navigateToMovie}
+          />
         ) : currentScreen === 'leaderboard' ? (
           <LeaderboardScreen onBack={navigateToHome} />
         ) : currentScreen === 'familyPlan' ? (
@@ -3301,7 +3502,7 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToLevelMovies={navigateToLevelMovies} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -3826,6 +4027,20 @@ const styles = StyleSheet.create({
   },
   browseAllText: {
     fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  seeAllBtn: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 10,
+  },
+  seeAllBtnText: {
+    fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
   },
