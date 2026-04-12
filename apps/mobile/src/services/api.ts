@@ -496,8 +496,12 @@ export interface SrsReviewCard {
   user_word_id: number;
   word: string;
   movie_id: number | null;
+  movie_title: string | null;
   srs_box: number;
   srs_due_at: string;
+  definition: string | null;
+  example_sentence: string | null;
+  cefr_level: string | null;
 }
 
 export interface SrsSessionStart {
@@ -725,6 +729,256 @@ export const adminApi = {
     }
     const data = await res.json();
     return data.jobs || [];
+  },
+};
+
+// =====================================================================
+// Feature Flags
+// =====================================================================
+
+export interface FeatureFlag {
+  flag_key: string;
+  enabled: boolean;
+  variant: string | null;
+}
+
+export const flagsApi = {
+  getMyFlags: async (): Promise<FeatureFlag[]> => {
+    const res = await authFetch(`${API_BASE_URL}/flags/me`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+};
+
+// =====================================================================
+// Billing / Subscriptions
+// =====================================================================
+
+export interface SubscriptionStatus {
+  tier: string;
+  is_premium: boolean;
+  expires_at: string | null;
+  product_id?: string | null;
+  platform?: string | null;
+}
+
+export interface RestoreResult {
+  restored: boolean;
+  tier: string;
+  message: string;
+}
+
+export const billingApi = {
+  verifyAppleReceipt: async (receiptData: string, productId: string): Promise<SubscriptionStatus> => {
+    const res = await authFetch(`${API_BASE_URL}/billing/apple/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ receipt_data: receiptData, product_id: productId }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Apple verify failed: ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  verifyGoogleReceipt: async (purchaseToken: string, productId: string): Promise<SubscriptionStatus> => {
+    const res = await authFetch(`${API_BASE_URL}/billing/google/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ purchase_token: purchaseToken, product_id: productId }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Google verify failed: ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  restorePurchases: async (): Promise<RestoreResult> => {
+    const res = await authFetch(`${API_BASE_URL}/billing/restore`, { method: 'POST' });
+    if (!res.ok) throw new Error('Restore failed');
+    return res.json();
+  },
+
+  getStatus: async (): Promise<SubscriptionStatus> => {
+    const res = await authFetch(`${API_BASE_URL}/billing/status`);
+    if (!res.ok) throw new Error('Status check failed');
+    return res.json();
+  },
+};
+
+// =====================================================================
+// Family Plan
+// =====================================================================
+
+export interface FamilyPlan {
+  plan_id: number;
+  owner_id: number;
+  owner_email: string;
+  max_members: number;
+  members: Array<{ user_id: number; email: string; username: string; joined_at: string }>;
+}
+
+export const familyApi = {
+  getPlan: async (): Promise<FamilyPlan | null> => {
+    const res = await authFetch(`${API_BASE_URL}/family/plan`);
+    if (!res.ok) return null;
+    return res.json();
+  },
+
+  createPlan: async (): Promise<FamilyPlan> => {
+    const res = await authFetch(`${API_BASE_URL}/family/create`, { method: 'POST' });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Create family plan failed: ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  inviteMember: async (email: string): Promise<{ success: boolean; message: string }> => {
+    const res = await authFetch(`${API_BASE_URL}/family/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text || 'Invite failed');
+    }
+    return res.json();
+  },
+
+  removeMember: async (userId: number): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/family/remove/${userId}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Remove failed');
+  },
+
+  leave: async (): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/family/leave`, { method: 'POST' });
+    if (!res.ok) throw new Error('Leave failed');
+  },
+};
+
+// =====================================================================
+// Gamification / Achievements
+// =====================================================================
+
+export interface Achievement {
+  key: string;
+  title: string;
+  description: string | null;
+  icon: string | null;
+  category: string;
+  threshold: number;
+  progress: number;
+  unlocked: boolean;
+  unlocked_at: string | null;
+}
+
+export interface AchievementsResponse {
+  achievements: Achievement[];
+  total_unlocked: number;
+  total_available: number;
+}
+
+export interface NewlyUnlocked {
+  key: string;
+  title: string;
+  icon: string | null;
+}
+
+export const achievementsApi = {
+  getMyAchievements: async (): Promise<AchievementsResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/achievements/me`);
+    if (!res.ok) throw new Error('Failed to load achievements');
+    return res.json();
+  },
+
+  triggerCheck: async (): Promise<NewlyUnlocked[]> => {
+    const res = await authFetch(`${API_BASE_URL}/achievements/check`, { method: 'POST' });
+    if (!res.ok) return [];
+    return res.json();
+  },
+};
+
+// =====================================================================
+// Social / Leaderboard
+// =====================================================================
+
+export interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  score: number;
+  is_you: boolean;
+}
+
+export interface LeaderboardResponse {
+  board: string;
+  entries: LeaderboardEntry[];
+  your_rank: number | null;
+  your_score: number | null;
+}
+
+export interface PublicProfile {
+  user_id: number;
+  username: string;
+  profile_picture_url: string | null;
+  words_saved: number;
+  current_streak: number;
+  longest_streak: number;
+  total_reviews: number;
+  achievements: Array<{ key: string; title: string; icon: string | null; unlocked_at: string | null }>;
+}
+
+export const socialApi = {
+  leaderboardWords: async (): Promise<LeaderboardResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/social/leaderboard/words`);
+    if (!res.ok) throw new Error('Failed to load leaderboard');
+    return res.json();
+  },
+
+  leaderboardStreak: async (): Promise<LeaderboardResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/social/leaderboard/streak`);
+    if (!res.ok) throw new Error('Failed to load leaderboard');
+    return res.json();
+  },
+
+  leaderboardReviews: async (): Promise<LeaderboardResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/social/leaderboard/reviews`);
+    if (!res.ok) throw new Error('Failed to load leaderboard');
+    return res.json();
+  },
+
+  getProfile: async (userId: number): Promise<PublicProfile> => {
+    const res = await authFetch(`${API_BASE_URL}/social/profile/${userId}`);
+    if (!res.ok) throw new Error('Failed to load profile');
+    return res.json();
+  },
+};
+
+// =====================================================================
+// Student Discount
+// =====================================================================
+
+export interface StudentStatus {
+  verified: boolean;
+  method: string | null;
+  discount_pct: number;
+  verified_at: string | null;
+}
+
+export const studentApi = {
+  getStatus: async (): Promise<StudentStatus> => {
+    const res = await authFetch(`${API_BASE_URL}/student/status`);
+    if (!res.ok) return { verified: false, method: null, discount_pct: 0, verified_at: null };
+    return res.json();
+  },
+
+  verify: async (email: string, schoolName?: string): Promise<StudentStatus> => {
+    const res = await authFetch(`${API_BASE_URL}/student/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ email, school_name: schoolName }),
+    });
+    if (!res.ok) throw new Error('Verification failed');
+    return res.json();
   },
 };
 

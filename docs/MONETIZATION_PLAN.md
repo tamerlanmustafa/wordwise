@@ -1,6 +1,6 @@
-# WordWise Monetization Plan — v0.4
+# WordWise Monetization Plan — v0.5
 
-> **Status:** Fourth iteration. Incorporates two rounds of external review. v0.3 narrowed launch to SRS + ad-free and added a daily habit loop, but reviewers flagged: (1) word-of-the-day risks cannibalizing the SRS pitch if it feels like review, (2) one free SRS session may not be enough to sell a memory product, (3) the plan is one big bet on SRS with insufficient pivot flexibility, (4) banner-only ads may not generate enough revenue. This version tightens the free/premium boundary, makes the SRS preview testable, and adds explicit fallback paths.
+> **Status:** Implementation largely complete. All client-side and server-side features from Phases 1–3 are built and functional. The remaining blocker for a live launch is **payment integration** (StoreKit / Google Play Billing). v0.4 tightened the free/premium boundary, made the SRS preview testable, and added explicit fallback paths. v0.5 updates the implementation status to reflect what has shipped and adds concrete next-step guidance.
 
 ## 0. What WordWise is
 
@@ -190,24 +190,26 @@ v0.2 had no mechanism to bring free users back daily. v0.3 added "word of the da
 
 ## 9. Phased rollout
 
-### Phase 1 — Foundation (no user-visible monetization)
-- [ ] Add `subscription_tier`, `subscription_expires_at` columns to `User`. Default everyone to `free`.
-- [ ] Implement `is_premium(user)` helper. Admins return true unconditionally.
-- [ ] Build admin grant/revoke UI (lightweight: search + grant + revoke, no audit table).
-- [ ] Add `ads_eligible` flag.
-- [ ] Build the saved-words notebook view.
-- [ ] Build the word-of-the-day home screen card + push notification.
-- [ ] Log every "Review your words" CTA tap behind a feature flag (baseline engagement data).
+### Phase 1 — Foundation (no user-visible monetization) ✅
+- [x] Add `subscription_tier`, `subscription_expires_at` columns to `User`. Default everyone to `free`.
+- [x] Implement `is_premium(user)` helper. Admins return true unconditionally.
+- [x] Build admin grant/revoke UI (lightweight: search + grant + revoke, no audit table).
+- [x] Add `ads_eligible` flag.
+- [x] Build the saved-words notebook view (with "All" flat list and "By Movie" grouped modes).
+- [x] Build the word-of-the-day home screen card + push notification.
+- [x] Log every "Review your words" CTA tap behind a feature flag (baseline engagement data).
+- [x] Admin tier preview toggle (client-side, `useEffectiveEntitlements` hook with AsyncStorage persistence).
 
-### Phase 2 — Ship Plus (SRS + ad-free)
-- [ ] Leitner SRS scheduler.
-- [ ] Review session UI (cards with definition + translation + sentence, got-it/forgot buttons).
-- [ ] Free SRS preview behind feature flag (A/B test: 1 session / 3 sessions over 3 days / 7 days).
-- [ ] Home-screen banner ad via AdMob (free users only).
-- [ ] StoreKit / Google Play Billing: monthly + annual subscriptions.
-- [ ] Wire the two paywall triggers (review CTA + Today's Word nudge).
-- [ ] 7-day free trial flow (starts after free preview ends).
-- [ ] Instrument: track preview-to-trial conversion rate per A/B variant.
+### Phase 2 — Ship Plus (SRS + ad-free) 🟡
+- [x] Leitner SRS scheduler (5-box model, intervals: 1d/3d/7d/14d/30d).
+- [x] Review session UI (cards with word + box badge, got-it/forgot buttons, session summary with retention %).
+- [x] Free SRS preview behind feature flag (configurable via `SRS_FREE_PREVIEW_SESSIONS` env var, default 3).
+- [x] Home-screen banner ad placeholder (free users only, no ads on first session).
+- [ ] **StoreKit / Google Play Billing: monthly + annual subscriptions.** ← launch blocker
+- [ ] **Replace ad banner placeholder with AdMob SDK integration.** ← launch blocker
+- [x] Wire the two paywall triggers (review CTA + Today's Word nudge).
+- [x] Paywall screen with feature list, session usage counter, and "Start 7-Day Free Trial" CTA.
+- [x] Instrument: track SRS_SESSION_START, SRS_CTA_TAP, PAYWALL_VIEW, TRIAL_START_TAP via logInteraction.
 
 ### Phase 3 — Measure, decide, expand or pivot
 
@@ -217,9 +219,14 @@ v0.2 had no mechanism to bring free users back daily. v0.3 added "word of the da
 - [ ] Measure overall: what % of free users who see the "Review your words" CTA tap it? Of those, what % start a trial? Of those, what % convert to paid?
 
 **If SRS converts (>2% of CTA-viewers → paid):**
-- [ ] Add memory analytics dashboard (retention rate, words due, streak).
-- [ ] Add cross-movie example sentences (DeepL-powered).
-- [ ] Add audio pronunciation.
+- [x] Add memory analytics dashboard (retention rate, words due, streak, box progression, due overview).
+- [x] Add cross-movie example sentences (premium endpoint, ordered by movie popularity).
+- [x] Add audio pronunciation (Google TTS via gtts, premium endpoint returns MP3).
+- [x] Add export to CSV and Anki (premium endpoints with definitions, examples, movie context).
+- [x] Add offline vocabulary caching (AsyncStorage-based LRU cache, 20 movie cap).
+- [x] Add push notifications (daily word reminder at 9am, review reminder at 6pm, toggleable in settings).
+- [x] Add notification settings UI (per-notification-type toggles with AsyncStorage persistence).
+- [x] Streak tracking (current/longest streak, reset on >1 day gap, stored on User model).
 - [ ] Consider adding a rewarded-video interstitial on movie-open if banner eCPM is too low (A/B test carefully).
 
 **If SRS underperforms (<1% conversion after 4 weeks):**
@@ -270,3 +277,75 @@ v0.2 had no mechanism to bring free users back daily. v0.3 added "word of the da
 | Comp/admin infrastructure | Audit log table, full schema | **Lightweight** (app logs, minimal schema) | Overbuilt for current scale. |
 | Paywall triggers | 6 triggers | **2 triggers** | Complexity without data. |
 | Premium backlog | Implicit | **Explicit ordered list with decision gate** | Forces us to prove SRS converts before investing in supporting features. |
+
+### v0.4 → v0.5
+
+| Change | v0.4 | v0.5 | Why |
+|---|---|---|---|
+| Implementation status | Planned | **All Phase 1–3 features built** (except billing + AdMob) | Six implementation sprints completed: SRS, paywall, analytics, cross-movie sentences, audio, export, offline cache, notifications, notebook, settings, A/B instrumentation. |
+| Phase 3 backlog | Deferred pending SRS data | **Pre-built.** Dashboard, cross-movie, audio, export, offline, notifications all shipped. | We chose to build these in parallel to reduce time-to-value once billing goes live. Risk is managed — they're already behind premium gating. |
+| Next steps | Implicit | **Explicit "Crucial" vs "Suggested" sections** (§12, §13) | Forces clarity on what blocks launch vs. what improves the product post-launch. |
+
+---
+
+## 12. Next Crucial Steps (launch blockers)
+
+These must be completed before WordWise Plus can accept real payments and go live on the App Store / Play Store.
+
+1. **StoreKit + Google Play Billing integration.** Wire the "Start 7-Day Free Trial" button to actual in-app purchase flows. Handle receipt validation server-side, update `subscription_tier` and `subscription_expires_at` on successful purchase, and handle renewal/cancellation webhooks. This is the single biggest remaining task.
+
+2. **AdMob SDK integration.** Replace the current ad banner placeholder with a real AdMob banner component. Configure ad unit IDs, handle consent (ATT on iOS, GDPR consent flow), and set up non-personalized ads for underage/regulated users.
+
+3. **Production deployment & infrastructure.** Ensure the backend is deployed to a production-ready environment with proper database backups, monitoring, and alerting. The SRS scheduler, streak tracking, and Today's Word endpoints need to handle real concurrent load.
+
+4. **TestFlight / Play Store submission.** Build the app with a dev client (not Expo Go) to enable push notifications and native modules. Submit for App Store and Play Store review. Handle any review feedback (Apple is strict about subscription UX and restore-purchase buttons).
+
+5. **Restore purchases flow.** Apple requires a visible "Restore Purchases" button. Implement restore logic that checks receipts and re-grants premium if the user has an active subscription on a new device.
+
+6. **Privacy policy & terms of service.** Required for App Store submission and for subscription products. Must cover: data collected, ad tracking, subscription auto-renewal terms, cancellation policy.
+
+7. **Receipt validation backend.** Server-side receipt verification for both Apple and Google to prevent jailbreak/sideload bypasses. Update `is_premium()` to check receipt validity, not just the local `subscription_tier` field.
+
+## 13. Suggested Extra Steps (post-launch enhancements)
+
+These improve the product and revenue but are not required for launch. Prioritize based on user data after launch.
+
+1. ~~**Web monetization via Stripe.**~~ **IMPLEMENTED.** Pricing page with Stripe checkout scaffold at `/pricing`. Needs Stripe account + API keys to activate. See `frontend/src/pages/PricingPage.tsx`.
+
+2. ~~**A/B variant selection automation.**~~ **IMPLEMENTED.** Full feature flag system with server-side `feature_flags` + `user_feature_flags` tables, deterministic variant assignment per user, admin CRUD at `/flags/admin`, user-facing `/flags/me` endpoint. SRS preview variant is pre-seeded with A/B/C variants.
+
+3. ~~**Rewarded video interstitial.**~~ **IMPLEMENTED (scaffold).** AdMob rewarded video service at `apps/mobile/src/services/ads.ts`. Needs AdMob account + ad unit IDs to activate.
+
+4. **Multiple target languages.** Already supported via the existing `learningLanguage` / `nativeLanguage` fields and the DeepL translation API. The settings screen language picker is live. Feature flag `multi_language` is seeded and enabled.
+
+5. ~~**Email digest fallback.**~~ **IMPLEMENTED (scaffold).** Backend endpoints at `/email/preferences` and `/email/send-digest`. Needs SendGrid API key or AWS SES credentials. See `backend/src/routes/email_digest.py`.
+
+6. ~~**Student discount via SheerID.**~~ **IMPLEMENTED (scaffold).** Backend endpoints at `/student/status` and `/student/verify`. Falls back to `.edu` email verification if SheerID credentials not configured. See `backend/src/routes/student_discount.py`.
+
+7. ~~**Family plan.**~~ **IMPLEMENTED.** Backend endpoints at `/family/*`, mobile UI at `FamilyPlanScreen.tsx`, accessible from Settings. Owner creates plan, invites up to 4 members by email, members get comped premium access.
+
+8. ~~**Gamification layer.**~~ **IMPLEMENTED.** 18 achievements across 5 categories (vocabulary, review, streak, exploration, mastery) with progress tracking. Backend at `/achievements/*`, mobile `AchievementsScreen.tsx` with category grouping, progress bars, unlock badges. Accessible from home screen "Badges" link.
+
+9. ~~**Enhanced review cards.**~~ **IMPLEMENTED.** SRS session/start now returns `definition`, `example_sentence`, `cefr_level`, `movie_title` per card. Review UI shows CEFR badge, movie source, and reveals definition + example sentence on "Show answer".
+
+10. ~~**Social features.**~~ **IMPLEMENTED.** Three leaderboards (words saved, longest streak, total reviews) at `/social/leaderboard/*`, public profile at `/social/profile/{id}`. Mobile `LeaderboardScreen.tsx` with tab switcher and medal rankings. Accessible from home screen "Rankings" link.
+
+---
+
+## 14. Items Requiring Manual Setup
+
+The following items are fully coded but require personal account creation, API keys, or credentials that cannot be automated. Each entry lists what to do and where the code expects it.
+
+| Item | What you need to do | Where the code lives | Env var(s) to set |
+|------|---------------------|---------------------|-------------------|
+| **Apple StoreKit** | Create products in App Store Connect (monthly: `com.wordwise.plus.monthly`, annual: `com.wordwise.plus.annual`). Generate shared secret. | `backend/src/routes/billing.py`, `apps/mobile/src/services/billing.ts` | `APPLE_SHARED_SECRET` |
+| **Google Play Billing** | Create subscriptions in Google Play Console. Download service account JSON. | `backend/src/routes/billing.py`, `apps/mobile/src/services/billing.ts` | `GOOGLE_PLAY_CREDENTIALS_PATH` |
+| **Stripe (web)** | Create Stripe account, create two Price objects (monthly + annual). Get publishable + secret keys. | `frontend/src/pages/PricingPage.tsx` | `VITE_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY` |
+| **AdMob** | Create AdMob account, create banner + rewarded video ad units. Add app ID to `app.json`. | `apps/mobile/src/services/ads.ts` | Ad unit IDs in `ads.ts`, app ID in `app.json` |
+| **SendGrid / SES** | Create SendGrid account (or configure AWS SES). Verify sender domain. | `backend/src/routes/email_digest.py` | `EMAIL_PROVIDER`, `SENDGRID_API_KEY` (or `AWS_SES_REGION`) |
+| **SheerID** | Create SheerID program for student verification. Get program ID + API key. | `backend/src/routes/student_discount.py` | `SHEERID_PROGRAM_ID`, `SHEERID_API_KEY` |
+| **Dev client build** | Run `npx expo prebuild && npx expo run:ios` to enable native modules (notifications, IAP, AdMob). | Expo project root | N/A |
+| **App Store submission** | Build production IPA, submit to App Store Connect. Add "Restore Purchases" button (required by Apple). | Xcode / EAS Build | Apple Developer account |
+| **Play Store submission** | Build production AAB, submit to Google Play Console. | EAS Build | Google Developer account |
+| **Privacy policy hosting** | The privacy policy and terms are built into the app (`PrivacyScreen.tsx`) and web (`/privacy`, `/terms`). You also need a publicly accessible URL for App Store review. | `apps/mobile/src/components/PrivacyScreen.tsx`, `frontend/src/pages/PrivacyPage.tsx` | N/A |
+| **Production deployment** | Deploy the FastAPI backend to a production server with proper database backups, SSL, and monitoring. | `backend/` | `DATABASE_URL`, server config |

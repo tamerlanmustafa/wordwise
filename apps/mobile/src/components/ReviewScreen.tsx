@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { srsApi, SrsPaywallError, type SrsReviewCard } from '../services/api';
+import { srsApi, wordwiseApi, SrsPaywallError, type SrsReviewCard } from '../services/api';
 
 // Leitner review session UI.
 //
@@ -42,6 +42,11 @@ export interface ReviewScreenProps {
 
 type Phase = 'loading' | 'prompt' | 'answer' | 'done' | 'empty' | 'error';
 
+const cefrColor = (level: string) => {
+  const map: Record<string, string> = { A1: '#4CAF50', A2: '#8BC34A', B1: '#FFC107', B2: '#FF9800', C1: '#F44336', C2: '#9C27B0' };
+  return map[level] || COLORS.primary;
+};
+
 export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [cards, setCards] = useState<SrsReviewCard[]>([]);
@@ -62,6 +67,11 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
+      wordwiseApi.logInteraction('_srs', 'SRS_SESSION_START', undefined, {
+        card_count: session.cards.length,
+        is_preview: session.is_preview,
+        previews_remaining: session.previews_remaining,
+      });
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
@@ -223,12 +233,30 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
 
       <Animated.View style={[styles.cardArea, { opacity: fade }]}>
         <View style={styles.card}>
-          <Text style={styles.boxBadge}>Box {currentCard?.srs_box ?? 1}</Text>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.boxBadge}>Box {currentCard?.srs_box ?? 1}</Text>
+            {currentCard?.cefr_level && (
+              <Text style={[styles.cefrBadge, { backgroundColor: cefrColor(currentCard.cefr_level) }]}>
+                {currentCard.cefr_level}
+              </Text>
+            )}
+          </View>
           <Text style={styles.word}>{currentCard?.word}</Text>
+          {currentCard?.movie_title && (
+            <Text style={styles.movieHint}>from {currentCard.movie_title}</Text>
+          )}
           {showAnswer ? (
-            <Text style={styles.hint}>
-              Do you remember what this means?
-            </Text>
+            <View style={styles.answerContent}>
+              {currentCard?.definition && (
+                <Text style={styles.definition}>{currentCard.definition}</Text>
+              )}
+              {currentCard?.example_sentence && (
+                <Text style={styles.exampleSentence}>"{currentCard.example_sentence}"</Text>
+              )}
+              {!currentCard?.definition && !currentCard?.example_sentence && (
+                <Text style={styles.hint}>Do you remember what this means?</Text>
+              )}
+            </View>
           ) : (
             <Text style={styles.hint}>
               Try to recall the meaning, then tap below.
@@ -302,13 +330,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+  },
   boxBadge: {
     fontSize: 12,
     color: COLORS.primary,
     fontWeight: '700',
-    marginBottom: 12,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  cefrBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   word: {
     fontSize: 36,
@@ -316,6 +359,32 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  movieHint: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  answerContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 12,
+  },
+  definition: {
+    fontSize: 16,
+    color: COLORS.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  exampleSentence: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    fontStyle: 'italic',
   },
   hint: {
     fontSize: 14,

@@ -1,5 +1,8 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { wordwiseApi } from '../services/api';
+import { purchaseProduct, restorePurchases, PRODUCTS, type ProductId } from '../services/billing';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -26,6 +29,10 @@ const FEATURES = [
 ];
 
 export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallScreenProps) {
+  useEffect(() => {
+    wordwiseApi.logInteraction('_srs', 'PAYWALL_VIEW', undefined, { previews_used: previewsUsed, previews_limit: previewsLimit });
+  }, [previewsUsed, previewsLimit]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -56,12 +63,36 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
         </View>
 
         <View style={styles.cta}>
-          <TouchableOpacity style={styles.trialBtn} onPress={() => {
-            // TODO: StoreKit / Google Play billing integration
+          <TouchableOpacity style={styles.trialBtn} onPress={async () => {
+            wordwiseApi.logInteraction('_srs', 'TRIAL_START_TAP', undefined, { previews_used: previewsUsed });
+            const success = await purchaseProduct(PRODUCTS.MONTHLY);
+            if (success) {
+              Alert.alert('Welcome to Plus!', 'Your subscription is now active.');
+              onBack();
+            }
           }}>
             <Text style={styles.trialBtnText}>Start 7-Day Free Trial</Text>
           </TouchableOpacity>
           <Text style={styles.priceHint}>Then $4.99/month · Cancel anytime</Text>
+
+          <TouchableOpacity style={styles.annualBtn} onPress={async () => {
+            wordwiseApi.logInteraction('_srs', 'ANNUAL_TAP', undefined, { previews_used: previewsUsed });
+            const success = await purchaseProduct(PRODUCTS.ANNUAL);
+            if (success) {
+              Alert.alert('Welcome to Plus!', 'Your annual subscription is now active.');
+              onBack();
+            }
+          }}>
+            <Text style={styles.annualBtnText}>Annual — $29.99/year (save 50%)</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.restoreBtn} onPress={async () => {
+            const result = await restorePurchases();
+            Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
+            if (result.restored) onBack();
+          }}>
+            <Text style={styles.restoreBtnText}>Restore Purchases</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -129,4 +160,17 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     marginTop: 10,
   },
+  annualBtn: {
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  annualBtnText: { color: COLORS.primary, fontSize: 15, fontWeight: '700' },
+  restoreBtn: { marginTop: 16 },
+  restoreBtnText: { fontSize: 13, color: COLORS.textTertiary, textDecorationLine: 'underline' },
 });

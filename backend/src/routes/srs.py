@@ -58,8 +58,12 @@ class ReviewCard(BaseModel):
     user_word_id: int
     word: str
     movie_id: Optional[int]
+    movie_title: Optional[str] = None
     srs_box: int
     srs_due_at: datetime
+    definition: Optional[str] = None
+    example_sentence: Optional[str] = None
+    cefr_level: Optional[str] = None
 
 
 class SessionStartResponse(BaseModel):
@@ -187,13 +191,47 @@ async def start_session(
         take=SESSION_SIZE,
     )
 
+    # Hydrate cards with definitions and movie titles
+    word_texts = list({r.word for r in due_rows})
+    movie_ids = list({r.movieId for r in due_rows if r.movieId})
+
+    def_map: dict[str, tuple] = {}
+    if word_texts:
+        defs = await db.word.find_many(where={"word": {"in": word_texts}})
+        for d in defs:
+            if d.word not in def_map and d.definition:
+                def_map[d.word] = (d.definition, d.example_sentence, getattr(d, "difficulty_level", None))
+
+    movie_map: dict[int, str] = {}
+    if movie_ids:
+        movies = await db.movie.find_many(where={"id": {"in": movie_ids}})
+        for m in movies:
+            movie_map[m.id] = m.title
+
+    # Look up CEFR levels from word classifications
+    cefr_map: dict[str, str] = {}
+    if word_texts:
+        cefr_rows = await db.query_raw(
+            """SELECT DISTINCT ON (wc.word) wc.word, wc.cefr_level
+               FROM word_classifications wc
+               WHERE wc.word = ANY($1::text[])
+               ORDER BY wc.word, wc.id DESC""",
+            word_texts,
+        )
+        for r in cefr_rows:
+            cefr_map[r["word"]] = r["cefr_level"]
+
     cards = [
         ReviewCard(
             user_word_id=r.id,
             word=r.word,
             movie_id=r.movieId,
+            movie_title=movie_map.get(r.movieId) if r.movieId else None,
             srs_box=r.srsBox,
             srs_due_at=r.srsDueAt,
+            definition=def_map.get(r.word, (None,))[0],
+            example_sentence=def_map.get(r.word, (None, None))[1] if r.word in def_map else None,
+            cefr_level=cefr_map.get(r.word),
         )
         for r in due_rows
     ]

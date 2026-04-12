@@ -34,6 +34,11 @@ import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
 import { offlineCache } from '../services/offlineCache';
 import { registerForPushNotifications, scheduleDailyWordReminder, scheduleReviewReminder } from '../services/notifications';
+import { AchievementsScreen } from '../components/AchievementsScreen';
+import { LeaderboardScreen } from '../components/LeaderboardScreen';
+import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
+import { PrivacyScreen } from '../components/PrivacyScreen';
+import { initializeBilling } from '../services/billing';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -44,7 +49,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
 interface MovieData {
   id: number;
   title: string;
@@ -853,6 +858,8 @@ const HomeScreen = ({
   onNavigateToReview,
   onNavigateToStats,
   onNavigateToNotebook,
+  onNavigateToAchievements,
+  onNavigateToLeaderboard,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -865,13 +872,17 @@ const HomeScreen = ({
   onNavigateToReview: () => void;
   onNavigateToStats: () => void;
   onNavigateToNotebook: () => void;
+  onNavigateToAchievements: () => void;
+  onNavigateToLeaderboard: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
   // state for a bug. See docs/MONETIZATION_PLAN.md §6.
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
   const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
-  const showAds = useShowAds();
+  const showAdsEntitlement = useShowAds();
+  const [isFirstSession, setIsFirstSession] = useState(true);
+  const showAds = showAdsEntitlement && !isFirstSession;
   const [activeTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -886,8 +897,15 @@ const HomeScreen = ({
   const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
+  const [todaysWordSaved, setTodaysWordSaved] = useState(false);
 
   useEffect(() => {
+    // No ads on first session (§5). Mark this session, show ads from the next one.
+    AsyncStorage.getItem('has_opened_before').then((val) => {
+      if (val) setIsFirstSession(false);
+      else AsyncStorage.setItem('has_opened_before', '1');
+    });
+
     srsApi.stats().then((s) => {
       setSrsDueCount(s.due_now);
       setSrsTotalSaved(s.total_saved);
@@ -1193,7 +1211,10 @@ const HomeScreen = ({
           <View style={styles.reviewCtaWrapper}>
             <TouchableOpacity
               style={styles.reviewCta}
-              onPress={onNavigateToReview}
+              onPress={() => {
+                wordwiseApi.logInteraction('_srs', 'SRS_CTA_TAP', undefined, { due_count: srsDueCount, total_saved: srsTotalSaved });
+                onNavigateToReview();
+              }}
               activeOpacity={0.8}
             >
               <View style={styles.reviewCtaLeft}>
@@ -1218,6 +1239,14 @@ const HomeScreen = ({
               <TouchableOpacity onPress={onNavigateToStats} hitSlop={8}>
                 <Text style={styles.statsLink}>My Progress</Text>
               </TouchableOpacity>
+              <Text style={styles.ctaLinkDot}>·</Text>
+              <TouchableOpacity onPress={onNavigateToAchievements} hitSlop={8}>
+                <Text style={styles.statsLink}>Badges</Text>
+              </TouchableOpacity>
+              <Text style={styles.ctaLinkDot}>·</Text>
+              <TouchableOpacity onPress={onNavigateToLeaderboard} hitSlop={8}>
+                <Text style={styles.statsLink}>Rankings</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1236,6 +1265,21 @@ const HomeScreen = ({
             {todaysWord.example_sentence && (
               <Text style={styles.todaySentence}>"{todaysWord.example_sentence}"</Text>
             )}
+            <TouchableOpacity
+              style={[styles.todaySaveBtn, todaysWordSaved && styles.todaySaveBtnSaved]}
+              onPress={async () => {
+                if (todaysWordSaved) return;
+                try {
+                  await wordwiseApi.saveWord(todaysWord.word, todaysWord.movie_id);
+                  setTodaysWordSaved(true);
+                  setSrsTotalSaved((n) => n + 1);
+                } catch {}
+              }}
+            >
+              <Text style={[styles.todaySaveBtnText, todaysWordSaved && styles.todaySaveBtnTextSaved]}>
+                {todaysWordSaved ? '★ Saved' : '☆ Save this word'}
+              </Text>
+            </TouchableOpacity>
             {srsTotalSaved > 0 && (
               <Text style={styles.todayNudge}>
                 You have {srsTotalSaved} saved words. Make sure you remember them → Plus.
@@ -1343,10 +1387,16 @@ const SettingsScreen = ({
   onBack,
   user,
   onUserUpdated,
+  onNavigateToFamilyPlan,
+  onNavigateToPrivacy,
+  onNavigateToTerms,
 }: {
   onBack: () => void;
   user: any;
   onUserUpdated: (user: any) => void;
+  onNavigateToFamilyPlan: () => void;
+  onNavigateToPrivacy: () => void;
+  onNavigateToTerms: () => void;
 }) => {
   const [username, setUsername] = useState(user?.username || '');
   const [nativeLanguage, setNativeLanguage] = useState(user?.native_language || 'en');
@@ -1360,6 +1410,43 @@ const SettingsScreen = ({
   const [showNativeLangPicker, setShowNativeLangPicker] = useState(false);
   const [showLearningLangPicker, setShowLearningLangPicker] = useState(false);
   const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
+  const [dailyWordNotif, setDailyWordNotif] = useState(true);
+  const [reviewNotif, setReviewNotif] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
+    AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
+  }, []);
+
+  const toggleDailyWord = async () => {
+    const next = !dailyWordNotif;
+    setDailyWordNotif(next);
+    await AsyncStorage.setItem('notif_daily_word', next ? 'on' : 'off');
+    if (next) {
+      scheduleDailyWordReminder();
+    } else {
+      const { cancelAllReminders: cancel } = require('../services/notifications');
+      // Just cancel this specific one — we'll re-schedule review if needed
+      try {
+        const Notif = require('expo-notifications');
+        await Notif.cancelScheduledNotificationAsync('daily-word');
+      } catch {}
+    }
+  };
+
+  const toggleReview = async () => {
+    const next = !reviewNotif;
+    setReviewNotif(next);
+    await AsyncStorage.setItem('notif_review', next ? 'on' : 'off');
+    if (next) {
+      scheduleReviewReminder();
+    } else {
+      try {
+        const Notif = require('expo-notifications');
+        await Notif.cancelScheduledNotificationAsync('review-reminder');
+      } catch {}
+    }
+  };
 
   const handleSave = async () => {
     if (!username.trim()) {
@@ -1579,6 +1666,61 @@ const SettingsScreen = ({
           ) : (
             <Text style={settingsStyles.saveButtonText}>Save Changes</Text>
           )}
+        </TouchableOpacity>
+
+        <View style={settingsStyles.divider} />
+
+        {/* Notifications */}
+        <Text style={settingsStyles.sectionTitle}>Notifications</Text>
+        <View style={settingsStyles.notifRow}>
+          <View style={settingsStyles.notifInfo}>
+            <Text style={settingsStyles.notifLabel}>Today's Word (9:00 AM)</Text>
+            <Text style={settingsStyles.notifDesc}>Daily word discovery from popular movies</Text>
+          </View>
+          <TouchableOpacity
+            style={[settingsStyles.notifToggle, dailyWordNotif && settingsStyles.notifToggleOn]}
+            onPress={toggleDailyWord}
+          >
+            <Text style={settingsStyles.notifToggleText}>{dailyWordNotif ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={settingsStyles.notifRow}>
+          <View style={settingsStyles.notifInfo}>
+            <Text style={settingsStyles.notifLabel}>Review Reminder (6:00 PM)</Text>
+            <Text style={settingsStyles.notifDesc}>Reminder to review your saved words</Text>
+          </View>
+          <TouchableOpacity
+            style={[settingsStyles.notifToggle, reviewNotif && settingsStyles.notifToggleOn]}
+            onPress={toggleReview}
+          >
+            <Text style={settingsStyles.notifToggleText}>{reviewNotif ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Subscription & Family */}
+        <Text style={settingsStyles.sectionTitle}>Subscription</Text>
+        <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToFamilyPlan}>
+          <Text style={settingsStyles.settingsLinkText}>Family Plan</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={settingsStyles.settingsLink} onPress={async () => {
+          const { restorePurchases } = require('../services/billing');
+          const result = await restorePurchases();
+          Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
+        }}>
+          <Text style={settingsStyles.settingsLinkText}>Restore Purchases</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+        </TouchableOpacity>
+
+        {/* Legal */}
+        <Text style={settingsStyles.sectionTitle}>Legal</Text>
+        <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToPrivacy}>
+          <Text style={settingsStyles.settingsLinkText}>Privacy Policy</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToTerms}>
+          <Text style={settingsStyles.settingsLinkText}>Terms of Service</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -1828,6 +1970,33 @@ const settingsStyles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  notifInfo: { flex: 1 },
+  notifLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+  notifDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  notifToggle: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#E0DDD8',
+    marginLeft: 12,
+  },
+  notifToggleOn: { backgroundColor: colors.primary },
+  notifToggleText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  settingsLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.paper,
+    borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: colors.border,
+  },
+  settingsLinkText: { fontSize: 15, color: colors.text },
+  settingsLinkArrow: { fontSize: 16, color: colors.textSecondary },
 });
 
 // Loading Screen
@@ -3033,6 +3202,26 @@ export default function App() {
     setCurrentScreen('notebook');
   };
 
+  const navigateToAchievements = () => {
+    setCurrentScreen('achievements');
+  };
+
+  const navigateToLeaderboard = () => {
+    setCurrentScreen('leaderboard');
+  };
+
+  const navigateToFamilyPlan = () => {
+    setCurrentScreen('familyPlan');
+  };
+
+  const navigateToPrivacy = () => {
+    setCurrentScreen('privacy');
+  };
+
+  const navigateToTerms = () => {
+    setCurrentScreen('terms');
+  };
+
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
     // everywhere. Normalize every field we care about so the merged user has
@@ -3089,7 +3278,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
       {isAuthenticated ? (
         currentScreen === 'settings' ? (
-          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} />
+          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} />
         ) : currentScreen === 'admin' ? (
           <AdminScreen onBack={navigateToHome} />
         ) : currentScreen === 'review' ? (
@@ -3100,12 +3289,22 @@ export default function App() {
           <StatsScreen onBack={navigateToHome} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (
           <NotebookScreen onBack={navigateToHome} />
+        ) : currentScreen === 'achievements' ? (
+          <AchievementsScreen onBack={navigateToHome} />
+        ) : currentScreen === 'leaderboard' ? (
+          <LeaderboardScreen onBack={navigateToHome} />
+        ) : currentScreen === 'familyPlan' ? (
+          <FamilyPlanScreen onBack={navigateToHome} userId={user!.id} />
+        ) : currentScreen === 'privacy' ? (
+          <PrivacyScreen onBack={navigateToHome} mode="privacy" />
+        ) : currentScreen === 'terms' ? (
+          <PrivacyScreen onBack={navigateToHome} mode="terms" />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -3165,7 +3364,18 @@ const styles = StyleSheet.create({
   todayWord: { fontSize: 28, fontWeight: '800', color: '#2D3142', marginBottom: 8 },
   todayDef: { fontSize: 14, color: '#5C6378', lineHeight: 20, marginBottom: 8 },
   todaySentence: { fontSize: 13, color: '#9AA0AE', fontStyle: 'italic', lineHeight: 18, marginBottom: 12 },
-  todayNudge: { fontSize: 12, color: '#7C5CBF', fontWeight: '500' },
+  todaySaveBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#7C5CBF',
+    alignItems: 'center',
+  },
+  todaySaveBtnSaved: { borderColor: '#4CAF9A', backgroundColor: '#F0FAF6' },
+  todaySaveBtnText: { fontSize: 14, fontWeight: '700', color: '#7C5CBF' },
+  todaySaveBtnTextSaved: { color: '#4CAF9A' },
+  todayNudge: { fontSize: 12, color: '#7C5CBF', fontWeight: '500', marginTop: 10 },
   adBanner: {
     height: 60,
     marginHorizontal: 16,

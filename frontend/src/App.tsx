@@ -14,6 +14,9 @@ import AllListsPage from './pages/AllListsPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminReportsPage from './pages/AdminReportsPage';
 import BookReaderPage from './pages/BookReaderPage';
+import PricingPage from './pages/PricingPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -49,6 +52,9 @@ function App() {
                       <Route path="/lists/:listName" element={<SavedWordsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route path="/admin/reports" element={<AdminReportsPage />} />
+                      <Route path="/pricing" element={<PricingPage />} />
+                      <Route path="/privacy" element={<PrivacyPage />} />
+                      <Route path="/terms" element={<TermsPage />} />
                     </Routes>
                   </Box>
                 </Box>
