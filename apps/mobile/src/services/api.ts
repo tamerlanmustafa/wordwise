@@ -268,6 +268,31 @@ export const wordwiseApi = {
     return res.json();
   },
 
+  getMoviesByCefr: async (level: string, limit: number = 50): Promise<{
+    level: string;
+    total: number;
+    movies: Array<{
+      movie_id: number;
+      tmdb_id: number | null;
+      title: string;
+      year: number | null;
+      poster_url: string | null;
+      description: string | null;
+      difficulty_score: number | null;
+      vote_average: number | null;
+      vote_count: number | null;
+    }>;
+  }> => {
+    const res = await fetch(
+      `${API_BASE_URL}/movies/by-cefr?level=${encodeURIComponent(level)}&limit=${limit}`
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /movies/by-cefr → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
   // Get movie difficulty
   getMovieDifficulty: async (movieId: number): Promise<{
     difficulty_level: string;

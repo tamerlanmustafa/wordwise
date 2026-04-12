@@ -472,13 +472,16 @@ const QUICK_FILTERS = [
 ];
 
 const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
-  { value: 'ELEMENTARY',   label: 'Elementary',   icon: '🟢' },
-  { value: 'INTERMEDIATE', label: 'Intermediate', icon: '🟡' },
-  { value: 'ADVANCED',     label: 'Advanced',     icon: '🔴' },
+  { value: 'A1', label: 'A1 Beginner',       icon: '🟢' },
+  { value: 'A2', label: 'A2 Elementary',      icon: '🟢' },
+  { value: 'B1', label: 'B1 Intermediate',    icon: '🟡' },
+  { value: 'B2', label: 'B2 Upper-Int.',      icon: '🟠' },
+  { value: 'C1', label: 'C1 Advanced',        icon: '🔴' },
+  { value: 'C2', label: 'C2 Proficiency',     icon: '🔴' },
 ];
 
 const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => {
-  const [selectedLevel, setSelectedLevel] = useState<string>('ELEMENTARY');
+  const [selectedLevel, setSelectedLevel] = useState<string>('A1');
   const [levelOpen, setLevelOpen] = useState(false);
   // Captured via onLayout so the menu can center under the chip regardless
   // of the selected label's width.
@@ -486,7 +489,7 @@ const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) =>
 
   const currentLevel = LEVEL_OPTIONS.find((o) => o.value === selectedLevel) ?? LEVEL_OPTIONS[0];
 
-  const MENU_WIDTH = 130;
+  const MENU_WIDTH = 165;
   const menuLeft = chipLayout
     ? Math.max(0, chipLayout.x + chipLayout.width / 2 - MENU_WIDTH / 2)
     : 0;
@@ -2685,14 +2688,15 @@ const SearchResultsScreen = ({
 
   // Routing prefixes:
   //  - `genre:<id>:<displayName>` → TMDB discover endpoint (legacy quick-start)
-  //  - `level:<LEVEL>:<displayName>` → our backend `/movies/by-level`, with
-  //    a per-row TMDB lookup to enrich poster_path/overview for rendering.
+  //  - `level:<LEVEL>:<displayName>` → our backend `/movies/by-cefr` (CEFR levels)
+  //    or `/movies/by-level` (old enum), with per-row TMDB enrichment.
   //  - anything else → TMDB title text search.
-  const levelMatch = query.match(/^level:([A-Z_]+):(.+)$/);
+  const levelMatch = query.match(/^level:([A-Z_\d]+):(.+)$/);
   const genreMatch = query.match(/^genre:([\d|]+):(.+)$/);
   const isLevel = !!levelMatch;
   const isGenre = !isLevel && !!genreMatch;
   const levelValue = levelMatch?.[1] ?? '';
+  const isCefrLevel = /^[ABC][12]$/.test(levelValue);
   const genreIds = genreMatch?.[1] ?? '';
   const displayTitle = isLevel
     ? `${levelMatch![2]} movies`
@@ -2703,9 +2707,10 @@ const SearchResultsScreen = ({
   const searchPage = async (pageNum: number) => {
     try {
       if (isLevel) {
-        // DB-backed: list once (no pagination — backend caps at limit).
         if (pageNum > 1) return { movies: [], totalPages: 1 };
-        const data = await wordwiseApi.getMoviesByLevel(levelValue, 100);
+        const data = isCefrLevel
+          ? await wordwiseApi.getMoviesByCefr(levelValue, 100)
+          : await wordwiseApi.getMoviesByLevel(levelValue, 100);
         // Enrich each row with TMDB metadata when tmdb_id is known. We don't
         // store poster_path locally, so without TMDB the cards would be blank.
         const enriched = await Promise.all(
@@ -2721,7 +2726,7 @@ const SearchResultsScreen = ({
               release_date: tmdb?.release_date ?? (m.year ? `${m.year}-01-01` : ''),
               overview: tmdb?.overview ?? (m.description ?? ''),
               genre_ids: tmdb?.genre_ids ?? [],
-              vote_average: tmdb?.vote_average ?? 0,
+              vote_average: tmdb?.vote_average ?? (m as any).vote_average ?? 0,
               original_language: tmdb?.original_language ?? 'en',
             };
           })
