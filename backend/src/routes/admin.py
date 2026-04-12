@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from prisma import Prisma
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 from src.database import get_db
 from src.middleware.auth import get_current_active_user, get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.difficulty_scorer import compute_difficulty
+from src.utils.subscription import entitlements_payload
 from pathlib import Path
 import logging
 
@@ -161,6 +165,117 @@ async def list_dead_jobs(
             for r in rows
         ]
     }
+
+class GrantPremiumBody(BaseModel):
+    # Accept either user id or email so admin UI can skip a lookup step.
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+    tier: str = "comped"  # comped | premium | trial
+    expires_in_days: Optional[int] = None  # None = never expires (comped default)
+
+
+def _serialize_sub_user(u) -> dict:
+    return {
+        "id": u.id,
+        "email": u.email,
+        "username": u.username,
+        "is_admin": bool(u.isAdmin),
+        "entitlements": entitlements_payload(u),
+    }
+
+
+@router.get("/users/search")
+async def search_users(
+    q: str,
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """Lightweight user search for the grant/revoke UI. Matches email or
+    username with a case-insensitive prefix. Caps at 20 results — this is
+    an admin typeahead, not an export tool."""
+    q = q.strip()
+    if not q:
+        return {"users": []}
+    rows = await db.user.find_many(
+        where={
+            "OR": [
+                {"email": {"contains": q, "mode": "insensitive"}},
+                {"username": {"contains": q, "mode": "insensitive"}},
+            ]
+        },
+        take=20,
+        order={"id": "desc"},
+    )
+    return {"users": [_serialize_sub_user(u) for u in rows]}
+
+
+@router.post("/users/grant-premium")
+async def grant_premium(
+    body: GrantPremiumBody,
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """Grant Plus to a user. `comped` is the default — no expiry, no billing.
+    `trial` requires `expires_in_days`. Audit log = application log for now
+    (see MONETIZATION_PLAN.md §6: no audit table at launch)."""
+    if body.tier not in ("comped", "premium", "trial"):
+        raise HTTPException(400, detail=f"invalid tier: {body.tier}")
+
+    target = None
+    if body.user_id is not None:
+        target = await db.user.find_unique(where={"id": body.user_id})
+    elif body.email:
+        target = await db.user.find_unique(where={"email": body.email})
+    if target is None:
+        raise HTTPException(404, detail="user not found")
+
+    expires_at = None
+    if body.tier == "trial":
+        days = body.expires_in_days or 7
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+    elif body.expires_in_days:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)
+
+    updated = await db.user.update(
+        where={"id": target.id},
+        data={
+            "subscriptionTier": body.tier,
+            "subscriptionExpiresAt": expires_at,
+            "adsEligible": False,
+        },
+    )
+    logger.info(
+        "[admin] grant_premium admin=%s target=%s tier=%s expires=%s",
+        admin_user.id,
+        target.id,
+        body.tier,
+        expires_at,
+    )
+    return _serialize_sub_user(updated)
+
+
+@router.post("/users/{user_id}/revoke-premium")
+async def revoke_premium(
+    user_id: int,
+    admin_user = Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """Revoke Plus. Drops the user back to free + ads_eligible=true.
+    Does NOT touch `isAdmin` — admins stay admins."""
+    target = await db.user.find_unique(where={"id": user_id})
+    if target is None:
+        raise HTTPException(404, detail="user not found")
+    updated = await db.user.update(
+        where={"id": user_id},
+        data={
+            "subscriptionTier": "free",
+            "subscriptionExpiresAt": None,
+            "adsEligible": True,
+        },
+    )
+    logger.info("[admin] revoke_premium admin=%s target=%s", admin_user.id, user_id)
+    return _serialize_sub_user(updated)
+
 
 _classifier = None
 

@@ -56,6 +56,19 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (tokens?.access && cachedUser) {
         const user = JSON.parse(cachedUser) as User;
         set({ user, status: 'authenticated' });
+
+        // Background-refresh /auth/me so entitlements (and any other
+        // server-side fields like is_admin) stay fresh after a cold start.
+        // Failure is non-fatal — we already have the cached user on screen.
+        import('../services/api')
+          .then(({ authApi }) => authApi.me())
+          .then((fresh) => {
+            if (fresh) {
+              set({ user: fresh });
+              AsyncStorage.setItem('user', JSON.stringify(fresh)).catch(() => {});
+            }
+          })
+          .catch((e) => console.warn('[AuthStore] /auth/me refresh failed:', e));
       } else {
         set({ status: 'unauthenticated' });
       }

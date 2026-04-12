@@ -23,6 +23,7 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
+import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { wordwiseApi, tmdbApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { ReportDialog } from '../components/ReportDialog';
@@ -853,6 +854,11 @@ const HomeScreen = ({
   onNavigateToSettings: () => void;
   onNavigateToAdmin: () => void;
 }) => {
+  // Admin preview toggle — show a sticky badge when an admin is previewing
+  // the free or premium experience so they never mistake the simulated
+  // state for a bug. See docs/MONETIZATION_PLAN.md §6.
+  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
+  const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
   const [activeTab] = useState<'movies' | 'books'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -958,6 +964,17 @@ const HomeScreen = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {showViewAsBadge && (
+        <TouchableOpacity
+          style={styles.viewAsBadge}
+          onPress={onNavigateToAdmin}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.viewAsBadgeText}>
+            Viewing as: {adminViewMode === 'free' ? 'Free user' : 'Premium user'} · tap to change
+          </Text>
+        </TouchableOpacity>
+      )}
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>WordWise</Text>
@@ -2770,6 +2787,9 @@ export default function App() {
 
   useEffect(() => {
     initialize();
+    // Hydrate the admin preview toggle from AsyncStorage so a refresh
+    // doesn't reset an admin's "viewing as free" selection.
+    useEntitlementsStore.getState().hydrate();
   }, [initialize]);
 
   // On first mount, try to restore the last chosen target language before
@@ -2912,6 +2932,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  viewAsBadge: {
+    backgroundColor: '#F4A261',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  viewAsBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   centered: {
     justifyContent: 'center',

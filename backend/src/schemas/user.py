@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 from prisma.enums import proficiencylevel
+from ..utils.subscription import entitlements_payload
 
 
 class UserCreate(BaseModel):
@@ -19,6 +20,16 @@ class UserLogin(BaseModel):
     password: str
 
 
+class Entitlements(BaseModel):
+    """Mobile/web clients read this off /auth/me to decide what to gate.
+    Authoritative source: src/utils/subscription.py."""
+    tier: str
+    is_premium: bool
+    is_admin: bool
+    ads_eligible: bool
+    subscription_expires_at: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -33,6 +44,7 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
     profile_picture_url: Optional[str] = None
     oauth_provider: Optional[str] = None
+    entitlements: Optional[Entitlements] = None
 
     class Config:
         from_attributes = True
@@ -57,7 +69,8 @@ class UserResponse(BaseModel):
                 'is_admin': getattr(obj, 'isAdmin', None),
                 'created_at': obj.createdAt,
                 'profile_picture_url': obj.profilePictureUrl,
-                'oauth_provider': obj.oauthProvider
+                'oauth_provider': obj.oauthProvider,
+                'entitlements': entitlements_payload(obj),
             }
             return super().model_validate(data)
         return super().model_validate(obj)

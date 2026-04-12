@@ -491,7 +491,72 @@ export const reportsApi = {
   },
 };
 
+// Auth API — just the pieces the stores need to refresh on cold-start.
+export const authApi = {
+  // Fetch the current user (including entitlements). Returns null on
+  // network/auth failure so callers can fall through to cached state.
+  me: async (): Promise<import('../types').User | null> => {
+    try {
+      const res = await authFetch(`${API_BASE_URL}/auth/me`);
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  },
+};
+
 export const adminApi = {
+  // Search users for the grant/revoke UI (email/username prefix match).
+  searchUsers: async (q: string): Promise<Array<{
+    id: number;
+    email: string;
+    username: string;
+    is_admin: boolean;
+    entitlements: import('../types').Entitlements;
+  }>> => {
+    const res = await authFetch(
+      `${API_BASE_URL}/admin/users/search?q=${encodeURIComponent(q)}`
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/users/search → ${res.status} ${body.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return data.users || [];
+  },
+
+  // Grant Plus (comped by default). Returns the updated user row.
+  grantPremium: async (body: {
+    user_id?: number;
+    email?: string;
+    tier?: 'comped' | 'premium' | 'trial';
+    expires_in_days?: number;
+  }) => {
+    const res = await authFetch(`${API_BASE_URL}/admin/users/grant-premium`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`grant-premium failed: ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Revoke Plus — drops user back to free + ads_eligible=true.
+  revokePremium: async (userId: number) => {
+    const res = await authFetch(
+      `${API_BASE_URL}/admin/users/${userId}/revoke-premium`,
+      { method: 'POST' }
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`revoke-premium failed: ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
   // Aggregate platform stats: movies/users/queue progress.
   stats: async (): Promise<AdminStats> => {
     const res = await authFetch(`${API_BASE_URL}/admin/stats`);

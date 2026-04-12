@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   RefreshControl,
   ScrollView,
@@ -23,6 +24,11 @@ import {
   type ReportStatus,
   type WordReport,
 } from '../services/api';
+import {
+  useEntitlementsStore,
+  type AdminViewMode,
+} from '../stores/entitlementsStore';
+import type { Entitlements } from '../types';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -117,6 +123,70 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   const [detailsStatus, setDetailsStatus] = useState<ReportStatus>('REVIEWED');
   const [detailsNotes, setDetailsNotes] = useState('');
   const [detailsSaving, setDetailsSaving] = useState(false);
+
+  // Admin tier preview toggle (see docs/MONETIZATION_PLAN.md §6).
+  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
+  const setAdminViewMode = useEntitlementsStore((s) => s.setAdminViewMode);
+
+  // Grant/revoke Plus UI state.
+  const [grantQuery, setGrantQuery] = useState('');
+  const [grantResults, setGrantResults] = useState<
+    Array<{ id: number; email: string; username: string; is_admin: boolean; entitlements: Entitlements }>
+  >([]);
+  const [grantSearching, setGrantSearching] = useState(false);
+  const [grantBusy, setGrantBusy] = useState<number | null>(null);
+
+  const searchUsers = useCallback(async (q: string) => {
+    setGrantQuery(q);
+    if (q.trim().length < 2) {
+      setGrantResults([]);
+      return;
+    }
+    setGrantSearching(true);
+    try {
+      const users = await adminApi.searchUsers(q.trim());
+      setGrantResults(users);
+    } catch (e: any) {
+      console.warn('[AdminScreen] user search failed:', e?.message);
+    } finally {
+      setGrantSearching(false);
+    }
+  }, []);
+
+  const handleGrant = useCallback(
+    async (userId: number, tier: 'comped' | 'trial') => {
+      setGrantBusy(userId);
+      try {
+        const updated = await adminApi.grantPremium({
+          user_id: userId,
+          tier,
+          expires_in_days: tier === 'trial' ? 7 : undefined,
+        });
+        setGrantResults((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, entitlements: updated.entitlements } : u))
+        );
+      } catch (e: any) {
+        Alert.alert('Grant failed', e?.message || 'Unknown error');
+      } finally {
+        setGrantBusy(null);
+      }
+    },
+    []
+  );
+
+  const handleRevoke = useCallback(async (userId: number) => {
+    setGrantBusy(userId);
+    try {
+      const updated = await adminApi.revokePremium(userId);
+      setGrantResults((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, entitlements: updated.entitlements } : u))
+      );
+    } catch (e: any) {
+      Alert.alert('Revoke failed', e?.message || 'Unknown error');
+    } finally {
+      setGrantBusy(null);
+    }
+  }, []);
 
   const fetchAll = useCallback(
     async (showSpinner = true) => {
@@ -443,6 +513,104 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
           />
         </View>
 
+        {/* Admin tier preview toggle — see docs/MONETIZATION_PLAN.md §6.
+            Lets admins simulate free/premium views for QA. Client-side
+            override only — does NOT change server-side subscription_tier. */}
+        <Text style={styles.sectionLabel}>View mode (QA preview)</Text>
+        <View style={styles.viewModeRow}>
+          {(['admin', 'premium', 'free'] as AdminViewMode[]).map((mode) => {
+            const active = adminViewMode === mode;
+            const label =
+              mode === 'admin' ? 'Admin' : mode === 'premium' ? 'Premium' : 'Free';
+            return (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.viewModeBtn, active && styles.viewModeBtnActive]}
+                onPress={() => setAdminViewMode(mode)}
+              >
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    active && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={styles.viewModeHint}>
+          {adminViewMode === 'admin'
+            ? 'Full admin access. Ads hidden, all Plus features unlocked.'
+            : adminViewMode === 'premium'
+              ? 'Simulating a premium user. Ads hidden, Plus unlocked, paywalls skipped.'
+              : 'Simulating a free user. Ads will show, paywalls will trigger. Admin tools still work.'}
+        </Text>
+
+        {/* Grant/Revoke Plus */}
+        <Text style={styles.sectionLabel}>Grant Plus</Text>
+        <TextInput
+          style={styles.grantInput}
+          placeholder="Search email or username…"
+          placeholderTextColor={COLORS.textTertiary}
+          value={grantQuery}
+          onChangeText={searchUsers}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {grantSearching && (
+          <Text style={styles.grantHint}>Searching…</Text>
+        )}
+        {grantResults.map((u) => {
+          const tier = u.entitlements.tier;
+          const isPlus = u.entitlements.is_premium && !u.is_admin;
+          return (
+            <View key={u.id} style={styles.grantRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.grantRowName}>
+                  {u.username} {u.is_admin ? '· admin' : ''}
+                </Text>
+                <Text style={styles.grantRowEmail} numberOfLines={1}>
+                  {u.email} · tier: {tier}
+                </Text>
+              </View>
+              {u.is_admin ? (
+                <Text style={styles.grantRowLocked}>admin</Text>
+              ) : isPlus ? (
+                <TouchableOpacity
+                  style={[styles.grantBtn, styles.grantBtnRevoke]}
+                  disabled={grantBusy === u.id}
+                  onPress={() => handleRevoke(u.id)}
+                >
+                  <Text style={styles.grantBtnText}>
+                    {grantBusy === u.id ? '…' : 'Revoke'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.grantBtn, styles.grantBtnTrial]}
+                    disabled={grantBusy === u.id}
+                    onPress={() => handleGrant(u.id, 'trial')}
+                  >
+                    <Text style={styles.grantBtnText}>7d trial</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.grantBtn, styles.grantBtnGrant]}
+                    disabled={grantBusy === u.id}
+                    onPress={() => handleGrant(u.id, 'comped')}
+                  >
+                    <Text style={styles.grantBtnText}>
+                      {grantBusy === u.id ? '…' : 'Comp'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          );
+        })}
+
         {/* By difficulty level */}
         {adminStats?.movies_by_level && Object.keys(adminStats.movies_by_level).length > 0 && (
           <>
@@ -693,6 +861,93 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  viewModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  viewModeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  viewModeBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  viewModeBtnText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  viewModeBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  viewModeHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  grantInput: {
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  grantHint: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginBottom: 8,
+  },
+  grantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.paper,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 6,
+    gap: 6,
+  },
+  grantRowName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  grantRowEmail: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  grantRowLocked: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    fontStyle: 'italic',
+  },
+  grantBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  grantBtnGrant: { backgroundColor: COLORS.success },
+  grantBtnTrial: { backgroundColor: COLORS.info },
+  grantBtnRevoke: { backgroundColor: COLORS.error },
+  grantBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   header: {
     flexDirection: 'row',

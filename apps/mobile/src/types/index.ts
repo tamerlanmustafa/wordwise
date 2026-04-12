@@ -1,3 +1,15 @@
+// Backend-authoritative entitlements (see backend/src/utils/subscription.py).
+// The mobile app NEVER computes is_premium on its own — it reads this object.
+// One truth, one gate. If you're tempted to check `user.subscriptionTier`
+// directly, use the entitlements helper in stores/entitlementsStore.ts instead.
+export interface Entitlements {
+  tier: 'free' | 'trial' | 'premium' | 'comped';
+  is_premium: boolean;
+  is_admin: boolean;
+  ads_eligible: boolean;
+  subscription_expires_at: string | null;
+}
+
 // User types
 export interface User {
   id: number;
@@ -9,6 +21,7 @@ export interface User {
   proficiency_level: string | null;
   default_tab: 'movies' | 'books';
   is_admin: boolean;
+  entitlements?: Entitlements | null;
 }
 
 // Movie types
