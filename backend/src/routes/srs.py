@@ -71,6 +71,16 @@ class SessionStartResponse(BaseModel):
     previews_remaining: int
 
 
+class TodaysWordResponse(BaseModel):
+    word: str
+    definition: Optional[str]
+    example_sentence: Optional[str]
+    movie_title: str
+    movie_poster_url: Optional[str]
+    cefr_level: Optional[str]
+    movie_id: int
+
+
 class ReviewBody(BaseModel):
     user_word_id: int
     correct: bool  # True = "Got it", False = "Forgot"
@@ -89,6 +99,11 @@ class StatsResponse(BaseModel):
     by_box: dict[int, int]
     is_premium: bool
     previews_remaining: int
+    current_streak: int
+    longest_streak: int
+    total_reviews: int
+    total_correct: int
+    retention_pct: int
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -118,6 +133,10 @@ async def srs_stats(
     used = getattr(current_user, "srsFreePreviewsUsed", 0) or 0
     remaining = max(0, FREE_PREVIEW_SESSIONS - used) if not premium else FREE_PREVIEW_SESSIONS
 
+    total_reviews = getattr(current_user, "srsTotalReviews", 0) or 0
+    total_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
+    retention_pct = round((total_correct / total_reviews) * 100) if total_reviews > 0 else 0
+
     return StatsResponse(
         total_saved=total_saved,
         due_now=due_now,
@@ -125,6 +144,11 @@ async def srs_stats(
         by_box=by_box,
         is_premium=premium,
         previews_remaining=remaining,
+        current_streak=getattr(current_user, "srsCurrentStreak", 0) or 0,
+        longest_streak=getattr(current_user, "srsLongestStreak", 0) or 0,
+        total_reviews=total_reviews,
+        total_correct=total_correct,
+        retention_pct=retention_pct,
     )
 
 
@@ -221,6 +245,7 @@ async def record_review(
 
     next_due = _next_due(new_box)
     now = datetime.now(timezone.utc)
+    today = now.date()
     await db.userword.update(
         where={"id": word_row.id},
         data={
@@ -230,8 +255,88 @@ async def record_review(
         },
     )
 
+    # Update aggregate stats on the user row.
+    prev_total = getattr(current_user, "srsTotalReviews", 0) or 0
+    prev_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
+    prev_streak = getattr(current_user, "srsCurrentStreak", 0) or 0
+    prev_longest = getattr(current_user, "srsLongestStreak", 0) or 0
+    last_date = getattr(current_user, "srsLastSessionDate", None)
+
+    new_streak = prev_streak
+    if last_date is None or (today - last_date).days >= 2:
+        new_streak = 1
+    elif (today - last_date).days == 1:
+        new_streak = prev_streak + 1
+    # same day → streak unchanged
+
+    new_longest = max(prev_longest, new_streak)
+
+    await db.user.update(
+        where={"id": current_user.id},
+        data={
+            "srsTotalReviews": prev_total + 1,
+            "srsTotalCorrect": prev_correct + (1 if body.correct else 0),
+            "srsCurrentStreak": new_streak,
+            "srsLongestStreak": new_longest,
+            "srsLastSessionDate": today,
+        },
+    )
+
     return ReviewResponse(
         user_word_id=word_row.id,
         new_box=new_box,
         next_due_at=next_due,
+    )
+
+
+@router.get("/today", response_model=Optional[TodaysWordResponse])
+async def todays_word(
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """
+    One discovery word per day — NOT from the user's saved deck.
+    Deterministic per user+date so repeated calls return the same word.
+    See docs/MONETIZATION_PLAN.md §8.
+    """
+    import hashlib
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    seed = int(hashlib.md5(f"{current_user.id}:{today_str}".encode()).hexdigest()[:8], 16)
+
+    saved_words = await db.userword.find_many(
+        where={"userId": current_user.id},
+        distinct=["word"],
+    )
+    saved_set = {uw.word.lower() for uw in saved_words}
+
+    candidates = await db.query_raw(
+        '''
+        SELECT w.word, w.definition, w.example_sentence,
+               m.id AS movie_id, m.title AS movie_title, m.poster_url
+        FROM words w
+        JOIN movies m ON w.movie_id = m.id
+        WHERE m.tmdb_vote_count >= 500
+          AND w.definition IS NOT NULL
+          AND w.word ~ '^[a-zA-Z]+$'
+          AND length(w.word) >= 4
+        ORDER BY m.tmdb_popularity DESC NULLS LAST
+        LIMIT 500
+        '''
+    )
+
+    filtered = [c for c in candidates if c["word"].lower() not in saved_set]
+    if not filtered:
+        return None
+
+    pick = filtered[seed % len(filtered)]
+
+    return TodaysWordResponse(
+        word=pick["word"],
+        definition=pick.get("definition"),
+        example_sentence=pick.get("example_sentence"),
+        movie_title=pick["movie_title"],
+        movie_poster_url=pick.get("poster_url"),
+        cefr_level=None,
+        movie_id=pick["movie_id"],
     )

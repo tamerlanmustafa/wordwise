@@ -24,6 +24,11 @@ model User {
   subscriptionExpiresAt DateTime?              @map("subscription_expires_at") @db.Timestamptz(6)
   adsEligible        Boolean?                  @default(true) @map("ads_eligible")
   srsFreePreviewsUsed Int?                     @default(0) @map("srs_free_previews_used")
+  srsCurrentStreak    Int?                     @default(0) @map("srs_current_streak")
+  srsLongestStreak    Int?                     @default(0) @map("srs_longest_streak")
+  srsLastSessionDate  DateTime?                @map("srs_last_session_date") @db.Date
+  srsTotalReviews     Int?                     @default(0) @map("srs_total_reviews")
+  srsTotalCorrect     Int?                     @default(0) @map("srs_total_correct")
   createdAt          DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   oauthProvider      oauthprovider             @map("oauth_provider")

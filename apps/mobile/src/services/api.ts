@@ -508,6 +508,16 @@ export interface SrsSessionStart {
   previews_remaining: number;
 }
 
+export interface TodaysWord {
+  word: string;
+  definition: string | null;
+  example_sentence: string | null;
+  movie_title: string;
+  movie_poster_url: string | null;
+  cefr_level: string | null;
+  movie_id: number;
+}
+
 export interface SrsStats {
   total_saved: number;
   due_now: number;
@@ -515,6 +525,11 @@ export interface SrsStats {
   by_box: Record<string, number>;
   is_premium: boolean;
   previews_remaining: number;
+  current_streak: number;
+  longest_streak: number;
+  total_reviews: number;
+  total_correct: number;
+  retention_pct: number;
 }
 
 // Thrown when /srs/session/start returns 402 (preview budget exhausted).
@@ -566,6 +581,13 @@ export const srsApi = {
       const text = await res.text().catch(() => '');
       throw new Error(`POST /srs/review → ${res.status} ${text.slice(0, 120)}`);
     }
+  },
+
+  todaysWord: async (): Promise<TodaysWord | null> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/today`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body || null;
   },
 };
 

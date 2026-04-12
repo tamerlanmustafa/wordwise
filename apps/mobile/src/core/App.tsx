@@ -24,12 +24,13 @@ import {
 } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore, useShowAds } from '../stores/entitlementsStore';
-import { wordwiseApi, tmdbApi, srsApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo } from '../services/api';
+import { wordwiseApi, tmdbApi, srsApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo, type TodaysWord } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { ReportDialog } from '../components/ReportDialog';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
+import { StatsScreen } from '../components/StatsScreen';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -40,7 +41,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats';
 interface MovieData {
   id: number;
   title: string;
@@ -847,6 +848,7 @@ const HomeScreen = ({
   onNavigateToSettings,
   onNavigateToAdmin,
   onNavigateToReview,
+  onNavigateToStats,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -857,6 +859,7 @@ const HomeScreen = ({
   onNavigateToSettings: () => void;
   onNavigateToAdmin: () => void;
   onNavigateToReview: () => void;
+  onNavigateToStats: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
@@ -877,12 +880,14 @@ const HomeScreen = ({
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
+  const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
 
   useEffect(() => {
     srsApi.stats().then((s) => {
       setSrsDueCount(s.due_now);
       setSrsTotalSaved(s.total_saved);
     }).catch(() => {});
+    srsApi.todaysWord().then(setTodaysWord).catch(() => {});
   }, []);
 
   // Sample popular books data
@@ -1180,25 +1185,52 @@ const HomeScreen = ({
 
         {/* SRS Review CTA */}
         {srsTotalSaved > 0 && (
-          <TouchableOpacity
-            style={styles.reviewCta}
-            onPress={onNavigateToReview}
-            activeOpacity={0.8}
-          >
-            <View style={styles.reviewCtaLeft}>
-              <Text style={styles.reviewCtaTitle}>
-                {srsDueCount && srsDueCount > 0
-                  ? `Review your words`
-                  : 'All caught up!'}
-              </Text>
-              <Text style={styles.reviewCtaSubtitle}>
-                {srsDueCount && srsDueCount > 0
-                  ? `${srsDueCount} word${srsDueCount === 1 ? '' : 's'} due for review`
-                  : `${srsTotalSaved} words saved · next review soon`}
-              </Text>
+          <View style={styles.reviewCtaWrapper}>
+            <TouchableOpacity
+              style={styles.reviewCta}
+              onPress={onNavigateToReview}
+              activeOpacity={0.8}
+            >
+              <View style={styles.reviewCtaLeft}>
+                <Text style={styles.reviewCtaTitle}>
+                  {srsDueCount && srsDueCount > 0
+                    ? `Review your words`
+                    : 'All caught up!'}
+                </Text>
+                <Text style={styles.reviewCtaSubtitle}>
+                  {srsDueCount && srsDueCount > 0
+                    ? `${srsDueCount} word${srsDueCount === 1 ? '' : 's'} due for review`
+                    : `${srsTotalSaved} words saved · next review soon`}
+                </Text>
+              </View>
+              <Text style={styles.reviewCtaArrow}>→</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onNavigateToStats} hitSlop={8}>
+              <Text style={styles.statsLink}>View my progress</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Today's Word — discovery, not review (see §8) */}
+        {todaysWord && (
+          <View style={styles.todayCard}>
+            <View style={styles.todayHeader}>
+              <Text style={styles.todayLabel}>Today's Word</Text>
+              <Text style={styles.todayMovie}>from {todaysWord.movie_title}</Text>
             </View>
-            <Text style={styles.reviewCtaArrow}>→</Text>
-          </TouchableOpacity>
+            <Text style={styles.todayWord}>{todaysWord.word}</Text>
+            {todaysWord.definition && (
+              <Text style={styles.todayDef}>{todaysWord.definition}</Text>
+            )}
+            {todaysWord.example_sentence && (
+              <Text style={styles.todaySentence}>"{todaysWord.example_sentence}"</Text>
+            )}
+            {srsTotalSaved > 0 && (
+              <Text style={styles.todayNudge}>
+                You have {srsTotalSaved} saved words. Make sure you remember them → Plus.
+              </Text>
+            )}
+          </View>
         )}
 
         {/* Trending Now */}
@@ -2910,6 +2942,10 @@ export default function App() {
     setCurrentScreen('paywall');
   };
 
+  const navigateToStats = () => {
+    setCurrentScreen('stats');
+  };
+
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
     // everywhere. Normalize every field we care about so the merged user has
@@ -2973,12 +3009,14 @@ export default function App() {
           <ReviewScreen onBack={navigateToHome} onPaywall={navigateToPaywall} />
         ) : currentScreen === 'paywall' ? (
           <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
+        ) : currentScreen === 'stats' ? (
+          <StatsScreen onBack={navigateToHome} onStartReview={navigateToReview} />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -3007,8 +3045,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#7C5CBF',
-    marginHorizontal: 16,
-    marginTop: 16,
     borderRadius: 14,
     padding: 16,
     shadowColor: '#7C5CBF',
@@ -3020,7 +3056,25 @@ const styles = StyleSheet.create({
   reviewCtaLeft: { flex: 1 },
   reviewCtaTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   reviewCtaSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  reviewCtaWrapper: { marginHorizontal: 16, marginTop: 16 },
   reviewCtaArrow: { fontSize: 22, color: '#FFFFFF', fontWeight: '700', marginLeft: 8 },
+  statsLink: { fontSize: 13, color: '#7C5CBF', fontWeight: '600', textAlign: 'center', marginTop: 10 },
+  todayCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E8E8EC',
+  },
+  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  todayLabel: { fontSize: 12, fontWeight: '700', color: '#7C5CBF', textTransform: 'uppercase', letterSpacing: 0.5 },
+  todayMovie: { fontSize: 12, color: '#9AA0AE' },
+  todayWord: { fontSize: 28, fontWeight: '800', color: '#2D3142', marginBottom: 8 },
+  todayDef: { fontSize: 14, color: '#5C6378', lineHeight: 20, marginBottom: 8 },
+  todaySentence: { fontSize: 13, color: '#9AA0AE', fontStyle: 'italic', lineHeight: 18, marginBottom: 12 },
+  todayNudge: { fontSize: 12, color: '#7C5CBF', fontWeight: '500' },
   adBanner: {
     height: 60,
     marginHorizontal: 16,
