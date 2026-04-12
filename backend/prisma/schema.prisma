@@ -23,6 +23,7 @@ model User {
   subscriptionTier   subscriptiontier?         @default(free) @map("subscription_tier")
   subscriptionExpiresAt DateTime?              @map("subscription_expires_at") @db.Timestamptz(6)
   adsEligible        Boolean?                  @default(true) @map("ads_eligible")
+  srsFreePreviewsUsed Int?                     @default(0) @map("srs_free_previews_used")
   createdAt          DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   oauthProvider      oauthprovider             @map("oauth_provider")
@@ -287,12 +288,18 @@ model UserWord {
   movieId   Int?     @map("movie_id")
   isLearned Boolean  @default(false) @map("is_learned")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Leitner SRS state. Box 1 = new/forgot, box 5 = graduated.
+  // Intervals: 1d, 3d, 7d, 14d, 30d. See src/routes/srs.py.
+  srsBox            Int       @default(1) @map("srs_box")
+  srsDueAt          DateTime  @default(now()) @map("srs_due_at") @db.Timestamptz(6)
+  srsLastReviewedAt DateTime? @map("srs_last_reviewed_at") @db.Timestamptz(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
 
   @@unique([userId, word, movieId], map: "unique_user_word_movie")
   @@index([userId], map: "ix_user_words_user_id")
   @@index([userId, isLearned], map: "ix_user_words_user_learned")
+  @@index([userId, srsDueAt], map: "ix_user_words_user_due")
   @@map("user_words")
 }
 

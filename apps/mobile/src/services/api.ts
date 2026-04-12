@@ -491,6 +491,84 @@ export const reportsApi = {
   },
 };
 
+// SRS review types — mirrors backend/src/routes/srs.py.
+export interface SrsReviewCard {
+  user_word_id: number;
+  word: string;
+  movie_id: number | null;
+  srs_box: number;
+  srs_due_at: string;
+}
+
+export interface SrsSessionStart {
+  cards: SrsReviewCard[];
+  total_due: number;
+  session_size: number;
+  is_preview: boolean;
+  previews_remaining: number;
+}
+
+export interface SrsStats {
+  total_saved: number;
+  due_now: number;
+  due_today: number;
+  by_box: Record<string, number>;
+  is_premium: boolean;
+  previews_remaining: number;
+}
+
+// Thrown when /srs/session/start returns 402 (preview budget exhausted).
+// The session screen catches this and pushes the paywall screen instead.
+export class SrsPaywallError extends Error {
+  previews_used: number;
+  previews_limit: number;
+  constructor(message: string, previews_used: number, previews_limit: number) {
+    super(message);
+    this.name = 'SrsPaywallError';
+    this.previews_used = previews_used;
+    this.previews_limit = previews_limit;
+  }
+}
+
+export const srsApi = {
+  stats: async (): Promise<SrsStats> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/stats`);
+    if (!res.ok) throw new Error(`GET /srs/stats → ${res.status}`);
+    return res.json();
+  },
+
+  startSession: async (): Promise<SrsSessionStart> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/session/start`, {
+      method: 'POST',
+    });
+    if (res.status === 402) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body?.detail || {};
+      throw new SrsPaywallError(
+        detail.message || 'Free review sessions used up',
+        detail.previews_used ?? 0,
+        detail.previews_limit ?? 0
+      );
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`POST /srs/session/start → ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  review: async (userWordId: number, correct: boolean): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/review`, {
+      method: 'POST',
+      body: JSON.stringify({ user_word_id: userWordId, correct }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`POST /srs/review → ${res.status} ${text.slice(0, 120)}`);
+    }
+  },
+};
+
 // Auth API — just the pieces the stores need to refresh on cold-start.
 export const authApi = {
   // Fetch the current user (including entitlements). Returns null on
