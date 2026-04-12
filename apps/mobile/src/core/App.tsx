@@ -31,6 +31,9 @@ import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
 import { StatsScreen } from '../components/StatsScreen';
+import { NotebookScreen } from '../components/NotebookScreen';
+import { offlineCache } from '../services/offlineCache';
+import { registerForPushNotifications, scheduleDailyWordReminder, scheduleReviewReminder } from '../services/notifications';
 
 // Configure Google Sign-In
 console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
@@ -41,7 +44,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook';
 interface MovieData {
   id: number;
   title: string;
@@ -849,6 +852,7 @@ const HomeScreen = ({
   onNavigateToAdmin,
   onNavigateToReview,
   onNavigateToStats,
+  onNavigateToNotebook,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -860,6 +864,7 @@ const HomeScreen = ({
   onNavigateToAdmin: () => void;
   onNavigateToReview: () => void;
   onNavigateToStats: () => void;
+  onNavigateToNotebook: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
@@ -1205,9 +1210,15 @@ const HomeScreen = ({
               </View>
               <Text style={styles.reviewCtaArrow}>→</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onNavigateToStats} hitSlop={8}>
-              <Text style={styles.statsLink}>View my progress</Text>
-            </TouchableOpacity>
+            <View style={styles.ctaLinks}>
+              <TouchableOpacity onPress={onNavigateToNotebook} hitSlop={8}>
+                <Text style={styles.statsLink}>My Words</Text>
+              </TouchableOpacity>
+              <Text style={styles.ctaLinkDot}>·</Text>
+              <TouchableOpacity onPress={onNavigateToStats} hitSlop={8}>
+                <Text style={styles.statsLink}>My Progress</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -2595,6 +2606,9 @@ const MovieDetailScreen = ({
       }
       setVocabulary(vocabResult);
 
+      // Cache for offline access
+      offlineCache.saveVocabulary(scriptResult.movie_id, movie.title, vocabResult);
+
       // Fetch saved words if authenticated
       if (isAuthenticated) {
         try {
@@ -2611,7 +2625,19 @@ const MovieDetailScreen = ({
       setActiveLevel(maxLevel[0]);
     } catch (err: any) {
       console.error('Failed to load vocabulary:', err);
-      setError(err.message || 'Failed to load vocabulary');
+      // Try offline cache before showing error
+      const cached = await offlineCache.getVocabulary(movie.id);
+      if (cached) {
+        setMovieId(movie.id);
+        setVocabulary(cached);
+        const levels = Object.entries(cached.level_distribution);
+        if (levels.length > 0) {
+          const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
+          setActiveLevel(maxLevel[0]);
+        }
+      } else {
+        setError(err.message || 'Failed to load vocabulary');
+      }
     } finally {
       setLoading(false);
     }
@@ -2917,6 +2943,12 @@ export default function App() {
     // Hydrate the admin preview toggle from AsyncStorage so a refresh
     // doesn't reset an admin's "viewing as free" selection.
     useEntitlementsStore.getState().hydrate();
+    // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
+    // registerForPushNotifications is a no-op on simulator.
+    registerForPushNotifications().then(() => {
+      scheduleDailyWordReminder();
+      scheduleReviewReminder();
+    }).catch(() => {});
   }, [initialize]);
 
   // On first mount, try to restore the last chosen target language before
@@ -2997,6 +3029,10 @@ export default function App() {
     setCurrentScreen('stats');
   };
 
+  const navigateToNotebook = () => {
+    setCurrentScreen('notebook');
+  };
+
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
     // everywhere. Normalize every field we care about so the merged user has
@@ -3062,12 +3098,14 @@ export default function App() {
           <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
         ) : currentScreen === 'stats' ? (
           <StatsScreen onBack={navigateToHome} onStartReview={navigateToReview} />
+        ) : currentScreen === 'notebook' ? (
+          <NotebookScreen onBack={navigateToHome} />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -3109,7 +3147,9 @@ const styles = StyleSheet.create({
   reviewCtaSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   reviewCtaWrapper: { marginHorizontal: 16, marginTop: 16 },
   reviewCtaArrow: { fontSize: 22, color: '#FFFFFF', fontWeight: '700', marginLeft: 8 },
-  statsLink: { fontSize: 13, color: '#7C5CBF', fontWeight: '600', textAlign: 'center', marginTop: 10 },
+  ctaLinks: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10, gap: 8 },
+  ctaLinkDot: { fontSize: 13, color: '#9AA0AE' },
+  statsLink: { fontSize: 13, color: '#7C5CBF', fontWeight: '600' },
   todayCard: {
     marginHorizontal: 16,
     marginTop: 16,

@@ -314,7 +314,7 @@ export const wordwiseApi = {
   },
 
   // Get all saved words for the user
-  getSavedWords: async (): Promise<Array<{ id: number; word: string; movie_id: number | null; is_learned: boolean }>> => {
+  getSavedWords: async (): Promise<SavedWordEntry[]> => {
     const res = await authFetch(`${API_BASE_URL}/user/words/`);
     if (!res.ok) throw new Error('Failed to get saved words');
     return res.json();
@@ -506,6 +506,16 @@ export interface SrsSessionStart {
   session_size: number;
   is_preview: boolean;
   previews_remaining: number;
+}
+
+export interface SavedWordEntry {
+  id: number;
+  word: string;
+  movie_id: number | null;
+  is_learned: boolean;
+  created_at: string;
+  saved_in_count: number;
+  saved_in_movies: Array<{ title: string; created_at: string; movie_id: number }>;
 }
 
 export interface TodaysWord {
