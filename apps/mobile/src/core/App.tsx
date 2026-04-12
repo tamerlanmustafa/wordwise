@@ -49,7 +49,7 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms' | 'levelMovies';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
 interface MovieData {
   id: number;
   title: string;
@@ -645,6 +645,16 @@ const formatVoteCount = (count: number): string => {
   return `${count}`;
 };
 
+const scoreToCefr = (score: number | null | undefined): string | null => {
+  if (score == null) return null;
+  if (score <= 24) return 'A1';
+  if (score <= 34) return 'A2';
+  if (score <= 44) return 'B1';
+  if (score <= 54) return 'B2';
+  if (score <= 69) return 'C1';
+  return 'C2';
+};
+
 const tmdbPosterCache: Record<number, string | null> = {};
 
 const TmdbPoster = ({ tmdbId, style }: { tmdbId: number; style: any }) => {
@@ -689,33 +699,46 @@ const RankedMovieList = ({
   movies: any[];
   onMoviePress: (movie: any) => void;
 }) => {
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const OVERVIEW_LIMIT = 100;
+
   if (movies.length === 0) return (
     <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
       No classified movies found for this level yet.
     </Text>
   );
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <View>
-      {movies.slice(0, 10).map((movie, i) => {
+      {movies.slice(0, 10).map((movie) => {
+        const movieId = movie.id || movie.movie_id;
         const posterUri = movie.poster_path
           ? `https://image.tmdb.org/t/p/w185${movie.poster_path}`
-          : movie.poster_url
-            ? movie.poster_url
-            : movie.tmdb_id
-              ? `https://image.tmdb.org/t/p/w185/${movie.tmdb_id}.jpg`
-              : undefined;
-        const tmdbPoster = movie.tmdb_id && !movie.poster_path && !movie.poster_url;
+          : movie.poster_url || undefined;
+        const overview = movie.overview || movie.description || '';
+        const isLong = overview.length > OVERVIEW_LIMIT;
+        const expanded = expandedIds.has(movieId);
+        const displayText = isLong && !expanded
+          ? overview.slice(0, OVERVIEW_LIMIT).trimEnd() + '…'
+          : overview;
+
         return (
           <TouchableOpacity
-            key={movie.id || movie.movie_id}
+            key={movieId}
             style={rankedStyles.row}
             onPress={() => onMoviePress(movie)}
             activeOpacity={0.7}
           >
-            <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
-              {i + 1}
-            </Text>
-            {(posterUri && !tmdbPoster) ? (
+            {posterUri ? (
               <Image source={{ uri: posterUri }} style={rankedStyles.poster} />
             ) : movie.tmdb_id ? (
               <TmdbPoster tmdbId={movie.tmdb_id} style={rankedStyles.poster} />
@@ -725,19 +748,33 @@ const RankedMovieList = ({
               </View>
             )}
             <View style={rankedStyles.info}>
-              <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
-              <Text style={rankedStyles.meta}>
-                {movie.release_date?.slice(0, 4) || movie.year || ''}
-              </Text>
-            </View>
-            {(movie.vote_average > 0 || movie.vote_average > 0) && (
-              <View style={rankedStyles.ratingBox}>
-                <Text style={rankedStyles.rating}>★ {Number(movie.vote_average || 0).toFixed(1)}</Text>
-                {movie.vote_count > 0 && (
-                  <Text style={rankedStyles.voteCount}>{formatVoteCount(movie.vote_count)}</Text>
+              <View>
+                <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
+                {(movie.vote_average > 0 || movie.difficulty_score != null) && (
+                  <Text style={rankedStyles.ratingInline}>
+                    {movie.vote_average > 0 ? `★ ${Number(movie.vote_average).toFixed(1)}` : ''}
+                    {movie.vote_count > 0 ? `  ·  ${formatVoteCount(movie.vote_count)} votes` : ''}
+                    {movie.difficulty_score != null && (
+                      <Text>  ·  <Text style={{ color: cefrColors[scoreToCefr(movie.difficulty_score)!] || colors.textSecondary }}>{scoreToCefr(movie.difficulty_score)} ({movie.difficulty_score}%)</Text></Text>
+                    )}
+                  </Text>
                 )}
               </View>
-            )}
+              {overview.length > 0 && (
+                <View>
+                  <Text style={rankedStyles.overview}>{displayText}</Text>
+                  {isLong && (
+                    <TouchableOpacity
+                      onPress={(e) => { e.stopPropagation(); toggleExpand(movieId); }}
+                      hitSlop={8}
+                      style={rankedStyles.expandBtn}
+                    >
+                      <Text style={rankedStyles.expandArrow}>{expanded ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         );
       })}
@@ -748,7 +785,7 @@ const RankedMovieList = ({
 const rankedStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -769,132 +806,38 @@ const rankedStyles = StyleSheet.create({
     backgroundColor: colors.border,
     marginRight: 14,
   },
-  info: { flex: 1 },
+  info: {
+    flex: 1,
+    minHeight: 90,
+    justifyContent: 'space-between',
+  },
   title: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
   },
-  meta: {
+  ratingInline: {
+    fontSize: 12,
+    color: '#F5A623',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  overview: {
     fontSize: 12,
     color: colors.textSecondary,
+    lineHeight: 17,
+    marginTop: 6,
   },
-  ratingBox: {
-    alignItems: 'flex-end',
-    flexShrink: 0,
-  },
-  rating: {
-    fontSize: 13,
-    color: '#F5A623',
-    fontWeight: '700',
-  },
-  voteCount: {
-    fontSize: 11,
-    color: colors.textSecondary,
+  expandBtn: {
+    alignSelf: 'flex-start',
     marginTop: 2,
+    paddingVertical: 2,
+  },
+  expandArrow: {
+    fontSize: 10,
+    color: colors.primary,
   },
 });
-
-// ── Level Movies: full-page list for a CEFR level ──────────────────────────
-const LevelMoviesScreen = ({
-  level,
-  onBack,
-  onMoviePress,
-}: {
-  level: string;
-  onBack: () => void;
-  onMoviePress: (movie: any) => void;
-}) => {
-  const [movies, setMovies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=100`);
-        if (res.ok) {
-          const data = await res.json();
-          setMovies((data.movies || []).map((m: any) => ({ ...m, id: m.tmdb_id || m.movie_id })));
-        }
-      } catch {}
-      setLoading(false);
-    })();
-  }, [level]);
-
-  const handlePress = (movie: any) => {
-    onMoviePress({
-      id: movie.id || movie.tmdb_id || movie.movie_id,
-      title: movie.title,
-      poster_path: movie.poster_path,
-      release_date: movie.year ? `${movie.year}-01-01` : undefined,
-      overview: movie.description,
-      original_language: 'en',
-    });
-  };
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={{ fontSize: 24, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, marginLeft: 12 }}>
-          Movies for {level}
-        </Text>
-        <Text style={{ fontSize: 13, color: colors.textSecondary, marginLeft: 8 }}>
-          ({movies.length})
-        </Text>
-      </View>
-      {loading ? (
-        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-      ) : movies.length === 0 ? (
-        <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 14, paddingVertical: 40 }}>
-          No classified movies found for {level} yet.
-        </Text>
-      ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
-          {movies.map((movie, i) => {
-            const hasPoster = movie.poster_path || movie.poster_url;
-            return (
-              <TouchableOpacity
-                key={movie.id || movie.movie_id}
-                style={rankedStyles.row}
-                onPress={() => handlePress(movie)}
-                activeOpacity={0.7}
-              >
-                <Text style={[rankedStyles.rank, i < 3 && rankedStyles.rankTop]}>
-                  {i + 1}
-                </Text>
-                {hasPoster ? (
-                  <Image source={{ uri: movie.poster_path ? `https://image.tmdb.org/t/p/w185${movie.poster_path}` : movie.poster_url }} style={rankedStyles.poster} />
-                ) : movie.tmdb_id ? (
-                  <TmdbPoster tmdbId={movie.tmdb_id} style={rankedStyles.poster} />
-                ) : (
-                  <View style={[rankedStyles.poster, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontSize: 24 }}>🎬</Text>
-                  </View>
-                )}
-                <View style={rankedStyles.info}>
-                  <Text style={rankedStyles.title} numberOfLines={2}>{movie.title}</Text>
-                  <Text style={rankedStyles.meta}>{movie.year || ''}</Text>
-                </View>
-                {movie.vote_average > 0 && (
-                  <View style={rankedStyles.ratingBox}>
-                    <Text style={rankedStyles.rating}>★ {Number(movie.vote_average).toFixed(1)}</Text>
-                    {movie.vote_count > 0 && (
-                      <Text style={rankedStyles.voteCount}>{formatVoteCount(movie.vote_count)}</Text>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-    </SafeAreaView>
-  );
-};
 
 // ── Trending Now: snap pager with dots ──────────────────────────────────────
 const SNAP_CARD_WIDTH = 150;
@@ -1034,7 +977,6 @@ const HomeScreen = ({
   onNavigateToNotebook,
   onNavigateToAchievements,
   onNavigateToLeaderboard,
-  onNavigateToLevelMovies,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -1049,7 +991,6 @@ const HomeScreen = ({
   onNavigateToNotebook: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
-  onNavigateToLevelMovies: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
@@ -1067,6 +1008,10 @@ const HomeScreen = ({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
   const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
+  const [homeTab, setHomeTab] = useState<'level' | 'trending'>('level');
+  const [tabSwitching, setTabSwitching] = useState(false);
+  const [levelSort, setLevelSort] = useState<'rating' | 'popularity' | 'level'>('rating');
+  const [levelSortAsc, setLevelSortAsc] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
@@ -1124,11 +1069,27 @@ const HomeScreen = ({
         const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${userLevel}&limit=15`);
         if (levelRes.ok) {
           const levelData = await levelRes.json();
-          const movies = (levelData.movies || []).map((m: any) => ({
+          const raw = (levelData.movies || []).map((m: any) => ({
             ...m,
             id: m.tmdb_id || m.movie_id,
           }));
-          setTopRatedMovies(movies);
+          // Enrich with TMDB data (poster + overview) in parallel
+          const enriched = await Promise.all(
+            raw.map(async (m: any) => {
+              if (!m.tmdb_id) return m;
+              try {
+                const r = await fetch(`https://api.themoviedb.org/3/movie/${m.tmdb_id}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
+                const t = await r.json();
+                return {
+                  ...m,
+                  overview: t.overview || m.description || '',
+                  poster_path: t.poster_path || null,
+                  release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
+                };
+              } catch { return m; }
+            })
+          );
+          setTopRatedMovies(enriched);
         }
       } catch {}
     } catch (error) {
@@ -1414,24 +1375,129 @@ const HomeScreen = ({
               </View>
               <Text style={styles.reviewCtaArrow}>→</Text>
             </TouchableOpacity>
-            <View style={styles.homeNavToggleWrapper}>
-              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToNotebook} activeOpacity={0.7}>
-                <Text style={styles.homeNavToggleText}>My Words</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToStats} activeOpacity={0.7}>
-                <Text style={styles.homeNavToggleText}>My Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToAchievements} activeOpacity={0.7}>
-                <Text style={styles.homeNavToggleText}>Badges</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToLeaderboard} activeOpacity={0.7}>
-                <Text style={styles.homeNavToggleText}>Rankings</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         )}
 
-        {/* Today's Word — discovery, not review (see §8) */}
+        {/* Banner Ad Placeholder */}
+        {showAds && (
+          <View style={styles.adBanner}>
+            <Text style={styles.adBannerText}>Ad</Text>
+          </View>
+        )}
+
+        {/* 4 Tools */}
+        <View style={styles.homeNavToggleWrapper}>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToNotebook} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>My Words</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToStats} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>My Progress</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToAchievements} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>Badges</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToLeaderboard} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>Rankings</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Level / Trending toggle */}
+        <View style={styles.homeTabToggleWrapper}>
+          <TouchableOpacity
+            style={[styles.homeTabToggleBtn, homeTab === 'level' && styles.homeTabToggleBtnActive]}
+            onPress={() => {
+              if (homeTab !== 'level') {
+                setTabSwitching(true);
+                setHomeTab('level');
+                setTimeout(() => setTabSwitching(false), 400);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.homeTabToggleText, homeTab === 'level' && styles.homeTabToggleTextActive]}>
+              ⭐ Your Level ({userLevel})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.homeTabToggleBtn, homeTab === 'trending' && styles.homeTabToggleBtnActive]}
+            onPress={() => {
+              if (homeTab !== 'trending') {
+                setTabSwitching(true);
+                setHomeTab('trending');
+                setTimeout(() => setTabSwitching(false), 400);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.homeTabToggleText, homeTab === 'trending' && styles.homeTabToggleTextActive]}>
+              🔥 Trending Now
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Sort filters — only for level tab */}
+        {homeTab === 'level' && (
+          <View style={styles.levelSortRow}>
+            {([
+              { key: 'rating' as const, label: 'Rating' },
+              { key: 'popularity' as const, label: 'Popularity' },
+              { key: 'level' as const, label: 'Level %' },
+            ]).map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.levelSortChip, levelSort === opt.key && styles.levelSortChipActive]}
+                onPress={() => {
+                  if (levelSort === opt.key) {
+                    setLevelSortAsc((v) => !v);
+                  } else {
+                    setLevelSort(opt.key);
+                    setLevelSortAsc(false);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.levelSortText, levelSort === opt.key && styles.levelSortTextActive]}>
+                  {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Tab content */}
+        <View style={styles.section}>
+          {loading || tabSwitching ? (
+            <View style={styles.skeletonContainer}>
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} style={styles.skeletonRow}>
+                  <View style={styles.skeletonPoster} />
+                  <View style={styles.skeletonInfo}>
+                    <View style={[styles.skeletonLine, { width: '70%' }]} />
+                    <View style={[styles.skeletonLine, { width: '40%', marginTop: 8 }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : homeTab === 'level' ? (
+            <RankedMovieList
+              movies={[...topRatedMovies].sort((a, b) => {
+                let diff = 0;
+                if (levelSort === 'rating') diff = (b.vote_average || 0) - (a.vote_average || 0);
+                else if (levelSort === 'popularity') diff = (b.vote_count || 0) - (a.vote_count || 0);
+                else diff = (a.difficulty_score || 0) - (b.difficulty_score || 0);
+                return levelSortAsc ? -diff : diff;
+              })}
+              onMoviePress={handleMoviePress}
+            />
+          ) : (
+            <SnapPager
+              movies={trendingMovies}
+              onMoviePress={handleMoviePress}
+            />
+          )}
+        </View>
+
+        {/* Today's Word — discovery, not review */}
         {todaysWord && (
           <View style={styles.todayCard}>
             <View style={styles.todayHeader}>
@@ -1460,58 +1526,8 @@ const HomeScreen = ({
                 {todaysWordSaved ? '★ Saved' : '☆ Save this word'}
               </Text>
             </TouchableOpacity>
-            {srsTotalSaved > 0 && (
-              <Text style={styles.todayNudge}>
-                You have {srsTotalSaved} saved words. Make sure you remember them → Plus.
-              </Text>
-            )}
           </View>
         )}
-
-        {/* Trending Now */}
-        <View style={[styles.section, { marginTop: 20 }]}>
-          <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : (
-            <SnapPager
-              movies={trendingMovies}
-              onMoviePress={handleMoviePress}
-            />
-          )}
-        </View>
-
-        {/* Banner Ad Placeholder */}
-        {showAds && (
-          <View style={styles.adBanner}>
-            <Text style={styles.adBannerText}>Ad</Text>
-          </View>
-        )}
-
-        {/* Top Rated for Your Level */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⭐ Top Rated for Your Level ({userLevel})</Text>
-          <Text style={styles.sectionSubtitle}>Movies matched to your proficiency level</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : (
-            <>
-              <RankedMovieList
-                movies={topRatedMovies}
-                onMoviePress={handleMoviePress}
-              />
-              {topRatedMovies.length > 0 && (
-                <TouchableOpacity
-                  style={styles.seeAllBtn}
-                  onPress={onNavigateToLevelMovies}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllBtnText}>See All {userLevel} Movies →</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-        </View>
 
         {/* Browse All */}
         <View style={{ alignItems: 'center', paddingVertical: 24 }}>
@@ -3403,10 +3419,6 @@ export default function App() {
     setCurrentScreen('leaderboard');
   };
 
-  const navigateToLevelMovies = () => {
-    setCurrentScreen('levelMovies');
-  };
-
   const navigateToFamilyPlan = () => {
     setCurrentScreen('familyPlan');
   };
@@ -3488,12 +3500,6 @@ export default function App() {
           <NotebookScreen onBack={navigateToHome} />
         ) : currentScreen === 'achievements' ? (
           <AchievementsScreen onBack={navigateToHome} />
-        ) : currentScreen === 'levelMovies' ? (
-          <LevelMoviesScreen
-            level={user?.proficiency_level || 'B1'}
-            onBack={navigateToHome}
-            onMoviePress={navigateToMovie}
-          />
         ) : currentScreen === 'leaderboard' ? (
           <LeaderboardScreen onBack={navigateToHome} />
         ) : currentScreen === 'familyPlan' ? (
@@ -3507,7 +3513,7 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToLevelMovies={navigateToLevelMovies} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -4035,19 +4041,86 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-  seeAllBtn: {
+  homeTabToggleWrapper: {
+    flexDirection: 'row',
     alignSelf: 'center',
-    marginTop: 14,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderRadius: 10,
+    marginTop: 20,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  seeAllBtnText: {
-    fontSize: 14,
+  homeTabToggleBtn: {
+    paddingHorizontal: 16,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  homeTabToggleBtnActive: {
+    backgroundColor: '#9c27b015',
+  },
+  homeTabToggleText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.textSecondary,
+  },
+  homeTabToggleTextActive: {
+    color: '#9c27b0',
+  },
+  levelSortRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingHorizontal: 16,
+  },
+  levelSortChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  levelSortChipActive: {
+    backgroundColor: '#9c27b015',
+    borderColor: '#9c27b0',
+  },
+  levelSortText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  levelSortTextActive: {
+    color: '#9c27b0',
+  },
+  skeletonContainer: {
+    paddingTop: 4,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  skeletonPoster: {
+    width: 60,
+    height: 90,
+    borderRadius: 6,
+    backgroundColor: colors.border,
+    marginRight: 14,
+    marginLeft: 48,
+  },
+  skeletonInfo: {
+    flex: 1,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: colors.border,
   },
   carousel: {
     paddingRight: 16,
