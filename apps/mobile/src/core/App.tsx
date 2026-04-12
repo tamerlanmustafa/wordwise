@@ -23,8 +23,8 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
-import { useEntitlementsStore, useShowAds } from '../stores/entitlementsStore';
-import { wordwiseApi, tmdbApi, srsApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo, type TodaysWord } from '../services/api';
+import { useEntitlementsStore, useShowAds, useIsPremium } from '../stores/entitlementsStore';
+import { wordwiseApi, tmdbApi, srsApi, premiumApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo, type TodaysWord, type CrossMovieSentence } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { ReportDialog } from '../components/ReportDialog';
 import { AdminScreen } from '../components/AdminScreen';
@@ -1863,6 +1863,9 @@ const WordRow = ({
   const [translating, setTranslating] = useState(false);
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
+  const [crossMovieSentences, setCrossMovieSentences] = useState<CrossMovieSentence[]>([]);
+  const [playingAudio, setPlayingAudio] = useState(false);
+  const isPremium = useIsPremium();
 
   const handlePress = async () => {
     if (expanded) {
@@ -1908,8 +1911,32 @@ const WordRow = ({
 
       await Promise.all(promises);
       setExpanded(true);
+
+      if (isPremium) {
+        premiumApi.crossMovieSentences(word.word).then(setCrossMovieSentences).catch(() => {});
+      }
     } finally {
       setTranslating(false);
+    }
+  };
+
+  const handlePronounce = async () => {
+    if (playingAudio) return;
+    setPlayingAudio(true);
+    try {
+      const { Audio } = require('expo-av');
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: premiumApi.pronounceUrl(word.word) },
+        { shouldPlay: true }
+      );
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+          setPlayingAudio(false);
+        }
+      });
+    } catch {
+      setPlayingAudio(false);
     }
   };
 
@@ -1945,6 +1972,17 @@ const WordRow = ({
         <View style={styles.wordRowMain}>
           <Text style={styles.rowNumber}>{rowNumber}.</Text>
           <Text style={styles.wordText}>{word.word}</Text>
+          {isPremium && expanded && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); handlePronounce(); }}
+              hitSlop={8}
+              style={styles.pronounceBtn}
+            >
+              <Text style={[styles.pronounceIcon, playingAudio && styles.pronounceIconActive]}>
+                {playingAudio ? '...' : '🔊'}
+              </Text>
+            </TouchableOpacity>
+          )}
           {translating && (
             <ActivityIndicator
               size="small"
@@ -2020,6 +2058,19 @@ const WordRow = ({
           ) : movieId ? (
             <Text style={styles.noExamples}>No sentence examples available</Text>
           ) : null}
+
+          {/* Cross-movie sentences (premium) */}
+          {isPremium && crossMovieSentences.length > 0 && (
+            <View style={styles.crossMovieSection}>
+              <Text style={styles.crossMovieLabel}>Also appears in:</Text>
+              {crossMovieSentences.slice(0, 3).map((s, i) => (
+                <View key={i} style={styles.crossMovieItem}>
+                  <Text style={styles.crossMovieMovie}>{s.movie_title}</Text>
+                  <Text style={styles.crossMovieSentence}>"{s.sentence}"</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -4040,4 +4091,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontStyle: 'italic',
   },
+  pronounceBtn: { marginLeft: 4, paddingHorizontal: 4 },
+  pronounceIcon: { fontSize: 14 },
+  pronounceIconActive: { opacity: 0.4 },
+  crossMovieSection: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F0EDE8' },
+  crossMovieLabel: { fontSize: 11, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  crossMovieItem: { marginBottom: 8 },
+  crossMovieMovie: { fontSize: 12, fontWeight: '600', color: colors.text, marginBottom: 2 },
+  crossMovieSentence: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic', lineHeight: 16 },
 });

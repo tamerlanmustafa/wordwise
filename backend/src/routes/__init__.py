@@ -14,5 +14,6 @@ from .upload import router as upload_router
 from .books import router as books_router
 from .interactions import router as interactions_router
 from .srs import router as srs_router
+from .premium import router as premium_router
 
-__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router"]
+__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router"]

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { srsApi, type SrsStats } from '../services/api';
+import { srsApi, premiumApi, type SrsStats } from '../services/api';
+import { useIsPremium } from '../stores/entitlementsStore';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -38,6 +41,7 @@ export interface StatsScreenProps {
 export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   const [stats, setStats] = useState<SrsStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const isPremium = useIsPremium();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,6 +172,30 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
             they're in your long-term memory.
           </Text>
         </View>
+
+        {/* Export (premium) */}
+        {isPremium && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Export your words</Text>
+            <Text style={styles.cardSub}>
+              Download your saved words for use in Anki or other apps
+            </Text>
+            <View style={styles.exportRow}>
+              <TouchableOpacity
+                style={styles.exportBtn}
+                onPress={() => Linking.openURL(premiumApi.exportCsvUrl())}
+              >
+                <Text style={styles.exportBtnText}>CSV</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.exportBtn}
+                onPress={() => Linking.openURL(premiumApi.exportAnkiUrl())}
+              >
+                <Text style={styles.exportBtnText}>Anki</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -271,4 +299,13 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
   emptyBody: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  exportRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  exportBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+  },
+  exportBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

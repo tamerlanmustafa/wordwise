@@ -591,6 +591,32 @@ export const srsApi = {
   },
 };
 
+// Premium feature APIs (Phase 4). All return 402 for non-premium users.
+export interface CrossMovieSentence {
+  movie_id: number;
+  movie_title: string;
+  sentence: string;
+  cefr_level: string | null;
+}
+
+export const premiumApi = {
+  crossMovieSentences: async (word: string): Promise<CrossMovieSentence[]> => {
+    const res = await authFetch(
+      `${API_BASE_URL}/premium/sentences/${encodeURIComponent(word)}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.sentences || [];
+  },
+
+  pronounceUrl: (word: string): string =>
+    `${API_BASE_URL}/premium/pronounce/${encodeURIComponent(word)}`,
+
+  exportCsvUrl: (): string => `${API_BASE_URL}/premium/export/csv`,
+
+  exportAnkiUrl: (): string => `${API_BASE_URL}/premium/export/anki`,
+};
+
 // Auth API — just the pieces the stores need to refresh on cold-start.
 export const authApi = {
   // Fetch the current user (including entitlements). Returns null on
