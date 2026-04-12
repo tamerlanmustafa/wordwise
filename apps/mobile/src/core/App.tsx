@@ -1231,21 +1231,18 @@ const HomeScreen = ({
               </View>
               <Text style={styles.reviewCtaArrow}>→</Text>
             </TouchableOpacity>
-            <View style={styles.ctaLinks}>
-              <TouchableOpacity onPress={onNavigateToNotebook} hitSlop={8}>
-                <Text style={styles.statsLink}>My Words</Text>
+            <View style={styles.homeNavToggleWrapper}>
+              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToNotebook} activeOpacity={0.7}>
+                <Text style={styles.homeNavToggleText}>My Words</Text>
               </TouchableOpacity>
-              <Text style={styles.ctaLinkDot}>·</Text>
-              <TouchableOpacity onPress={onNavigateToStats} hitSlop={8}>
-                <Text style={styles.statsLink}>My Progress</Text>
+              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToStats} activeOpacity={0.7}>
+                <Text style={styles.homeNavToggleText}>My Progress</Text>
               </TouchableOpacity>
-              <Text style={styles.ctaLinkDot}>·</Text>
-              <TouchableOpacity onPress={onNavigateToAchievements} hitSlop={8}>
-                <Text style={styles.statsLink}>Badges</Text>
+              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToAchievements} activeOpacity={0.7}>
+                <Text style={styles.homeNavToggleText}>Badges</Text>
               </TouchableOpacity>
-              <Text style={styles.ctaLinkDot}>·</Text>
-              <TouchableOpacity onPress={onNavigateToLeaderboard} hitSlop={8}>
-                <Text style={styles.statsLink}>Rankings</Text>
+              <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToLeaderboard} activeOpacity={0.7}>
+                <Text style={styles.homeNavToggleText}>Rankings</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1289,7 +1286,7 @@ const HomeScreen = ({
         )}
 
         {/* Trending Now */}
-        <View style={styles.section}>
+        <View style={[styles.section, { marginTop: 20 }]}>
           <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
           {loading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
@@ -3344,14 +3341,33 @@ const styles = StyleSheet.create({
   reviewCtaLeft: { flex: 1 },
   reviewCtaTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   reviewCtaSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  reviewCtaWrapper: { marginHorizontal: 16, marginTop: 16 },
+  reviewCtaWrapper: { marginHorizontal: 16, marginTop: 20 },
   reviewCtaArrow: { fontSize: 22, color: '#FFFFFF', fontWeight: '700', marginLeft: 8 },
-  ctaLinks: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10, gap: 8 },
-  ctaLinkDot: { fontSize: 13, color: '#9AA0AE' },
-  statsLink: { fontSize: 13, color: '#7C5CBF', fontWeight: '600' },
+  homeNavToggleWrapper: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginTop: 14,
+    backgroundColor: colors.paper,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  homeNavToggleBtn: {
+    paddingHorizontal: 14,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  homeNavToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7C5CBF',
+  },
   todayCard: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 20,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 20,
