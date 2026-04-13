@@ -3060,150 +3060,172 @@ const MovieDetailScreen = ({
           )}
         </View>
       </View>
-      {/* Overview */}
-      {movie.overview ? (
-        <View style={styles.overviewSection}>
-          <Text style={styles.overviewTitle}>Overview</Text>
-          <Text style={styles.overviewText}>{movie.overview}</Text>
-        </View>
-      ) : null}
-
       {loading ? (
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
-          <Text style={styles.loadingSubtext}>Searching script</Text>
-          <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.scriptErrorBox}>
-          <Text style={styles.scriptErrorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : vocabulary ? (
         <>
-
-          {/* Words / Expressions top-level toggle with sliding indicator */}
-          {hasIdioms && (
-            <View style={styles.viewModeToggleWrapper}>
-              <Animated.View
-                style={[
-                  styles.viewModeToggleIndicator,
-                  {
-                    transform: [
-                      {
-                        translateX: toggleIndicator.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 130],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.viewModeToggleBtn}
-                onPress={() => setViewMode('levels')}
-              >
-                <Text style={[styles.viewModeToggleText, viewMode === 'levels' && styles.viewModeToggleTextActive]}>
-                  Words
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.viewModeToggleBtn}
-                onPress={() => setViewMode('idioms')}
-              >
-                <Text style={[styles.viewModeToggleText, viewMode === 'idioms' && styles.viewModeToggleTextActive]}>
-                  Expressions ({idioms.length})
-                </Text>
-              </TouchableOpacity>
+          {movie.overview ? (
+            <View style={styles.overviewSection}>
+              <Text style={styles.overviewTitle}>Overview</Text>
+              <Text style={styles.overviewText}>{movie.overview}</Text>
             </View>
-          )}
+          ) : null}
+          <View style={[styles.container, styles.centered]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
+            <Text style={styles.loadingSubtext}>Searching script</Text>
+            <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
+          </View>
+        </>
+      ) : error ? (
+        <>
+          {movie.overview ? (
+            <View style={styles.overviewSection}>
+              <Text style={styles.overviewTitle}>Overview</Text>
+              <Text style={styles.overviewText}>{movie.overview}</Text>
+            </View>
+          ) : null}
+          <View style={styles.scriptErrorBox}>
+            <Text style={styles.scriptErrorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : vocabulary ? (
+        <ScrollView
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+        >
+          {/* Child 0: Overview — scrolls away under the sticky header */}
+          <View>
+            {movie.overview ? (
+              <View style={styles.overviewSection}>
+                <Text style={styles.overviewTitle}>Overview</Text>
+                <Text style={styles.overviewText}>{movie.overview}</Text>
+              </View>
+            ) : null}
+          </View>
 
-          {isIdiomsTab ? (
-            /* Expression difficulty tabs: Elementary / Intermediate / Advanced */
-            <>
-              <View style={styles.exprTabsRow}>
-                {([
-                  { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
-                  { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
-                  { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
-                ]).map((tab) => (
-                  <TouchableOpacity
-                    key={tab.key}
-                    style={[
-                      styles.exprTab,
-                      activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
-                    ]}
-                    onPress={() => setActiveExprLevel(tab.key)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.exprTabText,
-                      activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
-                    ]}>
-                      {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          {/* Child 1: Sticky — Toggle + Tabs stay pinned when scrolling */}
+          <View style={styles.stickyVocabHeader}>
+            {/* Words / Expressions top-level toggle with sliding indicator */}
+            {hasIdioms && (
+              <View style={styles.viewModeToggleWrapper}>
+                <Animated.View
+                  style={[
+                    styles.viewModeToggleIndicator,
+                    {
+                      transform: [
+                        {
+                          translateX: toggleIndicator.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 130],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.viewModeToggleBtn}
+                  onPress={() => setViewMode('levels')}
+                >
+                  <Text style={[styles.viewModeToggleText, viewMode === 'levels' && styles.viewModeToggleTextActive]}>
+                    Words
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.viewModeToggleBtn}
+                  onPress={() => setViewMode('idioms')}
+                >
+                  <Text style={[styles.viewModeToggleText, viewMode === 'idioms' && styles.viewModeToggleTextActive]}>
+                    Expressions ({idioms.length})
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.levelDescription}>
-                <View style={[styles.levelDot, { backgroundColor: activeExprLevel === 'elementary' ? '#4CAF50' : activeExprLevel === 'intermediate' ? '#FFC107' : '#F44336' }]} />
-                <Text style={styles.levelDescText}>
-                  {activeExprLevel === 'elementary' ? 'A1–A2 Level' : activeExprLevel === 'intermediate' ? 'B1–B2 Level' : 'C1–C2 Level'}
-                </Text>
-                <Text style={styles.levelWordCount}>
-                  {activeIdioms.length} expressions
-                </Text>
-              </View>
-            </>
-          ) : (
-            /* CEFR Level Tabs for Words view */
-            <>
-              <View style={styles.cefrTabsWrapper}>
-                <View style={styles.cefrTabsGradientBorder}>
-                  <View style={styles.cefrTabsInner}>
-                    <View style={styles.cefrTabsContent}>
-                      {wordLevels.map((levelData) => (
-                        <CEFRTab
-                          key={levelData.level}
-                          level={levelData.level}
-                          label={levelData.label}
-                          count={levelData.count}
-                          active={activeLevel === levelData.level}
-                          color={cefrColors[levelData.level] || colors.primary}
-                          onPress={() => setActiveLevel(levelData.level)}
-                        />
-                      ))}
+            )}
+
+            {isIdiomsTab ? (
+              /* Expression difficulty tabs: Elementary / Intermediate / Advanced */
+              <>
+                <View style={styles.exprTabsRow}>
+                  {([
+                    { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
+                    { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
+                    { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
+                  ]).map((tab) => (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[
+                        styles.exprTab,
+                        activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
+                      ]}
+                      onPress={() => setActiveExprLevel(tab.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.exprTabText,
+                        activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
+                      ]}>
+                        {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.levelDescription}>
+                  <View style={[styles.levelDot, { backgroundColor: activeExprLevel === 'elementary' ? '#4CAF50' : activeExprLevel === 'intermediate' ? '#FFC107' : '#F44336' }]} />
+                  <Text style={styles.levelDescText}>
+                    {activeExprLevel === 'elementary' ? 'A1–A2 Level' : activeExprLevel === 'intermediate' ? 'B1–B2 Level' : 'C1–C2 Level'}
+                  </Text>
+                  <Text style={styles.levelWordCount}>
+                    {activeIdioms.length} expressions
+                  </Text>
+                </View>
+              </>
+            ) : (
+              /* CEFR Level Tabs for Words view */
+              <>
+                <View style={styles.cefrTabsWrapper}>
+                  <View style={styles.cefrTabsGradientBorder}>
+                    <View style={styles.cefrTabsInner}>
+                      <View style={styles.cefrTabsContent}>
+                        {wordLevels.map((levelData) => (
+                          <CEFRTab
+                            key={levelData.level}
+                            level={levelData.level}
+                            label={levelData.label}
+                            count={levelData.count}
+                            active={activeLevel === levelData.level}
+                            color={cefrColors[levelData.level] || colors.primary}
+                            onPress={() => setActiveLevel(levelData.level)}
+                          />
+                        ))}
+                      </View>
                     </View>
                   </View>
                 </View>
-              </View>
-              <View style={styles.levelDescription}>
-                <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] || colors.primary }]} />
-                <Text style={styles.levelDescText}>
-                  {cefrLabels[activeLevel] || 'Advanced'}
-                </Text>
-                <Text style={styles.levelWordCount}>
-                  {activeWords.length} words
-                </Text>
-              </View>
-            </>
-          )}
+                <View style={styles.levelDescription}>
+                  <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] || colors.primary }]} />
+                  <Text style={styles.levelDescText}>
+                    {cefrLabels[activeLevel] || 'Advanced'}
+                  </Text>
+                  <Text style={styles.levelWordCount}>
+                    {activeWords.length} words
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
 
-          {/* Animated Word/Idiom List */}
-          <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-            {isIdiomsTab ? (
-              /* Idioms List - filtered by active CEFR level */
-              <FlatList
-                data={activeIdioms}
-                keyExtractor={(item, index) => `idiom-${item.phrase}-${index}`}
-                renderItem={({ item, index }) => (
+          {/* Child 2: Word/Idiom items */}
+          <Animated.View style={{ opacity: fadeAnim }}>
+            <View style={styles.wordList}>
+              {isIdiomsTab ? (
+                activeIdioms.map((item, index) => (
                   <IdiomRow
+                    key={`idiom-${item.phrase}-${index}`}
                     idiom={item}
                     index={index}
                     rowNumber={index + 1}
@@ -3214,17 +3236,11 @@ const MovieDetailScreen = ({
                     onSave={handleSaveWord}
                     isAuthenticated={isAuthenticated}
                   />
-                )}
-                contentContainerStyle={styles.wordList}
-                showsVerticalScrollIndicator={false}
-              />
-            ) : (
-              /* Word List */
-              <FlatList
-                data={activeWords}
-                keyExtractor={(item, index) => `${item.word}-${index}`}
-                renderItem={({ item, index }) => (
+                ))
+              ) : (
+                activeWords.map((item, index) => (
                   <WordRow
+                    key={`${item.word}-${index}`}
                     word={item}
                     index={index}
                     rowNumber={index + 1}
@@ -3236,13 +3252,11 @@ const MovieDetailScreen = ({
                     onSave={handleSaveWord}
                     isAuthenticated={isAuthenticated}
                   />
-                )}
-                contentContainerStyle={styles.wordList}
-                showsVerticalScrollIndicator={false}
-              />
-            )}
+                ))
+              )}
+            </View>
           </Animated.View>
-        </>
+        </ScrollView>
       ) : null}
     </SafeAreaView>
   );
@@ -4689,5 +4703,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  stickyVocabHeader: {
+    backgroundColor: colors.background,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
 });
