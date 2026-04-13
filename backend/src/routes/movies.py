@@ -105,37 +105,64 @@ CEFR_SCORE_RANGES = {
 @router.get("/by-cefr")
 async def list_movies_by_cefr(
     level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
+    genre: Optional[str] = Query(None, description="Genre name to filter by (e.g. Drama, Comedy)"),
     limit: int = Query(15, ge=1, le=100),
     db: Prisma = Depends(get_db),
 ):
-    """List movies whose difficulty score falls within a CEFR level range."""
+    """List movies whose difficulty score falls within a CEFR level range, optionally filtered by genre."""
     key = level.upper()
     if key not in CEFR_SCORE_RANGES:
         raise HTTPException(status_code=400, detail=f"Invalid CEFR level: {level}")
 
     lo, hi = CEFR_SCORE_RANGES[key]
 
-    rows = await db.query_raw(
-        """
-        SELECT m.id                AS movie_id,
-               m.title             AS title,
-               m.year              AS year,
-               m.poster_url        AS poster_url,
-               m.description       AS description,
-               m.difficulty_score  AS difficulty_score,
-               m.tmdb_id           AS tmdb_id,
-               m.tmdb_vote_average AS vote_average,
-               m.tmdb_vote_count   AS vote_count
-        FROM movies m
-        WHERE m.difficulty_score >= $1
-          AND m.difficulty_score <= $2
-        ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
-        LIMIT $3
-        """,
-        lo,
-        hi,
-        limit,
-    )
+    if genre:
+        rows = await db.query_raw(
+            """
+            SELECT m.id                AS movie_id,
+                   m.title             AS title,
+                   m.year              AS year,
+                   m.poster_url        AS poster_url,
+                   m.description       AS description,
+                   m.difficulty_score  AS difficulty_score,
+                   m.tmdb_id           AS tmdb_id,
+                   m.tmdb_vote_average AS vote_average,
+                   m.tmdb_vote_count   AS vote_count
+            FROM movies m
+            WHERE m.difficulty_score >= $1
+              AND m.difficulty_score <= $2
+              AND m.genre IS NOT NULL
+              AND m.genre ILIKE '%' || $3 || '%'
+            ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
+            LIMIT $4
+            """,
+            lo,
+            hi,
+            genre,
+            limit,
+        )
+    else:
+        rows = await db.query_raw(
+            """
+            SELECT m.id                AS movie_id,
+                   m.title             AS title,
+                   m.year              AS year,
+                   m.poster_url        AS poster_url,
+                   m.description       AS description,
+                   m.difficulty_score  AS difficulty_score,
+                   m.tmdb_id           AS tmdb_id,
+                   m.tmdb_vote_average AS vote_average,
+                   m.tmdb_vote_count   AS vote_count
+            FROM movies m
+            WHERE m.difficulty_score >= $1
+              AND m.difficulty_score <= $2
+            ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
+            LIMIT $3
+            """,
+            lo,
+            hi,
+            limit,
+        )
 
     return {
         "level": key,

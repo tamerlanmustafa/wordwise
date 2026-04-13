@@ -457,18 +457,18 @@ const heroStyles = StyleSheet.create({
   },
 });
 
-// ── Quick Start Row ──────────────────────────────────────────────────────────
-// Genre filters use TMDB genre IDs, encoded as `genre:<id>:<name>` so
-// SearchResultsScreen routes to TMDB discover. The first chip is a CEFR
-// difficulty dropdown (Elementary / Intermediate / Advanced) backed by our
-// own DB via `/movies/by-level`, encoded as `level:<LEVEL>:<displayName>`.
-const QUICK_FILTERS = [
-  { id: 'drama',     icon: '🎭', label: 'Drama',            query: 'genre:18:Drama' },
-  { id: 'comedy',    icon: '😂', label: 'Comedy',           query: 'genre:35:Comedy' },
-  { id: 'crime',     icon: '🔍', label: 'Crime & Thriller', query: 'genre:80|53:Crime & Thriller' },
-  { id: 'family',    icon: '🏠', label: 'Family Friendly',  query: 'genre:10751:Family' },
-  { id: 'romance',   icon: '💞', label: 'Romance',          query: 'genre:10749:Romance' },
-  { id: 'animation', icon: '🎨', label: 'Animation',        query: 'genre:16:Animation' },
+// ── Genre + Level filter options ─────────────────────────────────────────────
+const GENRE_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
+  { value: '',          label: 'All Genres',       icon: '🎬' },
+  { value: 'Drama',     label: 'Drama',            icon: '🎭' },
+  { value: 'Comedy',    label: 'Comedy',           icon: '😂' },
+  { value: 'Crime',     label: 'Crime & Thriller', icon: '🔍' },
+  { value: 'Family',    label: 'Family',           icon: '🏠' },
+  { value: 'Romance',   label: 'Romance',          icon: '💞' },
+  { value: 'Animation', label: 'Animation',        icon: '🎨' },
+  { value: 'Action',    label: 'Action',           icon: '💥' },
+  { value: 'Horror',    label: 'Horror',           icon: '👻' },
+  { value: 'Science Fiction', label: 'Sci-Fi',     icon: '🚀' },
 ];
 
 const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
@@ -480,164 +480,6 @@ const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
   { value: 'C2', label: 'C2 Proficiency',     icon: '🔴' },
 ];
 
-const MobileQuickStartRow = ({ onSearch }: { onSearch: (q: string) => void }) => {
-  const [selectedLevel, setSelectedLevel] = useState<string>('A1');
-  const [levelOpen, setLevelOpen] = useState(false);
-  // Captured via onLayout so the menu can center under the chip regardless
-  // of the selected label's width.
-  const [chipLayout, setChipLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-
-  const currentLevel = LEVEL_OPTIONS.find((o) => o.value === selectedLevel) ?? LEVEL_OPTIONS[0];
-
-  const MENU_WIDTH = 165;
-  const menuLeft = chipLayout
-    ? Math.max(0, chipLayout.x + chipLayout.width / 2 - MENU_WIDTH / 2)
-    : 0;
-  // Sit the menu directly below the chip, with a small 6px gap.
-  const menuTop = chipLayout ? chipLayout.y + chipLayout.height + 6 : 0;
-
-  const pickLevel = (value: string) => {
-    setSelectedLevel(value);
-    setLevelOpen(false);
-    const opt = LEVEL_OPTIONS.find((o) => o.value === value)!;
-    onSearch(`level:${opt.value}:${opt.label}`);
-  };
-
-  return (
-    <View style={quickStyles.container}>
-      <Text style={quickStyles.title}>Quick Start</Text>
-      <View style={quickStyles.row}>
-        {/* Level dropdown chip — pinned outside the ScrollView so its
-            absolute menu isn't clipped by horizontal overflow. */}
-        <TouchableOpacity
-          style={[quickStyles.chip, quickStyles.levelChip]}
-          onPress={() => setLevelOpen((o) => !o)}
-          activeOpacity={0.7}
-          onLayout={(e) => {
-            const { x, y, width, height } = e.nativeEvent.layout;
-            setChipLayout({ x, y, width, height });
-          }}
-        >
-          <Text style={quickStyles.chipIcon}>{currentLevel.icon}</Text>
-          <Text style={quickStyles.chipLabel}>{currentLevel.label}</Text>
-          <Text style={quickStyles.chipChevron}>{levelOpen ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={quickStyles.scroll}
-        >
-          {QUICK_FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.id}
-              style={quickStyles.chip}
-              onPress={() => onSearch(f.query)}
-              activeOpacity={0.7}
-            >
-              <Text style={quickStyles.chipIcon}>{f.icon}</Text>
-              <Text style={quickStyles.chipLabel}>{f.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {levelOpen && (
-          <View
-            style={[
-              quickStyles.levelMenu,
-              { left: menuLeft, top: menuTop, width: MENU_WIDTH },
-            ]}
-          >
-          {LEVEL_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[
-                quickStyles.levelItem,
-                opt.value === selectedLevel && quickStyles.levelItemActive,
-              ]}
-              onPress={() => pickLevel(opt.value)}
-              activeOpacity={0.7}
-            >
-              <Text style={quickStyles.levelItemIcon}>{opt.icon}</Text>
-              <Text style={quickStyles.levelItemText}>{opt.label}</Text>
-            </TouchableOpacity>
-          ))}
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
-
-const quickStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    // Don't clip the absolutely-positioned level menu.
-    overflow: 'visible',
-    zIndex: 100,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'visible',
-  },
-  // Clip scrolling chips to the ScrollView's bounds so they don't slide
-  // over the pinned level chip on the left. (The dropdown menu is rendered
-  // as a sibling of the ScrollView, so this clip doesn't affect it.)
-  scroll: { flex: 1, overflow: 'hidden' },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.paper,
-    marginRight: 10,
-  },
-  levelChip: {
-    borderColor: colors.primary,
-  },
-  chipIcon: { fontSize: 14 },
-  chipLabel: { fontSize: 13, fontWeight: '600', color: colors.text },
-  chipChevron: { fontSize: 10, color: colors.textSecondary, marginLeft: 2 },
-  levelMenu: {
-    position: 'absolute',
-    // `left`, `top`, and `width` are set inline from the chip's measured
-    // layout so the menu stays centered directly below it.
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.paper,
-    overflow: 'hidden',
-    zIndex: 1000,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-  },
-  levelItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  levelItemActive: { backgroundColor: colors.background },
-  levelItemIcon: { fontSize: 14, marginRight: 10 },
-  levelItemText: { fontSize: 14, fontWeight: '500', color: colors.text },
-});
 
 // ── Helpers for level movies ────────────────────────────────────────────────
 const formatVoteCount = (count: number): string => {
@@ -1012,6 +854,10 @@ const HomeScreen = ({
   const [tabSwitching, setTabSwitching] = useState(false);
   const [levelSort, setLevelSort] = useState<'rating' | 'popularity' | 'level'>('rating');
   const [levelSortAsc, setLevelSortAsc] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
+  const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState('');
+  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
@@ -1053,51 +899,50 @@ const HomeScreen = ({
     { id: 12, title: 'Anna Karenina', author: 'Leo Tolstoy', cover: 'https://covers.openlibrary.org/b/id/8234196-M.jpg' },
   ];
 
-  useEffect(() => {
-    fetchMovies();
-  }, []);
-
-  const userLevel = user?.proficiency_level || 'B1';
-
-  const fetchMovies = async () => {
+  const fetchLevelMovies = async (level: string, genre: string = '') => {
     try {
-      const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
-      const trendingData = await trendingRes.json();
-      setTrendingMovies(trendingData.results?.slice(0, 15) || []);
-
-      try {
-        const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${userLevel}&limit=15`);
-        if (levelRes.ok) {
-          const levelData = await levelRes.json();
-          const raw = (levelData.movies || []).map((m: any) => ({
-            ...m,
-            id: m.tmdb_id || m.movie_id,
-          }));
-          // Enrich with TMDB data (poster + overview) in parallel
-          const enriched = await Promise.all(
-            raw.map(async (m: any) => {
-              if (!m.tmdb_id) return m;
-              try {
-                const r = await fetch(`https://api.themoviedb.org/3/movie/${m.tmdb_id}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
-                const t = await r.json();
-                return {
-                  ...m,
-                  overview: t.overview || m.description || '',
-                  poster_path: t.poster_path || null,
-                  release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
-                };
-              } catch { return m; }
-            })
-          );
-          setTopRatedMovies(enriched);
-        }
-      } catch {}
-    } catch (error) {
-      console.error('Failed to fetch movies:', error);
-    } finally {
-      setLoading(false);
-    }
+      const genreParam = genre ? `&genre=${encodeURIComponent(genre)}` : '';
+      const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=15${genreParam}`);
+      if (levelRes.ok) {
+        const levelData = await levelRes.json();
+        const raw = (levelData.movies || []).map((m: any) => ({
+          ...m,
+          id: m.tmdb_id || m.movie_id,
+        }));
+        const enriched = await Promise.all(
+          raw.map(async (m: any) => {
+            if (!m.tmdb_id) return m;
+            try {
+              const r = await fetch(`https://api.themoviedb.org/3/movie/${m.tmdb_id}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
+              const t = await r.json();
+              return {
+                ...m,
+                overview: t.overview || m.description || '',
+                poster_path: t.poster_path || null,
+                release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
+              };
+            } catch { return m; }
+          })
+        );
+        setTopRatedMovies(enriched);
+      }
+    } catch {}
   };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
+        const trendingData = await trendingRes.json();
+        setTrendingMovies(trendingData.results?.slice(0, 15) || []);
+        await fetchLevelMovies(selectedLevel, selectedGenre);
+      } catch (error) {
+        console.error('Failed to fetch movies:', error);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const onSearchTextChange = (text: string) => {
     setSearchQuery(text);
@@ -1347,9 +1192,6 @@ const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        {/* Quick Start */}
-        {!loading && <MobileQuickStartRow onSearch={(q) => { onSearch(q); }} />}
-
         {/* SRS Review CTA */}
         {srsTotalSaved > 0 && (
           <View style={styles.reviewCtaWrapper}>
@@ -1402,38 +1244,117 @@ const HomeScreen = ({
         </View>
 
         {/* Level / Trending toggle */}
-        <View style={styles.homeTabToggleWrapper}>
-          <TouchableOpacity
-            style={[styles.homeTabToggleBtn, homeTab === 'level' && styles.homeTabToggleBtnActive]}
-            onPress={() => {
-              if (homeTab !== 'level') {
-                setTabSwitching(true);
-                setHomeTab('level');
-                setTimeout(() => setTabSwitching(false), 400);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.homeTabToggleText, homeTab === 'level' && styles.homeTabToggleTextActive]}>
-              ⭐ Your Level ({userLevel})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.homeTabToggleBtn, homeTab === 'trending' && styles.homeTabToggleBtnActive]}
-            onPress={() => {
-              if (homeTab !== 'trending') {
-                setTabSwitching(true);
-                setHomeTab('trending');
-                setTimeout(() => setTabSwitching(false), 400);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.homeTabToggleText, homeTab === 'trending' && styles.homeTabToggleTextActive]}>
-              🔥 Trending Now
-            </Text>
-          </TouchableOpacity>
+        <View style={{ zIndex: 50, overflow: 'visible' }}>
+          <View style={styles.homeTabToggleWrapper}>
+            <TouchableOpacity
+              style={[styles.homeTabToggleBtn, homeTab === 'level' && styles.homeTabToggleBtnActive]}
+              onPress={() => {
+                if (homeTab === 'level') {
+                  setLevelDropdownOpen((v) => !v);
+                  setGenreDropdownOpen(false);
+                } else {
+                  setTabSwitching(true);
+                  setHomeTab('level');
+                  setLevelDropdownOpen(false);
+                  setGenreDropdownOpen(false);
+                  setTimeout(() => setTabSwitching(false), 400);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.homeTabToggleText, homeTab === 'level' && styles.homeTabToggleTextActive]}>
+                {selectedLevel === (user?.proficiency_level || 'B1')
+                  ? `⭐ Your Level (${selectedLevel})`
+                  : `⭐ Level ${selectedLevel}`}
+                {homeTab === 'level' ? ` ${levelDropdownOpen ? '▲' : '▼'}` : ''}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.homeTabToggleBtn, homeTab === 'trending' && styles.homeTabToggleBtnActive]}
+              onPress={() => {
+                if (homeTab !== 'trending') {
+                  setTabSwitching(true);
+                  setHomeTab('trending');
+                  setLevelDropdownOpen(false);
+                  setGenreDropdownOpen(false);
+                  setTimeout(() => setTabSwitching(false), 400);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.homeTabToggleText, homeTab === 'trending' && styles.homeTabToggleTextActive]}>
+                🔥 Trending Now
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {levelDropdownOpen && (
+            <View style={[styles.levelPickerMenu, { left: 16 }]}>
+              {LEVEL_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.levelPickerItem, opt.value === selectedLevel && styles.levelPickerItemActive]}
+                  onPress={async () => {
+                    setLevelDropdownOpen(false);
+                    if (opt.value !== selectedLevel) {
+                      setSelectedLevel(opt.value);
+                      setTabSwitching(true);
+                      await fetchLevelMovies(opt.value, selectedGenre);
+                      setTabSwitching(false);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
+                  <Text style={[styles.levelPickerText, opt.value === selectedLevel && styles.levelPickerTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {genreDropdownOpen && (
+            <View style={[styles.levelPickerMenu, { right: 16, left: undefined }]}>
+              {GENRE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.levelPickerItem, opt.value === selectedGenre && styles.levelPickerItemActive]}
+                  onPress={async () => {
+                    setGenreDropdownOpen(false);
+                    if (opt.value !== selectedGenre) {
+                      setSelectedGenre(opt.value);
+                      setTabSwitching(true);
+                      await fetchLevelMovies(selectedLevel, opt.value);
+                      setTabSwitching(false);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
+                  <Text style={[styles.levelPickerText, opt.value === selectedGenre && styles.levelPickerTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
+
+        {/* Genre filter — only for level tab */}
+        {homeTab === 'level' && (
+          <TouchableOpacity
+            style={styles.genreFilterBtn}
+            onPress={() => {
+              setGenreDropdownOpen((v) => !v);
+              setLevelDropdownOpen(false);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.genreFilterText}>
+              {selectedGenre
+                ? `${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.icon || ''} ${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.label || selectedGenre}`
+                : '🎬 All Genres'}
+              {' '}{genreDropdownOpen ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Sort filters — only for level tab */}
         {homeTab === 'level' && (
@@ -2886,6 +2807,7 @@ const MovieDetailScreen = ({
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
+  const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -3057,22 +2979,20 @@ const MovieDetailScreen = ({
   const idioms = vocabulary?.idioms || [];
   const hasIdioms = idioms.length > 0;
 
-  // CEFR level groups for the Expressions view (idioms grouped by their cefr_level)
-  const idiomLevels = useMemo(() => {
-    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-    const byLevel: Record<string, any[]> = {};
+  // Expression groups: Elementary (A1+A2), Intermediate (B1+B2), Advanced (C1+C2)
+  const EXPR_LEVEL_MAP: Record<string, 'elementary' | 'intermediate' | 'advanced'> = {
+    A1: 'elementary', A2: 'elementary',
+    B1: 'intermediate', B2: 'intermediate',
+    C1: 'advanced', C2: 'advanced',
+  };
+  const idiomsByDifficulty = useMemo(() => {
+    const groups: Record<string, any[]> = { elementary: [], intermediate: [], advanced: [] };
     idioms.forEach((idiom) => {
       const lvl = (idiom.cefr_level || 'C1').toUpperCase();
-      if (!byLevel[lvl]) byLevel[lvl] = [];
-      byLevel[lvl].push(idiom);
+      const bucket = EXPR_LEVEL_MAP[lvl] || 'advanced';
+      groups[bucket].push(idiom);
     });
-    return levels.map((level) => ({
-      level,
-      label: cefrLabels[level] || level,
-      count: (byLevel[level] || []).length,
-      words: [], // unused for idiom view
-      idiomItems: byLevel[level] || [],
-    }));
+    return groups;
   }, [idioms]);
 
   // If user is in idioms view but there are no idioms, fall back to levels
@@ -3083,11 +3003,9 @@ const MovieDetailScreen = ({
   }, [viewMode, hasIdioms]);
 
   const isIdiomsTab = viewMode === 'idioms';
-  // Same CEFR tab UI drives both views — pick the source based on viewMode
-  const mergedLevels = isIdiomsTab ? idiomLevels : wordLevels;
-  const activeData = mergedLevels.find((l) => l.level === activeLevel);
+  const activeData = wordLevels.find((l) => l.level === activeLevel);
   const activeWords = activeData?.words || [];
-  const activeIdioms = (activeData as any)?.idiomItems || [];
+  const activeIdioms = isIdiomsTab ? (idiomsByDifficulty[activeExprLevel] || []) : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -3206,38 +3124,76 @@ const MovieDetailScreen = ({
             </View>
           )}
 
-          {/* CEFR Level Tabs - same component drives both Words and Expressions views */}
-          <View style={styles.cefrTabsWrapper}>
-            <View style={styles.cefrTabsGradientBorder}>
-              <View style={styles.cefrTabsInner}>
-                <View style={styles.cefrTabsContent}>
-                  {mergedLevels.map((levelData) => (
-                    <CEFRTab
-                      key={levelData.level}
-                      level={levelData.level}
-                      label={levelData.label}
-                      count={levelData.count}
-                      active={activeLevel === levelData.level}
-                      color={cefrColors[levelData.level] || colors.primary}
-                      onPress={() => setActiveLevel(levelData.level)}
-                    />
-                  ))}
+          {isIdiomsTab ? (
+            /* Expression difficulty tabs: Elementary / Intermediate / Advanced */
+            <>
+              <View style={styles.exprTabsRow}>
+                {([
+                  { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
+                  { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
+                  { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
+                ]).map((tab) => (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[
+                      styles.exprTab,
+                      activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
+                    ]}
+                    onPress={() => setActiveExprLevel(tab.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.exprTabText,
+                      activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
+                    ]}>
+                      {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.levelDescription}>
+                <View style={[styles.levelDot, { backgroundColor: activeExprLevel === 'elementary' ? '#4CAF50' : activeExprLevel === 'intermediate' ? '#FFC107' : '#F44336' }]} />
+                <Text style={styles.levelDescText}>
+                  {activeExprLevel === 'elementary' ? 'A1–A2 Level' : activeExprLevel === 'intermediate' ? 'B1–B2 Level' : 'C1–C2 Level'}
+                </Text>
+                <Text style={styles.levelWordCount}>
+                  {activeIdioms.length} expressions
+                </Text>
+              </View>
+            </>
+          ) : (
+            /* CEFR Level Tabs for Words view */
+            <>
+              <View style={styles.cefrTabsWrapper}>
+                <View style={styles.cefrTabsGradientBorder}>
+                  <View style={styles.cefrTabsInner}>
+                    <View style={styles.cefrTabsContent}>
+                      {wordLevels.map((levelData) => (
+                        <CEFRTab
+                          key={levelData.level}
+                          level={levelData.level}
+                          label={levelData.label}
+                          count={levelData.count}
+                          active={activeLevel === levelData.level}
+                          color={cefrColors[levelData.level] || colors.primary}
+                          onPress={() => setActiveLevel(levelData.level)}
+                        />
+                      ))}
+                    </View>
+                  </View>
                 </View>
               </View>
-            </View>
-          </View>
-
-
-          {/* Level Description */}
-          <View style={styles.levelDescription}>
-            <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] || colors.primary }]} />
-            <Text style={styles.levelDescText}>
-              {cefrLabels[activeLevel] || 'Advanced'}
-            </Text>
-            <Text style={styles.levelWordCount}>
-              {isIdiomsTab ? activeIdioms.length : activeWords.length} {isIdiomsTab ? 'expressions' : 'words'}
-            </Text>
-          </View>
+              <View style={styles.levelDescription}>
+                <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] || colors.primary }]} />
+                <Text style={styles.levelDescText}>
+                  {cefrLabels[activeLevel] || 'Advanced'}
+                </Text>
+                <Text style={styles.levelWordCount}>
+                  {activeWords.length} words
+                </Text>
+              </View>
+            </>
+          )}
 
           {/* Animated Word/Idiom List */}
           <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -4043,7 +3999,7 @@ const styles = StyleSheet.create({
   },
   homeTabToggleWrapper: {
     flexDirection: 'row',
-    alignSelf: 'center',
+    marginHorizontal: 16,
     marginTop: 20,
     backgroundColor: colors.paper,
     borderRadius: 12,
@@ -4052,7 +4008,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.08)',
   },
   homeTabToggleBtn: {
-    paddingHorizontal: 16,
+    flex: 1,
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4068,6 +4024,61 @@ const styles = StyleSheet.create({
   },
   homeTabToggleTextActive: {
     color: '#9c27b0',
+  },
+  levelPickerMenu: {
+    position: 'absolute',
+    top: 46,
+    width: 180,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+    zIndex: 1000,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    overflow: 'hidden',
+  },
+  levelPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  levelPickerItemActive: {
+    backgroundColor: '#9c27b010',
+  },
+  levelPickerIcon: {
+    fontSize: 14,
+    marginRight: 10,
+  },
+  levelPickerText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  levelPickerTextActive: {
+    color: '#9c27b0',
+    fontWeight: '700',
+  },
+  genreFilterBtn: {
+    alignSelf: 'center',
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  genreFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
   },
   levelSortRow: {
     flexDirection: 'row',
@@ -4658,4 +4669,25 @@ const styles = StyleSheet.create({
   crossMovieItem: { marginBottom: 8 },
   crossMovieMovie: { fontSize: 12, fontWeight: '600', color: colors.text, marginBottom: 2 },
   crossMovieSentence: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic', lineHeight: 16 },
+  exprTabsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  exprTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exprTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
 });
