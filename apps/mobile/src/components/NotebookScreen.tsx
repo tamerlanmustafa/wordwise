@@ -22,27 +22,35 @@ const COLORS = {
 };
 
 type GroupMode = 'all' | 'movie';
+type ListFilter = 'saved' | 'learned';
 
 export interface NotebookScreenProps {
   onBack: () => void;
+  filter?: ListFilter;
+  title?: string;
 }
 
-export function NotebookScreen({ onBack }: NotebookScreenProps) {
+export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScreenProps) {
   const [words, setWords] = useState<SavedWordEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupMode, setGroupMode] = useState<GroupMode>('all');
+
+  const headerTitle = title ?? (filter === 'learned' ? 'Learned Words' : 'Saved Words');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await wordwiseApi.getSavedWords();
-      setWords(data);
+      const filtered = filter === 'learned'
+        ? data.filter((w) => w.is_learned)
+        : data;
+      setWords(filtered);
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -67,7 +75,7 @@ export function NotebookScreen({ onBack }: NotebookScreenProps) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} />
+        <Header onBack={onBack} title={headerTitle} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
@@ -78,11 +86,15 @@ export function NotebookScreen({ onBack }: NotebookScreenProps) {
   if (words.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} />
+        <Header onBack={onBack} title={headerTitle} />
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>No saved words yet</Text>
+          <Text style={styles.emptyTitle}>
+            {filter === 'learned' ? 'No learned words yet' : 'No saved words yet'}
+          </Text>
           <Text style={styles.emptyBody}>
-            Tap the star icon on any word in a movie's vocabulary list to save it here.
+            {filter === 'learned'
+              ? 'Words you mark as learned during review will appear here.'
+              : "Tap the star icon on any word in a movie's vocabulary list to save it here."}
           </Text>
           <TouchableOpacity style={styles.primaryBtn} onPress={onBack}>
             <Text style={styles.primaryBtnText}>Browse movies</Text>
@@ -94,7 +106,7 @@ export function NotebookScreen({ onBack }: NotebookScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={onBack} />
+      <Header onBack={onBack} title={headerTitle} />
 
       {/* Toggle + count */}
       <View style={styles.toolbar}>
@@ -142,13 +154,13 @@ export function NotebookScreen({ onBack }: NotebookScreenProps) {
   );
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, title }: { onBack: () => void; title?: string }) {
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={8}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>My Words</Text>
+      <Text style={styles.headerTitle}>{title ?? 'My Words'}</Text>
       <View style={{ width: 60 }} />
     </View>
   );

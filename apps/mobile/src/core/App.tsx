@@ -49,7 +49,8 @@ GoogleSignin.configure({
 console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'lists' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
+type ListFilter = 'saved' | 'learned';
 interface MovieData {
   id: number;
   title: string;
@@ -817,6 +818,7 @@ const HomeScreen = ({
   onNavigateToReview,
   onNavigateToStats,
   onNavigateToNotebook,
+  onNavigateToLists,
   onNavigateToAchievements,
   onNavigateToLeaderboard,
 }: {
@@ -831,6 +833,7 @@ const HomeScreen = ({
   onNavigateToReview: () => void;
   onNavigateToStats: () => void;
   onNavigateToNotebook: () => void;
+  onNavigateToLists: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
 }) => {
@@ -1097,7 +1100,7 @@ const HomeScreen = ({
             style={styles.dropdownItem}
             onPress={() => {
               setShowUserMenu(false);
-              // TODO: Navigate to word lists
+              onNavigateToLists();
             }}
           >
             <Text style={styles.dropdownItemIcon}>📚</Text>
@@ -3174,15 +3177,6 @@ const MovieDetailScreen = ({
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={styles.levelDescription}>
-                  <View style={[styles.levelDot, { backgroundColor: activeExprLevel === 'elementary' ? '#4CAF50' : activeExprLevel === 'intermediate' ? '#FFC107' : '#F44336' }]} />
-                  <Text style={styles.levelDescText}>
-                    {activeExprLevel === 'elementary' ? 'A1–A2 Level' : activeExprLevel === 'intermediate' ? 'B1–B2 Level' : 'C1–C2 Level'}
-                  </Text>
-                  <Text style={styles.levelWordCount}>
-                    {activeIdioms.length} expressions
-                  </Text>
-                </View>
               </>
             ) : (
               /* CEFR Level Tabs for Words view */
@@ -3205,15 +3199,6 @@ const MovieDetailScreen = ({
                       </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.levelDescription}>
-                  <View style={[styles.levelDot, { backgroundColor: cefrColors[activeLevel] || colors.primary }]} />
-                  <Text style={styles.levelDescText}>
-                    {cefrLabels[activeLevel] || 'Advanced'}
-                  </Text>
-                  <Text style={styles.levelWordCount}>
-                    {activeWords.length} words
-                  </Text>
                 </View>
               </>
             )}
@@ -3262,6 +3247,100 @@ const MovieDetailScreen = ({
   );
 };
 
+// =====================================================================
+// My Lists index screen — mirrors web's AllListsPage
+// Shows two cards: Saved Words + Learned Words with counts; tapping
+// drills into the corresponding filtered NotebookScreen view.
+// =====================================================================
+const ListsScreen = ({
+  onBack,
+  onOpenList,
+}: {
+  onBack: () => void;
+  onOpenList: (filter: ListFilter) => void;
+}) => {
+  const [savedCount, setSavedCount] = useState<number | null>(null);
+  const [learnedCount, setLearnedCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const words = await wordwiseApi.getSavedWords();
+        setSavedCount(words.length);
+        setLearnedCount(words.filter((w) => w.is_learned).length);
+      } catch {
+        setSavedCount(0);
+        setLearnedCount(0);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const lists: Array<{
+    key: ListFilter;
+    icon: string;
+    name: string;
+    description: string;
+    count: number | null;
+    color: string;
+  }> = [
+    {
+      key: 'saved',
+      icon: '🔖',
+      name: 'Saved Words',
+      description: 'All words you have saved from movies',
+      count: savedCount,
+      color: '#F4A261',
+    },
+    {
+      key: 'learned',
+      icon: '✅',
+      name: 'Learned Words',
+      description: 'Words you have marked as learned',
+      count: learnedCount,
+      color: '#4CAF9A',
+    },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.detailHeaderTitle} numberOfLines={1}>My Lists</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {lists.map((list) => (
+          <TouchableOpacity
+            key={list.key}
+            style={styles.listsCard}
+            onPress={() => onOpenList(list.key)}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.listsCardIcon, { backgroundColor: list.color + '22' }]}>
+              <Text style={{ fontSize: 22 }}>{list.icon}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.listsCardName}>{list.name}</Text>
+              <Text style={styles.listsCardDesc}>{list.description}</Text>
+            </View>
+            <View style={[styles.listsCardBadge, { backgroundColor: list.color }]}>
+              <Text style={styles.listsCardBadgeText}>
+                {loading ? '…' : list.count ?? 0}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
 export default function App() {
   const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
@@ -3273,6 +3352,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
+  const [listFilter, setListFilter] = useState<ListFilter>('saved');
   // Header dropdown's chosen translation language. Persisted to AsyncStorage
   // (key: targetLanguage) so the user's last pick survives app restarts
   // instead of snapping back to user.learning_language every cold start.
@@ -3377,8 +3457,13 @@ export default function App() {
     setCurrentScreen('stats');
   };
 
-  const navigateToNotebook = () => {
+  const navigateToNotebook = (filter: ListFilter = 'saved') => {
+    setListFilter(filter);
     setCurrentScreen('notebook');
+  };
+
+  const navigateToLists = () => {
+    setCurrentScreen('lists');
   };
 
   const navigateToAchievements = () => {
@@ -3467,7 +3552,9 @@ export default function App() {
         ) : currentScreen === 'stats' ? (
           <StatsScreen onBack={navigateToHome} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (
-          <NotebookScreen onBack={navigateToHome} />
+          <NotebookScreen onBack={navigateToLists} filter={listFilter} />
+        ) : currentScreen === 'lists' ? (
+          <ListsScreen onBack={navigateToHome} onOpenList={navigateToNotebook} />
         ) : currentScreen === 'achievements' ? (
           <AchievementsScreen onBack={navigateToHome} />
         ) : currentScreen === 'leaderboard' ? (
@@ -3483,7 +3570,7 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -4252,8 +4339,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     backgroundColor: colors.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   detailPoster: {
     width: 80,
@@ -4328,8 +4413,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: colors.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   overviewTitle: {
     fontSize: 14,
@@ -4457,6 +4540,7 @@ const styles = StyleSheet.create({
   // Word List - Polished design
   wordList: {
     paddingBottom: 40,
+    backgroundColor: colors.paper,
   },
   wordRowWrapper: {
     borderBottomWidth: 1,
@@ -4704,10 +4788,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
   },
+  listsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.paper,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  listsCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  listsCardName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  listsCardDesc: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  listsCardBadge: {
+    minWidth: 32,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  listsCardBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   stickyVocabHeader: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.paper,
     paddingBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 10,
   },
 });
