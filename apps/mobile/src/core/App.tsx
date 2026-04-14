@@ -2256,6 +2256,10 @@ const WordRow = ({
   isSaved,
   onSave,
   isAuthenticated,
+  bookmarkHighlight,
+  accordionMode,
+  lastOpenedKey,
+  onExpand,
 }: {
   word: WordInfo;
   index: number;
@@ -2267,8 +2271,18 @@ const WordRow = ({
   isSaved?: boolean;
   onSave?: (word: string) => void;
   isAuthenticated?: boolean;
+  bookmarkHighlight?: boolean;
+  accordionMode?: boolean;
+  lastOpenedKey?: string | null;
+  onExpand?: (key: string) => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (accordionMode && expanded && lastOpenedKey && lastOpenedKey !== word.word) {
+      setExpanded(false);
+    }
+  }, [accordionMode, lastOpenedKey, expanded, word.word]);
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
@@ -2282,6 +2296,8 @@ const WordRow = ({
       setExpanded(false);
       return;
     }
+
+    onExpand?.(word.word);
 
     // Log interaction (fire-and-forget)
     if (isAuthenticated) {
@@ -2375,7 +2391,7 @@ const WordRow = ({
   return (
     <View style={styles.wordRowWrapper}>
       <TouchableOpacity
-        style={[styles.wordRow, expanded && styles.wordRowExpanded]}
+        style={[styles.wordRow, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
@@ -2554,6 +2570,10 @@ const IdiomRow = ({
   isSaved,
   onSave,
   isAuthenticated,
+  bookmarkHighlight,
+  accordionMode,
+  lastOpenedKey,
+  onExpand,
 }: {
   idiom: IdiomInfo;
   index: number;
@@ -2564,6 +2584,10 @@ const IdiomRow = ({
   isSaved?: boolean;
   onSave?: (word: string) => void;
   isAuthenticated?: boolean;
+  bookmarkHighlight?: boolean;
+  accordionMode?: boolean;
+  lastOpenedKey?: string | null;
+  onExpand?: (key: string) => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [translation, setTranslation] = useState<string | null>(null);
@@ -2572,11 +2596,19 @@ const IdiomRow = ({
 
   const phrase = idiom.phrase;
 
+  useEffect(() => {
+    if (accordionMode && expanded && lastOpenedKey && lastOpenedKey !== phrase) {
+      setExpanded(false);
+    }
+  }, [accordionMode, lastOpenedKey, expanded, phrase]);
+
   const handlePress = async () => {
     if (expanded) {
       setExpanded(false);
       return;
     }
+
+    onExpand?.(phrase);
 
     if (isAuthenticated) {
       wordwiseApi.logInteraction(phrase, 'ROW_CLICK', movieId);
@@ -2642,7 +2674,7 @@ const IdiomRow = ({
   return (
     <View style={styles.wordRowWrapper}>
       <TouchableOpacity
-        style={[styles.wordRow, expanded && styles.wordRowExpanded]}
+        style={[styles.wordRow, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
@@ -2904,13 +2936,11 @@ const BookmarkRowWrapper = ({
   wordKey,
   onLayoutY,
   onBookmark,
-  isCurrentBookmark,
   children,
 }: {
   wordKey: string;
   onLayoutY: (word: string, y: number) => void;
   onBookmark: (word: string) => void;
-  isCurrentBookmark: boolean;
   children: React.ReactNode;
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -2987,19 +3017,6 @@ const BookmarkRowWrapper = ({
         {...panResponder.panHandlers}
       >
         {children}
-        {isCurrentBookmark && (
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(255,209,102,0.32)',
-            }}
-          />
-        )}
       </Animated.View>
     </View>
   );
@@ -3032,6 +3049,8 @@ const MovieDetailScreen = ({
   // restore that context and scroll to the row on re-entry.
   const [currentBookmarkWord, setCurrentBookmarkWord] = useState<string | null>(null);
   const [restoreTrigger, setRestoreTrigger] = useState(0);
+  const [accordionMode, setAccordionMode] = useState(true);
+  const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const bookmarkAppliedRef = useRef(false);
   const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -3533,6 +3552,22 @@ const MovieDetailScreen = ({
                 </View>
               </>
             )}
+
+            {/* Accordion mode toggle */}
+            <View style={styles.accordionToggleRow}>
+              <TouchableOpacity
+                style={styles.accordionToggleBtn}
+                onPress={() => setAccordionMode((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.accordionCheckbox, accordionMode && styles.accordionCheckboxOn]}>
+                  {accordionMode && <Text style={styles.accordionCheckmark}>✓</Text>}
+                </View>
+                <Text style={styles.accordionToggleText}>
+                  Close previous row when opening a new one
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Child 2: Word/Idiom items */}
@@ -3550,7 +3585,6 @@ const MovieDetailScreen = ({
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
-                      isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <IdiomRow
                         idiom={item}
@@ -3562,6 +3596,10 @@ const MovieDetailScreen = ({
                         isSaved={savedWords.has(key)}
                         onSave={handleSaveWord}
                         isAuthenticated={isAuthenticated}
+                        bookmarkHighlight={currentBookmarkWord === key}
+                        accordionMode={accordionMode}
+                        lastOpenedKey={lastOpenedKey}
+                        onExpand={setLastOpenedKey}
                       />
                     </BookmarkRowWrapper>
                   );
@@ -3575,7 +3613,6 @@ const MovieDetailScreen = ({
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
-                      isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <WordRow
                         word={item}
@@ -3588,6 +3625,10 @@ const MovieDetailScreen = ({
                         isSaved={savedWords.has(key)}
                         onSave={handleSaveWord}
                         isAuthenticated={isAuthenticated}
+                        bookmarkHighlight={currentBookmarkWord === key}
+                        accordionMode={accordionMode}
+                        lastOpenedKey={lastOpenedKey}
+                        onExpand={setLastOpenedKey}
                       />
                     </BookmarkRowWrapper>
                   );
@@ -4907,6 +4948,44 @@ const styles = StyleSheet.create({
   },
   wordRowExpanded: {
     backgroundColor: `${colors.primary}08`, // Very subtle highlight
+  },
+  wordRowBookmarked: {
+    backgroundColor: '#FFF1CC',
+  },
+  accordionToggleRow: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  accordionToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accordionCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accordionCheckboxOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  accordionCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  accordionToggleText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   wordRowMain: {
     flexDirection: 'row',
