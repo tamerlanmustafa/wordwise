@@ -367,14 +367,48 @@ const BookCard = ({ book, onPress }: { book: any; onPress: () => void }) => (
 const MobileHeroSection = ({
   movie,
   onPress,
+  continueMovie,
+  onContinuePress,
 }: {
   movie: any | null;
   onPress: (movie: any) => void;
+  continueMovie?: any | null;
+  onContinuePress?: (movie: any) => void;
 }) => {
   if (!movie) return null;
   const backdrop = movie.backdrop_path
     ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
     : null;
+
+  // Floating "Continue" pill — appears when the user has previously opened
+  // a movie. Stops propagation so tapping the pill doesn't also trigger the
+  // hero card's onPress handler.
+  const continuePill = continueMovie ? (
+    <TouchableOpacity
+      style={heroStyles.continuePill}
+      onPress={(e) => {
+        e.stopPropagation();
+        onContinuePress?.(continueMovie);
+      }}
+      activeOpacity={0.85}
+    >
+      {continueMovie.poster_path ? (
+        <Image
+          source={{ uri: `https://image.tmdb.org/t/p/w92${continueMovie.poster_path}` }}
+          style={heroStyles.continuePillPoster}
+        />
+      ) : (
+        <View style={[heroStyles.continuePillPoster, { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
+      )}
+      <View style={heroStyles.continuePillText}>
+        <Text style={heroStyles.continuePillLabel}>CONTINUE</Text>
+        <Text style={heroStyles.continuePillTitle} numberOfLines={1}>
+          {continueMovie.title}
+        </Text>
+      </View>
+      <Text style={heroStyles.continuePillArrow}>▶</Text>
+    </TouchableOpacity>
+  ) : null;
 
   return (
     <TouchableOpacity activeOpacity={0.95} onPress={() => onPress(movie)}>
@@ -383,6 +417,7 @@ const MobileHeroSection = ({
           <ImageBackground source={{ uri: backdrop }} style={heroStyles.backdrop} resizeMode="cover">
             {/* Gradient overlay — darkens bottom 38% so the backdrop stays visible */}
             <View style={heroStyles.overlayBottom} />
+            {continuePill}
             <View style={heroStyles.content}>
               <Text style={heroStyles.title} numberOfLines={1}>{movie.title}</Text>
               {movie.overview ? (
@@ -401,6 +436,7 @@ const MobileHeroSection = ({
           </ImageBackground>
         ) : (
           <View style={[heroStyles.backdrop, { backgroundColor: colors.primary }]}>
+            {continuePill}
             <View style={heroStyles.content}>
               <Text style={heroStyles.title}>{movie.title}</Text>
             </View>
@@ -414,6 +450,47 @@ const MobileHeroSection = ({
 const heroStyles = StyleSheet.create({
   container: { width: '100%', height: 360 },
   backdrop: { width: '100%', height: '100%', justifyContent: 'flex-end' },
+  continuePill: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    borderRadius: 22,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingRight: 12,
+    maxWidth: 240,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  continuePillPoster: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginRight: 10,
+  },
+  continuePillText: {
+    flexShrink: 1,
+    marginRight: 8,
+  },
+  continuePillLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFD166',
+    letterSpacing: 1,
+  },
+  continuePillTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  continuePillArrow: {
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
   overlayBottom: {
     position: 'absolute',
     bottom: 0,
@@ -868,6 +945,18 @@ const HomeScreen = ({
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [todaysWordSaved, setTodaysWordSaved] = useState(false);
+  const [lastOpenedMovie, setLastOpenedMovie] = useState<any | null>(null);
+
+  // Rehydrate the last opened movie so the floating "Continue" pill can
+  // appear on the hero. Falls back to nothing on fresh installs.
+  useEffect(() => {
+    AsyncStorage.getItem('last_opened_movie')
+      .then((raw) => {
+        if (!raw) return;
+        try { setLastOpenedMovie(JSON.parse(raw)); } catch {}
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // No ads on first session (§5). Mark this session, show ads from the next one.
@@ -977,16 +1066,21 @@ const HomeScreen = ({
   };
 
   const handleMoviePress = (movie: any) => {
-    onMoviePress({
+    const normalized = {
       id: movie.id || movie.tmdb_id || movie.movie_id,
       title: movie.title,
       poster_path: movie.poster_path,
+      backdrop_path: movie.backdrop_path,
       release_date: movie.release_date || (movie.year ? `${movie.year}-01-01` : undefined),
       overview: movie.overview || movie.description,
       genre_ids: movie.genre_ids,
       vote_average: movie.vote_average,
       original_language: movie.original_language || 'en',
-    });
+    };
+    // Persist so the home hero can show a "Continue" pill next session.
+    setLastOpenedMovie(normalized);
+    AsyncStorage.setItem('last_opened_movie', JSON.stringify(normalized)).catch(() => {});
+    onMoviePress(normalized);
   };
 
   const handleBookPress = (book: any) => {
@@ -1121,11 +1215,14 @@ const HomeScreen = ({
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
+        {/* Hero — trending movie by default, with a floating "Continue" pill
+            on the backdrop when the user has opened a movie before. */}
         {!loading && (
           <MobileHeroSection
             movie={trendingMovies.find((m: any) => m.backdrop_path) ?? trendingMovies[0] ?? null}
             onPress={handleMoviePress}
+            continueMovie={lastOpenedMovie}
+            onContinuePress={handleMoviePress}
           />
         )}
 
