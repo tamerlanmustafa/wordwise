@@ -16,6 +16,8 @@ import {
   Animated,
   Modal,
   Alert,
+  PanResponder,
+  Easing,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -2891,6 +2893,118 @@ const SearchResultsScreen = ({
   );
 };
 
+// "Where you left off" row wrapper.
+// Reports its vertical offset via onLayout so the parent can scrollTo, and
+// pulses a warm gold background when `pulse` flips true — Kindle-style
+// "you were here" marker that fades away without demanding attention.
+// Swipe a row to the right past a threshold to mark this word as
+// "leave off here" — the resume point for next time you open the movie.
+// Also pulses in warm gold when re-entered with this word as the bookmark.
+const BookmarkRowWrapper = ({
+  wordKey,
+  onLayoutY,
+  onBookmark,
+  isCurrentBookmark,
+  children,
+}: {
+  wordKey: string;
+  onLayoutY: (word: string, y: number) => void;
+  onBookmark: (word: string) => void;
+  isCurrentBookmark: boolean;
+  children: React.ReactNode;
+}) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [dragging, setDragging] = useState(false);
+  const triggeredRef = useRef(false);
+
+  const THRESHOLD = 90;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && g.dx > 10,
+      onPanResponderGrant: () => {
+        triggeredRef.current = false;
+        setDragging(true);
+      },
+      onPanResponderMove: (_, g) => {
+        const x = Math.max(0, Math.min(g.dx, 160));
+        translateX.setValue(x);
+      },
+      onPanResponderRelease: (_, g) => {
+        setDragging(false);
+        if (g.dx > THRESHOLD && !triggeredRef.current) {
+          triggeredRef.current = true;
+          onBookmark(wordKey);
+          Animated.sequence([
+            Animated.timing(translateX, { toValue: 130, duration: 110, useNativeDriver: true }),
+            Animated.timing(translateX, { toValue: 0, duration: 260, useNativeDriver: true }),
+          ]).start();
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        setDragging(false);
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  const revealOpacity = translateX.interpolate({
+    inputRange: [0, 30, 160],
+    outputRange: [0, 0.7, 1],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <View
+      onLayout={(e) => onLayoutY(wordKey, e.nativeEvent.layout.y)}
+      style={{ overflow: 'hidden' }}
+    >
+      {dragging && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 160,
+            backgroundColor: '#7C5CBF',
+            justifyContent: 'center',
+            paddingLeft: 16,
+            opacity: revealOpacity,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
+            🔖  Leave off here
+          </Text>
+        </Animated.View>
+      )}
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+      >
+        {children}
+        {isCurrentBookmark && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(255,209,102,0.32)',
+            }}
+          />
+        )}
+      </Animated.View>
+    </View>
+  );
+};
+
 // Movie Detail Screen
 const MovieDetailScreen = ({
   movie,
@@ -2913,6 +3027,19 @@ const MovieDetailScreen = ({
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const isAuthenticated = useAuthStore((s) => s.status) === 'authenticated' || useAuthStore((s) => s.status) === 'offline_authenticated';
 
+  // Semantic "where you left off" bookmark. Tracks the word the user swiped
+  // to bookmark inside this movie, plus the tab/level it lived in, so we can
+  // restore that context and scroll to the row on re-entry.
+  const [currentBookmarkWord, setCurrentBookmarkWord] = useState<string | null>(null);
+  const [restoreTrigger, setRestoreTrigger] = useState(0);
+  const bookmarkAppliedRef = useRef(false);
+  const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const rowYOffsets = useRef<Record<string, number>>({});
+  const listContainerY = useRef<number>(0);
+
+  const bookmarkKey = `movie_bookmark_${movie.id}`;
+
   // Animation for tab switching
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const prevLevelRef = useRef<string>(activeLevel);
@@ -2927,6 +3054,8 @@ const MovieDetailScreen = ({
     const modeChanged = prevViewModeRef.current !== viewMode;
 
     if (levelChanged || modeChanged) {
+      // New list = stale row Y offsets; rebuild them from the fresh onLayouts
+      rowYOffsets.current = {};
       Animated.sequence([
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -2960,6 +3089,9 @@ const MovieDetailScreen = ({
   const loadVocabulary = async () => {
     setLoading(true);
     setError(null);
+    bookmarkAppliedRef.current = false;
+    pendingBookmarkRef.current = null;
+    rowYOffsets.current = {};
 
     try {
       // Go straight to fetch - the backend tries all sources (DB, subtitles, STANDS4 PDF/API)
@@ -3019,10 +3151,25 @@ const MovieDetailScreen = ({
         }
       }
 
-      // Set initial active level to the one with most words
-      const levels = Object.entries(vocabResult.level_distribution);
-      const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
-      setActiveLevel(maxLevel[0]);
+      // Restore "where you left off" bookmark, or fall back to the level
+      // with the most words. The pending word is applied in a separate effect
+      // after the list renders and onLayout has recorded row positions.
+      const bookmark = await readBookmark();
+        if (bookmark) {
+        pendingBookmarkRef.current = bookmark;
+        setCurrentBookmarkWord(bookmark.word);
+        setViewMode(bookmark.mode);
+        if (bookmark.mode === 'levels') {
+          setActiveLevel(bookmark.level);
+        } else {
+          setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
+        }
+        setRestoreTrigger((n) => n + 1);
+      } else {
+        const levels = Object.entries(vocabResult.level_distribution);
+        const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
+        setActiveLevel(maxLevel[0]);
+      }
     } catch (err: any) {
       console.error('Failed to load vocabulary:', err);
       // Try offline cache before showing error
@@ -3030,10 +3177,23 @@ const MovieDetailScreen = ({
       if (cached) {
         setMovieId(movie.id);
         setVocabulary(cached);
-        const levels = Object.entries(cached.level_distribution);
-        if (levels.length > 0) {
-          const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
-          setActiveLevel(maxLevel[0]);
+        const bookmark = await readBookmark();
+        if (bookmark) {
+          pendingBookmarkRef.current = bookmark;
+          setCurrentBookmarkWord(bookmark.word);
+          setViewMode(bookmark.mode);
+          if (bookmark.mode === 'levels') {
+            setActiveLevel(bookmark.level);
+          } else {
+            setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
+          }
+          setRestoreTrigger((n) => n + 1);
+        } else {
+          const levels = Object.entries(cached.level_distribution);
+          if (levels.length > 0) {
+            const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
+            setActiveLevel(maxLevel[0]);
+          }
         }
       } else {
         setError(err.message || 'Failed to load vocabulary');
@@ -3062,6 +3222,79 @@ const MovieDetailScreen = ({
       // Silently fail — don't interrupt UX
     }
   };
+
+  // --- "Where you left off" bookmark helpers ---
+  // Bookmark may carry a word (the top-visible row from scrolling, or an
+  // explicit save/tap) plus the tab/level. `explicit` = true only for
+  // strong signals like saves/taps — those are the ones that pulse on
+  // restore. Scroll anchors just scroll silently.
+  type Bookmark = {
+    word: string | null;
+    level: string;
+    mode: 'levels' | 'idioms';
+    explicit: boolean;
+  };
+
+  async function readBookmark(): Promise<Bookmark | null> {
+    try {
+      const raw = await AsyncStorage.getItem(bookmarkKey);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  const recordBookmark = (word: string) => {
+    const bm: Bookmark = {
+      word,
+      level: viewMode === 'levels' ? activeLevel : activeExprLevel,
+      mode: viewMode,
+      explicit: true,
+    };
+    setCurrentBookmarkWord(word);
+    AsyncStorage.setItem(bookmarkKey, JSON.stringify(bm)).catch(() => {});
+  };
+
+  // Restore scroll position + (optionally) pulse the bookmarked row.
+  // Fires once per movie open when a bookmark exists. Scrolls for any
+  // word anchor; pulses only for explicit engagement (save/tap) so scroll
+  // resumes feel invisible while saves feel acknowledged.
+  useEffect(() => {
+    if (!vocabulary || !pendingBookmarkRef.current || bookmarkAppliedRef.current) return;
+    const bm = pendingBookmarkRef.current;
+    let attempts = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const tryScroll = () => {
+      const rowY = bm.word ? rowYOffsets.current[bm.word] : undefined;
+      if (rowY != null && scrollViewRef.current) {
+        const target = Math.max(0, listContainerY.current + rowY - 120);
+        const scrollAnim = new Animated.Value(0);
+        const id = scrollAnim.addListener(({ value }) => {
+          scrollViewRef.current?.scrollTo({ y: value, animated: false });
+        });
+        Animated.timing(scrollAnim, {
+          toValue: target,
+          duration: 1100,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }).start(() => {
+          scrollAnim.removeListener(id);
+        });
+        bookmarkAppliedRef.current = true;
+        pendingBookmarkRef.current = null;
+        return;
+      }
+      if (++attempts < 20) {
+        timers.push(setTimeout(tryScroll, 150));
+      } else {
+        bookmarkAppliedRef.current = true;
+        pendingBookmarkRef.current = null;
+      }
+    };
+    timers.push(setTimeout(tryScroll, 400));
+    return () => { timers.forEach(clearTimeout); };
+  }, [vocabulary, activeLevel, activeExprLevel, viewMode, restoreTrigger]);
 
   // CEFR level groups for the Words view
   const wordLevels = useMemo(() => {
@@ -3192,6 +3425,7 @@ const MovieDetailScreen = ({
         </>
       ) : vocabulary ? (
         <ScrollView
+          ref={scrollViewRef}
           stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
@@ -3302,39 +3536,62 @@ const MovieDetailScreen = ({
           </View>
 
           {/* Child 2: Word/Idiom items */}
-          <Animated.View style={{ opacity: fadeAnim }}>
+          <Animated.View
+            style={{ opacity: fadeAnim }}
+            onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
+          >
             <View style={styles.wordList}>
               {isIdiomsTab ? (
-                activeIdioms.map((item, index) => (
-                  <IdiomRow
-                    key={`idiom-${item.phrase}-${index}`}
-                    idiom={item}
-                    index={index}
-                    rowNumber={index + 1}
-                    groupColor={cefrColors[activeLevel] || colors.primary}
-                    movieId={movieId}
-                    targetLang={targetLang}
-                    isSaved={savedWords.has(item.phrase)}
-                    onSave={handleSaveWord}
-                    isAuthenticated={isAuthenticated}
-                  />
-                ))
+                activeIdioms.map((item, index) => {
+                  const key = item.phrase;
+                  return (
+                    <BookmarkRowWrapper
+                      key={`idiom-${key}-${index}`}
+                      wordKey={key}
+                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                      onBookmark={recordBookmark}
+                      isCurrentBookmark={currentBookmarkWord === key}
+                    >
+                      <IdiomRow
+                        idiom={item}
+                        index={index}
+                        rowNumber={index + 1}
+                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        movieId={movieId}
+                        targetLang={targetLang}
+                        isSaved={savedWords.has(key)}
+                        onSave={handleSaveWord}
+                        isAuthenticated={isAuthenticated}
+                      />
+                    </BookmarkRowWrapper>
+                  );
+                })
               ) : (
-                activeWords.map((item, index) => (
-                  <WordRow
-                    key={`${item.word}-${index}`}
-                    word={item}
-                    index={index}
-                    rowNumber={index + 1}
-                    groupColor={cefrColors[activeLevel] || colors.primary}
-                    movieId={movieId}
-                    movieTitle={movie.title}
-                    targetLang={targetLang}
-                    isSaved={savedWords.has(item.word)}
-                    onSave={handleSaveWord}
-                    isAuthenticated={isAuthenticated}
-                  />
-                ))
+                activeWords.map((item, index) => {
+                  const key = item.word;
+                  return (
+                    <BookmarkRowWrapper
+                      key={`${key}-${index}`}
+                      wordKey={key}
+                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                      onBookmark={recordBookmark}
+                      isCurrentBookmark={currentBookmarkWord === key}
+                    >
+                      <WordRow
+                        word={item}
+                        index={index}
+                        rowNumber={index + 1}
+                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        movieId={movieId}
+                        movieTitle={movie.title}
+                        targetLang={targetLang}
+                        isSaved={savedWords.has(key)}
+                        onSave={handleSaveWord}
+                        isAuthenticated={isAuthenticated}
+                      />
+                    </BookmarkRowWrapper>
+                  );
+                })
               )}
             </View>
           </Animated.View>
