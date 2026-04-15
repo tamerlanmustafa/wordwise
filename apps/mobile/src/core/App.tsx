@@ -2952,11 +2952,13 @@ const BookmarkRowWrapper = ({
   wordKey,
   onLayoutY,
   onBookmark,
+  isCurrentBookmark,
   children,
 }: {
   wordKey: string;
   onLayoutY: (word: string, y: number) => void;
   onBookmark: (word: string) => void;
+  isCurrentBookmark: boolean;
   children: React.ReactNode;
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -3017,14 +3019,14 @@ const BookmarkRowWrapper = ({
             top: 0,
             bottom: 0,
             width: 160,
-            backgroundColor: '#7C5CBF',
+            backgroundColor: isCurrentBookmark ? '#E53935' : '#7C5CBF',
             justifyContent: 'center',
             paddingLeft: 16,
             opacity: revealOpacity,
           }}
         >
           <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
-            🔖  Leave off here
+            {isCurrentBookmark ? '✕  Remove bookmark' : '🔖  Leave off here'}
           </Text>
         </Animated.View>
       )}
@@ -3064,6 +3066,10 @@ const MovieDetailScreen = ({
   // to bookmark inside this movie, plus the tab/level it lived in, so we can
   // restore that context and scroll to the row on re-entry.
   const [currentBookmarkWord, setCurrentBookmarkWord] = useState<string | null>(null);
+  const currentBookmarkWordRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentBookmarkWordRef.current = currentBookmarkWord;
+  }, [currentBookmarkWord]);
   const [restoreTrigger, setRestoreTrigger] = useState(0);
   const [accordionMode, setAccordionMode] = useState(true);
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
@@ -3281,6 +3287,11 @@ const MovieDetailScreen = ({
   }
 
   const recordBookmark = (word: string) => {
+    if (currentBookmarkWordRef.current === word) {
+      setCurrentBookmarkWord(null);
+      AsyncStorage.removeItem(bookmarkKey).catch(() => {});
+      return;
+    }
     const bm: Bookmark = {
       word,
       level: viewMode === 'levels' ? activeLevel : activeExprLevel,
@@ -3593,6 +3604,7 @@ const MovieDetailScreen = ({
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
+                      isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <IdiomRow
                         idiom={item}
@@ -3621,6 +3633,7 @@ const MovieDetailScreen = ({
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
+                      isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <WordRow
                         word={item}
