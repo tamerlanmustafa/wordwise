@@ -44,6 +44,10 @@
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>WordWise uses this to save movie posters to your Photos.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>WordWise uses this to save movie posters to your Photos.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>

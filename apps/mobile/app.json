@@ -22,6 +22,14 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.400446242104-a9laa57dook0og2k93g9amjgieqo2mj7"
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "WordWise uses this to save movie posters to your Photos.",
+          "savePhotosPermission": "WordWise uses this to save movie posters to your Photos.",
+          "isAccessMediaLocationEnabled": false
+        }
       ]
     ],
     "ios": {

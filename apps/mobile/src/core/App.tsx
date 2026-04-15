@@ -28,6 +28,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore, useShowAds, useIsPremium } from '../stores/entitlementsStore';
 import { wordwiseApi, tmdbApi, srsApi, premiumApi, API_BASE_URL, type VocabularyResponse, type WordInfo, type IdiomInfo, type TodaysWord, type CrossMovieSentence } from '../services/api';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { ReportDialog } from '../components/ReportDialog';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
@@ -3073,6 +3075,7 @@ const MovieDetailScreen = ({
   const [restoreTrigger, setRestoreTrigger] = useState(0);
   const [accordionMode, setAccordionMode] = useState(true);
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
+  const [posterZoomOpen, setPosterZoomOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
   const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -3401,10 +3404,12 @@ const MovieDetailScreen = ({
 
       {/* Movie Info - always visible */}
       <View style={styles.movieInfoBar}>
-        <Image
-          source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-          style={styles.detailPoster}
-        />
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
+          <Image
+            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+            style={styles.detailPoster}
+          />
+        </TouchableOpacity>
         <View style={styles.movieInfoText}>
           <Text style={styles.movieInfoTitle}>{movie.title}</Text>
           <View style={styles.movieMetaRow}>
@@ -3659,6 +3664,48 @@ const MovieDetailScreen = ({
           </Animated.View>
         </ScrollView>
       ) : null}
+      <Modal
+        visible={posterZoomOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPosterZoomOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setPosterZoomOpen(false)}>
+          <View style={styles.posterZoomBackdrop}>
+            <TouchableWithoutFeedback>
+              <View>
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w780${movie.poster_path}` }}
+                  style={styles.posterZoomImage}
+                  resizeMode="contain"
+                />
+                <TouchableOpacity
+                  style={styles.posterShareBtn}
+                  onPress={async () => {
+                    try {
+                      const remote = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
+                      const safeTitle = movie.title.replace(/[^\w\-]+/g, '_');
+                      const localPath = `${FileSystem.cacheDirectory}${safeTitle}_poster.jpg`;
+                      const { uri } = await FileSystem.downloadAsync(remote, localPath);
+                      const { status } = await MediaLibrary.requestPermissionsAsync();
+                      if (status === 'granted') {
+                        await MediaLibrary.saveToLibraryAsync(uri);
+                        Alert.alert('Saved', 'Poster saved to your Photos.');
+                      } else {
+                        Alert.alert('Permission denied', 'Allow photo access to save the poster.');
+                      }
+                    } catch (e) {
+                      Alert.alert('Download failed', 'Could not save poster.');
+                    }
+                  }}
+                >
+                  <Text style={styles.posterShareBtnText}>Save to photos</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -4761,6 +4808,33 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 6,
     backgroundColor: colors.border,
+  },
+  posterZoomBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  posterZoomImage: {
+    width: 320,
+    height: 480,
+  },
+  posterShareBtn: {
+    marginTop: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+  },
+  posterShareBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   movieInfoText: {
     flex: 1,
