@@ -35,14 +35,24 @@ class ScriptIngestionService:
         movie_title: Optional[str] = None,
         script_id: Optional[str] = None,
         movie_id: Optional[int] = None,
+        tmdb_id: Optional[int] = None,
         year: Optional[int] = None,
         force_refresh: bool = False
     ) -> Dict[str, any]:
         search_key = script_id or movie_title
         logger.info(
             f"[ScriptIngestion] Processing '{search_key}' "
-            f"(script_id={script_id}, movie_id={movie_id}, year={year}, force_refresh={force_refresh})"
+            f"(script_id={script_id}, movie_id={movie_id}, tmdb_id={tmdb_id}, year={year}, force_refresh={force_refresh})"
         )
+
+        # If tmdb_id is provided, resolve it to a movie_id first — TMDB IDs are
+        # unique, so this disambiguates titles like "The Dark Knight" vs
+        # "The Dark Knight Rises".
+        if tmdb_id and not movie_id:
+            resolved = await self.db.movie.find_unique(where={"tmdbId": tmdb_id})
+            if resolved:
+                movie_id = resolved.id
+                logger.info(f"[ScriptIngestion] Resolved tmdb_id={tmdb_id} → movie_id={movie_id}")
 
         # Priority 1: Check database cache first (fastest)
         if not force_refresh:
@@ -65,6 +75,7 @@ class ScriptIngestionService:
                     saved_script = await self._save_to_database(
                         movie_title=movie_title,
                         movie_id=movie_id,
+                        tmdb_id=tmdb_id,
                         source_used="SUBTITLE_SRT",
                         script_data=script_data
                     )
@@ -101,6 +112,7 @@ class ScriptIngestionService:
                     saved_script = await self._save_to_database(
                         movie_title=movie_title,
                         movie_id=movie_id,
+                        tmdb_id=tmdb_id,
                         source_used=source_name,
                         script_data=script_data
                     )
@@ -173,11 +185,12 @@ class ScriptIngestionService:
         movie_title: str,
         movie_id: Optional[int],
         source_used: str,
-        script_data: Dict[str, any]
+        script_data: Dict[str, any],
+        tmdb_id: Optional[int] = None,
     ) -> Dict[str, any]:
         try:
             if not movie_id:
-                logger.info(f"[DB] Creating new movie record for '{movie_title}'")
+                logger.info(f"[DB] Creating new movie record for '{movie_title}' (tmdb_id={tmdb_id})")
 
                 metadata = script_data.get("metadata", {})
                 actual_title = metadata.get("title", movie_title)
@@ -191,14 +204,16 @@ class ScriptIngestionService:
                 if not year:
                     year = 2000
 
-                movie = await self.db.movie.create(
-                    data={
-                        "title": movie_title,
-                        "actualTitle": actual_title,
-                        "year": year,
-                        "description": metadata.get("synopsis", "")[:500] if metadata.get("synopsis") else None,
-                    }
-                )
+                create_data = {
+                    "title": movie_title,
+                    "actualTitle": actual_title,
+                    "year": year,
+                    "description": metadata.get("synopsis", "")[:500] if metadata.get("synopsis") else None,
+                }
+                if tmdb_id:
+                    create_data["tmdbId"] = tmdb_id
+
+                movie = await self.db.movie.create(data=create_data)
                 movie_id = movie.id
 
             logger.info(f"[DB] Saving script for movie_id={movie_id}, source={source_used}")

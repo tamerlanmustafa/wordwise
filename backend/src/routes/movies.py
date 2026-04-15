@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
@@ -127,7 +128,24 @@ async def list_movies_by_cefr(
                    m.difficulty_score  AS difficulty_score,
                    m.tmdb_id           AS tmdb_id,
                    m.tmdb_vote_average AS vote_average,
-                   m.tmdb_vote_count   AS vote_count
+                   m.tmdb_vote_count   AS vote_count,
+                   (
+                     SELECT COUNT(DISTINCT wc.lemma)
+                     FROM movie_scripts ms
+                     JOIN word_classifications wc ON wc.script_id = ms.id
+                     WHERE ms.movie_id = m.id
+                   )                   AS unique_words,
+                   (
+                     SELECT jsonb_object_agg(level, cnt)
+                     FROM (
+                       SELECT wc.cefr_level::text AS level,
+                              COUNT(*) AS cnt
+                       FROM movie_scripts ms
+                       JOIN word_classifications wc ON wc.script_id = ms.id
+                       WHERE ms.movie_id = m.id
+                       GROUP BY wc.cefr_level
+                     ) sub
+                   )                   AS cefr_distribution
             FROM movies m
             WHERE m.difficulty_score >= $1
               AND m.difficulty_score <= $2
@@ -152,7 +170,24 @@ async def list_movies_by_cefr(
                    m.difficulty_score  AS difficulty_score,
                    m.tmdb_id           AS tmdb_id,
                    m.tmdb_vote_average AS vote_average,
-                   m.tmdb_vote_count   AS vote_count
+                   m.tmdb_vote_count   AS vote_count,
+                   (
+                     SELECT COUNT(DISTINCT wc.lemma)
+                     FROM movie_scripts ms
+                     JOIN word_classifications wc ON wc.script_id = ms.id
+                     WHERE ms.movie_id = m.id
+                   )                   AS unique_words,
+                   (
+                     SELECT jsonb_object_agg(level, cnt)
+                     FROM (
+                       SELECT wc.cefr_level::text AS level,
+                              COUNT(*) AS cnt
+                       FROM movie_scripts ms
+                       JOIN word_classifications wc ON wc.script_id = ms.id
+                       WHERE ms.movie_id = m.id
+                       GROUP BY wc.cefr_level
+                     ) sub
+                   )                   AS cefr_distribution
             FROM movies m
             WHERE m.difficulty_score >= $1
               AND m.difficulty_score <= $2
@@ -163,6 +198,11 @@ async def list_movies_by_cefr(
             hi,
             limit,
         )
+
+    import logging
+    log = logging.getLogger("uvicorn.error")
+    for r in rows:
+        log.info(f"[BY-CEFR] movie_id={r['movie_id']} tmdb_id={r['tmdb_id']} title={r['title']!r} dist={r.get('cefr_distribution')}")
 
     return {
         "level": key,
@@ -177,6 +217,12 @@ async def list_movies_by_cefr(
                 "difficulty_score": r["difficulty_score"],
                 "vote_average": r["vote_average"],
                 "vote_count": r["vote_count"],
+                "unique_words": r.get("unique_words"),
+                "cefr_distribution": (
+                    json.loads(r["cefr_distribution"])
+                    if isinstance(r.get("cefr_distribution"), str)
+                    else r.get("cefr_distribution")
+                ),
             }
             for r in rows
         ],
@@ -460,6 +506,10 @@ async def get_vocabulary_full(
             key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999),
             reverse=True
         )
+
+    import logging
+    log = logging.getLogger("uvicorn.error")
+    log.info(f"[VOCAB-FULL] movie_id={movie_id} script_id={script.id} title={movie.title!r} dist={level_distribution}")
 
     # Detect idioms from script text
     from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms

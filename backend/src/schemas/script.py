@@ -44,6 +44,7 @@ class ScriptFetchRequest(BaseModel):
     movie_title: Optional[str] = Field(None, min_length=1, max_length=200)
     script_id: Optional[str] = Field(None, description="STANDS4 script ID (from search results)")
     movie_id: Optional[int] = None
+    tmdb_id: Optional[int] = Field(None, description="TMDB movie id — use when available to disambiguate similar titles")
     year: Optional[int] = Field(None, ge=1900, le=2100)
     force_refresh: bool = Field(False, description="Force refetch even if cached")
 

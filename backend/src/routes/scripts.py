@@ -69,6 +69,7 @@ async def fetch_script(
             movie_title=request.movie_title,
             script_id=request.script_id,
             movie_id=request.movie_id,
+            tmdb_id=request.tmdb_id,
             year=request.year,
             force_refresh=request.force_refresh
         )

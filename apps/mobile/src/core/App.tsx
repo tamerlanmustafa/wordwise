@@ -619,9 +619,11 @@ const TmdbPoster = ({ tmdbId, style }: { tmdbId: number; style: any }) => {
 const RankedMovieList = ({
   movies,
   onMoviePress,
+  userLevel,
 }: {
   movies: any[];
   onMoviePress: (movie: any) => void;
+  userLevel?: string;
 }) => {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const OVERVIEW_LIMIT = 100;
@@ -681,6 +683,23 @@ const RankedMovieList = ({
                     {movie.difficulty_score != null && (
                       <Text>  ·  <Text style={{ color: cefrColors[scoreToCefr(movie.difficulty_score)!] || colors.textSecondary }}>{scoreToCefr(movie.difficulty_score)} ({movie.difficulty_score}%)</Text></Text>
                     )}
+                    {(() => {
+                      const lvl = (userLevel || '').toUpperCase();
+                      const dist = movie.cefr_distribution;
+                      const levelCount = dist && lvl ? Number(dist[lvl] || 0) : 0;
+                      console.log(`[HomeList] movie_id=${movie.movie_id} tmdb_id=${movie.tmdb_id} title="${movie.title}" lvl=${lvl} count=${levelCount} dist=`, dist);
+                      if (levelCount > 0) {
+                        return (
+                          <Text style={{ color: colors.textSecondary }}>  ·  {levelCount} {lvl} words</Text>
+                        );
+                      }
+                      if (movie.unique_words > 0) {
+                        return (
+                          <Text style={{ color: colors.textSecondary }}>  ·  {movie.unique_words} words</Text>
+                        );
+                      }
+                      return null;
+                    })()}
                   </Text>
                 )}
               </View>
@@ -1072,6 +1091,7 @@ const HomeScreen = ({
   const handleMoviePress = (movie: any) => {
     const normalized = {
       id: movie.id || movie.tmdb_id || movie.movie_id,
+      tmdb_id: movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined),
       title: movie.title,
       poster_path: movie.poster_path,
       backdrop_path: movie.backdrop_path,
@@ -1513,6 +1533,7 @@ const HomeScreen = ({
                 return levelSortAsc ? -diff : diff;
               })}
               onMoviePress={handleMoviePress}
+              userLevel={selectedLevel}
             />
           ) : (
             <SnapPager
@@ -3141,7 +3162,9 @@ const MovieDetailScreen = ({
       // Go straight to fetch - the backend tries all sources (DB, subtitles, STANDS4 PDF/API)
       // Search is only needed for user-typed queries in the search bar
       const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
-      const scriptResult = await wordwiseApi.fetchScript('', cleanTitle);
+      const tmdbId = movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined);
+      console.log(`[MovieDetail] Fetching script for title="${cleanTitle}" tmdb_id=${tmdbId}`);
+      const scriptResult = await wordwiseApi.fetchScript('', cleanTitle, tmdbId);
 
       if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
         setError('Script too short or not found');
@@ -3181,6 +3204,7 @@ const MovieDetailScreen = ({
         console.log('[MovieDetail] Got preview vocabulary');
       }
       setVocabulary(vocabResult);
+      console.log(`[VocabCount] movie_id=${scriptResult.movie_id} title="${movie.title}" dist=`, vocabResult.level_distribution);
 
       // Cache for offline access
       offlineCache.saveVocabulary(scriptResult.movie_id, movie.title, vocabResult);
@@ -3582,6 +3606,12 @@ const MovieDetailScreen = ({
                     </View>
                   </View>
                 </View>
+                <Text style={styles.cefrLevelCount}>
+                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                    {activeData?.count ?? 0}
+                  </Text>{' '}
+                  {activeLevel} words
+                </Text>
               </>
             )}
 
@@ -5046,6 +5076,13 @@ const styles = StyleSheet.create({
   },
   wordRowBookmarked: {
     backgroundColor: '#FFF1CC',
+  },
+  cefrLevelCount: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: colors.textSecondary,
+    paddingTop: 8,
+    paddingBottom: 2,
   },
   accordionToggleRow: {
     flexDirection: 'row',

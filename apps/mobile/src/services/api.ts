@@ -192,13 +192,18 @@ export const wordwiseApi = {
   },
 
   // Fetch script for a movie
-  fetchScript: async (scriptId: string, movieTitle?: string): Promise<ScriptResponse> => {
+  fetchScript: async (
+    scriptId: string,
+    movieTitle?: string,
+    tmdbId?: number,
+  ): Promise<ScriptResponse> => {
     const res = await fetch(`${API_BASE_URL}/api/scripts/fetch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         script_id: scriptId,
         movie_title: movieTitle,
+        tmdb_id: tmdbId,
         force_refresh: false,
       }),
     });
