@@ -85,9 +85,7 @@ const SCHEMA = `
 class MockDatabase implements Database {
   private data: Map<string, unknown[]> = new Map();
 
-  execute(query: string, _params?: unknown[]): void {
-    console.log('[MockDB] Execute:', query.substring(0, 50));
-  }
+  execute(_query: string, _params?: unknown[]): void {}
 
   async executeAsync(query: string, params?: unknown[]): Promise<void> {
     this.execute(query, params);

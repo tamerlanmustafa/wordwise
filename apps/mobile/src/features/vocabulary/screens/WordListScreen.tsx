@@ -25,9 +25,8 @@ export const WordListScreen = () => {
     contentType,
   });
 
-  const handleWordPress = useCallback((word: Word) => {
+  const handleWordPress = useCallback((_word: Word) => {
     // TODO: Show word detail modal
-    console.log('Word pressed:', word.word);
   }, []);
 
   const renderItem = useCallback(

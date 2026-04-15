@@ -45,12 +45,10 @@ import { PrivacyScreen } from '../components/PrivacyScreen';
 import { initializeBilling } from '../services/billing';
 
 // Configure Google Sign-In
-console.log('[Google Sign-In] Configuring with iOS Client ID:', GOOGLE_CLIENT_ID_IOS);
 GoogleSignin.configure({
   iosClientId: GOOGLE_CLIENT_ID_IOS,
   scopes: ['profile', 'email'],
 });
-console.log('[Google Sign-In] Configuration complete');
 
 // Types for navigation
 type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'lists' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
@@ -121,35 +119,23 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
   const [error, setError] = useState('');
 
   const handleGoogleSignIn = async () => {
-    console.log('[Google Sign-In] Button pressed, starting sign-in flow...');
     setError('');
     setGoogleLoading(true);
 
     try {
-      console.log('[Google Sign-In] Calling GoogleSignin.signIn()...');
-      // Sign in with Google (no hasPlayServices check needed for iOS)
       const signInResult = await GoogleSignin.signIn();
-      console.log('[Google Sign-In] signIn() completed');
 
-      console.log('[Google Sign-In] Result:', JSON.stringify(signInResult, null, 2));
-
-      // Handle different response formats from the library
       const userData = signInResult.data?.user || signInResult.user || signInResult.data;
       if (!userData) {
         throw new Error('No user data received from Google');
       }
 
-      // Get the ID token - try multiple approaches
       let idToken = signInResult.data?.idToken || signInResult.idToken;
-
-      // If no idToken in result, try to get tokens separately
       if (!idToken) {
         try {
           const tokens = await GoogleSignin.getTokens();
           idToken = tokens.idToken || tokens.accessToken;
-        } catch (tokenErr) {
-          console.log('[Google Sign-In] Could not get tokens separately:', tokenErr);
-        }
+        } catch {}
       }
 
       const email = userData.email;
@@ -157,11 +143,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
       const photo = userData.photo;
       const googleId = userData.id;
 
-      console.log('[Google Sign-In] User data:', { email, name, photo, googleId, hasIdToken: !!idToken });
-
-      // Send to backend for login/registration
       const { config } = await import('../config/env');
-      console.log('[Google Sign-In] Calling backend:', `${config.API_URL}/auth/google/login`);
 
       const backendResponse = await fetch(`${config.API_URL}/auth/google/login`, {
         method: 'POST',
@@ -175,9 +157,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
         }),
       });
 
-      console.log('[Google Sign-In] Backend response status:', backendResponse.status);
       const data = await backendResponse.json();
-      console.log('[Google Sign-In] Backend response data:', data);
 
       if (!backendResponse.ok) {
         throw new Error(data.detail || 'Google login failed');
@@ -198,7 +178,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
 
       onLogin(user, data.access_token || data.token);
     } catch (err: any) {
-      console.log('[Google Sign-In] Error:', err.code, err.message, err);
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
         setError('Sign-in cancelled');
       } else if (err.code === statusCodes.IN_PROGRESS) {
@@ -227,8 +206,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
         ? { email: email.trim(), password }
         : { email: email.trim(), password, username: username.trim(), language_preference: 'en' };
 
-      console.log('Sending auth request:', endpoint, JSON.stringify(body));
-
       const authResponse = await fetch(`${config.API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -236,7 +213,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any, token: string) => void 
       });
 
       const data = await authResponse.json();
-      console.log('Auth response:', authResponse.status, data);
 
       if (!authResponse.ok) {
         throw new Error(data.detail || 'Authentication failed');
@@ -687,7 +663,6 @@ const RankedMovieList = ({
                       const lvl = (userLevel || '').toUpperCase();
                       const dist = movie.cefr_distribution;
                       const levelCount = dist && lvl ? Number(dist[lvl] || 0) : 0;
-                      console.log(`[HomeList] movie_id=${movie.movie_id} tmdb_id=${movie.tmdb_id} title="${movie.title}" lvl=${lvl} count=${levelCount} dist=`, dist);
                       if (levelCount > 0) {
                         return (
                           <Text style={{ color: colors.textSecondary }}>  ·  {levelCount} {lvl} words</Text>
@@ -1107,9 +1082,8 @@ const HomeScreen = ({
     onMoviePress(normalized);
   };
 
-  const handleBookPress = (book: any) => {
+  const handleBookPress = (_book: any) => {
     // TODO: Navigate to book detail
-    console.log('Book pressed:', book.title);
   };
 
   const currentLang = AVAILABLE_LANGUAGES.find(l => l.code === targetLanguage) || AVAILABLE_LANGUAGES[0];
@@ -3151,121 +3125,129 @@ const MovieDetailScreen = ({
     loadVocabulary();
   }, []);
 
+  const tmdbId = movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined);
+  const cacheKey = tmdbId ?? movie.id;
+
+  // Apply a loaded vocabulary to state (used by both cache-hit and network paths).
+  const applyVocabulary = async (
+    vocab: VocabularyResponse,
+    resolvedMovieId: number,
+    diff?: { level: string; score: number } | null,
+  ) => {
+    setMovieId(resolvedMovieId);
+    setVocabulary(vocab);
+    if (diff) setDifficulty(diff);
+
+    const bookmark = await readBookmark();
+    if (bookmark) {
+      pendingBookmarkRef.current = bookmark;
+      setCurrentBookmarkWord(bookmark.word);
+      setViewMode(bookmark.mode);
+      if (bookmark.mode === 'levels') {
+        setActiveLevel(bookmark.level);
+      } else {
+        setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
+      }
+      setRestoreTrigger((n) => n + 1);
+    } else {
+      const levels = Object.entries(vocab.level_distribution);
+      if (levels.length > 0) {
+        const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
+        setActiveLevel(maxLevel[0]);
+      }
+    }
+  };
+
+  // Full network pipeline. Used on cache miss AND as background refresh on cache hit.
+  const fetchFromNetwork = async (
+    opts: { silent: boolean },
+  ): Promise<{ vocab: VocabularyResponse; movieId: number; difficulty: { level: string; score: number } | null } | null> => {
+    const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
+    const scriptResult = await wordwiseApi.fetchScript('', cleanTitle, tmdbId);
+    if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
+      if (!opts.silent) setError('Script too short or not found');
+      return null;
+    }
+
+    const genreNames = movie.genre_ids?.map((id) => tmdbGenres[id]).filter(Boolean) || [];
+    await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang, genreNames);
+
+    let diff: { level: string; score: number } | null = null;
+    try {
+      const diffRes = await fetch(`${API_BASE_URL}/movies/${scriptResult.movie_id}/difficulty`);
+      if (diffRes.ok) {
+        const diffData = await diffRes.json();
+        if (diffData.difficulty_score != null) {
+          diff = { level: diffData.difficulty_level, score: diffData.difficulty_score };
+        }
+      }
+    } catch {}
+
+    let vocab: VocabularyResponse;
+    try {
+      vocab = await wordwiseApi.getVocabularyFull(scriptResult.movie_id);
+    } catch {
+      vocab = await wordwiseApi.getVocabularyPreview(scriptResult.movie_id);
+    }
+
+    offlineCache.savePayload(cacheKey, movie.title, {
+      vocabulary: vocab,
+      movieId: scriptResult.movie_id,
+      difficulty: diff,
+    });
+
+    return { vocab, movieId: scriptResult.movie_id, difficulty: diff };
+  };
+
   const loadVocabulary = async () => {
-    setLoading(true);
     setError(null);
     bookmarkAppliedRef.current = false;
     pendingBookmarkRef.current = null;
     rowYOffsets.current = {};
 
-    try {
-      // Go straight to fetch - the backend tries all sources (DB, subtitles, STANDS4 PDF/API)
-      // Search is only needed for user-typed queries in the search bar
-      const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
-      const tmdbId = movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined);
-      console.log(`[MovieDetail] Fetching script for title="${cleanTitle}" tmdb_id=${tmdbId}`);
-      const scriptResult = await wordwiseApi.fetchScript('', cleanTitle, tmdbId);
+    // Stale-while-revalidate: serve cached data instantly, then refresh in background.
+    const cached = await offlineCache.getPayload(cacheKey);
+    if (cached?.vocabulary) {
+      setLoading(false);
+      await applyVocabulary(cached.vocabulary, cached.movieId, cached.difficulty || null);
 
-      if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
-        setError('Script too short or not found');
-        setLoading(false);
-        return;
-      }
-
-      setMovieId(scriptResult.movie_id);
-
-      // Step 3: Classify vocabulary (pass genre names for difficulty scoring)
-      const genreNames = movie.genre_ids?.map(id => tmdbGenres[id]).filter(Boolean) || [];
-      await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang, genreNames);
-
-      // Step 3b: Fetch difficulty score
-      try {
-        const diffRes = await fetch(`${API_BASE_URL}/movies/${scriptResult.movie_id}/difficulty`);
-        if (diffRes.ok) {
-          const diffData = await diffRes.json();
-          if (diffData.difficulty_score != null) {
-            setDifficulty({ level: diffData.difficulty_level, score: diffData.difficulty_score });
+      // Background refresh — skip script-fetch + classify since we already
+      // have the movieId. Just re-read vocabulary/full and update silently
+      // if the distribution changed. Saves ~300-500ms vs full pipeline.
+      (async () => {
+        try {
+          const freshVocab = await wordwiseApi.getVocabularyFull(cached.movieId);
+          const cachedStr = JSON.stringify(cached.vocabulary.level_distribution);
+          const freshStr = JSON.stringify(freshVocab.level_distribution);
+          if (cachedStr !== freshStr) {
+            setVocabulary(freshVocab);
+            offlineCache.savePayload(cacheKey, movie.title, {
+              vocabulary: freshVocab,
+              movieId: cached.movieId,
+              difficulty: cached.difficulty || null,
+            });
           }
-        }
-      } catch (diffErr) {
-        console.log('[MovieDetail] Difficulty fetch failed:', diffErr);
-      }
+        } catch {}
+      })();
+      return;
+    }
 
-      // Step 4: Try to get full vocabulary first, fall back to preview
-      let vocabResult: VocabularyResponse;
-      try {
-        console.log('[MovieDetail] Attempting to get full vocabulary...');
-        vocabResult = await wordwiseApi.getVocabularyFull(scriptResult.movie_id);
-        console.log('[MovieDetail] Got full vocabulary successfully');
-      } catch (fullErr) {
-        console.log('[MovieDetail] Full vocabulary failed, falling back to preview:', fullErr);
-        // Fall back to preview if full vocabulary requires auth
-        vocabResult = await wordwiseApi.getVocabularyPreview(scriptResult.movie_id);
-        console.log('[MovieDetail] Got preview vocabulary');
-      }
-      setVocabulary(vocabResult);
-      console.log(`[VocabCount] movie_id=${scriptResult.movie_id} title="${movie.title}" dist=`, vocabResult.level_distribution);
+    // Cache miss — show loading and run the full pipeline.
+    setLoading(true);
+    try {
+      const fresh = await fetchFromNetwork({ silent: false });
+      if (!fresh) return;
+      await applyVocabulary(fresh.vocab, fresh.movieId, fresh.difficulty);
 
-      // Cache for offline access
-      offlineCache.saveVocabulary(scriptResult.movie_id, movie.title, vocabResult);
-
-      // Fetch saved words if authenticated
       if (isAuthenticated) {
         try {
           const saved = await wordwiseApi.getSavedWords();
-          setSavedWords(new Set(saved.map(w => w.word)));
-        } catch {
-          // Non-critical: don't block vocabulary display
-        }
-      }
-
-      // Restore "where you left off" bookmark, or fall back to the level
-      // with the most words. The pending word is applied in a separate effect
-      // after the list renders and onLayout has recorded row positions.
-      const bookmark = await readBookmark();
-        if (bookmark) {
-        pendingBookmarkRef.current = bookmark;
-        setCurrentBookmarkWord(bookmark.word);
-        setViewMode(bookmark.mode);
-        if (bookmark.mode === 'levels') {
-          setActiveLevel(bookmark.level);
-        } else {
-          setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
-        }
-        setRestoreTrigger((n) => n + 1);
-      } else {
-        const levels = Object.entries(vocabResult.level_distribution);
-        const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
-        setActiveLevel(maxLevel[0]);
+          setSavedWords(new Set(saved.map((w) => w.word)));
+        } catch {}
       }
     } catch (err: any) {
       console.error('Failed to load vocabulary:', err);
-      // Try offline cache before showing error
-      const cached = await offlineCache.getVocabulary(movie.id);
-      if (cached) {
-        setMovieId(movie.id);
-        setVocabulary(cached);
-        const bookmark = await readBookmark();
-        if (bookmark) {
-          pendingBookmarkRef.current = bookmark;
-          setCurrentBookmarkWord(bookmark.word);
-          setViewMode(bookmark.mode);
-          if (bookmark.mode === 'levels') {
-            setActiveLevel(bookmark.level);
-          } else {
-            setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
-          }
-          setRestoreTrigger((n) => n + 1);
-        } else {
-          const levels = Object.entries(cached.level_distribution);
-          if (levels.length > 0) {
-            const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
-            setActiveLevel(maxLevel[0]);
-          }
-        }
-      } else {
-        setError(err.message || 'Failed to load vocabulary');
-      }
+      setError(err.message || 'Failed to load vocabulary');
     } finally {
       setLoading(false);
     }
