@@ -2416,9 +2416,6 @@ const WordRow = ({
               style={styles.inlineSpinner}
             />
           )}
-          <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>
-            ▼
-          </Text>
           {isAuthenticated && onSave && (
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation(); onSave(word.word); }}
@@ -2428,15 +2425,6 @@ const WordRow = ({
               <Text style={[styles.bookmarkIcon, isSaved && styles.bookmarkIconActive]}>
                 {isSaved ? '★' : '☆'}
               </Text>
-            </TouchableOpacity>
-          )}
-          {isAuthenticated && (
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); setReportOpen(true); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.flagButton}
-            >
-              <Text style={styles.flagIcon}>⚑</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -2496,6 +2484,14 @@ const WordRow = ({
                 </View>
               ))}
             </View>
+          )}
+          {isAuthenticated && (
+            <TouchableOpacity
+              onPress={() => setReportOpen(true)}
+              style={styles.reportInlineBtn}
+            >
+              <Text style={styles.reportInlineBtnText}>⚐ Report an issue</Text>
+            </TouchableOpacity>
           )}
         </View>
       )}
@@ -2688,7 +2684,6 @@ const IdiomRow = ({
               style={styles.inlineSpinner}
             />
           )}
-          <Text style={[styles.expandIcon, expanded && styles.expandIconRotated]}>▼</Text>
           {isAuthenticated && onSave && (
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation(); onSave(phrase); }}
@@ -2932,6 +2927,27 @@ const SearchResultsScreen = ({
 // Swipe a row to the right past a threshold to mark this word as
 // "leave off here" — the resume point for next time you open the movie.
 // Also pulses in warm gold when re-entered with this word as the bookmark.
+const AccordionSwitch = ({ value, onToggle }: { value: boolean; onToggle: () => void }) => {
+  const translate = useRef(new Animated.Value(value ? 16 : 0)).current;
+  useEffect(() => {
+    Animated.timing(translate, {
+      toValue: value ? 16 : 0,
+      duration: 80,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [value, translate]);
+  return (
+    <TouchableOpacity onPress={onToggle} activeOpacity={0.8}>
+      <View style={[styles.accordionSwitchTrack, value && styles.accordionSwitchTrackOn]}>
+        <Animated.View
+          style={[styles.accordionSwitchThumb, { transform: [{ translateX: translate }] }]}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 const BookmarkRowWrapper = ({
   wordKey,
   onLayoutY,
@@ -3555,18 +3571,10 @@ const MovieDetailScreen = ({
 
             {/* Accordion mode toggle */}
             <View style={styles.accordionToggleRow}>
-              <TouchableOpacity
-                style={styles.accordionToggleBtn}
-                onPress={() => setAccordionMode((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.accordionCheckbox, accordionMode && styles.accordionCheckboxOn]}>
-                  {accordionMode && <Text style={styles.accordionCheckmark}>✓</Text>}
-                </View>
-                <Text style={styles.accordionToggleText}>
-                  Close previous row when opening a new one
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.accordionToggleText}>
+                Close previous row when opening a new one
+              </Text>
+              <AccordionSwitch value={accordionMode} onToggle={() => setAccordionMode((v) => !v)} />
             </View>
           </View>
 
@@ -4953,39 +4961,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF1CC',
   },
   accordionToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 12,
-  },
-  accordionToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  accordionCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.paper,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accordionCheckboxOn: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  accordionCheckmark: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
+    gap: 12,
   },
   accordionToggleText: {
+    flex: 1,
     fontSize: 13,
     color: colors.textSecondary,
     fontWeight: '500',
+  },
+  accordionSwitchTrack: {
+    width: 40,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#D4D2CC',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  accordionSwitchTrackOn: {
+    backgroundColor: colors.primary,
+  },
+  accordionSwitchThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  accordionSwitchThumbOn: {
+    alignSelf: 'flex-end',
   },
   wordRowMain: {
     flexDirection: 'row',
@@ -5195,6 +5209,18 @@ const styles = StyleSheet.create({
   pronounceBtn: { marginLeft: 4, paddingHorizontal: 4 },
   pronounceIcon: { fontSize: 14 },
   pronounceIconActive: { opacity: 0.4 },
+  reportInlineBtn: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0EDE8',
+    alignSelf: 'flex-start',
+  },
+  reportInlineBtnText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
   crossMovieSection: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F0EDE8' },
   crossMovieLabel: { fontSize: 11, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   crossMovieItem: { marginBottom: 8 },
