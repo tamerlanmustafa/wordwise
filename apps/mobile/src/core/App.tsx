@@ -3290,6 +3290,7 @@ const MovieDetailScreen = ({
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
+  const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -3464,13 +3465,20 @@ const MovieDetailScreen = ({
       await applyVocabulary(cached.vocabulary, cached.movieId, cached.difficulty || null);
 
       // Background refresh — skip script-fetch + classify since we already
-      // have the movieId. Just re-read vocabulary/full and update silently
-      // if the distribution changed. Saves ~300-500ms vs full pipeline.
+      // have the movieId. Just re-read vocabulary/full and swap in the fresh
+      // payload if anything changed (distribution, per-word frequency_rank,
+      // confidences, etc). Saves ~300-500ms vs full pipeline.
       (async () => {
         try {
           const freshVocab = await wordwiseApi.getVocabularyFull(cached.movieId);
-          const cachedStr = JSON.stringify(cached.vocabulary.level_distribution);
-          const freshStr = JSON.stringify(freshVocab.level_distribution);
+          const cachedStr = JSON.stringify({
+            dist: cached.vocabulary.level_distribution,
+            words: cached.vocabulary.top_words_by_level,
+          });
+          const freshStr = JSON.stringify({
+            dist: freshVocab.level_distribution,
+            words: freshVocab.top_words_by_level,
+          });
           if (cachedStr !== freshStr) {
             setVocabulary(freshVocab);
             offlineCache.savePayload(cacheKey, movie.title, {
@@ -3718,9 +3726,23 @@ const MovieDetailScreen = ({
   const allActiveIdioms = isIdiomsTab ? (idiomsByDifficulty[activeExprLevel] || []) : [];
   // Hide learned words from the visible rows. Counts in the tabs stay
   // absolute — they reflect the script, not the user's state.
-  const activeWords = learnedWords.size
+  const filteredActiveWords = learnedWords.size
     ? allActiveWords.filter((w: any) => !learnedWords.has(w.word))
     : allActiveWords;
+  const activeWords = useMemo(() => {
+    const arr = [...filteredActiveWords];
+    arr.sort((a: any, b: any) => {
+      const aNull = a.frequency_rank == null;
+      const bNull = b.frequency_rank == null;
+      if (aNull && !bNull) return 1;
+      if (!aNull && bNull) return -1;
+      if (aNull && bNull) return 0;
+      return wordSortOrder === 'rare'
+        ? b.frequency_rank - a.frequency_rank
+        : a.frequency_rank - b.frequency_rank;
+    });
+    return arr;
+  }, [filteredActiveWords, wordSortOrder]);
   const activeIdioms = learnedWords.size
     ? allActiveIdioms.filter((i: any) => !learnedWords.has(i.phrase || i.word))
     : allActiveIdioms;
@@ -3924,6 +3946,48 @@ const MovieDetailScreen = ({
                   </Text>{' '}
                   {activeLevel} words
                 </Text>
+                <View style={styles.wordSortRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setWordSortOrder('rare')}
+                    style={[
+                      styles.wordSortPill,
+                      wordSortOrder === 'rare' && {
+                        backgroundColor: cefrColors[activeLevel] || colors.primary,
+                        borderColor: cefrColors[activeLevel] || colors.primary,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.wordSortPillText,
+                        wordSortOrder === 'rare' && styles.wordSortPillTextActive,
+                      ]}
+                    >
+                      Least common {activeLevel}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setWordSortOrder('common')}
+                    style={[
+                      styles.wordSortPill,
+                      wordSortOrder === 'common' && {
+                        backgroundColor: cefrColors[activeLevel] || colors.primary,
+                        borderColor: cefrColors[activeLevel] || colors.primary,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.wordSortPillText,
+                        wordSortOrder === 'common' && styles.wordSortPillTextActive,
+                      ]}
+                    >
+                      Most common {activeLevel}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -5455,6 +5519,29 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     paddingTop: 8,
     paddingBottom: 2,
+  },
+  wordSortRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 8,
+    paddingHorizontal: 16,
+  },
+  wordSortPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  wordSortPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  wordSortPillTextActive: {
+    color: '#FFFFFF',
   },
   accordionToggleRow: {
     flexDirection: 'row',

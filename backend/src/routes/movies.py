@@ -481,6 +481,30 @@ async def get_vocabulary_full(
     top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
     level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
 
+    # Lazy-load wordfreq for on-the-fly rank backfill. Only 7% of stored
+    # classifications have frequency_rank populated, so without this the
+    # client-side common/rare sort is a no-op for most words.
+    try:
+        import wordfreq as _wordfreq
+    except Exception:
+        _wordfreq = None
+
+    _rank_cache: Dict[str, Optional[int]] = {}
+
+    def _compute_rank(token: str) -> Optional[int]:
+        if _wordfreq is None:
+            return None
+        key = token.lower()
+        if key in _rank_cache:
+            return _rank_cache[key]
+        try:
+            zipf = _wordfreq.zipf_frequency(key, 'en')
+            rank = int(10 ** (7 - zipf)) if zipf > 0 else 100000
+        except Exception:
+            rank = None
+        _rank_cache[key] = rank
+        return rank
+
     for word in cefr_words:
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
 
@@ -489,19 +513,24 @@ async def get_vocabulary_full(
 
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
+        rank = word.frequencyRank
+        if rank is None:
+            rank = _compute_rank(word.lemma or word.word)
+
         if level not in top_words_by_level:
             top_words_by_level[level] = []
         top_words_by_level[level].append({
             "word": word.word,
             "lemma": word.lemma,
             "confidence": word.confidence,
-            "frequency_rank": word.frequencyRank
+            "frequency_rank": rank
         })
 
     for level in top_words_by_level:
+        # Default: least common first. higher frequency_rank = rarer word.
+        # Words without rank data go to the end.
         top_words_by_level[level].sort(
-            key=lambda x: (x['frequency_rank'] is None, x['frequency_rank'] or 999999),
-            reverse=True
+            key=lambda x: (x['frequency_rank'] is None, -(x['frequency_rank'] or 0)),
         )
 
     import logging
