@@ -2446,6 +2446,7 @@ const WordRow = ({
   accordionMode,
   lastOpenedKey,
   onExpand,
+  displayLevel,
 }: {
   word: WordInfo;
   index: number;
@@ -2461,6 +2462,7 @@ const WordRow = ({
   accordionMode?: boolean;
   lastOpenedKey?: string | null;
   onExpand?: (key: string) => void;
+  displayLevel?: string;
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -2584,6 +2586,11 @@ const WordRow = ({
         <View style={styles.wordRowMain}>
           <Text style={styles.rowNumber}>{rowNumber}.</Text>
           <Text style={styles.wordText}>{word.word}</Text>
+          {displayLevel && (
+            <View style={[styles.inlineLevelBadge, { backgroundColor: cefrColors[displayLevel] || colors.primary }]}>
+              <Text style={styles.inlineLevelBadgeText}>{displayLevel}</Text>
+            </View>
+          )}
           {isPremium && expanded && (
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation(); handlePronounce(); }}
@@ -3291,6 +3298,7 @@ const MovieDetailScreen = ({
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
+  const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -3301,6 +3309,8 @@ const MovieDetailScreen = ({
   const [pendingLearned, setPendingLearned] = useState<string | null>(null);
   const pendingLearnedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAuthenticated = useAuthStore((s) => s.status) === 'authenticated' || useAuthStore((s) => s.status) === 'offline_authenticated';
+  const authUser = useAuthStore((s) => s.user);
+  const userProficiency = (authUser?.proficiency_level || 'B1').toUpperCase();
 
   // Semantic "where you left off" bookmark. Tracks the word the user swiped
   // to bookmark inside this movie, plus the tab/level it lived in, so we can
@@ -3747,6 +3757,40 @@ const MovieDetailScreen = ({
     ? allActiveIdioms.filter((i: any) => !learnedWords.has(i.phrase || i.word))
     : allActiveIdioms;
 
+  // "For you" — user's level + one above, minus saved & learned, rare-first,
+  // capped so it feels like a study set rather than a glossary.
+  const SUGGESTED_CAP = 60;
+  const LEVEL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const suggestedWords = useMemo<Array<WordInfo & { cefr_level: string }>>(() => {
+    if (!vocabulary) return [];
+    const idx = LEVEL_ORDER.indexOf(userProficiency);
+    if (idx < 0) return [];
+    const targetLevels = [userProficiency];
+    if (idx + 1 < LEVEL_ORDER.length) targetLevels.push(LEVEL_ORDER[idx + 1]);
+
+    const pool: Array<WordInfo & { cefr_level: string }> = [];
+    for (const lvl of targetLevels) {
+      const list = vocabulary.top_words_by_level[lvl] || [];
+      for (const w of list) {
+        if (learnedWords.has(w.word)) continue;
+        if (savedWords.has(w.word)) continue;
+        pool.push({ ...w, cefr_level: lvl });
+      }
+    }
+    pool.sort((a, b) => {
+      const aNull = a.frequency_rank == null;
+      const bNull = b.frequency_rank == null;
+      if (aNull && !bNull) return 1;
+      if (!aNull && bNull) return -1;
+      if (aNull && bNull) return 0;
+      return (b.frequency_rank as number) - (a.frequency_rank as number);
+    });
+    return pool;
+  }, [vocabulary, userProficiency, learnedWords, savedWords]);
+
+  const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
+  const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -3890,6 +3934,45 @@ const MovieDetailScreen = ({
               </View>
             )}
 
+            {!isIdiomsTab && (
+              <View style={styles.wordsViewToggleRow}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setWordsView('foryou')}
+                  style={[
+                    styles.wordsViewPill,
+                    wordsView === 'foryou' && styles.wordsViewPillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.wordsViewPillText,
+                      wordsView === 'foryou' && styles.wordsViewPillTextActive,
+                    ]}
+                  >
+                    For you
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setWordsView('all')}
+                  style={[
+                    styles.wordsViewPill,
+                    wordsView === 'all' && styles.wordsViewPillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.wordsViewPillText,
+                      wordsView === 'all' && styles.wordsViewPillTextActive,
+                    ]}
+                  >
+                    All levels
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {isIdiomsTab ? (
               /* Expression difficulty tabs: Elementary / Intermediate / Advanced */
               <>
@@ -3917,6 +4000,25 @@ const MovieDetailScreen = ({
                     </TouchableOpacity>
                   ))}
                 </View>
+              </>
+            ) : wordsView === 'foryou' ? (
+              /* "For you" — curated set at user's level + next */
+              <>
+                <Text style={styles.forYouHeadline}>
+                  {suggestedWords.length > 0 ? (
+                    <>
+                      <Text style={{ color: cefrColors[userProficiency] || colors.primary, fontWeight: '700' }}>
+                        {suggestedVisible.length}
+                      </Text>{' '}
+                      words to learn before watching
+                    </>
+                  ) : (
+                    'No new words at your level'
+                  )}
+                </Text>
+                <Text style={styles.forYouSubline}>
+                  Based on your {userProficiency} level
+                </Text>
               </>
             ) : (
               /* CEFR Level Tabs for Words view */
@@ -4036,6 +4138,51 @@ const MovieDetailScreen = ({
                     </BookmarkRowWrapper>
                   );
                 })
+              ) : wordsView === 'foryou' ? (
+                <>
+                  {suggestedVisible.map((item, index) => {
+                    const key = item.word;
+                    return (
+                      <BookmarkRowWrapper
+                        key={key}
+                        wordKey={key}
+                        onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                        onBookmark={recordBookmark}
+                        onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                        isCurrentBookmark={currentBookmarkWord === key}
+                      >
+                        <WordRow
+                          word={item}
+                          index={index}
+                          rowNumber={index + 1}
+                          groupColor={cefrColors[item.cefr_level] || colors.primary}
+                          movieId={movieId}
+                          movieTitle={movie.title}
+                          targetLang={targetLang}
+                          isSaved={savedWords.has(key)}
+                          onSave={handleSaveWord}
+                          isAuthenticated={isAuthenticated}
+                          bookmarkHighlight={currentBookmarkWord === key}
+                          accordionMode={accordionMode}
+                          lastOpenedKey={lastOpenedKey}
+                          onExpand={setLastOpenedKey}
+                          displayLevel={item.cefr_level}
+                        />
+                      </BookmarkRowWrapper>
+                    );
+                  })}
+                  {suggestedHidden > 0 && (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setWordsView('all')}
+                      style={styles.foryouMoreLink}
+                    >
+                      <Text style={styles.foryouMoreLinkText}>
+                        + {suggestedHidden} more — see all in All levels
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               ) : (
                 activeWords.map((item, index) => {
                   const key = item.word;
@@ -5526,6 +5673,71 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 8,
     paddingHorizontal: 16,
+  },
+  wordsViewToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+  },
+  wordsViewPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  wordsViewPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  wordsViewPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  wordsViewPillTextActive: {
+    color: '#FFFFFF',
+  },
+  forYouHeadline: {
+    textAlign: 'center',
+    fontSize: 15,
+    color: colors.text,
+    fontWeight: '600',
+    paddingTop: 14,
+    paddingBottom: 2,
+    paddingHorizontal: 16,
+  },
+  forYouSubline: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: colors.textSecondary,
+    paddingBottom: 4,
+  },
+  foryouMoreLink: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  foryouMoreLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  inlineLevelBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  inlineLevelBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   wordSortPill: {
     paddingVertical: 6,
