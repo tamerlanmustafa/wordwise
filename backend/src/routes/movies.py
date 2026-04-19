@@ -151,6 +151,7 @@ async def list_movies_by_cefr(
               AND m.difficulty_score <= $2
               AND m.genre IS NOT NULL
               AND m.genre ILIKE '%' || $3 || '%'
+              AND COALESCE(m.tmdb_vote_count, 0) >= 50
             ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
             LIMIT $4
             """,
@@ -191,6 +192,7 @@ async def list_movies_by_cefr(
             FROM movies m
             WHERE m.difficulty_score >= $1
               AND m.difficulty_score <= $2
+              AND COALESCE(m.tmdb_vote_count, 0) >= 50
             ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
             LIMIT $3
             """,
@@ -198,11 +200,6 @@ async def list_movies_by_cefr(
             hi,
             limit,
         )
-
-    import logging
-    log = logging.getLogger("uvicorn.error")
-    for r in rows:
-        log.info(f"[BY-CEFR] movie_id={r['movie_id']} tmdb_id={r['tmdb_id']} title={r['title']!r} dist={r.get('cefr_distribution')}")
 
     return {
         "level": key,
