@@ -92,6 +92,90 @@ async def learn_word(
     return {"learned": request.is_learned, "word": request.word}
 
 
+@router.post("/mark-learned")
+async def mark_word_learned(
+    request: SaveWordRequest,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    # Upsert a global (movieId=null) learned marker. Hides the word from all
+    # movie vocabulary lists. Leaves any per-movie saved rows untouched —
+    # starring and "never show again" are orthogonal.
+    existing = await db.userword.find_first(
+        where={
+            "userId": current_user.id,
+            "word": request.word,
+            "movieId": None,
+        }
+    )
+
+    if existing:
+        if not existing.isLearned:
+            await db.userword.update(
+                where={"id": existing.id},
+                data={"isLearned": True},
+            )
+    else:
+        await db.userword.create(
+            data={
+                "userId": current_user.id,
+                "word": request.word,
+                "isLearned": True,
+            }
+        )
+
+    return {"learned": True, "word": request.word}
+
+
+@router.post("/unlearn")
+async def unlearn_word(
+    request: SaveWordRequest,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    # Remove the global learned marker. Per-movie rows are untouched.
+    existing = await db.userword.find_first(
+        where={
+            "userId": current_user.id,
+            "word": request.word,
+            "movieId": None,
+            "isLearned": True,
+        }
+    )
+
+    if existing:
+        await db.userword.delete(where={"id": existing.id})
+
+    return {"learned": False, "word": request.word}
+
+
+@router.get("/learned")
+async def get_learned_words(
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db)
+):
+    # Only the global learned markers — these are what the client uses to
+    # hide rows across every movie. Per-movie rows with isLearned=true are
+    # possible in legacy data but aren't treated as "hide" markers.
+    words = await db.userword.find_many(
+        where={
+            "userId": current_user.id,
+            "isLearned": True,
+            "movieId": None,
+        },
+        order={"createdAt": "desc"},
+    )
+
+    return [
+        {
+            "id": w.id,
+            "word": w.word,
+            "created_at": w.createdAt.isoformat(),
+        }
+        for w in words
+    ]
+
+
 @router.get("/", response_model=List[UserWordResponse])
 async def get_user_words(
     current_user=Depends(get_current_active_user),

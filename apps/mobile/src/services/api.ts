@@ -329,6 +329,32 @@ export const wordwiseApi = {
     return res.json();
   },
 
+  // Mark a word as learned globally — hides it from every movie's list.
+  markWordLearned: async (word: string): Promise<{ learned: boolean; word: string }> => {
+    const res = await authFetch(`${API_BASE_URL}/user/words/mark-learned`, {
+      method: 'POST',
+      body: JSON.stringify({ word }),
+    });
+    if (!res.ok) throw new Error('Failed to mark word learned');
+    return res.json();
+  },
+
+  // Reverse mark-learned. Word reappears in movie vocabulary lists.
+  unlearnWord: async (word: string): Promise<{ learned: boolean; word: string }> => {
+    const res = await authFetch(`${API_BASE_URL}/user/words/unlearn`, {
+      method: 'POST',
+      body: JSON.stringify({ word }),
+    });
+    if (!res.ok) throw new Error('Failed to unlearn word');
+    return res.json();
+  },
+
+  getLearnedWords: async (): Promise<Array<{ id: number; word: string; created_at: string }>> => {
+    const res = await authFetch(`${API_BASE_URL}/user/words/learned`);
+    if (!res.ok) throw new Error('Failed to get learned words');
+    return res.json();
+  },
+
   // Log a user interaction (fire-and-forget)
   logInteraction: async (word: string, interactionType: string, movieId?: number | null, metadata?: Record<string, unknown>): Promise<void> => {
     try {

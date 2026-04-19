@@ -18,6 +18,9 @@ import {
   Alert,
   PanResponder,
   Easing,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -44,6 +47,19 @@ import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
 import { PrivacyScreen } from '../components/PrivacyScreen';
 import { initializeBilling } from '../services/billing';
 
+// Android requires opt-in for LayoutAnimation; iOS is on by default.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Smooth fade + collapse / expand transition for row mark-learned / undo.
+const LEARNED_ROW_ANIM = {
+  duration: 260,
+  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+  update: { type: 'easeInEaseOut' as const },
+  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+};
+
 // Configure Google Sign-In
 GoogleSignin.configure({
   iosClientId: GOOGLE_CLIENT_ID_IOS,
@@ -51,7 +67,7 @@ GoogleSignin.configure({
 });
 
 // Types for navigation
-type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'lists' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms';
+type Screen = 'home' | 'movieDetail' | 'searchResults' | 'settings' | 'admin' | 'review' | 'paywall' | 'stats' | 'notebook' | 'lists' | 'achievements' | 'leaderboard' | 'familyPlan' | 'privacy' | 'terms' | 'learnedWords' | 'vocabulary';
 type ListFilter = 'saved' | 'learned';
 interface MovieData {
   id: number;
@@ -896,6 +912,7 @@ const HomeScreen = ({
   onNavigateToLists,
   onNavigateToAchievements,
   onNavigateToLeaderboard,
+  onNavigateToVocabulary,
 }: {
   onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
@@ -911,6 +928,7 @@ const HomeScreen = ({
   onNavigateToLists: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
+  onNavigateToVocabulary: () => void;
 }) => {
   // Admin preview toggle — show a sticky badge when an admin is previewing
   // the free or premium experience so they never mistake the simulated
@@ -1197,6 +1215,16 @@ const HomeScreen = ({
           >
             <Text style={styles.dropdownItemIcon}>📚</Text>
             <Text style={styles.dropdownItemText}>My Lists</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onNavigateToVocabulary();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>📖</Text>
+            <Text style={styles.dropdownItemText}>Vocabulary</Text>
           </TouchableOpacity>
           <View style={styles.dropdownDivider} />
           <TouchableOpacity
@@ -1958,6 +1986,167 @@ const SettingsScreen = ({
     </SafeAreaView>
   );
 };
+
+// =====================================================================
+// Vocabulary hub — dedicated page under the user icon. Lists the user's
+// vocabulary-related sub-sections (currently just Learned Words; room
+// for future things like custom word lists, etc.).
+// =====================================================================
+const VocabularyScreen = ({
+  onBack,
+  onNavigateToLearnedWords,
+}: {
+  onBack: () => void;
+  onNavigateToLearnedWords: () => void;
+}) => {
+  const [learnedCount, setLearnedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    wordwiseApi.getLearnedWords()
+      .then((w) => setLearnedCount(w.length))
+      .catch(() => setLearnedCount(null));
+  }, []);
+
+  return (
+    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+      <View style={settingsStyles.header}>
+        <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
+          <Text style={settingsStyles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={settingsStyles.headerTitle}>Vocabulary</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={{ paddingTop: 12 }}>
+        <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToLearnedWords}>
+          <View style={{ flex: 1 }}>
+            <Text style={settingsStyles.settingsLinkText}>Learned Words</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+              {learnedCount === null
+                ? 'Words you already know'
+                : `${learnedCount} word${learnedCount === 1 ? '' : 's'} hidden from movie lists`}
+            </Text>
+          </View>
+          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+// =====================================================================
+// Learned Words screen — shows every word the user has globally marked
+// "never show again". Tap a row to unlearn it (word reappears in movie
+// lists on next load).
+// =====================================================================
+const LearnedWordsScreen = ({ onBack }: { onBack: () => void }) => {
+  const [words, setWords] = useState<Array<{ id: number; word: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setError(null);
+    try {
+      const data = await wordwiseApi.getLearnedWords();
+      setWords(data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load learned words');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleUnlearn = async (word: string) => {
+    // Optimistic remove.
+    const snapshot = words;
+    setWords((prev) => prev.filter((w) => w.word !== word));
+    try {
+      await wordwiseApi.unlearnWord(word);
+    } catch {
+      setWords(snapshot);
+      Alert.alert('Error', 'Could not restore that word. Try again.');
+    }
+  };
+
+  return (
+    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+      <View style={settingsStyles.header}>
+        <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
+          <Text style={settingsStyles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={settingsStyles.headerTitle}>Learned Words</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: colors.textSecondary }}>{error}</Text>
+        </View>
+      ) : words.length === 0 ? (
+        <View style={{ padding: 24, alignItems: 'center' }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: 'center' }}>
+            No learned words yet. Swipe left on a word in any movie to mark it as known.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
+            {words.length} word{words.length === 1 ? '' : 's'} hidden from movie lists. Tap to restore.
+          </Text>
+          {words.map((w) => (
+            <TouchableOpacity
+              key={w.id}
+              style={learnedStyles.row}
+              onPress={() =>
+                Alert.alert(
+                  'Restore word?',
+                  `"${w.word}" will reappear in movie vocabulary lists.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Restore', onPress: () => handleUnlearn(w.word) },
+                  ],
+                )
+              }
+            >
+              <Text style={learnedStyles.rowWord}>{w.word}</Text>
+              <Text style={learnedStyles.rowAction}>Restore</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+};
+
+const learnedStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  rowWord: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  rowAction: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+});
 
 const settingsStyles = StyleSheet.create({
   container: {
@@ -2949,65 +3138,91 @@ const BookmarkRowWrapper = ({
   wordKey,
   onLayoutY,
   onBookmark,
+  onMarkLearned,
   isCurrentBookmark,
   children,
 }: {
   wordKey: string;
   onLayoutY: (word: string, y: number) => void;
   onBookmark: (word: string) => void;
+  onMarkLearned?: (word: string) => void;
   isCurrentBookmark: boolean;
   children: React.ReactNode;
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [dragging, setDragging] = useState(false);
+  const [direction, setDirection] = useState<'right' | 'left' | null>(null);
   const triggeredRef = useRef(false);
 
   const THRESHOLD = 90;
+  // Refs so the PanResponder (captured once) always sees fresh callbacks.
+  const onBookmarkRef = useRef(onBookmark);
+  const onMarkLearnedRef = useRef(onMarkLearned);
+  const wordKeyRef = useRef(wordKey);
+  useEffect(() => { onBookmarkRef.current = onBookmark; }, [onBookmark]);
+  useEffect(() => { onMarkLearnedRef.current = onMarkLearned; }, [onMarkLearned]);
+  useEffect(() => { wordKeyRef.current = wordKey; }, [wordKey]);
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && g.dx > 10,
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && Math.abs(g.dx) > 10,
       onPanResponderGrant: () => {
         triggeredRef.current = false;
         setDragging(true);
       },
       onPanResponderMove: (_, g) => {
-        const x = Math.max(0, Math.min(g.dx, 160));
+        const x = Math.max(-160, Math.min(g.dx, 160));
         translateX.setValue(x);
+        setDirection(x > 0 ? 'right' : x < 0 ? 'left' : null);
       },
       onPanResponderRelease: (_, g) => {
         setDragging(false);
         if (g.dx > THRESHOLD && !triggeredRef.current) {
           triggeredRef.current = true;
-          onBookmark(wordKey);
+          onBookmarkRef.current(wordKeyRef.current);
           Animated.sequence([
             Animated.timing(translateX, { toValue: 130, duration: 110, useNativeDriver: true }),
             Animated.timing(translateX, { toValue: 0, duration: 260, useNativeDriver: true }),
-          ]).start();
+          ]).start(() => setDirection(null));
+        } else if (g.dx < -THRESHOLD && !triggeredRef.current && onMarkLearnedRef.current) {
+          triggeredRef.current = true;
+          // Snap translateX back; the parent's LayoutAnimation handles the
+          // fade + collapse of the row itself. No slide-off — the row just
+          // fades in place while rows below close up.
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start(() => setDirection(null));
+          onMarkLearnedRef.current(wordKeyRef.current);
         } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start(() => setDirection(null));
         }
       },
       onPanResponderTerminate: () => {
         setDragging(false);
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start(() => setDirection(null));
       },
     })
   ).current;
 
-  const revealOpacity = translateX.interpolate({
+  const rightRevealOpacity = translateX.interpolate({
     inputRange: [0, 30, 160],
     outputRange: [0, 0.7, 1],
     extrapolate: 'clamp',
   });
+  const leftRevealOpacity = translateX.interpolate({
+    inputRange: [-160, -30, 0],
+    outputRange: [1, 0.7, 0],
+    extrapolate: 'clamp',
+  });
+
+  const showRightReveal = dragging || direction === 'right';
+  const showLeftReveal = (dragging || direction === 'left') && !!onMarkLearned;
 
   return (
     <View
       onLayout={(e) => onLayoutY(wordKey, e.nativeEvent.layout.y)}
       style={{ overflow: 'hidden' }}
     >
-      {dragging && (
+      {showRightReveal && (
         <Animated.View
           pointerEvents="none"
           style={{
@@ -3019,11 +3234,32 @@ const BookmarkRowWrapper = ({
             backgroundColor: isCurrentBookmark ? '#E53935' : '#7C5CBF',
             justifyContent: 'center',
             paddingLeft: 16,
-            opacity: revealOpacity,
+            opacity: rightRevealOpacity,
           }}
         >
           <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
             {isCurrentBookmark ? '✕  Remove bookmark' : '🔖  Leave off here'}
+          </Text>
+        </Animated.View>
+      )}
+      {showLeftReveal && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 160,
+            backgroundColor: '#2E7D32',
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            paddingRight: 16,
+            opacity: leftRevealOpacity,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
+            ✓  I know this
           </Text>
         </Animated.View>
       )}
@@ -3057,6 +3293,12 @@ const MovieDetailScreen = ({
   const [movieId, setMovieId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
+  const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
+  // Pending left-swipe: the word is hidden locally and committed to the
+  // server only after the undo toast expires. If the user hits Undo before
+  // that, we cancel the timer and restore the row.
+  const [pendingLearned, setPendingLearned] = useState<string | null>(null);
+  const pendingLearnedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAuthenticated = useAuthStore((s) => s.status) === 'authenticated' || useAuthStore((s) => s.status) === 'offline_authenticated';
 
   // Semantic "where you left off" bookmark. Tracks the word the user swiped
@@ -3206,6 +3448,16 @@ const MovieDetailScreen = ({
     rowYOffsets.current = {};
 
     // Stale-while-revalidate: serve cached data instantly, then refresh in background.
+    // Kick off user-word fetches in parallel; don't block first paint on them.
+    if (isAuthenticated) {
+      wordwiseApi.getSavedWords()
+        .then((saved) => setSavedWords(new Set(saved.map((w) => w.word))))
+        .catch(() => {});
+      wordwiseApi.getLearnedWords()
+        .then((learned) => setLearnedWords(new Set(learned.map((w) => w.word))))
+        .catch(() => {});
+    }
+
     const cached = await offlineCache.getPayload(cacheKey);
     if (cached?.vocabulary) {
       setLoading(false);
@@ -3239,12 +3491,6 @@ const MovieDetailScreen = ({
       if (!fresh) return;
       await applyVocabulary(fresh.vocab, fresh.movieId, fresh.difficulty);
 
-      if (isAuthenticated) {
-        try {
-          const saved = await wordwiseApi.getSavedWords();
-          setSavedWords(new Set(saved.map((w) => w.word)));
-        } catch {}
-      }
     } catch (err: any) {
       console.error('Failed to load vocabulary:', err);
       setError(err.message || 'Failed to load vocabulary');
@@ -3252,6 +3498,82 @@ const MovieDetailScreen = ({
       setLoading(false);
     }
   };
+
+  const handleMarkLearned = (word: string) => {
+    if (!isAuthenticated) return;
+    // If there's already a pending learned word, commit it now — the user
+    // has moved on and clearly doesn't want to undo the previous one.
+    if (pendingLearnedTimerRef.current) {
+      clearTimeout(pendingLearnedTimerRef.current);
+      pendingLearnedTimerRef.current = null;
+    }
+    const previousPending = pendingLearned;
+    if (previousPending && previousPending !== word) {
+      wordwiseApi.markWordLearned(previousPending).catch(() => {});
+      setLearnedWords((prev) => {
+        const next = new Set(prev);
+        next.add(previousPending);
+        return next;
+      });
+    }
+
+    // Hide the row locally (filter picks this up). The LayoutAnimation
+    // makes the row fade out while rows below close up into its place.
+    LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
+    setLearnedWords((prev) => {
+      const next = new Set(prev);
+      next.add(word);
+      return next;
+    });
+    setPendingLearned(word);
+
+    // Commit to server after 5s unless undone.
+    pendingLearnedTimerRef.current = setTimeout(() => {
+      pendingLearnedTimerRef.current = null;
+      setPendingLearned((current) => (current === word ? null : current));
+      wordwiseApi.markWordLearned(word).catch(() => {
+        // Rollback on failure — fade the row back in.
+        LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
+        setLearnedWords((prev) => {
+          const next = new Set(prev);
+          next.delete(word);
+          return next;
+        });
+      });
+    }, 5000);
+  };
+
+  const handleUndoLearned = () => {
+    if (!pendingLearned) return;
+    if (pendingLearnedTimerRef.current) {
+      clearTimeout(pendingLearnedTimerRef.current);
+      pendingLearnedTimerRef.current = null;
+    }
+    // Reverse of mark-learned: rows below slide down while the restored
+    // row fades back in.
+    LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
+    setLearnedWords((prev) => {
+      const next = new Set(prev);
+      next.delete(pendingLearned);
+      return next;
+    });
+    setPendingLearned(null);
+  };
+
+  // On unmount / movie change, commit any pending learned word so it
+  // doesn't get dropped silently.
+  useEffect(() => {
+    return () => {
+      if (pendingLearnedTimerRef.current) {
+        clearTimeout(pendingLearnedTimerRef.current);
+        pendingLearnedTimerRef.current = null;
+      }
+      if (pendingLearned) {
+        wordwiseApi.markWordLearned(pendingLearned).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveWord = async (word: string) => {
     if (!isAuthenticated) return;
@@ -3392,8 +3714,16 @@ const MovieDetailScreen = ({
 
   const isIdiomsTab = viewMode === 'idioms';
   const activeData = wordLevels.find((l) => l.level === activeLevel);
-  const activeWords = activeData?.words || [];
-  const activeIdioms = isIdiomsTab ? (idiomsByDifficulty[activeExprLevel] || []) : [];
+  const allActiveWords = activeData?.words || [];
+  const allActiveIdioms = isIdiomsTab ? (idiomsByDifficulty[activeExprLevel] || []) : [];
+  // Hide learned words from the visible rows. Counts in the tabs stay
+  // absolute — they reflect the script, not the user's state.
+  const activeWords = learnedWords.size
+    ? allActiveWords.filter((w: any) => !learnedWords.has(w.word))
+    : allActiveWords;
+  const activeIdioms = learnedWords.size
+    ? allActiveIdioms.filter((i: any) => !learnedWords.has(i.phrase || i.word))
+    : allActiveIdioms;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -3617,10 +3947,11 @@ const MovieDetailScreen = ({
                   const key = item.phrase;
                   return (
                     <BookmarkRowWrapper
-                      key={`idiom-${key}-${index}`}
+                      key={`idiom-${key}`}
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
+                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
                       isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <IdiomRow
@@ -3646,10 +3977,11 @@ const MovieDetailScreen = ({
                   const key = item.word;
                   return (
                     <BookmarkRowWrapper
-                      key={`${key}-${index}`}
+                      key={key}
                       wordKey={key}
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
+                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
                       isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <WordRow
@@ -3718,6 +4050,18 @@ const MovieDetailScreen = ({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      {pendingLearned && (
+        <View style={styles.undoToast} pointerEvents="box-none">
+          <View style={styles.undoToastInner}>
+            <Text style={styles.undoToastText} numberOfLines={1}>
+              "{pendingLearned}" hidden
+            </Text>
+            <TouchableOpacity onPress={handleUndoLearned} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.undoToastAction}>UNDO</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -3961,6 +4305,14 @@ export default function App() {
     setCurrentScreen('terms');
   };
 
+  const navigateToLearnedWords = () => {
+    setCurrentScreen('learnedWords');
+  };
+
+  const navigateToVocabulary = () => {
+    setCurrentScreen('vocabulary');
+  };
+
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
     // everywhere. Normalize every field we care about so the merged user has
@@ -4018,6 +4370,10 @@ export default function App() {
       {isAuthenticated ? (
         currentScreen === 'settings' ? (
           <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} />
+        ) : currentScreen === 'vocabulary' ? (
+          <VocabularyScreen onBack={navigateToHome} onNavigateToLearnedWords={navigateToLearnedWords} />
+        ) : currentScreen === 'learnedWords' ? (
+          <LearnedWordsScreen onBack={() => setCurrentScreen('vocabulary')} />
         ) : currentScreen === 'admin' ? (
           <AdminScreen onBack={navigateToHome} />
         ) : currentScreen === 'review' ? (
@@ -4045,7 +4401,7 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -4847,6 +5203,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  undoToast: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 24,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  undoToastInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E2E2E',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+    maxWidth: '92%',
+  },
+  undoToastText: {
+    color: '#FFF',
+    fontSize: 14,
+    flexShrink: 1,
+    marginRight: 16,
+  },
+  undoToastAction: {
+    color: '#4FC3F7',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   movieInfoText: {
     flex: 1,
