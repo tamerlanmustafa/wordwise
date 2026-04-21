@@ -483,7 +483,6 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
       const list = vocabulary.top_words_by_level[lvl] || [];
       for (const w of list) {
         if (learnedWords.has(w.word)) continue;
-        if (savedWords.has(w.word)) continue;
         pool.push({ ...w, cefr_level: lvl });
       }
     }
@@ -496,7 +495,7 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
       return (b.frequency_rank as number) - (a.frequency_rank as number);
     });
     return pool;
-  }, [vocabulary, userProficiency, learnedWords, savedWords]);
+  }, [vocabulary, userProficiency, learnedWords]);
 
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
