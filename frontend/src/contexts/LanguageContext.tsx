@@ -1,31 +1,13 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { AVAILABLE_LANGUAGES, type LanguageOption } from '@wordwise/types';
+
+export type { LanguageOption };
 
 interface LanguageContextType {
   targetLanguage: string;
   setTargetLanguage: (lang: string) => void;
-  availableLanguages: LanguageOption[];
+  availableLanguages: ReadonlyArray<LanguageOption>;
 }
-
-export interface LanguageOption {
-  code: string;
-  name: string;
-  nativeName: string;
-}
-
-const AVAILABLE_LANGUAGES: LanguageOption[] = [
-  { code: 'ES', name: 'Spanish', nativeName: 'Español' },
-  { code: 'FR', name: 'French', nativeName: 'Français' },
-  { code: 'DE', name: 'German', nativeName: 'Deutsch' },
-  { code: 'IT', name: 'Italian', nativeName: 'Italiano' },
-  { code: 'PT', name: 'Portuguese', nativeName: 'Português' },
-  { code: 'RU', name: 'Russian', nativeName: 'Русский' },
-  { code: 'TR', name: 'Turkish', nativeName: 'Türkçe' },
-  { code: 'JA', name: 'Japanese', nativeName: '日本語' },
-  { code: 'ZH', name: 'Chinese', nativeName: '中文' },
-  { code: 'NL', name: 'Dutch', nativeName: 'Nederlands' },
-  { code: 'PL', name: 'Polish', nativeName: 'Polski' },
-  { code: 'AZ', name: 'Azerbaijani (Beta)', nativeName: 'Azərbaycan' },
-];
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 

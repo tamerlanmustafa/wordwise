@@ -1,7 +1,5 @@
-// Backend-authoritative entitlements (see backend/src/utils/subscription.py).
-// The mobile app NEVER computes is_premium on its own — it reads this object.
-// One truth, one gate. If you're tempted to check `user.subscriptionTier`
-// directly, use the entitlements helper in stores/entitlementsStore.ts instead.
+// KEEP IN SYNC with packages/types/src/index.ts. See constants.ts for rationale.
+
 export interface Entitlements {
   tier: 'free' | 'trial' | 'premium' | 'comped';
   is_premium: boolean;
@@ -10,7 +8,8 @@ export interface Entitlements {
   subscription_expires_at: string | null;
 }
 
-// User types
+export * from './constants';
+
 export interface User {
   id: number;
   email: string;
@@ -24,7 +23,6 @@ export interface User {
   entitlements?: Entitlements | null;
 }
 
-// Movie types
 export interface Movie {
   id: number;
   tmdb_id: number;
@@ -53,7 +51,6 @@ export interface MovieSearchResponse {
   total_results: number;
 }
 
-// Book types
 export interface Book {
   id: number;
   gutenberg_id: number;
@@ -66,7 +63,6 @@ export interface Book {
   word_count: number | null;
 }
 
-// Vocabulary types
 export interface Word {
   id: number;
   word: string;
@@ -95,9 +91,30 @@ export interface SavedWord extends Word {
   notes: string | null;
 }
 
-// Auth types
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;
   token_type: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface GoogleAuthRequest {
+  credential: string;
+}
+
+export interface ApiError {
+  detail: string;
+  status_code: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
 }

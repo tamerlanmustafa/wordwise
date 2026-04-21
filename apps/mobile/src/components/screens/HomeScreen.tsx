@@ -1,0 +1,677 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AVAILABLE_LANGUAGES } from '../../types';
+import { colors } from '../../theme/palette';
+import { styles } from '../../core/styles';
+import type { MovieData } from '../../core/types';
+import {
+  wordwiseApi,
+  tmdbApi,
+  srsApi,
+  API_BASE_URL,
+  type TodaysWord,
+} from '../../services/api';
+import { useEntitlementsStore, useShowAds } from '../../stores/entitlementsStore';
+import { MobileHeroSection } from '../home/MobileHeroSection';
+import { RankedMovieList } from '../home/RankedMovieList';
+import { SnapPager } from '../home/SnapPager';
+import { GENRE_OPTIONS, LEVEL_OPTIONS } from '../home/filterOptions';
+
+interface Props {
+  onLogout: () => void;
+  onMoviePress: (movie: MovieData) => void;
+  onSearch: (query: string) => void;
+  user: any;
+  targetLanguage: string;
+  setTargetLanguage: (lang: string) => void;
+  onNavigateToSettings: () => void;
+  onNavigateToAdmin: () => void;
+  onNavigateToReview: () => void;
+  onNavigateToStats: () => void;
+  onNavigateToNotebook: () => void;
+  onNavigateToLists: () => void;
+  onNavigateToAchievements: () => void;
+  onNavigateToLeaderboard: () => void;
+  onNavigateToVocabulary: () => void;
+}
+
+export const HomeScreen = ({
+  onLogout,
+  onMoviePress,
+  onSearch,
+  user,
+  targetLanguage,
+  setTargetLanguage,
+  onNavigateToSettings,
+  onNavigateToAdmin,
+  onNavigateToReview,
+  onNavigateToStats,
+  onNavigateToNotebook,
+  onNavigateToLists,
+  onNavigateToAchievements,
+  onNavigateToLeaderboard,
+  onNavigateToVocabulary,
+}: Props) => {
+  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
+  const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
+  const showAdsEntitlement = useShowAds();
+  const [isFirstSession, setIsFirstSession] = useState(true);
+  const showAds = showAdsEntitlement && !isFirstSession;
+  const [activeTab] = useState<'movies' | 'books'>('movies');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [allResults, setAllResults] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
+  const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
+  const [homeTab, setHomeTab] = useState<'level' | 'trending'>('level');
+  const [tabSwitching, setTabSwitching] = useState(false);
+  const [levelSort, setLevelSort] = useState<'rating' | 'popularity' | 'level'>('rating');
+  const [levelSortAsc, setLevelSortAsc] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
+  const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState('');
+  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
+  const [srsTotalSaved, setSrsTotalSaved] = useState(0);
+  const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
+  const [todaysWordSaved, setTodaysWordSaved] = useState(false);
+  const [lastOpenedMovie, setLastOpenedMovie] = useState<any | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('last_opened_movie')
+      .then((raw) => {
+        if (!raw) return;
+        try { setLastOpenedMovie(JSON.parse(raw)); } catch {}
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('has_opened_before').then((val) => {
+      if (val) setIsFirstSession(false);
+      else AsyncStorage.setItem('has_opened_before', '1');
+    });
+
+    srsApi.stats().then((s) => {
+      setSrsDueCount(s.due_now);
+      setSrsTotalSaved(s.total_saved);
+    }).catch(() => {});
+    srsApi.todaysWord().then(setTodaysWord).catch(() => {});
+  }, []);
+
+  const fetchLevelMovies = async (level: string, genre: string = '') => {
+    try {
+      const genreParam = genre ? `&genre=${encodeURIComponent(genre)}` : '';
+      const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=15${genreParam}`);
+      if (levelRes.ok) {
+        const levelData = await levelRes.json();
+        const raw = (levelData.movies || []).map((m: any) => ({
+          ...m,
+          id: m.tmdb_id || m.movie_id,
+        }));
+        const enriched = await Promise.all(
+          raw.map(async (m: any) => {
+            if (!m.tmdb_id) return m;
+            try {
+              const r = await fetch(`https://api.themoviedb.org/3/movie/${m.tmdb_id}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
+              const t = await r.json();
+              return {
+                ...m,
+                overview: t.overview || m.description || '',
+                poster_path: t.poster_path || null,
+                release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
+              };
+            } catch { return m; }
+          })
+        );
+        setTopRatedMovies(enriched);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
+        const trendingData = await trendingRes.json();
+        setTrendingMovies(trendingData.results?.slice(0, 15) || []);
+        await fetchLevelMovies(selectedLevel, selectedGenre);
+      } catch (error) {
+        console.error('Failed to fetch movies:', error);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const onSearchTextChange = (text: string) => {
+    setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await tmdbApi.searchMovies(text.trim());
+        setSuggestions(results.slice(0, 5));
+        setAllResults(results);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error('Autocomplete failed:', err);
+      }
+    }, 300);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSuggestions([]);
+    setAllResults([]);
+    setShowSuggestions(false);
+  };
+
+  const handleMoviePress = (movie: any) => {
+    const normalized = {
+      id: movie.id || movie.tmdb_id || movie.movie_id,
+      tmdb_id: movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined),
+      title: movie.title,
+      poster_path: movie.poster_path,
+      backdrop_path: movie.backdrop_path,
+      release_date: movie.release_date || (movie.year ? `${movie.year}-01-01` : undefined),
+      overview: movie.overview || movie.description,
+      genre_ids: movie.genre_ids,
+      vote_average: movie.vote_average,
+      original_language: movie.original_language || 'en',
+    };
+    setLastOpenedMovie(normalized);
+    AsyncStorage.setItem('last_opened_movie', JSON.stringify(normalized)).catch(() => {});
+    onMoviePress(normalized);
+  };
+
+  const currentLang = AVAILABLE_LANGUAGES.find(l => l.code === targetLanguage) || AVAILABLE_LANGUAGES[0];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {showViewAsBadge && (
+        <TouchableOpacity
+          style={styles.viewAsBadge}
+          onPress={onNavigateToAdmin}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.viewAsBadgeText}>
+            Viewing as: {adminViewMode === 'free' ? 'Free user' : 'Premium user'} · tap to change
+          </Text>
+        </TouchableOpacity>
+      )}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>WordWise</Text>
+
+        <View style={styles.headerRight}>
+          {user?.is_admin && (
+            <TouchableOpacity
+              style={styles.adminButton}
+              onPress={onNavigateToAdmin}
+            >
+              <Text style={styles.adminButtonText}>⚙</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.languageButton}
+            onPress={() => setShowLanguageMenu(!showLanguageMenu)}
+          >
+            <Text style={styles.languageButtonText}>{currentLang.code}</Text>
+            <Text style={styles.languageDropdownIcon}>▼</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.avatarButton}
+            onPress={() => setShowUserMenu(!showUserMenu)}
+          >
+            {user?.profile_picture_url ? (
+              <Image
+                source={{ uri: user.profile_picture_url }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {showLanguageMenu && (
+        <View style={styles.dropdownMenu}>
+          <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            {AVAILABLE_LANGUAGES.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.dropdownItem,
+                  lang.code === targetLanguage && styles.dropdownItemActive
+                ]}
+                onPress={() => {
+                  setTargetLanguage(lang.code);
+                  setShowLanguageMenu(false);
+                }}
+              >
+                <Text style={styles.dropdownItemCode}>{lang.code}</Text>
+                <Text style={styles.dropdownItemText}>{lang.nativeName}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {showUserMenu && (
+        <View style={[styles.dropdownMenu, styles.userDropdownMenu]}>
+          <View style={styles.dropdownUserInfo}>
+            <Text style={styles.dropdownUserName}>{user?.username || 'User'}</Text>
+            <Text style={styles.dropdownUserEmail}>{user?.email}</Text>
+          </View>
+          <View style={styles.dropdownDivider} />
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onNavigateToSettings();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>⚙️</Text>
+            <Text style={styles.dropdownItemText}>Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onNavigateToLists();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>📚</Text>
+            <Text style={styles.dropdownItemText}>My Lists</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onNavigateToVocabulary();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>📖</Text>
+            <Text style={styles.dropdownItemText}>Vocabulary</Text>
+          </TouchableOpacity>
+          <View style={styles.dropdownDivider} />
+          <TouchableOpacity
+            style={styles.dropdownItem}
+            onPress={() => {
+              setShowUserMenu(false);
+              onLogout();
+            }}
+          >
+            <Text style={styles.dropdownItemIcon}>🚪</Text>
+            <Text style={[styles.dropdownItemText, { color: colors.error }]}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {!loading && (
+          <MobileHeroSection
+            movie={trendingMovies.find((m: any) => m.backdrop_path) ?? trendingMovies[0] ?? null}
+            onPress={handleMoviePress}
+            continueMovie={lastOpenedMovie}
+            onContinuePress={handleMoviePress}
+          />
+        )}
+
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={onSearchTextChange}
+              onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
+                <Text style={styles.searchClearText}>✕</Text>
+              </TouchableOpacity>
+            )}
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.autocompleteDropdown}>
+                {suggestions.map((movie: any) => (
+                  <TouchableOpacity
+                    key={movie.id}
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      handleMoviePress(movie);
+                      clearSearch();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {movie.poster_path ? (
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                        style={styles.searchResultPoster}
+                      />
+                    ) : (
+                      <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                    )}
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
+                      <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {allResults.length > 5 && (
+                  <TouchableOpacity
+                    style={styles.seeAllButton}
+                    onPress={() => {
+                      onSearch(searchQuery.trim());
+                      clearSearch();
+                    }}
+                  >
+                    <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
+          >
+            <Text style={styles.searchButtonText}>🔍</Text>
+          </TouchableOpacity>
+        </View>
+
+        {srsTotalSaved > 0 && (
+          <View style={styles.reviewCtaWrapper}>
+            <TouchableOpacity
+              style={styles.reviewCta}
+              onPress={() => {
+                wordwiseApi.logInteraction('_srs', 'SRS_CTA_TAP', undefined, { due_count: srsDueCount, total_saved: srsTotalSaved });
+                onNavigateToReview();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.reviewCtaLeft}>
+                <Text style={styles.reviewCtaTitle}>
+                  {srsDueCount && srsDueCount > 0
+                    ? `Review your words`
+                    : 'All caught up!'}
+                </Text>
+                <Text style={styles.reviewCtaSubtitle}>
+                  {srsDueCount && srsDueCount > 0
+                    ? `${srsDueCount} word${srsDueCount === 1 ? '' : 's'} due for review`
+                    : `${srsTotalSaved} words saved · next review soon`}
+                </Text>
+              </View>
+              <Text style={styles.reviewCtaArrow}>→</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {showAds && (
+          <View style={styles.adBanner}>
+            <Text style={styles.adBannerText}>Ad</Text>
+          </View>
+        )}
+
+        <View style={styles.homeNavToggleWrapper}>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToNotebook} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>My Words</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToStats} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>My Progress</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToAchievements} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>Badges</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToLeaderboard} activeOpacity={0.7}>
+            <Text style={styles.homeNavToggleText}>Rankings</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ zIndex: 50, overflow: 'visible' }}>
+          <View style={styles.homeTabToggleWrapper}>
+            <TouchableOpacity
+              style={[styles.homeTabToggleBtn, homeTab === 'level' && styles.homeTabToggleBtnActive]}
+              onPress={() => {
+                if (homeTab === 'level') {
+                  setLevelDropdownOpen((v) => !v);
+                  setGenreDropdownOpen(false);
+                } else {
+                  setTabSwitching(true);
+                  setHomeTab('level');
+                  setLevelDropdownOpen(false);
+                  setGenreDropdownOpen(false);
+                  setTimeout(() => setTabSwitching(false), 400);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.homeTabToggleText, homeTab === 'level' && styles.homeTabToggleTextActive]}>
+                {selectedLevel === (user?.proficiency_level || 'B1')
+                  ? `⭐ Your Level (${selectedLevel})`
+                  : `⭐ Level ${selectedLevel}`}
+                {homeTab === 'level' ? ` ${levelDropdownOpen ? '▲' : '▼'}` : ''}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.homeTabToggleBtn, homeTab === 'trending' && styles.homeTabToggleBtnActive]}
+              onPress={() => {
+                if (homeTab !== 'trending') {
+                  setTabSwitching(true);
+                  setHomeTab('trending');
+                  setLevelDropdownOpen(false);
+                  setGenreDropdownOpen(false);
+                  setTimeout(() => setTabSwitching(false), 400);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.homeTabToggleText, homeTab === 'trending' && styles.homeTabToggleTextActive]}>
+                🔥 Trending Now
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {levelDropdownOpen && (
+            <View style={[styles.levelPickerMenu, { left: 16 }]}>
+              {LEVEL_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.levelPickerItem, opt.value === selectedLevel && styles.levelPickerItemActive]}
+                  onPress={async () => {
+                    setLevelDropdownOpen(false);
+                    if (opt.value !== selectedLevel) {
+                      setSelectedLevel(opt.value);
+                      setTabSwitching(true);
+                      await fetchLevelMovies(opt.value, selectedGenre);
+                      setTabSwitching(false);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
+                  <Text style={[styles.levelPickerText, opt.value === selectedLevel && styles.levelPickerTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {genreDropdownOpen && (
+            <View style={[styles.levelPickerMenu, { right: 16, left: undefined }]}>
+              {GENRE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.levelPickerItem, opt.value === selectedGenre && styles.levelPickerItemActive]}
+                  onPress={async () => {
+                    setGenreDropdownOpen(false);
+                    if (opt.value !== selectedGenre) {
+                      setSelectedGenre(opt.value);
+                      setTabSwitching(true);
+                      await fetchLevelMovies(selectedLevel, opt.value);
+                      setTabSwitching(false);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
+                  <Text style={[styles.levelPickerText, opt.value === selectedGenre && styles.levelPickerTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {homeTab === 'level' && (
+          <TouchableOpacity
+            style={styles.genreFilterBtn}
+            onPress={() => {
+              setGenreDropdownOpen((v) => !v);
+              setLevelDropdownOpen(false);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.genreFilterText}>
+              {selectedGenre
+                ? `${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.icon || ''} ${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.label || selectedGenre}`
+                : '🎬 All Genres'}
+              {' '}{genreDropdownOpen ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {homeTab === 'level' && (
+          <View style={styles.levelSortRow}>
+            {([
+              { key: 'rating' as const, label: 'Rating' },
+              { key: 'popularity' as const, label: 'Popularity' },
+              { key: 'level' as const, label: 'Level %' },
+            ]).map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.levelSortChip, levelSort === opt.key && styles.levelSortChipActive]}
+                onPress={() => {
+                  if (levelSort === opt.key) {
+                    setLevelSortAsc((v) => !v);
+                  } else {
+                    setLevelSort(opt.key);
+                    setLevelSortAsc(false);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.levelSortText, levelSort === opt.key && styles.levelSortTextActive]}>
+                  {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.section}>
+          {loading || tabSwitching ? (
+            <View style={styles.skeletonContainer}>
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} style={styles.skeletonRow}>
+                  <View style={styles.skeletonPoster} />
+                  <View style={styles.skeletonInfo}>
+                    <View style={[styles.skeletonLine, { width: '70%' }]} />
+                    <View style={[styles.skeletonLine, { width: '40%', marginTop: 8 }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : homeTab === 'level' ? (
+            <RankedMovieList
+              movies={[...topRatedMovies].sort((a, b) => {
+                let diff = 0;
+                if (levelSort === 'rating') diff = (b.vote_average || 0) - (a.vote_average || 0);
+                else if (levelSort === 'popularity') diff = (b.vote_count || 0) - (a.vote_count || 0);
+                else diff = (a.difficulty_score || 0) - (b.difficulty_score || 0);
+                return levelSortAsc ? -diff : diff;
+              })}
+              onMoviePress={handleMoviePress}
+              userLevel={selectedLevel}
+            />
+          ) : (
+            <SnapPager
+              movies={trendingMovies}
+              onMoviePress={handleMoviePress}
+            />
+          )}
+        </View>
+
+        {todaysWord && (
+          <View style={styles.todayCard}>
+            <View style={styles.todayHeader}>
+              <Text style={styles.todayLabel}>Today's Word</Text>
+              <Text style={styles.todayMovie}>from {todaysWord.movie_title}</Text>
+            </View>
+            <Text style={styles.todayWord}>{todaysWord.word}</Text>
+            {todaysWord.definition && (
+              <Text style={styles.todayDef}>{todaysWord.definition}</Text>
+            )}
+            {todaysWord.example_sentence && (
+              <Text style={styles.todaySentence}>"{todaysWord.example_sentence}"</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.todaySaveBtn, todaysWordSaved && styles.todaySaveBtnSaved]}
+              onPress={async () => {
+                if (todaysWordSaved) return;
+                try {
+                  await wordwiseApi.saveWord(todaysWord.word, todaysWord.movie_id);
+                  setTodaysWordSaved(true);
+                  setSrsTotalSaved((n) => n + 1);
+                } catch {}
+              }}
+            >
+              <Text style={[styles.todaySaveBtnText, todaysWordSaved && styles.todaySaveBtnTextSaved]}>
+                {todaysWordSaved ? '★ Saved' : '☆ Save this word'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+          <TouchableOpacity
+            style={styles.browseAllButton}
+            onPress={() => onSearch('')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.browseAllText}>Browse All Movies →</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+};

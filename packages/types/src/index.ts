@@ -1,3 +1,17 @@
+// Backend-authoritative entitlements (see backend/src/utils/subscription.py).
+// Clients NEVER compute is_premium on their own — they read this object.
+// One truth, one gate. If you're tempted to check `user.subscriptionTier`
+// directly, use the entitlements helper instead.
+export interface Entitlements {
+  tier: 'free' | 'trial' | 'premium' | 'comped';
+  is_premium: boolean;
+  is_admin: boolean;
+  ads_eligible: boolean;
+  subscription_expires_at: string | null;
+}
+
+export * from './constants';
+
 // User types
 export interface User {
   id: number;
@@ -9,6 +23,7 @@ export interface User {
   proficiency_level: string | null;
   default_tab: 'movies' | 'books';
   is_admin: boolean;
+  entitlements?: Entitlements | null;
 }
 
 // Movie types
