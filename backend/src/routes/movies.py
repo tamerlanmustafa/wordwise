@@ -11,6 +11,12 @@ from ..services import STANDS4ScriptsClient
 router = APIRouter(prefix="/movies", tags=["movies"])
 
 
+async def _get_hidden_word_set(db: Prisma) -> set:
+    """Admin-hidden words (misspellings, bad data). Compared case-insensitively."""
+    rows = await db.hiddenword.find_many()
+    return {r.word for r in rows}
+
+
 @router.get("/", response_model=MovieListResponse)
 async def list_movies(
     skip: int = Query(0, ge=0),
@@ -392,11 +398,15 @@ async def get_vocabulary_preview(
         order={'confidence': 'desc'}
     )
 
+    hidden = await _get_hidden_word_set(db)
+
     # Group by level and take first 3 from each
     top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
     level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
 
     for word in all_words:
+        if word.word.lower() in hidden:
+            continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
@@ -475,6 +485,8 @@ async def get_vocabulary_full(
         order={'confidence': 'desc'}
     )
 
+    hidden = await _get_hidden_word_set(db)
+
     from src.routes.cefr import should_keep_word
 
     # Group by level, filtering ultra-common A1 words
@@ -506,6 +518,8 @@ async def get_vocabulary_full(
         return rank
 
     for word in cefr_words:
+        if word.word.lower() in hidden:
+            continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
 
         if not should_keep_word(word.word, word.lemma, level):

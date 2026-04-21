@@ -765,6 +765,49 @@ export const adminApi = {
     const data = await res.json();
     return data.jobs || [];
   },
+
+  // Hide a misspelled/bad word from every movie+book vocabulary list.
+  // Admin-only; the server filters word_classification rows whose lowercased
+  // form matches any hidden_words row.
+  hideWord: async (word: string, reason?: string) => {
+    const res = await authFetch(`${API_BASE_URL}/admin/hidden-words`, {
+      method: 'POST',
+      body: JSON.stringify({ word, reason }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`POST /admin/hidden-words → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  unhideWord: async (word: string) => {
+    const res = await authFetch(
+      `${API_BASE_URL}/admin/hidden-words/${encodeURIComponent(word)}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`DELETE /admin/hidden-words → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  listHiddenWords: async (): Promise<Array<{
+    id: number;
+    word: string;
+    reason: string | null;
+    hidden_by: string | null;
+    created_at: string | null;
+  }>> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/hidden-words`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/hidden-words → ${res.status} ${body.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return data.hidden_words || [];
+  },
 };
 
 // =====================================================================

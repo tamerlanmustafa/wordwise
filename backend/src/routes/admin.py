@@ -470,3 +470,71 @@ async def reprocess_all_scripts(
         "total": len(scripts),
         "errors": errors
     }
+
+
+class HideWordRequest(BaseModel):
+    word: str
+    reason: Optional[str] = None
+
+
+@router.get("/hidden-words")
+async def list_hidden_words(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    rows = await db.hiddenword.find_many(
+        include={"hiddenBy": True},
+        order={"createdAt": "desc"},
+    )
+    return {
+        "hidden_words": [
+            {
+                "id": r.id,
+                "word": r.word,
+                "reason": r.reason,
+                "hidden_by": r.hiddenBy.email if r.hiddenBy else None,
+                "created_at": r.createdAt.isoformat() if r.createdAt else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/hidden-words")
+async def hide_word(
+    body: HideWordRequest,
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    # Stored lowercased; vocabulary filters compare against the lowercase form
+    # so uppercase variants in source material still get hidden.
+    normalized = body.word.strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="word is required")
+
+    existing = await db.hiddenword.find_unique(where={"word": normalized})
+    if existing:
+        return {"success": True, "id": existing.id, "already_hidden": True}
+
+    created = await db.hiddenword.create(
+        data={
+            "word": normalized,
+            "reason": body.reason,
+            "hiddenById": admin_user.id,
+        }
+    )
+    return {"success": True, "id": created.id, "word": created.word}
+
+
+@router.delete("/hidden-words/{word}")
+async def unhide_word(
+    word: str,
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    normalized = word.strip().lower()
+    existing = await db.hiddenword.find_unique(where={"word": normalized})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Word is not hidden")
+    await db.hiddenword.delete(where={"id": existing.id})
+    return {"success": True, "word": normalized}

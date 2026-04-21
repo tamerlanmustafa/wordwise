@@ -23,6 +23,7 @@ import type { MovieData } from '../../core/types';
 import { tmdbGenres } from '../../core/types';
 import {
   wordwiseApi,
+  adminApi,
   API_BASE_URL,
   type VocabularyResponse,
   type WordInfo,
@@ -337,6 +338,38 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
       });
       wordwiseApi.logInteraction(word, result.saved ? 'WORD_SAVE' : 'WORD_UNSAVE', movieId);
     } catch {}
+  };
+
+  // Admin-only: globally hide this word. Prompts for confirmation, calls
+  // /admin/hidden-words, and drops the word from the local vocabulary so the
+  // row disappears without needing a full refetch.
+  const handleHideWord = (word: string) => {
+    Alert.alert(
+      'Hide word globally?',
+      `"${word}" will be removed from every movie and book vocabulary list for all users. You can undo this from the admin panel.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Hide',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await adminApi.hideWord(word, 'Misspelled / bad data');
+              setVocabulary((prev) => {
+                if (!prev) return prev;
+                const nextByLevel: typeof prev.top_words_by_level = {};
+                for (const [lvl, list] of Object.entries(prev.top_words_by_level)) {
+                  nextByLevel[lvl] = list.filter((w: WordInfo) => w.word !== word);
+                }
+                return { ...prev, top_words_by_level: nextByLevel };
+              });
+            } catch (e: any) {
+              Alert.alert('Failed to hide word', e?.message || 'Unknown error');
+            }
+          },
+        },
+      ]
+    );
   };
 
   type Bookmark = {
@@ -844,6 +877,7 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
                           lastOpenedKey={lastOpenedKey}
                           onExpand={setLastOpenedKey}
                           displayLevel={item.cefr_level}
+                          onHide={authUser?.is_admin ? handleHideWord : undefined}
                         />
                       </BookmarkRowWrapper>
                     );
@@ -887,6 +921,7 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
                         accordionMode={accordionMode}
                         lastOpenedKey={lastOpenedKey}
                         onExpand={setLastOpenedKey}
+                        onHide={authUser?.is_admin ? handleHideWord : undefined}
                       />
                     </BookmarkRowWrapper>
                   );

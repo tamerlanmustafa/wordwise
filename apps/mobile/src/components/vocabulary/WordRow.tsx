@@ -34,6 +34,9 @@ interface Props {
   lastOpenedKey?: string | null;
   onExpand?: (key: string) => void;
   displayLevel?: string;
+  // When present, renders an admin-only "Hide word" control in the expanded
+  // panel. Passed down only for admins by the parent screen.
+  onHide?: (word: string) => void;
 }
 
 export const WordRow = ({
@@ -51,6 +54,7 @@ export const WordRow = ({
   lastOpenedKey,
   onExpand,
   displayLevel,
+  onHide,
 }: Props) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -265,6 +269,16 @@ export const WordRow = ({
               style={styles.reportInlineBtn}
             >
               <Text style={styles.reportInlineBtnText}>⚐ Report an issue</Text>
+            </TouchableOpacity>
+          )}
+          {onHide && (
+            <TouchableOpacity
+              onPress={() => onHide(word.word)}
+              style={styles.reportInlineBtn}
+            >
+              <Text style={[styles.reportInlineBtnText, { color: '#D66A6A' }]}>
+                🚫 Hide word (admin)
+              </Text>
             </TouchableOpacity>
           )}
         </View>

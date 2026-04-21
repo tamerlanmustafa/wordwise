@@ -40,6 +40,7 @@ model User {
   wordInteractions   UserWordInteraction[]
   reportsMade        WordReport[]              @relation("ReportedBy")
   reportsReviewed    WordReport[]              @relation("ReviewedBy")
+  hiddenWords        HiddenWord[]              @relation("HiddenWordBy")
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -559,6 +560,22 @@ model SentenceLemmaLink {
 }
 
 // ============================================================
+
+// Words an admin has flagged as misspelled / bad data. Present → hide the
+// word from every movie/book vocabulary list. `word` stored lowercased so
+// lookups don't care about the original casing in the source material.
+model HiddenWord {
+  id          Int      @id @default(autoincrement())
+  word        String   @unique @db.VarChar
+  hiddenById  Int      @map("hidden_by_id")
+  reason      String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  hiddenBy    User     @relation("HiddenWordBy", fields: [hiddenById], references: [id], onDelete: Cascade)
+
+  @@index([word], map: "ix_hidden_words_word")
+  @@map("hidden_words")
+}
 
 model WordReport {
   id                Int          @id @default(autoincrement())

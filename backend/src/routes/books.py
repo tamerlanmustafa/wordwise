@@ -748,11 +748,16 @@ async def get_book_vocabulary(
         order={"frequencyRank": "asc"}
     )
 
+    hidden_rows = await db.hiddenword.find_many()
+    hidden = {r.word for r in hidden_rows}
+
     # Build level distribution and top words by level, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
     top_words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
 
     for cls in classifications:
+        if cls.word.lower() in hidden:
+            continue
         level = cls.cefrLevel
 
         # Filter out ultra-common A1 words (pronouns, articles, etc.)
@@ -833,11 +838,16 @@ async def get_book_vocabulary_preview(
         take=100  # Limited for preview
     )
 
+    hidden_rows = await db.hiddenword.find_many()
+    hidden = {r.word for r in hidden_rows}
+
     # Build level distribution, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
     top_words_by_level = {"A1": [], "A2": [], "B1": [], "B2": [], "C1": [], "C2": []}
 
     for cls in classifications:
+        if cls.word.lower() in hidden:
+            continue
         level = cls.cefrLevel
 
         # Filter out ultra-common A1 words (pronouns, articles, etc.)
