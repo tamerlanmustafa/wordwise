@@ -4,7 +4,7 @@ import { colors } from '../../theme/palette';
 // Shared row styles used by both WordRow and IdiomRow (vocabulary tab).
 export const rowStyles = StyleSheet.create({
   wordRowWrapper: {
-    marginBottom: 4,
+    marginBottom: -1,
   },
   wordRow: {
     backgroundColor: colors.paper,
