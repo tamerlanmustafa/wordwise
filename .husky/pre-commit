@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Fast, staged-only. Keep this under a few seconds so commits stay cheap.
+# Typecheck + tests run on pre-push, not here.
+npx lint-staged

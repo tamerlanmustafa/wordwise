@@ -39,13 +39,12 @@ const PLANS = [
 ];
 
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCheckout = async (priceId: string, planId: string) => {
+  const handleCheckout = async (_priceId: string, planId: string) => {
     if (!STRIPE_KEY) {
       setError('Stripe is not configured yet. Set VITE_STRIPE_PUBLISHABLE_KEY in your environment.');
       return;

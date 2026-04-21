@@ -10,5 +10,10 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+  "exclude": [
+    "**/node_modules",
+    "**/Pods",
+    "src/features/**",
+    "src/navigation/**"
+  ]
 }

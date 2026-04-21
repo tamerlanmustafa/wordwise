@@ -14,11 +14,22 @@
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "shell:db": "psql -U wordwise_user -d wordwise_db",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "prepare": "husky",
+    "typecheck": "npm run typecheck:frontend && npm run typecheck:mobile",
+    "typecheck:frontend": "cd frontend && tsc -b --noEmit",
+    "typecheck:mobile": "cd apps/mobile && tsc --noEmit"
+  },
+  "lint-staged": {
+    "backend/**/*.py": [
+      "bash -c 'command -v ruff >/dev/null 2>&1 && ruff check --fix --config backend/ruff.toml \"$@\" || echo \"[lint-staged] ruff not on PATH, skipping (activate venv or: pip install ruff)\"' _"
+    ]
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
     "concurrently": "^8.2.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
     "typescript": "~5.9.2"
   },
   "engines": {

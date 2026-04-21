@@ -8,16 +8,25 @@ interface StoredTokens {
   refresh: string;
 }
 
-// Web fallback using localStorage
+// Web fallback using localStorage. Accessed via globalThis so mobile
+// tsconfig doesn't need to pull in DOM lib types.
+interface WebLocalStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+const getLocalStorage = (): WebLocalStorage =>
+  (globalThis as unknown as { localStorage: WebLocalStorage }).localStorage;
+
 const webStorage = {
   async setItemAsync(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
+    getLocalStorage().setItem(key, value);
   },
   async getItemAsync(key: string): Promise<string | null> {
-    return localStorage.getItem(key);
+    return getLocalStorage().getItem(key);
   },
   async deleteItemAsync(key: string): Promise<void> {
-    localStorage.removeItem(key);
+    getLocalStorage().removeItem(key);
   },
 };
 

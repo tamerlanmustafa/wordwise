@@ -1,0 +1,21 @@
+target-version = "py311"
+line-length = 120
+extend-exclude = ["prisma", "logs", "data", "__pycache__"]
+
+# Start narrow: only pyflakes (real bugs like undefined names and unused
+# imports). Do NOT add E/W/I/B/UP yet — the existing codebase has ~1300
+# style findings; bulk-fixing them belongs in its own PR. Graduate rule
+# families one at a time, each time CI is green.
+[lint]
+select = ["F"]
+ignore = [
+    "F401",  # unused import — too noisy in `__init__.py` barrels; revisit
+    "F403",  # star imports — used deliberately in routes/__init__.py
+    "F405",  # may be undefined from star — same reason as F403
+    "F541",  # f-string without placeholders — widespread in existing code
+    "F841",  # unused local variable — 18 existing; worth a dedicated cleanup PR
+    "F811",  # redefinition of unused name — a few in routes, revisit
+    "F601",  # duplicate dict keys — ~260 in cefr_classifier phrasal-verb
+             # tables; legitimate smell (later entries silently win) but
+             # needs its own audit PR, not a CI gate.
+]

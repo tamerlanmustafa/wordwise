@@ -11,7 +11,7 @@ import { MovieSidebar } from './MovieSidebar';
 import { ScrollToTop } from './ScrollToTop';
 import { ReportDialog } from './ReportDialog';
 import { createReport } from '../services/api';
-import type { ScriptAnalysisResult, DifficultyCategory, WordFrequency, CEFRLevel } from '../types/script';
+import type { ScriptAnalysisResult, WordFrequency, CEFRLevel } from '../types/script';
 import type { TMDBMetadata } from '../services/scriptService';
 import type { MovieDifficultyResult } from '../utils/computeMovieDifficulty';
 import { useLanguage } from '../contexts/LanguageContext';

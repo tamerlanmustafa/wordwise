@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Slower checks that catch what lint-staged can't. If this hurts velocity,
+# run these in CI only — but pre-push here means you find breakage before
+# the push round-trip.
+
+set -e
+
+echo "[pre-push] frontend tsc…"
+(cd frontend && npx tsc -b --noEmit)
+
+echo "[pre-push] mobile tsc…"
+(cd apps/mobile && npx tsc --noEmit)
+
+echo "[pre-push] mobile jest…"
+(cd apps/mobile && npm test --silent -- --ci)
+
+# Backend pytest is skipped here because it requires a venv the user may
+# not have activated. CI runs it on every push anyway. Uncomment if you
+# keep a venv available:
+# echo "[pre-push] backend pytest…"
+# (cd backend && pytest -q)
+
+echo "[pre-push] ok"
