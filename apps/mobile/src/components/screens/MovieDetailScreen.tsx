@@ -47,9 +47,13 @@ interface Props {
   movie: MovieData;
   onBack: () => void;
   targetLanguage: string;
+  // These receive the *resolved internal movieId* (not the TMDB id); the
+  // screen waits until vocabulary loads before enabling them.
+  onStartQuizJourney?: (internalMovieId: number) => void;
+  onStartPreMovieQuiz?: (internalMovieId: number) => void;
 }
 
-export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
+export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJourney, onStartPreMovieQuiz }: Props) => {
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -699,6 +703,25 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
                     All levels
                   </Text>
                 </TouchableOpacity>
+                {onStartQuizJourney && movieId != null && wordLevels.some((l) => l.count > 0) && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => onStartQuizJourney(movieId)}
+                    style={{
+                      marginLeft: 6,
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: colors.primary,
+                      backgroundColor: colors.primary,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                      🎮 Journey
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -730,9 +753,39 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage }: Props) => {
                 </View>
               </>
             ) : wordsView === 'foryou' ? (
-              suggestedWords.length === 0 ? (
-                <Text style={styles.forYouEmpty}>No new words at your level</Text>
-              ) : null
+              <>
+                {onStartPreMovieQuiz && movieId != null && wordLevels.some((l) => l.count > 0) && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => onStartPreMovieQuiz(movieId)}
+                    style={{
+                      marginHorizontal: 16,
+                      marginTop: 8,
+                      marginBottom: 12,
+                      paddingVertical: 14,
+                      paddingHorizontal: 18,
+                      borderRadius: 14,
+                      backgroundColor: colors.primary,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>
+                        Quiz yourself before watching
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#FFFFFF', opacity: 0.85, marginTop: 2 }}>
+                        10 cards · ~2 min · earn stars + XP
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 20, color: '#FFFFFF' }}>→</Text>
+                  </TouchableOpacity>
+                )}
+                {suggestedWords.length === 0 ? (
+                  <Text style={styles.forYouEmpty}>No new words at your level</Text>
+                ) : null}
+              </>
             ) : (
               <>
                 <View style={styles.cefrTabsWrapper}>

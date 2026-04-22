@@ -9,71 +9,74 @@ datasource db {
 }
 
 model User {
-  id                 Int                       @id @default(autoincrement())
-  email              String                    @unique(map: "ix_users_email") @db.VarChar
-  username           String                    @unique(map: "ix_users_username") @db.VarChar
-  passwordHash       String?                   @map("password_hash") @db.VarChar
-  languagePreference String?                   @map("language_preference") @db.VarChar
-  nativeLanguage     String?                   @default("en") @map("native_language") @db.VarChar(10)
-  learningLanguage   String?                   @default("en") @map("learning_language") @db.VarChar(10)
-  proficiencyLevel   proficiencylevel?         @map("proficiency_level")
-  defaultTab         String?                   @default("movies") @map("default_tab") @db.VarChar(10)
-  isActive           Boolean?                  @map("is_active")
-  isAdmin            Boolean?                  @map("is_admin")
-  subscriptionTier   subscriptiontier?         @default(free) @map("subscription_tier")
-  subscriptionExpiresAt DateTime?              @map("subscription_expires_at") @db.Timestamptz(6)
-  adsEligible        Boolean?                  @default(true) @map("ads_eligible")
-  srsFreePreviewsUsed Int?                     @default(0) @map("srs_free_previews_used")
-  srsCurrentStreak    Int?                     @default(0) @map("srs_current_streak")
-  srsLongestStreak    Int?                     @default(0) @map("srs_longest_streak")
-  srsLastSessionDate  DateTime?                @map("srs_last_session_date") @db.Date
-  srsTotalReviews     Int?                     @default(0) @map("srs_total_reviews")
-  srsTotalCorrect     Int?                     @default(0) @map("srs_total_correct")
-  createdAt          DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime?                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  oauthProvider      oauthprovider             @map("oauth_provider")
-  googleId           String?                   @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
-  profilePictureUrl  String?                   @map("profile_picture_url") @db.VarChar
-  wordLists          UserWordList[]
-  translationHistory UserTranslationHistory[]
-  userWords          UserWord[]
-  wordInteractions   UserWordInteraction[]
-  reportsMade        WordReport[]              @relation("ReportedBy")
-  reportsReviewed    WordReport[]              @relation("ReviewedBy")
-  hiddenWords        HiddenWord[]              @relation("HiddenWordBy")
+  id                    Int                      @id @default(autoincrement())
+  email                 String                   @unique(map: "ix_users_email") @db.VarChar
+  username              String                   @unique(map: "ix_users_username") @db.VarChar
+  passwordHash          String?                  @map("password_hash") @db.VarChar
+  languagePreference    String?                  @map("language_preference") @db.VarChar
+  nativeLanguage        String?                  @default("en") @map("native_language") @db.VarChar(10)
+  learningLanguage      String?                  @default("en") @map("learning_language") @db.VarChar(10)
+  proficiencyLevel      proficiencylevel?        @map("proficiency_level")
+  defaultTab            String?                  @default("movies") @map("default_tab") @db.VarChar(10)
+  isActive              Boolean?                 @map("is_active")
+  isAdmin               Boolean?                 @map("is_admin")
+  subscriptionTier      subscriptiontier?        @default(free) @map("subscription_tier")
+  subscriptionExpiresAt DateTime?                @map("subscription_expires_at") @db.Timestamptz(6)
+  adsEligible           Boolean?                 @default(true) @map("ads_eligible")
+  srsFreePreviewsUsed   Int?                     @default(0) @map("srs_free_previews_used")
+  srsCurrentStreak      Int?                     @default(0) @map("srs_current_streak")
+  srsLongestStreak      Int?                     @default(0) @map("srs_longest_streak")
+  srsLastSessionDate    DateTime?                @map("srs_last_session_date") @db.Date
+  srsTotalReviews       Int?                     @default(0) @map("srs_total_reviews")
+  srsTotalCorrect       Int?                     @default(0) @map("srs_total_correct")
+  createdAt             DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime?                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  oauthProvider         oauthprovider            @map("oauth_provider")
+  googleId              String?                  @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
+  profilePictureUrl     String?                  @map("profile_picture_url") @db.VarChar
+  wordLists             UserWordList[]
+  translationHistory    UserTranslationHistory[]
+  userWords             UserWord[]
+  wordInteractions      UserWordInteraction[]
+  reportsMade           WordReport[]             @relation("ReportedBy")
+  reportsReviewed       WordReport[]             @relation("ReviewedBy")
+  hiddenWords           HiddenWord[]             @relation("HiddenWordBy")
+  quizSessions          QuizSession[]
+  quizStats             UserQuizStats?
+  unitProgress          UnitProgress[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
 }
 
 model Movie {
-  id                 Int              @id @default(autoincrement())
-  title              String           @db.VarChar
-  actualTitle        String?          @map("actual_title") @db.VarChar
-  year               Int
-  genre              String?          @db.VarChar
-  difficultyLevel    difficultylevel? @map("difficulty_level")
-  difficultyScore    Int?             @map("difficulty_score")
-  cefrDistribution   Json?            @map("cefr_distribution")
-  script_text        String?
-  wordCount          Int?             @map("word_count")
-  description        String?
-  poster_url         String?          @db.VarChar
-  tmdbId             Int?             @unique @map("tmdb_id")
-  tmdbPopularity     Float?           @map("tmdb_popularity")
-  tmdbVoteAverage    Float?           @map("tmdb_vote_average")
-  tmdbVoteCount      Int?             @map("tmdb_vote_count")
-  createdAt          DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime?        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               Int                   @id @default(autoincrement())
+  title            String                @db.VarChar
+  actualTitle      String?               @map("actual_title") @db.VarChar
+  year             Int
+  genre            String?               @db.VarChar
+  difficultyLevel  difficultylevel?      @map("difficulty_level")
+  difficultyScore  Int?                  @map("difficulty_score")
+  cefrDistribution Json?                 @map("cefr_distribution")
+  script_text      String?
+  wordCount        Int?                  @map("word_count")
+  description      String?
+  poster_url       String?               @db.VarChar
+  tmdbId           Int?                  @unique @map("tmdb_id")
+  tmdbPopularity   Float?                @map("tmdb_popularity")
+  tmdbVoteAverage  Float?                @map("tmdb_vote_average")
+  tmdbVoteCount    Int?                  @map("tmdb_vote_count")
+  createdAt        DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime?             @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations
-  words              Word[]
-  movieScripts       MovieScript[]
-  aliases            MovieAlias[]
-  userWords          UserWord[]
-  wordReports        WordReport[]
-  lemmaMappings      MovieLemmaMapping[]
-  sentences          SentenceBank[]
-  wordInteractions   UserWordInteraction[]
+  words            Word[]
+  movieScripts     MovieScript[]
+  aliases          MovieAlias[]
+  userWords        UserWord[]
+  wordReports      WordReport[]
+  lemmaMappings    MovieLemmaMapping[]
+  sentences        SentenceBank[]
+  wordInteractions UserWordInteraction[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
@@ -82,26 +85,26 @@ model Movie {
 }
 
 model Book {
-  id                 Int              @id @default(autoincrement())
-  title              String           @db.VarChar
-  author             String?          @db.VarChar
-  year               Int?
-  description        String?          @db.Text
-  coverUrl           String?          @map("cover_url") @db.VarChar
+  id               Int              @id @default(autoincrement())
+  title            String           @db.VarChar
+  author           String?          @db.VarChar
+  year             Int?
+  description      String?          @db.Text
+  coverUrl         String?          @map("cover_url") @db.VarChar
   // External IDs
-  gutenbergId        Int?             @unique @map("gutenberg_id")
-  openLibraryKey     String?          @map("open_library_key") @db.VarChar
-  isbn               String?          @db.VarChar
+  gutenbergId      Int?             @unique @map("gutenberg_id")
+  openLibraryKey   String?          @map("open_library_key") @db.VarChar
+  isbn             String?          @db.VarChar
   // Analysis results
-  difficultyLevel    difficultylevel? @map("difficulty_level")
-  difficultyScore    Int?             @map("difficulty_score")
-  cefrDistribution   Json?            @map("cefr_distribution")
-  wordCount          Int?             @map("word_count")
+  difficultyLevel  difficultylevel? @map("difficulty_level")
+  difficultyScore  Int?             @map("difficulty_score")
+  cefrDistribution Json?            @map("cefr_distribution")
+  wordCount        Int?             @map("word_count")
   // Timestamps
-  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations
-  bookText           BookText?
+  bookText         BookText?
 
   @@index([id], map: "ix_books_id")
   @@index([title], map: "ix_books_title")
@@ -111,42 +114,42 @@ model Book {
 }
 
 model BookText {
-  id                  Int                       @id @default(autoincrement())
-  bookId              Int                       @unique @map("book_id")
-  sourceType          booksourcetype            @map("source_type")
-  rawText             String?                   @map("raw_text") @db.Text
-  cleanedText         String?                   @map("cleaned_text") @db.Text
-  cleanedWordCount    Int?                      @map("cleaned_word_count")
-  processingMetadata  Json?                     @map("processing_metadata")
+  id                   Int                      @id @default(autoincrement())
+  bookId               Int                      @unique @map("book_id")
+  sourceType           booksourcetype           @map("source_type")
+  rawText              String?                  @map("raw_text") @db.Text
+  cleanedText          String?                  @map("cleaned_text") @db.Text
+  cleanedWordCount     Int?                     @map("cleaned_word_count")
+  processingMetadata   Json?                    @map("processing_metadata")
   // Original EPUB file content (for reader)
-  epubContent         Bytes?                    @map("epub_content")
+  epubContent          Bytes?                   @map("epub_content")
   // Page extraction info
-  totalPages          Int?                      @map("total_pages")
+  totalPages           Int?                     @map("total_pages")
   pageExtractionMethod String?                  @map("page_extraction_method") @db.VarChar(50)
-  pageData            Json?                     @map("page_data") // Stores page boundaries
-  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  pageData             Json?                    @map("page_data") // Stores page boundaries
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations
-  book                Book                      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  wordClassifications BookWordClassification[]
+  book                 Book                     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  wordClassifications  BookWordClassification[]
 
   @@index([bookId], map: "ix_book_texts_book_id")
   @@map("book_texts")
 }
 
 model BookWordClassification {
-  id            Int               @id @default(autoincrement())
-  bookTextId    Int               @map("book_text_id")
-  word          String            @db.VarChar
-  lemma         String            @db.VarChar
-  pos           String?           @db.VarChar
-  cefrLevel     proficiencylevel  @map("cefr_level")
+  id            Int                  @id @default(autoincrement())
+  bookTextId    Int                  @map("book_text_id")
+  word          String               @db.VarChar
+  lemma         String               @db.VarChar
+  pos           String?              @db.VarChar
+  cefrLevel     proficiencylevel     @map("cefr_level")
   confidence    Float
   source        classificationsource
-  frequencyRank Int?              @map("frequency_rank")
-  pageNumber    Int?              @map("page_number") // Page where this word first appears
-  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  bookText      BookText          @relation(fields: [bookTextId], references: [id], onDelete: Cascade)
+  frequencyRank Int?                 @map("frequency_rank")
+  pageNumber    Int?                 @map("page_number") // Page where this word first appears
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  bookText      BookText             @relation(fields: [bookTextId], references: [id], onDelete: Cascade)
 
   @@index([bookTextId], map: "ix_book_word_classifications_book_text_id")
   @@index([lemma], map: "ix_book_word_classifications_lemma")
@@ -157,22 +160,22 @@ model BookWordClassification {
 }
 
 model MovieScript {
-  id                  Int                   @id @default(autoincrement())
-  movieId             Int                   @map("movie_id")
-  sourceUsed          scriptsource          @map("source_used")
-  rawSubtitleText     String?               @map("raw_subtitle_text") @db.Text
-  cleanedScriptText   String?               @map("cleaned_script_text")
-  cleanedWordCount    Int?                  @map("cleaned_word_count")
-  tokenizedWords      Json?                 @map("tokenized_words")
-  cefrResults         Json?                 @map("cefr_results")
-  isPreprocessed      Boolean               @default(false) @map("is_preprocessed")
-  isTruncated         Boolean               @default(false) @map("is_truncated")
-  isComplete          Boolean               @default(true) @map("is_complete")
-  processingMetadata  String?               @map("processing_metadata")
-  fetchedAt           DateTime              @default(now()) @map("fetched_at") @db.Timestamptz(6)
-  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
-  movie               Movie                 @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                  Int                  @id @default(autoincrement())
+  movieId             Int                  @map("movie_id")
+  sourceUsed          scriptsource         @map("source_used")
+  rawSubtitleText     String?              @map("raw_subtitle_text") @db.Text
+  cleanedScriptText   String?              @map("cleaned_script_text")
+  cleanedWordCount    Int?                 @map("cleaned_word_count")
+  tokenizedWords      Json?                @map("tokenized_words")
+  cefrResults         Json?                @map("cefr_results")
+  isPreprocessed      Boolean              @default(false) @map("is_preprocessed")
+  isTruncated         Boolean              @default(false) @map("is_truncated")
+  isComplete          Boolean              @default(true) @map("is_complete")
+  processingMetadata  String?              @map("processing_metadata")
+  fetchedAt           DateTime             @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  movie               Movie                @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   wordClassifications WordClassification[]
 
   @@unique([movieId])
@@ -182,17 +185,17 @@ model MovieScript {
 }
 
 model WordClassification {
-  id            Int               @id @default(autoincrement())
-  scriptId      Int               @map("script_id")
-  word          String            @db.VarChar
-  lemma         String            @db.VarChar
-  pos           String?           @db.VarChar
-  cefrLevel     proficiencylevel  @map("cefr_level")
+  id            Int                  @id @default(autoincrement())
+  scriptId      Int                  @map("script_id")
+  word          String               @db.VarChar
+  lemma         String               @db.VarChar
+  pos           String?              @db.VarChar
+  cefrLevel     proficiencylevel     @map("cefr_level")
   confidence    Float
   source        classificationsource
-  frequencyRank Int?              @map("frequency_rank")
-  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  script        MovieScript       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  frequencyRank Int?                 @map("frequency_rank")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  script        MovieScript          @relation(fields: [scriptId], references: [id], onDelete: Cascade)
 
   @@index([scriptId], map: "ix_word_classifications_script_id")
   @@index([lemma], map: "ix_word_classifications_lemma")
@@ -288,19 +291,19 @@ model UserTranslationHistory {
 }
 
 model UserWord {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  word      String   @db.VarChar
-  movieId   Int?     @map("movie_id")
-  isLearned Boolean  @default(false) @map("is_learned")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                Int       @id @default(autoincrement())
+  userId            Int       @map("user_id")
+  word              String    @db.VarChar
+  movieId           Int?      @map("movie_id")
+  isLearned         Boolean   @default(false) @map("is_learned")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   // Leitner SRS state. Box 1 = new/forgot, box 5 = graduated.
   // Intervals: 1d, 3d, 7d, 14d, 30d. See src/routes/srs.py.
   srsBox            Int       @default(1) @map("srs_box")
   srsDueAt          DateTime  @default(now()) @map("srs_due_at") @db.Timestamptz(6)
   srsLastReviewedAt DateTime? @map("srs_last_reviewed_at") @db.Timestamptz(6)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie             Movie?    @relation(fields: [movieId], references: [id], onDelete: SetNull)
 
   @@unique([userId, word, movieId], map: "unique_user_word_movie")
   @@index([userId], map: "ix_user_words_user_id")
@@ -437,24 +440,24 @@ enum subscriptiontier {
 // ============================================================
 
 model Lemma {
-  id              Int              @id @default(autoincrement())
-  lemma           String           @unique @db.VarChar
-  pos             String?          @db.VarChar(10)
-  cefrLevel       proficiencylevel @map("cefr_level")
-  confidence      Float            @default(0)
+  id              Int                  @id @default(autoincrement())
+  lemma           String               @unique @db.VarChar
+  pos             String?              @db.VarChar(10)
+  cefrLevel       proficiencylevel     @map("cefr_level")
+  confidence      Float                @default(0)
   source          classificationsource @default(fallback)
-  frequencyRank   Int?             @map("frequency_rank")
-  wordForms       Json?            @map("word_forms")
-  isMultiWord     Boolean          @default(false) @map("is_multi_word")
-  priorityScore   Float            @default(0) @map("priority_score")
-  totalMovieCount Int              @default(1) @map("total_movie_count")
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  frequencyRank   Int?                 @map("frequency_rank")
+  wordForms       Json?                @map("word_forms")
+  isMultiWord     Boolean              @default(false) @map("is_multi_word")
+  priorityScore   Float                @default(0) @map("priority_score")
+  totalMovieCount Int                  @default(1) @map("total_movie_count")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  senses         WordSense[]
-  translations   TranslationMemory[]
-  movieMappings  MovieLemmaMapping[]
-  sentenceLinks  SentenceLemmaLink[]
+  senses        WordSense[]
+  translations  TranslationMemory[]
+  movieMappings MovieLemmaMapping[]
+  sentenceLinks SentenceLemmaLink[]
 
   @@index([cefrLevel], map: "ix_lemmas_cefr_level")
   @@index([frequencyRank], map: "ix_lemmas_frequency_rank")
@@ -475,10 +478,10 @@ model WordSense {
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  lemma              Lemma               @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  translations       TranslationMemory[]
-  sentenceLinks      SentenceLemmaLink[]
-  dominantInMovies   MovieLemmaMapping[]
+  lemma            Lemma               @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
+  translations     TranslationMemory[]
+  sentenceLinks    SentenceLemmaLink[]
+  dominantInMovies MovieLemmaMapping[]
 
   @@unique([lemmaId, senseIndex], map: "unique_lemma_sense")
   @@index([lemmaId], map: "ix_word_senses_lemma_id")
@@ -528,31 +531,31 @@ model MovieLemmaMapping {
 }
 
 model SentenceBank {
-  id               Int      @id @default(autoincrement())
-  sentenceHash     String   @unique @map("sentence_hash") @db.VarChar(64)
-  sentence         String   @db.Text
-  movieId          Int      @map("movie_id")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           Int      @id @default(autoincrement())
+  sentenceHash String   @unique @map("sentence_hash") @db.VarChar(64)
+  sentence     String   @db.Text
+  movieId      Int      @map("movie_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  movie         Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  lemmaLinks    SentenceLemmaLink[]
+  movie      Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  lemmaLinks SentenceLemmaLink[]
 
   @@index([movieId], map: "ix_sentence_bank_movie_id")
   @@map("sentence_bank")
 }
 
 model SentenceLemmaLink {
-  id               Int      @id @default(autoincrement())
-  sentenceId       Int      @map("sentence_id")
-  lemmaId          Int      @map("lemma_id")
-  senseId          Int?     @map("sense_id")
-  wordPosition     Int?     @map("word_position")
-  score            Float    @default(0)
-  isRepresentative Boolean  @default(false) @map("is_representative")
+  id               Int     @id @default(autoincrement())
+  sentenceId       Int     @map("sentence_id")
+  lemmaId          Int     @map("lemma_id")
+  senseId          Int?    @map("sense_id")
+  wordPosition     Int?    @map("word_position")
+  score            Float   @default(0)
+  isRepresentative Boolean @default(false) @map("is_representative")
 
-  sentence  SentenceBank @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
-  lemma     Lemma        @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  sense     WordSense?   @relation(fields: [senseId], references: [id], onDelete: SetNull)
+  sentence SentenceBank @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
+  lemma    Lemma        @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
+  sense    WordSense?   @relation(fields: [senseId], references: [id], onDelete: SetNull)
 
   @@unique([sentenceId, lemmaId], map: "unique_sentence_lemma")
   @@index([lemmaId, senseId], map: "ix_sentence_lemma_link_lemma_sense")
@@ -565,13 +568,13 @@ model SentenceLemmaLink {
 // word from every movie/book vocabulary list. `word` stored lowercased so
 // lookups don't care about the original casing in the source material.
 model HiddenWord {
-  id          Int      @id @default(autoincrement())
-  word        String   @unique @db.VarChar
-  hiddenById  Int      @map("hidden_by_id")
-  reason      String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         Int      @id @default(autoincrement())
+  word       String   @unique @db.VarChar
+  hiddenById Int      @map("hidden_by_id")
+  reason     String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  hiddenBy    User     @relation("HiddenWordBy", fields: [hiddenById], references: [id], onDelete: Cascade)
+  hiddenBy User @relation("HiddenWordBy", fields: [hiddenById], references: [id], onDelete: Cascade)
 
   @@index([word], map: "ix_hidden_words_word")
   @@map("hidden_words")
@@ -592,12 +595,83 @@ model WordReport {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  reporter    User         @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
-  reviewer    User?        @relation("ReviewedBy", fields: [reviewerId], references: [id], onDelete: SetNull)
-  movie       Movie?       @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  reporter User   @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewer User?  @relation("ReviewedBy", fields: [reviewerId], references: [id], onDelete: SetNull)
+  movie    Movie? @relation(fields: [movieId], references: [id], onDelete: SetNull)
 
   @@index([status], map: "ix_word_reports_status")
   @@index([word], map: "ix_word_reports_word")
   @@index([reporterId], map: "ix_word_reports_reporter")
   @@map("word_reports")
+}
+
+// --- Quiz / gamification ---------------------------------------------------
+
+model QuizSession {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  movieId      Int?      @map("movie_id")
+  cefrLevel    String    @map("cefr_level") @db.VarChar(2)
+  kind         String    @db.VarChar(16) // "unit" | "pre_movie"
+  startedAt    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  stars        Int? // 0..3, null while in-progress
+  correctCount Int       @default(0) @map("correct_count")
+  totalScored  Int       @default(0) @map("total_scored")
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards QuizCardResult[]
+
+  @@index([userId, movieId, cefrLevel], map: "ix_quiz_sessions_user_movie_level")
+  @@index([completedAt], map: "ix_quiz_sessions_completed_at")
+  @@map("quiz_sessions")
+}
+
+model QuizCardResult {
+  id         Int      @id @default(autoincrement())
+  sessionId  Int      @map("session_id")
+  word       String   @db.VarChar
+  cardType   String   @map("card_type") @db.VarChar(16) // "mcq" | "self_rate"
+  isCorrect  Boolean? @map("is_correct") // null for self_rate
+  selfRating String?  @map("self_rating") @db.VarChar(8) // "know" | "kinda" | "dont"
+  answerMs   Int      @map("answer_ms")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId], map: "ix_quiz_card_results_session")
+  @@index([word], map: "ix_quiz_card_results_word")
+  @@map("quiz_card_results")
+}
+
+model UserQuizStats {
+  userId         Int      @id @map("user_id")
+  totalStars     Int      @default(0) @map("total_stars")
+  totalSessions  Int      @default(0) @map("total_sessions")
+  avgAccuracy    Float    @default(0) @map("avg_accuracy")
+  retentionScore Float    @default(0) @map("retention_score") // % correct on re-quiz ≥7d later
+  xp             Int      @default(0)
+  lastActiveAt   DateTime @default(now()) @map("last_active_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([totalStars], map: "ix_user_quiz_stats_total_stars")
+  @@index([xp], map: "ix_user_quiz_stats_xp")
+  @@index([retentionScore], map: "ix_user_quiz_stats_retention")
+  @@map("user_quiz_stats")
+}
+
+model UnitProgress {
+  userId    Int      @map("user_id")
+  movieId   Int      @map("movie_id")
+  cefrLevel String   @map("cefr_level") @db.VarChar(2)
+  bestStars Int      @default(0) @map("best_stars")
+  attempts  Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, movieId, cefrLevel])
+  @@index([userId, movieId], map: "ix_unit_progress_user_movie")
+  @@map("unit_progress")
 }

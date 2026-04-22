@@ -1060,4 +1060,177 @@ export const studentApi = {
   },
 };
 
+// =====================================================================
+// Quiz / Gamification
+// =====================================================================
+
+export type QuizCardType = 'type' | 'self_rate';
+export type QuizSelfRating = 'know' | 'kinda' | 'dont';
+export type QuizSessionKind = 'unit' | 'pre_movie' | 'batch';
+export type QuizLeaderboardMetric = 'stars' | 'xp' | 'retention';
+
+export interface QuizCard {
+  word: string;
+  card_type: QuizCardType;
+  translation: string | null;
+}
+
+export interface QuizStartSessionResponse {
+  session_id: number;
+  cards: QuizCard[];
+}
+
+export interface QuizCardResultInput {
+  word: string;
+  card_type: QuizCardType;
+  is_correct: boolean | null;
+  self_rating: QuizSelfRating | null;
+  answer_ms: number;
+}
+
+export interface QuizCompleteResponse {
+  stars: number;
+  xp_earned: number;
+  correct_count: number;
+  total_scored: number;
+}
+
+export interface QuizUnitState {
+  level: string;
+  word_count: number;
+  best_stars: number;
+  attempts: number;
+  locked: boolean;
+}
+
+export interface QuizLeaderboardEntry {
+  user_id: number;
+  username: string;
+  profile_picture_url: string | null;
+  total_stars: number;
+  xp: number;
+  retention_score: number;
+  rank: number;
+}
+
+export interface QuizMyRankResponse {
+  rank: number | null;
+  me: {
+    user_id: number;
+    username: string;
+    total_stars: number;
+    xp: number;
+    retention_score: number;
+  } | null;
+  neighbors: Array<{
+    rank: number;
+    user_id: number;
+    username: string;
+    value: number;
+  }>;
+}
+
+export const quizApi = {
+  startSession: async (
+    movieId: number,
+    level: string,
+    kind: QuizSessionKind = 'unit',
+  ): Promise<QuizStartSessionResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ movie_id: movieId, level, kind }),
+    });
+    if (!res.ok) throw new Error('Failed to start quiz session');
+    return res.json();
+  },
+
+  submitCards: async (
+    sessionId: number,
+    results: QuizCardResultInput[],
+  ): Promise<{ stored: number }> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/sessions/${sessionId}/cards`, {
+      method: 'POST',
+      body: JSON.stringify({ results }),
+    });
+    if (!res.ok) throw new Error('Failed to submit quiz cards');
+    return res.json();
+  },
+
+  completeSession: async (sessionId: number): Promise<QuizCompleteResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/sessions/${sessionId}/complete`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to complete quiz session');
+    return res.json();
+  },
+
+  getMovieUnits: async (movieId: number): Promise<QuizUnitState[]> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/movies/${movieId}/units`);
+    if (!res.ok) throw new Error('Failed to load quiz units');
+    return res.json();
+  },
+
+  getBatchUnits: async (movieIds: number[]): Promise<QuizUnitState[]> => {
+    const qs = encodeURIComponent(movieIds.join(','));
+    const res = await authFetch(`${API_BASE_URL}/quiz/batch/units?movie_ids=${qs}`);
+    if (!res.ok) throw new Error('Failed to load batch units');
+    return res.json();
+  },
+
+  startBatchSession: async (
+    movieIds: number[],
+    level: string,
+    kind: 'unit' | 'pre_movie' | 'batch' = 'batch',
+  ): Promise<QuizStartSessionResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/batch/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movie_ids: movieIds, level, kind }),
+    });
+    if (!res.ok) {
+      let msg = 'Failed to start batch session';
+      try {
+        const body = await res.json();
+        if (body?.detail) msg = String(body.detail);
+      } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
+  startPreMovieQuiz: async (movieId: number): Promise<QuizStartSessionResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/pre-movie/${movieId}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      let msg = 'Failed to start pre-movie quiz';
+      try {
+        const body = await res.json();
+        if (body?.detail) msg = String(body.detail);
+      } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
+  getLeaderboard: async (
+    metric: QuizLeaderboardMetric = 'stars',
+    limit = 50,
+  ): Promise<QuizLeaderboardEntry[]> => {
+    const res = await authFetch(
+      `${API_BASE_URL}/quiz/leaderboard?metric=${metric}&limit=${limit}`,
+    );
+    if (!res.ok) throw new Error('Failed to load quiz leaderboard');
+    return res.json();
+  },
+
+  getMyRank: async (
+    metric: QuizLeaderboardMetric = 'stars',
+  ): Promise<QuizMyRankResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/leaderboard/me?metric=${metric}`);
+    if (!res.ok) throw new Error('Failed to load rank');
+    return res.json();
+  },
+};
+
 export { API_BASE_URL };

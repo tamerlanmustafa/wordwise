@@ -17,7 +17,12 @@ export type Screen =
   | 'privacy'
   | 'terms'
   | 'learnedWords'
-  | 'vocabulary';
+  | 'vocabulary'
+  | 'quizJourney'
+  | 'quizLesson'
+  | 'quizResult'
+  | 'quizBatchBuilder'
+  | 'quizBatchJourney';
 
 export type ListFilter = 'saved' | 'learned';
 

@@ -42,6 +42,7 @@ interface Props {
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
   onNavigateToVocabulary: () => void;
+  onNavigateToBatchJourney?: () => void;
 }
 
 export const HomeScreen = ({
@@ -60,6 +61,7 @@ export const HomeScreen = ({
   onNavigateToAchievements,
   onNavigateToLeaderboard,
   onNavigateToVocabulary,
+  onNavigateToBatchJourney,
 }: Props) => {
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
   const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
@@ -482,21 +484,20 @@ export const HomeScreen = ({
                 {homeTab === 'level' ? ` ${levelDropdownOpen ? '▲' : '▼'}` : ''}
               </Text>
             </TouchableOpacity>
+            {/* "Journey" replaces the old Trending Now tab. Trending state
+                 (trendingMovies, SnapPager render branch) is left intact in
+                 case we want to reintroduce the trending view later. */}
             <TouchableOpacity
-              style={[styles.homeTabToggleBtn, homeTab === 'trending' && styles.homeTabToggleBtnActive]}
+              style={styles.homeTabToggleBtn}
               onPress={() => {
-                if (homeTab !== 'trending') {
-                  setTabSwitching(true);
-                  setHomeTab('trending');
-                  setLevelDropdownOpen(false);
-                  setGenreDropdownOpen(false);
-                  setTimeout(() => setTabSwitching(false), 400);
-                }
+                setLevelDropdownOpen(false);
+                setGenreDropdownOpen(false);
+                onNavigateToBatchJourney?.();
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.homeTabToggleText, homeTab === 'trending' && styles.homeTabToggleTextActive]}>
-                🔥 Trending Now
+              <Text style={styles.homeTabToggleText}>
+                🎮 Journey
               </Text>
             </TouchableOpacity>
           </View>

@@ -53,6 +53,33 @@ jobs:
       - name: Jest
         run: npm test -- --ci
 
+  schema:
+    name: schema (prisma validate + format drift)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate schema.prisma
+        # Catches syntax errors, undefined relations, malformed enum values —
+        # the class of bug that almost dropped 5 tables last sprint when the
+        # schema and DB diverged. Uses the node-based prisma CLI via npx so
+        # we don't install a query engine into the Python env.
+        run: npx --yes prisma@5.4.2 validate --schema=prisma/schema.prisma
+      - name: Check schema is formatted
+        # `prisma format` is idempotent — if it rewrites the file, we haven't
+        # committed a formatted version. Fail the job so reviewers see the
+        # drift instead of it landing silently.
+        run: |
+          cp prisma/schema.prisma prisma/schema.prisma.orig
+          npx --yes prisma@5.4.2 format --schema=prisma/schema.prisma
+          diff -u prisma/schema.prisma.orig prisma/schema.prisma \
+            || { echo "::error::schema.prisma is not formatted. Run: npx prisma format --schema=prisma/schema.prisma"; exit 1; }
+
   backend:
     name: backend (ruff + pytest)
     runs-on: ubuntu-latest

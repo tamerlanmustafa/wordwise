@@ -16,6 +16,11 @@ import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
 import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
 import { PrivacyScreen } from '../components/PrivacyScreen';
+import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
+import { QuizLessonScreen } from '../components/QuizLessonScreen';
+import { QuizResultScreen } from '../components/QuizResultScreen';
+import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
+import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
@@ -125,6 +130,7 @@ export default function App() {
   const navigateToHome = () => {
     setSelectedMovie(null);
     setSearchQueryNav('');
+    setResolvedMovieId(null);
     setCurrentScreen('home');
   };
 
@@ -191,6 +197,83 @@ export default function App() {
 
   const navigateToVocabulary = () => {
     setCurrentScreen('vocabulary');
+  };
+
+  // Quiz state. Journey shows units for a movie; lesson plays a session;
+  // result shows stars + XP. selectedMovie already gives us movieId/title for
+  // the journey screen, but a quiz session can outlive the movieDetail
+  // navigation context (user exits back, stats persist), so we stash the
+  // session separately.
+  const [quizSession, setQuizSession] = useState<{
+    session: QuizStartSessionResponse;
+    level: string;
+  } | null>(null);
+  const [quizResult, setQuizResult] = useState<{
+    result: QuizCompleteResponse;
+    level: string;
+  } | null>(null);
+
+  // Movies surfaced from TMDB search carry a TMDB id in `selectedMovie.id`,
+  // but backend endpoints need the internal movie id. MovieDetailScreen
+  // resolves it during vocabulary load and hands it back via these callbacks.
+  const [resolvedMovieId, setResolvedMovieId] = useState<number | null>(null);
+
+  const navigateToQuizJourney = (internalMovieId: number) => {
+    setResolvedMovieId(internalMovieId);
+    setCurrentScreen('quizJourney');
+  };
+
+  // Multi-movie batch journey state. Holds the picked movie ids + display
+  // title; cleared on exit from the batch journey.
+  const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
+
+  const navigateToBatchBuilder = () => {
+    setBatch(null);
+    setCurrentScreen('quizBatchBuilder');
+  };
+
+  const handleBatchBuilt = (ids: number[], title: string) => {
+    setBatch({ ids, title });
+    setCurrentScreen('quizBatchJourney');
+  };
+
+  const handleStartPreMovieQuiz = async (internalMovieId: number) => {
+    if (!selectedMovie) return;
+    setResolvedMovieId(internalMovieId);
+    try {
+      const session = await quizApi.startPreMovieQuiz(internalMovieId);
+      // The backend picks the level (max of user/movie), but doesn't return it.
+      // Fall back to the user's proficiency for the UI label — close enough;
+      // if this matters later we can surface the level in the response payload.
+      const level = (user?.proficiency_level || 'B1').toUpperCase();
+      setQuizSession({ session, level });
+      setCurrentScreen('quizLesson');
+    } catch (e: any) {
+      console.warn('[App] pre-movie quiz start failed:', e);
+      Alert.alert(
+        'Quiz unavailable',
+        e?.message || 'Could not start a quiz for this movie.',
+      );
+    }
+  };
+
+  const handleQuizSessionStart = (session: QuizStartSessionResponse, level: string) => {
+    setQuizSession({ session, level });
+    setCurrentScreen('quizLesson');
+  };
+
+  const handleQuizComplete = (result: QuizCompleteResponse, level: string) => {
+    setQuizResult({ result, level });
+    setCurrentScreen('quizResult');
+  };
+
+  const handleQuizResultDone = () => {
+    setQuizSession(null);
+    setQuizResult(null);
+    // Prefer returning to a batch journey if one is in context; else the
+    // single-movie journey; else home.
+    if (batch) setCurrentScreen('quizBatchJourney');
+    else setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
   };
 
   const handleUserUpdated = (updatedUser: any) => {
@@ -276,12 +359,48 @@ export default function App() {
           <PrivacyScreen onBack={navigateToHome} mode="privacy" />
         ) : currentScreen === 'terms' ? (
           <PrivacyScreen onBack={navigateToHome} mode="terms" />
+        ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
+          <QuizJourneyScreen
+            movieId={resolvedMovieId}
+            movieTitle={selectedMovie.title}
+            onBack={() => setCurrentScreen('movieDetail')}
+            onStartSession={handleQuizSessionStart}
+          />
+        ) : currentScreen === 'quizBatchBuilder' ? (
+          <QuizBatchBuilderScreen
+            userLevel={user?.proficiency_level}
+            onBack={navigateToHome}
+            onStart={handleBatchBuilt}
+          />
+        ) : currentScreen === 'quizBatchJourney' && batch ? (
+          <QuizJourneyScreen
+            movieIds={batch.ids}
+            movieTitle={batch.title}
+            onBack={() => setCurrentScreen('quizBatchBuilder')}
+            onStartSession={handleQuizSessionStart}
+          />
+        ) : currentScreen === 'quizLesson' && quizSession ? (
+          <QuizLessonScreen
+            session={quizSession.session}
+            level={quizSession.level}
+            onExit={() => {
+              setQuizSession(null);
+              setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
+            }}
+            onComplete={handleQuizComplete}
+          />
+        ) : currentScreen === 'quizResult' && quizResult ? (
+          <QuizResultScreen
+            result={quizResult.result}
+            level={quizResult.level}
+            onDone={handleQuizResultDone}
+          />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
-          <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} />
+          <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} onStartQuizJourney={navigateToQuizJourney} onStartPreMovieQuiz={handleStartPreMovieQuiz} />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToBatchBuilder} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
