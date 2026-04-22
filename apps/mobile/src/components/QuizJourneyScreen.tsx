@@ -1,6 +1,24 @@
+/**
+ * QuizJourneyScreen — dynamic upward-scrolling journey UI.
+ *
+ * Architecture (three stacked layers, all inside one scroll container so
+ * they share one scroll offset — see the design blueprint):
+ *
+ *   ScrollView (AnimatedScrollView; starts scrolled to user-level Y)
+ *     ├─ Layer A  Atmosphere   — parallax sky, translateY × 0.3
+ *     ├─ Layer B  Path+scenery — SVG <Path> road + repeating biome tiles
+ *     └─ Layer C  Nodes        — JourneyNode stack (8-layer composition)
+ *
+ * The journey starts at the user's *actual* proficiency level and only
+ * progresses upward (A1→A2→B1→B2→C1→C2). The list is filtered to
+ * `userLevel..C2` so lower levels simply aren't rendered — cleaner than
+ * rendering-and-hiding.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   ScrollView,
   StyleSheet,
@@ -9,8 +27,21 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, cefrColors, cefrLabels } from '../theme/palette';
-import { quizApi, type QuizUnitState, type QuizStartSessionResponse } from '../services/api';
+import {
+  quizApi,
+  type QuizUnitState,
+  type QuizStartSessionResponse,
+} from '../services/api';
+import { useAuthStore } from '../stores/authStore';
+import {
+  JourneyNode,
+  type NodeState as JNodeState,
+  type NodeLevel,
+} from './journey/JourneyNode';
+import { computeJourneyLayout } from './journey/useJourneyLayout';
+import { JourneyPath } from './journey/JourneyPath';
 
 export interface QuizJourneyScreenProps {
   // Either a single movie or a batch. Both shapes share the same screen.
@@ -21,20 +52,8 @@ export interface QuizJourneyScreenProps {
   onStartSession: (session: QuizStartSessionResponse, level: string) => void;
 }
 
+const LEVELS: NodeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const WINDOW_WIDTH = Dimensions.get('window').width;
-
-// One tileable background tile — repeated vertically to cover any scroll
-// length without per-band layout math. Emoji positions are fixed relative
-// to the tile so it seamlessly repeats.
-const TILE_HEIGHT = 160;
-const TILE_SCENERY = [
-  { emoji: '🌲', left: 0.08, top: 20, size: 22 },
-  { emoji: '🌿', left: 0.3, top: 100, size: 14 },
-  { emoji: '🍄', left: 0.55, top: 60, size: 14 },
-  { emoji: '🌳', left: 0.78, top: 25, size: 22 },
-  { emoji: '🌱', left: 0.18, top: 130, size: 12 },
-  { emoji: '🌿', left: 0.88, top: 115, size: 14 },
-];
 
 export function QuizJourneyScreen({
   movieId,
@@ -43,11 +62,18 @@ export function QuizJourneyScreen({
   onBack,
   onStartSession,
 }: QuizJourneyScreenProps) {
+  const user = useAuthStore((s) => s.user);
+  // User's real level clamps the journey's floor. Fallback to A1 if we
+  // somehow don't have a profile — never render below the user's level.
+  const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
+
   const [units, setUnits] = useState<QuizUnitState[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingLevel, setStartingLevel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const ids = useMemo(() => {
     if (movieIds && movieIds.length > 0) return movieIds;
@@ -73,14 +99,13 @@ export function QuizJourneyScreen({
 
   useEffect(() => { load(); }, [load]);
 
-  const handleStart = async (unit: QuizUnitState) => {
-    if (unit.locked) return;
-    setStartingLevel(unit.level);
+  const handleStart = async (level: string) => {
+    setStartingLevel(level);
     try {
       const session = ids.length > 1
-        ? await quizApi.startBatchSession(ids, unit.level, 'unit')
-        : await quizApi.startSession(ids[0], unit.level, 'unit');
-      onStartSession(session, unit.level);
+        ? await quizApi.startBatchSession(ids, level, 'unit')
+        : await quizApi.startSession(ids[0], level, 'unit');
+      onStartSession(session, level);
     } catch (e) {
       console.warn('[QuizJourney] start failed:', e);
       setError('Could not start session.');
@@ -89,13 +114,80 @@ export function QuizJourneyScreen({
     }
   };
 
-  // A1 at the bottom, C2 at the top. ScrollView still paints top-down, so
-  // we reverse the list and auto-scroll to the very bottom on mount.
-  const ordered = units ? [...units].reverse() : [];
+  // ─── Derive the ordered node list (bottom-up) ─────────────────────
+  // Journey starts at userLevel and only climbs upward. The backend's
+  // `locked` flag assumes progression from A1, but when the journey
+  // starts at the user's actual level, the first visible level is
+  // ALWAYS available regardless of whether A2/A1 were attempted. We
+  // override the backend lock for the starting level accordingly.
+  const { layout, visibleLevels } = useMemo(() => {
+    const userIdx = Math.max(0, LEVELS.indexOf(userLevel));
+    const visible = LEVELS.slice(userIdx); // [userLevel, ..., C2]
+    const byLevel = new Map<string, QuizUnitState>();
+    (units || []).forEach((u) => byLevel.set(u.level, u));
 
-  // One background tile per ~TILE_HEIGHT of road, plus a small buffer.
-  // Re-computed when units change (journey grows/shrinks).
-  const tilesNeeded = Math.max(6, ordered.length * 2);
+    // Find the "active" node: first visible level that has words and
+    // isn't already completed-to-mastery. That node must visually
+    // dominate. Subsequent levels are locked until the active one is
+    // completed; earlier levels (rare — only if user completed them on
+    // a previous session) read as `completed`.
+    let activeAssigned = false;
+
+    const inputs = visible.map((lv, visibleIdx) => {
+      const u = byLevel.get(lv);
+      const hasWords = !!u && u.word_count > 0;
+      const completed = !!u && u.best_stars >= 2;
+      // Override the backend lock for the user's starting level —
+      // that's always available by definition, even if the user hasn't
+      // attempted A1/A2.
+      const effectiveLocked = visibleIdx === 0 ? false : (!u || u.locked);
+
+      let state: JNodeState;
+      if (!hasWords) {
+        state = 'locked';
+      } else if (completed) {
+        state = 'completed';
+      } else if (!effectiveLocked && !activeAssigned) {
+        state = 'active';
+        activeAssigned = true;
+      } else if (effectiveLocked) {
+        state = 'locked';
+      } else {
+        state = 'inactive';
+      }
+      return { id: lv, level: lv, state };
+    });
+
+    // If nothing got the `active` flag (e.g. no unit has words), force
+    // the starting level to active anyway — the user should always
+    // have something to tap.
+    if (!activeAssigned && inputs.length > 0) {
+      inputs[0] = { ...inputs[0], state: 'active' };
+    }
+
+    return {
+      visibleLevels: visible,
+      layout: computeJourneyLayout(inputs, WINDOW_WIDTH),
+    };
+  }, [units, userLevel]);
+
+  // ─── Auto-scroll to the active node on first load ──────────────────
+  // We scroll once the content has been measured. Active node should
+  // land ~65% down the viewport, not at the bottom, so there's teaser
+  // context above.
+  const scrolledOnce = useRef(false);
+  const onContentSizeChange = (_: number, h: number) => {
+    if (scrolledOnce.current) return;
+    if (h <= 0) return;
+    scrolledOnce.current = true;
+    const targetY = layout.activeY ?? h;
+    // Align active node at 65% of viewport — scroll offset = targetY
+    // minus 0.65 × viewport. Approximate viewport via a guess; overshoot
+    // is clamped by the scrollview.
+    const viewportGuess = 600;
+    const scrollTo = Math.max(0, targetY - viewportGuess * 0.65);
+    scrollRef.current?.scrollTo({ y: scrollTo, animated: false });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -105,7 +197,9 @@ export function QuizJourneyScreen({
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Journey</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>{movieTitle}</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            {movieTitle} · starts {userLevel}
+          </Text>
         </View>
         <View style={{ width: 60 }} />
       </View>
@@ -127,155 +221,158 @@ export function QuizJourneyScreen({
           <Text style={styles.emptySub}>Classify this movie's script first.</Text>
         </View>
       ) : (
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.scroll}
-          onContentSizeChange={(_, h) => scrollRef.current?.scrollTo({ y: h, animated: false })}
+        <Animated.ScrollView
+          ref={scrollRef as any}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ height: layout.totalHeight }}
+          onContentSizeChange={onContentSizeChange}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true },
+          )}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Repeating tile background — one view per tile, all identical. */}
-          <View style={styles.bgLayer} pointerEvents="none">
-            {Array.from({ length: tilesNeeded }).map((_, i) => (
-              <BackgroundTile key={i} />
-            ))}
+          {/* ──────────── Layer A — Atmosphere ────────────
+              Full-height gradient backdrop that transitions through the
+              visible CEFR biomes. Translates slower than the scroll
+              (parallax × 0.3) so it visually lags — one of the cheapest
+              depth cues available. */}
+          <Animated.View
+            style={[
+              styles.atmosphere,
+              {
+                height: layout.totalHeight,
+                transform: [
+                  {
+                    translateY: scrollY.interpolate({
+                      inputRange: [0, layout.totalHeight],
+                      outputRange: [0, layout.totalHeight * -0.3],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <AtmosphereGradient visibleLevels={visibleLevels} />
+          </Animated.View>
+
+          {/* ──────────── Layer B — Path + scenery ────────────
+              The winding SVG road. Sits between atmosphere and nodes,
+              aligned 1:1 with scroll (not parallaxed) so nodes stay
+              glued to it. */}
+          <View style={[styles.pathLayer, { height: layout.totalHeight }]} pointerEvents="none">
+            <JourneyPath
+              pathD={layout.pathD}
+              width={WINDOW_WIDTH}
+              height={layout.totalHeight}
+            />
           </View>
 
-          {/* Foreground: the units (top = hardest, bottom = A1) */}
-          <View style={styles.roadLayer}>
-            {ordered.map((unit, idx) => {
-              const originalIdx = ordered.length - 1 - idx;
-              const side = originalIdx % 2 === 0 ? 'left' : 'right';
-              const isStarting = startingLevel === unit.level;
+          {/* ──────────── Layer C — Nodes ────────────
+              The tappable, layered JourneyNode stack. Absolute positioned
+              by the layout helper so the winding math is the sole source
+              of truth for placement. */}
+          <View style={[styles.nodesLayer, { height: layout.totalHeight }]}>
+            {layout.nodes.map((n) => {
+              // The layout hands back node CENTER coords; our JourneyNode
+              // is 120×120, so subtract 60 to convert center→top-left.
+              const left = n.x - 60;
+              const top = n.y - 60;
+              const isStarting = startingLevel === n.level;
               return (
-                <UnitStump
-                  key={unit.level}
-                  unit={unit}
-                  color={cefrColors[unit.level] || colors.primary}
-                  side={side}
-                  isStarting={isStarting}
-                  onPress={() => handleStart(unit)}
-                />
+                <View
+                  key={n.id}
+                  style={[styles.nodeWrapper, { left, top }]}
+                >
+                  <JourneyNode
+                    level={n.level as NodeLevel}
+                    state={isStarting ? 'active' : (n.state as JNodeState)}
+                    onPress={() => handleStart(n.level)}
+                  />
+                  {/* Per-node caption sits just beneath the tile so the
+                      user can read the level name + best-stars without
+                      tapping. Stays compact to avoid competing with the
+                      node itself. */}
+                  <NodeCaption
+                    level={n.level}
+                    unit={units.find((u) => u.level === n.level)}
+                    isStarting={isStarting}
+                  />
+                </View>
               );
             })}
           </View>
-
-          <Text style={styles.introText}>
-            Your journey starts here — climb up to harder levels.
-          </Text>
-        </ScrollView>
+        </Animated.ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
-// The one-and-only background tile. All tiles are identical so the image
-// appears to repeat seamlessly down the road.
-function BackgroundTile() {
+/**
+ * AtmosphereGradient — vertical gradient that passes through the biome
+ * color of each visible level in sequence. Locks `visibleLevels` as the
+ * only source of the palette; never hardcodes all 6 levels, because the
+ * journey can start anywhere.
+ */
+function AtmosphereGradient({ visibleLevels }: { visibleLevels: NodeLevel[] }) {
+  // Biome tints per level — brighter than the node color so the node
+  // still dominates when placed on top.
+  const biome: Record<NodeLevel, string> = {
+    A1: '#DCEDC8',
+    A2: '#C5E1A5',
+    B1: '#FFECB3',
+    B2: '#FFCCBC',
+    C1: '#FFCDD2',
+    C2: '#E1BEE7',
+  };
+  // The journey renders top-down, so top of canvas = hardest visible
+  // level (last in visibleLevels), bottom = user's level (first).
+  const colorsArr = [...visibleLevels].reverse().map((lv) => biome[lv]) as string[];
+  // LinearGradient needs ≥ 2 colors — if a user starts at C2 we only
+  // have one biome; duplicate it so the API is happy.
+  const safeColors = colorsArr.length >= 2 ? colorsArr : [colorsArr[0], colorsArr[0]];
   return (
-    <View style={styles.tile}>
-      {TILE_SCENERY.map((s, i) => (
-        <Text
-          key={i}
-          style={[
-            styles.scenery,
-            { left: s.left * WINDOW_WIDTH, top: s.top, fontSize: s.size },
-          ]}
-        >
-          {s.emoji}
-        </Text>
-      ))}
-    </View>
+    <LinearGradient
+      colors={safeColors as any}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={StyleSheet.absoluteFillObject}
+    />
   );
 }
 
-interface UnitStumpProps {
-  unit: QuizUnitState;
-  color: string;
-  side: 'left' | 'right';
+function NodeCaption({
+  level,
+  unit,
+  isStarting,
+}: {
+  level: string;
+  unit?: QuizUnitState;
   isStarting: boolean;
-  onPress: () => void;
-}
-
-// Tree-stump orb: concentric rings mimic growth rings, bark rim sits outside.
-// Color of each ring is shaded off the CEFR base color — A1 is green-stump,
-// C2 is purple-stump, etc., so each level feels like a different kind of wood.
-function UnitStump({ unit, color, side, isStarting, onPress }: UnitStumpProps) {
-  const label = cefrLabels[unit.level] || unit.level;
-  const isLocked = unit.locked;
-  const bark = shade(color, -0.45);
-  const outerWood = shade(color, -0.15);
-  const midWood = color;
-  const innerWood = shade(color, 0.25);
-  const coreWood = shade(color, 0.4);
-
+}) {
+  const label = cefrLabels[level] || level;
+  const color = cefrColors[level] || colors.primary;
   return (
-    <View style={[styles.stumpRow, side === 'right' && styles.stumpRowRight]}>
-      <TouchableOpacity
-        onPress={onPress}
-        disabled={isLocked || isStarting}
-        activeOpacity={0.85}
-        style={styles.stumpTouchable}
-      >
-        {/* Ground-shadow oval underneath */}
-        <View style={styles.stumpGroundShadow} />
-        {/* Concentric rings — bark → outermost wood → ... → core */}
-        <View style={[styles.ring, styles.ringBark, { backgroundColor: bark }]} />
-        <View style={[styles.ring, styles.ringOuter, { backgroundColor: outerWood }]} />
-        <View style={[styles.ring, styles.ringMid, { backgroundColor: midWood }]} />
-        <View style={[styles.ring, styles.ringInner, { backgroundColor: innerWood }]} />
-        <View style={[styles.ring, styles.ringCore, { backgroundColor: coreWood }]}>
-          <Text style={styles.stumpLabel}>{unit.level}</Text>
-        </View>
-        {isLocked && (
-          <View style={styles.lockOverlay}>
-            <Text style={styles.lockIcon}>🔒</Text>
-          </View>
-        )}
-        {isStarting && (
-          <View style={styles.lockOverlay}>
-            <ActivityIndicator color="#FFFFFF" />
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.caption}>
-        <Text style={[styles.captionLabel, isLocked && styles.captionLocked]}>{label}</Text>
-        <Text style={styles.captionMeta}>
-          {unit.word_count} word{unit.word_count === 1 ? '' : 's'}
-        </Text>
-        <View style={styles.starsRow}>
-          {[1, 2, 3].map((n) => (
-            <Text key={n} style={styles.star}>
-              {n <= unit.best_stars ? '⭐' : '☆'}
-            </Text>
-          ))}
-        </View>
-        {unit.attempts > 0 && (
-          <Text style={styles.attemptsText}>{unit.attempts} attempt{unit.attempts === 1 ? '' : 's'}</Text>
-        )}
-        {isLocked && (
-          <Text style={styles.lockText}>Finish previous level</Text>
-        )}
+    <View style={styles.caption} pointerEvents="none">
+      <View style={[styles.captionChip, { backgroundColor: color }]}>
+        <Text style={styles.captionChipText}>{label}</Text>
       </View>
+      {unit ? (
+        <Text style={styles.captionMeta}>
+          {isStarting ? 'Starting…' : `${unit.word_count} words · ${unit.best_stars}/3 ★`}
+        </Text>
+      ) : (
+        <Text style={styles.captionMeta}>No words yet</Text>
+      )}
     </View>
   );
 }
-
-// Lighten/darken a hex color by factor in [-1, 1].
-function shade(hex: string, factor: number): string {
-  const n = hex.replace('#', '');
-  if (n.length !== 6) return hex;
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v + (factor < 0 ? v * factor : (255 - v) * factor))));
-  return `#${[f(r), f(g), f(b)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
-}
-
-const STUMP_OUTER = 120;
-const STUMP_BARK = STUMP_OUTER + 10;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#DCEDC8' }, // soft meadow base
+  container: { flex: 1, backgroundColor: '#DCEDC8' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.paper,
@@ -284,110 +381,42 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: colors.primary, fontWeight: '500', width: 60 },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  scroll: { paddingBottom: 32, position: 'relative' },
 
-  // Repeating background layer: stacked identical tiles.
-  bgLayer: {
+  atmosphere: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 0, left: 0, right: 0,
+    zIndex: 0,
   },
-  tile: {
-    width: WINDOW_WIDTH,
-    height: TILE_HEIGHT,
-    backgroundColor: '#DCEDC8',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.03)',
+  pathLayer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    zIndex: 1,
   },
-  scenery: { position: 'absolute', opacity: 0.75 },
-
-  // Foreground road column.
-  roadLayer: { paddingTop: 24, paddingBottom: 24, zIndex: 1 },
-
-  introText: {
-    fontSize: 12, color: colors.text, textAlign: 'center',
-    marginTop: 12, paddingHorizontal: 24,
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    paddingVertical: 8, marginHorizontal: 40, borderRadius: 12,
-    overflow: 'hidden',
+  nodesLayer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    zIndex: 2,
   },
-
-  stumpRow: {
-    flexDirection: 'row',
+  nodeWrapper: {
+    position: 'absolute',
+    width: 120,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  stumpRowRight: { flexDirection: 'row-reverse' },
-  stumpTouchable: {
-    width: STUMP_BARK, height: STUMP_BARK,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  stumpGroundShadow: {
-    position: 'absolute',
-    bottom: -4,
-    width: STUMP_BARK + 6,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    opacity: 0.6,
-  },
-
-  // Concentric ring stack — all absolute-positioned, centered.
-  ring: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringBark: {
-    width: STUMP_BARK, height: STUMP_BARK,
-    borderRadius: STUMP_BARK / 2,
-  },
-  ringOuter: {
-    width: STUMP_OUTER, height: STUMP_OUTER,
-    borderRadius: STUMP_OUTER / 2,
-  },
-  ringMid: {
-    width: STUMP_OUTER * 0.78, height: STUMP_OUTER * 0.78,
-    borderRadius: (STUMP_OUTER * 0.78) / 2,
-  },
-  ringInner: {
-    width: STUMP_OUTER * 0.56, height: STUMP_OUTER * 0.56,
-    borderRadius: (STUMP_OUTER * 0.56) / 2,
-  },
-  ringCore: {
-    width: STUMP_OUTER * 0.38, height: STUMP_OUTER * 0.38,
-    borderRadius: (STUMP_OUTER * 0.38) / 2,
-  },
-  stumpLabel: {
-    fontSize: 20, fontWeight: '900', color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 
   caption: {
-    marginHorizontal: 10,
-    paddingVertical: 6, paddingHorizontal: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 12,
-    maxWidth: WINDOW_WIDTH * 0.42,
+    marginTop: 2,
+    alignItems: 'center',
   },
-  captionLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
-  captionLocked: { color: colors.textSecondary },
-  captionMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-  starsRow: { flexDirection: 'row', marginTop: 4, gap: 2 },
-  star: { fontSize: 14 },
-  attemptsText: { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
-  lockText: { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
-
-  lockOverlay: {
-    position: 'absolute',
-    width: STUMP_BARK, height: STUMP_BARK,
-    borderRadius: STUMP_BARK / 2,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center',
+  captionChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
-  lockIcon: { fontSize: 28 },
+  captionChipText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
+  captionMeta: { fontSize: 10, color: colors.text, marginTop: 2,
+    backgroundColor: 'rgba(255,255,255,0.8)', paddingHorizontal: 6, paddingVertical: 1,
+    borderRadius: 6, overflow: 'hidden',
+  },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   errorText: { color: colors.error, marginBottom: 12 },

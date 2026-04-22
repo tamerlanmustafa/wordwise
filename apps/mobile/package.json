@@ -28,6 +28,7 @@
     "expo-crypto": "^15.0.8",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.21",
+    "expo-linear-gradient": "~15.0.8",
     "expo-media-library": "~18.2.1",
     "expo-notifications": "~0.32.16",
     "expo-secure-store": "^15.0.8",
@@ -41,6 +42,7 @@
     "react-native-nitro-modules": "^0.35.2",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
     "zustand": "^5.0.9"
   },
