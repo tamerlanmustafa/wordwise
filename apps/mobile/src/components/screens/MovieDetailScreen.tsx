@@ -13,7 +13,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -35,6 +36,7 @@ import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
+import { QuizJourneyScreen } from '../QuizJourneyScreen';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -61,10 +63,11 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
+  const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
-  const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
+  const [wordsView, setWordsView] = useState<'foryou' | 'all' | 'journey'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
   const [startingPreMovieQuiz, setStartingPreMovieQuiz] = useState(false);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
@@ -542,6 +545,7 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {wordsView !== 'journey' && (
       <View style={styles.detailHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
@@ -551,8 +555,9 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
         </Text>
         <View style={{ width: 60 }} />
       </View>
+      )}
 
-      <View style={styles.movieInfoBar}>
+      {wordsView !== 'journey' && <View style={styles.movieInfoBar}>
         <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
           <Image
             source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
@@ -587,8 +592,16 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
             </View>
           )}
         </View>
-      </View>
-      {loading ? (
+      </View>}
+      <View style={{ flex: 1 }}>
+      {wordsView === 'journey' && movieId != null ? (
+        <QuizJourneyScreen
+          movieId={movieId}
+          movieTitle={movie.title}
+          onBack={() => setWordsView('foryou')}
+          onStartSession={() => {}}
+        />
+      ) : loading ? (
         <>
           {movie.overview ? (
             <View style={styles.overviewSection}>
@@ -670,63 +683,6 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
               </View>
             )}
 
-            {!isIdiomsTab && (
-              <View style={styles.wordsViewToggleRow}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setWordsView('foryou')}
-                  style={[
-                    styles.wordsViewPill,
-                    wordsView === 'foryou' && styles.wordsViewPillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.wordsViewPillText,
-                      wordsView === 'foryou' && styles.wordsViewPillTextActive,
-                    ]}
-                  >
-                    For you{suggestedVisible.length > 0 ? ` · ${suggestedVisible.length}` : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setWordsView('all')}
-                  style={[
-                    styles.wordsViewPill,
-                    wordsView === 'all' && styles.wordsViewPillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.wordsViewPillText,
-                      wordsView === 'all' && styles.wordsViewPillTextActive,
-                    ]}
-                  >
-                    All levels
-                  </Text>
-                </TouchableOpacity>
-                {onStartQuizJourney && movieId != null && wordLevels.some((l) => l.count > 0) && (
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => onStartQuizJourney(movieId)}
-                    style={{
-                      marginLeft: 6,
-                      paddingVertical: 6,
-                      paddingHorizontal: 12,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: colors.primary,
-                      backgroundColor: colors.primary,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                      🎮 Journey
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
 
             {isIdiomsTab ? (
               <>
@@ -1043,6 +999,58 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      </View>
+
+      {/* Bottom control bar — sits above the home indicator */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, insets.bottom) }]}>
+        <TouchableOpacity
+          style={[styles.bottomBarBtn, wordsView === 'foryou' && styles.bottomBarBtnActive]}
+          onPress={() => setWordsView('foryou')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="person"
+            size={18}
+            color={wordsView === 'foryou' ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.bottomBarBtnText, wordsView === 'foryou' && styles.bottomBarBtnTextActive]}>
+            For You
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.bottomBarBtn, wordsView === 'all' && styles.bottomBarBtnActive]}
+          onPress={() => setWordsView('all')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="layers"
+            size={18}
+            color={wordsView === 'all' ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.bottomBarBtnText, wordsView === 'all' && styles.bottomBarBtnTextActive]}>
+            All Levels
+          </Text>
+        </TouchableOpacity>
+
+        {movieId != null && wordLevels.some((l) => l.count > 0) && (
+          <TouchableOpacity
+            style={[styles.bottomBarBtn, wordsView === 'journey' && styles.bottomBarBtnActive]}
+            onPress={() => setWordsView('journey')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="map"
+              size={18}
+              color={wordsView === 'journey' ? colors.primary : colors.textSecondary}
+            />
+            <Text style={[styles.bottomBarBtnText, wordsView === 'journey' && styles.bottomBarBtnTextActive]}>
+              Journey
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {pendingLearned && (
         <View style={styles.undoToast} pointerEvents="box-none">
           <View style={styles.undoToastInner}>

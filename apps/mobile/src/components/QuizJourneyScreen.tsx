@@ -15,7 +15,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,7 +53,7 @@ export function QuizJourneyScreen({
   movieId,
   movieIds,
   movieTitle,
-  onBack,
+  onBack: _onBack,
   onStartSession,
 }: QuizJourneyScreenProps) {
   void onStartSession; void movieTitle;
@@ -198,9 +197,6 @@ export function QuizJourneyScreen({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <TouchableOpacity onPress={onBack} hitSlop={12} style={styles.backBtn}>
-        <Text style={styles.backText}>‹</Text>
-      </TouchableOpacity>
 
       {loading ? (
         <View style={styles.centered}>

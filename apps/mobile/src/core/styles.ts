@@ -1023,6 +1023,32 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     paddingVertical: 10,
   },
+  bottomBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F3EEFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0D4F7',
+    paddingTop: 7,
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  bottomBarBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  bottomBarBtnActive: {},
+  bottomBarBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  bottomBarBtnTextActive: {
+    color: colors.primary,
+  },
   foryouMoreLink: {
     alignItems: 'center',
     paddingVertical: 16,
