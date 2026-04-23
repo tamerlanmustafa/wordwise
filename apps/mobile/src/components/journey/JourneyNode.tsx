@@ -1,12 +1,9 @@
 /**
- * JourneyNode — bare 3D tile. Top face rests on a darker skirt.
- *
- * Depth comes from real geometry: the skirt (a same-shape, shifted-down,
- * darker View) reads as the button's base. On press the top face drops
- * onto the skirt — classic Duolingo tactile feedback.
+ * JourneyNode — flat rhombus tile with 3D skirt.
  */
 
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Pressable, StyleSheet, View, Animated } from 'react-native';
 import { cefrColors } from '../../theme/palette';
 
 export type NodeState = 'locked' | 'active' | 'inactive' | 'completed';
@@ -18,88 +15,163 @@ export interface JourneyNodeProps {
   onPress?: () => void;
 }
 
-const TILE = 84;
-const SKIRT_DEPTH = 8;
-const RADIUS = 20;
+// Geometry
+const TILE = 90;
+const SCALE_Y = 1;
+const SKIRT_DEPTH = 6;
+const RADIUS = 8;
 
-export const JOURNEY_NODE_WIDTH = TILE;
-export const JOURNEY_NODE_HEIGHT = TILE + SKIRT_DEPTH;
+const VISIBLE_W = Math.round(TILE * Math.SQRT2);
+const VISIBLE_H = Math.round(TILE * Math.SQRT2 * SCALE_Y);
 
+export const JOURNEY_NODE_WIDTH = VISIBLE_W;
+export const JOURNEY_NODE_HEIGHT = VISIBLE_H + SKIRT_DEPTH;
+
+// diamond transform (visual only)
+const DIAMOND_TRANSFORM = [
+  { rotate: '45deg' },
+  { scaleY: SCALE_Y },
+] as const;
+
+// utils
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
 }
-function clamp(v: number) { return Math.max(0, Math.min(255, Math.round(v))); }
+
+function clamp(v: number) {
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
 function rgbToHex(r: number, g: number, b: number) {
-  return `#${[r, g, b].map((v) => clamp(v).toString(16).padStart(2, '0')).join('')}`;
+  return `#${[r, g, b]
+    .map((v) => clamp(v).toString(16).padStart(2, '0'))
+    .join('')}`;
 }
+
 function darken(hex: string, f: number): string {
   const [r, g, b] = hexToRgb(hex);
   return rgbToHex(r * (1 - f), g * (1 - f), b * (1 - f));
 }
+
 function desaturate(hex: string, f: number): string {
   const [r, g, b] = hexToRgb(hex);
   const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-  return rgbToHex(r + (gray - r) * f, g + (gray - g) * f, b + (gray - b) * f);
+  return rgbToHex(
+    r + (gray - r) * f,
+    g + (gray - g) * f,
+    b + (gray - b) * f
+  );
 }
 
 export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
   const raw = cefrColors[level] || '#7C5CBF';
-  const baseColor = state === 'locked' ? desaturate(raw, 0.35) : raw;
-  const skirtColor = darken(baseColor, 0.22);
+
+  const baseColor =
+    state === 'locked'
+      ? desaturate(raw, 0.35)
+      : '#A2CB8B';
+
+  const skirtColor = darken(baseColor, 0.25);
+
+  // animation value
+  const pressAnim = useRef(new Animated.Value(0)).current;
+
+  const pressIn = () => {
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 6,
+    }).start();
+  };
+
+  const pressOut = () => {
+    Animated.spring(pressAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 6,
+    }).start();
+  };
+
+  const translateY = pressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, SKIRT_DEPTH],
+  });
 
   return (
     <View style={styles.container}>
+      {/* Skirt (static) */}
       <View
         style={[
-          styles.skirt,
+          styles.diamond,
+          styles.skirtPos,
           { backgroundColor: skirtColor },
-          state === 'active' && styles.skirtActive,
         ]}
       />
+
+      {/* Top face */}
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [
-          styles.topFace,
-          { backgroundColor: baseColor },
-          // Press-in drops the top face onto the skirt — real geometry
-          // change, no animation library needed.
-          pressed && styles.topFacePressed,
-          state === 'active' && styles.topFaceActive,
-        ]}
-      />
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+      >
+        {/* IMPORTANT: animation is OUTSIDE rotation */}
+        <Animated.View
+          style={{
+            transform: [{ translateY }],
+          }}
+        >
+          <View
+            style={[
+              styles.diamond,
+              styles.topPos,
+              { backgroundColor: baseColor },
+              state === 'active' && styles.topActive,
+            ]}
+          />
+        </Animated.View>
+      </Pressable>
     </View>
   );
 }
+
+// positioning math
+const SQUARE_LEFT = (VISIBLE_W - TILE) / 2;
+const SQUARE_TOP = (VISIBLE_H - TILE) / 2;
 
 const styles = StyleSheet.create({
   container: {
     width: JOURNEY_NODE_WIDTH,
     height: JOURNEY_NODE_HEIGHT,
+    marginVertical: 10,
+    marginHorizontal: 10,
   },
-  skirt: {
+
+  diamond: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: SKIRT_DEPTH,
-    height: TILE,
-    borderRadius: RADIUS,
-  },
-  skirtActive: {
-    top: SKIRT_DEPTH + 2,
-  },
-  topFace: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
     width: TILE,
     height: TILE,
     borderRadius: RADIUS,
+    transform: DIAMOND_TRANSFORM,
   },
-  topFacePressed: {
-    top: SKIRT_DEPTH,
+
+  topPos: {
+    top: SQUARE_TOP,
+    left: SQUARE_LEFT,
   },
-  topFaceActive: {
+
+  skirtPos: {
+    top: SQUARE_TOP + SKIRT_DEPTH,
+    left: SQUARE_LEFT,
+  },
+
+  topActive: {
     borderWidth: 3,
     borderColor: '#FFFFFF',
   },
