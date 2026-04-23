@@ -57,7 +57,7 @@ export function QuizJourneyScreen({
   onBack,
   onStartSession,
 }: QuizJourneyScreenProps) {
-  void onStartSession; // tapping is a no-op while we tune the UI
+  void onStartSession; void movieTitle;
 
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
@@ -198,16 +198,9 @@ export function QuizJourneyScreen({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Journey</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>{movieTitle}</Text>
-        </View>
-        <View style={{ width: 60 }} />
-      </View>
+      <TouchableOpacity onPress={onBack} hitSlop={12} style={styles.backBtn}>
+        <Text style={styles.backText}>‹</Text>
+      </TouchableOpacity>
 
       {loading ? (
         <View style={styles.centered}>
@@ -241,14 +234,14 @@ export function QuizJourneyScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#2E3B2C' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.paper,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+  backBtn: {
+    position: 'absolute',
+    top: 12,
+    left: 16,
+    zIndex: 10,
+    padding: 8,
   },
-  backText: { fontSize: 16, color: colors.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  backText: { fontSize: 32, color: '#FFFFFF', lineHeight: 32 },
 
   tileWrapper: {
     position: 'absolute',
