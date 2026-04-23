@@ -69,13 +69,11 @@ function desaturate(hex: string, f: number): string {
 }
 
 export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
+  // Per-CEFR-level color. A full section of B1 tiles all share one
+  // green; B2 tiles a yellow, etc. Locked tiles desaturate *their
+  // level's* color so they still feel visually linked to the section.
   const raw = cefrColors[level] || '#7C5CBF';
-
-  const baseColor =
-    state === 'locked'
-      ? desaturate(raw, 0.35)
-      : '#A2CB8B';
-
+  const baseColor = state === 'locked' ? desaturate(raw, 0.55) : raw;
   const skirtColor = darken(baseColor, 0.25);
 
   // animation value
