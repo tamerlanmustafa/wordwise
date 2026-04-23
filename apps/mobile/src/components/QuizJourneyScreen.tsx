@@ -105,12 +105,43 @@ export function QuizJourneyScreen({
     const byLevel = new Map<string, QuizUnitState>();
     units.forEach((u) => byLevel.set(u.level, u));
 
-    const zigzagRange = STEP_X * TILES_PER_DIAGONAL;
-    const startX = (WINDOW_WIDTH - JOURNEY_NODE_WIDTH) / 2 - zigzagRange / 2;
+    // Tile 0 anchored dead-center; each zigzag leg is exactly
+    // TILES_PER_DIAGONAL tiles (2 by default). The chain walks right
+    // for TPD tiles, then back left for TPD tiles, repeating. Sequence
+    // of X offsets from center (TPD=2):
+    //   0, +1, +2, +1, 0, +1, +2, +1, 0, ...  × STEP_X
+    const centerX = (WINDOW_WIDTH - JOURNEY_NODE_WIDTH) / 2;
+    const offsetFor = (idx: number) => {
+      // Each pair of legs (right + left) is 2*TPD tiles long. Within a
+      // pair the X offset is an absolute-value shape: rises for the
+      // first TPD moves, falls for the next TPD moves.
+      const cycle = 2 * TILES_PER_DIAGONAL;
+      const p = idx % cycle;
+      return (p <= TILES_PER_DIAGONAL ? p : cycle - p) * STEP_X;
+    };
+
+    // First pass: count total tiles so we can lay them out bottom-up.
+    // i=0 is the user's starting level and must sit at the BOTTOM of
+    // the scroll view; higher levels stack above.
+    let totalTiles = 0;
+    for (const lv of visible) {
+      const u = byLevel.get(lv);
+      const words = u?.word_count ?? 0;
+      if (words <= 0) continue;
+      totalTiles += Math.ceil(words / WORDS_PER_TILE);
+    }
+
+    const BOTTOM_PAD = 40;
+    const TOP_PAD = 60;
+    const height = BOTTOM_PAD + Math.max(1, totalTiles) * STEP_Y + TOP_PAD;
+
+    // Y for tile index i (0 = bottom starting tile). As i grows the
+    // tile moves UP (smaller y).
+    const yFor = (idx: number) =>
+      height - BOTTOM_PAD - JOURNEY_NODE_HEIGHT - idx * STEP_Y;
 
     const out: Array<{ id: string; x: number; y: number; level: NodeLevel; state: NodeState }> = [];
 
-    let x = startX;
     let i = 0;
     let activeAssigned = false;
 
@@ -124,9 +155,6 @@ export function QuizJourneyScreen({
       const levelUnlocked = lv === visible[0] || !u?.locked; // user's own level always unlocked
 
       for (let k = 0; k < tilesForLevel; k++) {
-        const segment = Math.floor(i / TILES_PER_DIAGONAL);
-        const dir = segment % 2 === 0 ? +1 : -1;
-
         let state: NodeState;
         if (levelCompleted) {
           state = 'completed';
@@ -141,25 +169,32 @@ export function QuizJourneyScreen({
 
         out.push({
           id: `${lv}-${k}`,
-          x,
-          y: 20 + i * STEP_Y,
+          x: centerX - STEP_X + offsetFor(i),
+          y: yFor(i),
           level: lv,
           state,
         });
-        x += STEP_X * dir;
         i++;
       }
     }
 
-    // Fallback: if no levels had words, drop one teaser tile so the
-    // screen isn't empty.
+    // Fallback: if no levels had words, drop one teaser tile at the
+    // bottom so the screen isn't empty.
     if (out.length === 0) {
-      out.push({ id: 'empty-0', x: startX, y: 20, level: userLevel, state: 'inactive' });
+      out.push({ id: 'empty-0', x: centerX, y: yFor(0), level: userLevel, state: 'inactive' });
     }
 
-    const height = 40 + Math.max(1, i) * STEP_Y + JOURNEY_NODE_HEIGHT;
     return { tiles: out, totalHeight: height };
   }, [units, userLevel]);
+
+  // On first layout, scroll to the bottom so the user lands on their
+  // starting tile, not the C2 peak of the journey.
+  const scrolledOnce = useRef(false);
+  const onContentSizeChange = (_w: number, _h: number) => {
+    if (scrolledOnce.current) return;
+    scrolledOnce.current = true;
+    scrollRef.current?.scrollToEnd({ animated: false });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -187,6 +222,7 @@ export function QuizJourneyScreen({
           ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ height: totalHeight }}
+          onContentSizeChange={onContentSizeChange}
           showsVerticalScrollIndicator={false}
         >
           {tiles.map((t) => (
