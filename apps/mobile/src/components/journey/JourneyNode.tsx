@@ -16,21 +16,35 @@ export interface JourneyNodeProps {
 }
 
 // Geometry
-const TILE = 90;
-const SCALE_Y = 1;
-const SKIRT_DEPTH = 6;
+const TILE = 70;
+const SCALE_X = 1.5; // 👈 makes left/right corners pointier
+const SCALE_Y = 1;   // keep vertical natural
+const SKIRT_DEPTH = 8;
 const RADIUS = 8;
 
-const VISIBLE_W = Math.round(TILE * Math.SQRT2);
-const VISIBLE_H = Math.round(TILE * Math.SQRT2 * SCALE_Y);
+// Base rectangle BEFORE rotation
+const BASE_W = TILE * SCALE_X;
+const BASE_H = TILE * SCALE_Y;
+
+// Rotated bounding box (45deg)
+const VISIBLE_W = Math.round(
+  Math.abs(BASE_W * Math.cos(Math.PI / 4)) +
+  Math.abs(BASE_H * Math.sin(Math.PI / 4))
+);
+
+const VISIBLE_H = Math.round(
+  Math.abs(BASE_W * Math.sin(Math.PI / 4)) +
+  Math.abs(BASE_H * Math.cos(Math.PI / 4))
+);
 
 export const JOURNEY_NODE_WIDTH = VISIBLE_W;
 export const JOURNEY_NODE_HEIGHT = VISIBLE_H + SKIRT_DEPTH;
 
-// diamond transform (visual only)
+// ✅ Correct transform order
 const DIAMOND_TRANSFORM = [
-  { rotate: '45deg' },
+  { scaleX: SCALE_X },
   { scaleY: SCALE_Y },
+  { rotate: '45deg' },
 ] as const;
 
 // utils
@@ -69,14 +83,10 @@ function desaturate(hex: string, f: number): string {
 }
 
 export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
-  // Per-CEFR-level color. A full section of B1 tiles all share one
-  // green; B2 tiles a yellow, etc. Locked tiles desaturate *their
-  // level's* color so they still feel visually linked to the section.
   const raw = cefrColors[level] || '#7C5CBF';
   const baseColor = state === 'locked' ? desaturate(raw, 0.55) : raw;
   const skirtColor = darken(baseColor, 0.25);
 
-  // animation value
   const pressAnim = useRef(new Animated.Value(0)).current;
 
   const pressIn = () => {
@@ -104,7 +114,7 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
 
   return (
     <View style={styles.container}>
-      {/* Skirt (static) */}
+      {/* Skirt */}
       <View
         style={[
           styles.diamond,
@@ -119,7 +129,6 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
         onPressIn={pressIn}
         onPressOut={pressOut}
       >
-        {/* IMPORTANT: animation is OUTSIDE rotation */}
         <Animated.View
           style={{
             transform: [{ translateY }],
@@ -139,7 +148,7 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
   );
 }
 
-// positioning math
+// Centering math
 const SQUARE_LEFT = (VISIBLE_W - TILE) / 2;
 const SQUARE_TOP = (VISIBLE_H - TILE) / 2;
 
