@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,7 +36,8 @@ import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
-import { QuizJourneyScreen } from '../QuizJourneyScreen';
+import { GlobalBottomBar } from '../GlobalBottomBar';
+import { useWatchLaterStore } from '../../stores/watchLaterStore';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -49,15 +50,28 @@ interface Props {
   movie: MovieData;
   onBack: () => void;
   targetLanguage: string;
-  // These receive the *resolved internal movieId* (not the TMDB id); the
-  // screen waits until vocabulary loads before enabling them. The pre-movie
-  // quiz handler returns a Promise so we can render a spinner on the button
+  // Receives the *resolved internal movieId* (not the TMDB id); the screen
+  // waits until vocabulary loads before enabling. The pre-movie quiz
+  // handler returns a Promise so we can render a spinner on the button
   // while the backend warms up translations (~1–3s).
-  onStartQuizJourney?: (internalMovieId: number) => void;
   onStartPreMovieQuiz?: (internalMovieId: number) => void | Promise<void>;
+  // Global bottom-bar handlers.
+  onNavigateHome: () => void;
+  onNavigateWords: () => void;
+  onNavigateJourney: () => void;
+  onNavigateRankings: () => void;
 }
 
-export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJourney, onStartPreMovieQuiz }: Props) => {
+export const MovieDetailScreen = ({
+  movie,
+  onBack,
+  targetLanguage,
+  onStartPreMovieQuiz,
+  onNavigateHome,
+  onNavigateWords,
+  onNavigateJourney,
+  onNavigateRankings,
+}: Props) => {
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +81,26 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
-  const [wordsView, setWordsView] = useState<'foryou' | 'all' | 'journey'>('foryou');
+  const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
+
+  // Watch Later state — backed by Zustand + AsyncStorage. Phase-1 mock
+  // until the real backend endpoint lands. `inWatchLater` is derived so
+  // the button flips when the store changes.
+  const watchLaterMovies = useWatchLaterStore((s) => s.movies);
+  const toggleWatchLater = useWatchLaterStore((s) => s.toggle);
+  const inWatchLater = movieId != null && watchLaterMovies.some((m) => m.movieId === movieId);
+
+  const handleToggleWatchLater = () => {
+    if (movieId == null) return;
+    toggleWatchLater({
+      movieId,
+      tmdbId: movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined),
+      title: movie.title,
+      posterPath: movie.poster_path,
+      backdropPath: (movie as any).backdrop_path || null,
+    });
+  };
   const [startingPreMovieQuiz, setStartingPreMovieQuiz] = useState(false);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -545,7 +577,6 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {wordsView !== 'journey' && (
       <View style={styles.detailHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
@@ -555,9 +586,8 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
         </Text>
         <View style={{ width: 60 }} />
       </View>
-      )}
 
-      {wordsView !== 'journey' && <View style={styles.movieInfoBar}>
+      <View style={styles.movieInfoBar}>
         <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
           <Image
             source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
@@ -591,17 +621,26 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
               </Text>
             </View>
           )}
+          {movieId != null && (
+            <TouchableOpacity
+              onPress={handleToggleWatchLater}
+              style={[styles.watchLaterBtn, inWatchLater && styles.watchLaterBtnActive]}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={inWatchLater ? 'bookmark' : 'bookmark-outline'}
+                size={14}
+                color={inWatchLater ? '#FFFFFF' : colors.primary}
+              />
+              <Text style={[styles.watchLaterBtnText, inWatchLater && styles.watchLaterBtnTextActive]}>
+                {inWatchLater ? 'In Watch Later' : 'Watch Later'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </View>}
+      </View>
       <View style={{ flex: 1 }}>
-      {wordsView === 'journey' && movieId != null ? (
-        <QuizJourneyScreen
-          movieId={movieId}
-          movieTitle={movie.title}
-          onBack={() => setWordsView('foryou')}
-          onStartSession={() => {}}
-        />
-      ) : loading ? (
+      {loading ? (
         <>
           {movie.overview ? (
             <View style={styles.overviewSection}>
@@ -683,6 +722,32 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
               </View>
             )}
 
+
+            {/* Inline view filter — For You / All Levels. Only shown on
+                the words tab (not idioms). Replaces the old bottom-bar
+                position since nav is now global. */}
+            {!isIdiomsTab && (
+              <View style={styles.wordsViewSegmented}>
+                <TouchableOpacity
+                  style={[styles.wordsViewSegment, wordsView === 'foryou' && styles.wordsViewSegmentActive]}
+                  onPress={() => startTransition(() => setWordsView('foryou'))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.wordsViewSegmentText, wordsView === 'foryou' && styles.wordsViewSegmentTextActive]}>
+                    For You
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.wordsViewSegment, wordsView === 'all' && styles.wordsViewSegmentActive]}
+                  onPress={() => startTransition(() => setWordsView('all'))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.wordsViewSegmentText, wordsView === 'all' && styles.wordsViewSegmentTextActive]}>
+                    All Levels
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {isIdiomsTab ? (
               <>
@@ -911,7 +976,7 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
                   {suggestedHidden > 0 && (
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      onPress={() => setWordsView('all')}
+                      onPress={() => startTransition(() => setWordsView('all'))}
                       style={styles.foryouMoreLink}
                     >
                       <Text style={styles.foryouMoreLinkText}>
@@ -1001,55 +1066,18 @@ export const MovieDetailScreen = ({ movie, onBack, targetLanguage, onStartQuizJo
       </Modal>
       </View>
 
-      {/* Bottom control bar — sits above the home indicator */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(16, insets.bottom) }]}>
-        <TouchableOpacity
-          style={[styles.bottomBarBtn, wordsView === 'foryou' && styles.bottomBarBtnActive]}
-          onPress={() => setWordsView('foryou')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="person"
-            size={18}
-            color={wordsView === 'foryou' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[styles.bottomBarBtnText, wordsView === 'foryou' && styles.bottomBarBtnTextActive]}>
-            For You
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.bottomBarBtn, wordsView === 'all' && styles.bottomBarBtnActive]}
-          onPress={() => setWordsView('all')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="layers"
-            size={18}
-            color={wordsView === 'all' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[styles.bottomBarBtnText, wordsView === 'all' && styles.bottomBarBtnTextActive]}>
-            All Levels
-          </Text>
-        </TouchableOpacity>
-
-        {movieId != null && wordLevels.some((l) => l.count > 0) && (
-          <TouchableOpacity
-            style={[styles.bottomBarBtn, wordsView === 'journey' && styles.bottomBarBtnActive]}
-            onPress={() => setWordsView('journey')}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="map"
-              size={18}
-              color={wordsView === 'journey' ? colors.primary : colors.textSecondary}
-            />
-            <Text style={[styles.bottomBarBtnText, wordsView === 'journey' && styles.bottomBarBtnTextActive]}>
-              Journey
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Global 4-tab nav — same on every screen. Movie-local view
+          filters (For You / All Levels) live inline inside the word list
+          section, not here. */}
+      <GlobalBottomBar
+        active={null}
+        onTabPress={(t) => {
+          if (t === 'home') onNavigateHome();
+          else if (t === 'words') onNavigateWords();
+          else if (t === 'journey') onNavigateJourney();
+          else if (t === 'rankings') onNavigateRankings();
+        }}
+      />
 
       {pendingLearned && (
         <View style={styles.undoToast} pointerEvents="box-none">

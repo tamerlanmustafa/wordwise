@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
+import { useWatchLaterStore } from '../stores/watchLaterStore';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
@@ -20,6 +21,8 @@ import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
 import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
+import { JourneyScreen } from '../components/JourneyScreen';
+import type { BottomTab } from '../components/GlobalBottomBar';
 import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
@@ -75,6 +78,7 @@ export default function App() {
     // Hydrate the admin preview toggle from AsyncStorage so a refresh
     // doesn't reset an admin's "viewing as free" selection.
     useEntitlementsStore.getState().hydrate();
+    useWatchLaterStore.getState().hydrate();
     // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
     // registerForPushNotifications is a no-op on simulator.
     registerForPushNotifications().then(() => {
@@ -232,6 +236,22 @@ export default function App() {
     setCurrentScreen('quizBatchBuilder');
   };
 
+  // Global Journey tab — lands the user on the new multi-section
+  // practice screen backed by their Watch Later list. Legacy
+  // batch-builder route stays around for the old home button.
+  const navigateToJourney = () => {
+    setCurrentScreen('journey');
+  };
+
+  // Single dispatcher for the global 4-tab bar. Every screen feeds its
+  // taps through here so navigation stays consistent.
+  const handleTabPress = (t: BottomTab) => {
+    if (t === 'home') navigateToHome();
+    else if (t === 'words') navigateToNotebook();
+    else if (t === 'journey') navigateToJourney();
+    else if (t === 'rankings') navigateToLeaderboard();
+  };
+
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
     setCurrentScreen('quizBatchJourney');
@@ -359,6 +379,18 @@ export default function App() {
           <PrivacyScreen onBack={navigateToHome} mode="privacy" />
         ) : currentScreen === 'terms' ? (
           <PrivacyScreen onBack={navigateToHome} mode="terms" />
+        ) : currentScreen === 'journey' ? (
+          <JourneyScreen
+            onTabPress={handleTabPress}
+            onMoviePress={(mid) => {
+              // Tapping a section header opens the underlying movie.
+              // We don't have the full MovieData in the store, so we
+              // fall back to clearing and letting home re-fetch. For
+              // now just go home.
+              void mid;
+              navigateToHome();
+            }}
+          />
         ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
           <QuizJourneyScreen
             movieId={resolvedMovieId}
@@ -396,11 +428,20 @@ export default function App() {
             onDone={handleQuizResultDone}
           />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
-          <MovieDetailScreen movie={selectedMovie} onBack={navigateToHome} targetLanguage={targetLanguage} onStartQuizJourney={navigateToQuizJourney} onStartPreMovieQuiz={handleStartPreMovieQuiz} />
+          <MovieDetailScreen
+            movie={selectedMovie}
+            onBack={navigateToHome}
+            targetLanguage={targetLanguage}
+            onStartPreMovieQuiz={handleStartPreMovieQuiz}
+            onNavigateHome={navigateToHome}
+            onNavigateWords={navigateToNotebook}
+            onNavigateJourney={navigateToJourney}
+            onNavigateRankings={navigateToLeaderboard}
+          />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToBatchBuilder} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { GlobalBottomBar } from '../GlobalBottomBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AVAILABLE_LANGUAGES } from '../../types';
 import { colors } from '../../theme/palette';
@@ -671,8 +672,18 @@ export const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
+
+      <GlobalBottomBar
+        active="home"
+        onTabPress={(t) => {
+          if (t === 'words') onNavigateToNotebook();
+          else if (t === 'rankings') onNavigateToLeaderboard();
+          else if (t === 'journey') onNavigateToBatchJourney?.();
+          // 'home' is already current, no-op
+        }}
+      />
     </SafeAreaView>
   );
 };
