@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GlobalBottomBar } from '../GlobalBottomBar';
+import { FloatingContinueButton } from '../FloatingContinueButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AVAILABLE_LANGUAGES } from '../../types';
 import { colors } from '../../theme/palette';
@@ -22,7 +23,6 @@ import {
   type TodaysWord,
 } from '../../services/api';
 import { useEntitlementsStore, useShowAds } from '../../stores/entitlementsStore';
-import { MobileHeroSection } from '../home/MobileHeroSection';
 import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
 import { GENRE_OPTIONS, LEVEL_OPTIONS } from '../home/filterOptions';
@@ -339,14 +339,6 @@ export const HomeScreen = ({
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {!loading && (
-          <MobileHeroSection
-            movie={trendingMovies.find((m: any) => m.backdrop_path) ?? trendingMovies[0] ?? null}
-            onPress={handleMoviePress}
-            continueMovie={lastOpenedMovie}
-            onContinuePress={handleMoviePress}
-          />
-        )}
 
         <View style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
@@ -412,32 +404,6 @@ export const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        {srsTotalSaved > 0 && (
-          <View style={styles.reviewCtaWrapper}>
-            <TouchableOpacity
-              style={styles.reviewCta}
-              onPress={() => {
-                wordwiseApi.logInteraction('_srs', 'SRS_CTA_TAP', undefined, { due_count: srsDueCount, total_saved: srsTotalSaved });
-                onNavigateToReview();
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.reviewCtaLeft}>
-                <Text style={styles.reviewCtaTitle}>
-                  {srsDueCount && srsDueCount > 0
-                    ? `Review your words`
-                    : 'All caught up!'}
-                </Text>
-                <Text style={styles.reviewCtaSubtitle}>
-                  {srsDueCount && srsDueCount > 0
-                    ? `${srsDueCount} word${srsDueCount === 1 ? '' : 's'} due for review`
-                    : `${srsTotalSaved} words saved · next review soon`}
-                </Text>
-              </View>
-              <Text style={styles.reviewCtaArrow}>→</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {showAds && (
           <View style={styles.adBanner}>
@@ -674,6 +640,13 @@ export const HomeScreen = ({
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {lastOpenedMovie && (
+        <FloatingContinueButton
+          movie={lastOpenedMovie}
+          onPress={() => handleMoviePress(lastOpenedMovie)}
+        />
+      )}
 
       <GlobalBottomBar
         active="home"

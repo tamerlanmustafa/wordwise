@@ -520,6 +520,44 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 12,
   },
+  // Continue bar — replaces the old hero banner. Compact pill that taps
+  // straight into the last opened movie.
+  continueBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 6,
+    backgroundColor: colors.paper,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  continueBarPoster: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+  },
+  continueBarLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 1,
+  },
+  continueBarTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 1,
+  },
+  continueBarArrow: {
+    fontSize: 12,
+    color: colors.primary,
+    marginLeft: 4,
+  },
   browseAllText: {
     fontSize: 15,
     fontWeight: '600',

@@ -245,7 +245,7 @@ export default function App() {
   // taps through here so navigation stays consistent.
   const handleTabPress = (t: BottomTab) => {
     if (t === 'home') navigateToHome();
-    else if (t === 'words') navigateToNotebook();
+    else if (t === 'words') navigateToReview();
     else if (t === 'journey') navigateToJourney();
     else if (t === 'rankings') navigateToLeaderboard();
   };
@@ -267,25 +267,6 @@ export default function App() {
     setCurrentScreen('quizLesson');
   };
 
-  const handleStartPreMovieQuiz = async (internalMovieId: number) => {
-    if (!selectedMovie) return;
-    setResolvedMovieId(internalMovieId);
-    try {
-      const session = await quizApi.startPreMovieQuiz(internalMovieId);
-      // The backend picks the level (max of user/movie), but doesn't return it.
-      // Fall back to the user's proficiency for the UI label — close enough;
-      // if this matters later we can surface the level in the response payload.
-      const level = (user?.proficiency_level || 'B1').toUpperCase();
-      setQuizSession({ session, level });
-      setCurrentScreen('quizLesson');
-    } catch (e: any) {
-      console.warn('[App] pre-movie quiz start failed:', e);
-      Alert.alert(
-        'Quiz unavailable',
-        e?.message || 'Could not start a quiz for this movie.',
-      );
-    }
-  };
 
   const handleQuizSessionStart = (session: QuizStartSessionResponse, level: string) => {
     setQuizSession({ session, level });
@@ -443,9 +424,8 @@ export default function App() {
             movie={selectedMovie}
             onBack={navigateToHome}
             targetLanguage={targetLanguage}
-            onStartPreMovieQuiz={handleStartPreMovieQuiz}
             onNavigateHome={navigateToHome}
-            onNavigateWords={navigateToNotebook}
+            onNavigateWords={navigateToReview}
             onNavigateJourney={navigateToJourney}
             onNavigateRankings={navigateToLeaderboard}
           />

@@ -52,7 +52,6 @@ interface Props {
   // waits until vocabulary loads before enabling. The pre-movie quiz
   // handler returns a Promise so we can render a spinner on the button
   // while the backend warms up translations (~1–3s).
-  onStartPreMovieQuiz?: (internalMovieId: number) => void | Promise<void>;
   // Global bottom-bar handlers.
   onNavigateHome: () => void;
   onNavigateWords: () => void;
@@ -64,7 +63,6 @@ export const MovieDetailScreen = ({
   movie,
   onBack,
   targetLanguage,
-  onStartPreMovieQuiz,
   onNavigateHome,
   onNavigateWords,
   onNavigateJourney,
@@ -81,7 +79,6 @@ export const MovieDetailScreen = ({
   const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
 
-  const [startingPreMovieQuiz, setStartingPreMovieQuiz] = useState(false);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
@@ -742,48 +739,6 @@ export const MovieDetailScreen = ({
               </>
             ) : wordsView === 'foryou' ? (
               <>
-                {onStartPreMovieQuiz && movieId != null && wordLevels.some((l) => l.count > 0) && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    disabled={startingPreMovieQuiz}
-                    onPress={async () => {
-                      if (startingPreMovieQuiz) return;
-                      setStartingPreMovieQuiz(true);
-                      try {
-                        await onStartPreMovieQuiz(movieId);
-                      } finally {
-                        setStartingPreMovieQuiz(false);
-                      }
-                    }}
-                    style={{
-                      marginHorizontal: 16,
-                      marginTop: 8,
-                      marginBottom: 12,
-                      paddingVertical: 14,
-                      paddingHorizontal: 18,
-                      borderRadius: 14,
-                      backgroundColor: colors.primary,
-                      opacity: startingPreMovieQuiz ? 0.7 : 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>
-                        {startingPreMovieQuiz ? 'Preparing quiz…' : 'Quiz yourself before watching'}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#FFFFFF', opacity: 0.85, marginTop: 2 }}>
-                        10 cards · ~2 min · earn stars + XP
-                      </Text>
-                    </View>
-                    {startingPreMovieQuiz ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <Text style={{ fontSize: 20, color: '#FFFFFF' }}>→</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
                 {suggestedWords.length === 0 ? (
                   <Text style={styles.forYouEmpty}>No new words at your level</Text>
                 ) : null}
