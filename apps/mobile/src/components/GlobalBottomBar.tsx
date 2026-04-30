@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/palette';
 
-export type BottomTab = 'home' | 'words' | 'journey' | 'rankings';
+export type BottomTab = 'home' | 'words' | 'journey' | 'rankings' | 'profile';
 
 interface Props {
   /** Which tab to render as active; `null` when inside a sub-page that
@@ -29,6 +29,7 @@ export function GlobalBottomBar({ active, onTabPress }: Props) {
       <TabBtn icon="library" label="My Words" isActive={active === 'words'} onPress={() => onTabPress('words')} />
       <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />
       <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} />
+      <TabBtn icon="person-circle" label="Profile" isActive={active === 'profile'} onPress={() => onTabPress('profile')} />
     </View>
   );
 }

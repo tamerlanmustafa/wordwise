@@ -21,8 +21,10 @@ import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
 import { JourneyScreen } from '../components/JourneyScreen';
+import { UserMenuSheet } from '../components/UserMenuSheet';
+import { SplashIntro } from '../components/SplashIntro';
 import type { BottomTab } from '../components/GlobalBottomBar';
-import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
+import { type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
@@ -220,19 +222,8 @@ export default function App() {
   // resolves it during vocabulary load and hands it back via these callbacks.
   const [resolvedMovieId, setResolvedMovieId] = useState<number | null>(null);
 
-  const navigateToQuizJourney = (internalMovieId: number) => {
-    setResolvedMovieId(internalMovieId);
-    setCurrentScreen('quizJourney');
-  };
-
-  // Multi-movie batch journey state. Holds the picked movie ids + display
-  // title; cleared on exit from the batch journey.
+  // Multi-movie batch journey state.
   const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
-
-  const navigateToBatchBuilder = () => {
-    setBatch(null);
-    setCurrentScreen('quizBatchBuilder');
-  };
 
   // Global Journey tab — lands the user on the new multi-section
   // practice screen backed by their Watch Later list. Legacy
@@ -243,11 +234,14 @@ export default function App() {
 
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
+  const [showUserSheet, setShowUserSheet] = useState(false);
+
   const handleTabPress = (t: BottomTab) => {
     if (t === 'home') navigateToHome();
     else if (t === 'words') navigateToReview();
     else if (t === 'journey') navigateToJourney();
     else if (t === 'rankings') navigateToLeaderboard();
+    else if (t === 'profile') setShowUserSheet(true);
   };
 
   const handleBatchBuilt = (ids: number[], title: string) => {
@@ -432,11 +426,29 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} />
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} onNavigateToProfile={() => setShowUserSheet(true)} />
         )
       ) : (
         <LoginScreen onLogin={handleLogin} />
       )}
+
+      {/* User profile sheet — rendered at root so it floats above any screen */}
+      <UserMenuSheet
+        visible={showUserSheet}
+        onClose={() => setShowUserSheet(false)}
+        user={user}
+        targetLanguage={targetLanguage}
+        setTargetLanguage={setTargetLanguage}
+        onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
+        onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
+        onNavigateToLists={() => { setShowUserSheet(false); navigateToNotebook(); }}
+        onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
+        onLogout={() => { setShowUserSheet(false); logout(); }}
+        isAdmin={!!user?.is_admin}
+      />
+
+      {/* First-launch splash — absolute over everything, auto-dismisses */}
+      <SplashIntro />
     </SafeAreaProvider>
   );
 }

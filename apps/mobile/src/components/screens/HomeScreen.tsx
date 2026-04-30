@@ -44,6 +44,7 @@ interface Props {
   onNavigateToLeaderboard: () => void;
   onNavigateToVocabulary: () => void;
   onNavigateToBatchJourney?: () => void;
+  onNavigateToProfile?: () => void;
 }
 
 export const HomeScreen = ({
@@ -63,6 +64,7 @@ export const HomeScreen = ({
   onNavigateToLeaderboard,
   onNavigateToVocabulary,
   onNavigateToBatchJourney,
+  onNavigateToProfile,
 }: Props) => {
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
   const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
@@ -86,8 +88,6 @@ export const HomeScreen = ({
   const [selectedGenre, setSelectedGenre] = useState('');
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
@@ -222,120 +222,6 @@ export const HomeScreen = ({
             Viewing as: {adminViewMode === 'free' ? 'Free user' : 'Premium user'} · tap to change
           </Text>
         </TouchableOpacity>
-      )}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>WordWise</Text>
-
-        <View style={styles.headerRight}>
-          {user?.is_admin && (
-            <TouchableOpacity
-              style={styles.adminButton}
-              onPress={onNavigateToAdmin}
-            >
-              <Text style={styles.adminButtonText}>⚙</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.languageButton}
-            onPress={() => setShowLanguageMenu(!showLanguageMenu)}
-          >
-            <Text style={styles.languageButtonText}>{currentLang.code}</Text>
-            <Text style={styles.languageDropdownIcon}>▼</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={() => setShowUserMenu(!showUserMenu)}
-          >
-            {user?.profile_picture_url ? (
-              <Image
-                source={{ uri: user.profile_picture_url }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitial}>
-                  {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {showLanguageMenu && (
-        <View style={styles.dropdownMenu}>
-          <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-            {AVAILABLE_LANGUAGES.map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                style={[
-                  styles.dropdownItem,
-                  lang.code === targetLanguage && styles.dropdownItemActive
-                ]}
-                onPress={() => {
-                  setTargetLanguage(lang.code);
-                  setShowLanguageMenu(false);
-                }}
-              >
-                <Text style={styles.dropdownItemCode}>{lang.code}</Text>
-                <Text style={styles.dropdownItemText}>{lang.nativeName}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {showUserMenu && (
-        <View style={[styles.dropdownMenu, styles.userDropdownMenu]}>
-          <View style={styles.dropdownUserInfo}>
-            <Text style={styles.dropdownUserName}>{user?.username || 'User'}</Text>
-            <Text style={styles.dropdownUserEmail}>{user?.email}</Text>
-          </View>
-          <View style={styles.dropdownDivider} />
-          <TouchableOpacity
-            style={styles.dropdownItem}
-            onPress={() => {
-              setShowUserMenu(false);
-              onNavigateToSettings();
-            }}
-          >
-            <Text style={styles.dropdownItemIcon}>⚙️</Text>
-            <Text style={styles.dropdownItemText}>Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dropdownItem}
-            onPress={() => {
-              setShowUserMenu(false);
-              onNavigateToLists();
-            }}
-          >
-            <Text style={styles.dropdownItemIcon}>📚</Text>
-            <Text style={styles.dropdownItemText}>My Lists</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dropdownItem}
-            onPress={() => {
-              setShowUserMenu(false);
-              onNavigateToVocabulary();
-            }}
-          >
-            <Text style={styles.dropdownItemIcon}>📖</Text>
-            <Text style={styles.dropdownItemText}>Vocabulary</Text>
-          </TouchableOpacity>
-          <View style={styles.dropdownDivider} />
-          <TouchableOpacity
-            style={styles.dropdownItem}
-            onPress={() => {
-              setShowUserMenu(false);
-              onLogout();
-            }}
-          >
-            <Text style={styles.dropdownItemIcon}>🚪</Text>
-            <Text style={[styles.dropdownItemText, { color: colors.error }]}>Logout</Text>
-          </TouchableOpacity>
-        </View>
       )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -654,7 +540,7 @@ export const HomeScreen = ({
           if (t === 'words') onNavigateToNotebook();
           else if (t === 'rankings') onNavigateToLeaderboard();
           else if (t === 'journey') onNavigateToBatchJourney?.();
-          // 'home' is already current, no-op
+          else if (t === 'profile') onNavigateToProfile?.();
         }}
       />
     </SafeAreaView>
