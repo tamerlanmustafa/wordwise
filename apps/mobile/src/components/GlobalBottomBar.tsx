@@ -26,7 +26,7 @@ export function GlobalBottomBar({ active, onTabPress }: Props) {
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom) }]}>
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
-      <TabBtn icon="library" label="My Words" isActive={active === 'words'} onPress={() => onTabPress('words')} />
+      <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} />
       <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />
       <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} />
       <TabBtn icon="person-circle" label="Profile" isActive={active === 'profile'} onPress={() => onTabPress('profile')} />

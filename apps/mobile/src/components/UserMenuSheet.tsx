@@ -30,6 +30,8 @@ interface Props {
   onNavigateToAdmin: () => void;
   onNavigateToLists: () => void;
   onNavigateToVocabulary: () => void;
+  onNavigateToStats: () => void;
+  onNavigateToAchievements: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
 }
@@ -44,6 +46,8 @@ export function UserMenuSheet({
   onNavigateToAdmin,
   onNavigateToLists,
   onNavigateToVocabulary,
+  onNavigateToStats,
+  onNavigateToAchievements,
   onLogout,
   isAdmin,
 }: Props) {
@@ -127,9 +131,11 @@ export function UserMenuSheet({
 
           {/* Navigation items */}
           {[
-            { icon: '⚙️', label: 'Settings', action: wrap(onNavigateToSettings) },
+            { icon: '📊', label: 'My Progress', action: wrap(onNavigateToStats) },
+            { icon: '🏅', label: 'Badges', action: wrap(onNavigateToAchievements) },
             { icon: '📚', label: 'My Lists', action: wrap(onNavigateToLists) },
             { icon: '📖', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
+            { icon: '⚙️', label: 'Settings', action: wrap(onNavigateToSettings) },
             ...(isAdmin
               ? [{ icon: '🛠', label: 'Admin Panel', action: wrap(onNavigateToAdmin) }]
               : []),

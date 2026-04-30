@@ -25,7 +25,7 @@ import {
 import { useEntitlementsStore, useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
-import { GENRE_OPTIONS, LEVEL_OPTIONS } from '../home/filterOptions';
+import { LEVEL_OPTIONS } from '../home/filterOptions';
 
 interface Props {
   onLogout: () => void;
@@ -85,8 +85,6 @@ export const HomeScreen = ({
   const [levelSortAsc, setLevelSortAsc] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
   const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
-  const [selectedGenre, setSelectedGenre] = useState('');
-  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
@@ -116,10 +114,9 @@ export const HomeScreen = ({
     srsApi.todaysWord().then(setTodaysWord).catch(() => {});
   }, []);
 
-  const fetchLevelMovies = async (level: string, genre: string = '') => {
+  const fetchLevelMovies = async (level: string) => {
     try {
-      const genreParam = genre ? `&genre=${encodeURIComponent(genre)}` : '';
-      const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=15${genreParam}`);
+      const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=15`);
       if (levelRes.ok) {
         const levelData = await levelRes.json();
         const raw = (levelData.movies || []).map((m: any) => ({
@@ -152,7 +149,7 @@ export const HomeScreen = ({
         const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
         const trendingData = await trendingRes.json();
         setTrendingMovies(trendingData.results?.slice(0, 15) || []);
-        await fetchLevelMovies(selectedLevel, selectedGenre);
+        await fetchLevelMovies(selectedLevel);
       } catch (error) {
         console.error('Failed to fetch movies:', error);
       } finally {
@@ -212,17 +209,6 @@ export const HomeScreen = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {showViewAsBadge && (
-        <TouchableOpacity
-          style={styles.viewAsBadge}
-          onPress={onNavigateToAdmin}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.viewAsBadgeText}>
-            Viewing as: {adminViewMode === 'free' ? 'Free user' : 'Premium user'} · tap to change
-          </Text>
-        </TouchableOpacity>
-      )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
 
@@ -297,20 +283,6 @@ export const HomeScreen = ({
           </View>
         )}
 
-        <View style={styles.homeNavToggleWrapper}>
-          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToNotebook} activeOpacity={0.7}>
-            <Text style={styles.homeNavToggleText}>My Words</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToStats} activeOpacity={0.7}>
-            <Text style={styles.homeNavToggleText}>My Progress</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToAchievements} activeOpacity={0.7}>
-            <Text style={styles.homeNavToggleText}>Badges</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.homeNavToggleBtn} onPress={onNavigateToLeaderboard} activeOpacity={0.7}>
-            <Text style={styles.homeNavToggleText}>Rankings</Text>
-          </TouchableOpacity>
-        </View>
 
         <View style={{ zIndex: 50, overflow: 'visible' }}>
           <View style={styles.homeTabToggleWrapper}>
@@ -319,12 +291,10 @@ export const HomeScreen = ({
               onPress={() => {
                 if (homeTab === 'level') {
                   setLevelDropdownOpen((v) => !v);
-                  setGenreDropdownOpen(false);
                 } else {
                   setTabSwitching(true);
                   setHomeTab('level');
                   setLevelDropdownOpen(false);
-                  setGenreDropdownOpen(false);
                   setTimeout(() => setTabSwitching(false), 400);
                 }
               }}
@@ -337,22 +307,11 @@ export const HomeScreen = ({
                 {homeTab === 'level' ? ` ${levelDropdownOpen ? '▲' : '▼'}` : ''}
               </Text>
             </TouchableOpacity>
-            {/* "Journey" replaces the old Trending Now tab. Trending state
-                 (trendingMovies, SnapPager render branch) is left intact in
-                 case we want to reintroduce the trending view later. */}
-            <TouchableOpacity
-              style={styles.homeTabToggleBtn}
-              onPress={() => {
-                setLevelDropdownOpen(false);
-                setGenreDropdownOpen(false);
-                onNavigateToBatchJourney?.();
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.homeTabToggleText}>
-                🎮 Journey
-              </Text>
-            </TouchableOpacity>
+            {/* Journey tab — disabled until feature is ready. */}
+            <View style={[styles.homeTabToggleBtn, { opacity: 0.4 }]}>
+              <Text style={styles.homeTabToggleText}>🎮 Journey</Text>
+              <Text style={{ fontSize: 9, color: '#A0A0B0', fontWeight: '700', marginTop: 1 }}>Soon</Text>
+            </View>
           </View>
 
           {levelDropdownOpen && (
@@ -366,7 +325,7 @@ export const HomeScreen = ({
                     if (opt.value !== selectedLevel) {
                       setSelectedLevel(opt.value);
                       setTabSwitching(true);
-                      await fetchLevelMovies(opt.value, selectedGenre);
+                      await fetchLevelMovies(opt.value);
                       setTabSwitching(false);
                     }
                   }}
@@ -379,48 +338,7 @@ export const HomeScreen = ({
             </View>
           )}
 
-          {genreDropdownOpen && (
-            <View style={[styles.levelPickerMenu, { right: 16, left: undefined }]}>
-              {GENRE_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.levelPickerItem, opt.value === selectedGenre && styles.levelPickerItemActive]}
-                  onPress={async () => {
-                    setGenreDropdownOpen(false);
-                    if (opt.value !== selectedGenre) {
-                      setSelectedGenre(opt.value);
-                      setTabSwitching(true);
-                      await fetchLevelMovies(selectedLevel, opt.value);
-                      setTabSwitching(false);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
-                  <Text style={[styles.levelPickerText, opt.value === selectedGenre && styles.levelPickerTextActive]}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
         </View>
-
-        {homeTab === 'level' && (
-          <TouchableOpacity
-            style={styles.genreFilterBtn}
-            onPress={() => {
-              setGenreDropdownOpen((v) => !v);
-              setLevelDropdownOpen(false);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.genreFilterText}>
-              {selectedGenre
-                ? `${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.icon || ''} ${GENRE_OPTIONS.find((g) => g.value === selectedGenre)?.label || selectedGenre}`
-                : '🎬 All Genres'}
-              {' '}{genreDropdownOpen ? '▲' : '▼'}
-            </Text>
-          </TouchableOpacity>
-        )}
 
         {homeTab === 'level' && (
           <View style={styles.levelSortRow}>
@@ -537,7 +455,7 @@ export const HomeScreen = ({
       <GlobalBottomBar
         active="home"
         onTabPress={(t) => {
-          if (t === 'words') onNavigateToNotebook();
+          if (t === 'words') onNavigateToLists();
           else if (t === 'rankings') onNavigateToLeaderboard();
           else if (t === 'journey') onNavigateToBatchJourney?.();
           else if (t === 'profile') onNavigateToProfile?.();

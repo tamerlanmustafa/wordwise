@@ -238,7 +238,7 @@ export default function App() {
 
   const handleTabPress = (t: BottomTab) => {
     if (t === 'home') navigateToHome();
-    else if (t === 'words') navigateToReview();
+    else if (t === 'words') navigateToLists();
     else if (t === 'journey') navigateToJourney();
     else if (t === 'rankings') navigateToLeaderboard();
     else if (t === 'profile') setShowUserSheet(true);
@@ -419,7 +419,7 @@ export default function App() {
             onBack={navigateToHome}
             targetLanguage={targetLanguage}
             onNavigateHome={navigateToHome}
-            onNavigateWords={navigateToReview}
+            onNavigateWords={navigateToLists}
             onNavigateJourney={navigateToJourney}
             onNavigateRankings={navigateToLeaderboard}
           />
@@ -443,6 +443,8 @@ export default function App() {
         onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
         onNavigateToLists={() => { setShowUserSheet(false); navigateToNotebook(); }}
         onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
+        onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
+        onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
         onLogout={() => { setShowUserSheet(false); logout(); }}
         isAdmin={!!user?.is_admin}
       />
