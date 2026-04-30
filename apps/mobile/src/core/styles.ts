@@ -1023,32 +1023,6 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     paddingVertical: 10,
   },
-  // Watch Later toggle — sits in the movie info bar next to chips.
-  watchLaterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  watchLaterBtnActive: {
-    backgroundColor: colors.primary,
-  },
-  watchLaterBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  watchLaterBtnTextActive: {
-    color: '#FFFFFF',
-  },
-
   // Inline For You / All Levels segmented control (inside movie detail
   // word list, not the global bottom nav).
   wordsViewSegmented: {

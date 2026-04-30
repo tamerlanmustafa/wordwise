@@ -54,6 +54,12 @@ class StartBatchSessionRequest(BaseModel):
     kind: str = Field("batch", pattern=r"^(unit|pre_movie|batch)$")
 
 
+class StartJourneySessionRequest(BaseModel):
+    level: str = Field(..., pattern=r"^(A1|A2|B1|B2|C1|C2)$")
+    tile_index: int = Field(..., ge=0)
+    words_per_tile: int = Field(5, ge=1, le=20)
+
+
 class CardPayload(BaseModel):
     word: str
     card_type: str  # "type" | "self_rate"
@@ -682,3 +688,88 @@ async def get_my_rank(
         },
         "neighbors": neighbors,
     }
+
+
+# --- Journey (level-global, frequency-sorted) ---------------------------------
+
+async def _get_journey_words_at_level(
+    db: Prisma, level: str, offset: int, limit: int
+) -> List[str]:
+    """Return `limit` unique words at `level`, sorted easiest-first by
+    global frequency rank (lower rank = more common in the language =
+    easier to learn). Words with no rank data go to the end.
+
+    Deduplication is done across all movies: the same word can be
+    classified in many scripts, so we pick the single occurrence with
+    the best (lowest) frequencyRank and sort by that.
+    """
+    rows = await db.query_raw(
+        """
+        SELECT word, best_rank
+        FROM (
+            SELECT LOWER(word) AS word,
+                   MIN(frequency_rank) AS best_rank
+            FROM word_classifications
+            WHERE cefr_level::text = $1
+              AND word IS NOT NULL
+              AND TRIM(word) <> ''
+            GROUP BY LOWER(word)
+        ) sub
+        ORDER BY best_rank ASC NULLS LAST
+        OFFSET $2 LIMIT $3
+        """,
+        level, offset, limit,
+    )
+    hidden_rows = await db.hiddenword.find_many()
+    hidden = {h.word.lower() for h in hidden_rows}
+    return [r["word"] for r in rows if r["word"].lower() not in hidden]
+
+
+@router.post("/journey/sessions", response_model=StartSessionResponse)
+async def start_journey_session(
+    body: StartJourneySessionRequest,
+    current_user = Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """Start a quiz session for one journey tile.
+
+    Words are drawn from a global, cross-movie frequency-ranked list at
+    the requested CEFR level. Tile 0 gets the 5 most common words at
+    that level, tile 1 the next 5, and so on — so the user always
+    progresses from easier to harder vocabulary as they climb the path.
+    """
+    offset = body.tile_index * body.words_per_tile
+    words = await _get_journey_words_at_level(
+        db, body.level, offset, body.words_per_tile
+    )
+
+    if not words:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No words available at level {body.level} for tile "
+                f"{body.tile_index}. Either the level has fewer than "
+                f"{offset + body.words_per_tile} classified words, or "
+                f"none have been classified yet."
+            ),
+        )
+
+    target_lang = (
+        current_user.nativeLanguage
+        or current_user.learningLanguage
+        or "es"
+    ).lower()
+    translations = await _translate_words(db, words, target_lang, current_user.id)
+    cards = _build_cards(words, [], translations)
+
+    session = await db.quizsession.create(data={
+        "userId": current_user.id,
+        "movieId": None,
+        "cefrLevel": body.level,
+        "kind": "journey",
+    })
+
+    return StartSessionResponse(
+        session_id=session.id,
+        cards=[CardPayload(**c.__dict__) for c in cards],
+    )

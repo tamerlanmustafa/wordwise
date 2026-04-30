@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar, Alert, Platform, UIManager } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
-import { useWatchLaterStore } from '../stores/watchLaterStore';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
@@ -78,7 +77,6 @@ export default function App() {
     // Hydrate the admin preview toggle from AsyncStorage so a refresh
     // doesn't reset an admin's "viewing as free" selection.
     useEntitlementsStore.getState().hydrate();
-    useWatchLaterStore.getState().hydrate();
     // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
     // registerForPushNotifications is a no-op on simulator.
     registerForPushNotifications().then(() => {
@@ -257,6 +255,18 @@ export default function App() {
     setCurrentScreen('quizBatchJourney');
   };
 
+  // Journey tile progress — persisted here so round-tripping through the
+  // quiz lesson (unmounts JourneyScreen) doesn't reset the count.
+  const [journeyCompletedCount, setJourneyCompletedCount] = useState(0);
+  // Which tile index was active when the quiz started; incremented on return.
+  const journeyTileInProgressRef = useRef<number | null>(null);
+
+  const handleJourneySessionStart = (session: QuizStartSessionResponse, level: string, tileIndex: number) => {
+    journeyTileInProgressRef.current = tileIndex;
+    setQuizSession({ session, level });
+    setCurrentScreen('quizLesson');
+  };
+
   const handleStartPreMovieQuiz = async (internalMovieId: number) => {
     if (!selectedMovie) return;
     setResolvedMovieId(internalMovieId);
@@ -290,8 +300,13 @@ export default function App() {
   const handleQuizResultDone = () => {
     setQuizSession(null);
     setQuizResult(null);
-    // Prefer returning to a batch journey if one is in context; else the
-    // single-movie journey; else home.
+    // Journey tile: mark it completed and return to the journey screen.
+    if (journeyTileInProgressRef.current !== null) {
+      setJourneyCompletedCount((n) => Math.max(n, journeyTileInProgressRef.current! + 1));
+      journeyTileInProgressRef.current = null;
+      setCurrentScreen('journey');
+      return;
+    }
     if (batch) setCurrentScreen('quizBatchJourney');
     else setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
   };
@@ -382,14 +397,10 @@ export default function App() {
         ) : currentScreen === 'journey' ? (
           <JourneyScreen
             onTabPress={handleTabPress}
-            onMoviePress={(mid) => {
-              // Tapping a section header opens the underlying movie.
-              // We don't have the full MovieData in the store, so we
-              // fall back to clearing and letting home re-fetch. For
-              // now just go home.
-              void mid;
-              navigateToHome();
-            }}
+            completedCount={journeyCompletedCount}
+            onStartSession={(session, level, tileIndex) =>
+              handleJourneySessionStart(session, level, tileIndex)
+            }
           />
         ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
           <QuizJourneyScreen

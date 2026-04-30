@@ -276,9 +276,6 @@ export function QuizLessonScreen({
             <Text style={styles.prompt}>Do you know this word?</Text>
             <View style={[styles.wordCard, { borderColor: color }]}>
               <Text style={styles.wordText}>{card.word}</Text>
-              {card.translation && (
-                <Text style={styles.translationSmall}>{card.translation}</Text>
-              )}
             </View>
 
             <View style={styles.selfRateCol}>

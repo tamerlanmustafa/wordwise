@@ -3,7 +3,8 @@
  */
 
 import React, { useRef } from 'react';
-import { Pressable, StyleSheet, View, Animated } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { cefrColors } from '../../theme/palette';
 
 export type NodeState = 'locked' | 'active' | 'inactive' | 'completed';
@@ -12,6 +13,8 @@ export type NodeLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 export interface JourneyNodeProps {
   level: NodeLevel;
   state: NodeState;
+  /** Number or text shown centered on the top face. Ignored when locked. */
+  label?: string | number;
   onPress?: () => void;
 }
 
@@ -82,14 +85,16 @@ function desaturate(hex: string, f: number): string {
   );
 }
 
-export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
+export function JourneyNode({ level, state, label, onPress }: JourneyNodeProps) {
   const raw = cefrColors[level] || '#7C5CBF';
-  const baseColor = state === 'locked' ? desaturate(raw, 0.55) : raw;
+  const baseColor = state === 'locked' ? desaturate(raw, 0.7) : raw;
   const skirtColor = darken(baseColor, 0.25);
+  const isLocked = state === 'locked';
 
   const pressAnim = useRef(new Animated.Value(0)).current;
 
   const pressIn = () => {
+    if (isLocked) return;
     Animated.spring(pressAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -99,6 +104,7 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
   };
 
   const pressOut = () => {
+    if (isLocked) return;
     Animated.spring(pressAnim, {
       toValue: 0,
       useNativeDriver: true,
@@ -113,7 +119,7 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLocked && styles.containerLocked]}>
       {/* Skirt */}
       <View
         style={[
@@ -123,17 +129,14 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
         ]}
       />
 
-      {/* Top face */}
+      {/* Top face + label — both translate together on press */}
       <Pressable
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
+        disabled={isLocked}
       >
-        <Animated.View
-          style={{
-            transform: [{ translateY }],
-          }}
-        >
+        <Animated.View style={{ transform: [{ translateY }] }}>
           <View
             style={[
               styles.diamond,
@@ -142,6 +145,23 @@ export function JourneyNode({ level, state, onPress }: JourneyNodeProps) {
               state === 'active' && styles.topActive,
             ]}
           />
+
+          {/* Locked tiles get a fake-blur dim overlay so they visibly
+              "recede." Real BlurView would need expo-blur (native
+              module + rebuild) — we can upgrade later. */}
+          {isLocked && (
+            <View style={[styles.diamond, styles.topPos, styles.lockedOverlay]} />
+          )}
+
+          {/* Content overlay — NOT rotated (sits above the diamond's
+              transform tree), so numbers/icons read upright. */}
+          <View style={styles.contentOverlay} pointerEvents="none">
+            {isLocked ? (
+              <Ionicons name="lock-closed" size={20} color="rgba(255,255,255,0.8)" />
+            ) : label != null ? (
+              <Text style={styles.labelText}>{String(label)}</Text>
+            ) : null}
+          </View>
         </Animated.View>
       </Pressable>
     </View>
@@ -181,5 +201,36 @@ const styles = StyleSheet.create({
   topActive: {
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+
+  // Locked state — tile opacity drops so it visibly "recedes" into the
+  // distance. Fake blur via dim overlay until we wire expo-blur.
+  containerLocked: {
+    opacity: 0.4,
+  },
+  lockedOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  // Non-transformed overlay centered on the diamond's visible bounds —
+  // hosts the number label or lock icon upright regardless of the
+  // diamond's rotation/scale.
+  contentOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: VISIBLE_W,
+    height: VISIBLE_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });

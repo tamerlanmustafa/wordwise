@@ -1198,6 +1198,27 @@ export const quizApi = {
     return res.json();
   },
 
+  startJourneySession: async (
+    level: string,
+    tileIndex: number,
+    wordsPerTile = 5,
+  ): Promise<QuizStartSessionResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/quiz/journey/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level, tile_index: tileIndex, words_per_tile: wordsPerTile }),
+    });
+    if (!res.ok) {
+      let msg = 'Failed to start journey session';
+      try {
+        const body = await res.json();
+        if (body?.detail) msg = String(body.detail);
+      } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
   startPreMovieQuiz: async (movieId: number): Promise<QuizStartSessionResponse> => {
     const res = await authFetch(`${API_BASE_URL}/quiz/pre-movie/${movieId}`, {
       method: 'POST',

@@ -1,39 +1,29 @@
 /**
- * JourneyScreen — global practice engine.
+ * JourneyScreen — progressive daily-check-in zigzag.
  *
- * Auto-starts on tab entry. Reads the user's Watch Later list from
- * `watchLaterStore` and fetches each movie's vocabulary in parallel.
- * Produces one *section* per movie:
- *   - TMDB backdrop (35% opacity) + dark overlay for tile contrast
- *   - Movie title chip, top-left of the section
- *   - Readiness bar (known rare words / total rare words at ≥ userLevel)
- *   - Diamond-tile zigzag chain, one tile per ~10 smart-sampled words
- *
- * "Smart sampling" = top N highest-frequency words the user doesn't
- * already know, pulled from levels ≥ user's proficiency. A 1000-word
- * movie collapses to ~10 tiles of the most impactful words, not 100.
- *
- * Phase 2 will wire real `/movies/{id}/readiness` + server-side
- * SRS-aware sampling; for now everything is computed client-side.
+ * Scroll rules:
+ *  • On entry the user starts at tile 1. They can scroll up ~3 viewport
+ *    heights before hitting a soft lock.
+ *  • The top fade mask is INVISIBLE while they have room to scroll; it
+ *    ramps to fully-opaque only as they approach the locked boundary —
+ *    tiles recede behind it giving the "the path fades into the future"
+ *    illusion.
+ *  • When the user taps the active (bottommost) tile and "completes" it,
+ *    one tile's worth of scroll (STEP_Y) unlocks at the top, the tile is
+ *    marked completed, and the next becomes active.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react'; // useState used for startingTile
 import {
-  ActivityIndicator,
+  Animated,
   Dimensions,
-  Image,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/palette';
-import { wordwiseApi, type VocabularyResponse, type WordInfo } from '../services/api';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../stores/authStore';
-import { useWatchLaterStore, type WatchLaterMovie } from '../stores/watchLaterStore';
 import {
   JourneyNode,
   JOURNEY_NODE_WIDTH,
@@ -42,455 +32,219 @@ import {
   type NodeLevel,
 } from './journey/JourneyNode';
 import { GlobalBottomBar, type BottomTab } from './GlobalBottomBar';
+import { quizApi, type QuizStartSessionResponse } from '../services/api';
 
 export interface JourneyScreenProps {
   onTabPress: (tab: BottomTab) => void;
-  onMoviePress?: (movieId: number) => void;
+  onStartSession: (session: QuizStartSessionResponse, level: string, tileIndex: number) => void;
+  /** How many tiles the user has completed so far. Persisted in App.tsx
+      so returning from the quiz doesn't reset progress. */
+  completedCount: number;
 }
 
 const LEVELS: NodeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const WINDOW_WIDTH = Dimensions.get('window').width;
+const WINDOW_WIDTH  = Dimensions.get('window').width;
+const WINDOW_HEIGHT = Dimensions.get('window').height;
 
-// Tuning
-const WORDS_PER_TILE = 10;
-const MAX_WORDS_PER_MOVIE = 100; // smart sampling cap
+const TOTAL_TILES        = 120;
+const VISIBLE_AHEAD      = 11;   // active + 11 inactive = 12 unlocked
 const TILES_PER_DIAGONAL = 2;
-const STEP_X = 70;
-const STEP_Y = 75;
+const STEP_X             = 70;
+const STEP_Y             = 75;
+const BOTTOM_PAD         = 40;
+const TOP_PAD            = 30;
 
-interface MovieSection {
-  movie: WatchLaterMovie;
-  vocab: VocabularyResponse | null;
-  loading: boolean;
-  error: string | null;
-}
+// How many viewport-heights of scroll the user gets before hitting the
+// soft lock. Each completed tile adds STEP_Y more.
+const INITIAL_SCROLL_BUDGET = 3 * WINDOW_HEIGHT;
 
-export function JourneyScreen({ onTabPress, onMoviePress }: JourneyScreenProps) {
+// How far above the scroll limit the fade starts to ramp in.
+const FADE_RAMP = WINDOW_HEIGHT * 0.8;
+
+export function JourneyScreen({ onTabPress, onStartSession, completedCount }: JourneyScreenProps) {
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
-  const watchLater = useWatchLaterStore((s) => s.movies);
 
-  const [sections, setSections] = useState<MovieSection[]>([]);
+  const scrollY   = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
 
-  // Fetch vocabulary for each Watch Later movie in parallel.
-  useEffect(() => {
-    let cancelled = false;
-    setSections(
-      watchLater.map((m) => ({ movie: m, vocab: null, loading: true, error: null })),
-    );
-    if (watchLater.length === 0) return;
+  // Starting scroll offset — computed once during first layout so we can
+  // derive the scroll budget relative to "tile 1 at the bottom."
+  const startScrollRef = useRef(0);
 
-    watchLater.forEach((m, idx) => {
-      wordwiseApi
-        .getVocabularyFull(m.movieId)
-        .then((vocab) => {
-          if (cancelled) return;
-          setSections((prev) => {
-            const next = [...prev];
-            next[idx] = { movie: m, vocab, loading: false, error: null };
-            return next;
-          });
-        })
-        .catch((e) => {
-          if (cancelled) return;
-          console.warn('[Journey] vocab fetch failed for', m.title, e);
-          setSections((prev) => {
-            const next = [...prev];
-            next[idx] = { movie: m, vocab: null, loading: false, error: 'Could not load vocabulary' };
-            return next;
-          });
-        });
-    });
-    return () => { cancelled = true; };
-  }, [watchLater]);
-
-  // Build per-section tile layouts. Tiles are laid out continuously
-  // across sections so the zigzag chain is unbroken from bottom to top.
+  // ─── Build tile data ────────────────────────────────────────────────
   const layout = useMemo(() => {
-    const userIdx = Math.max(0, LEVELS.indexOf(userLevel));
-    const visibleLevels = new Set(LEVELS.slice(userIdx));
+    const userIdx       = Math.max(0, LEVELS.indexOf(userLevel));
+    const visibleLevels = LEVELS.slice(userIdx);
+    const tilesPerLevel = Math.ceil(TOTAL_TILES / visibleLevels.length);
 
     const centerX = (WINDOW_WIDTH - JOURNEY_NODE_WIDTH) / 2;
-    // Zigzag X offset for a given global tile index (tile 1 is centered).
     const offsetFor = (idx: number) => {
       const cycle = 2 * TILES_PER_DIAGONAL;
-      const p = idx % cycle;
+      const p     = idx % cycle;
       return (p <= TILES_PER_DIAGONAL ? p : cycle - p) * STEP_X;
     };
 
-    const built: Array<{
-      section: MovieSection;
-      tiles: Array<{ id: string; x: number; y: number; level: NodeLevel; state: NodeState }>;
-      headerY: number;
-      sectionHeight: number;
-      readiness: number;
-      totalRare: number;
-      knownRare: number;
-      words: WordInfo[];
+    const naturalHeight  = BOTTOM_PAD + TOTAL_TILES * STEP_Y + JOURNEY_NODE_HEIGHT + TOP_PAD;
+    const totalHeight    = Math.max(WINDOW_HEIGHT + 200, naturalHeight);
+    const yCursor        = totalHeight - BOTTOM_PAD;
+
+    const tiles: Array<{
+      id: string; x: number; y: number;
+      level: NodeLevel; label: number;
     }> = [];
 
-    const SECTION_HEADER_HEIGHT = 120;
-    const BOTTOM_PAD = 40;
-    const TOP_PAD = 60;
-
-    let globalTileIdx = 0;
-    let cumulativeHeight = BOTTOM_PAD;
-
-    // Build sections bottom-up (first movie at bottom). Each section's
-    // tiles stack above its header; the next section sits above.
-    for (const s of sections) {
-      const words = selectSmartSampledWords(s.vocab, visibleLevels, MAX_WORDS_PER_MOVIE);
-      const readinessResult = computeReadiness(s.vocab, visibleLevels, userIdx);
-      const tilesForSection = Math.max(1, Math.ceil(words.length / WORDS_PER_TILE));
-
-      // Assemble tile metadata; actual Y comes after we know totalHeight.
-      const tilesMeta: Array<{ level: NodeLevel; state: NodeState; wordsForTile: WordInfo[] }> = [];
-      for (let k = 0; k < tilesForSection; k++) {
-        const slice = words.slice(k * WORDS_PER_TILE, (k + 1) * WORDS_PER_TILE);
-        // The dominant level of the slice drives tile color.
-        const level = pickDominantLevel(slice) || userLevel;
-        // First tile of first section = active; rest = inactive for now.
-        const state: NodeState =
-          globalTileIdx + k === 0 ? 'active' : 'inactive';
-        tilesMeta.push({ level, state, wordsForTile: slice });
-      }
-
-      const sectionHeight = SECTION_HEADER_HEIGHT + tilesForSection * STEP_Y;
-      built.push({
-        section: s,
-        tiles: [],           // will fill in after we know totalHeight
-        headerY: 0,
-        sectionHeight,
-        readiness: readinessResult.score,
-        totalRare: readinessResult.totalRare,
-        knownRare: readinessResult.knownRare,
-        words,
-      });
-
-      // Track cumulative; we'll flip bottom-up at the end.
-      (built[built.length - 1] as any)._tileMeta = tilesMeta;
-      (built[built.length - 1] as any)._startIdx = globalTileIdx;
-      globalTileIdx += tilesForSection;
-      cumulativeHeight += sectionHeight;
-    }
-
-    const totalHeight = cumulativeHeight + TOP_PAD;
-
-    // Now fill in y positions (top of canvas = last section = hardest).
-    let yCursor = totalHeight - BOTTOM_PAD;
-    for (const b of built) {
-      const meta = (b as any)._tileMeta as Array<{ level: NodeLevel; state: NodeState; wordsForTile: WordInfo[] }>;
-      const startIdx = (b as any)._startIdx as number;
-
-      // Tile Y: from bottom of the section upward.
-      for (let k = 0; k < meta.length; k++) {
-        const globalIdx = startIdx + k;
-        const tileY = yCursor - JOURNEY_NODE_HEIGHT - k * STEP_Y;
-        const x = centerX - STEP_X + offsetFor(globalIdx);
-        b.tiles.push({
-          id: `${b.section.movie.movieId}-${k}`,
-          x,
-          y: tileY,
-          level: meta[k].level,
-          state: meta[k].state,
+    let globalIdx = 0;
+    for (const lv of visibleLevels) {
+      const count = Math.min(tilesPerLevel, TOTAL_TILES - globalIdx);
+      for (let k = 0; k < count; k++) {
+        const i = globalIdx + k;
+        tiles.push({
+          id: `t-${i}`,
+          x: centerX - STEP_X + offsetFor(i),
+          y: yCursor - JOURNEY_NODE_HEIGHT - i * STEP_Y,
+          level: lv,
+          label: i + 1,
         });
       }
-
-      const tilesStackHeight = meta.length * STEP_Y;
-      b.headerY = yCursor - tilesStackHeight - SECTION_HEADER_HEIGHT;
-      yCursor -= b.sectionHeight;
+      globalIdx += count;
+      if (globalIdx >= TOTAL_TILES) break;
     }
 
-    return { built, totalHeight };
-  }, [sections, userLevel]);
+    return { tiles, totalHeight };
+  }, [userLevel]);
 
-  // Auto-scroll to the bottom (user's current level / first tile) on mount.
-  const scrollRef = useRef<ScrollView>(null);
+  // ─── Per-tile state (re-derives when completedCount changes) ─────────
+  const tileState = useCallback(
+    (i: number): NodeState => {
+      if (i < completedCount)                          return 'completed';
+      if (i === completedCount)                        return 'active';
+      if (i <= completedCount + VISIBLE_AHEAD)         return 'inactive';
+      return 'locked';
+    },
+    [completedCount],
+  );
+
+  // ─── Restricted content height ───────────────────────────────────────
+  // The ScrollView only exposes as much height as the current scroll
+  // budget allows. When the user completes a tile the budget grows by
+  // STEP_Y and this value ticks up, extending the scrollable area.
+  const allowedScrollRange   = INITIAL_SCROLL_BUDGET + completedCount * STEP_Y;
+  const restrictedHeight     = startScrollRef.current > 0
+    ? Math.min(
+        layout.totalHeight,
+        startScrollRef.current + allowedScrollRange + WINDOW_HEIGHT,
+      )
+    : layout.totalHeight; // before first layout use full height (scroll handled in onContentSizeChange)
+
+  // ─── Initial scroll anchor ────────────────────────────────────────────
   const scrolledOnce = useRef(false);
-  const onContentSizeChange = (_w: number, _h: number) => {
-    if (scrolledOnce.current) return;
+  const onContentSizeChange = (_w: number, h: number) => {
+    if (scrolledOnce.current || h <= 0) return;
     scrolledOnce.current = true;
-    scrollRef.current?.scrollToEnd({ animated: false });
+    const tile1Y          = h - BOTTOM_PAD - JOURNEY_NODE_HEIGHT;
+    const desiredViewportY = WINDOW_HEIGHT - 80 - JOURNEY_NODE_HEIGHT - 24;
+    const startOffset      = Math.max(0, tile1Y - desiredViewportY);
+    startScrollRef.current = startOffset;
+    scrollRef.current?.scrollTo({ y: startOffset, animated: false });
   };
 
-  const allLoading = sections.length > 0 && sections.every((s) => s.loading);
-  const isEmpty = watchLater.length === 0;
+  // ─── Fade mask opacity ────────────────────────────────────────────────
+  // 0 while user has room to scroll; ramps to 1 only as they approach the
+  // soft lock ceiling (the locked tiles are behind the fade, giving the
+  // "path fades into the future" effect).
+  const scrollLimit  = startScrollRef.current + allowedScrollRange;
+  const fadeStart    = Math.max(0, scrollLimit - FADE_RAMP);
+  const fadeMaskOpacity = scrollY.interpolate({
+    inputRange:  [fadeStart, scrollLimit],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
+  // ─── Tile press: start quiz for the active tile ──────────────────────
+  // Only the active tile (at completedCount) is tappable. Words for
+  // tile i are the 5 words at rank offset i*5 within the user's level —
+  // tile 0 = 5 easiest, tile 1 = next 5 easiest, etc.
+  const [startingTile, setStartingTile] = useState<number | null>(null);
+
+  const handleTilePress = useCallback(async (i: number) => {
+    if (i !== completedCount || startingTile !== null) return;
+    setStartingTile(i);
+    try {
+      const session = await quizApi.startJourneySession(userLevel, i, 5);
+      onStartSession(session, userLevel, i);
+    } catch (e) {
+      console.warn('[Journey] start session failed:', e);
+    } finally {
+      setStartingTile(null);
+    }
+  }, [completedCount, startingTile, userLevel, onStartSession]);
+
+  // ─────────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      {isEmpty ? (
-        <JourneyEmptyState />
-      ) : allLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.centerHint}>Loading your journey…</Text>
-        </View>
-      ) : (
-        <ScrollView
-          ref={scrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ height: layout.totalHeight }}
-          onContentSizeChange={onContentSizeChange}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Backdrops + headers per section */}
-          {layout.built.map((b) => (
-            <JourneySectionHeader
-              key={`hdr-${b.section.movie.movieId}`}
-              section={b.section}
-              readiness={b.readiness}
-              knownRare={b.knownRare}
-              totalRare={b.totalRare}
-              headerY={b.headerY}
-              sectionHeight={b.sectionHeight}
-              onMoviePress={onMoviePress}
-            />
-          ))}
+    <SafeAreaView style={styles.root} edges={[]}>
+      <Animated.ScrollView
+        ref={scrollRef as any}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ height: restrictedHeight }}
+        onContentSizeChange={onContentSizeChange}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+      >
+        {layout.tiles.map((t, i) => {
+          const state = startingTile === i ? 'active' : tileState(i);
+          return (
+            <View
+              key={t.id}
+              style={[styles.tileWrapper, { left: t.x, top: t.y }]}
+            >
+              <JourneyNode
+                level={t.level}
+                state={state}
+                label={startingTile === i ? '…' : t.label}
+                onPress={() => handleTilePress(i)}
+              />
+            </View>
+          );
+        })}
+      </Animated.ScrollView>
 
-          {/* Tiles (rendered after so they sit on top of the backdrops) */}
-          {layout.built.flatMap((b) =>
-            b.tiles.map((t) => (
-              <View
-                key={t.id}
-                style={[styles.tileWrapper, { left: t.x, top: t.y }]}
-              >
-                <JourneyNode level={t.level} state={t.state} />
-              </View>
-            )),
-          )}
-        </ScrollView>
-      )}
+      {/* Top fade mask — transparent while the user has scroll room,
+          fades to opaque only as they approach the locked boundary so
+          the "tiles continuing beyond" illusion kicks in at the right
+          moment. Uses native driver via Animated.View opacity. */}
+      <Animated.View
+        style={[styles.topFadeMask, { opacity: fadeMaskOpacity }]}
+        pointerEvents="none"
+      >
+        <LinearGradient
+          colors={['rgba(46,59,44,1)', 'rgba(46,59,44,0.75)', 'rgba(46,59,44,0)']}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+      </Animated.View>
 
       <GlobalBottomBar active="journey" onTabPress={onTabPress} />
     </SafeAreaView>
   );
 }
 
-// ─── Smart sampling ────────────────────────────────────────────────────
-// Prefer higher-frequency words (lower frequency_rank) from levels at or
-// above the user's. The highest-frequency rare words unlock the biggest
-// comprehension gains per tile practiced.
-function selectSmartSampledWords(
-  vocab: VocabularyResponse | null,
-  visibleLevels: Set<NodeLevel>,
-  cap: number,
-): WordInfo[] {
-  if (!vocab) return [];
-  const pool: WordInfo[] = [];
-  for (const lv of Array.from(visibleLevels)) {
-    const list = vocab.top_words_by_level[lv] || [];
-    pool.push(...list);
-  }
-  // Sort by frequency rank ascending (lower rank = more frequent =
-  // higher practice value). Words with null rank go to the end.
-  pool.sort((a, b) => {
-    const ar = a.frequency_rank ?? Number.POSITIVE_INFINITY;
-    const br = b.frequency_rank ?? Number.POSITIVE_INFINITY;
-    return ar - br;
-  });
-  return pool.slice(0, cap);
-}
-
-// Dominant CEFR level of a tile's word slice — so the tile's color
-// matches whichever level most of its words come from.
-function pickDominantLevel(words: WordInfo[]): NodeLevel | null {
-  if (words.length === 0) return null;
-  // WordInfo doesn't expose `level` directly — we can't infer level from
-  // the word itself here without the source map. Fall back to the user's
-  // level until Phase 2 threads the level through with each word.
-  return null;
-}
-
-// Readiness = knownRare / totalRare where "rare" means at or above the
-// user's current level. Phase 1 knowsCount is a placeholder (uses
-// wordlist_coverage as a rough heuristic); Phase 2 will compute from
-// actual SRS / learned flags.
-function computeReadiness(
-  vocab: VocabularyResponse | null,
-  visibleLevels: Set<NodeLevel>,
-  _userIdx: number,
-): { score: number; totalRare: number; knownRare: number } {
-  if (!vocab) return { score: 0, totalRare: 0, knownRare: 0 };
-  let totalRare = 0;
-  for (const lv of Array.from(visibleLevels)) {
-    totalRare += vocab.level_distribution[lv as 'A1'] || 0;
-  }
-  // Phase-1 heuristic: use wordlist_coverage (0-1) as a stand-in for
-  // "how much of the movie you already know at this level."
-  const known = Math.round(totalRare * (vocab.wordlist_coverage || 0));
-  const score = totalRare > 0 ? Math.round((known / totalRare) * 100) : 0;
-  return { score, totalRare, knownRare: known };
-}
-
-// ─── Section header + backdrop ────────────────────────────────────────
-interface HeaderProps {
-  section: MovieSection;
-  readiness: number;
-  knownRare: number;
-  totalRare: number;
-  headerY: number;
-  sectionHeight: number;
-  onMoviePress?: (movieId: number) => void;
-}
-
-function JourneySectionHeader({
-  section,
-  readiness,
-  knownRare,
-  totalRare,
-  headerY,
-  sectionHeight,
-  onMoviePress,
-}: HeaderProps) {
-  const { movie } = section;
-  const backdropUri = movie.backdropPath
-    ? `https://image.tmdb.org/t/p/w780${movie.backdropPath}`
-    : movie.posterPath
-      ? `https://image.tmdb.org/t/p/w780${movie.posterPath}`
-      : null;
-
-  const readinessColor = readiness >= 75 ? '#4CAF9A' : readiness >= 50 ? '#F4A261' : '#D66A6A';
-  const readinessLabel = readiness >= 75 ? 'Ready' : readiness >= 50 ? 'Almost' : 'Tough';
-
-  return (
-    <View style={[styles.section, { top: headerY, height: sectionHeight }]}>
-      {/* Backdrop image — fills the section behind the tiles */}
-      {backdropUri && (
-        <Image
-          source={{ uri: backdropUri }}
-          style={styles.sectionBackdrop}
-          resizeMode="cover"
-        />
-      )}
-      {/* Dark overlay for tile readability */}
-      <View style={styles.sectionOverlay} />
-
-      {/* Header content */}
-      <TouchableOpacity
-        style={styles.sectionHeaderContent}
-        onPress={() => onMoviePress?.(movie.movieId)}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.sectionTitle} numberOfLines={1}>{movie.title}</Text>
-        <View style={styles.readinessRow}>
-          <View style={styles.readinessBarBg}>
-            <View
-              style={[
-                styles.readinessBarFill,
-                { width: `${readiness}%`, backgroundColor: readinessColor },
-              ]}
-            />
-          </View>
-          <Text style={[styles.readinessLabel, { color: readinessColor }]}>
-            {readinessLabel} · {readiness}%
-          </Text>
-        </View>
-        {totalRare > 0 && (
-          <Text style={styles.sectionMeta}>
-            {knownRare}/{totalRare} rare words known
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function JourneyEmptyState() {
-  return (
-    <View style={styles.centered}>
-      <Ionicons name="bookmark-outline" size={48} color={colors.textSecondary} />
-      <Text style={styles.emptyTitle}>Your journey is empty</Text>
-      <Text style={styles.emptyHint}>
-        Tap "Watch Later" on a movie to start prepping for it. Your
-        journey will combine those movies' vocabulary into one practice
-        flow.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#2E3B2C' },
-
-  section: {
+  topFadeMask: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
+    height: 100,
   },
-  sectionBackdrop: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    opacity: 0.35,
-  },
-  sectionOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  sectionHeaderContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  readinessRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 8,
-  },
-  readinessBarBg: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
-  },
-  readinessBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  readinessLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sectionMeta: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: 4,
-  },
-
   tileWrapper: {
     position: 'absolute',
     width: JOURNEY_NODE_WIDTH,
-  },
-
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  centerHint: {
-    marginTop: 12,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 12,
-  },
-  emptyHint: {
-    marginTop: 8,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    lineHeight: 20,
   },
 });

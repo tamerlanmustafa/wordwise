@@ -13,8 +13,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -37,7 +36,6 @@ import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { GlobalBottomBar } from '../GlobalBottomBar';
-import { useWatchLaterStore } from '../../stores/watchLaterStore';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -77,30 +75,12 @@ export const MovieDetailScreen = ({
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
-  const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
   const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
   const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
 
-  // Watch Later state — backed by Zustand + AsyncStorage. Phase-1 mock
-  // until the real backend endpoint lands. `inWatchLater` is derived so
-  // the button flips when the store changes.
-  const watchLaterMovies = useWatchLaterStore((s) => s.movies);
-  const toggleWatchLater = useWatchLaterStore((s) => s.toggle);
-  const inWatchLater = movieId != null && watchLaterMovies.some((m) => m.movieId === movieId);
-
-  const handleToggleWatchLater = () => {
-    if (movieId == null) return;
-    toggleWatchLater({
-      movieId,
-      tmdbId: movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : undefined),
-      title: movie.title,
-      posterPath: movie.poster_path,
-      backdropPath: (movie as any).backdrop_path || null,
-    });
-  };
   const [startingPreMovieQuiz, setStartingPreMovieQuiz] = useState(false);
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -620,22 +600,6 @@ export const MovieDetailScreen = ({
                 {difficulty.level} · {difficulty.score}%
               </Text>
             </View>
-          )}
-          {movieId != null && (
-            <TouchableOpacity
-              onPress={handleToggleWatchLater}
-              style={[styles.watchLaterBtn, inWatchLater && styles.watchLaterBtnActive]}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={inWatchLater ? 'bookmark' : 'bookmark-outline'}
-                size={14}
-                color={inWatchLater ? '#FFFFFF' : colors.primary}
-              />
-              <Text style={[styles.watchLaterBtnText, inWatchLater && styles.watchLaterBtnTextActive]}>
-                {inWatchLater ? 'In Watch Later' : 'Watch Later'}
-              </Text>
-            </TouchableOpacity>
           )}
         </View>
       </View>

@@ -27,7 +27,7 @@ export function GlobalBottomBar({ active, onTabPress }: Props) {
     <View style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom) }]}>
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
       <TabBtn icon="bookmark" label="My Words" isActive={active === 'words'} onPress={() => onTabPress('words')} />
-      <TabBtn icon="map" label="Journey" isActive={active === 'journey'} onPress={() => onTabPress('journey')} />
+      <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />
       <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} />
     </View>
   );
@@ -37,18 +37,25 @@ function TabBtn({
   icon,
   label,
   isActive,
+  disabled,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   isActive: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
-  const color = isActive ? colors.primary : colors.textSecondary;
+  const color = disabled ? '#C5C5D0' : isActive ? colors.primary : colors.textSecondary;
   return (
-    <TouchableOpacity style={styles.btn} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.btn, disabled && styles.btnDisabled]}
+      onPress={disabled ? undefined : onPress}
+      activeOpacity={disabled ? 1 : 0.7}
+    >
       <Ionicons name={icon} size={18} color={color} />
       <Text style={[styles.label, { color }]}>{label}</Text>
+      {disabled && <Text style={styles.comingSoon}>Soon</Text>}
     </TouchableOpacity>
   );
 }
@@ -62,6 +69,16 @@ const styles = StyleSheet.create({
     paddingTop: 7,
     paddingHorizontal: 16,
     gap: 6,
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  comingSoon: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#A0A0B0',
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   btn: {
     flex: 1,
