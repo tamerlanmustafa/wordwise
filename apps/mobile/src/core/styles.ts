@@ -914,6 +914,21 @@ export const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
+  photosBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+  },
+  photosBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text,
+  },
   overviewSection: {
     paddingHorizontal: 14,
     paddingTop: 6,

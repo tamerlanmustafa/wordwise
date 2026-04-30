@@ -165,6 +165,23 @@ export const tmdbApi = {
     if (!posterPath) return null;
     return `https://image.tmdb.org/t/p/${size}${posterPath}`;
   },
+
+  /** Returns all available images for a movie: backdrops, posters, logos. */
+  getMovieImages: async (tmdbId: number): Promise<{
+    backdrops: Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
+    posters:   Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
+    logos:     Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
+  }> => {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}/images?api_key=${TMDB_API_KEY}`
+    );
+    const data = await res.json();
+    return {
+      backdrops: data.backdrops || [],
+      posters:   data.posters   || [],
+      logos:     data.logos     || [],
+    };
+  },
 };
 
 // WordWise API

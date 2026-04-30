@@ -36,6 +36,7 @@ import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { GlobalBottomBar } from '../GlobalBottomBar';
+import { MoviePhotosModal } from '../MoviePhotosModal';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -97,6 +98,7 @@ export const MovieDetailScreen = ({
   const [accordionMode, setAccordionMode] = useState(true);
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const [posterZoomOpen, setPosterZoomOpen] = useState(false);
+  const [photosOpen, setPhotosOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
   const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -598,6 +600,15 @@ export const MovieDetailScreen = ({
               </Text>
             </View>
           )}
+          {authUser?.is_admin && (
+            <TouchableOpacity
+              onPress={() => setPhotosOpen(true)}
+              style={styles.photosBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.photosBtnText}>🖼 Photos</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       <View style={{ flex: 1 }}>
@@ -1010,6 +1021,13 @@ export const MovieDetailScreen = ({
           </View>
         </View>
       )}
+
+      <MoviePhotosModal
+        visible={photosOpen}
+        tmdbId={movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : null)}
+        movieTitle={movie.title}
+        onClose={() => setPhotosOpen(false)}
+      />
     </SafeAreaView>
   );
 };
