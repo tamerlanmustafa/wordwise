@@ -133,6 +133,7 @@ export const HomeScreen = ({
                 ...m,
                 overview: t.overview || m.description || '',
                 poster_path: t.poster_path || null,
+                backdrop_path: t.backdrop_path || null,
                 release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
               };
             } catch { return m; }
