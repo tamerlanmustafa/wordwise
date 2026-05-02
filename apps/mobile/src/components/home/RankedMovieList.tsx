@@ -24,13 +24,16 @@ import { TmdbPoster } from '../movies/TmdbPoster';
 import { scoreToCefr } from '../../utils/formatting';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
-const CARD_H      = 140;   // unchanged from original design
-const PEEK        = 20;    // px of next card visible below the active one
-const CONTAINER_H = CARD_H + PEEK;  // clipping container height
+const CARD_H        = 140;   // unchanged from original design
+const CARD_GAP      = 8;     // gap between cards
+const VISIBLE_CARDS = 3;
+const PEEK          = 20;    // px of the next card visible below the last full one
+const ITEM_H        = CARD_H + CARD_GAP;  // 148 — slot height including gap
+const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;  // 464
 
-// ── Scale / opacity for each card position ───────────────────────────────────
-// Active (at top): scale 1.0 / opacity 1.0
-// Peeking below:   scale 0.90 / opacity 0.7
+// ── Scale / opacity for cards below the fold ─────────────────────────────────
+// Cards 0-2 are always full size at rest.
+// Card 3 onwards starts at PEEK_SCALE and grows to 1.0 as user scrolls it in.
 const PEEK_SCALE   = 0.90;
 const PEEK_OPACITY = 0.70;
 
@@ -79,34 +82,26 @@ const StackCard = React.memo(({
   // scrollY = 0         → card 0 is active.  card 1 peeks (PEEK_SCALE)
   // scrollY = CARD_H    → card 1 is active.  card 2 peeks
   // scrollY = n*CARD_H  → card n is active
-  const activeAt = index * CARD_H;
+  // "foldsAt" = the scrollY at which this card becomes fully visible.
+  // Cards 0..(VISIBLE_CARDS-1) have foldsAt ≤ 0 → full size at rest.
+  // Card VISIBLE_CARDS has foldsAt = CARD_H → peek at rest, full after one scroll.
+  const foldsAt = (index - VISIBLE_CARDS + 1) * ITEM_H;
 
   const scale = scrollY.interpolate({
-    inputRange: [
-      activeAt - CARD_H,
-      activeAt,
-      activeAt + CARD_H * 0.5,
-    ],
+    inputRange: [foldsAt - ITEM_H, foldsAt, foldsAt + ITEM_H],
     outputRange: [PEEK_SCALE, 1.0, 1.0],
     extrapolate: 'clamp',
   });
 
   const opacity = scrollY.interpolate({
-    inputRange: [
-      activeAt - CARD_H,
-      activeAt,
-      activeAt + CARD_H * 0.5,
-    ],
-    outputRange: [PEEK_OPACITY, 1.0, 1.0],
+    inputRange: [foldsAt - ITEM_H, foldsAt],
+    outputRange: [PEEK_OPACITY, 1.0],
     extrapolate: 'clamp',
   });
 
-  // Compensate for the gap that scale creates inside the fixed-height
-  // cardSlot. When scale = PEEK_SCALE the card is (1-PEEK_SCALE)*CARD_H/2
-  // smaller on each side. Moving it up by that amount closes the white
-  // gap between consecutive cards.
+  // Close the gap that scale creates inside the fixed-height cardSlot.
   const translateY = scrollY.interpolate({
-    inputRange: [activeAt - CARD_H, activeAt],
+    inputRange: [foldsAt - ITEM_H, foldsAt],
     outputRange: [-(1 - PEEK_SCALE) * CARD_H / 2, 0],
     extrapolate: 'clamp',
   });
@@ -193,7 +188,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           // Snap: each swipe advances exactly one card.
-          snapToInterval={CARD_H}
+          snapToInterval={ITEM_H}
           snapToAlignment="start"
           decelerationRate="fast"
           // Allow scroll inside the parent HomeScreen ScrollView.
@@ -244,9 +239,10 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Each FlatList row occupies exactly CARD_H so snapping is predictable.
+  // Each row = card + gap below it.
   cardSlot: {
-    height: CARD_H,
+    height: ITEM_H,
+    paddingBottom: CARD_GAP,
   },
 
   // The animated wrapper: scale + opacity animate here.

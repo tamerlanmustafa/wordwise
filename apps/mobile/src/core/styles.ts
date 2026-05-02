@@ -651,6 +651,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 10,
+    marginBottom: 14,
     paddingHorizontal: 16,
   },
   levelSortChip: {
