@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../theme/tokens';
 import { GlobalBottomBar } from '../GlobalBottomBar';
-import { FloatingContinueButton } from '../FloatingContinueButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AVAILABLE_LANGUAGES } from '../../types';
 import { colors } from '../../theme/palette';
@@ -92,15 +91,27 @@ export const HomeScreen = ({
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [todaysWordSaved, setTodaysWordSaved] = useState(false);
-  const [lastOpenedMovie, setLastOpenedMovie] = useState<any | null>(null);
+  const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('last_opened_movie')
-      .then((raw) => {
-        if (!raw) return;
-        try { setLastOpenedMovie(JSON.parse(raw)); } catch {}
-      })
-      .catch(() => {});
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('recently_viewed_movies');
+        if (raw) {
+          setRecentlyViewed(JSON.parse(raw));
+          return;
+        }
+        // Migrate from old single-movie key
+        const lastRaw = await AsyncStorage.getItem('last_opened_movie');
+        if (lastRaw) {
+          const last = JSON.parse(lastRaw);
+          setRecentlyViewed([last]);
+          AsyncStorage.setItem('recently_viewed_movies', JSON.stringify([last])).catch(() => {});
+        }
+      } catch {}
+    })();
   }, []);
 
   useEffect(() => {
@@ -203,8 +214,13 @@ export const HomeScreen = ({
       vote_average: movie.vote_average,
       original_language: movie.original_language || 'en',
     };
-    setLastOpenedMovie(normalized);
     AsyncStorage.setItem('last_opened_movie', JSON.stringify(normalized)).catch(() => {});
+    setRecentlyViewed((prev) => {
+      const filtered = prev.filter((m) => String(m.id) !== String(normalized.id));
+      const updated = [normalized, ...filtered].slice(0, 8);
+      AsyncStorage.setItem('recently_viewed_movies', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     onMoviePress(normalized);
   };
 
@@ -223,6 +239,13 @@ export const HomeScreen = ({
               placeholderTextColor={colors.textSecondary}
               value={searchQuery}
               onChangeText={onSearchTextChange}
+              onFocus={() => {
+                if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+                setSearchFocused(true);
+              }}
+              onBlur={() => {
+                blurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
+              }}
               onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
               returnKeyType="search"
             />
@@ -268,6 +291,36 @@ export const HomeScreen = ({
                     <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+            {searchFocused && !searchQuery && recentlyViewed.length > 0 && (
+              <View style={styles.autocompleteDropdown}>
+                <Text style={styles.recentlyViewedLabel}>Recently Viewed</Text>
+                {recentlyViewed.slice(0, 5).map((movie: any) => (
+                  <TouchableOpacity
+                    key={movie.id}
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+                      setSearchFocused(false);
+                      handleMoviePress(movie);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {movie.poster_path ? (
+                      <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
+                        style={styles.searchResultPoster}
+                      />
+                    ) : (
+                      <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                    )}
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
+                      <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
@@ -437,13 +490,6 @@ export const HomeScreen = ({
 
         <View style={{ height: 16 }} />
       </ScrollView>
-
-      {lastOpenedMovie && (
-        <FloatingContinueButton
-          movie={lastOpenedMovie}
-          onPress={() => handleMoviePress(lastOpenedMovie)}
-        />
-      )}
 
     </SafeAreaView>
   );

@@ -429,6 +429,16 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
   },
+  recentlyViewedLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+    textTransform: 'uppercase',
+  },
   seeAllButton: {
     paddingVertical: 12,
     alignItems: 'center',
@@ -458,7 +468,8 @@ export const styles = StyleSheet.create({
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
