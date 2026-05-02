@@ -85,23 +85,38 @@ const StackCard = React.memo(({
   // "foldsAt" = the scrollY at which this card becomes fully visible.
   // Cards 0..(VISIBLE_CARDS-1) have foldsAt ≤ 0 → full size at rest.
   // Card VISIBLE_CARDS has foldsAt = CARD_H → peek at rest, full after one scroll.
-  const foldsAt = (index - VISIBLE_CARDS + 1) * ITEM_H;
+  // scrollY where this card finishes entering from below → full size.
+  const foldsIn  = (index - VISIBLE_CARDS + 1) * ITEM_H;
+  // scrollY where this card starts leaving out of the top → shrinks back.
+  const foldsOut = index * ITEM_H;
 
+  // Symmetric bell: small → full → full → small
   const scale = scrollY.interpolate({
-    inputRange: [foldsAt - ITEM_H, foldsAt, foldsAt + ITEM_H],
-    outputRange: [PEEK_SCALE, 1.0, 1.0],
+    inputRange: [
+      foldsIn  - ITEM_H,   // arriving from below  → peek scale
+      foldsIn,             // fully in window       → full scale
+      foldsOut,            // still at top          → full scale
+      foldsOut + ITEM_H,   // exiting out of top    → peek scale (mirror)
+    ],
+    outputRange: [PEEK_SCALE, 1.0, 1.0, PEEK_SCALE],
     extrapolate: 'clamp',
   });
 
   const opacity = scrollY.interpolate({
-    inputRange: [foldsAt - ITEM_H, foldsAt],
-    outputRange: [PEEK_OPACITY, 1.0],
+    inputRange: [
+      foldsIn  - ITEM_H,
+      foldsIn,
+      foldsOut,
+      foldsOut + ITEM_H,
+    ],
+    outputRange: [PEEK_OPACITY, 1.0, 1.0, PEEK_OPACITY],
     extrapolate: 'clamp',
   });
 
-  // Close the gap that scale creates inside the fixed-height cardSlot.
+  // Close the gap on entry. On exit the card is scrolling off-screen so
+  // gap closure isn't needed visually.
   const translateY = scrollY.interpolate({
-    inputRange: [foldsAt - ITEM_H, foldsAt],
+    inputRange: [foldsIn - ITEM_H, foldsIn],
     outputRange: [-(1 - PEEK_SCALE) * CARD_H / 2, 0],
     extrapolate: 'clamp',
   });
