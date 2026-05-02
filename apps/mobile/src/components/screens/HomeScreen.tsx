@@ -433,17 +433,7 @@ export const HomeScreen = ({
           </View>
         )}
 
-        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-          <TouchableOpacity
-            style={styles.browseAllButton}
-            onPress={() => onSearch('')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.browseAllText}>Browse All Movies →</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 24 }} />
+        <View style={{ height: 16 }} />
       </ScrollView>
 
       {lastOpenedMovie && (

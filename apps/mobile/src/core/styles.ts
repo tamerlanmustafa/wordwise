@@ -500,7 +500,7 @@ export const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 18,
