@@ -445,15 +445,6 @@ export const HomeScreen = ({
         />
       )}
 
-      <GlobalBottomBar
-        active="home"
-        onTabPress={(t) => {
-          if (t === 'words') onNavigateToLists();
-          else if (t === 'rankings') onNavigateToLeaderboard();
-          else if (t === 'journey') onNavigateToBatchJourney?.();
-          else if (t === 'profile') onNavigateToProfile?.();
-        }}
-      />
     </SafeAreaView>
   );
 };

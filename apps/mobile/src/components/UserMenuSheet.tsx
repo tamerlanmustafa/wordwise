@@ -1,7 +1,8 @@
 /**
- * UserMenuSheet — slides up from the bottom when the profile tab is pressed.
- * Contains everything that was previously split between the header's user
- * avatar menu, the language dropdown, and the admin gear icon.
+ * UserMenuSheet — slides up from the bottom, rendered as an absolute-position
+ * overlay (no Modal) so the GlobalBottomBar rendered after it in the tree
+ * stays fully interactive. The scrim and sheet both stop at `bottomOffset`
+ * so the bar is never covered.
  */
 
 import { useEffect, useRef } from 'react';
@@ -9,24 +10,18 @@ import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import {
   Animated,
   Image,
-  Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/palette';
-import { AVAILABLE_LANGUAGES } from '../types';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   user: any;
-  targetLanguage: string;
-  setTargetLanguage: (lang: string) => void;
   onNavigateToSettings: () => void;
   onNavigateToAdmin: () => void;
   onNavigateToLists: () => void;
@@ -35,14 +30,14 @@ interface Props {
   onNavigateToAchievements: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
+  /** Height of GlobalBottomBar — sheet and scrim stop above it. */
+  bottomOffset: number;
 }
 
 export function UserMenuSheet({
   visible,
   onClose,
   user,
-  targetLanguage,
-  setTargetLanguage,
   onNavigateToSettings,
   onNavigateToAdmin,
   onNavigateToLists,
@@ -51,13 +46,15 @@ export function UserMenuSheet({
   onNavigateToAchievements,
   onLogout,
   isAdmin,
+  bottomOffset,
 }: Props) {
-  const insets = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(400)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  const pref = useThemeStore((s) => s.preference);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
-      toValue: visible ? 0 : 400,
+      toValue: visible ? 0 : 600,
       useNativeDriver: true,
       bounciness: 0,
       speed: 18,
@@ -66,24 +63,38 @@ export function UserMenuSheet({
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
+  const navItems = [
+    { icon: '📊', label: 'My Progress', action: wrap(onNavigateToStats) },
+    { icon: '🏅', label: 'Badges', action: wrap(onNavigateToAchievements) },
+    { icon: '📚', label: 'My Lists', action: wrap(onNavigateToLists) },
+    { icon: '📖', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
+    { icon: '⚙️', label: 'Settings', action: wrap(onNavigateToSettings) },
+    ...(isAdmin ? [{ icon: '🛠', label: 'Admin Panel', action: wrap(onNavigateToAdmin) }] : []),
+  ];
+
+  const themeOpts: { key: ThemePreference; label: string; icon: string }[] = [
+    { key: 'light',  label: 'Light',  icon: '☀️' },
+    { key: 'system', label: 'Auto',   icon: '📱' },
+    { key: 'dark',   label: 'Dark',   icon: '🌙' },
+  ];
+
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-      {/* Scrim */}
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.scrim} />
-      </TouchableWithoutFeedback>
+    // Covers everything above the bar; pointer events pass through to bar below
+    <View
+      style={[StyleSheet.absoluteFillObject, { bottom: bottomOffset }]}
+      pointerEvents={visible ? 'box-none' : 'none'}
+    >
+      {/* Scrim — only present when open so it never blocks touches when closed */}
+      {visible && (
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.scrim} />
+        </TouchableWithoutFeedback>
+      )}
 
       {/* Sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: Math.max(insets.bottom, 16), transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        {/* Handle */}
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.handle} />
 
-        {/* User identity */}
         <View style={styles.identity}>
           {user?.profile_picture_url ? (
             <Image source={{ uri: user.profile_picture_url }} style={styles.avatar} />
@@ -102,100 +113,46 @@ export function UserMenuSheet({
 
         <View style={styles.divider} />
 
-        <ScrollView bounces={false}>
-          {/* Language selector */}
-          <Text style={styles.sectionLabel}>Translation language</Text>
-          <View style={styles.langRow}>
-            {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
+        {navItems.map(({ icon, label, action }) => (
+          <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.7}>
+            <Text style={styles.rowIcon}>{icon}</Text>
+            <Text style={styles.rowLabel}>{label}</Text>
+            <Text style={styles.rowArrow}>›</Text>
+          </TouchableOpacity>
+        ))}
+
+        <View style={styles.divider} />
+
+        <View style={styles.themeRow}>
+          <View style={styles.themeChips}>
+            {themeOpts.map((o) => (
               <TouchableOpacity
-                key={lang.code}
-                style={[
-                  styles.langChip,
-                  lang.code === targetLanguage && styles.langChipActive,
-                ]}
-                onPress={() => setTargetLanguage(lang.code)}
+                key={o.key}
+                style={[styles.themeChip, pref === o.key && styles.themeChipActive]}
+                onPress={() => useThemeStore.getState().setPreference(o.key)}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.langChipText,
-                    lang.code === targetLanguage && styles.langChipTextActive,
-                  ]}
-                >
-                  {lang.code}
+                <Text style={styles.themeChipIcon}>{o.icon}</Text>
+                <Text style={[styles.themeChipLabel, pref === o.key && styles.themeChipLabelActive]}>
+                  {o.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </View>
 
-          <View style={styles.divider} />
+        <View style={styles.divider} />
 
-          {/* Navigation items */}
-          {[
-            { icon: '📊', label: 'My Progress', action: wrap(onNavigateToStats) },
-            { icon: '🏅', label: 'Badges', action: wrap(onNavigateToAchievements) },
-            { icon: '📚', label: 'My Lists', action: wrap(onNavigateToLists) },
-            { icon: '📖', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
-            { icon: '⚙️', label: 'Settings', action: wrap(onNavigateToSettings) },
-            ...(isAdmin
-              ? [{ icon: '🛠', label: 'Admin Panel', action: wrap(onNavigateToAdmin) }]
-              : []),
-          ].map(({ icon, label, action }) => (
-            <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.7}>
-              <Text style={styles.rowIcon}>{icon}</Text>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
-
-          <View style={styles.divider} />
-
-          {/* ── Theme picker ── */}
-          {(() => {
-            const { preference, setPreference } = useThemeStore.getState();
-            // Re-render when preference changes by reading from store.
-            // eslint-disable-next-line react-hooks/rules-of-hooks
-            const pref = useThemeStore((s) => s.preference);
-            const opts: { key: ThemePreference; label: string; icon: string }[] = [
-              { key: 'light',  label: 'Light',  icon: '☀️' },
-              { key: 'system', label: 'Auto',   icon: '📱' },
-              { key: 'dark',   label: 'Dark',   icon: '🌙' },
-            ];
-            return (
-              <View style={styles.themeRow}>
-                <Text style={styles.sectionLabel}>THEME</Text>
-                <View style={styles.themeChips}>
-                  {opts.map((o) => (
-                    <TouchableOpacity
-                      key={o.key}
-                      style={[styles.themeChip, pref === o.key && styles.themeChipActive]}
-                      onPress={() => useThemeStore.getState().setPreference(o.key)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.themeChipIcon}>{o.icon}</Text>
-                      <Text style={[styles.themeChipLabel, pref === o.key && styles.themeChipLabelActive]}>
-                        {o.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            );
-          })()}
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => { onClose(); setTimeout(onLogout, 200); }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.rowIcon}>🚪</Text>
-            <Text style={[styles.rowLabel, { color: colors.error }]}>Logout</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => { onClose(); setTimeout(onLogout, 200); }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.rowIcon}>🚪</Text>
+          <Text style={[styles.rowLabel, { color: colors.error }]}>Logout</Text>
+        </TouchableOpacity>
       </Animated.View>
-    </Modal>
+    </View>
   );
 }
 
@@ -213,8 +170,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: '80%',
+    paddingTop: 10,
+    paddingBottom: 16,
   },
   handle: {
     width: 40,
@@ -222,97 +179,39 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.border,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: 16,
+    paddingBottom: 10,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  userEmail: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 8,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  langRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  langChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  langChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  langChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  langChipTextActive: {
-    color: '#FFFFFF',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  rowIcon: { fontSize: 18, width: 28, textAlign: 'center' },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: colors.text },
-  rowArrow: { fontSize: 18, color: colors.textSecondary },
-
-  themeRow: { paddingVertical: 10 },
-  themeChips: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  avatarInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
+  userName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  userEmail: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
+  rowIcon: { fontSize: 16, width: 26, textAlign: 'center' },
+  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.text },
+  rowArrow: { fontSize: 16, color: colors.textSecondary },
+  themeRow: { paddingVertical: 4 },
+  themeChips: { flexDirection: 'row', gap: 8 },
   themeChip: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'center',
+    paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -323,7 +222,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primary + '18',
   },
-  themeChipIcon: { fontSize: 18 },
-  themeChipLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  themeChipIcon: { fontSize: 14 },
+  themeChipLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   themeChipLabelActive: { color: colors.primary, fontWeight: '700' },
 });

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS } from '../../types';
+import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { colors } from '../../theme/palette';
 import { API_BASE_URL } from '../../services/api';
 import { scheduleDailyWordReminder, scheduleReviewReminder } from '../../services/notifications';
@@ -25,6 +25,8 @@ interface Props {
   onNavigateToFamilyPlan: () => void;
   onNavigateToPrivacy: () => void;
   onNavigateToTerms: () => void;
+  targetLanguage: string;
+  setTargetLanguage: (lang: string) => void;
 }
 
 export const SettingsScreen = ({
@@ -34,6 +36,8 @@ export const SettingsScreen = ({
   onNavigateToFamilyPlan,
   onNavigateToPrivacy,
   onNavigateToTerms,
+  targetLanguage,
+  setTargetLanguage,
 }: Props) => {
   const [username, setUsername] = useState(user?.username || '');
   const [nativeLanguage, setNativeLanguage] = useState(user?.native_language || 'en');
@@ -260,6 +264,28 @@ export const SettingsScreen = ({
           <Text style={settingsStyles.selectLabel}>Proficiency Level</Text>
           <Text style={settingsStyles.selectValue}>{getProfName(proficiencyLevel)} ▼</Text>
         </TouchableOpacity>
+
+        <View style={settingsStyles.divider} />
+
+        <Text style={settingsStyles.sectionTitle}>Translation Language</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              style={[
+                settingsStyles.selectButton,
+                { paddingVertical: 8, paddingHorizontal: 14, marginBottom: 0 },
+                lang.code === targetLanguage && { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
+              onPress={() => setTargetLanguage(lang.code)}
+              activeOpacity={0.7}
+            >
+              <Text style={[settingsStyles.selectLabel, lang.code === targetLanguage && { color: '#fff' }]}>
+                {lang.code}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={settingsStyles.divider} />
 

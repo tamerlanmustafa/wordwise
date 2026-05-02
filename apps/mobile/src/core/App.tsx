@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar, Alert, Platform, UIManager } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -25,7 +25,7 @@ import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
 import { JourneyScreen } from '../components/JourneyScreen';
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
-import type { BottomTab } from '../components/GlobalBottomBar';
+import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
 import { type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
@@ -241,13 +241,14 @@ export default function App() {
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
   const [showUserSheet, setShowUserSheet] = useState(false);
+  const [barHeight, setBarHeight] = useState(0);
 
   const handleTabPress = (t: BottomTab) => {
     if (t === 'home') navigateToHome();
     else if (t === 'words') navigateToLists();
     else if (t === 'journey') navigateToJourney();
     else if (t === 'rankings') navigateToLeaderboard();
-    else if (t === 'profile') setShowUserSheet(true);
+    else if (t === 'profile') setShowUserSheet((prev) => !prev);
   };
 
   const handleBatchBuilt = (ids: number[], title: string) => {
@@ -343,12 +344,29 @@ export default function App() {
 
   const isAuthenticated = status === 'authenticated' || status === 'offline_authenticated';
 
+  // Derive the active bottom tab from current screen so the bar stays
+  // highlighted correctly regardless of where the user navigates.
+  const activeTab: BottomTab | null = (() => {
+    if (showUserSheet) return 'profile';
+    switch (currentScreen) {
+      case 'home':
+      case 'searchResults': return 'home';
+      case 'lists':
+      case 'notebook':
+      case 'review': return 'words';
+      case 'journey': return 'journey';
+      case 'leaderboard': return 'rankings';
+      default: return null;
+    }
+  })();
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.paper} />
       {isAuthenticated ? (
-        currentScreen === 'settings' ? (
-          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} />
+        <View style={{ flex: 1 }}>
+        {currentScreen === 'settings' ? (
+          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
         ) : currentScreen === 'vocabulary' ? (
           <VocabularyScreen onBack={navigateToHome} onNavigateToLearnedWords={navigateToLearnedWords} />
         ) : currentScreen === 'learnedWords' ? (
@@ -433,27 +451,26 @@ export default function App() {
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
           <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} onNavigateToProfile={() => setShowUserSheet(true)} />
-        )
+        )}
+        <UserMenuSheet
+          visible={showUserSheet}
+          onClose={() => setShowUserSheet(false)}
+          user={user}
+          onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
+          onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
+          onNavigateToLists={() => { setShowUserSheet(false); navigateToNotebook(); }}
+          onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
+          onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
+          onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
+          onLogout={() => { setShowUserSheet(false); logout(); }}
+          isAdmin={!!user?.is_admin}
+          bottomOffset={barHeight}
+        />
+        <GlobalBottomBar active={activeTab} onTabPress={handleTabPress} onLayout={(h) => setBarHeight(h)} />
+        </View>
       ) : (
         <LoginScreen onLogin={handleLogin} />
       )}
-
-      {/* User profile sheet — rendered at root so it floats above any screen */}
-      <UserMenuSheet
-        visible={showUserSheet}
-        onClose={() => setShowUserSheet(false)}
-        user={user}
-        targetLanguage={targetLanguage}
-        setTargetLanguage={setTargetLanguage}
-        onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
-        onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
-        onNavigateToLists={() => { setShowUserSheet(false); navigateToNotebook(); }}
-        onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
-        onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
-        onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
-        onLogout={() => { setShowUserSheet(false); logout(); }}
-        isAdmin={!!user?.is_admin}
-      />
 
       {/* First-launch splash — absolute over everything, auto-dismisses */}
       <SplashIntro />

@@ -20,13 +20,17 @@ interface Props {
       doesn't belong to a single tab (e.g. movie detail). */
   active: BottomTab | null;
   onTabPress: (tab: BottomTab) => void;
+  onLayout?: (height: number) => void;
 }
 
-export function GlobalBottomBar({ active, onTabPress }: Props) {
+export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}>
+    <View
+      style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}
+      onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
+    >
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
       <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} />
       <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />
