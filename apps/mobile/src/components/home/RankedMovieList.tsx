@@ -27,9 +27,9 @@ import { scoreToCefr } from '../../utils/formatting';
 const CARD_H        = 140;   // unchanged from original design
 const CARD_GAP      = 8;     // gap between cards
 const VISIBLE_CARDS = 3;
-const PEEK          = 20;    // px of the next card visible below the last full one
+const PEEK          = 72;    // ~half of CARD_H visible as the "incoming" card hint
 const ITEM_H        = CARD_H + CARD_GAP;  // 148 — slot height including gap
-const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;  // 464
+const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;  // 516
 
 // ── Scale / opacity for cards below the fold ─────────────────────────────────
 // Cards 0-2 are always full size at rest.
