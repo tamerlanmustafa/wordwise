@@ -11,6 +11,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/palette';
+import { useThemeColors } from '../theme/tokens';
 
 export type BottomTab = 'home' | 'words' | 'journey' | 'rankings' | 'profile';
 
@@ -23,8 +24,9 @@ interface Props {
 
 export function GlobalBottomBar({ active, onTabPress }: Props) {
   const insets = useSafeAreaInsets();
+  const tc = useThemeColors();
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom) }]}>
+    <View style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}>
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
       <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} />
       <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />

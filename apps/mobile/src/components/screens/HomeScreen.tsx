@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useThemeColors } from '../../theme/tokens';
 import { GlobalBottomBar } from '../GlobalBottomBar';
 import { FloatingContinueButton } from '../FloatingContinueButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -66,6 +67,7 @@ export const HomeScreen = ({
   onNavigateToBatchJourney,
   onNavigateToProfile,
 }: Props) => {
+  const tc = useThemeColors();
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
   const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
   const showAdsEntitlement = useShowAds();
@@ -209,7 +211,7 @@ export const HomeScreen = ({
   const currentLang = AVAILABLE_LANGUAGES.find(l => l.code === targetLanguage) || AVAILABLE_LANGUAGES[0];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
 

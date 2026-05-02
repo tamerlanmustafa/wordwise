@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
+import { useThemeStore } from '../stores/themeStore';
+import { useThemeColors } from '../theme/tokens';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
@@ -56,6 +58,9 @@ export default function App() {
   const logout = useAuthStore((s) => s.logout);
   const initialize = useAuthStore((s) => s.initialize);
 
+  const tc = useThemeColors();
+  const resolvedTheme = useThemeStore((s) => s.resolved);
+
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
@@ -79,6 +84,7 @@ export default function App() {
     // Hydrate the admin preview toggle from AsyncStorage so a refresh
     // doesn't reset an admin's "viewing as free" selection.
     useEntitlementsStore.getState().hydrate();
+    useThemeStore.getState().hydrate();
     // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
     // registerForPushNotifications is a no-op on simulator.
     registerForPushNotifications().then(() => {
@@ -329,7 +335,7 @@ export default function App() {
   if (status === 'loading') {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.background} />
         <LoadingScreen />
       </SafeAreaProvider>
     );
@@ -339,7 +345,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
+      <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.paper} />
       {isAuthenticated ? (
         currentScreen === 'settings' ? (
           <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} />

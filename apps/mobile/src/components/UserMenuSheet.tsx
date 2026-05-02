@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import {
   Animated,
   Image,
@@ -149,6 +150,41 @@ export function UserMenuSheet({
 
           <View style={styles.divider} />
 
+          {/* ── Theme picker ── */}
+          {(() => {
+            const { preference, setPreference } = useThemeStore.getState();
+            // Re-render when preference changes by reading from store.
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const pref = useThemeStore((s) => s.preference);
+            const opts: { key: ThemePreference; label: string; icon: string }[] = [
+              { key: 'light',  label: 'Light',  icon: '☀️' },
+              { key: 'system', label: 'Auto',   icon: '📱' },
+              { key: 'dark',   label: 'Dark',   icon: '🌙' },
+            ];
+            return (
+              <View style={styles.themeRow}>
+                <Text style={styles.sectionLabel}>THEME</Text>
+                <View style={styles.themeChips}>
+                  {opts.map((o) => (
+                    <TouchableOpacity
+                      key={o.key}
+                      style={[styles.themeChip, pref === o.key && styles.themeChipActive]}
+                      onPress={() => useThemeStore.getState().setPreference(o.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.themeChipIcon}>{o.icon}</Text>
+                      <Text style={[styles.themeChipLabel, pref === o.key && styles.themeChipLabelActive]}>
+                        {o.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            );
+          })()}
+
+          <View style={styles.divider} />
+
           <TouchableOpacity
             style={styles.row}
             onPress={() => { onClose(); setTimeout(onLogout, 200); }}
@@ -270,4 +306,24 @@ const styles = StyleSheet.create({
   rowIcon: { fontSize: 18, width: 28, textAlign: 'center' },
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: colors.text },
   rowArrow: { fontSize: 18, color: colors.textSecondary },
+
+  themeRow: { paddingVertical: 10 },
+  themeChips: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  themeChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    gap: 4,
+  },
+  themeChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '18',
+  },
+  themeChipIcon: { fontSize: 18 },
+  themeChipLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  themeChipLabelActive: { color: colors.primary, fontWeight: '700' },
 });
