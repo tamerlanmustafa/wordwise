@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../theme/palette';
 import { wordwiseApi, API_BASE_URL, type IdiomInfo } from '../../services/api';
@@ -22,7 +22,7 @@ interface Props {
 }
 
 // Mirrors WordRow: fetches translation + sentence examples on click and supports bookmarking.
-export const IdiomRow = ({
+const _IdiomRow = ({
   idiom,
   rowNumber,
   groupColor,
@@ -186,3 +186,4 @@ export const IdiomRow = ({
     </View>
   );
 };
+export const IdiomRow = memo(_IdiomRow);

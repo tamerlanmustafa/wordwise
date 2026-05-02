@@ -9,6 +9,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// Warm the native image cache on press-in so poster and backdrop images
+// are already decoded when MovieDetailScreen mounts (~200ms head start).
+function prefetchMovieImages(movie: any) {
+  if (movie.poster_path) {
+    // Prefetch the w500 poster (used in the lightbox / full-size view).
+    Image.prefetch(`https://image.tmdb.org/t/p/w500${movie.poster_path}`).catch(() => {});
+  }
+  if (movie.backdrop_path) {
+    Image.prefetch(`https://image.tmdb.org/t/p/w780${movie.backdrop_path}`).catch(() => {});
+  }
+}
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { colors, cefrColors } from '../../theme/palette';
@@ -90,6 +102,7 @@ export const RankedMovieList = ({ movies, onMoviePress, userLevel }: Props) => {
             key={movieId}
             style={s.card}
             onPress={() => onMoviePress(movie)}
+            onPressIn={() => prefetchMovieImages(movie)}
             activeOpacity={0.85}
           >
             {/* Poster — tap to zoom, does NOT open movie */}

@@ -154,6 +154,10 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
             <TouchableOpacity
               style={styles.searchResultItem}
               onPress={() => handlePress(item)}
+              onPressIn={() => {
+                if (item.poster_path) Image.prefetch(`https://image.tmdb.org/t/p/w500${item.poster_path}`).catch(() => {});
+                if (item.backdrop_path) Image.prefetch(`https://image.tmdb.org/t/p/w780${item.backdrop_path}`).catch(() => {});
+              }}
               activeOpacity={0.7}
             >
               {item.poster_path ? (

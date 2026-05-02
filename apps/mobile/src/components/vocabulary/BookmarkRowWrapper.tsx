@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Text, View } from 'react-native';
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 // Swipe a row to the right past a threshold to mark this word as
 // "leave off here" — the resume point for next time you open the movie.
 // Also pulses in warm gold when re-entered with this word as the bookmark.
-export const BookmarkRowWrapper = ({
+const _BookmarkRowWrapper = ({
   wordKey,
   onLayoutY,
   onBookmark,
@@ -147,3 +147,5 @@ export const BookmarkRowWrapper = ({
     </View>
   );
 };
+
+export const BookmarkRowWrapper = memo(_BookmarkRowWrapper);

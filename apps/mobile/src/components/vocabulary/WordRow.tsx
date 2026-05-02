@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Text,
@@ -39,7 +39,15 @@ interface Props {
   onHide?: (word: string) => void;
 }
 
-export const WordRow = ({
+// React.memo prevents re-renders when the parent updates but this row's
+// props haven't changed. Key wins:
+//   • Expanding one row changes `lastOpenedKey` in the parent — without memo
+//     every sibling row re-renders. With memo only the newly-opened and
+//     previously-open rows re-render.
+//   • Saving a word changes the parent's `savedWords` Set — without memo
+//     every row re-renders. With memo only the row whose `isSaved` prop
+//     actually changed re-renders.
+const _WordRow = ({
   word,
   rowNumber,
   groupColor,
@@ -287,3 +295,5 @@ export const WordRow = ({
   );
 };
 
+
+export const WordRow = memo(_WordRow);
