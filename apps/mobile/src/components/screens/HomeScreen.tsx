@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
+  Keyboard,
   ScrollView,
   Text,
   TextInput,
@@ -229,7 +230,12 @@ export const HomeScreen = ({
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+      >
 
         <View style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
@@ -490,6 +496,14 @@ export const HomeScreen = ({
 
         <View style={{ height: 16 }} />
       </ScrollView>
+
+      {(searchFocused && !searchQuery && recentlyViewed.length > 0) && (
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 98 }}
+          activeOpacity={1}
+          onPress={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+        />
+      )}
 
     </SafeAreaView>
   );
