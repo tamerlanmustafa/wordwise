@@ -8,7 +8,7 @@
  * scrolls the rest of the page independently.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -181,8 +181,17 @@ const StackCard = React.memo(({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollY  = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<any>(null);
   const [zoomed, setZoomed] = useState<{ uri: string; title: string } | null>(null);
+
+  // Reset to the top whenever the movie list changes (filter/sort switch).
+  // Without this, scrollY stays at whatever offset the previous sort left it,
+  // making cards render at the wrong scale.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    scrollY.setValue(0);
+  }, [data]);
 
   if (!data.length) {
     return (
@@ -200,6 +209,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
           overflow:hidden clips everything else so only 1 card is visible. */}
       <View style={s.container}>
         <Animated.ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           // Snap: each swipe advances exactly one card.
