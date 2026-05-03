@@ -347,33 +347,42 @@ export const HomeScreen = ({
 
 
         <View style={{ zIndex: 50, overflow: 'visible' }}>
-          <View style={styles.homeTabToggleWrapper}>
+          <View style={styles.levelSortRow}>
             <TouchableOpacity
-              style={[styles.homeTabToggleBtn, homeTab === 'level' && styles.homeTabToggleBtnActive]}
-              onPress={() => {
-                if (homeTab === 'level') {
-                  setLevelDropdownOpen((v) => !v);
-                } else {
-                  setTabSwitching(true);
-                  setHomeTab('level');
-                  setLevelDropdownOpen(false);
-                  setTimeout(() => setTabSwitching(false), 400);
-                }
-              }}
+              style={[styles.levelSortChip, styles.levelSortChipActive]}
+              onPress={() => setLevelDropdownOpen((v) => !v)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.homeTabToggleText, homeTab === 'level' && styles.homeTabToggleTextActive]}>
+              <Text style={styles.levelSortTextActive}>
                 {selectedLevel === (user?.proficiency_level || 'B1')
-                  ? `⭐ Your Level (${selectedLevel})`
-                  : `⭐ Level ${selectedLevel}`}
-                {homeTab === 'level' ? ` ${levelDropdownOpen ? '▲' : '▼'}` : ''}
+                  ? `⭐ ${selectedLevel}`
+                  : `⭐ ${selectedLevel}`}{' '}
+                {levelDropdownOpen ? '▲' : '▼'}
               </Text>
             </TouchableOpacity>
-            {/* Journey tab — disabled until feature is ready. */}
-            <View style={[styles.homeTabToggleBtn, { opacity: 0.4 }]}>
-              <Text style={styles.homeTabToggleText}>🎮 Journey</Text>
-              <Text style={{ fontSize: 9, color: '#A0A0B0', fontWeight: '700', marginTop: 1 }}>Soon</Text>
-            </View>
+            {([
+              { key: 'rating' as const, label: 'Rating' },
+              { key: 'popularity' as const, label: 'Popularity' },
+              { key: 'level' as const, label: 'Level %' },
+            ]).map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.levelSortChip, levelSort === opt.key && styles.levelSortChipActive]}
+                onPress={() => {
+                  if (levelSort === opt.key) {
+                    setLevelSortAsc((v) => !v);
+                  } else {
+                    setLevelSort(opt.key);
+                    setLevelSortAsc(false);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.levelSortText, levelSort === opt.key && styles.levelSortTextActive]}>
+                  {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {levelDropdownOpen && (
@@ -399,36 +408,7 @@ export const HomeScreen = ({
               ))}
             </View>
           )}
-
         </View>
-
-        {homeTab === 'level' && (
-          <View style={styles.levelSortRow}>
-            {([
-              { key: 'rating' as const, label: 'Rating' },
-              { key: 'popularity' as const, label: 'Popularity' },
-              { key: 'level' as const, label: 'Level %' },
-            ]).map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[styles.levelSortChip, levelSort === opt.key && styles.levelSortChipActive]}
-                onPress={() => {
-                  if (levelSort === opt.key) {
-                    setLevelSortAsc((v) => !v);
-                  } else {
-                    setLevelSort(opt.key);
-                    setLevelSortAsc(false);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.levelSortText, levelSort === opt.key && styles.levelSortTextActive]}>
-                  {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         <View style={styles.section}>
           {loading || tabSwitching ? (
