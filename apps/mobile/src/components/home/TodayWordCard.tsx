@@ -2,27 +2,28 @@ import React, { memo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { colors } from '../../theme/palette';
-import { wordwiseApi, srsApi, API_BASE_URL, type TodaysWord } from '../../services/api';
+import { wordwiseApi, API_BASE_URL, type TodaysWord } from '../../services/api';
+
+const CARD_HEIGHT = 168;
+const FACE_PADDING = 20;
 
 interface Props {
   word: TodaysWord;
   targetLanguage: string;
-  onReload: () => void;
-  reloading: boolean;
-  saved: boolean;
-  onSave: () => void;
 }
 
-const _TodayWordCard = ({ word, targetLanguage, onReload, reloading, saved, onSave }: Props) => {
+const _TodayWordCard = ({ word, targetLanguage }: Props) => {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const flipAnim = useRef(new Animated.Value(0)).current;
   const flipCount = useRef(0);
-
+  const [showingFront, setShowingFront] = useState(true);
   const [translating, setTranslating] = useState(false);
   const [translation, setTranslation] = useState<string | null>(null);
   const [sentence, setSentence] = useState<string | null>(null);
@@ -37,123 +38,129 @@ const _TodayWordCard = ({ word, targetLanguage, onReload, reloading, saved, onSa
     outputRange: ['180deg', '360deg', '540deg', '720deg'],
   });
 
-  const handleFlip = async () => {
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaved(prev => !prev);
+    try {
+      const res = await wordwiseApi.saveWord(word.word, word.movie_id);
+      setSaved(res.saved);
+    } catch {
+      setSaved(prev => !prev);
+    }
+    setSaving(false);
+  };
+
+  const handleFlip = () => {
     const next = flipCount.current + 1;
     flipCount.current = next;
     const isFlippingToBack = next % 2 === 1;
-
-    // Fetch on first reveal only
-    if (isFlippingToBack && !translation) {
-      setTranslating(true);
-      try {
-        const [translationRes] = await Promise.all([
-          wordwiseApi.translate(word.word, targetLanguage, undefined, word.movie_id),
-          fetch(
-            `${API_BASE_URL}/api/enrichment/movies/${word.movie_id}/sentences/${encodeURIComponent(word.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`
-          )
-            .then(r => r.json())
-            .then(data => {
-              const ex = data.sentences?.[0];
-              if (ex) {
-                setSentence(ex.sentence ?? null);
-                setSentenceTranslation(ex.translation ?? null);
-              }
-            })
-            .catch(() => {}),
-        ]);
-        setTranslation(translationRes.translated);
-      } catch {}
-      setTranslating(false);
-    }
+    // Swap pointer events at the midpoint of the animation
+    setTimeout(() => setShowingFront(!isFlippingToBack), 210);
 
     Animated.timing(flipAnim, {
       toValue: next,
       duration: 420,
       useNativeDriver: true,
     }).start();
+
+    if (isFlippingToBack && !translation) {
+      setTranslating(true);
+      Promise.all([
+        wordwiseApi.translate(word.word, targetLanguage, undefined, word.movie_id),
+        fetch(
+          `${API_BASE_URL}/api/enrichment/movies/${word.movie_id}/sentences/${encodeURIComponent(word.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`
+        )
+          .then(r => r.json())
+          .then(data => {
+            const ex = data.sentences?.[0];
+            if (ex) {
+              setSentence(ex.sentence ?? null);
+              setSentenceTranslation(ex.translation ?? null);
+            }
+          })
+          .catch(() => {}),
+      ])
+        .then(([res]) => setTranslation(res.translated))
+        .catch(() => {})
+        .finally(() => setTranslating(false));
+    }
   };
 
-  const cardHeader = (
-    <View style={s.header}>
-      <View style={s.headerLeft}>
-        <Text style={s.label}>Today's Word</Text>
-        <TouchableOpacity
-          onPress={onReload}
-          disabled={reloading}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={[s.label, { opacity: reloading ? 0.35 : 1, marginLeft: 6 }]}>↻</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
-    </View>
-  );
+  const isSameAsWord = (t: string) => t.trim().toLowerCase() === word.word.toLowerCase();
 
   return (
-    <TouchableOpacity onPress={handleFlip} activeOpacity={1} style={s.container}>
-      <View>
-        {/* FRONT */}
-        <Animated.View
-          style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
-        >
-          {cardHeader}
-          <Text style={s.word}>{word.word}</Text>
-          {word.cefr_level && (
-            <View style={s.cefrBadge}>
-              <Text style={s.cefrText}>{word.cefr_level}</Text>
-            </View>
-          )}
+    <View style={s.container}>
+      {/* FRONT face */}
+      <Animated.View
+        pointerEvents={showingFront ? 'auto' : 'none'}
+        style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
+      >
+        {/* header outside flip zone — reload works without flipping */}
+        <View style={s.header}>
+          <Text style={s.label}>Today's Word</Text>
+          <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
+        </View>
+        {/* word + star as siblings — no nesting, no propagation issues */}
+        <View style={s.wordRow}>
+          <Pressable onPress={handleFlip} style={s.wordPressable}>
+            <Text style={s.word}>{word.word}</Text>
+          </Pressable>
+          <Pressable onPress={handleSave} hitSlop={14} style={s.starBtn}>
+            <Text style={[s.star, saved && s.starSaved]}>{saved ? '★' : '☆'}</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={handleFlip} style={s.flipZone}>
           <Text style={s.hint}>Tap to reveal translation</Text>
-        </Animated.View>
+        </Pressable>
+      </Animated.View>
 
-        {/* BACK */}
-        <Animated.View
-          style={[s.face, s.back, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
-        >
-          {cardHeader}
-          <Text style={s.word}>{word.word}</Text>
-
+      {/* BACK face */}
+      <Animated.View
+        pointerEvents={showingFront ? 'none' : 'auto'}
+        style={[s.face, s.back, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
+      >
+        <View style={s.header}>
+          <Text style={s.label}>Translation</Text>
+          <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
+        </View>
+        <Pressable onPress={handleFlip} style={s.flipZone}>
           {translating ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 14 }} />
+            <View style={s.loadingBox}>
+              <ActivityIndicator size="small" color="#7C5CBF" />
+            </View>
           ) : (
             <>
-              {translation && (
-                <Text style={s.translation}>{translation.toLowerCase()}</Text>
+              {translation && !isSameAsWord(translation) && (
+                <Text style={s.translationWord}>{translation}</Text>
               )}
-              {sentence && (
-                <Text style={s.sentence}>"{sentence}"</Text>
-              )}
-              {sentenceTranslation && (
-                <Text style={s.sentenceTranslation}>{sentenceTranslation}</Text>
-              )}
+              {sentence ? (
+                <>
+                  <Text style={s.sentence} numberOfLines={3}>"{sentence}"</Text>
+                  {sentenceTranslation ? (
+                    <Text style={s.sentenceTranslation} numberOfLines={2}>{sentenceTranslation}</Text>
+                  ) : null}
+                </>
+              ) : null}
             </>
           )}
-
-          <TouchableOpacity
-            style={[s.saveBtn, saved && s.saveBtnSaved]}
-            onPress={onSave}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.saveBtnText, saved && s.saveBtnTextSaved]}>
-              {saved ? '★  Saved' : '☆  Save this word'}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </TouchableOpacity>
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 };
 
 export const TodayWordCard = memo(_TodayWordCard);
 
-// Skeleton shown while the word is loading
 export const TodayWordCardSkeleton = () => (
   <View style={s.container}>
-    <View style={s.face}>
-      <View style={[s.skeletonLine, { width: '40%', marginBottom: 16 }]} />
-      <View style={[s.skeletonLine, { width: '60%', height: 28, marginBottom: 10 }]} />
-      <View style={[s.skeletonLine, { width: '30%', height: 14, marginBottom: 20 }]} />
-      <View style={[s.skeletonLine, { width: '100%', height: 38 }]} />
+    <View style={s.skeletonFace}>
+      <View style={s.header}>
+        <View style={[s.skeletonLine, { width: 90, height: 10 }]} />
+        <View style={[s.skeletonLine, { width: 80, height: 10 }]} />
+      </View>
+      <View style={[s.skeletonLine, { width: '55%', height: 30, marginTop: 10, marginBottom: 10 }]} />
+      <View style={[s.skeletonLine, { width: '30%', height: 14 }]} />
     </View>
   </View>
 );
@@ -162,32 +169,36 @@ const s = StyleSheet.create({
   container: {
     marginHorizontal: 16,
     marginTop: 16,
+    height: CARD_HEIGHT,
     borderRadius: 16,
-    overflow: 'hidden',
   },
   face: {
-    width: '100%',
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E8E8EC',
-    padding: 20,
     backfaceVisibility: 'hidden',
+    overflow: 'hidden',
+    padding: FACE_PADDING,
   },
-  back: {
+  back: {},
+  skeletonFace: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E8EC',
+    padding: FACE_PADDING,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
   label: {
     fontSize: 11,
     fontWeight: '700',
@@ -196,34 +207,23 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
   },
   movie: { fontSize: 11, color: '#9AA0AE', flexShrink: 1, marginLeft: 8 },
+  wordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  wordPressable: { flexShrink: 1 },
   word: { fontSize: 30, fontWeight: '800', color: '#1A1A2E', letterSpacing: -0.3 },
-  cefrBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F0EBF8',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    marginTop: 6,
+  starBtn: { paddingLeft: 8, paddingVertical: 4 },
+  star: { fontSize: 26, color: '#C8B8E8' },
+  starSaved: { color: '#7C5CBF' },
+  flipZone: { flex: 1 },
+  hint: { fontSize: 12, color: '#9AA0AE' },
+  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  translationWord: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#7C5CBF',
+    letterSpacing: -0.3,
+    marginBottom: 6,
   },
-  cefrText: { fontSize: 11, fontWeight: '700', color: '#7C5CBF' },
-  hint: { fontSize: 12, color: '#9AA0AE', marginTop: 10 },
-  translation: { fontSize: 15, color: '#7C5CBF', fontWeight: '500', marginTop: 4, marginBottom: 12 },
-  sentence: { fontSize: 13, color: '#4A4A5A', fontStyle: 'italic', lineHeight: 19, marginBottom: 4 },
-  sentenceTranslation: { fontSize: 12, color: '#9AA0AE', lineHeight: 17, marginBottom: 14 },
-  saveBtn: {
-    marginTop: 14,
-    paddingVertical: 11,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#7C5CBF',
-    alignItems: 'center',
-  },
-  saveBtnSaved: { borderColor: '#4CAF9A', backgroundColor: '#F0FAF6' },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#7C5CBF' },
-  saveBtnTextSaved: { color: '#4CAF9A' },
-  skeletonLine: {
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#EBEBEB',
-  },
+  sentence: { fontSize: 13, color: '#4A4A5A', fontStyle: 'italic', lineHeight: 18, marginBottom: 3 },
+  sentenceTranslation: { fontSize: 12, color: '#9AA0AE', lineHeight: 17 },
+  skeletonLine: { borderRadius: 7, backgroundColor: '#EBEBEB' },
 });

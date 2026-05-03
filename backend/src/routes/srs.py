@@ -347,115 +347,52 @@ async def todays_word(
     user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
     target_lang = (current_user.nativeLanguage or "en").lower()
 
-    # Try exact level first, then adjacent levels, then anything
-    level_fallbacks = [
-        [user_level],
-        {"A1": ["A1","A2"], "A2": ["A1","A2","B1"], "B1": ["A2","B1","B2"],
-         "B2": ["B1","B2","C1"], "C1": ["B2","C1","C2"], "C2": ["C1","C2"]}.get(user_level, [user_level]),
-        ["A1","A2","B1","B2","C1","C2"],
-    ]
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[today_word] user={current_user.id} level={user_level} lang={target_lang}")
 
-    candidates = []
-    for levels in level_fallbacks:
-        level_list = ", ".join(f"'{l}'" for l in levels)
-        rows = await db.query_raw(
-            f'''
-            SELECT word, cefr_level, example_sentence,
-                   translated_word, translated_sentence,
-                   movie_id, movie_title, poster_url
-            FROM (
-                SELECT DISTINCT ON (l.id)
-                    l.id,
-                    l.lemma       AS word,
-                    l.cefr_level,
-                    l.priority_score,
-                    l.frequency_rank,
-                    sb.sentence   AS example_sentence,
-                    tm.translated_word,
-                    tm.translated_sentence,
-                    m.id          AS movie_id,
-                    m.title       AS movie_title,
-                    m.poster_url
-                FROM lemmas l
-                JOIN movie_lemma_mappings mlm ON mlm.lemma_id = l.id
-                JOIN movies m ON m.id = mlm.movie_id
-                LEFT JOIN LATERAL (
-                    SELECT sb2.sentence
-                    FROM sentence_lemma_links sll
-                    JOIN sentence_bank sb2 ON sb2.id = sll.sentence_id
-                    WHERE sll.lemma_id = l.id
-                    ORDER BY sll.is_representative DESC, sll.score DESC
-                    LIMIT 1
-                ) sb ON true
-                LEFT JOIN LATERAL (
-                    SELECT tm2.translated_word, tm2.translated_sentence
-                    FROM word_senses ws
-                    JOIN translation_memory tm2 ON tm2.lemma_id = l.id
-                        AND tm2.sense_id = ws.id
-                        AND tm2.target_lang = \'{target_lang}\'
-                    WHERE ws.lemma_id = l.id
-                    ORDER BY ws.sense_index ASC
-                    LIMIT 1
-                ) tm ON true
-                WHERE l.cefr_level IN ({level_list})
-                  AND l.lemma ~ \'^[a-zA-Z]+$\'
-                  AND length(l.lemma) >= 4
-                  AND l.is_multi_word = false
-                  AND sb.sentence IS NOT NULL
-                  AND tm.translated_word IS NOT NULL
-                ORDER BY l.id
-            ) ranked
-            ORDER BY priority_score DESC, frequency_rank ASC NULLS LAST
-            LIMIT 500
-            '''
-        )
-        if rows:
-            candidates = rows
-            break
+    # word_classifications is the authoritative CEFR source used throughout the app.
+    # Pick distinct lemmas at the user's level from movie scripts, ordered by frequency.
+    candidates = await db.query_raw(
+        f'''
+        SELECT
+            wc.lemma                            AS word,
+            wc.cefr_level::text                 AS cefr_level,
+            m.id                                AS movie_id,
+            m.title                             AS movie_title,
+            m.poster_url,
+            AVG(wc.frequency_rank)              AS avg_rank
+        FROM word_classifications wc
+        JOIN movie_scripts ms ON ms.id = wc.script_id
+        JOIN movies m ON m.id = ms.movie_id
+        WHERE wc.cefr_level = \'{user_level}\'
+          AND wc.lemma ~ \'^[a-zA-Z]+$\'
+          AND length(wc.lemma) >= 4
+        GROUP BY wc.lemma, wc.cefr_level, m.id, m.title, m.poster_url
+        ORDER BY avg_rank ASC NULLS LAST
+        LIMIT 1000
+        '''
+    )
 
-    # Final fallback: drop translation/sentence requirements
-    if not candidates:
-        rows = await db.query_raw(
-            f'''
-            SELECT word, cefr_level,
-                   NULL::text AS example_sentence,
-                   NULL::text AS translated_word,
-                   NULL::text AS translated_sentence,
-                   movie_id, movie_title, poster_url
-            FROM (
-                SELECT DISTINCT ON (l.id)
-                    l.id,
-                    l.lemma       AS word,
-                    l.cefr_level,
-                    l.priority_score,
-                    l.frequency_rank,
-                    m.id          AS movie_id,
-                    m.title       AS movie_title,
-                    m.poster_url
-                FROM lemmas l
-                JOIN movie_lemma_mappings mlm ON mlm.lemma_id = l.id
-                JOIN movies m ON m.id = mlm.movie_id
-                WHERE l.lemma ~ \'^[a-zA-Z]+$\'
-                  AND length(l.lemma) >= 4
-                  AND l.is_multi_word = false
-                ORDER BY l.id
-            ) ranked
-            ORDER BY priority_score DESC, frequency_rank ASC NULLS LAST
-            LIMIT 500
-            '''
-        )
-        candidates = rows
+    logger.info(f"[today_word] candidates={len(candidates)} level={user_level}")
 
     if not candidates:
+        logger.warning(f"[today_word] no words found for level={user_level}")
         return None
+
+    # Skip top 10% (too common) and bottom 20% (noise) by frequency rank
+    n = len(candidates)
+    lo = n // 10
+    hi = n - (n // 5)
+    candidates = candidates[lo:hi] if hi > lo else candidates
 
     pick = candidates[seed % len(candidates)]
 
     return TodaysWordResponse(
         word=pick["word"],
-        translated_word=pick.get("translated_word"),
-        example_sentence=pick.get("example_sentence"),
-        translated_sentence=pick.get("translated_sentence"),
+        translated_word=None,
+        example_sentence=None,
+        translated_sentence=None,
         movie_title=pick["movie_title"],
         movie_poster_url=pick.get("poster_url"),
         cefr_level=pick.get("cefr_level"),
