@@ -576,8 +576,9 @@ export interface SavedWordEntry {
 
 export interface TodaysWord {
   word: string;
-  definition: string | null;
+  translated_word: string | null;
   example_sentence: string | null;
+  translated_sentence: string | null;
   movie_title: string;
   movie_poster_url: string | null;
   cefr_level: string | null;
@@ -649,8 +650,8 @@ export const srsApi = {
     }
   },
 
-  todaysWord: async (): Promise<TodaysWord | null> => {
-    const res = await authFetch(`${API_BASE_URL}/srs/today`);
+  todaysWord: async (skip = 0): Promise<TodaysWord | null> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/today?skip=${skip}`);
     if (!res.ok) return null;
     const body = await res.json();
     return body || null;

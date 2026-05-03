@@ -77,8 +77,9 @@ class SessionStartResponse(BaseModel):
 
 class TodaysWordResponse(BaseModel):
     word: str
-    definition: Optional[str]
+    translated_word: Optional[str]
     example_sentence: Optional[str]
+    translated_sentence: Optional[str]
     movie_title: str
     movie_poster_url: Optional[str]
     cefr_level: Optional[str]
@@ -329,52 +330,134 @@ async def record_review(
 
 @router.get("/today", response_model=Optional[TodaysWordResponse])
 async def todays_word(
+    skip: int = 0,
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
     """
-    One discovery word per day — NOT from the user's saved deck.
-    Deterministic per user+date so repeated calls return the same word.
-    See docs/MONETIZATION_PLAN.md §8.
+    One word per day matched to the user's proficiency level.
+    Pass skip=N to get the Nth next word (used by the reload button).
     """
     import hashlib
 
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    seed = int(hashlib.md5(f"{current_user.id}:{today_str}".encode()).hexdigest()[:8], 16)
+    seed = int(hashlib.md5(f"{current_user.id}:{today_str}".encode()).hexdigest()[:8], 16) + skip
 
-    saved_words = await db.userword.find_many(
-        where={"userId": current_user.id},
-        distinct=["word"],
-    )
-    saved_set = {uw.word.lower() for uw in saved_words}
+    raw_level = current_user.proficiencyLevel
+    user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
+    target_lang = (current_user.nativeLanguage or "en").lower()
 
-    candidates = await db.query_raw(
-        '''
-        SELECT w.word, w.definition, w.example_sentence,
-               m.id AS movie_id, m.title AS movie_title, m.poster_url
-        FROM words w
-        JOIN movies m ON w.movie_id = m.id
-        WHERE m.tmdb_vote_count >= 500
-          AND w.definition IS NOT NULL
-          AND w.word ~ '^[a-zA-Z]+$'
-          AND length(w.word) >= 4
-        ORDER BY m.tmdb_popularity DESC NULLS LAST
-        LIMIT 500
-        '''
-    )
+    # Try exact level first, then adjacent levels, then anything
+    level_fallbacks = [
+        [user_level],
+        {"A1": ["A1","A2"], "A2": ["A1","A2","B1"], "B1": ["A2","B1","B2"],
+         "B2": ["B1","B2","C1"], "C1": ["B2","C1","C2"], "C2": ["C1","C2"]}.get(user_level, [user_level]),
+        ["A1","A2","B1","B2","C1","C2"],
+    ]
 
-    filtered = [c for c in candidates if c["word"].lower() not in saved_set]
-    if not filtered:
+    candidates = []
+    for levels in level_fallbacks:
+        level_list = ", ".join(f"'{l}'" for l in levels)
+        rows = await db.query_raw(
+            f'''
+            SELECT word, cefr_level, example_sentence,
+                   translated_word, translated_sentence,
+                   movie_id, movie_title, poster_url
+            FROM (
+                SELECT DISTINCT ON (l.id)
+                    l.id,
+                    l.lemma       AS word,
+                    l.cefr_level,
+                    l.priority_score,
+                    l.frequency_rank,
+                    sb.sentence   AS example_sentence,
+                    tm.translated_word,
+                    tm.translated_sentence,
+                    m.id          AS movie_id,
+                    m.title       AS movie_title,
+                    m.poster_url
+                FROM lemmas l
+                JOIN movie_lemma_mappings mlm ON mlm.lemma_id = l.id
+                JOIN movies m ON m.id = mlm.movie_id
+                LEFT JOIN LATERAL (
+                    SELECT sb2.sentence
+                    FROM sentence_lemma_links sll
+                    JOIN sentence_bank sb2 ON sb2.id = sll.sentence_id
+                    WHERE sll.lemma_id = l.id
+                    ORDER BY sll.is_representative DESC, sll.score DESC
+                    LIMIT 1
+                ) sb ON true
+                LEFT JOIN LATERAL (
+                    SELECT tm2.translated_word, tm2.translated_sentence
+                    FROM word_senses ws
+                    JOIN translation_memory tm2 ON tm2.lemma_id = l.id
+                        AND tm2.sense_id = ws.id
+                        AND tm2.target_lang = \'{target_lang}\'
+                    WHERE ws.lemma_id = l.id
+                    ORDER BY ws.sense_index ASC
+                    LIMIT 1
+                ) tm ON true
+                WHERE l.cefr_level IN ({level_list})
+                  AND l.lemma ~ \'^[a-zA-Z]+$\'
+                  AND length(l.lemma) >= 4
+                  AND l.is_multi_word = false
+                  AND sb.sentence IS NOT NULL
+                  AND tm.translated_word IS NOT NULL
+                ORDER BY l.id
+            ) ranked
+            ORDER BY priority_score DESC, frequency_rank ASC NULLS LAST
+            LIMIT 500
+            '''
+        )
+        if rows:
+            candidates = rows
+            break
+
+    # Final fallback: drop translation/sentence requirements
+    if not candidates:
+        rows = await db.query_raw(
+            f'''
+            SELECT word, cefr_level,
+                   NULL::text AS example_sentence,
+                   NULL::text AS translated_word,
+                   NULL::text AS translated_sentence,
+                   movie_id, movie_title, poster_url
+            FROM (
+                SELECT DISTINCT ON (l.id)
+                    l.id,
+                    l.lemma       AS word,
+                    l.cefr_level,
+                    l.priority_score,
+                    l.frequency_rank,
+                    m.id          AS movie_id,
+                    m.title       AS movie_title,
+                    m.poster_url
+                FROM lemmas l
+                JOIN movie_lemma_mappings mlm ON mlm.lemma_id = l.id
+                JOIN movies m ON m.id = mlm.movie_id
+                WHERE l.lemma ~ \'^[a-zA-Z]+$\'
+                  AND length(l.lemma) >= 4
+                  AND l.is_multi_word = false
+                ORDER BY l.id
+            ) ranked
+            ORDER BY priority_score DESC, frequency_rank ASC NULLS LAST
+            LIMIT 500
+            '''
+        )
+        candidates = rows
+
+    if not candidates:
         return None
 
-    pick = filtered[seed % len(filtered)]
+    pick = candidates[seed % len(candidates)]
 
     return TodaysWordResponse(
         word=pick["word"],
-        definition=pick.get("definition"),
+        translated_word=pick.get("translated_word"),
         example_sentence=pick.get("example_sentence"),
+        translated_sentence=pick.get("translated_sentence"),
         movie_title=pick["movie_title"],
         movie_poster_url=pick.get("poster_url"),
-        cefr_level=None,
+        cefr_level=pick.get("cefr_level"),
         movie_id=pick["movie_id"],
     )

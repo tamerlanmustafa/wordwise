@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Animated,
   Image,
   Keyboard,
   ScrollView,
@@ -92,6 +94,15 @@ export const HomeScreen = ({
   const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [todaysWordSaved, setTodaysWordSaved] = useState(false);
+  const [todaysWordSkip, setTodaysWordSkip] = useState(0);
+  const [todaysWordLoading, setTodaysWordLoading] = useState(false);
+  const [todaysWordFlipped, setTodaysWordFlipped] = useState(false);
+  const [todaysWordTranslation, setTodaysWordTranslation] = useState<string | null>(null);
+  const [todaysWordSentence, setTodaysWordSentence] = useState<string | null>(null);
+  const [todaysWordSentenceTranslation, setTodaysWordSentenceTranslation] = useState<string | null>(null);
+  const [todaysWordTranslating, setTodaysWordTranslating] = useState(false);
+  const [todaysCardHeight, setTodaysCardHeight] = useState(0);
+  const flipAnim = useRef(new Animated.Value(0)).current;
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,8 +136,56 @@ export const HomeScreen = ({
       setSrsDueCount(s.due_now);
       setSrsTotalSaved(s.total_saved);
     }).catch(() => {});
-    srsApi.todaysWord().then(setTodaysWord).catch(() => {});
+    srsApi.todaysWord(0).then(setTodaysWord).catch(() => {});
   }, []);
+
+  const reloadTodaysWord = async () => {
+    if (todaysWordLoading) return;
+    setTodaysWordLoading(true);
+    const nextSkip = todaysWordSkip + 1;
+    setTodaysWordSkip(nextSkip);
+    setTodaysWordSaved(false);
+    setTodaysWordFlipped(false);
+    setTodaysWordTranslation(null);
+    setTodaysWordSentence(null);
+    setTodaysWordSentenceTranslation(null);
+    flipAnim.setValue(0);
+    try {
+      const w = await srsApi.todaysWord(nextSkip);
+      setTodaysWord(w);
+    } catch {}
+    setTodaysWordLoading(false);
+  };
+
+  const handleTodaysWordFlip = async () => {
+    if (todaysWordFlipped || !todaysWord) return;
+    setTodaysWordTranslating(true);
+    // Start the flip animation immediately — data loads during the spin
+    Animated.timing(flipAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start(() => {
+      setTodaysWordFlipped(true);
+    });
+    try {
+      const [translationRes] = await Promise.all([
+        wordwiseApi.translate(todaysWord.word, targetLanguage, undefined, todaysWord.movie_id),
+        fetch(`${API_BASE_URL}/api/enrichment/movies/${todaysWord.movie_id}/sentences/${encodeURIComponent(todaysWord.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`)
+          .then(r => r.json())
+          .then(data => {
+            const ex = data.sentences?.[0];
+            if (ex) {
+              setTodaysWordSentence(ex.sentence);
+              if (ex.translation) setTodaysWordSentenceTranslation(ex.translation);
+            }
+          })
+          .catch(() => {}),
+      ]);
+      setTodaysWordTranslation(translationRes.translated);
+    } catch {}
+    setTodaysWordTranslating(false);
+  };
 
   const fetchLevelMovies = async (level: string) => {
     try {
@@ -345,6 +404,106 @@ export const HomeScreen = ({
           </View>
         )}
 
+        {todaysWord && (() => {
+          const frontRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+          const backRotate  = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
+          return (
+            <TouchableOpacity
+              onPress={handleTodaysWordFlip}
+              activeOpacity={1}
+              disabled={todaysWordFlipped}
+              style={styles.todayCard}
+            >
+              {/* measure front to size the container */}
+              <View style={{ position: 'relative' }}
+                onLayout={e => setTodaysCardHeight(e.nativeEvent.layout.height)}
+              >
+                {/* FRONT */}
+                <Animated.View
+                  style={[
+                    styles.todayCardFace,
+                    { transform: [{ perspective: 1000 }, { rotateY: frontRotate }] },
+                  ]}
+                >
+                  <View style={styles.todayCardInner}>
+                    <View style={styles.todayHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.todayLabel}>Today's Word</Text>
+                        <TouchableOpacity
+                          onPress={e => { e.stopPropagation(); reloadTodaysWord(); }}
+                          disabled={todaysWordLoading}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={[styles.todayLabel, { opacity: todaysWordLoading ? 0.4 : 1 }]}>↻</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.todayMovie}>from {todaysWord.movie_title}</Text>
+                    </View>
+                    <Text style={styles.todayWord}>{todaysWord.word}</Text>
+                    <Text style={styles.todayTapHint}>Tap to reveal translation</Text>
+                  </View>
+                </Animated.View>
+
+                {/* BACK */}
+                <Animated.View
+                  style={[
+                    styles.todayCardFace,
+                    styles.todayCardBack,
+                    todaysCardHeight > 0 ? { height: todaysCardHeight } : {},
+                    { transform: [{ perspective: 1000 }, { rotateY: backRotate }] },
+                  ]}
+                >
+                  <View style={styles.todayCardInner}>
+                    <View style={styles.todayHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.todayLabel}>Today's Word</Text>
+                        <TouchableOpacity
+                          onPress={e => { e.stopPropagation(); reloadTodaysWord(); }}
+                          disabled={todaysWordLoading}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={[styles.todayLabel, { opacity: todaysWordLoading ? 0.4 : 1 }]}>↻</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.todayMovie}>from {todaysWord.movie_title}</Text>
+                    </View>
+                    <Text style={styles.todayWord}>{todaysWord.word}</Text>
+                    {todaysWordTranslating ? (
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
+                    ) : (
+                      <>
+                        {todaysWordTranslation && (
+                          <Text style={styles.todayTranslation}>{todaysWordTranslation.toLowerCase()}</Text>
+                        )}
+                        {todaysWordSentence && (
+                          <Text style={styles.todaySentence}>"{todaysWordSentence}"</Text>
+                        )}
+                        {todaysWordSentenceTranslation && (
+                          <Text style={styles.todayTranslatedSentence}>{todaysWordSentenceTranslation}</Text>
+                        )}
+                      </>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.todaySaveBtn, todaysWordSaved && styles.todaySaveBtnSaved]}
+                      onPress={async () => {
+                        if (todaysWordSaved) return;
+                        try {
+                          await wordwiseApi.saveWord(todaysWord.word, todaysWord.movie_id);
+                          setTodaysWordSaved(true);
+                          setSrsTotalSaved((n) => n + 1);
+                        } catch {}
+                      }}
+                    >
+                      <Text style={[styles.todaySaveBtnText, todaysWordSaved && styles.todaySaveBtnTextSaved]}>
+                        {todaysWordSaved ? '★  Saved' : '☆  Save this word'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              </View>
+            </TouchableOpacity>
+          );
+        })()}
 
         <View style={{ zIndex: 50, overflow: 'visible' }}>
           <View style={styles.levelSortRow}>
@@ -442,37 +601,6 @@ export const HomeScreen = ({
             />
           )}
         </View>
-
-        {todaysWord && (
-          <View style={styles.todayCard}>
-            <View style={styles.todayHeader}>
-              <Text style={styles.todayLabel}>Today's Word</Text>
-              <Text style={styles.todayMovie}>from {todaysWord.movie_title}</Text>
-            </View>
-            <Text style={styles.todayWord}>{todaysWord.word}</Text>
-            {todaysWord.definition && (
-              <Text style={styles.todayDef}>{todaysWord.definition}</Text>
-            )}
-            {todaysWord.example_sentence && (
-              <Text style={styles.todaySentence}>"{todaysWord.example_sentence}"</Text>
-            )}
-            <TouchableOpacity
-              style={[styles.todaySaveBtn, todaysWordSaved && styles.todaySaveBtnSaved]}
-              onPress={async () => {
-                if (todaysWordSaved) return;
-                try {
-                  await wordwiseApi.saveWord(todaysWord.word, todaysWord.movie_id);
-                  setTodaysWordSaved(true);
-                  setSrsTotalSaved((n) => n + 1);
-                } catch {}
-              }}
-            >
-              <Text style={[styles.todaySaveBtnText, todaysWordSaved && styles.todaySaveBtnTextSaved]}>
-                {todaysWordSaved ? '★ Saved' : '☆ Save this word'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         <View style={{ height: 16 }} />
       </ScrollView>
