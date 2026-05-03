@@ -24,7 +24,7 @@ import { TmdbPoster } from '../movies/TmdbPoster';
 import { scoreToCefr } from '../../utils/formatting';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
-const CARD_H        = 140;   // unchanged from original design
+const CARD_H        = 130;
 const CARD_GAP      = 8;     // gap between cards
 const VISIBLE_CARDS = 3;
 const PEEK          = 72;    // ~half of CARD_H visible as the "incoming" card hint
@@ -255,7 +255,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
   );
 };
 
-const POSTER_H = 110;
+const POSTER_H = 100;
 
 const s = StyleSheet.create({
   // Clips to exactly one card + the peek strip.

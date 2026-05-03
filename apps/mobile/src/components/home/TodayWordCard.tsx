@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { wordwiseApi, API_BASE_URL, type TodaysWord } from '../../services/api';
 
-const CARD_HEIGHT = 168;
-const FACE_PADDING = 20;
+const CARD_HEIGHT = 148;
+const FACE_PADDING = 16;
 
 interface Props {
   word: TodaysWord;
@@ -175,10 +175,8 @@ const s = StyleSheet.create({
   face: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#6B46C1',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E8E8EC',
     backfaceVisibility: 'hidden',
     overflow: 'hidden',
     padding: FACE_PADDING,
@@ -187,10 +185,8 @@ const s = StyleSheet.create({
   skeletonFace: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#6B46C1',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E8E8EC',
     padding: FACE_PADDING,
   },
   header: {
@@ -202,28 +198,28 @@ const s = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7C5CBF',
+    color: 'rgba(255,255,255,0.55)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  movie: { fontSize: 11, color: '#9AA0AE', flexShrink: 1, marginLeft: 8 },
+  movie: { fontSize: 11, color: 'rgba(255,255,255,0.45)', flexShrink: 1, marginLeft: 8 },
   wordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   wordPressable: { flexShrink: 1 },
-  word: { fontSize: 30, fontWeight: '800', color: '#1A1A2E', letterSpacing: -0.3 },
+  word: { fontSize: 30, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
   starBtn: { paddingLeft: 8, paddingVertical: 4 },
-  star: { fontSize: 26, color: '#C8B8E8' },
-  starSaved: { color: '#7C5CBF' },
+  star: { fontSize: 26, color: 'rgba(255,255,255,0.35)' },
+  starSaved: { color: '#FACC15' },
   flipZone: { flex: 1 },
-  hint: { fontSize: 12, color: '#9AA0AE' },
+  hint: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   translationWord: {
     fontSize: 30,
     fontWeight: '800',
-    color: '#7C5CBF',
+    color: '#FFFFFF',
     letterSpacing: -0.3,
     marginBottom: 6,
   },
-  sentence: { fontSize: 13, color: '#4A4A5A', fontStyle: 'italic', lineHeight: 18, marginBottom: 3 },
-  sentenceTranslation: { fontSize: 12, color: '#9AA0AE', lineHeight: 17 },
-  skeletonLine: { borderRadius: 7, backgroundColor: '#EBEBEB' },
+  sentence: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 18, marginBottom: 3 },
+  sentenceTranslation: { fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 17 },
+  skeletonLine: { borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.15)' },
 });

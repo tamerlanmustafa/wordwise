@@ -237,6 +237,7 @@ export const HomeScreen = ({
       >
 
         <View style={styles.searchContainer}>
+          <Text style={styles.searchBrandLabel}>WW</Text>
           <View style={styles.searchInputWrapper}>
             <TextInput
               style={styles.searchInput}

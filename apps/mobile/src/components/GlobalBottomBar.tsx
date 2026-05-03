@@ -28,7 +28,7 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
   const tc = useThemeColors();
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(16, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}
+      style={[styles.bar, { paddingBottom: Math.max(6, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}
       onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
     >
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />

@@ -107,7 +107,7 @@ export const styles = StyleSheet.create({
   adBanner: {
     height: 60,
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 4,
     borderRadius: 10,
     backgroundColor: '#F0EDE8',
     borderWidth: 1,
@@ -405,13 +405,21 @@ export const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
     position: 'relative',
     zIndex: 200,
     overflow: 'visible',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  searchBrandLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.5,
+    marginRight: 2,
   },
   searchButton: {
     backgroundColor: colors.primary,
