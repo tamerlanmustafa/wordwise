@@ -20,6 +20,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { colors, cefrColors, cefrLabels } from '../../theme/palette';
 import { useThemeColors } from '../../theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { tmdbGenres } from '../../core/types';
@@ -32,7 +33,6 @@ import {
 } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { offlineCache } from '../../services/offlineCache';
-import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
@@ -104,12 +104,25 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const [overviewNaturalHeight, setOverviewNaturalHeight] = useState(0);
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
+  const [overviewHidden, setOverviewHidden] = useState(false);
+  const overviewHiddenRef = useRef(false);
+  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const shouldHide = y > 80;
+    if (shouldHide !== overviewHiddenRef.current) {
+      overviewHiddenRef.current = shouldHide;
+      LayoutAnimation.configureNext({
+        duration: 220,
+        create: { type: 'easeInEaseOut', property: 'opacity' },
+        update: { type: 'easeInEaseOut' },
+        delete: { type: 'easeInEaseOut', property: 'opacity' },
+      });
+      setOverviewHidden(shouldHide);
+    }
+  }, []);
   const prevLevelRef = useRef<string>(activeLevel);
   const prevViewModeRef = useRef<'levels' | 'idioms'>(viewMode);
-
-  const toggleIndicator = useRef(new Animated.Value(viewMode === 'idioms' ? 1 : 0)).current;
 
   useEffect(() => {
     const levelChanged = prevLevelRef.current !== activeLevel;
@@ -133,14 +146,6 @@ export const MovieDetailScreen = ({
       prevViewModeRef.current = viewMode;
     }
   }, [activeLevel, viewMode, fadeAnim]);
-
-  useEffect(() => {
-    Animated.timing(toggleIndicator, {
-      toValue: viewMode === 'idioms' ? 1 : 0,
-      duration: 280,
-      useNativeDriver: true,
-    }).start();
-  }, [viewMode, toggleIndicator]);
 
   useEffect(() => {
     loadVocabulary();
@@ -568,46 +573,31 @@ export const MovieDetailScreen = ({
       </View>
 
       <View style={styles.movieHeaderContainer}>
-        <View style={styles.movieInfoBar}>
-          {/* Poster — left */}
-          <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)} style={styles.detailPosterWrapper}>
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-              style={styles.detailPoster}
+        {/* Hero — backdrop full-width with floating poster bottom-left */}
+        <View style={styles.movieHeaderHero}>
+          {movie.backdrop_path ? (
+            <ImageBackground
+              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+              style={styles.movieHeaderBackdropFill}
+              imageStyle={styles.movieHeaderBackdropImg}
               resizeMode="cover"
             />
-          </TouchableOpacity>
-
-          {/* Backdrop + info — right */}
-          <View style={styles.movieHeaderBackdropSection}>
-            {movie.backdrop_path && (
-              <ImageBackground
-                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-                style={styles.movieHeaderBackdropFill}
-                imageStyle={styles.movieHeaderBackdropImg}
-                resizeMode="cover"
-              />
-            )}
-            <View style={styles.movieHeaderOverlay} />
-            <View style={styles.movieHeaderRow}>
-              <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
-              <View style={styles.movieMetaRow}>
-                <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
-                {movie.vote_average != null && (
-                  <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
-                )}
-                {movie.original_language && (
-                  <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
-                )}
-              </View>
-              {movie.genre_ids && movie.genre_ids.length > 0 && (
-                <View style={styles.genreRow}>
-                  {movie.genre_ids.slice(0, 3).map((id) => (
-                    <View key={id} style={styles.genreChip}>
-                      <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
-                    </View>
-                  ))}
-                </View>
+          ) : null}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.85)']}
+            style={styles.movieHeaderHeroGradient}
+            pointerEvents="none"
+          />
+          {/* Title + meta in gradient, indented to clear the floating poster */}
+          <View style={styles.movieHeaderTitleArea}>
+            <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
+            <View style={styles.movieMetaRow}>
+              <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+              {movie.vote_average != null && (
+                <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
+              )}
+              {movie.original_language && (
+                <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
               )}
               {difficulty && (
                 <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
@@ -618,34 +608,54 @@ export const MovieDetailScreen = ({
               )}
             </View>
           </View>
-        </View>
-        {movie.overview ? (
-          <Animated.View
-            style={{
-              maxHeight: overviewNaturalHeight
-                ? scrollY.interpolate({
-                    inputRange: [0, 60],
-                    outputRange: [overviewNaturalHeight, 0],
-                    extrapolate: 'clamp',
-                  })
-                : undefined,
-              opacity: scrollY.interpolate({
-                inputRange: [0, 40],
-                outputRange: [1, 0],
-                extrapolate: 'clamp',
-              }),
-              overflow: 'hidden',
-            }}
-            onLayout={(e) => {
-              if (!overviewNaturalHeight) {
-                setOverviewNaturalHeight(e.nativeEvent.layout.height);
-              }
-            }}
+          {/* Floating poster anchored bottom-left */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setPosterZoomOpen(true)}
+            style={styles.detailPosterFloating}
           >
-            <View style={styles.overviewSection}>
-              <Text style={styles.overviewText}>{movie.overview}</Text>
-            </View>
-          </Animated.View>
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+              style={styles.detailPoster}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        </View>
+        {/* Below hero — genres on light bg */}
+        {movie.genre_ids && movie.genre_ids.length > 0 ? (
+          <View style={styles.genreRow}>
+            {movie.genre_ids.slice(0, 3).map((id) => (
+              <View key={id} style={styles.genreChip}>
+                <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {movie.overview && !overviewHidden ? (
+          <View style={styles.overviewSection}>
+            <Text
+              style={styles.overviewText}
+              numberOfLines={overviewExpanded ? undefined : 3}
+            >
+              {movie.overview}
+            </Text>
+            {(movie.overview.length > 150) && (
+              <TouchableOpacity
+                onPress={() => {
+                  LayoutAnimation.configureNext({
+                    duration: 200,
+                    update: { type: 'easeInEaseOut' },
+                  });
+                  setOverviewExpanded((v) => !v);
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={styles.overviewMoreLink}>
+                  {overviewExpanded ? 'less' : 'more'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : null}
       </View>
       <View style={{ flex: 1 }}>
@@ -672,182 +682,141 @@ export const MovieDetailScreen = ({
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           scrollEventThrottle={16}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
+          onScroll={handleScroll}
         >
           <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-            {hasIdioms && (
-              <View style={styles.viewModeToggleWrapper}>
-                <Animated.View
+            {/* Unified tab row: For You (fixed) + A1–C2 + Idioms (scroll) */}
+            <View style={styles.unifiedTabsRowWrapper}>
+            {/* Fixed For You + divider on the left */}
+            <View style={styles.unifiedTabsLeftFixed}>
+              {(() => {
+                const foryouActive = !isIdiomsTab && wordsView === 'foryou';
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.unifiedTab,
+                      foryouActive && { backgroundColor: `${colors.primary}20` },
+                    ]}
+                    onPress={() => {
+                      setViewMode('levels');
+                      startTransition(() => setWordsView('foryou'));
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.unifiedTabLabel,
+                      foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
+                    ]}>
+                      ★ For You
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
+              <View style={styles.unifiedTabDivider} />
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
+            >
+              {wordLevels.map((lvl) => {
+                const active = !isIdiomsTab && wordsView === 'all' && activeLevel === lvl.level;
+                const c = cefrColors[lvl.level] || colors.primary;
+                return (
+                  <TouchableOpacity
+                    key={lvl.level}
+                    style={[
+                      styles.unifiedTab,
+                      styles.unifiedTabLevel,
+                      active && { backgroundColor: `${c}20` },
+                    ]}
+                    onPress={() => {
+                      setViewMode('levels');
+                      startTransition(() => setWordsView('all'));
+                      setActiveLevel(lvl.level);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.unifiedTabLabel,
+                      active && [styles.unifiedTabLabelActive, { color: c }],
+                    ]}>
+                      {lvl.level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              {hasIdioms && (
+                <TouchableOpacity
                   style={[
-                    styles.viewModeToggleIndicator,
-                    {
-                      transform: [
-                        {
-                          translateX: toggleIndicator.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 130],
-                          }),
-                        },
-                      ],
-                    },
+                    styles.unifiedTab,
+                    isIdiomsTab && { backgroundColor: '#F4A26120' },
                   ]}
-                />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.viewModeToggleBtn}
-                  onPress={() => setViewMode('levels')}
-                >
-                  <Text style={[styles.viewModeToggleText, viewMode === 'levels' && styles.viewModeToggleTextActive]}>
-                    Words
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.viewModeToggleBtn}
                   onPress={() => setViewMode('idioms')}
-                >
-                  <Text style={[styles.viewModeToggleText, viewMode === 'idioms' && styles.viewModeToggleTextActive]}>
-                    Expressions ({idioms.length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-
-            {/* Inline view filter — For You / All Levels. Only shown on
-                the words tab (not idioms). Replaces the old bottom-bar
-                position since nav is now global. */}
-            {!isIdiomsTab && (
-              <View style={styles.wordsViewSegmented}>
-                <TouchableOpacity
-                  style={[styles.wordsViewSegment, wordsView === 'foryou' && styles.wordsViewSegmentActive]}
-                  onPress={() => startTransition(() => setWordsView('foryou'))}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.wordsViewSegmentText, wordsView === 'foryou' && styles.wordsViewSegmentTextActive]}>
-                    For You
+                  <Text style={[
+                    styles.unifiedTabLabel,
+                    isIdiomsTab && [styles.unifiedTabLabelActive, { color: '#F4A261' }],
+                  ]}>
+                    Idioms
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.wordsViewSegment, wordsView === 'all' && styles.wordsViewSegmentActive]}
-                  onPress={() => startTransition(() => setWordsView('all'))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.wordsViewSegmentText, wordsView === 'all' && styles.wordsViewSegmentTextActive]}>
-                    All Levels
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              )}
+            </ScrollView>
+            <LinearGradient
+              colors={['rgba(228,220,240,0)', '#E4DCF0']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.unifiedTabsRightFade}
+              pointerEvents="none"
+            />
+            </View>
 
+            {/* Sub-row */}
             {isIdiomsTab ? (
-              <>
-                <View style={styles.exprTabsRow}>
-                  {([
-                    { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
-                    { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
-                    { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
-                  ]).map((tab) => (
-                    <TouchableOpacity
-                      key={tab.key}
-                      style={[
-                        styles.exprTab,
-                        activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
-                      ]}
-                      onPress={() => setActiveExprLevel(tab.key)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.exprTabText,
-                        activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
-                      ]}>
-                        {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
+              <View style={styles.exprTabsRow}>
+                {([
+                  { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
+                  { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
+                  { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
+                ]).map((tab) => (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[
+                      styles.exprTab,
+                      activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
+                    ]}
+                    onPress={() => setActiveExprLevel(tab.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.exprTabText,
+                      activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
+                    ]}>
+                      {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ) : wordsView === 'foryou' ? (
-              <>
-                {suggestedWords.length === 0 ? (
-                  <Text style={styles.forYouEmpty}>No new words at your level</Text>
-                ) : null}
-              </>
+              suggestedWords.length === 0 ? (
+                <Text style={styles.forYouEmpty}>No new words at your level</Text>
+              ) : null
             ) : (
-              <>
-                <View style={styles.cefrTabsWrapper}>
-                  <View style={styles.cefrTabsGradientBorder}>
-                    <View style={styles.cefrTabsInner}>
-                      <View style={styles.cefrTabsContent}>
-                        {wordLevels.map((levelData) => (
-                          <CEFRTab
-                            key={levelData.level}
-                            level={levelData.level}
-                            label={levelData.label}
-                            count={levelData.count}
-                            active={activeLevel === levelData.level}
-                            color={cefrColors[levelData.level] || colors.primary}
-                            onPress={() => setActiveLevel(levelData.level)}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-                </View>
-                <Text style={styles.cefrLevelCount}>
+              <TouchableOpacity
+                style={styles.countSortRow}
+                onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                activeOpacity={0.6}
+              >
+                <Text style={styles.countSortText}>
                   <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
                     {activeData?.count ?? 0}
-                  </Text>{' '}
-                  {activeLevel} words
+                  </Text>
+                  {' '}{activeLevel} words · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
                 </Text>
-                <View style={styles.wordSortRow}>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => setWordSortOrder('rare')}
-                    style={[
-                      styles.wordSortPill,
-                      wordSortOrder === 'rare' && {
-                        backgroundColor: cefrColors[activeLevel] || colors.primary,
-                        borderColor: cefrColors[activeLevel] || colors.primary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.wordSortPillText,
-                        wordSortOrder === 'rare' && styles.wordSortPillTextActive,
-                      ]}
-                    >
-                      Least common {activeLevel}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => setWordSortOrder('common')}
-                    style={[
-                      styles.wordSortPill,
-                      wordSortOrder === 'common' && {
-                        backgroundColor: cefrColors[activeLevel] || colors.primary,
-                        borderColor: cefrColors[activeLevel] || colors.primary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.wordSortPillText,
-                        wordSortOrder === 'common' && styles.wordSortPillTextActive,
-                      ]}
-                    >
-                      Most common {activeLevel}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
+              </TouchableOpacity>
             )}
-
           </View>
 
           <Animated.View
@@ -926,8 +895,9 @@ export const MovieDetailScreen = ({
                       style={styles.foryouMoreLink}
                     >
                       <Text style={styles.foryouMoreLinkText}>
-                        + {suggestedHidden} more — see all in All levels
+                        + {suggestedHidden} more words across all levels
                       </Text>
+                      <Text style={styles.foryouMoreLinkArrow}>→</Text>
                     </TouchableOpacity>
                   )}
                 </>
