@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { colors, cefrColors, cefrLabels } from '../../theme/palette';
+import { useThemeColors } from '../../theme/tokens';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { tmdbGenres } from '../../core/types';
@@ -31,7 +32,6 @@ import {
 } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { offlineCache } from '../../services/offlineCache';
-import { AccordionSwitch } from '../ui/AccordionSwitch';
 import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
@@ -60,6 +60,7 @@ export const MovieDetailScreen = ({
   onBack,
   targetLanguage,
 }: Props) => {
+  const tc = useThemeColors();
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +88,11 @@ export const MovieDetailScreen = ({
   }, [currentBookmarkWord]);
   const [restoreTrigger, setRestoreTrigger] = useState(0);
   const [accordionMode, setAccordionMode] = useState(true);
+  useEffect(() => {
+    AsyncStorage.getItem('accordion_mode').then((v) => {
+      if (v === 'off') setAccordionMode(false);
+    });
+  }, []);
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const [posterZoomOpen, setPosterZoomOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
@@ -98,6 +104,8 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [overviewNaturalHeight, setOverviewNaturalHeight] = useState(0);
   const prevLevelRef = useRef<string>(activeLevel);
   const prevViewModeRef = useRef<'levels' | 'idioms'>(viewMode);
 
@@ -548,8 +556,8 @@ export const MovieDetailScreen = ({
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.detailHeader}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+      <View style={[styles.detailHeader, { backgroundColor: tc.background, borderBottomWidth: 0 }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
@@ -559,79 +567,97 @@ export const MovieDetailScreen = ({
         <View style={{ width: 60 }} />
       </View>
 
-      <View style={styles.movieInfoBar}>
-        {/* Poster — left */}
-        <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)} style={styles.detailPosterWrapper}>
-          <Image
-            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-            style={styles.detailPoster}
-            resizeMode="cover"
-          />
-        </TouchableOpacity>
-
-        {/* Backdrop + info — right */}
-        <View style={styles.movieHeaderBackdropSection}>
-          {movie.backdrop_path && (
-            <ImageBackground
-              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-              style={styles.movieHeaderBackdropFill}
-              imageStyle={styles.movieHeaderBackdropImg}
+      <View style={styles.movieHeaderContainer}>
+        <View style={styles.movieInfoBar}>
+          {/* Poster — left */}
+          <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)} style={styles.detailPosterWrapper}>
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+              style={styles.detailPoster}
               resizeMode="cover"
             />
-          )}
-          <View style={styles.movieHeaderOverlay} />
-          <View style={styles.movieHeaderRow}>
-            <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
-            <View style={styles.movieMetaRow}>
-              <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
-              {movie.vote_average != null && (
-                <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
+          </TouchableOpacity>
+
+          {/* Backdrop + info — right */}
+          <View style={styles.movieHeaderBackdropSection}>
+            {movie.backdrop_path && (
+              <ImageBackground
+                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+                style={styles.movieHeaderBackdropFill}
+                imageStyle={styles.movieHeaderBackdropImg}
+                resizeMode="cover"
+              />
+            )}
+            <View style={styles.movieHeaderOverlay} />
+            <View style={styles.movieHeaderRow}>
+              <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
+              <View style={styles.movieMetaRow}>
+                <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+                {movie.vote_average != null && (
+                  <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
+                )}
+                {movie.original_language && (
+                  <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+                )}
+              </View>
+              {movie.genre_ids && movie.genre_ids.length > 0 && (
+                <View style={styles.genreRow}>
+                  {movie.genre_ids.slice(0, 3).map((id) => (
+                    <View key={id} style={styles.genreChip}>
+                      <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
+                    </View>
+                  ))}
+                </View>
               )}
-              {movie.original_language && (
-                <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+              {difficulty && (
+                <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
+                  <Text style={styles.difficultyChipText}>
+                    {difficulty.level} · {difficulty.score}%
+                  </Text>
+                </View>
               )}
             </View>
-            {movie.genre_ids && movie.genre_ids.length > 0 && (
-              <View style={styles.genreRow}>
-                {movie.genre_ids.slice(0, 3).map((id) => (
-                  <View key={id} style={styles.genreChip}>
-                    <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {difficulty && (
-              <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
-                <Text style={styles.difficultyChipText}>
-                  {difficulty.level} · {difficulty.score}%
-                </Text>
-              </View>
-            )}
           </View>
         </View>
+        {movie.overview ? (
+          <Animated.View
+            style={{
+              maxHeight: overviewNaturalHeight
+                ? scrollY.interpolate({
+                    inputRange: [0, 60],
+                    outputRange: [overviewNaturalHeight, 0],
+                    extrapolate: 'clamp',
+                  })
+                : undefined,
+              opacity: scrollY.interpolate({
+                inputRange: [0, 40],
+                outputRange: [1, 0],
+                extrapolate: 'clamp',
+              }),
+              overflow: 'hidden',
+            }}
+            onLayout={(e) => {
+              if (!overviewNaturalHeight) {
+                setOverviewNaturalHeight(e.nativeEvent.layout.height);
+              }
+            }}
+          >
+            <View style={styles.overviewSection}>
+              <Text style={styles.overviewText}>{movie.overview}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
       </View>
       <View style={{ flex: 1 }}>
       {loading ? (
-        <>
-          {movie.overview ? (
-            <View style={styles.overviewSection}>
-              <Text style={styles.overviewText} numberOfLines={2}>{movie.overview}</Text>
-            </View>
-          ) : null}
-          <View style={[styles.container, styles.centered]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
-            <Text style={styles.loadingSubtext}>Searching script</Text>
-            <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
-          </View>
-        </>
+        <View style={[styles.container, styles.centered]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
+          <Text style={styles.loadingSubtext}>Searching script</Text>
+          <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
+        </View>
       ) : error ? (
         <>
-          {movie.overview ? (
-            <View style={styles.overviewSection}>
-              <Text style={styles.overviewText} numberOfLines={2}>{movie.overview}</Text>
-            </View>
-          ) : null}
           <View style={styles.scriptErrorBox}>
             <Text style={styles.scriptErrorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
@@ -642,19 +668,16 @@ export const MovieDetailScreen = ({
       ) : vocabulary ? (
         <ScrollView
           ref={scrollViewRef}
-          stickyHeaderIndices={[1]}
+          stickyHeaderIndices={[0]}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
         >
-          <View>
-            {movie.overview ? (
-              <View style={styles.overviewSection}>
-                <Text style={styles.overviewText} numberOfLines={2}>{movie.overview}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.stickyVocabHeader}>
+          <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
             {hasIdioms && (
               <View style={styles.viewModeToggleWrapper}>
                 <Animated.View
@@ -825,19 +848,13 @@ export const MovieDetailScreen = ({
               </>
             )}
 
-            <View style={styles.accordionToggleRow}>
-              <Text style={styles.accordionToggleText}>
-                Close previous row when opening a new one
-              </Text>
-              <AccordionSwitch value={accordionMode} onToggle={() => setAccordionMode((v) => !v)} />
-            </View>
           </View>
 
           <Animated.View
             style={{ opacity: fadeAnim }}
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
-            <View style={styles.wordList}>
+            <View style={[styles.wordList, { backgroundColor: tc.background }]}>
               {isIdiomsTab ? (
                 activeIdioms.map((item, index) => {
                   const key = item.phrase;

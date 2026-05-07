@@ -53,11 +53,19 @@ export const SettingsScreen = ({
   const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
   const [dailyWordNotif, setDailyWordNotif] = useState(true);
   const [reviewNotif, setReviewNotif] = useState(true);
+  const [accordionMode, setAccordionMode] = useState(true);
 
   useEffect(() => {
     AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
     AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
+    AsyncStorage.getItem('accordion_mode').then((v) => { if (v === 'off') setAccordionMode(false); });
   }, []);
+
+  const toggleAccordionMode = async () => {
+    const next = !accordionMode;
+    setAccordionMode(next);
+    await AsyncStorage.setItem('accordion_mode', next ? 'on' : 'off');
+  };
 
   const toggleDailyWord = async () => {
     const next = !dailyWordNotif;
@@ -323,6 +331,20 @@ export const SettingsScreen = ({
         </TouchableOpacity>
 
         <View style={settingsStyles.divider} />
+
+        <Text style={settingsStyles.sectionTitle}>Vocabulary</Text>
+        <View style={settingsStyles.notifRow}>
+          <View style={settingsStyles.notifInfo}>
+            <Text style={settingsStyles.notifLabel}>Auto-collapse word rows</Text>
+            <Text style={settingsStyles.notifDesc}>Close the previously opened row when you open a new one</Text>
+          </View>
+          <TouchableOpacity
+            style={[settingsStyles.notifToggle, accordionMode && settingsStyles.notifToggleOn]}
+            onPress={toggleAccordionMode}
+          >
+            <Text style={settingsStyles.notifToggleText}>{accordionMode ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={settingsStyles.sectionTitle}>Notifications</Text>
         <View style={settingsStyles.notifRow}>

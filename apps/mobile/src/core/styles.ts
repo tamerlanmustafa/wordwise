@@ -821,12 +821,23 @@ export const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 20,
   },
+  movieHeaderContainer: {
+    marginHorizontal: 12,
+    marginVertical: 8,
+    backgroundColor: colors.paper,
+    borderRadius: 16,
+    paddingBottom: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
   movieInfoBar: {
     flexDirection: 'row',
     alignItems: 'stretch',
     height: 160,
-    marginHorizontal: 12,
-    marginVertical: 8,
+    padding: 10,
     gap: 10,
   },
   detailPosterWrapper: {
@@ -1002,14 +1013,15 @@ export const styles = StyleSheet.create({
   },
   overviewSection: {
     paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 8,
-    backgroundColor: colors.paper,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
   overviewText: {
     fontSize: 12,
     color: colors.textSecondary,
     lineHeight: 17,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   scriptErrorBox: {
     margin: 16,
@@ -1227,21 +1239,6 @@ export const styles = StyleSheet.create({
   },
   wordSortPillTextActive: {
     color: '#FFFFFF',
-  },
-  accordionToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 6,
-    gap: 10,
-  },
-  accordionToggleText: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
   },
   expandIcon: {
     fontSize: 10,
