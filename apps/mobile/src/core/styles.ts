@@ -403,6 +403,12 @@ export const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  searchBarFixed: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 300,
+  },
   searchContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,

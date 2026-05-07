@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { wordwiseApi, API_BASE_URL, type TodaysWord } from '../../services/api';
+import { useDoubleTap } from '../../hooks/useDoubleTap';
 
 const CARD_HEIGHT = 148;
 const FACE_PADDING = 16;
@@ -88,6 +89,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
   };
 
   const isSameAsWord = (t: string) => t.trim().toLowerCase() === word.word.toLowerCase();
+  const onDoubleTapFlip = useDoubleTap(handleFlip);
 
   return (
     <View style={s.container}>
@@ -103,15 +105,15 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         </View>
         {/* word + star as siblings — no nesting, no propagation issues */}
         <View style={s.wordRow}>
-          <Pressable onPress={handleFlip} style={s.wordPressable}>
+          <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>
             <Text style={s.word}>{word.word}</Text>
           </Pressable>
           <Pressable onPress={handleSave} hitSlop={14} style={s.starBtn}>
             <Text style={[s.star, saved && s.starSaved]}>{saved ? '★' : '☆'}</Text>
           </Pressable>
         </View>
-        <Pressable onPress={handleFlip} style={s.flipZone}>
-          <Text style={s.hint}>Tap to reveal translation</Text>
+        <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
+          <Text style={s.hint}>Double tap to flip</Text>
         </Pressable>
       </Animated.View>
 
@@ -124,7 +126,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
           <Text style={s.label}>Translation</Text>
           <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
         </View>
-        <Pressable onPress={handleFlip} style={s.flipZone}>
+        <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
           {translating ? (
             <View style={s.loadingBox}>
               <ActivityIndicator size="small" color="#7C5CBF" />

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   Keyboard,
   ScrollView,
@@ -8,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../../theme/tokens';
 import { GlobalBottomBar } from '../GlobalBottomBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,6 +69,7 @@ export const HomeScreen = ({
   onNavigateToProfile,
 }: Props) => {
   const tc = useThemeColors();
+  const insets = useSafeAreaInsets();
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
   const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
   const showAdsEntitlement = useShowAds();
@@ -94,6 +96,30 @@ export const HomeScreen = ({
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SEARCH_BAR_H = 66;
+  const searchBarAnim = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const searchBarVisible = useRef(true);
+
+  const handleScroll = (e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+    if (y < SEARCH_BAR_H) {
+      if (!searchBarVisible.current) {
+        searchBarVisible.current = true;
+        Animated.timing(searchBarAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      }
+      return;
+    }
+    if (dy > 3 && searchBarVisible.current) {
+      searchBarVisible.current = false;
+      Animated.timing(searchBarAnim, { toValue: -SEARCH_BAR_H, duration: 200, useNativeDriver: true }).start();
+    } else if (dy < -3 && !searchBarVisible.current) {
+      searchBarVisible.current = true;
+      Animated.timing(searchBarAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -229,13 +255,7 @@ export const HomeScreen = ({
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
 
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
-      >
-
+      <Animated.View style={[styles.searchBarFixed, { top: insets.top, backgroundColor: tc.background, transform: [{ translateY: searchBarAnim }] }]}>
         <View style={styles.searchContainer}>
           <Text style={styles.searchBrandLabel}>WW</Text>
           <View style={styles.searchInputWrapper}>
@@ -337,21 +357,22 @@ export const HomeScreen = ({
             <Text style={styles.searchButtonText}>🔍</Text>
           </TouchableOpacity>
         </View>
+      </Animated.View>
 
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+        onScroll={handleScroll}
+        contentContainerStyle={{ paddingTop: SEARCH_BAR_H }}
+      >
 
         {showAds && (
           <View style={styles.adBanner}>
             <Text style={styles.adBannerText}>Ad</Text>
           </View>
-        )}
-
-        {todaysWord ? (
-          <TodayWordCard
-            word={todaysWord}
-            targetLanguage={targetLanguage}
-          />
-        ) : (
-          <TodayWordCardSkeleton />
         )}
 
         <View style={{ zIndex: 50, overflow: 'visible' }}>
@@ -448,6 +469,17 @@ export const HomeScreen = ({
               movies={trendingMovies}
               onMoviePress={handleMoviePress}
             />
+          )}
+        </View>
+
+        <View style={{ marginTop: -88, zIndex: 10 }}>
+          {todaysWord ? (
+            <TodayWordCard
+              word={todaysWord}
+              targetLanguage={targetLanguage}
+            />
+          ) : (
+            <TodayWordCardSkeleton />
           )}
         </View>
 
