@@ -35,7 +35,6 @@ import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
-import { GlobalBottomBar } from '../GlobalBottomBar';
 import { MoviePhotosModal } from '../MoviePhotosModal';
 
 const LEARNED_ROW_ANIM = {
@@ -54,20 +53,12 @@ interface Props {
   // handler returns a Promise so we can render a spinner on the button
   // while the backend warms up translations (~1–3s).
   // Global bottom-bar handlers.
-  onNavigateHome: () => void;
-  onNavigateWords: () => void;
-  onNavigateJourney: () => void;
-  onNavigateRankings: () => void;
 }
 
 export const MovieDetailScreen = ({
   movie,
   onBack,
   targetLanguage,
-  onNavigateHome,
-  onNavigateWords,
-  onNavigateJourney,
-  onNavigateRankings,
 }: Props) => {
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
@@ -998,19 +989,6 @@ export const MovieDetailScreen = ({
         </TouchableWithoutFeedback>
       </Modal>
       </View>
-
-      {/* Global 4-tab nav — same on every screen. Movie-local view
-          filters (For You / All Levels) live inline inside the word list
-          section, not here. */}
-      <GlobalBottomBar
-        active={null}
-        onTabPress={(t) => {
-          if (t === 'home') onNavigateHome();
-          else if (t === 'words') onNavigateWords();
-          else if (t === 'journey') onNavigateJourney();
-          else if (t === 'rankings') onNavigateRankings();
-        }}
-      />
 
       {pendingLearned && (
         <View style={styles.undoToast} pointerEvents="box-none">

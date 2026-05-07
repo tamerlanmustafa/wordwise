@@ -442,10 +442,6 @@ export default function App() {
             movie={selectedMovie}
             onBack={navigateToHome}
             targetLanguage={targetLanguage}
-            onNavigateHome={navigateToHome}
-            onNavigateWords={navigateToLists}
-            onNavigateJourney={navigateToJourney}
-            onNavigateRankings={navigateToLeaderboard}
           />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
