@@ -822,8 +822,26 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   movieInfoBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    height: 160,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    gap: 10,
+  },
+  detailPosterWrapper: {
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
     overflow: 'hidden',
-    aspectRatio: 16 / 9,
+    backgroundColor: colors.border,
+  },
+  detailPoster: {
+    flex: 1,
+  },
+  movieHeaderBackdropSection: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
     backgroundColor: 'rgba(15,8,25,0.88)',
   },
   movieHeaderBackdropFill: {
@@ -842,32 +860,13 @@ export const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.38)',
   },
-  movieHeaderOverlayBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
   movieHeaderRow: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    paddingTop: 8,
-    gap: 12,
-  },
-  detailPoster: {
-    width: 64,
-    height: 92,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
+    padding: 10,
+    gap: 4,
   },
   posterZoomBackdrop: {
     flex: 1,
@@ -929,10 +928,6 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  movieInfoText: {
-    flex: 1,
-    gap: 4,
   },
   movieInfoTitle: {
     fontSize: 15,

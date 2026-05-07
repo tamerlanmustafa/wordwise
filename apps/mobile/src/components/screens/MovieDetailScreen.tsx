@@ -36,8 +36,6 @@ import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MoviePhotosModal } from '../MoviePhotosModal';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -91,7 +89,6 @@ export const MovieDetailScreen = ({
   const [accordionMode, setAccordionMode] = useState(true);
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const [posterZoomOpen, setPosterZoomOpen] = useState(false);
-  const [photosOpen, setPhotosOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
   const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -563,27 +560,27 @@ export const MovieDetailScreen = ({
       </View>
 
       <View style={styles.movieInfoBar}>
-        {movie.backdrop_path && (
-          <ImageBackground
-            source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-            style={styles.movieHeaderBackdropFill}
-            imageStyle={styles.movieHeaderBackdropImg}
+        {/* Poster — left */}
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)} style={styles.detailPosterWrapper}>
+          <Image
+            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+            style={styles.detailPoster}
             resizeMode="cover"
           />
-        )}
-        <View style={styles.movieHeaderOverlay} />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.72)']}
-          style={styles.movieHeaderOverlayBottom}
-        />
-        <View style={styles.movieHeaderRow}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-              style={styles.detailPoster}
+        </TouchableOpacity>
+
+        {/* Backdrop + info — right */}
+        <View style={styles.movieHeaderBackdropSection}>
+          {movie.backdrop_path && (
+            <ImageBackground
+              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+              style={styles.movieHeaderBackdropFill}
+              imageStyle={styles.movieHeaderBackdropImg}
+              resizeMode="cover"
             />
-          </TouchableOpacity>
-          <View style={styles.movieInfoText}>
+          )}
+          <View style={styles.movieHeaderOverlay} />
+          <View style={styles.movieHeaderRow}>
             <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
             <View style={styles.movieMetaRow}>
               <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
@@ -609,15 +606,6 @@ export const MovieDetailScreen = ({
                   {difficulty.level} · {difficulty.score}%
                 </Text>
               </View>
-            )}
-            {authUser?.is_admin && (
-              <TouchableOpacity
-                onPress={() => setPhotosOpen(true)}
-                style={styles.photosBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.photosBtnText}>🖼 Photos</Text>
-              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -1020,12 +1008,6 @@ export const MovieDetailScreen = ({
         </View>
       )}
 
-      <MoviePhotosModal
-        visible={photosOpen}
-        tmdbId={movie.tmdb_id || (typeof movie.id === 'number' ? movie.id : null)}
-        movieTitle={movie.title}
-        onClose={() => setPhotosOpen(false)}
-      />
     </SafeAreaView>
   );
 };
