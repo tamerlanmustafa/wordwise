@@ -544,6 +544,66 @@ export const MovieDetailScreen = ({
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
+  // Sliding tab indicator for the scrollable level/idioms row. The For You
+  // tab lives in a separate fixed container so it isn't part of the slide.
+  const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorWidth = useRef(new Animated.Value(0)).current;
+  const indicatorOpacity = useRef(new Animated.Value(0)).current;
+  const indicatorPositioned = useRef(false);
+
+  const activeScrollKey: string | null = isIdiomsTab
+    ? 'IDIOMS'
+    : wordsView === 'all'
+      ? activeLevel
+      : null;
+  const activeIndicatorColor = isIdiomsTab
+    ? '#F4A26120'
+    : `${cefrColors[activeLevel] || colors.primary}20`;
+
+  useEffect(() => {
+    if (!activeScrollKey) {
+      Animated.timing(indicatorOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
+    const layout = tabLayouts.current[activeScrollKey];
+    if (!layout) return;
+    Animated.parallel([
+      Animated.timing(indicatorX, {
+        toValue: layout.x,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(indicatorWidth, {
+        toValue: layout.width,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(indicatorOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [activeScrollKey, indicatorX, indicatorWidth, indicatorOpacity]);
+
+  const handleScrollTabLayout = (key: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
+    const { x, width } = e.nativeEvent.layout;
+    tabLayouts.current[key] = { x, width };
+    if (key === activeScrollKey && !indicatorPositioned.current) {
+      indicatorX.setValue(x);
+      indicatorWidth.setValue(width);
+      indicatorOpacity.setValue(1);
+      indicatorPositioned.current = true;
+    }
+  };
+
   // Defer the heavy list inputs so tab taps update the header immediately
   // while the row re-render runs at lower priority on the next tick.
   const deferredIsIdiomsTab = useDeferredValue(isIdiomsTab);
@@ -559,7 +619,9 @@ export const MovieDetailScreen = ({
   const INITIAL_ROWS = 25;
   const ROW_BATCH = 35;
   const ROW_BATCH_DELAY = 40;
+  const SKELETON_DURATION = 140;
   const [renderLimit, setRenderLimit] = useState(INITIAL_ROWS);
+  const [isSwitching, setIsSwitching] = useState(false);
   const activeListLength = deferredIsIdiomsTab
     ? deferredActiveIdioms.length
     : deferredWordsView === 'foryou'
@@ -568,6 +630,9 @@ export const MovieDetailScreen = ({
   // Reset whenever the user changes the active filter set.
   useEffect(() => {
     setRenderLimit(INITIAL_ROWS);
+    setIsSwitching(true);
+    const id = setTimeout(() => setIsSwitching(false), SKELETON_DURATION);
+    return () => clearTimeout(id);
   }, [viewMode, wordsView, activeLevel, activeExprLevel, wordSortOrder]);
   // Progressively grow until we've rendered everything in the active list.
   useEffect(() => {
@@ -737,17 +802,26 @@ export const MovieDetailScreen = ({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
             >
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.unifiedTabIndicator,
+                  {
+                    left: indicatorX,
+                    width: indicatorWidth,
+                    opacity: indicatorOpacity,
+                    backgroundColor: activeIndicatorColor,
+                  },
+                ]}
+              />
               {wordLevels.map((lvl) => {
                 const active = !isIdiomsTab && wordsView === 'all' && activeLevel === lvl.level;
                 const c = cefrColors[lvl.level] || colors.primary;
                 return (
                   <TouchableOpacity
                     key={lvl.level}
-                    style={[
-                      styles.unifiedTab,
-                      styles.unifiedTabLevel,
-                      active && { backgroundColor: `${c}20` },
-                    ]}
+                    style={[styles.unifiedTab, styles.unifiedTabLevel]}
+                    onLayout={handleScrollTabLayout(lvl.level)}
                     onPress={() => {
                       setViewMode('levels');
                       startTransition(() => setWordsView('all'));
@@ -766,10 +840,8 @@ export const MovieDetailScreen = ({
               })}
               {hasIdioms && (
                 <TouchableOpacity
-                  style={[
-                    styles.unifiedTab,
-                    isIdiomsTab && { backgroundColor: '#F4A26120' },
-                  ]}
+                  style={styles.unifiedTab}
+                  onLayout={handleScrollTabLayout('IDIOMS')}
                   onPress={() => setViewMode('idioms')}
                   activeOpacity={0.7}
                 >
@@ -841,7 +913,14 @@ export const MovieDetailScreen = ({
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
             <View style={[styles.wordList, { backgroundColor: tc.background }]}>
-              {deferredIsIdiomsTab ? (
+              {isSwitching ? (
+                Array.from({ length: INITIAL_ROWS }).map((_, i) => (
+                  <View key={`skel-${i}`} style={styles.wordSkeletonRow}>
+                    <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarPrimary]} />
+                    <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarSecondary]} />
+                  </View>
+                ))
+              ) : deferredIsIdiomsTab ? (
                 deferredActiveIdioms.slice(0, renderLimit).map((item, index) => {
                   const key = item.phrase;
                   return (

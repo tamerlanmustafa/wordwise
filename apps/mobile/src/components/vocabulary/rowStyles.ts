@@ -86,6 +86,18 @@ export const rowStyles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  expandSkeletonGroup: {
+    paddingVertical: 4,
+    gap: 8,
+  },
+  expandSkeletonBar: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: 'rgba(124, 92, 191, 0.16)',
+  },
+  expandSkeletonBarShort: { width: '55%' },
+  expandSkeletonBarLong: { width: '92%' },
+  expandSkeletonBarMid: { width: '75%' },
   translationBox: {
     flexDirection: 'row',
     alignItems: 'baseline',

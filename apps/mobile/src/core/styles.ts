@@ -1120,6 +1120,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 8,
     minWidth: 40,
   },
+  unifiedTabIndicator: {
+    position: 'absolute',
+    top: 6,
+    bottom: 6,
+    borderRadius: 10,
+  },
   unifiedTabLabel: {
     fontSize: 14,
     fontWeight: '700',
@@ -1168,6 +1174,29 @@ export const styles = StyleSheet.create({
   wordList: {
     paddingBottom: 40,
     backgroundColor: colors.paper,
+  },
+  wordSkeletonRow: {
+    height: 50,
+    marginBottom: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 92, 191, 0.10)',
+    backgroundColor: 'rgba(124, 92, 191, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  wordSkeletonBar: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: 'rgba(124, 92, 191, 0.18)',
+  },
+  wordSkeletonBarPrimary: {
+    flex: 1,
+  },
+  wordSkeletonBarSecondary: {
+    width: 28,
   },
   forYouEmpty: {
     textAlign: 'center',

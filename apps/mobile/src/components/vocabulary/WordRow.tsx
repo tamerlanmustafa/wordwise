@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
+  LayoutAnimation,
   Text,
   TouchableOpacity,
   View,
@@ -17,6 +17,19 @@ export interface SentenceExample {
   matched_form?: string;
   translation?: string;
 }
+
+const EXPAND_ANIM = {
+  duration: 220,
+  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+  update: { type: 'easeInEaseOut' as const },
+  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+};
+const REVEAL_ANIM = {
+  duration: 180,
+  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+  update: { type: 'easeInEaseOut' as const },
+  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+};
 
 interface Props {
   word: WordInfo;
@@ -65,69 +78,69 @@ const _WordRow = ({
   onHide,
 }: Props) => {
   const [expanded, setExpanded] = useState(false);
+  const [contentLoaded, setContentLoaded] = useState(false);
 
   useEffect(() => {
     if (accordionMode && expanded && lastOpenedKey && lastOpenedKey !== word.word) {
+      LayoutAnimation.configureNext(EXPAND_ANIM);
       setExpanded(false);
     }
   }, [accordionMode, lastOpenedKey, expanded, word.word]);
   const [translation, setTranslation] = useState<string | null>(null);
-  const [translating, setTranslating] = useState(false);
   const [sentenceExamples, setSentenceExamples] = useState<SentenceExample[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
   const [crossMovieSentences, setCrossMovieSentences] = useState<CrossMovieSentence[]>([]);
   const [playingAudio, setPlayingAudio] = useState(false);
   const isPremium = useIsPremium();
 
-  const handlePress = async () => {
+  const handlePress = () => {
     if (expanded) {
+      LayoutAnimation.configureNext(EXPAND_ANIM);
       setExpanded(false);
       return;
     }
 
     onExpand?.(word.word);
-
     if (isAuthenticated) {
       wordwiseApi.logInteraction(word.word, 'ROW_CLICK', movieId);
     }
 
-    if (translation) {
-      setExpanded(true);
-      return;
-    }
+    // Expand instantly with skeleton; content reveals together once both
+    // fetches finish (translation, in-movie sentences). Report/Hide buttons
+    // are gated on the same flag so they appear with the rest.
+    LayoutAnimation.configureNext(EXPAND_ANIM);
+    setExpanded(true);
 
-    setTranslating(true);
-    try {
-      const promises: Promise<void>[] = [];
+    if (contentLoaded) return;
 
+    const promises: Promise<void>[] = [];
+    promises.push(
+      wordwiseApi.translate(word.word, targetLang || 'ES', undefined, movieId)
+        .then((result) => setTranslation(result.translated))
+        .catch(() => setTranslation('Translation failed'))
+    );
+    if (movieId) {
+      const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
       promises.push(
-        wordwiseApi.translate(word.word, targetLang || 'ES', undefined, movieId)
-          .then((result) => setTranslation(result.translated))
-          .catch(() => setTranslation('Translation failed'))
+        fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.sentences && Array.isArray(data.sentences)) {
+              setSentenceExamples(data.sentences);
+            }
+          })
+          .catch(() => {})
       );
+    }
+    Promise.all(promises).then(() => {
+      LayoutAnimation.configureNext(REVEAL_ANIM);
+      setContentLoaded(true);
+    });
 
-      if (movieId) {
-        const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
-        promises.push(
-          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.sentences && Array.isArray(data.sentences)) {
-                setSentenceExamples(data.sentences);
-              }
-            })
-            .catch(() => {})
-        );
-      }
-
-      await Promise.all(promises);
-      setExpanded(true);
-
-      if (isPremium) {
-        premiumApi.crossMovieSentences(word.word).then(setCrossMovieSentences).catch(() => {});
-      }
-    } finally {
-      setTranslating(false);
+    // Cross-movie sentences load independently — they're a bonus block, not
+    // gated with the primary content reveal.
+    if (isPremium) {
+      premiumApi.crossMovieSentences(word.word).then(setCrossMovieSentences).catch(() => {});
     }
   };
 
@@ -198,13 +211,6 @@ const _WordRow = ({
               </Text>
             </TouchableOpacity>
           )}
-          {translating && (
-            <ActivityIndicator
-              size="small"
-              color={colors.primary}
-              style={styles.inlineSpinner}
-            />
-          )}
           {isAuthenticated && onSave && (
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation(); onSave(word.word); }}
@@ -229,36 +235,65 @@ const _WordRow = ({
 
       {expanded && (
         <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
-          <View style={styles.translationBox}>
-            <Text style={styles.translationDash}>—</Text>
-            {translation ? (
-              <Text
-                style={[
-                  styles.translationText,
-                  isUntranslatable && styles.translationUntranslatable,
-                ]}
-              >
-                {isUntranslatable ? '(same as source)' : translation.toLowerCase()}
-              </Text>
-            ) : (
-              <Text style={styles.noTranslation}>No translation available</Text>
-            )}
-          </View>
-
-          {sentenceExamples.length > 0 ? (
-            sentenceExamples.map((example, idx) => (
-              <View key={idx} style={styles.exampleCard}>
-                {renderHighlightedSentence(example.sentence, word.word, example.matched_form)}
-                {example.translation && (
-                  <Text style={styles.exampleTranslation}>
-                    {example.translation.toLowerCase()}
+          {contentLoaded ? (
+            <>
+              <View style={styles.translationBox}>
+                <Text style={styles.translationDash}>—</Text>
+                {translation ? (
+                  <Text
+                    style={[
+                      styles.translationText,
+                      isUntranslatable && styles.translationUntranslatable,
+                    ]}
+                  >
+                    {isUntranslatable ? '(same as source)' : translation.toLowerCase()}
                   </Text>
+                ) : (
+                  <Text style={styles.noTranslation}>No translation available</Text>
                 )}
               </View>
-            ))
-          ) : movieId ? (
-            <Text style={styles.noExamples}>No sentence examples available</Text>
-          ) : null}
+
+              {sentenceExamples.length > 0 ? (
+                sentenceExamples.map((example, idx) => (
+                  <View key={idx} style={styles.exampleCard}>
+                    {renderHighlightedSentence(example.sentence, word.word, example.matched_form)}
+                    {example.translation && (
+                      <Text style={styles.exampleTranslation}>
+                        {example.translation.toLowerCase()}
+                      </Text>
+                    )}
+                  </View>
+                ))
+              ) : movieId ? (
+                <Text style={styles.noExamples}>No sentence examples available</Text>
+              ) : null}
+
+              {isAuthenticated && (
+                <TouchableOpacity
+                  onPress={() => setReportOpen(true)}
+                  style={styles.reportInlineBtn}
+                >
+                  <Text style={styles.reportInlineBtnText}>⚐ Report an issue</Text>
+                </TouchableOpacity>
+              )}
+              {onHide && (
+                <TouchableOpacity
+                  onPress={() => onHide(word.word)}
+                  style={styles.reportInlineBtn}
+                >
+                  <Text style={[styles.reportInlineBtnText, { color: '#D66A6A' }]}>
+                    🚫 Hide word (admin)
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <View style={styles.expandSkeletonGroup}>
+              <View style={[styles.expandSkeletonBar, styles.expandSkeletonBarShort]} />
+              <View style={[styles.expandSkeletonBar, styles.expandSkeletonBarLong]} />
+              <View style={[styles.expandSkeletonBar, styles.expandSkeletonBarMid]} />
+            </View>
+          )}
 
           {isPremium && crossMovieSentences.length > 0 && (
             <View style={styles.crossMovieSection}>
@@ -270,24 +305,6 @@ const _WordRow = ({
                 </View>
               ))}
             </View>
-          )}
-          {isAuthenticated && (
-            <TouchableOpacity
-              onPress={() => setReportOpen(true)}
-              style={styles.reportInlineBtn}
-            >
-              <Text style={styles.reportInlineBtnText}>⚐ Report an issue</Text>
-            </TouchableOpacity>
-          )}
-          {onHide && (
-            <TouchableOpacity
-              onPress={() => onHide(word.word)}
-              style={styles.reportInlineBtn}
-            >
-              <Text style={[styles.reportInlineBtnText, { color: '#D66A6A' }]}>
-                🚫 Hide word (admin)
-              </Text>
-            </TouchableOpacity>
           )}
         </View>
       )}
