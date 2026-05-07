@@ -7,12 +7,12 @@ export const rowStyles = StyleSheet.create({
     marginBottom: -1,
   },
   wordRow: {
-    backgroundColor: colors.paper,
+    backgroundColor: '#F0E8FA',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DDD0EE',
   },
   wordRowExpanded: {
     borderColor: colors.primary,

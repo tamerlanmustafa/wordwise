@@ -1,4 +1,4 @@
-import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -103,7 +103,6 @@ export const MovieDetailScreen = ({
 
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
-  const fadeAnim = useRef(new Animated.Value(1)).current;
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [overviewHidden, setOverviewHidden] = useState(false);
   const overviewHiddenRef = useRef(false);
@@ -125,27 +124,12 @@ export const MovieDetailScreen = ({
   const prevViewModeRef = useRef<'levels' | 'idioms'>(viewMode);
 
   useEffect(() => {
-    const levelChanged = prevLevelRef.current !== activeLevel;
-    const modeChanged = prevViewModeRef.current !== viewMode;
-
-    if (levelChanged || modeChanged) {
+    if (prevLevelRef.current !== activeLevel || prevViewModeRef.current !== viewMode) {
       rowYOffsets.current = {};
-      Animated.sequence([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-      ]).start();
       prevLevelRef.current = activeLevel;
       prevViewModeRef.current = viewMode;
     }
-  }, [activeLevel, viewMode, fadeAnim]);
+  }, [activeLevel, viewMode]);
 
   useEffect(() => {
     loadVocabulary();
@@ -560,6 +544,40 @@ export const MovieDetailScreen = ({
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
+  // Defer the heavy list inputs so tab taps update the header immediately
+  // while the row re-render runs at lower priority on the next tick.
+  const deferredIsIdiomsTab = useDeferredValue(isIdiomsTab);
+  const deferredWordsView = useDeferredValue(wordsView);
+  const deferredActiveWords = useDeferredValue(activeWords);
+  const deferredActiveIdioms = useDeferredValue(activeIdioms);
+  const deferredSuggestedVisible = useDeferredValue(suggestedVisible);
+
+  // Chunked rendering: mount the first 25 rows immediately on a tab switch,
+  // then progressively reveal the rest in batches. ~100 WordRow mounts in
+  // one frame is the actual bottleneck — splitting them across frames keeps
+  // the tap responsive.
+  const INITIAL_ROWS = 25;
+  const ROW_BATCH = 35;
+  const ROW_BATCH_DELAY = 40;
+  const [renderLimit, setRenderLimit] = useState(INITIAL_ROWS);
+  const activeListLength = deferredIsIdiomsTab
+    ? deferredActiveIdioms.length
+    : deferredWordsView === 'foryou'
+      ? deferredSuggestedVisible.length
+      : deferredActiveWords.length;
+  // Reset whenever the user changes the active filter set.
+  useEffect(() => {
+    setRenderLimit(INITIAL_ROWS);
+  }, [viewMode, wordsView, activeLevel, activeExprLevel, wordSortOrder]);
+  // Progressively grow until we've rendered everything in the active list.
+  useEffect(() => {
+    if (renderLimit >= activeListLength) return;
+    const id = setTimeout(() => {
+      setRenderLimit((n) => Math.min(n + ROW_BATCH, activeListLength));
+    }, ROW_BATCH_DELAY);
+    return () => clearTimeout(id);
+  }, [renderLimit, activeListLength]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
       <View style={[styles.detailHeader, { backgroundColor: tc.background, borderBottomWidth: 0 }]}>
@@ -819,13 +837,12 @@ export const MovieDetailScreen = ({
             )}
           </View>
 
-          <Animated.View
-            style={{ opacity: fadeAnim }}
+          <View
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
             <View style={[styles.wordList, { backgroundColor: tc.background }]}>
-              {isIdiomsTab ? (
-                activeIdioms.map((item, index) => {
+              {deferredIsIdiomsTab ? (
+                deferredActiveIdioms.slice(0, renderLimit).map((item, index) => {
                   const key = item.phrase;
                   return (
                     <BookmarkRowWrapper
@@ -854,9 +871,9 @@ export const MovieDetailScreen = ({
                     </BookmarkRowWrapper>
                   );
                 })
-              ) : wordsView === 'foryou' ? (
+              ) : deferredWordsView === 'foryou' ? (
                 <>
-                  {suggestedVisible.map((item, index) => {
+                  {deferredSuggestedVisible.slice(0, renderLimit).map((item, index) => {
                     const key = item.word;
                     return (
                       <BookmarkRowWrapper
@@ -902,7 +919,7 @@ export const MovieDetailScreen = ({
                   )}
                 </>
               ) : (
-                activeWords.map((item, index) => {
+                deferredActiveWords.slice(0, renderLimit).map((item, index) => {
                   const key = item.word;
                   return (
                     <BookmarkRowWrapper
@@ -935,7 +952,7 @@ export const MovieDetailScreen = ({
                 })
               )}
             </View>
-          </Animated.View>
+          </View>
         </ScrollView>
       ) : null}
       <Modal
