@@ -368,6 +368,12 @@ async def todays_word(
         WHERE wc.cefr_level = \'{user_level}\'
           AND wc.lemma ~ \'^[a-zA-Z]+$\'
           AND length(wc.lemma) >= 4
+          AND (m.tmdb_vote_count IS NULL OR m.tmdb_vote_count >= 500)
+          AND EXISTS (
+              SELECT 1 FROM movie_scripts msc
+              WHERE msc.movie_id = m.id
+                AND msc.cleaned_script_text IS NOT NULL
+          )
         GROUP BY wc.lemma, wc.cefr_level, m.id, m.title, m.poster_url
         ORDER BY avg_rank ASC NULLS LAST
         LIMIT 1000
