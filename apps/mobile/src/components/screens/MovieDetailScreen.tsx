@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   Image,
+  ImageBackground,
   LayoutAnimation,
   Modal,
   ScrollView,
@@ -35,6 +36,7 @@ import { CEFRTab } from '../vocabulary/CEFRTab';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MoviePhotosModal } from '../MoviePhotosModal';
 
 const LEARNED_ROW_ANIM = {
@@ -561,48 +563,63 @@ export const MovieDetailScreen = ({
       </View>
 
       <View style={styles.movieInfoBar}>
-        <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
-          <Image
-            source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-            style={styles.detailPoster}
+        {movie.backdrop_path && (
+          <ImageBackground
+            source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+            style={styles.movieHeaderBackdropFill}
+            imageStyle={styles.movieHeaderBackdropImg}
+            resizeMode="cover"
           />
-        </TouchableOpacity>
-        <View style={styles.movieInfoText}>
-          <Text style={styles.movieInfoTitle}>{movie.title}</Text>
-          <View style={styles.movieMetaRow}>
-            <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
-            {movie.vote_average != null && (
-              <Text style={styles.movieRating}>⭐ {movie.vote_average.toFixed(1)}</Text>
+        )}
+        <View style={styles.movieHeaderOverlay} />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.72)']}
+          style={styles.movieHeaderOverlayBottom}
+        />
+        <View style={styles.movieHeaderRow}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => setPosterZoomOpen(true)}>
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+              style={styles.detailPoster}
+            />
+          </TouchableOpacity>
+          <View style={styles.movieInfoText}>
+            <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
+            <View style={styles.movieMetaRow}>
+              <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
+              {movie.vote_average != null && (
+                <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
+              )}
+              {movie.original_language && (
+                <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+              )}
+            </View>
+            {movie.genre_ids && movie.genre_ids.length > 0 && (
+              <View style={styles.genreRow}>
+                {movie.genre_ids.slice(0, 3).map((id) => (
+                  <View key={id} style={styles.genreChip}>
+                    <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
+                  </View>
+                ))}
+              </View>
             )}
-            {movie.original_language && (
-              <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
+            {difficulty && (
+              <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
+                <Text style={styles.difficultyChipText}>
+                  {difficulty.level} · {difficulty.score}%
+                </Text>
+              </View>
+            )}
+            {authUser?.is_admin && (
+              <TouchableOpacity
+                onPress={() => setPhotosOpen(true)}
+                style={styles.photosBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.photosBtnText}>🖼 Photos</Text>
+              </TouchableOpacity>
             )}
           </View>
-          {movie.genre_ids && movie.genre_ids.length > 0 && (
-            <View style={styles.genreRow}>
-              {movie.genre_ids.slice(0, 3).map((id) => (
-                <View key={id} style={styles.genreChip}>
-                  <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-          {difficulty && (
-            <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
-              <Text style={styles.difficultyChipText}>
-                {difficulty.level} · {difficulty.score}%
-              </Text>
-            </View>
-          )}
-          {authUser?.is_admin && (
-            <TouchableOpacity
-              onPress={() => setPhotosOpen(true)}
-              style={styles.photosBtn}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.photosBtnText}>🖼 Photos</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
       <View style={{ flex: 1 }}>
