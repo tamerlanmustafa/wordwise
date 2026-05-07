@@ -24,12 +24,12 @@ import { TmdbPoster } from '../movies/TmdbPoster';
 import { scoreToCefr } from '../../utils/formatting';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
-const CARD_H        = 130;
-const CARD_GAP      = 8;     // gap between cards
+const CARD_H        = 116;
+const CARD_GAP      = 8;
 const VISIBLE_CARDS = 3;
-const PEEK          = 72;    // ~half of CARD_H visible as the "incoming" card hint
-const ITEM_H        = CARD_H + CARD_GAP;  // 148 — slot height including gap
-const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;  // 516
+const PEEK          = 32;
+const ITEM_H        = CARD_H + CARD_GAP;
+const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;
 
 // ── Scale / opacity for cards below the fold ─────────────────────────────────
 // Cards 0-2 are always full size at rest.
@@ -255,7 +255,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
   );
 };
 
-const POSTER_H = 100;
+const POSTER_H = 84;
 
 const s = StyleSheet.create({
   // Clips to exactly one card + the peek strip.

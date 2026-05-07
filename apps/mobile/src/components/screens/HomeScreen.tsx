@@ -375,6 +375,15 @@ export const HomeScreen = ({
           </View>
         )}
 
+        {todaysWord ? (
+          <TodayWordCard
+            word={todaysWord}
+            targetLanguage={targetLanguage}
+          />
+        ) : (
+          <TodayWordCardSkeleton />
+        )}
+
         <View style={{ zIndex: 50, overflow: 'visible' }}>
           <View style={styles.levelSortRow}>
             <TouchableOpacity
@@ -469,17 +478,6 @@ export const HomeScreen = ({
               movies={trendingMovies}
               onMoviePress={handleMoviePress}
             />
-          )}
-        </View>
-
-        <View style={{ marginTop: -88, zIndex: 10 }}>
-          {todaysWord ? (
-            <TodayWordCard
-              word={todaysWord}
-              targetLanguage={targetLanguage}
-            />
-          ) : (
-            <TodayWordCardSkeleton />
           )}
         </View>
 

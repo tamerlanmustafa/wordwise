@@ -541,7 +541,7 @@ export const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   sectionTitle: {
     fontSize: 18,
@@ -691,8 +691,8 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 10,
-    marginBottom: 14,
+    marginTop: 4,
+    marginBottom: 8,
     paddingHorizontal: 16,
   },
   levelSortChip: {

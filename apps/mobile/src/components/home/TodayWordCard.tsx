@@ -1,4 +1,4 @@
-import React, { memo, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -52,11 +52,35 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
     setSaving(false);
   };
 
+  const prefetchBackside = () => {
+    if (translation) return;
+    setTranslating(true);
+    Promise.all([
+      wordwiseApi.translate(word.word, targetLanguage, undefined, word.movie_id),
+      fetch(
+        `${API_BASE_URL}/api/enrichment/movies/${word.movie_id}/sentences/${encodeURIComponent(word.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`
+      )
+        .then(r => r.json())
+        .then(data => {
+          const ex = data.sentences?.[0];
+          if (ex) {
+            setSentence(ex.sentence ?? null);
+            setSentenceTranslation(ex.translation ?? null);
+          }
+        })
+        .catch(() => {}),
+    ])
+      .then(([res]) => setTranslation(res.translated))
+      .catch(() => {})
+      .finally(() => setTranslating(false));
+  };
+
+  useEffect(() => { prefetchBackside(); }, []);
+
   const handleFlip = () => {
     const next = flipCount.current + 1;
     flipCount.current = next;
     const isFlippingToBack = next % 2 === 1;
-    // Swap pointer events at the midpoint of the animation
     setTimeout(() => setShowingFront(!isFlippingToBack), 210);
 
     Animated.timing(flipAnim, {
@@ -65,27 +89,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
       useNativeDriver: true,
     }).start();
 
-    if (isFlippingToBack && !translation) {
-      setTranslating(true);
-      Promise.all([
-        wordwiseApi.translate(word.word, targetLanguage, undefined, word.movie_id),
-        fetch(
-          `${API_BASE_URL}/api/enrichment/movies/${word.movie_id}/sentences/${encodeURIComponent(word.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`
-        )
-          .then(r => r.json())
-          .then(data => {
-            const ex = data.sentences?.[0];
-            if (ex) {
-              setSentence(ex.sentence ?? null);
-              setSentenceTranslation(ex.translation ?? null);
-            }
-          })
-          .catch(() => {}),
-      ])
-        .then(([res]) => setTranslation(res.translated))
-        .catch(() => {})
-        .finally(() => setTranslating(false));
-    }
+    if (isFlippingToBack) prefetchBackside();
   };
 
   const isSameAsWord = (t: string) => t.trim().toLowerCase() === word.word.toLowerCase();
@@ -132,19 +136,19 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
               <ActivityIndicator size="small" color="#7C5CBF" />
             </View>
           ) : (
-            <>
+            <View>
               {translation && !isSameAsWord(translation) && (
-                <Text style={s.translationWord}>{translation}</Text>
+                <View><Text style={s.translationWord}>{translation}</Text></View>
               )}
               {sentence ? (
-                <>
-                  <Text style={s.sentence} numberOfLines={3}>"{sentence}"</Text>
+                <View>
+                  <Text style={s.sentence} numberOfLines={3}>"{sentence.replace(/\n/g, ' ')}"</Text>
                   {sentenceTranslation ? (
-                    <Text style={s.sentenceTranslation} numberOfLines={2}>{sentenceTranslation}</Text>
+                    <Text style={s.sentenceTranslation} numberOfLines={1}>{sentenceTranslation}</Text>
                   ) : null}
-                </>
+                </View>
               ) : null}
-            </>
+            </View>
           )}
         </Pressable>
       </Animated.View>
@@ -169,8 +173,9 @@ export const TodayWordCardSkeleton = () => (
 
 const s = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 8,
     height: CARD_HEIGHT,
     borderRadius: 16,
   },
@@ -195,7 +200,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   label: {
     fontSize: 11,
@@ -215,13 +220,13 @@ const s = StyleSheet.create({
   hint: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   translationWord: {
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.3,
-    marginBottom: 6,
+    marginBottom: 3,
   },
-  sentence: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 18, marginBottom: 3 },
-  sentenceTranslation: { fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 17 },
+  sentence: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 16, marginBottom: 2 },
+  sentenceTranslation: { fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 15 },
   skeletonLine: { borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.15)' },
 });
