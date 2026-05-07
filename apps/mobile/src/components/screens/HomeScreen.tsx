@@ -379,6 +379,7 @@ export const HomeScreen = ({
           <TodayWordCard
             word={todaysWord}
             targetLanguage={targetLanguage}
+            onMoviePress={handleMoviePress}
           />
         ) : (
           <TodayWordCardSkeleton />

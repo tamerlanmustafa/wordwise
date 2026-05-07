@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { wordwiseApi, API_BASE_URL, type TodaysWord } from '../../services/api';
@@ -16,9 +17,10 @@ const FACE_PADDING = 16;
 interface Props {
   word: TodaysWord;
   targetLanguage: string;
+  onMoviePress: (movie: { id: number; tmdb_id: number; title: string }) => void;
 }
 
-const _TodayWordCard = ({ word, targetLanguage }: Props) => {
+const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -102,12 +104,9 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         pointerEvents={showingFront ? 'auto' : 'none'}
         style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
       >
-        {/* header outside flip zone — reload works without flipping */}
         <View style={s.header}>
           <Text style={s.label}>Today's Word</Text>
-          <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
         </View>
-        {/* word + star as siblings — no nesting, no propagation issues */}
         <View style={s.wordRow}>
           <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>
             <Text style={s.word}>{word.word}</Text>
@@ -116,9 +115,13 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
             <Text style={[s.star, saved && s.starSaved]}>{saved ? '★' : '☆'}</Text>
           </Pressable>
         </View>
-        <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
+        <Pressable onPress={onDoubleTapFlip} style={s.flipZone} />
+        <View style={s.frontFooter}>
+          <TouchableOpacity onPress={() => onMoviePress({ id: word.movie_id, tmdb_id: word.movie_id, title: word.movie_title })} hitSlop={8}>
+            <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
+          </TouchableOpacity>
           <Text style={s.hint}>Double tap to flip</Text>
-        </Pressable>
+        </View>
       </Animated.View>
 
       {/* BACK face */}
@@ -126,10 +129,6 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         pointerEvents={showingFront ? 'none' : 'auto'}
         style={[s.face, s.back, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
       >
-        <View style={s.header}>
-          <Text style={s.label}>Translation</Text>
-          <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
-        </View>
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
           {translating ? (
             <View style={s.loadingBox}>
@@ -144,7 +143,9 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
                 <View>
                   <Text style={s.sentence} numberOfLines={3}>"{sentence.replace(/\n/g, ' ')}"</Text>
                   {sentenceTranslation ? (
-                    <Text style={s.sentenceTranslation} numberOfLines={1}>{sentenceTranslation}</Text>
+                    <View style={{ marginTop: 6 }}>
+                      <Text style={s.sentenceTranslation} numberOfLines={2}>{sentenceTranslation.replace(/\n/g, ' ')}</Text>
+                    </View>
                   ) : null}
                 </View>
               ) : null}
@@ -217,6 +218,7 @@ const s = StyleSheet.create({
   star: { fontSize: 26, color: 'rgba(255,255,255,0.35)' },
   starSaved: { color: '#FACC15' },
   flipZone: { flex: 1 },
+  frontFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   hint: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   translationWord: {
