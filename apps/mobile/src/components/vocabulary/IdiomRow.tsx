@@ -150,7 +150,7 @@ const _IdiomRow = ({
       </TouchableOpacity>
 
       {expanded && (
-        <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
+        <View style={styles.dropdownPanel}>
           <View style={styles.translationBox}>
             <Text style={styles.translationDash}>—</Text>
             {translation ? (

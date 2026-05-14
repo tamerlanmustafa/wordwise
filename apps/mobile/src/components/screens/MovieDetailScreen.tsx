@@ -5,10 +5,11 @@ import {
   Animated,
   Easing,
   Image,
-  ImageBackground,
   LayoutAnimation,
   Modal,
+  Pressable,
   ScrollView,
+  StatusBar,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -30,12 +31,20 @@ import {
   API_BASE_URL,
   type VocabularyResponse,
   type WordInfo,
+  type IdiomInfo,
 } from '../../services/api';
+
+// Words and idioms render side-by-side in the same level list. Discriminate
+// by checking for the idiom-only `phrase` field.
+type RowItem = WordInfo | IdiomInfo;
+const isIdiom = (item: RowItem): item is IdiomInfo => 'phrase' in item;
 import { useAuthStore } from '../../stores/authStore';
 import { offlineCache } from '../../services/offlineCache';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
+import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
+import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -44,21 +53,24 @@ const LEARNED_ROW_ANIM = {
   delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
 };
 
+// TODO: wire sceneStrips once the scenes endpoint returns
+// { afterWord, sceneNumber, sceneTitle, timestamp, image_path, words_in_scene[] } per movie.
+type SceneStripEntry = { afterWord: string } & SceneStripProps;
+
 interface Props {
   movie: MovieData;
   onBack: () => void;
   targetLanguage: string;
-  // Receives the *resolved internal movieId* (not the TMDB id); the screen
-  // waits until vocabulary loads before enabling. The pre-movie quiz
-  // handler returns a Promise so we can render a spinner on the button
-  // while the backend warms up translations (~1–3s).
-  // Global bottom-bar handlers.
+  readWords?: Set<string>;
+  sceneStrips?: SceneStripEntry[];
 }
 
 export const MovieDetailScreen = ({
   movie,
   onBack,
   targetLanguage,
+  readWords,
+  sceneStrips,
 }: Props) => {
   const tc = useThemeColors();
   const targetLang = targetLanguage;
@@ -66,8 +78,6 @@ export const MovieDetailScreen = ({
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
-  const [viewMode, setViewMode] = useState<'levels' | 'idioms'>('levels');
-  const [activeExprLevel, setActiveExprLevel] = useState<'elementary' | 'intermediate' | 'advanced'>('intermediate');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
   const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
@@ -96,7 +106,7 @@ export const MovieDetailScreen = ({
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const [posterZoomOpen, setPosterZoomOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
-  const pendingBookmarkRef = useRef<{ word: string | null; level: string; mode: 'levels' | 'idioms'; explicit?: boolean } | null>(null);
+  const pendingBookmarkRef = useRef<{ word: string | null; level: string; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const rowYOffsets = useRef<Record<string, number>>({});
   const listContainerY = useRef<number>(0);
@@ -104,32 +114,37 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
-  const [overviewHidden, setOverviewHidden] = useState(false);
-  const overviewHiddenRef = useRef(false);
+  // Hides the entire movie header (poster, backdrop, meta, overview) once the
+  // user has scrolled past a deliberate threshold so the vocabulary list takes
+  // the full screen. Hysteresis prevents flicker: hide at 110px, restore once
+  // the user pulls back near the top (< 24px).
+  const HEADER_HIDE_THRESHOLD = 110;
+  const HEADER_SHOW_THRESHOLD = 24;
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const headerHiddenRef = useRef(false);
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const y = e.nativeEvent.contentOffset.y;
-    const shouldHide = y > 80;
-    if (shouldHide !== overviewHiddenRef.current) {
-      overviewHiddenRef.current = shouldHide;
+    const isHidden = headerHiddenRef.current;
+    const shouldHide = isHidden ? y > HEADER_SHOW_THRESHOLD : y > HEADER_HIDE_THRESHOLD;
+    if (shouldHide !== isHidden) {
+      headerHiddenRef.current = shouldHide;
       LayoutAnimation.configureNext({
-        duration: 220,
+        duration: 340,
         create: { type: 'easeInEaseOut', property: 'opacity' },
         update: { type: 'easeInEaseOut' },
         delete: { type: 'easeInEaseOut', property: 'opacity' },
       });
-      setOverviewHidden(shouldHide);
+      setHeaderHidden(shouldHide);
     }
   }, []);
   const prevLevelRef = useRef<string>(activeLevel);
-  const prevViewModeRef = useRef<'levels' | 'idioms'>(viewMode);
 
   useEffect(() => {
-    if (prevLevelRef.current !== activeLevel || prevViewModeRef.current !== viewMode) {
+    if (prevLevelRef.current !== activeLevel) {
       rowYOffsets.current = {};
       prevLevelRef.current = activeLevel;
-      prevViewModeRef.current = viewMode;
     }
-  }, [activeLevel, viewMode]);
+  }, [activeLevel]);
 
   useEffect(() => {
     loadVocabulary();
@@ -149,14 +164,18 @@ export const MovieDetailScreen = ({
 
     const bookmark = await readBookmark();
     if (bookmark) {
-      pendingBookmarkRef.current = bookmark;
-      setCurrentBookmarkWord(bookmark.word);
-      setViewMode(bookmark.mode);
-      if (bookmark.mode === 'levels') {
-        setActiveLevel(bookmark.level);
-      } else {
-        setActiveExprLevel(bookmark.level as 'elementary' | 'intermediate' | 'advanced');
+      let resolvedLevel = bookmark.level;
+      // Migrate legacy idioms-mode bookmarks: their level was a difficulty
+      // bucket ("elementary"/"intermediate"/"advanced") rather than a CEFR
+      // code, so look up the bookmarked phrase to find its real CEFR level.
+      if ((bookmark as any).mode === 'idioms' && bookmark.word) {
+        const found = (vocab.idioms || []).find((i) => i.phrase === bookmark.word);
+        if (found?.cefr_level) resolvedLevel = found.cefr_level.toUpperCase();
       }
+      const restored = { word: bookmark.word, level: resolvedLevel, explicit: !!bookmark.explicit };
+      pendingBookmarkRef.current = restored;
+      setCurrentBookmarkWord(bookmark.word);
+      setActiveLevel(resolvedLevel);
       setRestoreTrigger((n) => n + 1);
     } else {
       const levels = Object.entries(vocab.level_distribution);
@@ -386,7 +405,6 @@ export const MovieDetailScreen = ({
   type Bookmark = {
     word: string | null;
     level: string;
-    mode: 'levels' | 'idioms';
     explicit: boolean;
   };
 
@@ -408,13 +426,12 @@ export const MovieDetailScreen = ({
     }
     const bm: Bookmark = {
       word,
-      level: viewMode === 'levels' ? activeLevel : activeExprLevel,
-      mode: viewMode,
+      level: activeLevel,
       explicit: true,
     };
     setCurrentBookmarkWord(word);
     AsyncStorage.setItem(bookmarkKey, JSON.stringify(bm)).catch(() => {});
-  }, [bookmarkKey, viewMode, activeLevel, activeExprLevel]);
+  }, [bookmarkKey, activeLevel]);
 
   useEffect(() => {
     if (!vocabulary || !pendingBookmarkRef.current || bookmarkAppliedRef.current) return;
@@ -450,7 +467,7 @@ export const MovieDetailScreen = ({
     };
     timers.push(setTimeout(tryScroll, 400));
     return () => { timers.forEach(clearTimeout); };
-  }, [vocabulary, activeLevel, activeExprLevel, viewMode, restoreTrigger]);
+  }, [vocabulary, activeLevel, restoreTrigger]);
 
   const wordLevels = useMemo(() => {
     if (!vocabulary) return [];
@@ -465,101 +482,96 @@ export const MovieDetailScreen = ({
   }, [vocabulary]);
 
   const idioms = vocabulary?.idioms || [];
-  const hasIdioms = idioms.length > 0;
 
-  const EXPR_LEVEL_MAP: Record<string, 'elementary' | 'intermediate' | 'advanced'> = {
-    A1: 'elementary', A2: 'elementary',
-    B1: 'intermediate', B2: 'intermediate',
-    C1: 'advanced', C2: 'advanced',
-  };
-  const idiomsByDifficulty = useMemo(() => {
-    const groups: Record<string, any[]> = { elementary: [], intermediate: [], advanced: [] };
+  // Idioms have their own CEFR level, so we group them the same way words are
+  // grouped — by exact CEFR match. They render inline with the level's words.
+  const idiomsByLevel = useMemo(() => {
+    const groups: Record<string, IdiomInfo[]> = { A1: [], A2: [], B1: [], B2: [], C1: [], C2: [] };
     idioms.forEach((idiom) => {
       const lvl = (idiom.cefr_level || 'C1').toUpperCase();
-      const bucket = EXPR_LEVEL_MAP[lvl] || 'advanced';
-      groups[bucket].push(idiom);
+      if (groups[lvl]) groups[lvl].push(idiom);
     });
     return groups;
   }, [idioms]);
 
-  useEffect(() => {
-    if (viewMode === 'idioms' && !hasIdioms) {
-      setViewMode('levels');
-    }
-  }, [viewMode, hasIdioms]);
-
-  const isIdiomsTab = viewMode === 'idioms';
   const activeData = wordLevels.find((l) => l.level === activeLevel);
   const allActiveWords = activeData?.words || [];
-  const allActiveIdioms = isIdiomsTab ? (idiomsByDifficulty[activeExprLevel] || []) : [];
+  const allActiveIdioms = idiomsByLevel[activeLevel] || [];
   const filteredActiveWords = learnedWords.size
     ? allActiveWords.filter((w: any) => !learnedWords.has(w.word))
     : allActiveWords;
-  const activeWords = useMemo(() => {
-    const arr = [...filteredActiveWords];
-    arr.sort((a: any, b: any) => {
-      const aNull = a.frequency_rank == null;
-      const bNull = b.frequency_rank == null;
+  const filteredActiveIdioms = learnedWords.size
+    ? allActiveIdioms.filter((i) => !learnedWords.has(i.phrase))
+    : allActiveIdioms;
+  // Words and idioms share the level's row list. Idioms have no frequency
+  // rank so they always sort to the end (matching the existing null-rank
+  // behavior for words).
+  const activeItems = useMemo<RowItem[]>(() => {
+    const arr: RowItem[] = [...filteredActiveWords, ...filteredActiveIdioms];
+    arr.sort((a, b) => {
+      const aRank = isIdiom(a) ? null : a.frequency_rank;
+      const bRank = isIdiom(b) ? null : b.frequency_rank;
+      const aNull = aRank == null;
+      const bNull = bRank == null;
       if (aNull && !bNull) return 1;
       if (!aNull && bNull) return -1;
       if (aNull && bNull) return 0;
       return wordSortOrder === 'rare'
-        ? b.frequency_rank - a.frequency_rank
-        : a.frequency_rank - b.frequency_rank;
+        ? (bRank as number) - (aRank as number)
+        : (aRank as number) - (bRank as number);
     });
     return arr;
-  }, [filteredActiveWords, wordSortOrder]);
-  const activeIdioms = learnedWords.size
-    ? allActiveIdioms.filter((i: any) => !learnedWords.has(i.phrase || i.word))
-    : allActiveIdioms;
+  }, [filteredActiveWords, filteredActiveIdioms, wordSortOrder]);
 
   const SUGGESTED_CAP = 60;
   const LEVEL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-  const suggestedWords = useMemo<Array<WordInfo & { cefr_level: string }>>(() => {
+  type SuggestedItem = (WordInfo & { cefr_level: string }) | (IdiomInfo & { cefr_level: string });
+  const suggestedWords = useMemo<SuggestedItem[]>(() => {
     if (!vocabulary) return [];
     const idx = LEVEL_ORDER.indexOf(userProficiency);
     if (idx < 0) return [];
-    const targetLevels = [userProficiency];
-    if (idx + 1 < LEVEL_ORDER.length) targetLevels.push(LEVEL_ORDER[idx + 1]);
+    const targetLevels = new Set([userProficiency]);
+    if (idx + 1 < LEVEL_ORDER.length) targetLevels.add(LEVEL_ORDER[idx + 1]);
 
-    const pool: Array<WordInfo & { cefr_level: string }> = [];
+    const pool: SuggestedItem[] = [];
     for (const lvl of targetLevels) {
       const list = vocabulary.top_words_by_level[lvl] || [];
       for (const w of list) {
         if (learnedWords.has(w.word)) continue;
         pool.push({ ...w, cefr_level: lvl });
       }
+      const idiomList = idiomsByLevel[lvl] || [];
+      for (const i of idiomList) {
+        if (learnedWords.has(i.phrase)) continue;
+        pool.push({ ...i, cefr_level: lvl });
+      }
     }
     pool.sort((a, b) => {
-      const aNull = a.frequency_rank == null;
-      const bNull = b.frequency_rank == null;
+      const aRank = isIdiom(a) ? null : a.frequency_rank;
+      const bRank = isIdiom(b) ? null : b.frequency_rank;
+      const aNull = aRank == null;
+      const bNull = bRank == null;
       if (aNull && !bNull) return 1;
       if (!aNull && bNull) return -1;
       if (aNull && bNull) return 0;
-      return (b.frequency_rank as number) - (a.frequency_rank as number);
+      return (bRank as number) - (aRank as number);
     });
     return pool;
-  }, [vocabulary, userProficiency, learnedWords]);
+  }, [vocabulary, userProficiency, learnedWords, idiomsByLevel]);
 
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
-  // Sliding tab indicator for the scrollable level/idioms row. The For You
-  // tab lives in a separate fixed container so it isn't part of the slide.
+  // Sliding tab indicator for the scrollable level row. The For You tab
+  // lives in a separate fixed container so it isn't part of the slide.
   const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorWidth = useRef(new Animated.Value(0)).current;
   const indicatorOpacity = useRef(new Animated.Value(0)).current;
   const indicatorPositioned = useRef(false);
 
-  const activeScrollKey: string | null = isIdiomsTab
-    ? 'IDIOMS'
-    : wordsView === 'all'
-      ? activeLevel
-      : null;
-  const activeIndicatorColor = isIdiomsTab
-    ? '#F4A26120'
-    : `${cefrColors[activeLevel] || colors.primary}20`;
+  const activeScrollKey: string | null = wordsView === 'all' ? activeLevel : null;
+  const activeIndicatorColor = `${cefrColors[activeLevel] || colors.primary}20`;
 
   useEffect(() => {
     if (!activeScrollKey) {
@@ -606,11 +618,116 @@ export const MovieDetailScreen = ({
 
   // Defer the heavy list inputs so tab taps update the header immediately
   // while the row re-render runs at lower priority on the next tick.
-  const deferredIsIdiomsTab = useDeferredValue(isIdiomsTab);
   const deferredWordsView = useDeferredValue(wordsView);
-  const deferredActiveWords = useDeferredValue(activeWords);
-  const deferredActiveIdioms = useDeferredValue(activeIdioms);
+  const deferredActiveItems = useDeferredValue(activeItems);
   const deferredSuggestedVisible = useDeferredValue(suggestedVisible);
+
+  // Treatment A: rarity fill ratio per word, computed from the visible set's rank range.
+  const freqFillMap = useMemo(() => {
+    const list = deferredWordsView === 'foryou' ? deferredSuggestedVisible : deferredActiveItems;
+    const wordItems = list.filter((item): item is WordInfo => !isIdiom(item));
+    const ranks = wordItems.map((w) => w.frequency_rank).filter((r): r is number => r != null);
+    if (ranks.length < 2) return new Map<string, number>();
+    const minRank = Math.min(...ranks);
+    const maxRank = Math.max(...ranks);
+    const range = maxRank - minRank;
+    return new Map(wordItems.map((w) => [
+      w.word,
+      w.frequency_rank == null || range === 0 ? 0 : (w.frequency_rank - minRank) / range,
+    ]));
+  }, [deferredWordsView, deferredSuggestedVisible, deferredActiveItems]);
+
+  // Treatment E: scene strip lookup by afterWord.
+  const sceneStripMap = useMemo(() => {
+    const map = new Map<string, SceneStripEntry>();
+    (sceneStrips ?? []).forEach((s) => map.set(s.afterWord, s));
+    return map;
+  }, [sceneStrips]);
+
+  // Pre-fetch sentence examples for the For You list in a single batch call.
+  //
+  // Race condition we're handling: classify-script schedules a background
+  // task that populates SentenceBank in ~2-5s. The first batch request
+  // typically beats that task and gets empty results. We mark those misses
+  // as 'miss-recent', bump retryTick after 5s, and the effect re-runs to
+  // refetch them. A second empty response promotes them to 'miss-confirmed'
+  // (the word genuinely has no indexed sentence — extract_word_sentences
+  // does literal matching and skips inflected forms).
+  type SentenceEntry = { sentence: string; word_position: number; matched_form: string };
+  type FetchStatus = 'in-flight' | 'in-flight-retry' | 'hit' | 'miss-recent' | 'miss-confirmed';
+  const [foryouSentences, setForyouSentences] = useState<Record<string, SentenceEntry>>({});
+  const [sentencesRetryTick, setSentencesRetryTick] = useState(0);
+  const sentencesStatusRef = useRef<Record<string, FetchStatus>>({});
+
+  useEffect(() => {
+    if (!movieId || wordsView !== 'foryou') return;
+    const words = suggestedWords
+      .slice(0, SUGGESTED_CAP)
+      .filter((w): w is WordInfo & { cefr_level: string } => !isIdiom(w))
+      .map((w) => w.word);
+    const status = sentencesStatusRef.current;
+    const missing = words.filter((w) => {
+      const s = status[w];
+      return s === undefined || s === 'miss-recent';
+    });
+    if (!missing.length) return;
+    missing.forEach((w) => {
+      status[w] = status[w] === 'miss-recent' ? 'in-flight-retry' : 'in-flight';
+    });
+    const t0 = Date.now();
+    console.log('[batch-sentences] fetching', {
+      movieId, count: missing.length, retryTick: sentencesRetryTick, sample: missing.slice(0, 3),
+    });
+    // No cancel-on-rerun guard: the request is for `missing` words on this
+    // movie, and setForyouSentences only merges. If MovieDetailScreen has
+    // unmounted (movie navigation), React no-ops the setState. If the effect
+    // re-ran for the same movie (e.g. background vocab refresh changed
+    // suggestedWords' identity), in-flight status prevents a duplicate fetch
+    // and the original promise still updates state when it resolves.
+    wordwiseApi.batchSentences(movieId, missing).then((results) => {
+      const elapsed = Date.now() - t0;
+      let hits = 0;
+      let firstMisses = 0;
+      let confirmedMisses = 0;
+      setForyouSentences((prev) => {
+        const next = { ...prev };
+        for (const w of missing) {
+          const wasRetry = status[w] === 'in-flight-retry';
+          const list = results[w] || [];
+          if (list.length > 0) {
+            next[w] = list[0];
+            status[w] = 'hit';
+            hits++;
+          } else {
+            next[w] = { sentence: '', word_position: 0, matched_form: w };
+            if (wasRetry) {
+              status[w] = 'miss-confirmed';
+              confirmedMisses++;
+            } else {
+              status[w] = 'miss-recent';
+              firstMisses++;
+            }
+          }
+        }
+        return next;
+      });
+      console.log('[batch-sentences] returned', {
+        elapsedMs: elapsed, requested: missing.length, hits, firstMisses, confirmedMisses,
+      });
+      if (firstMisses > 0) {
+        console.log('[batch-sentences] scheduling retry in 5s', { count: firstMisses });
+        setTimeout(() => setSentencesRetryTick((t) => t + 1), 5000);
+      }
+    }).catch((err) => {
+      console.warn('[batch-sentences] FAILED', { elapsedMs: Date.now() - t0, err: String(err) });
+      // Reset so a future render can re-attempt.
+      missing.forEach((w) => {
+        if (status[w] === 'in-flight' || status[w] === 'in-flight-retry') {
+          delete status[w];
+        }
+      });
+    });
+  }, [movieId, wordsView, suggestedWords, sentencesRetryTick]);
 
   // Chunked rendering: mount the first 25 rows immediately on a tab switch,
   // then progressively reveal the rest in batches. ~100 WordRow mounts in
@@ -622,18 +739,16 @@ export const MovieDetailScreen = ({
   const SKELETON_DURATION = 140;
   const [renderLimit, setRenderLimit] = useState(INITIAL_ROWS);
   const [isSwitching, setIsSwitching] = useState(false);
-  const activeListLength = deferredIsIdiomsTab
-    ? deferredActiveIdioms.length
-    : deferredWordsView === 'foryou'
-      ? deferredSuggestedVisible.length
-      : deferredActiveWords.length;
+  const activeListLength = deferredWordsView === 'foryou'
+    ? deferredSuggestedVisible.length
+    : deferredActiveItems.length;
   // Reset whenever the user changes the active filter set.
   useEffect(() => {
     setRenderLimit(INITIAL_ROWS);
     setIsSwitching(true);
     const id = setTimeout(() => setIsSwitching(false), SKELETON_DURATION);
     return () => clearTimeout(id);
-  }, [viewMode, wordsView, activeLevel, activeExprLevel, wordSortOrder]);
+  }, [wordsView, activeLevel, wordSortOrder]);
   // Progressively grow until we've rendered everything in the active list.
   useEffect(() => {
     if (renderLimit >= activeListLength) return;
@@ -645,6 +760,7 @@ export const MovieDetailScreen = ({
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+      <StatusBar barStyle="light-content" />
       <View style={[styles.detailHeader, { backgroundColor: tc.background, borderBottomWidth: 0 }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
@@ -655,92 +771,83 @@ export const MovieDetailScreen = ({
         <View style={{ width: 60 }} />
       </View>
 
-      <View style={styles.movieHeaderContainer}>
-        {/* Hero — backdrop full-width with floating poster bottom-left */}
-        <View style={styles.movieHeaderHero}>
+      {!headerHidden && (
+      <>
+        <View style={styles.heroBackdrop}>
           {movie.backdrop_path ? (
-            <ImageBackground
+            <Image
               source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-              style={styles.movieHeaderBackdropFill}
-              imageStyle={styles.movieHeaderBackdropImg}
+              style={styles.heroBackdropImage}
               resizeMode="cover"
             />
           ) : null}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.85)']}
-            style={styles.movieHeaderHeroGradient}
             pointerEvents="none"
+            colors={['rgba(0,0,0,0.5)', 'transparent']}
+            style={styles.heroTopFade}
           />
-          {/* Title + meta in gradient, indented to clear the floating poster */}
-          <View style={styles.movieHeaderTitleArea}>
-            <Text style={styles.movieInfoTitle} numberOfLines={2}>{movie.title}</Text>
-            <View style={styles.movieMetaRow}>
-              <Text style={styles.movieInfoYear}>{movie.release_date?.slice(0, 4)}</Text>
-              {movie.vote_average != null && (
-                <Text style={styles.movieRating}>★ {movie.vote_average.toFixed(1)}</Text>
-              )}
-              {movie.original_language && (
-                <Text style={styles.movieLanguage}>{movie.original_language.toUpperCase()}</Text>
-              )}
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)']}
+            locations={[0, 0.3, 0.7, 1]}
+            style={styles.heroBottomGradient}
+          />
+          <View style={styles.heroFloating}>
+            <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
+              <Image
+                source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+                style={styles.heroPosterImage}
+                resizeMode="cover"
+              />
+            </Pressable>
+            <View style={styles.heroMetaCol}>
+              <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
+              <Text style={styles.heroMetaRow} numberOfLines={1}>
+                {movie.release_date ? (
+                  <Text style={styles.heroMetaYear}>{movie.release_date.slice(0, 4)}</Text>
+                ) : null}
+                {movie.release_date && movie.vote_average != null ? (
+                  <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
+                ) : null}
+                {movie.vote_average != null ? (
+                  <Text style={styles.heroMetaRating}>★ {movie.vote_average.toFixed(1)}</Text>
+                ) : null}
+                {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
+                  <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
+                ) : null}
+                {movie.genre_ids && movie.genre_ids.length > 0 ? (
+                  <Text style={styles.heroMetaGenres}>
+                    {movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')}
+                  </Text>
+                ) : null}
+              </Text>
               {difficulty && (
-                <View style={[styles.difficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
-                  <Text style={styles.difficultyChipText}>
-                    {difficulty.level} · {difficulty.score}%
+                <View style={[styles.heroDifficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
+                  <Text style={styles.heroDifficultyChipText}>
+                    {difficulty.level} · {difficulty.score}% match
                   </Text>
                 </View>
               )}
             </View>
           </View>
-          {/* Floating poster anchored bottom-left */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setPosterZoomOpen(true)}
-            style={styles.detailPosterFloating}
-          >
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-              style={styles.detailPoster}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
         </View>
-        {/* Below hero — genres on light bg */}
-        {movie.genre_ids && movie.genre_ids.length > 0 ? (
-          <View style={styles.genreRow}>
-            {movie.genre_ids.slice(0, 3).map((id) => (
-              <View key={id} style={styles.genreChip}>
-                <Text style={styles.genreChipText}>{tmdbGenres[id] || 'Other'}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        {movie.overview && !overviewHidden ? (
-          <View style={styles.overviewSection}>
+        {movie.overview ? (
+          <View style={styles.overviewBox}>
             <Text
               style={styles.overviewText}
-              numberOfLines={overviewExpanded ? undefined : 3}
+              numberOfLines={overviewExpanded ? undefined : 2}
             >
               {movie.overview}
             </Text>
-            {(movie.overview.length > 150) && (
-              <TouchableOpacity
-                onPress={() => {
-                  LayoutAnimation.configureNext({
-                    duration: 200,
-                    update: { type: 'easeInEaseOut' },
-                  });
-                  setOverviewExpanded((v) => !v);
-                }}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Text style={styles.overviewMoreLink}>
-                  {overviewExpanded ? 'less' : 'more'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <Pressable onPress={() => setOverviewExpanded((v) => !v)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={styles.overviewToggle}>
+                {overviewExpanded ? 'Show less' : 'Read more'}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
-      </View>
+      </>
+      )}
       <View style={{ flex: 1 }}>
       {loading ? (
         <View style={[styles.container, styles.centered]}>
@@ -768,12 +875,12 @@ export const MovieDetailScreen = ({
           onScroll={handleScroll}
         >
           <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-            {/* Unified tab row: For You (fixed) + A1–C2 + Idioms (scroll) */}
+            {/* Unified tab row: For You (fixed) + A1–C2 (scroll) */}
             <View style={styles.unifiedTabsRowWrapper}>
             {/* Fixed For You + divider on the left */}
             <View style={styles.unifiedTabsLeftFixed}>
               {(() => {
-                const foryouActive = !isIdiomsTab && wordsView === 'foryou';
+                const foryouActive = wordsView === 'foryou';
                 return (
                   <TouchableOpacity
                     style={[
@@ -781,7 +888,6 @@ export const MovieDetailScreen = ({
                       foryouActive && { backgroundColor: `${colors.primary}20` },
                     ]}
                     onPress={() => {
-                      setViewMode('levels');
                       startTransition(() => setWordsView('foryou'));
                     }}
                     activeOpacity={0.7}
@@ -815,7 +921,7 @@ export const MovieDetailScreen = ({
                 ]}
               />
               {wordLevels.map((lvl) => {
-                const active = !isIdiomsTab && wordsView === 'all' && activeLevel === lvl.level;
+                const active = wordsView === 'all' && activeLevel === lvl.level;
                 const c = cefrColors[lvl.level] || colors.primary;
                 return (
                   <TouchableOpacity
@@ -823,7 +929,6 @@ export const MovieDetailScreen = ({
                     style={[styles.unifiedTab, styles.unifiedTabLevel]}
                     onLayout={handleScrollTabLayout(lvl.level)}
                     onPress={() => {
-                      setViewMode('levels');
                       startTransition(() => setWordsView('all'));
                       setActiveLevel(lvl.level);
                     }}
@@ -838,21 +943,6 @@ export const MovieDetailScreen = ({
                   </TouchableOpacity>
                 );
               })}
-              {hasIdioms && (
-                <TouchableOpacity
-                  style={styles.unifiedTab}
-                  onLayout={handleScrollTabLayout('IDIOMS')}
-                  onPress={() => setViewMode('idioms')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.unifiedTabLabel,
-                    isIdiomsTab && [styles.unifiedTabLabelActive, { color: '#F4A261' }],
-                  ]}>
-                    Idioms
-                  </Text>
-                </TouchableOpacity>
-              )}
             </ScrollView>
             <LinearGradient
               colors={['rgba(228,220,240,0)', '#E4DCF0']}
@@ -864,32 +954,7 @@ export const MovieDetailScreen = ({
             </View>
 
             {/* Sub-row */}
-            {isIdiomsTab ? (
-              <View style={styles.exprTabsRow}>
-                {([
-                  { key: 'elementary' as const, label: 'Elementary', color: '#4CAF50' },
-                  { key: 'intermediate' as const, label: 'Intermediate', color: '#FFC107' },
-                  { key: 'advanced' as const, label: 'Advanced', color: '#F44336' },
-                ]).map((tab) => (
-                  <TouchableOpacity
-                    key={tab.key}
-                    style={[
-                      styles.exprTab,
-                      activeExprLevel === tab.key && { backgroundColor: tab.color + '18', borderColor: tab.color },
-                    ]}
-                    onPress={() => setActiveExprLevel(tab.key)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.exprTabText,
-                      activeExprLevel === tab.key && { color: tab.color, fontWeight: '700' },
-                    ]}>
-                      {tab.label} ({idiomsByDifficulty[tab.key]?.length || 0})
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : wordsView === 'foryou' ? (
+            {wordsView === 'foryou' ? (
               suggestedWords.length === 0 ? (
                 <Text style={styles.forYouEmpty}>No new words at your level</Text>
               ) : null
@@ -901,9 +966,9 @@ export const MovieDetailScreen = ({
               >
                 <Text style={styles.countSortText}>
                   <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                    {activeData?.count ?? 0}
+                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
                   </Text>
-                  {' '}{activeLevel} words · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
+                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
                 </Text>
               </TouchableOpacity>
             )}
@@ -920,68 +985,67 @@ export const MovieDetailScreen = ({
                     <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarSecondary]} />
                   </View>
                 ))
-              ) : deferredIsIdiomsTab ? (
-                deferredActiveIdioms.slice(0, renderLimit).map((item, index) => {
-                  const key = item.phrase;
-                  return (
-                    <BookmarkRowWrapper
-                      key={`idiom-${key}`}
-                      wordKey={key}
-                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
-                      onBookmark={recordBookmark}
-                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                      isCurrentBookmark={currentBookmarkWord === key}
-                    >
-                      <IdiomRow
-                        idiom={item}
-                        index={index}
-                        rowNumber={index + 1}
-                        groupColor={cefrColors[activeLevel] || colors.primary}
-                        movieId={movieId}
-                        targetLang={targetLang}
-                        isSaved={savedWords.has(key)}
-                        onSave={handleSaveWord}
-                        isAuthenticated={isAuthenticated}
-                        bookmarkHighlight={currentBookmarkWord === key}
-                        accordionMode={accordionMode}
-                        lastOpenedKey={lastOpenedKey}
-                        onExpand={setLastOpenedKey}
-                      />
-                    </BookmarkRowWrapper>
-                  );
-                })
               ) : deferredWordsView === 'foryou' ? (
                 <>
                   {deferredSuggestedVisible.slice(0, renderLimit).map((item, index) => {
+                    if (isIdiom(item)) {
+                      const key = item.phrase;
+                      return (
+                        <BookmarkRowWrapper
+                          key={`idiom-${key}`}
+                          wordKey={key}
+                          onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                          onBookmark={recordBookmark}
+                          onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                          isCurrentBookmark={currentBookmarkWord === key}
+                        >
+                          <IdiomRow
+                            idiom={item}
+                            index={index}
+                            rowNumber={index + 1}
+                            groupColor={cefrColors[item.cefr_level] || colors.primary}
+                            movieId={movieId}
+                            targetLang={targetLang}
+                            isSaved={savedWords.has(key)}
+                            onSave={handleSaveWord}
+                            isAuthenticated={isAuthenticated}
+                            bookmarkHighlight={currentBookmarkWord === key}
+                            accordionMode={accordionMode}
+                            lastOpenedKey={lastOpenedKey}
+                            onExpand={setLastOpenedKey}
+                          />
+                        </BookmarkRowWrapper>
+                      );
+                    }
                     const key = item.word;
                     return (
-                      <BookmarkRowWrapper
-                        key={key}
-                        wordKey={key}
-                        onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
-                        onBookmark={recordBookmark}
-                        onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                        isCurrentBookmark={currentBookmarkWord === key}
-                      >
-                        <WordRow
-                          word={item}
-                          index={index}
-                          rowNumber={index + 1}
-                          groupColor={cefrColors[item.cefr_level] || colors.primary}
-                          movieId={movieId}
-                          movieTitle={movie.title}
-                          targetLang={targetLang}
-                          isSaved={savedWords.has(key)}
-                          onSave={handleSaveWord}
-                          isAuthenticated={isAuthenticated}
-                          bookmarkHighlight={currentBookmarkWord === key}
-                          accordionMode={accordionMode}
-                          lastOpenedKey={lastOpenedKey}
-                          onExpand={setLastOpenedKey}
-                          displayLevel={item.cefr_level}
-                          onHide={authUser?.is_admin ? handleHideWord : undefined}
-                        />
-                      </BookmarkRowWrapper>
+                      <React.Fragment key={key}>
+                        <BookmarkRowWrapper
+                          wordKey={key}
+                          onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                          onBookmark={recordBookmark}
+                          onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                          isCurrentBookmark={currentBookmarkWord === key}
+                        >
+                          <ForYouWordRow
+                            word={item}
+                            rowNumber={index + 1}
+                            level={item.cefr_level}
+                            movieId={movieId}
+                            targetLang={targetLang}
+                            isSaved={savedWords.has(key)}
+                            onSave={handleSaveWord}
+                            isAuthenticated={isAuthenticated}
+                            bookmarkHighlight={currentBookmarkWord === key}
+                            isRead={readWords?.has(key)}
+                            accordionMode={accordionMode}
+                            lastOpenedKey={lastOpenedKey}
+                            onExpand={setLastOpenedKey}
+                            preloadedSentence={foryouSentences[key]}
+                          />
+                        </BookmarkRowWrapper>
+                        {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
+                      </React.Fragment>
                     );
                   })}
                   {suggestedHidden > 0 && (
@@ -998,35 +1062,68 @@ export const MovieDetailScreen = ({
                   )}
                 </>
               ) : (
-                deferredActiveWords.slice(0, renderLimit).map((item, index) => {
+                deferredActiveItems.slice(0, renderLimit).map((item, index) => {
+                  if (isIdiom(item)) {
+                    const key = item.phrase;
+                    return (
+                      <BookmarkRowWrapper
+                        key={`idiom-${key}`}
+                        wordKey={key}
+                        onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                        onBookmark={recordBookmark}
+                        onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                        isCurrentBookmark={currentBookmarkWord === key}
+                      >
+                        <IdiomRow
+                          idiom={item}
+                          index={index}
+                          rowNumber={index + 1}
+                          groupColor={cefrColors[activeLevel] || colors.primary}
+                          movieId={movieId}
+                          targetLang={targetLang}
+                          isSaved={savedWords.has(key)}
+                          onSave={handleSaveWord}
+                          isAuthenticated={isAuthenticated}
+                          bookmarkHighlight={currentBookmarkWord === key}
+                          accordionMode={accordionMode}
+                          lastOpenedKey={lastOpenedKey}
+                          onExpand={setLastOpenedKey}
+                        />
+                      </BookmarkRowWrapper>
+                    );
+                  }
                   const key = item.word;
                   return (
-                    <BookmarkRowWrapper
-                      key={key}
-                      wordKey={key}
-                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
-                      onBookmark={recordBookmark}
-                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                      isCurrentBookmark={currentBookmarkWord === key}
-                    >
-                      <WordRow
-                        word={item}
-                        index={index}
-                        rowNumber={index + 1}
-                        groupColor={cefrColors[activeLevel] || colors.primary}
-                        movieId={movieId}
-                        movieTitle={movie.title}
-                        targetLang={targetLang}
-                        isSaved={savedWords.has(key)}
-                        onSave={handleSaveWord}
-                        isAuthenticated={isAuthenticated}
-                        bookmarkHighlight={currentBookmarkWord === key}
-                        accordionMode={accordionMode}
-                        lastOpenedKey={lastOpenedKey}
-                        onExpand={setLastOpenedKey}
-                        onHide={authUser?.is_admin ? handleHideWord : undefined}
-                      />
-                    </BookmarkRowWrapper>
+                    <React.Fragment key={key}>
+                      <BookmarkRowWrapper
+                        wordKey={key}
+                        onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                        onBookmark={recordBookmark}
+                        onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                        isCurrentBookmark={currentBookmarkWord === key}
+                      >
+                        <WordRow
+                          word={item}
+                          index={index}
+                          rowNumber={index + 1}
+                          groupColor={cefrColors[activeLevel] || colors.primary}
+                          movieId={movieId}
+                          movieTitle={movie.title}
+                          targetLang={targetLang}
+                          isSaved={savedWords.has(key)}
+                          onSave={handleSaveWord}
+                          isAuthenticated={isAuthenticated}
+                          bookmarkHighlight={currentBookmarkWord === key}
+                          accordionMode={accordionMode}
+                          lastOpenedKey={lastOpenedKey}
+                          onExpand={setLastOpenedKey}
+                          freqFill={freqFillMap.get(key)}
+                          isRead={readWords?.has(key)}
+                          onHide={authUser?.is_admin ? handleHideWord : undefined}
+                        />
+                      </BookmarkRowWrapper>
+                      {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
+                    </React.Fragment>
                   );
                 })
               )}

@@ -310,6 +310,89 @@ class SentenceExampleService:
             for sent, _score, _idx, pos, form in candidates[:max_examples]
         ]
 
+    def extract_sentences_for_lemmas(
+        self,
+        script_text: str,
+        target_lemmas: Set[str],
+        nlp,
+        max_per_lemma: int = 1,
+    ) -> Dict[str, List[Tuple[str, int, str]]]:
+        """
+        Batch lemma → sentences extraction in a single spaCy pass over the
+        whole script. Same matching logic as extract_word_sentences_by_lemma,
+        but processes every target lemma in one traversal instead of one
+        spaCy call per lemma.
+
+        Use this as the slow-path fallback for the batch /sentences endpoint
+        when SentenceBank doesn't have rows for every requested word.
+
+        Returns Dict[lemma → list of (sentence, word_position, matched_form)].
+        Only lemmas that found at least one sentence appear in the result.
+        """
+        if not target_lemmas:
+            return {}
+
+        # One spaCy call for the entire script. spaCy's sentence segmenter
+        # handles boundaries internally, which is more accurate than regex
+        # splitting + per-sentence parsing.
+        doc = nlp(script_text)
+
+        # Two tiers of candidates:
+        #   • preferred: in the [MIN, MAX] range and scored > 0
+        #   • fallback:  too short or zero-score (still useful when
+        #     screenplay dialogue is mostly short lines)
+        # We use the fallback only if the preferred bucket is empty for a
+        # given lemma, so longer/clearer sentences are still chosen first.
+        preferred: Dict[str, List[Tuple[str, float, int, int, str]]] = defaultdict(list)
+        fallback: Dict[str, List[Tuple[str, float, int, int, str]]] = defaultdict(list)
+
+        sents = list(doc.sents)
+        for sent_idx, sent in enumerate(sents):
+            content_tokens = [t for t in sent if not t.is_punct and not t.is_space]
+            word_count = len(content_tokens)
+            if word_count == 0 or word_count > self.MAX_SENTENCE_WORDS:
+                continue
+
+            sent_text = sent.text.strip()
+            if not sent_text:
+                continue
+
+            # Build context-padded version for short sentences so the row
+            # has more than a fragment to display.
+            display_text = sent_text
+            if word_count < self.MIN_SENTENCE_WORDS and sent_idx > 0:
+                prev = sents[sent_idx - 1].text.strip()
+                if prev:
+                    combined = prev + " " + sent_text
+                    if len(combined.split()) <= self.MAX_SENTENCE_WORDS:
+                        display_text = combined
+
+            tokens_lower = [t.text.lower() for t in content_tokens]
+            seen_lemmas_in_sentence: Set[str] = set()
+
+            for tok_idx, token in enumerate(content_tokens):
+                lemma = token.lemma_.lower()
+                if lemma not in target_lemmas or lemma in seen_lemmas_in_sentence:
+                    continue
+                seen_lemmas_in_sentence.add(lemma)
+                surface = token.text.lower()
+                score = self.score_sentence(sent_text, tokens_lower, surface, sent_idx)
+
+                entry = (display_text, max(score, 0.0), sent_idx, tok_idx, token.text)
+                if word_count >= self.MIN_SENTENCE_WORDS and score > 0:
+                    preferred[lemma].append(entry)
+                else:
+                    fallback[lemma].append(entry)
+
+        result: Dict[str, List[Tuple[str, int, str]]] = {}
+        for lemma in target_lemmas:
+            items = preferred.get(lemma) or fallback.get(lemma)
+            if not items:
+                continue
+            items.sort(key=lambda x: (-x[1], x[2]))
+            result[lemma] = [(sent, pos, form) for sent, _score, _idx, pos, form in items[:max_per_lemma]]
+        return result
+
     def extract_phrase_sentences(
         self,
         script_text: str,

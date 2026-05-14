@@ -47,6 +47,8 @@ interface Props {
   lastOpenedKey?: string | null;
   onExpand?: (key: string) => void;
   displayLevel?: string;
+  freqFill?: number;   // 0..1 rarity fill, computed by parent from visible set
+  isRead?: boolean;    // word has been translated/tapped before
   // When present, renders an admin-only "Hide word" control in the expanded
   // panel. Passed down only for admins by the parent screen.
   onHide?: (word: string) => void;
@@ -75,6 +77,8 @@ const _WordRow = ({
   lastOpenedKey,
   onExpand,
   displayLevel,
+  freqFill,
+  isRead,
   onHide,
 }: Props) => {
   const [expanded, setExpanded] = useState(false);
@@ -166,6 +170,12 @@ const _WordRow = ({
 
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
+  // Treatments C + F: level wash → read tint → bookmark highlight (priority order)
+  const rowBg = bookmarkHighlight ? '#FFF4D6' : isRead ? '#FAFAF8' : `${groupColor}10`;
+  // 85% alpha (0xD9) normally, 45% (0x73) when read
+  const fillAlpha = isRead ? '73' : 'D9';
+  const freqLabel = freqFill == null ? null : freqFill > 0.66 ? 'RARE' : freqFill > 0.33 ? 'UNCOMMON' : 'COMMON';
+
   const renderHighlightedSentence = (sentence: string, targetWord: string, matchedForm?: string) => {
     const words = new Set([targetWord.toLowerCase()]);
     if (matchedForm) words.add(matchedForm.toLowerCase());
@@ -188,17 +198,27 @@ const _WordRow = ({
   return (
     <View style={styles.wordRowWrapper}>
       <TouchableOpacity
-        style={[styles.wordRow, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked]}
+        style={[styles.wordRow, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked, { backgroundColor: rowBg }]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
+        {/* Treatment F3: bookmark accent bar on left edge */}
+        {bookmarkHighlight && (
+          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.warning, borderTopLeftRadius: 8, borderBottomLeftRadius: expanded ? 0 : 8 }} />
+        )}
         <View style={styles.wordRowMain}>
-          <Text style={styles.rowNumber}>{rowNumber}.</Text>
-          <Text style={styles.wordText}>{word.word}</Text>
+          <Text style={[styles.rowNumber, isRead && { opacity: 0.5 }]}>{rowNumber}.</Text>
+          <Text style={[styles.wordText, isRead && { color: colors.textSecondary }]}>{word.word}</Text>
           {displayLevel && (
             <View style={[styles.inlineLevelBadge, { backgroundColor: cefrColors[displayLevel] || colors.primary }]}>
               <Text style={styles.inlineLevelBadgeText}>{displayLevel}</Text>
             </View>
+          )}
+          {/* Treatment A: rarity label between word and bookmark */}
+          {freqLabel != null && (
+            <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
+              {freqLabel}
+            </Text>
           )}
           {isPremium && expanded && (
             <TouchableOpacity
@@ -223,6 +243,14 @@ const _WordRow = ({
             </TouchableOpacity>
           )}
         </View>
+        {/* Treatment A: frequency density bar */}
+        {freqFill != null && (
+          <View style={{ marginLeft: 48, marginRight: 60, marginTop: 4 }}>
+            <View style={{ height: 2, backgroundColor: `${groupColor}21`, borderRadius: 1 }}>
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${freqFill * 100}%`, backgroundColor: `${groupColor}${fillAlpha}`, borderRadius: 1 }} />
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
 
       <ReportDialog
@@ -234,7 +262,7 @@ const _WordRow = ({
       />
 
       {expanded && (
-        <View style={[styles.dropdownPanel, { borderLeftColor: groupColor }]}>
+        <View style={styles.dropdownPanel}>
           {contentLoaded ? (
             <>
               <View style={styles.translationBox}>

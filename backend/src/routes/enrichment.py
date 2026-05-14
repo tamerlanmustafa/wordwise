@@ -682,12 +682,17 @@ async def get_word_sentences(
             if links:
                 for link in links:
                     sent = link.sentence.sentence
-                    sent_doc = nlp(sent)
-                    matched_form = word.lower()
-                    for token in sent_doc:
-                        if token.lemma_.lower() == lemma_text:
-                            matched_form = token.text
-                            break
+                    # Use stored matched_form when present (populated at
+                    # indexing time). Fall back to a single spaCy parse only
+                    # for legacy rows where matched_form is NULL.
+                    matched_form = link.matchedForm
+                    if matched_form is None:
+                        sent_doc = nlp(sent)
+                        matched_form = word.lower()
+                        for token in sent_doc:
+                            if token.lemma_.lower() == lemma_text:
+                                matched_form = token.text
+                                break
                     raw_sentences.append({
                         "sentence": sent,
                         "word_position": link.wordPosition or 0,
@@ -760,6 +765,206 @@ async def get_word_sentences(
     except Exception as e:
         logger.error(f"Failed to extract sentences for '{word}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class BatchSentencesRequest(BaseModel):
+    """Request body for the batch-sentences endpoint."""
+    words: List[str] = Field(..., description="Surface-form words to look up")
+    max_examples: int = Field(1, ge=1, le=5)
+
+
+@router.post("/movies/{movie_id}/sentences/batch")
+async def get_word_sentences_batch(
+    movie_id: int,
+    request: BatchSentencesRequest,
+    db: Prisma = Depends(get_db),
+):
+    """
+    Look up cached sentences for many words in a single round trip.
+    Replaces the N+1 pattern of calling /sentences/{word} per row.
+
+    Only the SentenceBank fast path is used here — words without an indexed
+    sentence return an empty list rather than triggering a full-script
+    spaCy reparse for the batch. Callers can fall back to /sentences/{word}
+    for misses if they need the slow path.
+
+    Phrases (multi-word entries) are skipped; they need extract_phrase_sentences
+    and don't currently appear in the For You list anyway.
+    """
+    import time
+    t_start = time.perf_counter()
+
+    if not request.words:
+        logger.info(f"[batch-sentences] movie={movie_id} empty request, no-op")
+        return {"movie_id": movie_id, "results": {}}
+
+    single_words = [w.lower().strip() for w in request.words if w and " " not in w.strip()]
+    n_in = len(request.words)
+    n_single = len(single_words)
+    if not single_words:
+        logger.info(f"[batch-sentences] movie={movie_id} all {n_in} inputs were phrases or empty")
+        return {"movie_id": movie_id, "results": {}}
+
+    # Resolve word → lemma from word_classifications for this movie. The
+    # classifier saw the word in full sentence context, so its lemma is
+    # accurate. Bare-word spaCy lemmatization is wrong for many forms
+    # ("bookmaking" → "bookmake", "abuses" → "abuse" but only sometimes,
+    # any short fragment from a tokenization artifact gets mangled). Using
+    # the classified lemma keeps the request path consistent with the
+    # indexer and removes spaCy from the hot path.
+    t_lemma = time.perf_counter()
+    classifications = await db.wordclassification.find_many(
+        where={
+            "script": {"is": {"movieId": movie_id}},
+            "word": {"in": single_words, "mode": "insensitive"},
+        }
+    )
+    word_to_lemma: Dict[str, str] = {}
+    for wc in classifications:
+        word_to_lemma[wc.word.lower()] = wc.lemma.lower()
+    # Fallback for any input not in classifications (shouldn't happen for
+    # the For You flow, but defensive): treat the word as its own lemma.
+    for w in single_words:
+        if w not in word_to_lemma:
+            word_to_lemma[w] = w
+    lemma_ms = (time.perf_counter() - t_lemma) * 1000
+    nlp_load_ms = 0.0  # nlp is loaded lazily only by the slow-path fallback
+
+    # Resolve lemmas → ids in a single query.
+    unique_lemmas = list({lemma for lemma in word_to_lemma.values()})
+    t_lemma_q = time.perf_counter()
+    lemma_records = await db.lemma.find_many(where={"lemma": {"in": unique_lemmas}})
+    lemma_q_ms = (time.perf_counter() - t_lemma_q) * 1000
+    lemma_str_to_id = {lr.lemma: lr.id for lr in lemma_records}
+
+    if not lemma_str_to_id:
+        total_ms = (time.perf_counter() - t_start) * 1000
+        logger.warning(
+            f"[batch-sentences] movie={movie_id} NO LEMMA MATCHES "
+            f"words={n_single} unique_lemmas={len(unique_lemmas)} "
+            f"sample_lemmas={unique_lemmas[:5]} total={total_ms:.0f}ms"
+        )
+        return {"movie_id": movie_id, "results": {word: [] for word in word_to_lemma}}
+
+    # One query for every link in this movie keyed by these lemmas.
+    t_links = time.perf_counter()
+    links = await db.sentencelemmalink.find_many(
+        where={
+            "lemmaId": {"in": list(lemma_str_to_id.values())},
+            "sentence": {"movieId": movie_id},
+        },
+        include={"sentence": True},
+        order={"score": "desc"},
+    )
+    links_ms = (time.perf_counter() - t_links) * 1000
+
+    # Group by lemma, capped at max_examples per lemma. The list is already
+    # sorted by score desc, so we just take the head of each bucket.
+    by_lemma_id: Dict[int, list] = {}
+    for link in links:
+        bucket = by_lemma_id.setdefault(link.lemmaId, [])
+        if len(bucket) < request.max_examples:
+            bucket.append(link)
+
+    results: Dict[str, list] = {}
+    n_hit_fast = 0
+    n_matched_form_null = 0
+    missing_words: List[str] = []
+    for word, lemma_str in word_to_lemma.items():
+        lemma_id = lemma_str_to_id.get(lemma_str)
+        bucket = by_lemma_id.get(lemma_id, []) if lemma_id is not None else []
+        if bucket:
+            n_hit_fast += 1
+            for link in bucket:
+                if link.matchedForm is None:
+                    n_matched_form_null += 1
+            results[word] = [
+                {
+                    "sentence": link.sentence.sentence,
+                    "word_position": link.wordPosition or 0,
+                    "matched_form": link.matchedForm or word,
+                }
+                for link in bucket
+            ]
+        else:
+            results[word] = []
+            missing_words.append(word)
+
+    # ─── Slow-path fallback ─────────────────────────────────────────────────
+    # Only fires for movies that haven't been indexed at all (no SentenceBank
+    # rows). For indexed movies, we trust whatever the lemma-based indexer
+    # produced — burning ~1-2s of spaCy at request time to scrape another
+    # one or two sentences for marginal coverage doesn't pay off. Cold/
+    # unindexed movies still get a one-time bootstrap so first-time access
+    # works, and the backfill script handles the rest offline.
+    n_hit_slow = 0
+    slow_path_ms = 0.0
+    movie_already_indexed = await db.sentencebank.find_first(
+        where={"movieId": movie_id}
+    ) is not None
+    if missing_words and not movie_already_indexed:
+        t_slow = time.perf_counter()
+        try:
+            movie = await db.movie.find_unique(
+                where={"id": movie_id},
+                include={"movieScripts": True},
+            )
+            script_text = (
+                movie.movieScripts[0].cleanedScriptText
+                if movie and movie.movieScripts and movie.movieScripts[0].cleanedScriptText
+                else None
+            )
+            if script_text:
+                # Lazy-load spaCy only when the slow path actually fires;
+                # the fast path no longer needs it.
+                from src.services.lemmatization_service import get_nlp
+                t_nlp = time.perf_counter()
+                nlp = get_nlp()
+                nlp_load_ms = (time.perf_counter() - t_nlp) * 1000
+                missing_lemmas = {word_to_lemma[w] for w in missing_words}
+                sentence_service = SentenceExampleService()
+                slow_results = sentence_service.extract_sentences_for_lemmas(
+                    script_text,
+                    missing_lemmas,
+                    nlp,
+                    max_per_lemma=request.max_examples,
+                )
+                for word in missing_words:
+                    lemma = word_to_lemma[word]
+                    sents = slow_results.get(lemma, [])
+                    if sents:
+                        n_hit_slow += 1
+                        results[word] = [
+                            {
+                                "sentence": sent,
+                                "word_position": pos,
+                                "matched_form": form,
+                            }
+                            for sent, pos, form in sents
+                        ]
+        except Exception as fallback_err:
+            logger.warning(
+                f"[batch-sentences] slow-path fallback failed: {fallback_err}",
+                exc_info=True,
+            )
+        slow_path_ms = (time.perf_counter() - t_slow) * 1000
+
+    total_ms = (time.perf_counter() - t_start) * 1000
+    slow_path_state = "fired" if slow_path_ms > 0 else (
+        "skipped(indexed)" if movie_already_indexed else "skipped(no-misses)"
+    )
+    logger.info(
+        f"[batch-sentences] movie={movie_id} "
+        f"in={n_in} single={n_single} lemmas={len(unique_lemmas)} "
+        f"lemma_rows={len(lemma_records)} links={len(links)} "
+        f"hits_fast={n_hit_fast}/{n_single} hits_slow={n_hit_slow}/{len(missing_words) or 0} "
+        f"slow_path={slow_path_state} legacy_null_matched_form={n_matched_form_null} "
+        f"| timing nlp_load={nlp_load_ms:.0f}ms classifications_q={lemma_ms:.0f}ms "
+        f"lemma_q={lemma_q_ms:.0f}ms links_q={links_ms:.0f}ms "
+        f"slow_path_t={slow_path_ms:.0f}ms total={total_ms:.0f}ms"
+    )
+
+    return {"movie_id": movie_id, "results": results}
 
 
 @router.get("/movies/{movie_id}/examples/{word}", response_model=WordExamplesResponse)

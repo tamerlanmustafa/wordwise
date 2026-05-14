@@ -1,3 +1,11 @@
+# Load backend/.env into the process environment BEFORE Prisma's client
+# module imports — the Rust query-engine subprocess inherits this env and
+# fails to start without DATABASE_URL. This makes `uvicorn src.main:app`
+# work in a fresh shell that hasn't `source .env`'d.
+from pathlib import Path as _Path
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(_Path(__file__).parent.parent / '.env')
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager

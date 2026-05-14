@@ -267,6 +267,33 @@ async def classify_text(request: TextClassificationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def populate_sentence_bank_bg(movie_id: int):
+    """
+    Background task: populate SentenceBank + SentenceLemmaLink for a movie's
+    classified vocabulary. Translation-free (pure spaCy + DB), so safe to fire
+    on every classify-script call. Idempotent — skips if SentenceBank already
+    has entries for this movie.
+
+    Owns its own Prisma connection because the request-scoped `db` injected
+    into the handler is closed by the time this task runs.
+    """
+    db = None
+    try:
+        db = Prisma()
+        await db.connect()
+        from src.services.sentence_bank_service import populate_movie_sentence_bank
+        stats = await populate_movie_sentence_bank(db, movie_id)
+        logger.info(f"[bg-sentencebank] movie={movie_id} {stats}")
+    except Exception as e:
+        logger.error(f"[bg-sentencebank] movie={movie_id} FAILED: {e}", exc_info=True)
+    finally:
+        if db is not None:
+            try:
+                await db.disconnect()
+            except Exception:
+                pass
+
+
 async def auto_enrich_after_classification(movie_id: int, target_lang: str):
     """
     Background task: Automatically enrich movie with sentence examples after classification.
@@ -464,6 +491,10 @@ async def classify_script(
                 except Exception as e:
                     logger.warning(f"Failed to update difficulty with genres: {e}")
 
+            # Schedule SentenceBank population if this movie hasn't been
+            # indexed yet. The task is idempotent and translation-free.
+            background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
+
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
                 movie_id=request.movie_id,
@@ -658,8 +689,11 @@ async def classify_script(
         ]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
-        # NOTE: Auto-enrichment removed - enrichment should only be triggered
-        # via the dedicated /enrich endpoint with explicit user action
+        # Schedule SentenceBank population in the background. This is the
+        # cheap (no-LLM) path: only sentence extraction + DB writes. The
+        # heavier translation-bearing /enrich endpoint is still the explicit
+        # opt-in for filling translation_memory / WordSentenceExample.
+        background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
 
         # Final response
         script_word_count = script.cleanedWordCount or 0

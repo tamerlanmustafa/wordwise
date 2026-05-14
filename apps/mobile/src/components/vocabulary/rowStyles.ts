@@ -76,11 +76,7 @@ export const rowStyles = StyleSheet.create({
     color: '#F4A261',
   },
   dropdownPanel: {
-    backgroundColor: colors.paper,
-    borderLeftWidth: 3,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#2E1F4A',
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
     paddingHorizontal: 14,
@@ -93,7 +89,7 @@ export const rowStyles = StyleSheet.create({
   expandSkeletonBar: {
     height: 12,
     borderRadius: 4,
-    backgroundColor: 'rgba(124, 92, 191, 0.16)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   expandSkeletonBarShort: { width: '55%' },
   expandSkeletonBarLong: { width: '92%' },
@@ -105,58 +101,58 @@ export const rowStyles = StyleSheet.create({
   },
   translationDash: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.55)',
     marginRight: 6,
   },
   translationText: {
     fontSize: 14,
-    color: colors.text,
+    color: '#FFFFFF',
     flex: 1,
   },
   translationUntranslatable: {
     fontStyle: 'italic',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.55)',
   },
   noTranslation: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.55)',
     fontStyle: 'italic',
   },
   exampleCard: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 10,
     borderRadius: 6,
     marginBottom: 6,
   },
   exampleSentence: {
     fontSize: 13,
-    color: colors.text,
+    color: 'rgba(255,255,255,0.92)',
     lineHeight: 18,
   },
   exampleTranslation: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.65)',
     marginTop: 4,
     fontStyle: 'italic',
   },
   highlightedWord: {
     fontWeight: '700',
-    color: colors.primary,
+    color: '#C4B0F0',
   },
   noExamples: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.55)',
     fontStyle: 'italic',
   },
   crossMovieSection: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: 'rgba(255,255,255,0.10)',
   },
   crossMovieLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.65)',
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -165,12 +161,12 @@ export const rowStyles = StyleSheet.create({
   },
   crossMovieMovie: {
     fontSize: 12,
-    color: colors.primary,
+    color: '#C4B0F0',
     fontWeight: '600',
   },
   crossMovieSentence: {
     fontSize: 12,
-    color: colors.text,
+    color: 'rgba(255,255,255,0.92)',
     fontStyle: 'italic',
   },
   reportInlineBtn: {
@@ -179,6 +175,6 @@ export const rowStyles = StyleSheet.create({
   },
   reportInlineBtnText: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
   },
 });

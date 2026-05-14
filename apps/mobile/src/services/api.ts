@@ -388,6 +388,33 @@ export const wordwiseApi = {
       // Fire-and-forget: don't let tracking failures affect UX
     }
   },
+
+  // Batch lookup of in-movie example sentences. One round trip for many
+  // words; backend hits SentenceBank only (fast path) and skips misses.
+  batchSentences: async (
+    movieId: number,
+    words: string[],
+    maxExamples: number = 1,
+  ): Promise<Record<string, { sentence: string; word_position: number; matched_form: string }[]>> => {
+    if (!words.length) return {};
+    const t0 = Date.now();
+    const res = await fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words, max_examples: maxExamples }),
+    });
+    const httpMs = Date.now() - t0;
+    if (!res.ok) {
+      console.warn('[batchSentences] HTTP error', { status: res.status, httpMs, words: words.length });
+      return {};
+    }
+    const data = await res.json();
+    const totalMs = Date.now() - t0;
+    console.log('[batchSentences] http ok', {
+      httpMs, totalMs, requested: words.length, returned: Object.keys(data.results || {}).length,
+    });
+    return data.results || {};
+  },
 };
 
 // =====================================================================

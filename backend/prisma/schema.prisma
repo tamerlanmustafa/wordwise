@@ -532,7 +532,7 @@ model MovieLemmaMapping {
 
 model SentenceBank {
   id           Int      @id @default(autoincrement())
-  sentenceHash String   @unique @map("sentence_hash") @db.VarChar(64)
+  sentenceHash String   @map("sentence_hash") @db.VarChar(64)
   sentence     String   @db.Text
   movieId      Int      @map("movie_id")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -540,7 +540,12 @@ model SentenceBank {
   movie      Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
   lemmaLinks SentenceLemmaLink[]
 
+  // Dedup is per-movie now (was global). Two movies with the same line of
+  // dialogue each get their own row; a single movie can't double-store the
+  // same line. See migration 2026_05_09_sentence_bank_per_movie.sql.
+  @@unique([sentenceHash, movieId], map: "sentence_bank_hash_movie_unique")
   @@index([movieId], map: "ix_sentence_bank_movie_id")
+  @@index([sentenceHash], map: "ix_sentence_bank_sentence_hash")
   @@map("sentence_bank")
 }
 
@@ -550,6 +555,7 @@ model SentenceLemmaLink {
   lemmaId          Int     @map("lemma_id")
   senseId          Int?    @map("sense_id")
   wordPosition     Int?    @map("word_position")
+  matchedForm      String? @map("matched_form") @db.VarChar
   score            Float   @default(0)
   isRepresentative Boolean @default(false) @map("is_representative")
 
