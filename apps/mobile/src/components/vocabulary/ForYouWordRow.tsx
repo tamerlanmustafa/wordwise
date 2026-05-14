@@ -1,6 +1,11 @@
 import React, { memo, useEffect, useState } from 'react';
-import { LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, cefrColors } from '../../theme/palette';
+
+// Serif italic gives the For You row a calmer, book-page feel — Georgia is
+// preinstalled on iOS; Android falls back to its default serif (Noto Serif
+// on most builds).
+const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' });
 import { wordwiseApi, type WordInfo } from '../../services/api';
 import type { SentenceExample } from './WordRow';
 
@@ -168,6 +173,7 @@ const styles = StyleSheet.create({
   },
   rowNum: {
     fontSize: 12,
+    fontFamily: SERIF,
     fontStyle: 'italic',
     color: '#B0B5C0',
     fontWeight: '500',
@@ -178,12 +184,15 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1 },
   sentence: {
-    fontSize: 15,
+    fontSize: 16,
+    fontFamily: SERIF,
     fontStyle: 'italic',
     color: colors.text,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   sentenceHi: {
+    fontFamily: SERIF,
+    fontStyle: 'italic',
     fontWeight: '700',
     textDecorationLine: 'underline',
   },
@@ -195,14 +204,18 @@ const styles = StyleSheet.create({
   },
   wordLabel: {
     fontSize: 13,
+    fontFamily: SERIF,
+    fontStyle: 'italic',
     fontWeight: '700',
   },
   dot: {
     fontSize: 13,
+    fontFamily: SERIF,
     color: colors.textSecondary,
   },
   translation: {
     fontSize: 13,
+    fontFamily: SERIF,
     fontStyle: 'italic',
     color: colors.textSecondary,
   },
