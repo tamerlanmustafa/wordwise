@@ -129,15 +129,27 @@ export const MovieDetailScreen = ({
     const shouldHide = isHidden ? y > HEADER_SHOW_THRESHOLD : y > HEADER_HIDE_THRESHOLD;
     if (shouldHide !== isHidden) {
       headerHiddenRef.current = shouldHide;
-      LayoutAnimation.configureNext({
-        duration: 340,
-        create: { type: 'easeInEaseOut', property: 'opacity' },
-        update: { type: 'easeInEaseOut' },
-        delete: { type: 'easeInEaseOut', property: 'opacity' },
-      });
       setHeaderHidden(shouldHide);
     }
   }, []);
+  // Animated collapse: 0 = full hero shown, 1 = compact header shown.
+  // Drives height, opacity, and translateY together so the transition reads
+  // as one continuous motion rather than a layout pop.
+  const collapseAnim = useRef(new Animated.Value(0)).current;
+  const [heroNaturalHeight, setHeroNaturalHeight] = useState(0);
+  useEffect(() => {
+    Animated.timing(collapseAnim, {
+      toValue: headerHidden ? 1 : 0,
+      duration: 320,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [headerHidden, collapseAnim]);
+  // Re-measure the hero's natural height when the overview expands/collapses,
+  // since that grows the layout and we don't want the collapse to clip text.
+  useEffect(() => {
+    setHeroNaturalHeight(0);
+  }, [overviewExpanded]);
   const prevLevelRef = useRef<string>(activeLevel);
 
   useEffect(() => {
@@ -770,98 +782,144 @@ export const MovieDetailScreen = ({
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
       <StatusBar barStyle="light-content" />
 
-      {!headerHidden ? (
-      <>
-        <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
-          {movie.backdrop_path ? (
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-              style={styles.heroBackdropImage}
-              resizeMode="cover"
-            />
-          ) : null}
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(0,0,0,0.55)', 'transparent']}
-            style={[styles.heroTopFade, { height: 80 + insets.top }]}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)']}
-            locations={[0, 0.3, 0.7, 1]}
-            style={styles.heroBottomGradient}
-          />
-          <View style={[styles.heroBackButtonOverlay, { top: insets.top + 4 }]}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.heroBackButtonText}>← Back</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.heroFloating}>
-            <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
+      <Animated.View
+        style={[
+          { overflow: 'hidden' },
+          heroNaturalHeight > 0
+            ? {
+                height: collapseAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [heroNaturalHeight, insets.top + 44],
+                }),
+              }
+            : null,
+        ]}
+      >
+        <Animated.View
+          onLayout={(e) => {
+            if (heroNaturalHeight === 0) {
+              setHeroNaturalHeight(e.nativeEvent.layout.height);
+            }
+          }}
+          style={{
+            opacity: collapseAnim.interpolate({
+              inputRange: [0, 0.6, 1],
+              outputRange: [1, 0, 0],
+            }),
+            transform: [
+              {
+                translateY: collapseAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -40],
+                }),
+              },
+            ],
+          }}
+        >
+          <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
+            {movie.backdrop_path ? (
               <Image
-                source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-                style={styles.heroPosterImage}
+                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+                style={styles.heroBackdropImage}
                 resizeMode="cover"
               />
-            </Pressable>
-            <View style={styles.heroMetaCol}>
-              <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
-              <Text style={styles.heroMetaRow} numberOfLines={1}>
-                {movie.release_date ? (
-                  <Text style={styles.heroMetaYear}>{movie.release_date.slice(0, 4)}</Text>
-                ) : null}
-                {movie.release_date && movie.vote_average != null ? (
-                  <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
-                ) : null}
-                {movie.vote_average != null ? (
-                  <Text style={styles.heroMetaRating}>★ {movie.vote_average.toFixed(1)}</Text>
-                ) : null}
-                {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
-                  <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
-                ) : null}
-                {movie.genre_ids && movie.genre_ids.length > 0 ? (
-                  <Text style={styles.heroMetaGenres}>
-                    {movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')}
-                  </Text>
-                ) : null}
-              </Text>
-              {difficulty && (
-                <View style={[styles.heroDifficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
-                  <Text style={styles.heroDifficultyChipText}>
-                    {difficulty.level} · {difficulty.score}% match
-                  </Text>
-                </View>
-              )}
+            ) : null}
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(0,0,0,0.55)', 'transparent']}
+              style={[styles.heroTopFade, { height: 80 + insets.top }]}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)']}
+              locations={[0, 0.3, 0.7, 1]}
+              style={styles.heroBottomGradient}
+            />
+            <View style={[styles.heroBackButtonOverlay, { top: insets.top + 4 }]}>
+              <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.heroBackButtonText}>← Back</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.heroFloating}>
+              <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+                  style={styles.heroPosterImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+              <View style={styles.heroMetaCol}>
+                <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
+                <Text style={styles.heroMetaRow} numberOfLines={1}>
+                  {movie.release_date ? (
+                    <Text style={styles.heroMetaYear}>{movie.release_date.slice(0, 4)}</Text>
+                  ) : null}
+                  {movie.release_date && movie.vote_average != null ? (
+                    <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
+                  ) : null}
+                  {movie.vote_average != null ? (
+                    <Text style={styles.heroMetaRating}>★ {movie.vote_average.toFixed(1)}</Text>
+                  ) : null}
+                  {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
+                    <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
+                  ) : null}
+                  {movie.genre_ids && movie.genre_ids.length > 0 ? (
+                    <Text style={styles.heroMetaGenres}>
+                      {movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')}
+                    </Text>
+                  ) : null}
+                </Text>
+                {difficulty && (
+                  <View style={[styles.heroDifficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
+                    <Text style={styles.heroDifficultyChipText}>
+                      {difficulty.level} · {difficulty.score}% match
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-        {movie.overview ? (
-          <View style={styles.overviewBox}>
-            <Text
-              style={styles.overviewText}
-              numberOfLines={overviewExpanded ? undefined : 2}
-            >
-              {movie.overview}
-            </Text>
-            <Pressable onPress={() => setOverviewExpanded((v) => !v)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-              <Text style={styles.overviewToggle}>
-                {overviewExpanded ? 'Show less' : 'Read more'}
+          {movie.overview ? (
+            <View style={styles.overviewBox}>
+              <Text
+                style={styles.overviewText}
+                numberOfLines={overviewExpanded ? undefined : 2}
+              >
+                {movie.overview}
               </Text>
-            </Pressable>
+              <Pressable onPress={() => setOverviewExpanded((v) => !v)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Text style={styles.overviewToggle}>
+                  {overviewExpanded ? 'Show less' : 'Read more'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </Animated.View>
+
+        <Animated.View
+          pointerEvents={headerHidden ? 'auto' : 'none'}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            opacity: collapseAnim.interpolate({
+              inputRange: [0, 0.4, 1],
+              outputRange: [0, 0, 1],
+            }),
+          }}
+        >
+          <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
+            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+              {movie.title}
+            </Text>
+            <View style={{ width: 60 }} />
           </View>
-        ) : null}
-      </>
-      ) : (
-        <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-            {movie.title}
-          </Text>
-          <View style={{ width: 60 }} />
-        </View>
-      )}
+        </Animated.View>
+      </Animated.View>
       <View style={{ flex: 1 }}>
       {loading ? (
         <View style={[styles.container, styles.centered]}>
