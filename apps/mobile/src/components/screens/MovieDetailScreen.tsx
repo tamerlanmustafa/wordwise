@@ -653,6 +653,7 @@ export const MovieDetailScreen = ({
   // refetch them. A second empty response promotes them to 'miss-confirmed'
   // (the word genuinely has no indexed sentence — extract_word_sentences
   // does literal matching and skips inflected forms).
+  const FORYOU_MAX_SENTENCE_CHARS = 75;
   type SentenceEntry = { sentence: string; word_position: number; matched_form: string };
   type FetchStatus = 'in-flight' | 'in-flight-retry' | 'hit' | 'miss-recent' | 'miss-confirmed';
   const [foryouSentences, setForyouSentences] = useState<Record<string, SentenceEntry>>({});
@@ -987,7 +988,17 @@ export const MovieDetailScreen = ({
                 ))
               ) : deferredWordsView === 'foryou' ? (
                 <>
-                  {deferredSuggestedVisible.slice(0, renderLimit).map((item, index) => {
+                  {deferredSuggestedVisible
+                    .slice(0, renderLimit)
+                    .filter((item) => {
+                      if (isIdiom(item)) return true;
+                      const entry = foryouSentences[item.word];
+                      if (!entry) return true; // still loading → keep skeleton
+                      if (!entry.sentence) return false; // confirmed miss → hide
+                      if (entry.sentence.length > FORYOU_MAX_SENTENCE_CHARS) return false;
+                      return true;
+                    })
+                    .map((item, index) => {
                     if (isIdiom(item)) {
                       const key = item.phrase;
                       return (

@@ -184,11 +184,11 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1 },
   sentence: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: SERIF,
     fontStyle: 'italic',
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 21,
   },
   sentenceHi: {
     fontFamily: SERIF,
