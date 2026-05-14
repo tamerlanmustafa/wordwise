@@ -1,6 +1,7 @@
 generator client {
-  provider             = "prisma-client-py"
-  recursive_type_depth = "5"
+  provider                    = "prisma-client-py"
+  recursive_type_depth        = "5"
+  enable_experimental_decimal = "true"
 }
 
 datasource db {
@@ -405,6 +406,13 @@ enum classificationsource {
   fallback
 }
 
+enum sentencesource {
+  subtitle
+  llm
+  tatoeba
+  public_domain
+}
+
 enum interactiontype {
   ROW_CLICK
   TRANSLATION_VIEW
@@ -531,22 +539,41 @@ model MovieLemmaMapping {
 }
 
 model SentenceBank {
-  id           Int      @id @default(autoincrement())
-  sentenceHash String   @map("sentence_hash") @db.VarChar(64)
-  sentence     String   @db.Text
-  movieId      Int      @map("movie_id")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           Int            @id @default(autoincrement())
+  sentenceHash String         @map("sentence_hash") @db.VarChar(64)
+  sentence     String         @db.Text
+  // movieId NULL = global LLM-authored sentence shared across every movie
+  // that has the linked lemma. movieId NOT NULL = legacy movie-tied row
+  // (subtitle extraction or pre-global LLM backfill). Postgres treats NULL
+  // ≠ NULL in unique constraints, so global dedup is enforced by a partial
+  // unique index — see migration 2026_05_14_shared_sentences_and_cost_ledger.sql.
+  movieId      Int?           @map("movie_id")
+  source       sentencesource @default(subtitle)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  movie      Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  movie      Movie?              @relation(fields: [movieId], references: [id], onDelete: Cascade)
   lemmaLinks SentenceLemmaLink[]
 
-  // Dedup is per-movie now (was global). Two movies with the same line of
-  // dialogue each get their own row; a single movie can't double-store the
-  // same line. See migration 2026_05_09_sentence_bank_per_movie.sql.
   @@unique([sentenceHash, movieId], map: "sentence_bank_hash_movie_unique")
   @@index([movieId], map: "ix_sentence_bank_movie_id")
   @@index([sentenceHash], map: "ix_sentence_bank_sentence_hash")
+  @@index([movieId, source], map: "ix_sentence_bank_movie_source")
   @@map("sentence_bank")
+}
+
+model LlmUsageLedger {
+  id                  Int      @id @default(autoincrement())
+  ts                  DateTime @default(now()) @db.Timestamptz(6)
+  model               String   @db.VarChar(64)
+  inputTokens         Int      @default(0) @map("input_tokens")
+  cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
+  cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  outputTokens        Int      @default(0) @map("output_tokens")
+  estimatedCostUsd    Decimal  @default(0) @map("estimated_cost_usd") @db.Decimal(12, 6)
+  context             String   @default("unknown") @db.VarChar(64)
+
+  @@index([ts], map: "ix_llm_usage_ledger_ts")
+  @@map("llm_usage_ledger")
 }
 
 model SentenceLemmaLink {

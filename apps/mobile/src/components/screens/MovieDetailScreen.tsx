@@ -15,7 +15,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -73,6 +73,7 @@ export const MovieDetailScreen = ({
   sceneStrips,
 }: Props) => {
   const tc = useThemeColors();
+  const insets = useSafeAreaInsets();
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -644,7 +645,9 @@ export const MovieDetailScreen = ({
     return map;
   }, [sceneStrips]);
 
-  // Pre-fetch sentence examples for the For You list in a single batch call.
+  // Pre-fetch sentence examples for the visible list in a single batch call.
+  // Used by both the For You tab and the level tabs (A1–C2) to filter out
+  // rows whose example sentence is missing or too long.
   //
   // Race condition we're handling: classify-script schedules a background
   // task that populates SentenceBank in ~2-5s. The first batch request
@@ -653,19 +656,23 @@ export const MovieDetailScreen = ({
   // refetch them. A second empty response promotes them to 'miss-confirmed'
   // (the word genuinely has no indexed sentence — extract_word_sentences
   // does literal matching and skips inflected forms).
-  const FORYOU_MAX_SENTENCE_CHARS = 75;
+  const MAX_SENTENCE_CHARS = 75;
   type SentenceEntry = { sentence: string; word_position: number; matched_form: string };
   type FetchStatus = 'in-flight' | 'in-flight-retry' | 'hit' | 'miss-recent' | 'miss-confirmed';
-  const [foryouSentences, setForyouSentences] = useState<Record<string, SentenceEntry>>({});
+  const [sentencePreviews, setSentencePreviews] = useState<Record<string, SentenceEntry>>({});
   const [sentencesRetryTick, setSentencesRetryTick] = useState(0);
   const sentencesStatusRef = useRef<Record<string, FetchStatus>>({});
 
   useEffect(() => {
-    if (!movieId || wordsView !== 'foryou') return;
-    const words = suggestedWords
-      .slice(0, SUGGESTED_CAP)
-      .filter((w): w is WordInfo & { cefr_level: string } => !isIdiom(w))
-      .map((w) => w.word);
+    if (!movieId) return;
+    const words = wordsView === 'foryou'
+      ? suggestedWords
+          .slice(0, SUGGESTED_CAP)
+          .filter((w): w is WordInfo & { cefr_level: string } => !isIdiom(w))
+          .map((w) => w.word)
+      : activeItems
+          .filter((w): w is WordInfo => !isIdiom(w))
+          .map((w) => w.word);
     const status = sentencesStatusRef.current;
     const missing = words.filter((w) => {
       const s = status[w];
@@ -677,10 +684,10 @@ export const MovieDetailScreen = ({
     });
     const t0 = Date.now();
     console.log('[batch-sentences] fetching', {
-      movieId, count: missing.length, retryTick: sentencesRetryTick, sample: missing.slice(0, 3),
+      movieId, view: wordsView, count: missing.length, retryTick: sentencesRetryTick, sample: missing.slice(0, 3),
     });
     // No cancel-on-rerun guard: the request is for `missing` words on this
-    // movie, and setForyouSentences only merges. If MovieDetailScreen has
+    // movie, and setSentencePreviews only merges. If MovieDetailScreen has
     // unmounted (movie navigation), React no-ops the setState. If the effect
     // re-ran for the same movie (e.g. background vocab refresh changed
     // suggestedWords' identity), in-flight status prevents a duplicate fetch
@@ -690,7 +697,7 @@ export const MovieDetailScreen = ({
       let hits = 0;
       let firstMisses = 0;
       let confirmedMisses = 0;
-      setForyouSentences((prev) => {
+      setSentencePreviews((prev) => {
         const next = { ...prev };
         for (const w of missing) {
           const wasRetry = status[w] === 'in-flight-retry';
@@ -728,7 +735,7 @@ export const MovieDetailScreen = ({
         }
       });
     });
-  }, [movieId, wordsView, suggestedWords, sentencesRetryTick]);
+  }, [movieId, wordsView, suggestedWords, activeItems, sentencesRetryTick]);
 
   // Chunked rendering: mount the first 25 rows immediately on a tab switch,
   // then progressively reveal the rest in batches. ~100 WordRow mounts in
@@ -760,21 +767,12 @@ export const MovieDetailScreen = ({
   }, [renderLimit, activeListLength]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
       <StatusBar barStyle="light-content" />
-      <View style={[styles.detailHeader, { backgroundColor: tc.background, borderBottomWidth: 0 }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-          {movie.title}
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
 
-      {!headerHidden && (
+      {!headerHidden ? (
       <>
-        <View style={styles.heroBackdrop}>
+        <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
           {movie.backdrop_path ? (
             <Image
               source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
@@ -784,8 +782,8 @@ export const MovieDetailScreen = ({
           ) : null}
           <LinearGradient
             pointerEvents="none"
-            colors={['rgba(0,0,0,0.5)', 'transparent']}
-            style={styles.heroTopFade}
+            colors={['rgba(0,0,0,0.55)', 'transparent']}
+            style={[styles.heroTopFade, { height: 80 + insets.top }]}
           />
           <LinearGradient
             pointerEvents="none"
@@ -793,6 +791,11 @@ export const MovieDetailScreen = ({
             locations={[0, 0.3, 0.7, 1]}
             style={styles.heroBottomGradient}
           />
+          <View style={[styles.heroBackButtonOverlay, { top: insets.top + 4 }]}>
+            <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.heroBackButtonText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.heroFloating}>
             <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
               <Image
@@ -848,6 +851,16 @@ export const MovieDetailScreen = ({
           </View>
         ) : null}
       </>
+      ) : (
+        <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+            {movie.title}
+          </Text>
+          <View style={{ width: 60 }} />
+        </View>
       )}
       <View style={{ flex: 1 }}>
       {loading ? (
@@ -992,10 +1005,10 @@ export const MovieDetailScreen = ({
                     .slice(0, renderLimit)
                     .filter((item) => {
                       if (isIdiom(item)) return true;
-                      const entry = foryouSentences[item.word];
+                      const entry = sentencePreviews[item.word];
                       if (!entry) return true; // still loading → keep skeleton
                       if (!entry.sentence) return false; // confirmed miss → hide
-                      if (entry.sentence.length > FORYOU_MAX_SENTENCE_CHARS) return false;
+                      if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
                       return true;
                     })
                     .map((item, index) => {
@@ -1052,7 +1065,7 @@ export const MovieDetailScreen = ({
                             accordionMode={accordionMode}
                             lastOpenedKey={lastOpenedKey}
                             onExpand={setLastOpenedKey}
-                            preloadedSentence={foryouSentences[key]}
+                            preloadedSentence={sentencePreviews[key]}
                           />
                         </BookmarkRowWrapper>
                         {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
@@ -1073,7 +1086,17 @@ export const MovieDetailScreen = ({
                   )}
                 </>
               ) : (
-                deferredActiveItems.slice(0, renderLimit).map((item, index) => {
+                deferredActiveItems
+                  .slice(0, renderLimit)
+                  .filter((item) => {
+                    if (isIdiom(item)) return true;
+                    const entry = sentencePreviews[item.word];
+                    if (!entry) return true; // still loading → keep skeleton
+                    if (!entry.sentence) return false; // confirmed miss → hide
+                    if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
+                    return true;
+                  })
+                  .map((item, index) => {
                   if (isIdiom(item)) {
                     const key = item.phrase;
                     return (

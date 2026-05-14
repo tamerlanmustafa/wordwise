@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
     google_translate_enabled: str = "false"
 
+    # Anthropic (LLM example sentence generation)
+    anthropic_api_key: str = ""
+    anthropic_sentence_model: str = "claude-sonnet-4-6"
+    # Hard ceiling on cumulative Anthropic spend (USD) recorded in
+    # llm_usage_ledger. Before each LLM call we sum the ledger and refuse
+    # to fire if we're already at or above this number. Set to 0 to disable.
+    llm_cost_cap_usd: float = 50.0
+
     class Config:
         env_file = ".env"
         case_sensitive = False

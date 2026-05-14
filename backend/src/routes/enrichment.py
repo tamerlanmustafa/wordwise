@@ -11,12 +11,24 @@ import logging
 
 from src.database import get_db
 from prisma import Prisma
+from src.config import get_settings
 from src.services.sentence_example_service import SentenceExampleService
 from src.services.example_translation_service import ExampleTranslationService
 from src.services.sentence_bank_service import populate_sentence_bank
 from src.services.sense_clustering_service import cluster_and_store_senses
 from src.services.translation_memory_service import TranslationMemoryService
 from src.services.v2_optimization_service import V2OptimizationService
+
+
+# Read-path preference: prefer LLM-authored sentences over any legacy
+# subtitle-extracted rows. Tatoeba / public-domain fallbacks slot in
+# between. Lower number = higher priority.
+SENTENCE_SOURCE_PRIORITY = {
+    "llm": 0,
+    "tatoeba": 1,
+    "public_domain": 2,
+    "subtitle": 3,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -828,7 +840,6 @@ async def get_word_sentences_batch(
         if w not in word_to_lemma:
             word_to_lemma[w] = w
     lemma_ms = (time.perf_counter() - t_lemma) * 1000
-    nlp_load_ms = 0.0  # nlp is loaded lazily only by the slow-path fallback
 
     # Resolve lemmas → ids in a single query.
     unique_lemmas = list({lemma for lemma in word_to_lemma.values()})
@@ -846,25 +857,39 @@ async def get_word_sentences_batch(
         )
         return {"movie_id": movie_id, "results": {word: [] for word in word_to_lemma}}
 
-    # One query for every link in this movie keyed by these lemmas.
+    # Query both global (movieId IS NULL) and movie-tied rows in one shot.
+    # Global LLM rows are shared across every movie; movie-tied rows are
+    # legacy data (subtitle extractions + the pre-global LLM backfill).
     t_links = time.perf_counter()
     links = await db.sentencelemmalink.find_many(
         where={
             "lemmaId": {"in": list(lemma_str_to_id.values())},
-            "sentence": {"movieId": movie_id},
+            "OR": [
+                {"sentence": {"is": {"movieId": None}}},
+                {"sentence": {"is": {"movieId": movie_id}}},
+            ],
         },
         include={"sentence": True},
         order={"score": "desc"},
     )
     links_ms = (time.perf_counter() - t_links) * 1000
 
-    # Group by lemma, capped at max_examples per lemma. The list is already
-    # sorted by score desc, so we just take the head of each bucket.
+    # Group by lemma, then sort each bucket so the preferred example wins.
+    # Priority: source (llm beats subtitle) → movie-tied beats global within
+    # the same source (honors legacy per-movie LLM rows when present) →
+    # higher score breaks ties. Cap at max_examples per lemma.
     by_lemma_id: Dict[int, list] = {}
     for link in links:
-        bucket = by_lemma_id.setdefault(link.lemmaId, [])
-        if len(bucket) < request.max_examples:
-            bucket.append(link)
+        by_lemma_id.setdefault(link.lemmaId, []).append(link)
+    for lemma_id, bucket in by_lemma_id.items():
+        bucket.sort(
+            key=lambda link: (
+                SENTENCE_SOURCE_PRIORITY.get(link.sentence.source, 99),
+                0 if link.sentence.movieId is not None else 1,
+                -(link.score or 0.0),
+            )
+        )
+        by_lemma_id[lemma_id] = bucket[: request.max_examples]
 
     results: Dict[str, list] = {}
     n_hit_fast = 0
@@ -890,78 +915,72 @@ async def get_word_sentences_batch(
             results[word] = []
             missing_words.append(word)
 
-    # ─── Slow-path fallback ─────────────────────────────────────────────────
-    # Only fires for movies that haven't been indexed at all (no SentenceBank
-    # rows). For indexed movies, we trust whatever the lemma-based indexer
-    # produced — burning ~1-2s of spaCy at request time to scrape another
-    # one or two sentences for marginal coverage doesn't pay off. Cold/
-    # unindexed movies still get a one-time bootstrap so first-time access
-    # works, and the backfill script handles the rest offline.
+    # ─── Slow-path fallback (LLM generation) ────────────────────────────────
+    # For words with no cached example sentence in this movie or globally,
+    # ask Claude to author one. The sentence is stored globally (movieId
+    # NULL) so the next movie that contains the same lemma serves the
+    # cached row for free. If ANTHROPIC_API_KEY is unset we leave the words
+    # as misses; the offline backfill script can fill them later. Spend is
+    # capped by settings.llm_cost_cap_usd — once hit, slow-path is skipped.
     n_hit_slow = 0
     slow_path_ms = 0.0
-    movie_already_indexed = await db.sentencebank.find_first(
-        where={"movieId": movie_id}
-    ) is not None
-    if missing_words and not movie_already_indexed:
-        t_slow = time.perf_counter()
-        try:
-            movie = await db.movie.find_unique(
-                where={"id": movie_id},
-                include={"movieScripts": True},
-            )
-            script_text = (
-                movie.movieScripts[0].cleanedScriptText
-                if movie and movie.movieScripts and movie.movieScripts[0].cleanedScriptText
-                else None
-            )
-            if script_text:
-                # Lazy-load spaCy only when the slow path actually fires;
-                # the fast path no longer needs it.
-                from src.services.lemmatization_service import get_nlp
-                t_nlp = time.perf_counter()
-                nlp = get_nlp()
-                nlp_load_ms = (time.perf_counter() - t_nlp) * 1000
-                missing_lemmas = {word_to_lemma[w] for w in missing_words}
-                sentence_service = SentenceExampleService()
-                slow_results = sentence_service.extract_sentences_for_lemmas(
-                    script_text,
-                    missing_lemmas,
-                    nlp,
-                    max_per_lemma=request.max_examples,
+    slow_path_state = "skipped(no-misses)"
+    if missing_words:
+        slow_path_state = "skipped(no-llm-key)"
+        if get_settings().anthropic_api_key:
+            t_slow = time.perf_counter()
+            try:
+                # Lazy import — the anthropic SDK may not be installed in
+                # environments that don't generate sentences (CI, dev).
+                from src.services.llm_sentence_service import (
+                    CostCapExceeded,
+                    LLMSentenceService,
+                    WordRequest,
                 )
-                for word in missing_words:
-                    lemma = word_to_lemma[word]
-                    sents = slow_results.get(lemma, [])
-                    if sents:
-                        n_hit_slow += 1
-                        results[word] = [
-                            {
-                                "sentence": sent,
-                                "word_position": pos,
-                                "matched_form": form,
-                            }
-                            for sent, pos, form in sents
-                        ]
-        except Exception as fallback_err:
-            logger.warning(
-                f"[batch-sentences] slow-path fallback failed: {fallback_err}",
-                exc_info=True,
-            )
-        slow_path_ms = (time.perf_counter() - t_slow) * 1000
+
+                word_reqs = [
+                    WordRequest(
+                        word=w,
+                        lemma=word_to_lemma[w],
+                        cefr=None,  # CEFR lookup is cheap to add later
+                    )
+                    for w in missing_words
+                    if word_to_lemma.get(w) in lemma_str_to_id
+                ]
+                if word_reqs:
+                    llm = LLMSentenceService()
+                    try:
+                        llm_results = await llm.generate_and_store(
+                            db,
+                            words=word_reqs,
+                            lemma_id_map=lemma_str_to_id,
+                            context="batch_endpoint",
+                        )
+                        for word, payload in llm_results.items():
+                            n_hit_slow += 1
+                            results[word] = [payload]
+                        slow_path_state = "fired"
+                    except CostCapExceeded as cap_err:
+                        logger.warning(f"[batch-sentences] {cap_err}")
+                        slow_path_state = "skipped(cost-cap)"
+            except Exception as fallback_err:
+                logger.warning(
+                    f"[batch-sentences] llm slow-path failed: {fallback_err}",
+                    exc_info=True,
+                )
+                slow_path_state = "errored"
+            slow_path_ms = (time.perf_counter() - t_slow) * 1000
 
     total_ms = (time.perf_counter() - t_start) * 1000
-    slow_path_state = "fired" if slow_path_ms > 0 else (
-        "skipped(indexed)" if movie_already_indexed else "skipped(no-misses)"
-    )
     logger.info(
         f"[batch-sentences] movie={movie_id} "
         f"in={n_in} single={n_single} lemmas={len(unique_lemmas)} "
         f"lemma_rows={len(lemma_records)} links={len(links)} "
         f"hits_fast={n_hit_fast}/{n_single} hits_slow={n_hit_slow}/{len(missing_words) or 0} "
         f"slow_path={slow_path_state} legacy_null_matched_form={n_matched_form_null} "
-        f"| timing nlp_load={nlp_load_ms:.0f}ms classifications_q={lemma_ms:.0f}ms "
+        f"| timing classifications_q={lemma_ms:.0f}ms "
         f"lemma_q={lemma_q_ms:.0f}ms links_q={links_ms:.0f}ms "
-        f"slow_path_t={slow_path_ms:.0f}ms total={total_ms:.0f}ms"
+        f"llm_slow_path={slow_path_ms:.0f}ms total={total_ms:.0f}ms"
     )
 
     return {"movie_id": movie_id, "results": results}
