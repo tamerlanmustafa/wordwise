@@ -32,6 +32,7 @@ import {
   type NodeLevel,
 } from './journey/JourneyNode';
 import { GlobalBottomBar, type BottomTab } from './GlobalBottomBar';
+import { JourneyReelBackground } from './journey/JourneyReelBackground';
 import { quizApi, type QuizStartSessionResponse } from '../services/api';
 
 export interface JourneyScreenProps {
@@ -183,6 +184,7 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount }: Jo
   // ─────────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.root} edges={[]}>
+      <JourneyReelBackground />
       <Animated.ScrollView
         ref={scrollRef as any}
         style={{ flex: 1 }}

@@ -33,7 +33,7 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
     >
       <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
       <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} />
-      <TabBtn icon="map" label="Journey" isActive={false} disabled onPress={() => onTabPress('journey')} />
+      <TabBtn icon="film" label="Reel" isActive={active === 'journey'} onPress={() => onTabPress('journey')} />
       <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} />
       <TabBtn icon="person-circle" label="Profile" isActive={active === 'profile'} onPress={() => onTabPress('profile')} />
     </View>

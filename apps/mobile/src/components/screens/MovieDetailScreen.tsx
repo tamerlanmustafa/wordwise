@@ -145,18 +145,20 @@ export const MovieDetailScreen = ({
     lastScrollY.current = y;
   }, [NAV_BAR_HEIGHT, animateNav]);
 
-  // Slide only the nav row's body (44px), not the full NAV_BAR_HEIGHT.
-  // A permanent filler covers the safe-area inset area so the filter tabs
-  // never slip behind the dynamic island when the nav row hides.
-  const NAV_ROW_BODY = 44;
   const navTranslateY = navSlide.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -NAV_ROW_BODY],
+    outputRange: [0, -NAV_BAR_HEIGHT],
+  });
+  // Counter-translate keeps the filter tabs visually fixed just below the
+  // dynamic island while the nav row slides off. The parent View's bg fills
+  // the area above the tabs because the parent extends across that region.
+  const tabsCounterTranslateY = navSlide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, insets.top],
   });
   // tabsHeight is measured via onLayout once the filter tabs render. The
   // top-of-list spacer matches the visible area of the absolute top bar:
-  // (inset filler + navBar body + tabs) when shown, (inset filler + tabs)
-  // when the navBar has slid away — so tabs always sit below the island.
+  // (navBar + tabs) when shown, (inset + tabs) when the nav has slid away.
   const [tabsHeight, setTabsHeight] = useState(0);
   const spacerHeight = navSlide.interpolate({
     inputRange: [0, 1],
@@ -779,27 +781,11 @@ export const MovieDetailScreen = ({
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
       <StatusBar barStyle="light-content" />
 
-      {/* Permanent dynamic-island filler — always visible behind the island
-          so nothing scrolls underneath it. */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: insets.top,
-          backgroundColor: tc.background,
-          zIndex: 11,
-        }}
-      />
-
-      {/* Sliding top bar: back+title slides away on scroll down; tabs stay
-          anchored just below the dynamic island. */}
+      {/* Unified top bar: back+title slides away on scroll down; tabs stay anchored. */}
       <Animated.View
         style={{
           position: 'absolute',
-          top: insets.top,
+          top: 0,
           left: 0,
           right: 0,
           zIndex: 10,
@@ -807,7 +793,7 @@ export const MovieDetailScreen = ({
           transform: [{ translateY: navTranslateY }],
         }}
       >
-        <View style={[styles.detailHeader, { paddingTop: 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
+        <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
@@ -817,9 +803,12 @@ export const MovieDetailScreen = ({
           <View style={{ width: 60 }} />
         </View>
         {vocabulary ? (
-          <View
+          <Animated.View
             onLayout={(e) => setTabsHeight(e.nativeEvent.layout.height)}
-            style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}
+            style={[
+              styles.stickyVocabHeader,
+              { backgroundColor: tc.background, transform: [{ translateY: tabsCounterTranslateY }] },
+            ]}
           >
             <View style={styles.unifiedTabsRowWrapper}>
             <View style={styles.unifiedTabsLeftFixed}>
@@ -914,7 +903,7 @@ export const MovieDetailScreen = ({
                 </Text>
               </TouchableOpacity>
             )}
-          </View>
+          </Animated.View>
         ) : null}
       </Animated.View>
 
