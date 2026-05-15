@@ -150,8 +150,8 @@ export const HomeScreen = ({
       setSrsDueCount(s.due_now);
       setSrsTotalSaved(s.total_saved);
     }).catch(() => {});
-    srsApi.todaysWord(0).then(setTodaysWord).catch(() => {});
-  }, []);
+    srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {});
+  }, [targetLanguage]);
 
   const fetchLevelMovies = async (level: string) => {
     try {
@@ -379,7 +379,6 @@ export const HomeScreen = ({
           <TodayWordCard
             word={todaysWord}
             targetLanguage={targetLanguage}
-            onMoviePress={handleMoviePress}
           />
         ) : (
           <TodayWordCardSkeleton />

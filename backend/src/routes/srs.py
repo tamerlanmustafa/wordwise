@@ -80,10 +80,13 @@ class TodaysWordResponse(BaseModel):
     translated_word: Optional[str]
     example_sentence: Optional[str]
     translated_sentence: Optional[str]
-    movie_title: str
-    movie_poster_url: Optional[str]
     cefr_level: Optional[str]
-    movie_id: int
+    # Legacy movie attribution. Today's word is no longer drawn from a specific
+    # movie, so these are always None — kept for backward compatibility with
+    # older client builds that still read the field.
+    movie_title: Optional[str] = None
+    movie_poster_url: Optional[str] = None
+    movie_id: Optional[int] = None
 
 
 class ReviewBody(BaseModel):
@@ -328,15 +331,24 @@ async def record_review(
     )
 
 
+_CEFR_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
+
+
 @router.get("/today", response_model=Optional[TodaysWordResponse])
 async def todays_word(
     skip: int = 0,
+    target_lang: Optional[str] = None,
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
     """
     One word per day matched to the user's proficiency level.
     Pass skip=N to get the Nth next word (used by the reload button).
+
+    The word is drawn from the global Lemma table (any source) — not tied to a
+    specific movie — and is guaranteed to have a globally-cached LLM example
+    sentence so the card always renders. The candidate pool is the user's CEFR
+    level plus one level above, with garbage filtered out via `hidden_words`.
     """
     import hashlib
 
@@ -345,62 +357,106 @@ async def todays_word(
 
     raw_level = current_user.proficiencyLevel
     user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
-    target_lang = (current_user.nativeLanguage or "en").lower()
+    resolved_target = (target_lang or current_user.nativeLanguage or "en").lower()
 
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"[today_word] user={current_user.id} level={user_level} lang={target_lang}")
+    # Pool = user's level + one step up (capped at C2) to stretch them slightly.
+    try:
+        level_idx = _CEFR_ORDER.index(user_level)
+    except ValueError:
+        level_idx = _CEFR_ORDER.index("B1")
+    levels = [_CEFR_ORDER[level_idx]]
+    if level_idx + 1 < len(_CEFR_ORDER):
+        levels.append(_CEFR_ORDER[level_idx + 1])
+    levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
 
-    # word_classifications is the authoritative CEFR source used throughout the app.
-    # Pick distinct lemmas at the user's level from movie scripts, ordered by frequency.
+    logger.info(f"[today_word] user={current_user.id} levels={levels} target_lang={resolved_target}")
+
+    # Pick lemmas at the target levels that:
+    #   - aren't flagged as garbage in hidden_words (admin curation)
+    #   - look like real English words (alphabetic, length >= 4)
+    #   - have at least one global LLM-authored example sentence, so the card
+    #     always has something to flip to
     candidates = await db.query_raw(
-        f'''
+        f"""
         SELECT
-            wc.lemma                            AS word,
-            wc.cefr_level::text                 AS cefr_level,
-            m.id                                AS movie_id,
-            m.title                             AS movie_title,
-            m.poster_url,
-            AVG(wc.frequency_rank)              AS avg_rank
-        FROM word_classifications wc
-        JOIN movie_scripts ms ON ms.id = wc.script_id
-        JOIN movies m ON m.id = ms.movie_id
-        WHERE wc.cefr_level = \'{user_level}\'
-          AND wc.lemma ~ \'^[a-zA-Z]+$\'
-          AND length(wc.lemma) >= 4
-          AND (m.tmdb_vote_count IS NULL OR m.tmdb_vote_count >= 500)
-          AND EXISTS (
-              SELECT 1 FROM movie_scripts msc
-              WHERE msc.movie_id = m.id
-                AND msc.cleaned_script_text IS NOT NULL
+            l.id              AS lemma_id,
+            l.lemma           AS word,
+            l.cefr_level::text AS cefr_level,
+            l.frequency_rank
+        FROM lemmas l
+        WHERE l.cefr_level::text IN ({levels_sql})
+          AND l.lemma ~ '^[a-zA-Z]+$'
+          AND length(l.lemma) >= 4
+          AND NOT EXISTS (
+              SELECT 1 FROM hidden_words hw WHERE hw.word = l.lemma
           )
-        GROUP BY wc.lemma, wc.cefr_level, m.id, m.title, m.poster_url
-        ORDER BY avg_rank ASC NULLS LAST
-        LIMIT 1000
-        '''
+          AND EXISTS (
+              SELECT 1
+              FROM sentence_lemma_links sll
+              JOIN sentence_bank sb ON sb.id = sll.sentence_id
+              WHERE sll.lemma_id = l.id
+                AND sb.movie_id IS NULL
+                AND sb.source = 'llm'
+          )
+        ORDER BY l.frequency_rank ASC NULLS LAST
+        LIMIT 2000
+        """
     )
 
-    logger.info(f"[today_word] candidates={len(candidates)} level={user_level}")
+    logger.info(f"[today_word] candidates={len(candidates)} levels={levels}")
 
     if not candidates:
-        logger.warning(f"[today_word] no words found for level={user_level}")
+        logger.warning(f"[today_word] no eligible lemmas for levels={levels}")
         return None
 
-    # Skip top 10% (too common) and bottom 20% (noise) by frequency rank
+    # Trim outer bands so we don't surface the most common (boring) or the
+    # rarest (often noisy) words.
     n = len(candidates)
     lo = n // 10
     hi = n - (n // 5)
-    candidates = candidates[lo:hi] if hi > lo else candidates
+    pool = candidates[lo:hi] if hi > lo else candidates
 
-    pick = candidates[seed % len(candidates)]
+    pick = pool[seed % len(pool)]
+
+    # Fetch the LLM sentence linked to this lemma. Highest score wins; the
+    # global LLM row is guaranteed by the EXISTS filter above.
+    sentence_text: Optional[str] = None
+    sentence_link = await db.sentencelemmalink.find_first(
+        where={
+            "lemmaId": pick["lemma_id"],
+            "sentence": {"is": {"movieId": None, "source": "llm"}},
+        },
+        include={"sentence": True},
+        order={"score": "desc"},
+    )
+    if sentence_link and sentence_link.sentence:
+        sentence_text = sentence_link.sentence.sentence
+
+    # Best-effort translations. Failures fall back to English-only display
+    # rather than dropping the card entirely.
+    translated_word: Optional[str] = None
+    translated_sentence: Optional[str] = None
+    if resolved_target and resolved_target.lower() != "en":
+        from ..services.translation_service import TranslationService
+        ts = TranslationService(db)
+        try:
+            word_tx = await ts.get_translation(pick["word"], resolved_target.upper(), "en")
+            if word_tx and word_tx.get("translated"):
+                translated_word = word_tx["translated"]
+        except Exception as e:
+            logger.warning(f"[today_word] word translation failed: {e}")
+        if sentence_text:
+            try:
+                sent_tx = await ts.get_translation(sentence_text, resolved_target.upper(), "en")
+                if sent_tx and sent_tx.get("translated"):
+                    translated_sentence = sent_tx["translated"]
+            except Exception as e:
+                logger.warning(f"[today_word] sentence translation failed: {e}")
 
     return TodaysWordResponse(
         word=pick["word"],
-        translated_word=None,
-        example_sentence=None,
-        translated_sentence=None,
-        movie_title=pick["movie_title"],
-        movie_poster_url=pick.get("poster_url"),
+        translated_word=translated_word,
+        example_sentence=sentence_text,
+        translated_sentence=translated_sentence,
         cefr_level=pick.get("cefr_level"),
-        movie_id=pick["movie_id"],
     )

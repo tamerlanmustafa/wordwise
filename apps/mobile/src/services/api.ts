@@ -606,10 +606,13 @@ export interface TodaysWord {
   translated_word: string | null;
   example_sentence: string | null;
   translated_sentence: string | null;
-  movie_title: string;
-  movie_poster_url: string | null;
   cefr_level: string | null;
-  movie_id: number;
+  // Legacy movie attribution. Today's word is no longer drawn from a specific
+  // movie — these are always null from the server now and only kept so older
+  // payloads still type-check.
+  movie_title?: string | null;
+  movie_poster_url?: string | null;
+  movie_id?: number | null;
 }
 
 export interface SrsStats {
@@ -677,8 +680,9 @@ export const srsApi = {
     }
   },
 
-  todaysWord: async (skip = 0): Promise<TodaysWord | null> => {
-    const res = await authFetch(`${API_BASE_URL}/srs/today?skip=${skip}`);
+  todaysWord: async (skip = 0, targetLang?: string): Promise<TodaysWord | null> => {
+    const qs = `skip=${skip}${targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : ''}`;
+    const res = await authFetch(`${API_BASE_URL}/srs/today?${qs}`);
     if (!res.ok) return null;
     const body = await res.json();
     return body || null;

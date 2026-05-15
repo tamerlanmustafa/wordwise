@@ -5,10 +5,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { wordwiseApi, API_BASE_URL, type TodaysWord } from '../../services/api';
+import { wordwiseApi, type TodaysWord } from '../../services/api';
 import { useDoubleTap } from '../../hooks/useDoubleTap';
 
 const CARD_HEIGHT = 148;
@@ -17,10 +16,9 @@ const FACE_PADDING = 16;
 interface Props {
   word: TodaysWord;
   targetLanguage: string;
-  onMoviePress: (movie: { id: number; tmdb_id: number; title: string }) => void;
 }
 
-const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
+const _TodayWordCard = ({ word, targetLanguage }: Props) => {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -28,9 +26,11 @@ const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
   const flipCount = useRef(0);
   const [showingFront, setShowingFront] = useState(true);
   const [translating, setTranslating] = useState(false);
-  const [translation, setTranslation] = useState<string | null>(null);
-  const [sentence, setSentence] = useState<string | null>(null);
-  const [sentenceTranslation, setSentenceTranslation] = useState<string | null>(null);
+  const [translation, setTranslation] = useState<string | null>(word.translated_word ?? null);
+  const sentence = word.example_sentence ?? null;
+  const [sentenceTranslation, setSentenceTranslation] = useState<string | null>(
+    word.translated_sentence ?? null
+  );
 
   const frontRotate = flipAnim.interpolate({
     inputRange: [0, 1, 2, 3],
@@ -46,7 +46,8 @@ const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
     setSaving(true);
     setSaved(prev => !prev);
     try {
-      const res = await wordwiseApi.saveWord(word.word, word.movie_id);
+      // Today's word is movie-independent, so the save is a global save.
+      const res = await wordwiseApi.saveWord(word.word);
       setSaved(res.saved);
     } catch {
       setSaved(prev => !prev);
@@ -55,26 +56,28 @@ const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
   };
 
   const prefetchBackside = () => {
-    if (translation) return;
+    const needWord = !translation;
+    const needSentence = !!sentence && !sentenceTranslation;
+    if (!needWord && !needSentence) return;
     setTranslating(true);
-    Promise.all([
-      wordwiseApi.translate(word.word, targetLanguage, undefined, word.movie_id),
-      fetch(
-        `${API_BASE_URL}/api/enrichment/movies/${word.movie_id}/sentences/${encodeURIComponent(word.word)}?max_examples=1&target_lang=${encodeURIComponent(targetLanguage)}`
-      )
-        .then(r => r.json())
-        .then(data => {
-          const ex = data.sentences?.[0];
-          if (ex) {
-            setSentence(ex.sentence ?? null);
-            setSentenceTranslation(ex.translation ?? null);
-          }
-        })
-        .catch(() => {}),
-    ])
-      .then(([res]) => setTranslation(res.translated))
-      .catch(() => {})
-      .finally(() => setTranslating(false));
+    const tasks: Promise<unknown>[] = [];
+    if (needWord) {
+      tasks.push(
+        wordwiseApi
+          .translate(word.word, targetLanguage)
+          .then(res => setTranslation(res.translated))
+          .catch(() => {})
+      );
+    }
+    if (needSentence && sentence) {
+      tasks.push(
+        wordwiseApi
+          .translate(sentence, targetLanguage)
+          .then(res => setSentenceTranslation(res.translated))
+          .catch(() => {})
+      );
+    }
+    Promise.all(tasks).finally(() => setTranslating(false));
   };
 
   useEffect(() => { prefetchBackside(); }, []);
@@ -117,9 +120,7 @@ const _TodayWordCard = ({ word, targetLanguage, onMoviePress }: Props) => {
         </View>
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone} />
         <View style={s.frontFooter}>
-          <TouchableOpacity onPress={() => onMoviePress({ id: word.movie_id, tmdb_id: word.movie_id, title: word.movie_title })} hitSlop={8}>
-            <Text style={s.movie} numberOfLines={1}>from {word.movie_title}</Text>
-          </TouchableOpacity>
+          {word.cefr_level ? <Text style={s.level}>{word.cefr_level}</Text> : <View />}
           <Text style={s.hint}>Double tap to flip</Text>
         </View>
       </Animated.View>
@@ -210,7 +211,12 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  movie: { fontSize: 11, color: 'rgba(255,255,255,0.45)', flexShrink: 1, marginLeft: 8 },
+  level: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 0.6,
+  },
   wordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   wordPressable: { flexShrink: 1 },
   word: { fontSize: 30, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
