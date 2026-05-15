@@ -1299,4 +1299,42 @@ export const quizApi = {
   },
 };
 
+// ─── Reel ────────────────────────────────────────────────────────────────
+export interface ReelMovieItem {
+  tmdb_id: number;
+  position: number;
+  title: string;
+  poster_path: string | null;
+  year: number | null;
+}
+
+export const reelApi = {
+  list: async (): Promise<ReelMovieItem[]> => {
+    const res = await authFetch(`${API_BASE_URL}/reel`);
+    if (!res.ok) throw new Error('Failed to load reel');
+    return res.json();
+  },
+
+  add: async (input: {
+    tmdb_id: number;
+    title: string;
+    poster_path: string | null;
+    year: number | null;
+  }): Promise<ReelMovieItem> => {
+    const res = await authFetch(`${API_BASE_URL}/reel`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error('Failed to add to reel');
+    return res.json();
+  },
+
+  remove: async (tmdbId: number): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/reel/${tmdbId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to remove from reel');
+  },
+};
+
 export { API_BASE_URL };

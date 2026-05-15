@@ -45,6 +45,7 @@ model User {
   quizSessions          QuizSession[]
   quizStats             UserQuizStats?
   unitProgress          UnitProgress[]
+  reelMovies            UserReelMovie[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -707,4 +708,21 @@ model UnitProgress {
   @@id([userId, movieId, cefrLevel])
   @@index([userId, movieId], map: "ix_unit_progress_user_movie")
   @@map("unit_progress")
+}
+
+model UserReelMovie {
+  userId     Int      @map("user_id")
+  tmdbId     Int      @map("tmdb_id")
+  position   Int
+  title      String   @db.VarChar
+  posterPath String?  @map("poster_path") @db.VarChar
+  year       Int?
+  addedAt    DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tmdbId])
+  @@unique([userId, position], map: "ux_user_reel_movies_user_position")
+  @@index([userId, addedAt], map: "ix_user_reel_movies_user_added_at")
+  @@map("user_reel_movies")
 }

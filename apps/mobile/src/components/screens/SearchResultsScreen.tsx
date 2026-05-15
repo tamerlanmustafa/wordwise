@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -12,11 +13,16 @@ import { colors } from '../../theme/palette';
 import { wordwiseApi, tmdbApi } from '../../services/api';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
+import { useReelStore } from '../../stores/reelStore';
 
 interface Props {
   query: string;
   onBack: () => void;
   onMoviePress: (movie: MovieData) => void;
+  /** When 'addToReel', tapping a row adds the movie to the user's reel
+      instead of opening movie detail. The row shows a checkmark once
+      added; tapping again removes it. */
+  mode?: 'open' | 'addToReel';
 }
 
 // Routing prefixes:
@@ -24,15 +30,25 @@ interface Props {
 //  - `level:<LEVEL>:<displayName>` → our backend `/movies/by-cefr` (CEFR levels)
 //    or `/movies/by-level` (old enum), with per-row TMDB enrichment.
 //  - anything else → TMDB title text search.
-export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
+export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open' }: Props) => {
+  // In addToReel mode the user types into an inline search box; we
+  // re-run the query whenever `liveQuery` changes (debounced).
+  const [liveQuery, setLiveQuery] = useState(query);
+  const effectiveQuery = mode === 'addToReel' ? liveQuery : query;
+
+  const reelMovies = useReelStore((s) => s.movies);
+  const reelAdd = useReelStore((s) => s.add);
+  const reelRemove = useReelStore((s) => s.remove);
+  const isInReel = (id: number) => reelMovies.some((m) => m.tmdb_id === id);
+
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const levelMatch = query.match(/^level:([A-Z_\d]+):(.+)$/);
-  const genreMatch = query.match(/^genre:([\d|]+):(.+)$/);
+  const levelMatch = effectiveQuery.match(/^level:([A-Z_\d]+):(.+)$/);
+  const genreMatch = effectiveQuery.match(/^genre:([\d|]+):(.+)$/);
   const isLevel = !!levelMatch;
   const isGenre = !isLevel && !!genreMatch;
   const levelValue = levelMatch?.[1] ?? '';
@@ -42,7 +58,9 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
     ? `${levelMatch![2]} movies`
     : isGenre
     ? genreMatch![2]
-    : `Results for "${query}"`;
+    : mode === 'addToReel'
+    ? 'Add Movies'
+    : `Results for "${effectiveQuery}"`;
 
   const searchPage = async (pageNum: number) => {
     try {
@@ -83,7 +101,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
       // just dead-end at script fetch.
       const url = isGenre
         ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&with_original_language=en&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
-        : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(query)}&page=${pageNum}`;
+        : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(effectiveQuery)}&page=${pageNum}`;
       const res = await fetch(url);
       const data = await res.json();
       return {
@@ -96,15 +114,25 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
   };
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+    if (mode === 'addToReel' && !effectiveQuery.trim()) {
+      // No query yet — just clear and wait for user input.
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    // Tiny debounce so each keystroke doesn't spam TMDB.
+    const t = setTimeout(async () => {
       const { movies, totalPages } = await searchPage(1);
+      if (cancelled) return;
       setResults(movies);
       setHasMore(1 < totalPages);
       setPage(1);
       setLoading(false);
-    })();
-  }, [query]);
+    }, mode === 'addToReel' ? 250 : 0);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [effectiveQuery, mode]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -118,6 +146,20 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
   };
 
   const handlePress = (movie: any) => {
+    if (mode === 'addToReel') {
+      if (isInReel(movie.id)) {
+        reelRemove(movie.id);
+      } else {
+        const year = movie.release_date ? Number(movie.release_date.slice(0, 4)) || null : null;
+        reelAdd({
+          tmdb_id: movie.id,
+          title: movie.title,
+          poster_path: movie.poster_path ?? null,
+          year,
+        });
+      }
+      return;
+    }
     onMoviePress({
       id: movie.id,
       title: movie.title,
@@ -141,6 +183,28 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
         </Text>
         <View style={{ width: 60 }} />
       </View>
+
+      {mode === 'addToReel' ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+          <TextInput
+            value={liveQuery}
+            onChangeText={setLiveQuery}
+            placeholder="Search TMDB for a movie…"
+            placeholderTextColor="#9aa"
+            autoFocus
+            autoCorrect={false}
+            style={{
+              borderWidth: 1,
+              borderColor: '#E0D4F7',
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              backgroundColor: '#fff',
+            }}
+          />
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={[styles.container, styles.centered]}>
@@ -178,6 +242,11 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress }: Props) => {
                   <Text style={styles.searchResultOverview} numberOfLines={2}>{item.overview}</Text>
                 ) : null}
               </View>
+              {mode === 'addToReel' ? (
+                <Text style={{ fontSize: 22, color: isInReel(item.id) ? colors.primary : '#C5C5D0', marginLeft: 8 }}>
+                  {isInReel(item.id) ? '✓' : '+'}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           )}
           contentContainerStyle={{ paddingHorizontal: 16 }}

@@ -400,6 +400,14 @@ export default function App() {
             onStartSession={(session, level, tileIndex) =>
               handleJourneySessionStart(session, level, tileIndex)
             }
+            onAddMovies={() => setCurrentScreen('addToReel')}
+          />
+        ) : currentScreen === 'addToReel' ? (
+          <SearchResultsScreen
+            query=""
+            mode="addToReel"
+            onBack={() => setCurrentScreen('journey')}
+            onMoviePress={() => {}}
           />
         ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
           <QuizJourneyScreen

@@ -23,7 +23,8 @@ export type Screen =
   | 'quizResult'
   | 'quizBatchBuilder'
   | 'quizBatchJourney'
-  | 'journey';
+  | 'journey'
+  | 'addToReel';
 
 export type ListFilter = 'saved' | 'learned';
 

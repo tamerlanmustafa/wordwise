@@ -3,7 +3,7 @@
  */
 
 import React, { useRef } from 'react';
-import { Pressable, StyleSheet, Text, View, Animated } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cefrColors } from '../../theme/palette';
 
@@ -13,8 +13,13 @@ export type NodeLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 export interface JourneyNodeProps {
   level: NodeLevel;
   state: NodeState;
-  /** Number or text shown centered on the top face. Ignored when locked. */
+  /** Number or text shown centered on the top face. Ignored when locked
+      or when `posterUri` is provided. */
   label?: string | number;
+  /** Optional movie poster URL. When set, the diamond face becomes the
+      poster (clipped to the rotated square, counter-rotated so the
+      poster reads upright) and the number label is hidden. */
+  posterUri?: string | null;
   onPress?: () => void;
 }
 
@@ -85,7 +90,7 @@ function desaturate(hex: string, f: number): string {
   );
 }
 
-export function JourneyNode({ level, state, label, onPress }: JourneyNodeProps) {
+export function JourneyNode({ level, state, label, posterUri, onPress }: JourneyNodeProps) {
   const raw = cefrColors[level] || '#7C5CBF';
   const baseColor = state === 'locked' ? desaturate(raw, 0.7) : raw;
   const skirtColor = darken(baseColor, 0.25);
@@ -141,10 +146,22 @@ export function JourneyNode({ level, state, label, onPress }: JourneyNodeProps) 
             style={[
               styles.diamond,
               styles.topPos,
-              { backgroundColor: baseColor },
+              { backgroundColor: baseColor, overflow: 'hidden' },
               state === 'active' && styles.topActive,
             ]}
-          />
+          >
+            {posterUri ? (
+              // Counter-rotate the poster so it reads upright while the
+              // parent rhombus stays rotated 45deg + scaled. Reversing
+              // scaleX/scaleY first then rotating -45deg cancels the
+              // diamond's transform stack exactly.
+              <Image
+                source={{ uri: posterUri }}
+                style={styles.posterImg}
+                resizeMode="cover"
+              />
+            ) : null}
+          </View>
 
           {/* Locked tiles get a fake-blur dim overlay so they visibly
               "recede." Real BlurView would need expo-blur (native
@@ -158,7 +175,7 @@ export function JourneyNode({ level, state, label, onPress }: JourneyNodeProps) 
           <View style={styles.contentOverlay} pointerEvents="none">
             {isLocked ? (
               <Ionicons name="lock-closed" size={20} color="rgba(255,255,255,0.8)" />
-            ) : label != null ? (
+            ) : posterUri ? null : label != null ? (
               <Text style={styles.labelText}>{String(label)}</Text>
             ) : null}
           </View>
@@ -223,6 +240,22 @@ const styles = StyleSheet.create({
     height: VISIBLE_H,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  posterImg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: TILE,
+    height: TILE,
+    // Cancel the parent diamond transform: undo the 45deg rotation
+    // first, then undo the non-uniform scale. With the diamond
+    // transformed via [scaleX, scaleY, rotate], the inverse is the
+    // reverse list with negated rotation and reciprocal scales.
+    transform: [
+      { rotate: '-45deg' },
+      { scaleX: 1 / SCALE_X },
+      { scaleY: 1 / SCALE_Y },
+    ],
   },
   labelText: {
     fontSize: 20,

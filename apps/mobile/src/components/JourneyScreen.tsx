@@ -13,17 +13,21 @@
  *    marked completed, and the next becomes active.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'; // useState used for startingTile
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../stores/authStore';
+import { useReelStore } from '../stores/reelStore';
 import {
   JourneyNode,
   JOURNEY_NODE_WIDTH,
@@ -41,13 +45,13 @@ export interface JourneyScreenProps {
   /** How many tiles the user has completed so far. Persisted in App.tsx
       so returning from the quiz doesn't reset progress. */
   completedCount: number;
+  /** Open the "Add Movies" picker (search in addToReel mode). */
+  onAddMovies: () => void;
 }
 
-const LEVELS: NodeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const WINDOW_WIDTH  = Dimensions.get('window').width;
 const WINDOW_HEIGHT = Dimensions.get('window').height;
 
-const TOTAL_TILES        = 120;
 const VISIBLE_AHEAD      = 11;   // active + 11 inactive = 12 unlocked
 const TILES_PER_DIAGONAL = 2;
 const STEP_X             = 70;
@@ -62,9 +66,18 @@ const INITIAL_SCROLL_BUDGET = 3 * WINDOW_HEIGHT;
 // How far above the scroll limit the fade starts to ramp in.
 const FADE_RAMP = WINDOW_HEIGHT * 0.8;
 
-export function JourneyScreen({ onTabPress, onStartSession, completedCount }: JourneyScreenProps) {
+export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAddMovies }: JourneyScreenProps) {
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
+  const insets = useSafeAreaInsets();
+
+  // ─── Reel: per-user ordered list of movies ──────────────────────────
+  const reelMovies = useReelStore((s) => s.movies);
+  const reelHydrated = useReelStore((s) => s.hydrated);
+  const hydrateReel = useReelStore((s) => s.hydrate);
+  useEffect(() => { if (!reelHydrated) hydrateReel(); }, [reelHydrated, hydrateReel]);
+
+  const TOTAL_TILES = reelMovies.length;
 
   const scrollY   = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
@@ -74,11 +87,9 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount }: Jo
   const startScrollRef = useRef(0);
 
   // ─── Build tile data ────────────────────────────────────────────────
+  // One tile per reel movie, in add-order. Tile 0 is bottom-most (nearest
+  // the active position). Empty reel → no tiles (CTA shown instead).
   const layout = useMemo(() => {
-    const userIdx       = Math.max(0, LEVELS.indexOf(userLevel));
-    const visibleLevels = LEVELS.slice(userIdx);
-    const tilesPerLevel = Math.ceil(TOTAL_TILES / visibleLevels.length);
-
     const centerX = (WINDOW_WIDTH - JOURNEY_NODE_WIDTH) / 2;
     const offsetFor = (idx: number) => {
       const cycle = 2 * TILES_PER_DIAGONAL;
@@ -93,27 +104,25 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount }: Jo
     const tiles: Array<{
       id: string; x: number; y: number;
       level: NodeLevel; label: number;
+      posterUri: string | null;
+      title: string;
     }> = [];
 
-    let globalIdx = 0;
-    for (const lv of visibleLevels) {
-      const count = Math.min(tilesPerLevel, TOTAL_TILES - globalIdx);
-      for (let k = 0; k < count; k++) {
-        const i = globalIdx + k;
-        tiles.push({
-          id: `t-${i}`,
-          x: centerX - STEP_X + offsetFor(i),
-          y: yCursor - JOURNEY_NODE_HEIGHT - i * STEP_Y,
-          level: lv,
-          label: i + 1,
-        });
-      }
-      globalIdx += count;
-      if (globalIdx >= TOTAL_TILES) break;
+    for (let i = 0; i < TOTAL_TILES; i++) {
+      const m = reelMovies[i];
+      tiles.push({
+        id: `t-${m.tmdb_id}`,
+        x: centerX - STEP_X + offsetFor(i),
+        y: yCursor - JOURNEY_NODE_HEIGHT - i * STEP_Y,
+        level: userLevel,
+        label: i + 1,
+        posterUri: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null,
+        title: m.title,
+      });
     }
 
     return { tiles, totalHeight };
-  }, [userLevel]);
+  }, [userLevel, reelMovies, TOTAL_TILES]);
 
   // ─── Per-tile state (re-derives when completedCount changes) ─────────
   const tileState = useCallback(
@@ -208,12 +217,37 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount }: Jo
                 level={t.level}
                 state={state}
                 label={startingTile === i ? '…' : t.label}
+                posterUri={t.posterUri}
                 onPress={() => handleTilePress(i)}
               />
             </View>
           );
         })}
       </Animated.ScrollView>
+
+      {/* Top-right "Add Movies" button. Sits inside the safe-zone
+          (x > 32) so it never collides with the sprocket gutters. */}
+      <TouchableOpacity
+        style={[
+          styles.addBtn,
+          { top: insets.top + 10 },
+        ]}
+        onPress={onAddMovies}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={16} color="#1a1109" />
+        <Text style={styles.addBtnText}>Add Movies</Text>
+      </TouchableOpacity>
+
+      {/* Empty state — show only when the reel is hydrated and empty. */}
+      {reelHydrated && reelMovies.length === 0 ? (
+        <View style={styles.emptyState} pointerEvents="box-none">
+          <Text style={styles.emptyTitle}>Your reel is empty</Text>
+          <Text style={styles.emptySubtitle}>
+            Tap "Add Movies" to start building your journey.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Top fade mask — transparent while the user has scroll room,
           fades to opaque only as they approach the locked boundary so
@@ -231,7 +265,6 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount }: Jo
         />
       </Animated.View>
 
-      <GlobalBottomBar active="journey" onTabPress={onTabPress} />
     </SafeAreaView>
   );
 }
@@ -248,5 +281,47 @@ const styles = StyleSheet.create({
   tileWrapper: {
     position: 'absolute',
     width: JOURNEY_NODE_WIDTH,
+  },
+  addBtn: {
+    position: 'absolute',
+    right: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,180,80,0.92)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  addBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1a1109',
+    letterSpacing: 0.2,
+  },
+  emptyState: {
+    position: 'absolute',
+    top: '40%',
+    left: 40,
+    right: 40,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: 'rgba(255,200,140,0.95)',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,200,140,0.65)',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
