@@ -67,6 +67,11 @@ async def fetch_uncovered_lemmas(db: Prisma, limit: int | None) -> List[dict]:
         FROM lemmas l
         JOIN used u ON u.lemma_id = l.id
         WHERE l.id NOT IN (SELECT lemma_id FROM covered)
+          -- Skip lemmas the admin has hidden (garbage / proper nouns
+          -- / foreign words). The hide list is populated by
+          -- hide_garbage_lemmas.py; we don't want to spend LLM tokens
+          -- on tokens that won't be displayed.
+          AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
         ORDER BY l.id
     """
     if limit is not None:

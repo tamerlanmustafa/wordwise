@@ -115,41 +115,53 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
-  // Hides the entire movie header (poster, backdrop, meta, overview) once the
-  // user has scrolled past a deliberate threshold so the vocabulary list takes
-  // the full screen. Hysteresis prevents flicker: hide at 110px, restore once
-  // the user pulls back near the top (< 24px).
-  const HEADER_HIDE_THRESHOLD = 110;
-  const HEADER_SHOW_THRESHOLD = 24;
-  const [headerHidden, setHeaderHidden] = useState(false);
-  const headerHiddenRef = useRef(false);
-  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
-    const y = e.nativeEvent.contentOffset.y;
-    const isHidden = headerHiddenRef.current;
-    const shouldHide = isHidden ? y > HEADER_SHOW_THRESHOLD : y > HEADER_HIDE_THRESHOLD;
-    if (shouldHide !== isHidden) {
-      headerHiddenRef.current = shouldHide;
-      setHeaderHidden(shouldHide);
-    }
-  }, []);
-  // Animated collapse: 0 = full hero shown, 1 = compact header shown.
-  // Drives height, opacity, and translateY together so the transition reads
-  // as one continuous motion rather than a layout pop.
-  const collapseAnim = useRef(new Animated.Value(0)).current;
-  const [heroNaturalHeight, setHeroNaturalHeight] = useState(0);
-  useEffect(() => {
-    Animated.timing(collapseAnim, {
-      toValue: headerHidden ? 1 : 0,
-      duration: 320,
-      easing: Easing.inOut(Easing.cubic),
+  // Hide-on-scroll-down, show-on-scroll-up pattern for the back+title bar.
+  // The filter tabs always stay visible; only the navigation row slides away.
+  const NAV_BAR_HEIGHT = insets.top + 44;
+  const navSlide = useRef(new Animated.Value(0)).current; // 0 = shown, 1 = hidden
+  const lastScrollY = useRef(0);
+  const navHiddenRef = useRef(false);
+  const animateNav = useCallback((hidden: boolean) => {
+    if (navHiddenRef.current === hidden) return;
+    navHiddenRef.current = hidden;
+    Animated.timing(navSlide, {
+      toValue: hidden ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [headerHidden, collapseAnim]);
-  // Re-measure the hero's natural height when the overview expands/collapses,
-  // since that grows the layout and we don't want the collapse to clip text.
-  useEffect(() => {
-    setHeroNaturalHeight(0);
-  }, [overviewExpanded]);
+  }, [navSlide]);
+  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    // Near the top, always show the nav bar.
+    if (y < NAV_BAR_HEIGHT) {
+      animateNav(false);
+    } else if (Math.abs(dy) > 6) {
+      // Hide on a meaningful downward gesture, show on upward.
+      if (dy > 0) animateNav(true);
+      else animateNav(false);
+    }
+    lastScrollY.current = y;
+  }, [NAV_BAR_HEIGHT, animateNav]);
+
+  // Slide only the nav row's body (44px), not the full NAV_BAR_HEIGHT.
+  // A permanent filler covers the safe-area inset area so the filter tabs
+  // never slip behind the dynamic island when the nav row hides.
+  const NAV_ROW_BODY = 44;
+  const navTranslateY = navSlide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -NAV_ROW_BODY],
+  });
+  // tabsHeight is measured via onLayout once the filter tabs render. The
+  // top-of-list spacer matches the visible area of the absolute top bar:
+  // (inset filler + navBar body + tabs) when shown, (inset filler + tabs)
+  // when the navBar has slid away — so tabs always sit below the island.
+  const [tabsHeight, setTabsHeight] = useState(0);
+  const spacerHeight = navSlide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [NAV_BAR_HEIGHT + tabsHeight, insets.top + tabsHeight],
+  });
   const prevLevelRef = useRef<string>(activeLevel);
 
   useEffect(() => {
@@ -291,7 +303,6 @@ export const MovieDetailScreen = ({
       await applyVocabulary(fresh.vocab, fresh.movieId, fresh.difficulty);
 
     } catch (err: any) {
-      console.error('Failed to load vocabulary:', err);
       setError(err.message || 'Failed to load vocabulary');
     } finally {
       setLoading(false);
@@ -694,10 +705,6 @@ export const MovieDetailScreen = ({
     missing.forEach((w) => {
       status[w] = status[w] === 'miss-recent' ? 'in-flight-retry' : 'in-flight';
     });
-    const t0 = Date.now();
-    console.log('[batch-sentences] fetching', {
-      movieId, view: wordsView, count: missing.length, retryTick: sentencesRetryTick, sample: missing.slice(0, 3),
-    });
     // No cancel-on-rerun guard: the request is for `missing` words on this
     // movie, and setSentencePreviews only merges. If MovieDetailScreen has
     // unmounted (movie navigation), React no-ops the setState. If the effect
@@ -705,10 +712,7 @@ export const MovieDetailScreen = ({
     // suggestedWords' identity), in-flight status prevents a duplicate fetch
     // and the original promise still updates state when it resolves.
     wordwiseApi.batchSentences(movieId, missing).then((results) => {
-      const elapsed = Date.now() - t0;
-      let hits = 0;
       let firstMisses = 0;
-      let confirmedMisses = 0;
       setSentencePreviews((prev) => {
         const next = { ...prev };
         for (const w of missing) {
@@ -717,12 +721,10 @@ export const MovieDetailScreen = ({
           if (list.length > 0) {
             next[w] = list[0];
             status[w] = 'hit';
-            hits++;
           } else {
             next[w] = { sentence: '', word_position: 0, matched_form: w };
             if (wasRetry) {
               status[w] = 'miss-confirmed';
-              confirmedMisses++;
             } else {
               status[w] = 'miss-recent';
               firstMisses++;
@@ -731,15 +733,10 @@ export const MovieDetailScreen = ({
         }
         return next;
       });
-      console.log('[batch-sentences] returned', {
-        elapsedMs: elapsed, requested: missing.length, hits, firstMisses, confirmedMisses,
-      });
       if (firstMisses > 0) {
-        console.log('[batch-sentences] scheduling retry in 5s', { count: firstMisses });
         setTimeout(() => setSentencesRetryTick((t) => t + 1), 5000);
       }
-    }).catch((err) => {
-      console.warn('[batch-sentences] FAILED', { elapsedMs: Date.now() - t0, err: String(err) });
+    }).catch(() => {
       // Reset so a future render can re-attempt.
       missing.forEach((w) => {
         if (status[w] === 'in-flight' || status[w] === 'in-flight-retry') {
@@ -782,41 +779,158 @@ export const MovieDetailScreen = ({
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
       <StatusBar barStyle="light-content" />
 
+      {/* Permanent dynamic-island filler — always visible behind the island
+          so nothing scrolls underneath it. */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: tc.background,
+          zIndex: 11,
+        }}
+      />
+
+      {/* Sliding top bar: back+title slides away on scroll down; tabs stay
+          anchored just below the dynamic island. */}
       <Animated.View
-        style={[
-          { overflow: 'hidden' },
-          heroNaturalHeight > 0
-            ? {
-                height: collapseAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [heroNaturalHeight, insets.top + 44],
-                }),
-              }
-            : null,
-        ]}
+        style={{
+          position: 'absolute',
+          top: insets.top,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          backgroundColor: tc.background,
+          transform: [{ translateY: navTranslateY }],
+        }}
       >
-        <Animated.View
-          onLayout={(e) => {
-            if (heroNaturalHeight === 0) {
-              setHeroNaturalHeight(e.nativeEvent.layout.height);
-            }
-          }}
-          style={{
-            opacity: collapseAnim.interpolate({
-              inputRange: [0, 0.6, 1],
-              outputRange: [1, 0, 0],
-            }),
-            transform: [
-              {
-                translateY: collapseAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -40],
-                }),
-              },
-            ],
-          }}
+        <View style={[styles.detailHeader, { paddingTop: 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+            {movie.title}
+          </Text>
+          <View style={{ width: 60 }} />
+        </View>
+        {vocabulary ? (
+          <View
+            onLayout={(e) => setTabsHeight(e.nativeEvent.layout.height)}
+            style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}
+          >
+            <View style={styles.unifiedTabsRowWrapper}>
+            <View style={styles.unifiedTabsLeftFixed}>
+              {(() => {
+                const foryouActive = wordsView === 'foryou';
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.unifiedTab,
+                      foryouActive && { backgroundColor: `${colors.primary}20` },
+                    ]}
+                    onPress={() => {
+                      startTransition(() => setWordsView('foryou'));
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.unifiedTabLabel,
+                      foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
+                    ]}>
+                      ★ For You
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
+              <View style={styles.unifiedTabDivider} />
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
+            >
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.unifiedTabIndicator,
+                  {
+                    left: indicatorX,
+                    width: indicatorWidth,
+                    opacity: indicatorOpacity,
+                    backgroundColor: activeIndicatorColor,
+                  },
+                ]}
+              />
+              {wordLevels.map((lvl) => {
+                const active = wordsView === 'all' && activeLevel === lvl.level;
+                const c = cefrColors[lvl.level] || colors.primary;
+                return (
+                  <TouchableOpacity
+                    key={lvl.level}
+                    style={[styles.unifiedTab, styles.unifiedTabLevel]}
+                    onLayout={handleScrollTabLayout(lvl.level)}
+                    onPress={() => {
+                      startTransition(() => setWordsView('all'));
+                      setActiveLevel(lvl.level);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.unifiedTabLabel,
+                      active && [styles.unifiedTabLabelActive, { color: c }],
+                    ]}>
+                      {lvl.level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <LinearGradient
+              colors={['rgba(228,220,240,0)', '#E4DCF0']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.unifiedTabsRightFade}
+              pointerEvents="none"
+            />
+            </View>
+            {wordsView === 'foryou' ? (
+              suggestedWords.length === 0 ? (
+                <Text style={styles.forYouEmpty}>No new words at your level</Text>
+              ) : null
+            ) : (
+              <TouchableOpacity
+                style={styles.countSortRow}
+                onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                activeOpacity={0.6}
+              >
+                <Text style={styles.countSortText}>
+                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                  </Text>
+                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : null}
+      </Animated.View>
+
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
         >
-          <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
+          {/* Spacer matches the visible area of the absolute top bar */}
+          <Animated.View style={{ height: spacerHeight }} />
+          {/* Hero — scrolls away naturally */}
+          <View>
+            <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
             {movie.backdrop_path ? (
               <Image
                 source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
@@ -894,158 +1008,27 @@ export const MovieDetailScreen = ({
               </Pressable>
             </View>
           ) : null}
-        </Animated.View>
-
-        <Animated.View
-          pointerEvents={headerHidden ? 'auto' : 'none'}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            opacity: collapseAnim.interpolate({
-              inputRange: [0, 0.4, 1],
-              outputRange: [0, 0, 1],
-            }),
-          }}
-        >
-          <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-              {movie.title}
-            </Text>
-            <View style={{ width: 60 }} />
           </View>
-        </Animated.View>
-      </Animated.View>
-      <View style={{ flex: 1 }}>
-      {loading ? (
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
-          <Text style={styles.loadingSubtext}>Searching script</Text>
-          <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
-        </View>
-      ) : error ? (
-        <>
-          <View style={styles.scriptErrorBox}>
-            <Text style={styles.scriptErrorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : vocabulary ? (
-        <ScrollView
-          ref={scrollViewRef}
-          stickyHeaderIndices={[0]}
-          showsVerticalScrollIndicator={false}
-          style={{ flex: 1 }}
-          scrollEventThrottle={16}
-          onScroll={handleScroll}
-        >
-          <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-            {/* Unified tab row: For You (fixed) + A1–C2 (scroll) */}
-            <View style={styles.unifiedTabsRowWrapper}>
-            {/* Fixed For You + divider on the left */}
-            <View style={styles.unifiedTabsLeftFixed}>
-              {(() => {
-                const foryouActive = wordsView === 'foryou';
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.unifiedTab,
-                      foryouActive && { backgroundColor: `${colors.primary}20` },
-                    ]}
-                    onPress={() => {
-                      startTransition(() => setWordsView('foryou'));
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.unifiedTabLabel,
-                      foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
-                    ]}>
-                      ★ For You
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })()}
-              <View style={styles.unifiedTabDivider} />
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
-            >
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.unifiedTabIndicator,
-                  {
-                    left: indicatorX,
-                    width: indicatorWidth,
-                    opacity: indicatorOpacity,
-                    backgroundColor: activeIndicatorColor,
-                  },
-                ]}
-              />
-              {wordLevels.map((lvl) => {
-                const active = wordsView === 'all' && activeLevel === lvl.level;
-                const c = cefrColors[lvl.level] || colors.primary;
-                return (
-                  <TouchableOpacity
-                    key={lvl.level}
-                    style={[styles.unifiedTab, styles.unifiedTabLevel]}
-                    onLayout={handleScrollTabLayout(lvl.level)}
-                    onPress={() => {
-                      startTransition(() => setWordsView('all'));
-                      setActiveLevel(lvl.level);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.unifiedTabLabel,
-                      active && [styles.unifiedTabLabelActive, { color: c }],
-                    ]}>
-                      {lvl.level}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            <LinearGradient
-              colors={['rgba(228,220,240,0)', '#E4DCF0']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.unifiedTabsRightFade}
-              pointerEvents="none"
-            />
-            </View>
 
-            {/* Sub-row */}
-            {wordsView === 'foryou' ? (
-              suggestedWords.length === 0 ? (
-                <Text style={styles.forYouEmpty}>No new words at your level</Text>
-              ) : null
-            ) : (
-              <TouchableOpacity
-                style={styles.countSortRow}
-                onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
-                activeOpacity={0.6}
-              >
-                <Text style={styles.countSortText}>
-                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
-                  </Text>
-                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
-                </Text>
+          {/* Child 1: sticky vocab tabs, or loading / error shown below the hero */}
+          {loading ? (
+            <View style={[styles.container, styles.centered]}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
+              <Text style={styles.loadingSubtext}>Searching script</Text>
+              <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.scriptErrorBox}>
+              <Text style={styles.scriptErrorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
+                <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          ) : null}
 
+          {/* Child 2: word list */}
+          {vocabulary ? (
           <View
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
@@ -1221,8 +1204,8 @@ export const MovieDetailScreen = ({
               )}
             </View>
           </View>
+          ) : null}
         </ScrollView>
-      ) : null}
       <Modal
         visible={posterZoomOpen}
         transparent
