@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../config/env';
 import { tokenStorage } from './auth/tokenStorage';
 
@@ -681,10 +682,22 @@ export const srsApi = {
   },
 
   todaysWord: async (skip = 0, targetLang?: string): Promise<TodaysWord | null> => {
+    // Same word for the whole calendar day per language; cache locally so
+    // navigation between tabs/screens doesn't re-fetch (and re-translate).
+    const today = new Date().toISOString().slice(0, 10);
+    const cacheKey = `todays_word_v1:${today}:${targetLang ?? 'native'}:skip${skip}`;
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) return JSON.parse(cached) as TodaysWord;
+    } catch {}
+
     const qs = `skip=${skip}${targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : ''}`;
     const res = await authFetch(`${API_BASE_URL}/srs/today?${qs}`);
     if (!res.ok) return null;
     const body = await res.json();
+    if (body) {
+      AsyncStorage.setItem(cacheKey, JSON.stringify(body)).catch(() => {});
+    }
     return body || null;
   },
 };

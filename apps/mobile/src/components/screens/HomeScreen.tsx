@@ -150,6 +150,12 @@ export const HomeScreen = ({
       setSrsDueCount(s.due_now);
       setSrsTotalSaved(s.total_saved);
     }).catch(() => {});
+  }, []);
+
+  // Today's word is cached per-day per-language inside srsApi.todaysWord, so
+  // this effect is a no-op on tab switches and only hits the network when the
+  // user changes their translation language (or the date rolls over).
+  useEffect(() => {
     srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {});
   }, [targetLanguage]);
 
