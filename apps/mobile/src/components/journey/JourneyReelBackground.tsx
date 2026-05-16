@@ -1,12 +1,18 @@
 /**
  * JourneyReelBackground — purely visual film-strip substrate for the
- * Journey Reel screen. No logic, no state, no interaction. All UI
- * chrome (header, daily-goal strip, tiles, CTA card, bottom nav) is
- * absolutely positioned on top of this; chrome should stay inside
- * x: [32, width - 32] so the sprocket gutters remain visible.
+ * Journey Reel screen. Fixed to the viewport: stock, radial light,
+ * warm leaks, grain, dust, gutters and scratches all belong to the
+ * "viewing window," not the film itself. The sprocket perforations
+ * and edge codes — which read as physical features of the strip —
+ * live in `JourneyReelSprockets` and travel with the scroll content
+ * so the film visibly unrolls past the gutters.
+ *
+ * All UI chrome (header, daily-goal strip, tiles, CTA card, bottom
+ * nav) is absolutely positioned on top of this; chrome should stay
+ * inside x: [32, width - 32] so the sprocket gutters remain visible.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, {
   Defs,
@@ -20,7 +26,6 @@ import Svg, {
   FeGaussianBlur,
   G,
   Circle,
-  Text as SvgText,
 } from 'react-native-svg';
 
 interface Props {
@@ -28,9 +33,6 @@ interface Props {
   height?: number;
 }
 
-const SPROCKET_PITCH = 26;
-const SPROCKET_W = 11;
-const SPROCKET_H = 16;
 const GUTTER_W = 30;
 
 // Deterministic dust positions normalized to [0,1] × [0,1].
@@ -65,27 +67,6 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
 
   const W = size.w;
   const H = size.h;
-
-  // Sprocket Y positions.
-  const sprocketYs = useMemo(() => {
-    const ys: number[] = [];
-    for (let y = 8; y < H - 8; y += SPROCKET_PITCH) ys.push(y);
-    return ys;
-  }, [H]);
-
-  // Edge-code midpoints between every other sprocket pair.
-  const edgeCodes = useMemo(() => {
-    const out: Array<{ y: number; label: string }> = [];
-    for (let i = 0; i + 1 < sprocketYs.length; i += 2) {
-      const a = sprocketYs[i];
-      const b = sprocketYs[i + 1];
-      const y = (a + b) / 2 + SPROCKET_H / 2;
-      const idx = Math.floor(i / 2);
-      const label = 'WW·' + String(42 + idx).padStart(3, '0') + 'A';
-      out.push({ y, label });
-    }
-    return out;
-  }, [sprocketYs]);
 
   return (
     <View
@@ -245,70 +226,9 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
         <Rect x={GUTTER_W - 1} y={0} width={1} height={H} fill="rgba(0,0,0,0.4)" />
         <Rect x={W - GUTTER_W} y={0} width={1} height={H} fill="rgba(0,0,0,0.4)" />
 
-        {/* 6. Sprocket perforations */}
-        {sprocketYs.map((y, i) => (
-          <G key={`spk-${i}`}>
-            {/* Left hole */}
-            <Rect
-              x={9.5}
-              y={y}
-              width={SPROCKET_W}
-              height={SPROCKET_H}
-              rx={2.5}
-              ry={2.5}
-              fill="#050300"
-            />
-            <Rect
-              x={9.5}
-              y={y}
-              width={SPROCKET_W}
-              height={SPROCKET_H}
-              rx={2.5}
-              ry={2.5}
-              fill="url(#reel-sprocket-rim)"
-            />
-            {/* Right hole */}
-            <Rect
-              x={W - 9.5 - SPROCKET_W}
-              y={y}
-              width={SPROCKET_W}
-              height={SPROCKET_H}
-              rx={2.5}
-              ry={2.5}
-              fill="#050300"
-            />
-            <Rect
-              x={W - 9.5 - SPROCKET_W}
-              y={y}
-              width={SPROCKET_W}
-              height={SPROCKET_H}
-              rx={2.5}
-              ry={2.5}
-              fill="url(#reel-sprocket-rim)"
-            />
-          </G>
-        ))}
-
-        {/* 7. Edge codes — rotated text reading bottom-to-top in right gutter */}
-        {edgeCodes.map((c, i) => {
-          const x = W - 6;
-          return (
-            <SvgText
-              key={`ec-${i}`}
-              x={x}
-              y={c.y}
-              fontSize={6}
-              fontWeight="700"
-              fill="rgba(255,180,80,0.55)"
-              letterSpacing={0.2}
-              fontFamily='"SF Mono", "Menlo", Consolas, monospace'
-              transform={`rotate(-90 ${x} ${c.y})`}
-              textAnchor="start"
-            >
-              {c.label}
-            </SvgText>
-          );
-        })}
+        {/* 6 + 7. Sprocket perforations and edge codes are rendered by
+            JourneyReelSprockets inside the ScrollView's content so they
+            travel with the film while the gutters above stay fixed. */}
 
         {/* 8. Emulsion scratches — two stacked vertical repeating patterns,
             rendered as discrete rects (no repeating-linear-gradient in SVG). */}

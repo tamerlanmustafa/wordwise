@@ -37,6 +37,7 @@ import {
 } from './journey/JourneyNode';
 import { GlobalBottomBar, type BottomTab } from './GlobalBottomBar';
 import { JourneyReelBackground } from './journey/JourneyReelBackground';
+import { JourneyReelSprockets } from './journey/JourneyReelSprockets';
 import { quizApi, type QuizStartSessionResponse } from '../services/api';
 
 export interface JourneyScreenProps {
@@ -206,6 +207,11 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
           { useNativeDriver: true },
         )}
       >
+        {/* Sprockets travel with the scroll content. The gutter bands
+            in JourneyReelBackground stay fixed to the viewport, so the
+            holes appear to roll past a stationary film-window. */}
+        <JourneyReelSprockets width={WINDOW_WIDTH} height={layout.totalHeight} />
+
         {layout.tiles.map((t, i) => {
           const state = startingTile === i ? 'active' : tileState(i);
           return (
