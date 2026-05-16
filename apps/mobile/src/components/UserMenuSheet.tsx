@@ -5,7 +5,7 @@
  * so the bar is never covered.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import {
   Animated,
@@ -16,7 +16,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { colors } from '../theme/palette';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
 interface Props {
   visible: boolean;
@@ -48,6 +48,8 @@ export function UserMenuSheet({
   isAdmin,
   bottomOffset,
 }: Props) {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const slideAnim = useRef(new Animated.Value(600)).current;
 
   const pref = useThemeStore((s) => s.preference);
@@ -149,24 +151,24 @@ export function UserMenuSheet({
           activeOpacity={0.7}
         >
           <Text style={styles.rowIcon}>🚪</Text>
-          <Text style={[styles.rowLabel, { color: colors.error }]}>Logout</Text>
+          <Text style={[styles.rowLabel, { color: tc.error }]}>Logout</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: tc.scrim,
   },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.border,
+    backgroundColor: tc.border,
     alignSelf: 'center',
     marginBottom: 12,
   },
@@ -192,18 +194,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primary,
+    backgroundColor: tc.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  userName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  userEmail: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
+  userName: { fontSize: 15, fontWeight: '700', color: tc.text },
+  userEmail: { fontSize: 12, color: tc.textSecondary, marginTop: 1 },
+  divider: { height: 1, backgroundColor: tc.divider, marginVertical: 6 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
   rowIcon: { fontSize: 16, width: 26, textAlign: 'center' },
-  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.text },
-  rowArrow: { fontSize: 16, color: colors.textSecondary },
+  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: tc.text },
+  rowArrow: { fontSize: 16, color: tc.textSecondary },
   themeRow: { paddingVertical: 4 },
   themeChips: { flexDirection: 'row', gap: 8 },
   themeChip: {
@@ -214,15 +216,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    borderColor: tc.border,
+    backgroundColor: tc.background,
     gap: 4,
   },
   themeChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '18',
+    borderColor: tc.primary,
+    backgroundColor: tc.primary + '22',
   },
   themeChipIcon: { fontSize: 14 },
-  themeChipLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  themeChipLabelActive: { color: colors.primary, fontWeight: '700' },
+  themeChipLabel: { fontSize: 12, fontWeight: '600', color: tc.textSecondary },
+  themeChipLabelActive: { color: tc.primary, fontWeight: '700' },
 });

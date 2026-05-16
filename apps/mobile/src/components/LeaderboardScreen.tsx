@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -9,19 +9,13 @@ import {
   type QuizLeaderboardEntry,
   type QuizLeaderboardMetric,
 } from '../services/api';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  gold: '#FFD700',
+// Medal/highlight colors are symbolic and stay constant across themes.
+const MEDAL = {
+  gold:   '#FFD700',
   silver: '#C0C0C0',
   bronze: '#CD7F32',
-  highlight: '#F0EBFF',
 };
 
 // Top-level section split: vocabulary stats vs quiz stats. Keeps the existing
@@ -56,6 +50,9 @@ export interface LeaderboardScreenProps {
 }
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
+
   const [section, setSection] = useState<Section>('vocab');
   const [vocabBoard, setVocabBoard] = useState<VocabBoard>('words');
   const [quizBoard, setQuizBoard] = useState<QuizBoard>('stars');
@@ -123,10 +120,10 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
   useEffect(() => { load(); }, [load]);
 
   const medalColor = (rank: number) => {
-    if (rank === 1) return COLORS.gold;
-    if (rank === 2) return COLORS.silver;
-    if (rank === 3) return COLORS.bronze;
-    return COLORS.textTertiary;
+    if (rank === 1) return MEDAL.gold;
+    if (rank === 2) return MEDAL.silver;
+    if (rank === 3) return MEDAL.bronze;
+    return tc.textMuted;
   };
 
   const renderItem = ({ item }: { item: BoardRow }) => (
@@ -209,7 +206,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={tc.primary} />
         </View>
       ) : (
         <FlatList
@@ -232,48 +229,48 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.paper,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: tc.paper,
+    borderBottomWidth: 1, borderBottomColor: tc.border,
   },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  backText: { fontSize: 16, color: tc.primary, fontWeight: '500', width: 60 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
   sectionRow: {
     flexDirection: 'row', paddingHorizontal: 12, paddingTop: 12, gap: 8,
   },
   sectionBtn: {
     flex: 1, paddingVertical: 10, borderRadius: 10,
-    backgroundColor: COLORS.paper, alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: tc.paper, alignItems: 'center',
+    borderWidth: 1, borderColor: tc.border,
   },
-  sectionBtnActive: { backgroundColor: COLORS.text, borderColor: COLORS.text },
-  sectionBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
-  sectionBtnTextActive: { color: '#FFFFFF' },
+  sectionBtnActive: { backgroundColor: tc.text, borderColor: tc.text },
+  sectionBtnText: { fontSize: 13, fontWeight: '700', color: tc.textSecondary },
+  sectionBtnTextActive: { color: tc.paper },
   tabs: { flexDirection: 'row', padding: 12, gap: 8 },
   tab: {
     flex: 1, paddingVertical: 10, borderRadius: 10,
-    backgroundColor: COLORS.paper, alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: tc.paper, alignItems: 'center',
+    borderWidth: 1, borderColor: tc.border,
   },
-  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
+  tabActive: { backgroundColor: tc.primary, borderColor: tc.primary },
+  tabText: { fontSize: 12, fontWeight: '600', color: tc.textSecondary },
   tabTextActive: { color: '#FFFFFF' },
-  yourRank: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: COLORS.highlight },
-  yourRankText: { fontSize: 14, fontWeight: '700', color: COLORS.primary, textAlign: 'center' },
+  yourRank: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: tc.primary + '18' },
+  yourRankText: { fontSize: 14, fontWeight: '700', color: tc.primary, textAlign: 'center' },
   list: { padding: 16 },
   row: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16,
-    backgroundColor: COLORS.paper, borderRadius: 12, marginBottom: 8,
-    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: tc.paper, borderRadius: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: tc.border,
   },
-  rowHighlight: { backgroundColor: COLORS.highlight, borderColor: COLORS.primary },
+  rowHighlight: { backgroundColor: tc.primary + '18', borderColor: tc.primary },
   rank: { fontSize: 16, fontWeight: '800', width: 44, textAlign: 'center' },
-  username: { flex: 1, fontSize: 15, color: COLORS.text, marginLeft: 8 },
-  usernameBold: { fontWeight: '700', color: COLORS.primary },
-  score: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  username: { flex: 1, fontSize: 15, color: tc.text, marginLeft: 8 },
+  usernameBold: { fontWeight: '700', color: tc.primary },
+  score: { fontSize: 15, fontWeight: '700', color: tc.text },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
-  emptyText: { fontSize: 14, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24 },
+  emptyText: { fontSize: 14, color: tc.textMuted, textAlign: 'center', paddingHorizontal: 24 },
 });

@@ -14,7 +14,6 @@ import { useThemeColors } from '../../theme/tokens';
 import { GlobalBottomBar } from '../GlobalBottomBar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AVAILABLE_LANGUAGES } from '../../types';
-import { colors } from '../../theme/palette';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import {
@@ -263,12 +262,12 @@ export const HomeScreen = ({
 
       <Animated.View style={[styles.searchBarFixed, { top: insets.top, backgroundColor: tc.background, transform: [{ translateY: searchBarAnim }] }]}>
         <View style={styles.searchContainer}>
-          <Text style={styles.searchBrandLabel}>WW</Text>
+          <Text style={[styles.searchBrandLabel, { color: tc.primary }]}>WW</Text>
           <View style={styles.searchInputWrapper}>
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { backgroundColor: tc.paper, color: tc.text, borderColor: tc.border }]}
               placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={tc.textMuted}
               value={searchQuery}
               onChangeText={onSearchTextChange}
               onFocus={() => {
@@ -283,15 +282,15 @@ export const HomeScreen = ({
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
-                <Text style={styles.searchClearText}>✕</Text>
+                <Text style={[styles.searchClearText, { color: tc.textSecondary }]}>✕</Text>
               </TouchableOpacity>
             )}
             {showSuggestions && suggestions.length > 0 && (
-              <View style={styles.autocompleteDropdown}>
+              <View style={[styles.autocompleteDropdown, { backgroundColor: tc.paper, borderColor: tc.border }]}>
                 {suggestions.map((movie: any) => (
                   <TouchableOpacity
                     key={movie.id}
-                    style={styles.searchResultItem}
+                    style={[styles.searchResultItem, { borderBottomColor: tc.border }]}
                     onPress={() => {
                       handleMoviePress(movie);
                       clearSearch();
@@ -304,34 +303,34 @@ export const HomeScreen = ({
                         style={styles.searchResultPoster}
                       />
                     ) : (
-                      <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                      <View style={[styles.searchResultPoster, { backgroundColor: tc.border }]} />
                     )}
                     <View style={styles.searchResultInfo}>
-                      <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
-                      <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                      <Text style={[styles.searchResultTitle, { color: tc.text }]} numberOfLines={1}>{movie.title}</Text>
+                      <Text style={[styles.searchResultYear, { color: tc.textSecondary }]}>{movie.release_date?.slice(0, 4)}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
                 {allResults.length > 5 && (
                   <TouchableOpacity
-                    style={styles.seeAllButton}
+                    style={[styles.seeAllButton, { borderTopColor: tc.border }]}
                     onPress={() => {
                       onSearch(searchQuery.trim());
                       clearSearch();
                     }}
                   >
-                    <Text style={styles.seeAllText}>See all {allResults.length} results</Text>
+                    <Text style={[styles.seeAllText, { color: tc.primary }]}>See all {allResults.length} results</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
             {searchFocused && !searchQuery && recentlyViewed.length > 0 && (
-              <View style={styles.autocompleteDropdown}>
-                <Text style={styles.recentlyViewedLabel}>Recently Viewed</Text>
+              <View style={[styles.autocompleteDropdown, { backgroundColor: tc.paper, borderColor: tc.border }]}>
+                <Text style={[styles.recentlyViewedLabel, { color: tc.textSecondary }]}>Recently Viewed</Text>
                 {recentlyViewed.slice(0, 5).map((movie: any) => (
                   <TouchableOpacity
                     key={movie.id}
-                    style={styles.searchResultItem}
+                    style={[styles.searchResultItem, { borderBottomColor: tc.border }]}
                     onPress={() => {
                       if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
                       setSearchFocused(false);
@@ -345,11 +344,11 @@ export const HomeScreen = ({
                         style={styles.searchResultPoster}
                       />
                     ) : (
-                      <View style={[styles.searchResultPoster, { backgroundColor: colors.border }]} />
+                      <View style={[styles.searchResultPoster, { backgroundColor: tc.border }]} />
                     )}
                     <View style={styles.searchResultInfo}>
-                      <Text style={styles.searchResultTitle} numberOfLines={1}>{movie.title}</Text>
-                      <Text style={styles.searchResultYear}>{movie.release_date?.slice(0, 4)}</Text>
+                      <Text style={[styles.searchResultTitle, { color: tc.text }]} numberOfLines={1}>{movie.title}</Text>
+                      <Text style={[styles.searchResultYear, { color: tc.textSecondary }]}>{movie.release_date?.slice(0, 4)}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -393,7 +392,7 @@ export const HomeScreen = ({
         <View style={{ zIndex: 50, overflow: 'visible' }}>
           <View style={styles.levelSortRow}>
             <TouchableOpacity
-              style={[styles.levelSortChip, styles.levelSortChipActive]}
+              style={[styles.levelSortChip, { backgroundColor: tc.paper, borderColor: tc.border }, styles.levelSortChipActive]}
               onPress={() => setLevelDropdownOpen((v) => !v)}
               activeOpacity={0.7}
             >
@@ -411,7 +410,11 @@ export const HomeScreen = ({
             ]).map((opt) => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.levelSortChip, levelSort === opt.key && styles.levelSortChipActive]}
+                style={[
+                  styles.levelSortChip,
+                  { backgroundColor: tc.paper, borderColor: tc.border },
+                  levelSort === opt.key && styles.levelSortChipActive,
+                ]}
                 onPress={() => {
                   if (levelSort === opt.key) {
                     setLevelSortAsc((v) => !v);
@@ -422,7 +425,13 @@ export const HomeScreen = ({
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.levelSortText, levelSort === opt.key && styles.levelSortTextActive]}>
+                <Text
+                  style={[
+                    styles.levelSortText,
+                    { color: tc.textSecondary },
+                    levelSort === opt.key && styles.levelSortTextActive,
+                  ]}
+                >
                   {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
                 </Text>
               </TouchableOpacity>
@@ -430,11 +439,15 @@ export const HomeScreen = ({
           </View>
 
           {levelDropdownOpen && (
-            <View style={[styles.levelPickerMenu, { left: 16 }]}>
+            <View style={[styles.levelPickerMenu, { left: 16, backgroundColor: tc.paper, borderColor: tc.border }]}>
               {LEVEL_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
-                  style={[styles.levelPickerItem, opt.value === selectedLevel && styles.levelPickerItemActive]}
+                  style={[
+                    styles.levelPickerItem,
+                    { borderBottomColor: tc.border },
+                    opt.value === selectedLevel && styles.levelPickerItemActive,
+                  ]}
                   onPress={async () => {
                     setLevelDropdownOpen(false);
                     if (opt.value !== selectedLevel) {
@@ -447,7 +460,7 @@ export const HomeScreen = ({
                   activeOpacity={0.7}
                 >
                   <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
-                  <Text style={[styles.levelPickerText, opt.value === selectedLevel && styles.levelPickerTextActive]}>{opt.label}</Text>
+                  <Text style={[styles.levelPickerText, { color: tc.text }, opt.value === selectedLevel && styles.levelPickerTextActive]}>{opt.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>

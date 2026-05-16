@@ -3,6 +3,7 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { wordwiseApi } from '../../services/api';
 import { styles } from '../../core/styles';
+import { useThemeColors } from '../../theme/tokens';
 import type { ListFilter } from '../../core/types';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export const ListsScreen = ({ onBack, onOpenList }: Props) => {
+  const tc = useThemeColors();
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [learnedCount, setLearnedCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,12 +59,12 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.detailHeader}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+      <View style={[styles.detailHeader, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={[styles.backButtonText, { color: tc.primary }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.detailHeaderTitle} numberOfLines={1}>My Lists</Text>
+        <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>My Lists</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -70,7 +72,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
         {lists.map((list) => (
           <TouchableOpacity
             key={list.key}
-            style={styles.listsCard}
+            style={[styles.listsCard, { backgroundColor: tc.paper, borderColor: tc.border }]}
             onPress={() => onOpenList(list.key)}
             activeOpacity={0.75}
           >
@@ -78,8 +80,8 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
               <Text style={{ fontSize: 22 }}>{list.icon}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.listsCardName}>{list.name}</Text>
-              <Text style={styles.listsCardDesc}>{list.description}</Text>
+              <Text style={[styles.listsCardName, { color: tc.text }]}>{list.name}</Text>
+              <Text style={[styles.listsCardDesc, { color: tc.textSecondary }]}>{list.description}</Text>
             </View>
             <View style={[styles.listsCardBadge, { backgroundColor: list.color }]}>
               <Text style={styles.listsCardBadgeText}>

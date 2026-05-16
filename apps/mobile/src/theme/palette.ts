@@ -1,6 +1,12 @@
-// Canonical color palette. These values drive the running app — the older
-// src/theme/index.ts belongs to unwired feature folders and will be removed
-// once that dead code goes.
+/**
+ * Static colour palette — light-mode values, plus CEFR-level colours that
+ * are theme-independent (the same green = A1 in both modes).
+ *
+ * For colours that must change with the active theme, use
+ * `useThemeColors()` from ./tokens instead — this file's `colors` is just a
+ * static snapshot of the light palette for places that can't run a hook
+ * (e.g. StyleSheet.create blocks at module scope).
+ */
 
 export const colors = {
   primary: '#7C5CBF',
