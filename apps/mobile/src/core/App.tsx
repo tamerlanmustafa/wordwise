@@ -6,6 +6,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { useThemeStore } from '../stores/themeStore';
+import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useThemeColors } from '../theme/tokens';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
@@ -27,7 +28,8 @@ import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen'
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
-import { type QuizStartSessionResponse, type QuizCompleteResponse } from '../services/api';
+import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
+import { useReelStore } from '../stores/reelStore';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
@@ -86,6 +88,7 @@ export default function App() {
     // doesn't reset an admin's "viewing as free" selection.
     useEntitlementsStore.getState().hydrate();
     useThemeStore.getState().hydrate();
+    useDailyGoalStore.getState().hydrate();
     // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
     // registerForPushNotifications is a no-op on simulator.
     registerForPushNotifications().then(() => {
@@ -257,9 +260,20 @@ export default function App() {
     setCurrentScreen('quizBatchJourney');
   };
 
-  // Journey tile progress — persisted here so round-tripping through the
-  // quiz lesson (unmounts JourneyScreen) doesn't reset the count.
+  // Journey tile progress — persisted to AsyncStorage so it survives
+  // cold starts. Streaks, daily goals, and the "Up next" teaser all
+  // depend on this being durable. Backend mirror is a follow-up.
   const [journeyCompletedCount, setJourneyCompletedCount] = useState(0);
+  const [journeyProgressHydrated, setJourneyProgressHydrated] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem('journey.completedCount').then((v) => {
+      if (v) {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n) && n >= 0) setJourneyCompletedCount(n);
+      }
+      setJourneyProgressHydrated(true);
+    }).catch(() => setJourneyProgressHydrated(true));
+  }, []);
   // Which tile index was active when the quiz started; incremented on return.
   const journeyTileInProgressRef = useRef<number | null>(null);
 
@@ -297,7 +311,64 @@ export default function App() {
     setCurrentScreen('quizLesson');
   };
 
-  const handleQuizComplete = (result: QuizCompleteResponse, level: string) => {
+  // Journey-result snapshot — populated up-front in handleQuizComplete
+  // so QuizResultScreen renders the post-completion streak/pip values
+  // and can decide whether to show the daily-3 wall. Null for non-
+  // journey sessions (movie / batch quizzes use the legacy fallback).
+  const [journeyResultMeta, setJourneyResultMeta] = useState<{
+    completedTileIdx: number;
+    dailyDone: number;
+    dailyStreak: number;
+    justHit3: boolean;
+    cardResults: QuizCardResultInput[];
+    upNext: {
+      tileIdx: number;
+      label: number;
+      movie: string;
+      poster: string | null;
+    } | null;
+  } | null>(null);
+
+  const handleQuizComplete = (
+    result: QuizCompleteResponse,
+    level: string,
+    cardResults: QuizCardResultInput[] = [],
+  ) => {
+    // Bump persisted progress + the daily counter NOW so the result
+    // screen reads fresh values. handleQuizResultDone only handles
+    // navigation after the user dismisses.
+    if (journeyTileInProgressRef.current !== null) {
+      const completedIdx = journeyTileInProgressRef.current;
+      setJourneyCompletedCount((n) => {
+        const next = Math.max(n, completedIdx + 1);
+        AsyncStorage.setItem('journey.completedCount', String(next)).catch(() => {});
+        return next;
+      });
+      const bump = useDailyGoalStore.getState().bump();
+      // Compute "Up next" from the current reel snapshot. The tile
+      // *after* the one the user just finished becomes the next active.
+      const nextIdx = completedIdx + 1;
+      const reelTiles = useReelStore.getState().tiles;
+      const nextTile = reelTiles[nextIdx];
+      const upNext = nextTile
+        ? {
+            tileIdx: nextIdx,
+            label: nextIdx + 1,
+            movie: nextTile.title,
+            poster: nextTile.poster_path ?? null,
+          }
+        : null;
+      setJourneyResultMeta({
+        completedTileIdx: completedIdx,
+        dailyDone: bump.done,
+        dailyStreak: bump.streak,
+        justHit3: bump.justHit3,
+        cardResults,
+        upNext,
+      });
+    } else {
+      setJourneyResultMeta(null);
+    }
     setQuizResult({ result, level });
     setCurrentScreen('quizResult');
   };
@@ -305,9 +376,8 @@ export default function App() {
   const handleQuizResultDone = () => {
     setQuizSession(null);
     setQuizResult(null);
-    // Journey tile: mark it completed and return to the journey screen.
+    setJourneyResultMeta(null);
     if (journeyTileInProgressRef.current !== null) {
-      setJourneyCompletedCount((n) => Math.max(n, journeyTileInProgressRef.current! + 1));
       journeyTileInProgressRef.current = null;
       setCurrentScreen('journey');
       return;
@@ -315,6 +385,34 @@ export default function App() {
     if (batch) setCurrentScreen('quizBatchJourney');
     else setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
   };
+
+  // Chain directly into the next active tile's Set Intro instead of
+  // dropping back to the reel. Only available in journey mode and only
+  // when there IS a next tile loaded. After the daily-3 wall this is
+  // surfaced as the secondary "+1 bonus tile" path.
+  const handleJourneyNextSet = useCallback(async () => {
+    if (!journeyResultMeta?.upNext) return;
+    const nextTile = useReelStore.getState().tiles[journeyResultMeta.upNext.tileIdx];
+    if (!nextTile) return;
+    const nextIdx = journeyResultMeta.upNext.tileIdx;
+    const nextLevel = (user?.proficiency_level || 'A1').toUpperCase();
+    try {
+      const session = await quizApi.startJourneySession(nextLevel, nextIdx, 5, nextTile.tmdb_id);
+      setQuizSession(null);
+      setQuizResult(null);
+      setJourneyResultMeta(null);
+      handleShowSetIntro({
+        session,
+        level: nextLevel as any,
+        tileIndex: nextIdx,
+        movie: { title: nextTile.title, poster_path: nextTile.poster_path },
+        setNumber: nextIdx + 1,
+        reelNumber: 1,
+      });
+    } catch (err: any) {
+      Alert.alert('Could not start next set', err?.message ?? 'Please try again.');
+    }
+  }, [journeyResultMeta, user?.proficiency_level]);
 
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
@@ -420,7 +518,7 @@ export default function App() {
         ) : currentScreen === 'journey' ? (
           <JourneyScreen
             onTabPress={handleTabPress}
-            completedCount={journeyCompletedCount}
+            completedCount={journeyProgressHydrated ? journeyCompletedCount : -1}
             onShowSetIntro={handleShowSetIntro}
             onAddMovies={() => setCurrentScreen('addToReel')}
           />
@@ -479,6 +577,8 @@ export default function App() {
             result={quizResult.result}
             level={quizResult.level}
             onDone={handleQuizResultDone}
+            journey={journeyResultMeta}
+            onNextSet={journeyResultMeta?.upNext ? handleJourneyNextSet : undefined}
           />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen

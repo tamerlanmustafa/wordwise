@@ -36,10 +36,13 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
   const [liveQuery, setLiveQuery] = useState(query);
   const effectiveQuery = mode === 'addToReel' ? liveQuery : query;
 
-  const reelMovies = useReelStore((s) => s.movies);
+  const reelTiles = useReelStore((s) => s.tiles);
   const reelAdd = useReelStore((s) => s.add);
   const reelRemove = useReelStore((s) => s.remove);
-  const isInReel = (id: number) => reelMovies.some((m) => m.tmdb_id === id);
+  // Only user-source rows count as "in your reel" — suggested tiles
+  // are server-curated, not user-picked, so the + button stays active.
+  const isInReel = (id: number) =>
+    reelTiles.some((t) => t.tmdb_id === id && t.source === 'user');
 
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

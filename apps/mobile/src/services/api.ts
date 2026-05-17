@@ -1264,11 +1264,17 @@ export const quizApi = {
     level: string,
     tileIndex: number,
     wordsPerTile = 5,
+    tmdbId?: number,
   ): Promise<QuizStartSessionResponse> => {
     const res = await authFetch(`${API_BASE_URL}/quiz/journey/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ level, tile_index: tileIndex, words_per_tile: wordsPerTile }),
+      body: JSON.stringify({
+        level,
+        tile_index: tileIndex,
+        words_per_tile: wordsPerTile,
+        ...(tmdbId != null ? { tmdb_id: tmdbId } : {}),
+      }),
     });
     if (!res.ok) {
       let msg = 'Failed to start journey session';
@@ -1317,17 +1323,27 @@ export const quizApi = {
 };
 
 // ─── Reel ────────────────────────────────────────────────────────────────
-export interface ReelMovieItem {
+export type ReelTileSource = 'user' | 'suggested';
+
+export interface ReelTile {
   tmdb_id: number;
-  position: number;
   title: string;
   poster_path: string | null;
   year: number | null;
+  source: ReelTileSource;
 }
 
+export interface ReelListResponse {
+  tiles: ReelTile[];
+  has_more: boolean;
+}
+
+/** Legacy alias kept for callers that imported the prior name. */
+export type ReelMovieItem = ReelTile;
+
 export const reelApi = {
-  list: async (): Promise<ReelMovieItem[]> => {
-    const res = await authFetch(`${API_BASE_URL}/reel`);
+  list: async (cursor = 0, limit = 60): Promise<ReelListResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/reel?cursor=${cursor}&limit=${limit}`);
     if (!res.ok) throw new Error('Failed to load reel');
     return res.json();
   },
@@ -1337,7 +1353,7 @@ export const reelApi = {
     title: string;
     poster_path: string | null;
     year: number | null;
-  }): Promise<ReelMovieItem> => {
+  }): Promise<ReelTile> => {
     const res = await authFetch(`${API_BASE_URL}/reel`, {
       method: 'POST',
       body: JSON.stringify(input),

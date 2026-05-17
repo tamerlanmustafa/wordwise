@@ -17,7 +17,6 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Line } from 'react-native-svg';
 
 import type { NodeLevel } from './JourneyNode';
 
@@ -34,6 +33,10 @@ export interface MovieTileProps {
   centerX: number;
   /** Center Y within the parent container. */
   centerY: number;
+  /** Where this tile came from: a user pick (★ in the badge) or a
+   *  curated suggestion (number in the badge). Visual logic is
+   *  otherwise identical across sources. */
+  source?: 'user' | 'suggested';
   onPress?: () => void;
 }
 
@@ -67,8 +70,12 @@ function tmdb(path: string) {
 }
 
 export function MovieTile({
-  idx, label, level, movie, poster, state, centerX, centerY, onPress,
+  idx: _idx, label, level, movie, poster, state, centerX, centerY, source, onPress,
 }: MovieTileProps) {
+  // Number badge always shows queue position. The ★ for user picks
+  // lives in a separate corner stamp so the user can still see "I'm
+  // on tile 3 of my reel."
+  const badgeContent = String(label);
   const accent = CEFR_COLOR[level] ?? CEFR_COLOR.A1;
   const size = SIZE[state];
   const badge = BADGE_SIZE[state];
@@ -151,30 +158,38 @@ export function MovieTile({
             },
           ]}
         >
-          {isLocked ? (
-            <LockedFill size={size} />
-          ) : poster ? (
-            <>
-              <Image
-                source={{ uri: tmdb(poster) }}
-                style={styles.poster}
-                resizeMode="cover"
-              />
-              {/* Sepia-ish treatment for completed: warm tint + slight
-                  darken. RN has no CSS filter; this is the closest
-                  approximation that stays in the amber palette. */}
-              {isCompleted ? (
-                <View pointerEvents="none" style={styles.sepiaOverlay} />
-              ) : null}
-            </>
+          {poster ? (
+            <Image
+              source={{ uri: tmdb(poster) }}
+              style={[
+                styles.poster,
+                // Desaturate completed via opacity only. RN has no CSS
+                // sepia/saturate filter; the prior warm overlay clashed
+                // with red CEFR borders. Locked tiles also dim so the
+                // user can scan their reel ahead but the future still
+                // reads as "not earned yet."
+                isCompleted ? { opacity: 0.55 } : null,
+                isLocked    ? { opacity: 0.28 } : null,
+              ]}
+              resizeMode="cover"
+            ></Image>
           ) : (
-            <View style={[styles.poster, { backgroundColor: FRAME_BG }]} />
+            <View style={[styles.poster, { backgroundColor: FRAME_BG }]}></View>
           )}
+          {/* Locked overlay — a thin dark wash on top of the dimmed
+              poster so the future tiles read as "behind a veil," not
+              just "low-contrast posters." */}
+          {isLocked && poster ? (
+            <View
+              pointerEvents="none"
+              style={[styles.poster, { backgroundColor: 'rgba(14,8,5,0.45)' }]}
+            ></View>
+          ) : null}
 
           {/* Bottom title strip — active + inactive only. */}
           {(isActive || isInactive) ? (
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.92)']}
+              colors={["transparent", "rgba(0,0,0,0.92)"]}
               style={[
                 styles.titleStrip,
                 isActive ? styles.titleStripActive : styles.titleStripInactive,
@@ -193,15 +208,19 @@ export function MovieTile({
             </LinearGradient>
           ) : null}
 
-          {/* Corner stamps */}
+          {/* Completed ✓ stamp — top-right. */}
           {isCompleted ? (
             <View style={styles.checkDisc} pointerEvents="none">
               <Text style={styles.checkGlyph}>✓</Text>
             </View>
           ) : null}
-          {isActive ? (
-            <View style={styles.todayPill} pointerEvents="none">
-              <Text style={styles.todayText}>TODAY</Text>
+
+          {/* User-pick ★ stamp — top-left. Separate from the number
+              badge so the user still sees queue position. Suppressed on
+              locked tiles (the dimmed wrapper would mute the gold). */}
+          {source === "user" && !isLocked ? (
+            <View style={styles.starDisc} pointerEvents="none">
+              <Text style={styles.starGlyph}>★</Text>
             </View>
           ) : null}
         </Animated.View>
@@ -228,44 +247,9 @@ export function MovieTile({
             fontWeight: '900',
           }}
         >
-          {label}
+          {badgeContent}
         </Text>
       </View>
-    </View>
-  );
-}
-
-/** Diagonal-stripe fill for locked tiles. SVG-based to approximate the
- *  CSS repeating-linear-gradient(45deg, ...) the spec calls for. */
-function LockedFill({ size }: { size: number }) {
-  // Generate diagonal lines 8px apart across the tile.
-  const STRIDE = 16; // dark stripe period (8 on + 8 off)
-  // Lines along y = -x + c, for c going from 0..2*size in STRIDE steps.
-  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-  for (let c = -size; c <= 2 * size; c += STRIDE) {
-    lines.push({ x1: c, y1: 0, x2: c - size, y2: size });
-  }
-  return (
-    <View style={[styles.poster, { backgroundColor: FRAME_BG, alignItems: 'center', justifyContent: 'center' }]}>
-      <Svg
-        width={size}
-        height={size}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      >
-        {lines.map((l, i) => (
-          <Line
-            key={i}
-            x1={l.x1}
-            y1={l.y1}
-            x2={l.x2}
-            y2={l.y2}
-            stroke="#0e0805"
-            strokeWidth={8}
-          />
-        ))}
-      </Svg>
-      <Text style={{ fontSize: 18, opacity: 0.5 }}>🔒</Text>
     </View>
   );
 }
@@ -309,10 +293,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  sepiaOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(120, 70, 20, 0.28)',
-  },
   titleStrip: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -346,23 +326,20 @@ const styles = StyleSheet.create({
   checkGlyph: {
     fontSize: 13, fontWeight: '900', color: '#3a2400',
   },
-  todayPill: {
+  starDisc: {
     position: 'absolute',
-    top: 6, left: 6,
-    paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: 4,
+    top: 4, left: 4,
+    width: 18, height: 18, borderRadius: 9,
     backgroundColor: GOLD,
+    alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.5,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-  todayText: {
-    color: '#3a2400',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1,
+  starGlyph: {
+    fontSize: 11, fontWeight: '900', color: '#3a2400',
   },
   badge: {
     position: 'absolute',

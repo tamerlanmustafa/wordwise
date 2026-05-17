@@ -24,7 +24,11 @@ export interface QuizLessonScreenProps {
   session: QuizStartSessionResponse;
   level: string;
   onExit: () => void;
-  onComplete: (result: QuizCompleteResponse, level: string) => void;
+  onComplete: (
+    result: QuizCompleteResponse,
+    level: string,
+    cardResults: QuizCardResultInput[],
+  ) => void;
 }
 
 // Normalize strings before comparing a typed answer to the expected
@@ -118,7 +122,7 @@ export function QuizLessonScreen({
     try {
       await quizApi.submitCards(session.session_id, final);
       const result = await quizApi.completeSession(session.session_id);
-      onComplete(result, level);
+      onComplete(result, level, final);
     } catch (e) {
       console.warn('[QuizLesson] finish failed:', e);
       setError('Could not save results. Tap retry.');

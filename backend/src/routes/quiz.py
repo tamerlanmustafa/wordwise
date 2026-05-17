@@ -58,6 +58,12 @@ class StartJourneySessionRequest(BaseModel):
     level: str = Field(..., pattern=r"^(A1|A2|B1|B2|C1|C2)$")
     tile_index: int = Field(..., ge=0)
     words_per_tile: int = Field(5, ge=1, le=20)
+    # TMDB id of the active tile's movie. When provided AND the movie
+    # has subtitle vocab on file, words are sourced from THAT movie's
+    # top-frequency unknown lemmas in the user's CEFR ±1 band, with
+    # SRS-due words bubbled in first. Falls back to the legacy
+    # cross-movie offset-based pull when absent or empty.
+    tmdb_id: Optional[int] = None
 
 
 class CardPayload(BaseModel):
@@ -725,6 +731,88 @@ async def _get_journey_words_at_level(
     return [r["word"] for r in rows if r["word"].lower() not in hidden]
 
 
+_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+# Cap how many of a tile's 5 cards can be SRS reintroductions. The rest
+# stay new movie-specific lemmas so the user always learns something.
+SRS_REINTRO_CAP = 2
+
+
+def _band_levels(level: str) -> list[str]:
+    """CEFR ±1 band as a list of level strings."""
+    try:
+        i = _LEVELS.index(level)
+    except ValueError:
+        i = 0
+    return _LEVELS[max(0, i - 1): min(len(_LEVELS), i + 2)]
+
+
+async def _movie_specific_words(
+    db: Prisma,
+    user_id: int,
+    tmdb_id: int,
+    level: str,
+    words_per_tile: int,
+) -> list[str]:
+    """Return movie-specific lemmas (lowercase strings) for one tile,
+    SRS-due words first (capped), then top-frequency unknowns from the
+    movie in the user's CEFR ±1 band. Returns [] if the movie has no
+    lemma mappings — caller should fall back to the legacy path.
+    """
+    band = _band_levels(level)
+
+    # 1. SRS-due reintroductions. Pull from user_words where srs_due_at
+    #    is in the past, ordered most-overdue first, capped at the
+    #    reintro budget. We don't restrict these to the movie — the
+    #    point is they're old debts being paid.
+    srs_rows = await db.query_raw(
+        """
+        SELECT word
+        FROM user_words
+        WHERE user_id = $1
+          AND is_learned = false
+          AND srs_due_at <= NOW()
+        ORDER BY srs_due_at ASC
+        LIMIT $2
+        """,
+        user_id, SRS_REINTRO_CAP,
+    )
+    srs_words: list[str] = [r["word"].lower() for r in srs_rows]
+
+    needed = words_per_tile - len(srs_words)
+    if needed <= 0:
+        return srs_words[:words_per_tile]
+
+    # 2. Movie-specific unknowns at level ±1. Excludes lemmas the user
+    #    already has in user_words (whether learned or in SRS queue) so
+    #    we don't duplicate the SRS slice.
+    band_placeholders = ",".join(f"${i + 4}" for i in range(len(band)))
+    movie_rows = await db.query_raw(
+        f"""
+        SELECT l.lemma
+        FROM movie_lemma_mappings mlm
+        JOIN movies m  ON m.id = mlm.movie_id
+        JOIN lemmas l  ON l.id = mlm.lemma_id
+        WHERE m.tmdb_id = $1
+          AND l.cefr_level::text IN ({band_placeholders})
+          AND NOT EXISTS (
+              SELECT 1 FROM user_words uw
+              WHERE uw.user_id = $2
+                AND LOWER(uw.word) = LOWER(l.lemma)
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM hidden_words hw
+              WHERE LOWER(hw.word) = LOWER(l.lemma)
+          )
+        ORDER BY mlm.frequency_in_movie DESC, l.frequency_rank ASC NULLS LAST
+        LIMIT $3
+        """,
+        tmdb_id, user_id, needed, *band,
+    )
+    new_words = [r["lemma"].lower() for r in movie_rows]
+
+    return srs_words + new_words
+
+
 @router.post("/journey/sessions", response_model=StartSessionResponse)
 async def start_journey_session(
     body: StartJourneySessionRequest,
@@ -733,24 +821,40 @@ async def start_journey_session(
 ):
     """Start a quiz session for one journey tile.
 
-    Words are drawn from a global, cross-movie frequency-ranked list at
-    the requested CEFR level. Tile 0 gets the 5 most common words at
-    that level, tile 1 the next 5, and so on — so the user always
-    progresses from easier to harder vocabulary as they climb the path.
+    Word-selection strategy:
+      1. If `tmdb_id` is provided AND the movie has lemma mappings on
+         file, pull words from THAT movie's subtitle vocab — SRS-due
+         lemmas first (capped at SRS_REINTRO_CAP), then top-frequency
+         unknown lemmas in the user's CEFR ±1 band.
+      2. Otherwise (or if the movie's mapping yields nothing usable),
+         fall back to the legacy cross-movie offset query: tile N gets
+         the Nth window of frequency-ranked words at the user's level.
     """
-    offset = body.tile_index * body.words_per_tile
-    words = await _get_journey_words_at_level(
-        db, body.level, offset, body.words_per_tile
-    )
+    words: list[str] = []
+    movie_id: Optional[int] = None
+
+    if body.tmdb_id is not None:
+        words = await _movie_specific_words(
+            db, current_user.id, body.tmdb_id, body.level, body.words_per_tile,
+        )
+        # Look up the internal movie id so the session is correctly
+        # attributed (powers per-movie progress + stats downstream).
+        movie_row = await db.movie.find_first(where={"tmdbId": body.tmdb_id})
+        if movie_row:
+            movie_id = movie_row.id
+
+    if not words:
+        offset = body.tile_index * body.words_per_tile
+        words = await _get_journey_words_at_level(
+            db, body.level, offset, body.words_per_tile
+        )
 
     if not words:
         raise HTTPException(
             status_code=404,
             detail=(
                 f"No words available at level {body.level} for tile "
-                f"{body.tile_index}. Either the level has fewer than "
-                f"{offset + body.words_per_tile} classified words, or "
-                f"none have been classified yet."
+                f"{body.tile_index}."
             ),
         )
 
@@ -764,7 +868,7 @@ async def start_journey_session(
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
-        "movieId": None,
+        "movieId": movie_id,
         "cefrLevel": body.level,
         "kind": "journey",
     })
