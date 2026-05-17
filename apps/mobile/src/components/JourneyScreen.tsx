@@ -1,16 +1,20 @@
 /**
- * JourneyScreen — progressive daily-check-in zigzag.
+ * JourneyScreen — Journey Reel zigzag built from the user's per-user
+ * reel (synced via reelStore). Tile 0 is bottom-most; tile (idx)'s
+ * state derives from completedCount + VISIBLE_AHEAD per the spec.
  *
- * Scroll rules:
- *  • On entry the user starts at tile 1. They can scroll up ~3 viewport
- *    heights before hitting a soft lock.
- *  • The top fade mask is INVISIBLE while they have room to scroll; it
- *    ramps to fully-opaque only as they approach the locked boundary —
- *    tiles recede behind it giving the "the path fades into the future"
- *    illusion.
- *  • When the user taps the active (bottommost) tile and "completes" it,
- *    one tile's worth of scroll (STEP_Y) unlocks at the top, the tile is
- *    marked completed, and the next becomes active.
+ * Visual layers, bottom → top:
+ *   1. JourneyReelBackground (fixed substrate: stock, leaks, grain,
+ *      gutters, scratches).
+ *   2. ScrollView content:
+ *        a. JourneyReelSprockets (perforations + edge codes, scroll
+ *           with content so the film unrolls past the gutters).
+ *        b. JourneyConnector (path lines between tile centers, behind
+ *           tile frames).
+ *        c. ReelChips at CEFR-group boundaries.
+ *        d. MovieTiles.
+ *   3. Top fade (viewport-anchored, color-matched to the stock).
+ *   4. Top-right "Add Movies" pill.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,16 +32,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../stores/authStore';
 import { useReelStore } from '../stores/reelStore';
-import {
-  JourneyNode,
-  JOURNEY_NODE_WIDTH,
-  JOURNEY_NODE_HEIGHT,
-  type NodeState,
-  type NodeLevel,
-} from './journey/JourneyNode';
-import { GlobalBottomBar, type BottomTab } from './GlobalBottomBar';
+import { type NodeLevel } from './journey/JourneyNode';
+import { type BottomTab } from './GlobalBottomBar';
 import { JourneyReelBackground } from './journey/JourneyReelBackground';
 import { JourneyReelSprockets } from './journey/JourneyReelSprockets';
+import { MovieTile, type TileState } from './journey/MovieTile';
+import { JourneyConnector } from './journey/JourneyConnector';
+import { ReelChip } from './journey/ReelChip';
 import { quizApi, type QuizStartSessionResponse } from '../services/api';
 
 export interface JourneyScreenProps {
@@ -53,19 +54,21 @@ export interface JourneyScreenProps {
 const WINDOW_WIDTH  = Dimensions.get('window').width;
 const WINDOW_HEIGHT = Dimensions.get('window').height;
 
-const VISIBLE_AHEAD      = 11;   // active + 11 inactive = 12 unlocked
+const VISIBLE_AHEAD      = 9;    // active + 9 inactive = 10 unlocked
 const TILES_PER_DIAGONAL = 2;
-const STEP_X             = 70;
-const STEP_Y             = 75;
-const BOTTOM_PAD         = 40;
-const TOP_PAD            = 30;
+const STEP_X             = 56;
+const STEP_Y             = 62;
+const BOTTOM_PAD         = 60;   // headroom for the active tile (92) + TODAY pill
+const TOP_PAD            = 60;   // headroom for top fade + REEL chip
+const CENTER_X           = WINDOW_WIDTH / 2;
+const LEVELS: NodeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// Maximum tile size used to derive scroll anchors that align the bottom
+// tile inside the viewport regardless of which size state it's in.
+const ACTIVE_TILE_SIZE = 92;
 
 // How many viewport-heights of scroll the user gets before hitting the
 // soft lock. Each completed tile adds STEP_Y more.
 const INITIAL_SCROLL_BUDGET = 3 * WINDOW_HEIGHT;
-
-// How far above the scroll limit the fade starts to ramp in.
-const FADE_RAMP = WINDOW_HEIGHT * 0.8;
 
 export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAddMovies }: JourneyScreenProps) {
   const user = useAuthStore((s) => s.user);
@@ -89,45 +92,78 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
 
   // ─── Build tile data ────────────────────────────────────────────────
   // One tile per reel movie, in add-order. Tile 0 is bottom-most (nearest
-  // the active position). Empty reel → no tiles (CTA shown instead).
+  // the active position). Each tile's CEFR level is distributed across
+  // the user's level → C2 so the reel groups naturally into "reels."
   const layout = useMemo(() => {
-    const centerX = (WINDOW_WIDTH - JOURNEY_NODE_WIDTH) / 2;
-    const offsetFor = (idx: number) => {
-      const cycle = 2 * TILES_PER_DIAGONAL;
-      const p     = idx % cycle;
+    const offsetFor = (i: number) => {
+      const cycle = 2 * TILES_PER_DIAGONAL;       // 4
+      const p     = i % cycle;
       return (p <= TILES_PER_DIAGONAL ? p : cycle - p) * STEP_X;
     };
 
-    const naturalHeight  = BOTTOM_PAD + TOTAL_TILES * STEP_Y + JOURNEY_NODE_HEIGHT + TOP_PAD;
-    const totalHeight    = Math.max(WINDOW_HEIGHT + 200, naturalHeight);
-    const yCursor        = totalHeight - BOTTOM_PAD;
+    // Distribute movies across visible CEFR levels.
+    const userIdx       = Math.max(0, LEVELS.indexOf(userLevel));
+    const visibleLevels = LEVELS.slice(userIdx);
+    const tilesPerLevel = Math.max(1, Math.ceil(TOTAL_TILES / visibleLevels.length));
+    const levelFor = (i: number): NodeLevel => {
+      const li = Math.min(visibleLevels.length - 1, Math.floor(i / tilesPerLevel));
+      return visibleLevels[li];
+    };
+
+    const naturalHeight = BOTTOM_PAD + TOTAL_TILES * STEP_Y + ACTIVE_TILE_SIZE + TOP_PAD;
+    const totalHeight   = Math.max(WINDOW_HEIGHT + 200, naturalHeight);
 
     const tiles: Array<{
       id: string; x: number; y: number;
       level: NodeLevel; label: number;
-      posterUri: string | null;
-      title: string;
+      poster: string | null;
+      title: string; idx: number;
     }> = [];
 
     for (let i = 0; i < TOTAL_TILES; i++) {
       const m = reelMovies[i];
+      // y is the tile *center*, measured from the top of the scroll
+      // content. yFromBottom = BOTTOM_PAD + i * STEP_Y per spec.
+      const yFromBottom = BOTTOM_PAD + i * STEP_Y;
       tiles.push({
         id: `t-${m.tmdb_id}`,
-        x: centerX - STEP_X + offsetFor(i),
-        y: yCursor - JOURNEY_NODE_HEIGHT - i * STEP_Y,
-        level: userLevel,
+        idx: i,
+        x: CENTER_X - STEP_X + offsetFor(i),
+        y: totalHeight - yFromBottom,
+        level: levelFor(i),
         label: i + 1,
-        posterUri: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null,
+        poster: m.poster_path ?? null,
         title: m.title,
       });
     }
 
-    return { tiles, totalHeight };
-  }, [userLevel, reelMovies, TOTAL_TILES]);
+    // Group boundaries → REEL chips. Chip sits 28px above the top tile
+    // (highest idx) of each level group.
+    const groups: Array<{
+      level: NodeLevel; reelN: number; topY: number;
+      allCompleted: boolean; allLocked: boolean;
+    }> = [];
+    let groupReelN = 1;
+    for (const lv of visibleLevels) {
+      const inLevel = tiles.filter((t) => t.level === lv);
+      if (inLevel.length === 0) continue;
+      // Top tile = highest idx → smallest y.
+      const topTile = inLevel.reduce((a, b) => (a.idx > b.idx ? a : b));
+      groups.push({
+        level: lv,
+        reelN: groupReelN++,
+        topY: topTile.y - 28,
+        allCompleted: inLevel.every((t) => t.idx < completedCount),
+        allLocked:    inLevel.every((t) => t.idx > completedCount + VISIBLE_AHEAD),
+      });
+    }
+
+    return { tiles, totalHeight, groups };
+  }, [userLevel, reelMovies, TOTAL_TILES, completedCount]);
 
   // ─── Per-tile state (re-derives when completedCount changes) ─────────
   const tileState = useCallback(
-    (i: number): NodeState => {
+    (i: number): TileState => {
       if (i < completedCount)                          return 'completed';
       if (i === completedCount)                        return 'active';
       if (i <= completedCount + VISIBLE_AHEAD)         return 'inactive';
@@ -153,24 +189,14 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
   const onContentSizeChange = (_w: number, h: number) => {
     if (scrolledOnce.current || h <= 0) return;
     scrolledOnce.current = true;
-    const tile1Y          = h - BOTTOM_PAD - JOURNEY_NODE_HEIGHT;
-    const desiredViewportY = WINDOW_HEIGHT - 80 - JOURNEY_NODE_HEIGHT - 24;
-    const startOffset      = Math.max(0, tile1Y - desiredViewportY);
+    // Bottom tile center sits at `h - BOTTOM_PAD`. Anchor so that tile
+    // appears ~80 + half-tile px above the bottom nav.
+    const tile1CenterY     = h - BOTTOM_PAD;
+    const desiredViewportY = WINDOW_HEIGHT - 80 - ACTIVE_TILE_SIZE / 2 - 24;
+    const startOffset      = Math.max(0, tile1CenterY - desiredViewportY);
     startScrollRef.current = startOffset;
     scrollRef.current?.scrollTo({ y: startOffset, animated: false });
   };
-
-  // ─── Fade mask opacity ────────────────────────────────────────────────
-  // 0 while user has room to scroll; ramps to 1 only as they approach the
-  // soft lock ceiling (the locked tiles are behind the fade, giving the
-  // "path fades into the future" effect).
-  const scrollLimit  = startScrollRef.current + allowedScrollRange;
-  const fadeStart    = Math.max(0, scrollLimit - FADE_RAMP);
-  const fadeMaskOpacity = scrollY.interpolate({
-    inputRange:  [fadeStart, scrollLimit],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
 
   // ─── Tile press: start quiz for the active tile ──────────────────────
   // Only the active tile (at completedCount) is tappable. Words for
@@ -178,18 +204,12 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
   // tile 0 = 5 easiest, tile 1 = next 5 easiest, etc.
   const [startingTile, setStartingTile] = useState<number | null>(null);
 
-  const handleTilePress = useCallback(async (i: number) => {
-    if (i !== completedCount || startingTile !== null) return;
-    setStartingTile(i);
-    try {
-      const session = await quizApi.startJourneySession(userLevel, i, 5);
-      onStartSession(session, userLevel, i);
-    } catch (e) {
-      console.warn('[Journey] start session failed:', e);
-    } finally {
-      setStartingTile(null);
-    }
-  }, [completedCount, startingTile, userLevel, onStartSession]);
+  const handleTilePress = useCallback((_i: number) => {
+    // Quiz navigation intentionally disabled for now — we're testing
+    // the tile press affordance in isolation. Reinstate the
+    // quizApi.startJourneySession / onStartSession calls when the
+    // Set Intro screen is ready.
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -212,21 +232,42 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
             holes appear to roll past a stationary film-window. */}
         <JourneyReelSprockets width={WINDOW_WIDTH} height={layout.totalHeight} />
 
+        {/* Connector lines — rendered BEHIND the tiles so strokes
+            appear to emerge from under each frame. */}
+        <JourneyConnector
+          width={WINDOW_WIDTH}
+          height={layout.totalHeight}
+          points={layout.tiles.map((t) => ({ idx: t.idx, x: t.x, y: t.y }))}
+          completedCount={completedCount}
+        />
+
+        {/* REEL N · LEVEL chips at each group's top boundary. */}
+        {layout.groups.map((g) => (
+          <ReelChip
+            key={`chip-${g.level}`}
+            reelN={g.reelN}
+            level={g.level}
+            top={g.topY}
+            completed={g.allCompleted}
+            locked={g.allLocked}
+          />
+        ))}
+
         {layout.tiles.map((t, i) => {
-          const state = startingTile === i ? 'active' : tileState(i);
+          const state: TileState = startingTile === i ? 'active' : tileState(i);
           return (
-            <View
+            <MovieTile
               key={t.id}
-              style={[styles.tileWrapper, { left: t.x, top: t.y }]}
-            >
-              <JourneyNode
-                level={t.level}
-                state={state}
-                label={startingTile === i ? '…' : t.label}
-                posterUri={t.posterUri}
-                onPress={() => handleTilePress(i)}
-              />
-            </View>
+              idx={t.idx}
+              label={t.label}
+              level={t.level}
+              movie={t.title}
+              poster={t.poster}
+              state={state}
+              centerX={t.x}
+              centerY={t.y}
+              onPress={() => handleTilePress(i)}
+            />
           );
         })}
       </Animated.ScrollView>
@@ -255,21 +296,16 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
         </View>
       ) : null}
 
-      {/* Top fade mask — transparent while the user has scroll room,
-          fades to opaque only as they approach the locked boundary so
-          the "tiles continuing beyond" illusion kicks in at the right
-          moment. Uses native driver via Animated.View opacity. */}
-      <Animated.View
-        style={[styles.topFadeMask, { opacity: fadeMaskOpacity }]}
+      {/* Top fade — softens locked tiles into the film stock as they
+          scroll out the top, so they feel like "frames yet to be
+          developed." Anchored to viewport top, matches the stock color
+          (#1a1109). */}
+      <LinearGradient
+        colors={['rgba(26,17,9,1)', 'rgba(26,17,9,0.5)', 'rgba(26,17,9,0)']}
+        locations={[0, 0.6, 1]}
+        style={styles.topFadeMask}
         pointerEvents="none"
-      >
-        <LinearGradient
-          colors={['rgba(46,59,44,1)', 'rgba(46,59,44,0.75)', 'rgba(46,59,44,0)']}
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-      </Animated.View>
+      />
 
     </SafeAreaView>
   );
@@ -282,11 +318,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
-  },
-  tileWrapper: {
-    position: 'absolute',
-    width: JOURNEY_NODE_WIDTH,
+    height: 160,
   },
   addBtn: {
     position: 'absolute',
