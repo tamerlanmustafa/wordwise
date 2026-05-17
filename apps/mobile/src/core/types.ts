@@ -24,6 +24,7 @@ export type Screen =
   | 'quizBatchBuilder'
   | 'quizBatchJourney'
   | 'journey'
+  | 'setIntro'
   | 'addToReel';
 
 export type ListFilter = 'saved' | 'learned';

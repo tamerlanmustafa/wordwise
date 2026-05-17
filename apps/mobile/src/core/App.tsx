@@ -22,7 +22,8 @@ import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
 import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
-import { JourneyScreen } from '../components/JourneyScreen';
+import { JourneyScreen, type SetIntroPayload } from '../components/JourneyScreen';
+import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
@@ -262,10 +263,32 @@ export default function App() {
   // Which tile index was active when the quiz started; incremented on return.
   const journeyTileInProgressRef = useRef<number | null>(null);
 
+  // Set Intro payload — populated when the user taps the active tile and
+  // we've successfully started a journey session. Held until the user
+  // taps "Start learning" (advances to quiz) or backs out.
+  const [setIntroData, setSetIntroData] = useState<SetIntroPayload | null>(null);
+
   const handleJourneySessionStart = (session: QuizStartSessionResponse, level: string, tileIndex: number) => {
     journeyTileInProgressRef.current = tileIndex;
     setQuizSession({ session, level });
     setCurrentScreen('quizLesson');
+  };
+
+  const handleShowSetIntro = (payload: SetIntroPayload) => {
+    setSetIntroData(payload);
+    setCurrentScreen('setIntro');
+  };
+
+  const handleSetIntroStart = () => {
+    if (!setIntroData) return;
+    const { session, level, tileIndex } = setIntroData;
+    setSetIntroData(null);
+    handleJourneySessionStart(session, level, tileIndex);
+  };
+
+  const handleSetIntroBack = () => {
+    setSetIntroData(null);
+    setCurrentScreen('journey');
   };
 
 
@@ -354,7 +377,8 @@ export default function App() {
       case 'lists':
       case 'notebook':
       case 'review': return 'words';
-      case 'journey': return 'journey';
+      case 'journey':
+      case 'setIntro': return 'journey';
       case 'leaderboard': return 'rankings';
       default: return null;
     }
@@ -397,10 +421,21 @@ export default function App() {
           <JourneyScreen
             onTabPress={handleTabPress}
             completedCount={journeyCompletedCount}
-            onStartSession={(session, level, tileIndex) =>
-              handleJourneySessionStart(session, level, tileIndex)
-            }
+            onShowSetIntro={handleShowSetIntro}
             onAddMovies={() => setCurrentScreen('addToReel')}
+          />
+        ) : currentScreen === 'setIntro' && setIntroData ? (
+          <SetIntroScreen
+            setNumber={setIntroData.setNumber}
+            reelNumber={setIntroData.reelNumber}
+            movie={setIntroData.movie}
+            level={setIntroData.level}
+            words={setIntroData.session.cards.map<SetIntroWord>((c) => ({
+              word: c.word,
+              rank: null,
+            }))}
+            onBack={handleSetIntroBack}
+            onStart={handleSetIntroStart}
           />
         ) : currentScreen === 'addToReel' ? (
           <SearchResultsScreen

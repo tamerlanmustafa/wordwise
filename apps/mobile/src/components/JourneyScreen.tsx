@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   ScrollView,
@@ -41,9 +42,21 @@ import { JourneyConnector } from './journey/JourneyConnector';
 import { ReelChip } from './journey/ReelChip';
 import { quizApi, type QuizStartSessionResponse } from '../services/api';
 
+export interface SetIntroPayload {
+  session: QuizStartSessionResponse;
+  level: NodeLevel;
+  tileIndex: number;
+  movie: { title: string; poster_path: string | null };
+  setNumber: number;
+  reelNumber: number;
+}
+
 export interface JourneyScreenProps {
   onTabPress: (tab: BottomTab) => void;
-  onStartSession: (session: QuizStartSessionResponse, level: string, tileIndex: number) => void;
+  /** Tile tap → start a journey session for the active tile and surface
+      the Set Intro preview. The user taps "Start learning" there to enter
+      the quiz proper. */
+  onShowSetIntro: (payload: SetIntroPayload) => void;
   /** How many tiles the user has completed so far. Persisted in App.tsx
       so returning from the quiz doesn't reset progress. */
   completedCount: number;
@@ -70,7 +83,7 @@ const ACTIVE_TILE_SIZE = 92;
 // soft lock. Each completed tile adds STEP_Y more.
 const INITIAL_SCROLL_BUDGET = 3 * WINDOW_HEIGHT;
 
-export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAddMovies }: JourneyScreenProps) {
+export function JourneyScreen({ onTabPress, onShowSetIntro, completedCount, onAddMovies }: JourneyScreenProps) {
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
   const insets = useSafeAreaInsets();
@@ -204,12 +217,33 @@ export function JourneyScreen({ onTabPress, onStartSession, completedCount, onAd
   // tile 0 = 5 easiest, tile 1 = next 5 easiest, etc.
   const [startingTile, setStartingTile] = useState<number | null>(null);
 
-  const handleTilePress = useCallback((_i: number) => {
-    // Quiz navigation intentionally disabled for now — we're testing
-    // the tile press affordance in isolation. Reinstate the
-    // quizApi.startJourneySession / onStartSession calls when the
-    // Set Intro screen is ready.
-  }, []);
+  const handleTilePress = useCallback(async (i: number) => {
+    // Only the active tile is meant to be pressable; defensive guard in
+    // case state drifts between render and tap.
+    if (i !== completedCount || startingTile !== null) return;
+
+    const tile = layout.tiles[i];
+    if (!tile) return;
+    const group = layout.groups.find((g) => g.level === tile.level);
+    const reelNumber = group ? group.reelN : 1;
+
+    setStartingTile(i);
+    try {
+      const session = await quizApi.startJourneySession(tile.level, i, 5);
+      onShowSetIntro({
+        session,
+        level: tile.level,
+        tileIndex: i,
+        movie: { title: tile.title, poster_path: tile.poster },
+        setNumber: tile.label,
+        reelNumber,
+      });
+    } catch (err: any) {
+      Alert.alert('Could not start set', err?.message ?? 'Please try again.');
+    } finally {
+      setStartingTile(null);
+    }
+  }, [completedCount, layout.tiles, layout.groups, startingTile, onShowSetIntro]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
