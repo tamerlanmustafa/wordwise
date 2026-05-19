@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { colors } from '../../theme/palette';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { API_BASE_URL } from '../../services/api';
 import { scheduleDailyWordReminder, scheduleReviewReminder } from '../../services/notifications';
 import { settingsStyles } from './settingsStyles';
@@ -54,6 +57,11 @@ export const SettingsScreen = ({
   const [dailyWordNotif, setDailyWordNotif] = useState(true);
   const [reviewNotif, setReviewNotif] = useState(true);
   const [accordionMode, setAccordionMode] = useState(true);
+
+  const tc = useThemeColors();
+  const themePreference = useThemeStore((s) => s.preference);
+  const setThemePreference = useThemeStore((s) => s.setPreference);
+  const appearanceStyles = useMemo(() => makeAppearanceStyles(tc), [tc]);
 
   useEffect(() => {
     AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
@@ -275,6 +283,35 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
+        <Text style={settingsStyles.sectionTitle}>Appearance</Text>
+        <View style={appearanceStyles.segmented}>
+          {(['light', 'system', 'dark'] as ThemePreference[]).map((opt) => {
+            const isActive = themePreference === opt;
+            return (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => setThemePreference(opt)}
+                style={[
+                  appearanceStyles.segment,
+                  isActive && appearanceStyles.segmentActive,
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    appearanceStyles.segmentText,
+                    isActive && appearanceStyles.segmentTextActive,
+                  ]}
+                >
+                  {opt === 'system' ? 'System' : opt === 'light' ? 'Light' : 'Dark'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={settingsStyles.divider} />
+
         <Text style={settingsStyles.sectionTitle}>Translation Language</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
@@ -403,3 +440,32 @@ export const SettingsScreen = ({
     </SafeAreaView>
   );
 };
+
+const makeAppearanceStyles = (tc: ThemeColors) => StyleSheet.create({
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: tc.paper,
+    borderWidth: 1,
+    borderColor: tc.border,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentActive: {
+    backgroundColor: tc.primary,
+  },
+  segmentText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: tc.textSecondary,
+  },
+  segmentTextActive: {
+    color: tc.textInverse,
+  },
+});

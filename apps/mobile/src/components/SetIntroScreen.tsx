@@ -31,6 +31,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { cefrColors, cefrLabels } from '../theme/palette';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 
 export interface SetIntroWord {
@@ -57,15 +58,24 @@ export interface SetIntroScreenProps {
 
 const HERO_H        = 360;
 const STATUS_PAD    = 44;
-const GOLD          = '#FFD166';
-const BG            = '#0e0d10';
-const FALLBACK_DARK = '#221710';
 
 const SERIF_FAMILY = Platform.select({
   ios: 'Georgia',
   android: 'serif',
   default: 'Georgia',
 });
+
+// Hero overlay gradient — flips per mode.
+const HERO_GRADIENT_DARK = [
+  'rgba(14,13,16,0.45)',
+  'rgba(14,13,16,0.25)',
+  'rgba(14,13,16,0.95)',
+] as const;
+const HERO_GRADIENT_LIGHT = [
+  'rgba(237,232,245,0.35)',
+  'rgba(237,232,245,0.20)',
+  'rgba(237,232,245,0.92)',
+] as const;
 
 export function SetIntroScreen({
   setNumber,
@@ -77,7 +87,10 @@ export function SetIntroScreen({
   onBack,
   onStart,
 }: SetIntroScreenProps) {
-  const levelColor = cefrColors[level] ?? GOLD;
+  const tc = useThemeColors();
+  const scheme = useColorScheme();
+  const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
+  const levelColor = cefrColors[level] ?? tc.gold;
   const levelLabel = cefrLabels[level] ?? level;
 
   const posterW500 = movie.poster_path
@@ -155,46 +168,42 @@ export function SetIntroScreen({
     }).start();
 
   return (
-    <SafeAreaView style={styles.root} edges={[]}>
+    <SafeAreaView style={s.root} edges={[]}>
       {/* ── Layer 1: Hero backdrop ─────────────────────────────────── */}
-      <View style={styles.hero}>
+      <View style={s.hero}>
         {posterW500 ? (
           <Image
             source={{ uri: posterW500 }}
-            style={styles.heroImage}
+            style={s.heroImage}
             blurRadius={28}
             resizeMode="cover"
           />
         ) : (
-          <View style={[styles.heroImage, { backgroundColor: FALLBACK_DARK }]} />
+          <View style={[s.heroImage, { backgroundColor: tc.reelStockDeep }]} />
         )}
         <LinearGradient
-          colors={[
-            'rgba(14,13,16,0.45)',
-            'rgba(14,13,16,0.25)',
-            'rgba(14,13,16,0.95)',
-          ]}
+          colors={scheme === 'dark' ? [...HERO_GRADIENT_DARK] : [...HERO_GRADIENT_LIGHT]}
           locations={[0, 0.4, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
 
         {/* ── Layer 3: Source-film card ─────────────────────────────── */}
-        <View style={styles.filmCard}>
+        <View style={s.filmCard}>
           {posterW185 ? (
-            <Image source={{ uri: posterW185 }} style={styles.filmPoster} />
+            <Image source={{ uri: posterW185 }} style={s.filmPoster} />
           ) : (
-            <View style={[styles.filmPoster, styles.filmPosterFallback]}>
-              <Text style={styles.filmPosterGlyph}>🎬</Text>
+            <View style={[s.filmPoster, s.filmPosterFallback]}>
+              <Text style={s.filmPosterGlyph}>🎬</Text>
             </View>
           )}
-          <View style={styles.filmInfo}>
-            <Text style={styles.eyebrowGold}>SOURCE FILM</Text>
-            <Text style={styles.filmTitle} numberOfLines={2}>
+          <View style={s.filmInfo}>
+            <Text style={s.eyebrowGold}>SOURCE FILM</Text>
+            <Text style={s.filmTitle} numberOfLines={2}>
               {movie.title}
             </Text>
-            <View style={[styles.cefrPill, { backgroundColor: levelColor }]}>
-              <Text style={styles.cefrPillText}>
+            <View style={[s.cefrPill, { backgroundColor: levelColor }]}>
+              <Text style={s.cefrPillText}>
                 {level} · {levelLabel}
               </Text>
             </View>
@@ -208,15 +217,15 @@ export function SetIntroScreen({
         accessibilityLabel="Back"
         onPress={onBack}
         style={({ pressed }) => [
-          styles.backBtn,
+          s.backBtn,
           { top: STATUS_PAD, opacity: pressed ? 0.7 : 1 },
         ]}
         hitSlop={8}
       >
         <Ionicons name="chevron-back" size={18} color="#fff" />
       </Pressable>
-      <View style={[styles.setPill, { top: STATUS_PAD }]}>
-        <Text style={styles.setPillText}>
+      <View style={[s.setPill, { top: STATUS_PAD }]}>
+        <Text style={s.setPillText}>
           SET {setNumber} · REEL {reelNumber}
         </Text>
       </View>
@@ -228,31 +237,31 @@ export function SetIntroScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* Layer 4 — Value-prop strap */}
-        <View style={styles.strap}>
-          <View style={styles.strapText}>
-            <Text style={styles.eyebrowGold}>
+        <View style={s.strap}>
+          <View style={s.strapText}>
+            <Text style={s.eyebrowGold}>
               {isReplay ? 'REVIEW SET' : 'PRE-WATCH VOCAB'}
             </Text>
-            <Text style={styles.strapHeadline}>
+            <Text style={s.strapHeadline}>
               Learn 5 words from this film
             </Text>
-            <Text style={styles.strapSubhead}>
+            <Text style={s.strapSubhead}>
               So when you watch it with subtitles later, you'll actually
               follow every line.
             </Text>
           </View>
-          <View style={styles.timePill}>
-            <Text style={styles.timePillText}>~2 min</Text>
+          <View style={s.timePill}>
+            <Text style={s.timePillText}>~2 min</Text>
           </View>
         </View>
 
         {/* Layer 5 — Word preview list */}
-        <View style={styles.wordList}>
+        <View style={s.wordList}>
           {words.map((w, i) => (
             <Animated.View
               key={`${w.word}-${i}`}
               style={[
-                styles.wordRow,
+                s.wordRow,
                 {
                   opacity: rowAnims[i],
                   transform: [
@@ -266,19 +275,19 @@ export function SetIntroScreen({
                 },
               ]}
             >
-              <View style={styles.indexDisc}>
-                <Text style={styles.indexDiscText}>{i + 1}</Text>
+              <View style={s.indexDisc}>
+                <Text style={s.indexDiscText}>{i + 1}</Text>
               </View>
-              <View style={styles.wordCol}>
-                <Text style={styles.wordText} numberOfLines={1}>
+              <View style={s.wordCol}>
+                <Text style={s.wordText} numberOfLines={1}>
                   {w.word}
                 </Text>
-                <Text style={styles.wordMeta}>{formatMeta(w)}</Text>
+                <Text style={s.wordMeta}>{formatMeta(w)}</Text>
               </View>
               {w.isReview ? (
-                <Text style={styles.reviewChip}>↻ Review</Text>
+                <Text style={s.reviewChip}>↻ Review</Text>
               ) : (
-                <Text style={styles.newChip}>NEW</Text>
+                <Text style={s.newChip}>NEW</Text>
               )}
             </Animated.View>
           ))}
@@ -291,7 +300,7 @@ export function SetIntroScreen({
           top of the nav — `bottom: 14` gives the spec'd gap. */}
       <Animated.View
         style={[
-          styles.ctaWrap,
+          s.ctaWrap,
           {
             shadowRadius: isReplay ? 0 : pulseRadius,
             transform: [{ scale: ctaScale }],
@@ -303,16 +312,16 @@ export function SetIntroScreen({
           onPressOut={pressOut}
           onPress={onStart}
           style={[
-            styles.ctaBtn,
-            isReplay ? styles.ctaBtnReview : styles.ctaBtnPrimary,
+            s.ctaBtn,
+            isReplay ? s.ctaBtnReview : s.ctaBtnPrimary,
           ]}
           accessibilityRole="button"
           accessibilityLabel={isReplay ? 'Review set' : 'Start learning'}
         >
           <Text
             style={[
-              styles.ctaText,
-              isReplay ? styles.ctaTextReview : styles.ctaTextPrimary,
+              s.ctaText,
+              isReplay ? s.ctaTextReview : s.ctaTextPrimary,
             ]}
           >
             {isReplay ? 'Review →' : 'Start learning →'}
@@ -330,10 +339,10 @@ function formatMeta(w: SetIntroWord): string {
   return `${letters} · rank ${w.rank.toLocaleString()}`;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: tc.background,
   },
 
   // Layer 1 — hero
@@ -344,7 +353,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: HERO_H,
     overflow: 'hidden',
-    backgroundColor: FALLBACK_DARK,
+    backgroundColor: tc.reelStockDeep,
   },
   heroImage: {
     position: 'absolute',
@@ -355,7 +364,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.2 }],
   },
 
-  // Layer 2 — top chrome
+  // Layer 2 — top chrome. The blurred-poster hero is dark-ish in both
+  // modes thanks to the overlay; keep the chrome dark-translucent so
+  // the white icons remain readable.
   backBtn: {
     position: 'absolute',
     left: 16,
@@ -410,7 +421,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   filmPosterFallback: {
-    backgroundColor: FALLBACK_DARK,
+    backgroundColor: tc.reelStockDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -449,7 +460,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  // Layer 4 — value-prop strap
+  // Layer 4 — value-prop strap (over `tc.background`, post-hero)
   strap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -465,14 +476,14 @@ const styles = StyleSheet.create({
   strapHeadline: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#fff',
+    color: tc.text,
     letterSpacing: -0.2,
     marginTop: 2,
   },
   strapSubhead: {
     fontSize: 11,
     fontWeight: '400',
-    color: 'rgba(255,255,255,0.55)',
+    color: tc.textSecondary,
     marginTop: 4,
     lineHeight: 15,
   },
@@ -480,22 +491,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: tc.border,
     marginTop: 14,
   },
   timePillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
+    color: tc.textSecondary,
   },
 
-  // Shared eyebrow
+  // Shared eyebrow — gold over the dark hero (filmCard) AND over the
+  // post-hero light surface (strap). goldOnSurface stays legible on both.
   eyebrowGold: {
     fontSize: 10,
     fontWeight: '900',
-    color: GOLD,
+    color: tc.goldOnSurface,
     letterSpacing: 1.8,
   },
 
@@ -513,22 +525,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: tc.border,
   },
   indexDisc: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255,209,102,0.18)',
+    backgroundColor: tc.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   indexDiscText: {
     fontSize: 12,
     fontWeight: '900',
-    color: GOLD,
+    color: tc.goldOnSurface,
   },
   wordCol: {
     flex: 1,
@@ -537,34 +549,34 @@ const styles = StyleSheet.create({
   wordText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: tc.text,
     fontFamily: SERIF_FAMILY,
     letterSpacing: -0.2,
   },
   wordMeta: {
     fontSize: 10.5,
-    color: 'rgba(255,255,255,0.45)',
+    color: tc.textFaint,
     letterSpacing: 0.3,
     marginTop: 2,
   },
   newChip: {
     fontSize: 10,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
+    color: tc.textFaint,
   },
   reviewChip: {
     fontSize: 10,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
+    color: tc.textSecondary,
   },
 
-  // Layer 6 — CTA
+  // Layer 6 — CTA. Gold on dark / purple on light per the spec.
   ctaWrap: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 14,
-    shadowColor: GOLD,
+    shadowColor: tc.gold,
     shadowOpacity: 0.35,
     shadowOffset: { width: 0, height: 8 },
   },
@@ -576,12 +588,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaBtnPrimary: {
-    backgroundColor: GOLD,
+    backgroundColor: scheme === 'dark' ? tc.gold : tc.primary,
   },
   ctaBtnReview: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: tc.border,
   },
   ctaText: {
     fontSize: 14,
@@ -590,10 +602,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   ctaTextPrimary: {
-    color: '#3a2400',
+    color: scheme === 'dark' ? tc.goldDeep : tc.textInverse,
   },
   ctaTextReview: {
-    color: '#fff',
+    color: tc.text,
   },
-
 });

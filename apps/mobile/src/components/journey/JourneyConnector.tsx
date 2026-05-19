@@ -9,9 +9,13 @@
  *   2. Both endpoints are user-pick tiles (user-zone segments stay
  *      solid even when uncompleted, so user picks read as "real"
  *      rather than "not-real-yet").
+ *
+ * Light/dark: stroke colours come from useThemeColors() — solid uses
+ * `gold` (dark) / `goldOnSurface` (light), dashed uses `border`.
  */
 
 import Svg, { Line } from "react-native-svg";
+import { useThemeColors } from "../../theme/tokens";
 
 interface Pt {
   idx: number;
@@ -28,6 +32,7 @@ interface Props {
 }
 
 export function JourneyConnector({ width, height, points, completedCount }: Props) {
+  const tc = useThemeColors();
   return (
     <Svg
       width={width}
@@ -49,7 +54,7 @@ export function JourneyConnector({ width, height, points, completedCount }: Prop
             y1={p.y}
             x2={q.x}
             y2={q.y}
-            stroke={isSolid ? "#FFD166" : "rgba(255,255,255,0.18)"}
+            stroke={isSolid ? tc.goldOnSurface : tc.border}
             strokeWidth={isSolid ? 2.5 : 1.5}
             strokeLinecap="round"
             strokeDasharray={isSolid ? undefined : "3 5"}

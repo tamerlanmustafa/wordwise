@@ -7,9 +7,13 @@
  * The tile is positioned by its parent at the tile's *center*
  * coordinates; this component sizes itself and centers within that
  * point.
+ *
+ * Light/dark: frame, fallback, badge stroke, and ✓ stamp pull from
+ * useThemeColors(). The badge background tracks the quizzed state
+ * (gold) or the CEFR colour (themed via the static CEFR table).
  */
 
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import {
   Animated,
   Image,
@@ -20,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 import type { NodeLevel } from './JourneyNode';
 
@@ -51,9 +56,6 @@ const CEFR_COLOR: Record<NodeLevel, string> = {
   C1: '#F44336',
   C2: '#9C27B0',
 };
-const GOLD = '#FFD166';
-const STOCK = '#1a1109';
-const FRAME_BG = '#221710';
 
 const TILE_SIZE  = 72;
 const BADGE_SIZE = 24;
@@ -74,6 +76,9 @@ export function MovieTile({
   busy,
   onPress,
 }: MovieTileProps) {
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+
   const accent = CEFR_COLOR[level] ?? CEFR_COLOR.A1;
   const left = centerX - TILE_SIZE / 2;
   const top = centerY - TILE_SIZE / 2;
@@ -95,7 +100,7 @@ export function MovieTile({
   return (
     <View
       style={[
-        styles.wrapper,
+        s.wrapper,
         { left, top, width: TILE_SIZE, height: TILE_SIZE, opacity: busy ? 0.7 : 1 },
       ]}
       pointerEvents="box-none"
@@ -109,8 +114,8 @@ export function MovieTile({
       >
         <Animated.View
           style={[
-            styles.frame,
-            styles.baseShadow,
+            s.frame,
+            s.baseShadow,
             {
               width: TILE_SIZE,
               height: TILE_SIZE,
@@ -122,31 +127,30 @@ export function MovieTile({
           {poster ? (
             <Image
               source={{ uri: tmdb(poster) }}
-              style={styles.poster}
+              style={s.poster}
               resizeMode="cover"
             />
           ) : (
-            <View style={[styles.poster, { backgroundColor: FRAME_BG }]} />
+            <View style={[s.poster, { backgroundColor: tc.reelStockDeep }]} />
           )}
 
           {/* Bottom title strip — always visible now that every tile is
               first-class. */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.92)']}
-            style={styles.titleStrip}
+            style={s.titleStrip}
             pointerEvents="none"
           >
-            <Text numberOfLines={2} style={styles.titleText}>
+            <Text numberOfLines={2} style={s.titleText}>
               {movie}
             </Text>
           </LinearGradient>
 
           {/* Quizzed ✓ stamp — top-right, only after at least one
-              completed quiz session. Replaces the old 'completed'
-              state since the reel no longer has linear progression. */}
+              completed quiz session. */}
           {quizzed ? (
-            <View style={styles.checkDisc} pointerEvents="none">
-              <Text style={styles.checkGlyph}>✓</Text>
+            <View style={s.checkDisc} pointerEvents="none">
+              <Text style={s.checkGlyph}>✓</Text>
             </View>
           ) : null}
         </Animated.View>
@@ -156,18 +160,18 @@ export function MovieTile({
       <View
         pointerEvents="none"
         style={[
-          styles.badge,
+          s.badge,
           {
             width: BADGE_SIZE,
             height: BADGE_SIZE,
             borderRadius: BADGE_SIZE / 2,
-            backgroundColor: quizzed ? GOLD : accent,
+            backgroundColor: quizzed ? tc.gold : accent,
           },
         ]}
       >
         <Text
           style={{
-            color: quizzed ? '#3a2400' : '#fff',
+            color: quizzed ? tc.goldDeep : tc.textInverse,
             fontSize: 11,
             fontWeight: '900',
           }}
@@ -184,7 +188,7 @@ export function MovieTile({
  *  multi-state model; every tile is evergreen. */
 export type TileState = 'evergreen';
 
-const styles = StyleSheet.create({
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   wrapper: {
     position: 'absolute',
   },
@@ -192,7 +196,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: FRAME_BG,
+    backgroundColor: tc.reelStockDeep,
     borderWidth: 2.5,
   },
   baseShadow: {
@@ -226,7 +230,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4, right: 4,
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: GOLD,
+    backgroundColor: tc.gold,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.5,
@@ -235,13 +239,13 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   checkGlyph: {
-    fontSize: 12, fontWeight: '900', color: '#3a2400',
+    fontSize: 12, fontWeight: '900', color: tc.goldDeep,
   },
   badge: {
     position: 'absolute',
     top: -8, left: -4,
     borderWidth: 2.5,
-    borderColor: STOCK,
+    borderColor: tc.reelStock,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.4,

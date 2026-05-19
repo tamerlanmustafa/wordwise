@@ -36,6 +36,7 @@ import { JourneyReelBackground } from './journey/JourneyReelBackground';
 import { JourneyReelSprockets } from './journey/JourneyReelSprockets';
 import { MovieTile } from './journey/MovieTile';
 import { JourneyConnector } from './journey/JourneyConnector';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { ReelTile } from '../services/api';
 
 export interface MoviePreviewPayload {
@@ -71,6 +72,8 @@ export function JourneyScreen({
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
   const insets = useSafeAreaInsets();
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
 
   // ─── Reel: user picks (auto-seeded on first launch) ────────────────
   const reelTiles = useReelStore((s) => s.tiles);
@@ -157,7 +160,7 @@ export function JourneyScreen({
 
   // ─── Render ──────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.root} edges={[]}>
+    <SafeAreaView style={s.root} edges={[]}>
       <JourneyReelBackground></JourneyReelBackground>
       <Animated.ScrollView
         ref={scrollRef as any}
@@ -204,12 +207,12 @@ export function JourneyScreen({
           <View
             pointerEvents="none"
             style={[
-              styles.emptyHint,
+              s.emptyHint,
               { top: layout.totalHeight - WINDOW_HEIGHT / 2 },
             ]}
           >
-            <Text style={styles.emptyHintTitle}>Your reel is empty</Text>
-            <Text style={styles.emptyHintBody}>
+            <Text style={s.emptyHintTitle}>Your reel is empty</Text>
+            <Text style={s.emptyHintBody}>
               Add movies from the Home tab to start your list.
             </Text>
           </View>
@@ -218,30 +221,30 @@ export function JourneyScreen({
 
       {/* Top fade — viewport-anchored, color-matched to the film stock. */}
       <LinearGradient
-        colors={['rgba(26,17,9,1)', 'rgba(26,17,9,0.5)', 'rgba(26,17,9,0)']}
+        colors={[tc.reelStock, withAlpha(tc.reelStock, 0.5), withAlpha(tc.reelStock, 0)]}
         locations={[0, 0.6, 1]}
-        style={[styles.topFadeMask, { height: 160 + insets.top }]}
+        style={[s.topFadeMask, { height: 160 + insets.top }]}
         pointerEvents="none"
       ></LinearGradient>
 
       {/* Daily-goal strip — viewport-anchored. Activity-based: each
           completed quiz fills one pip; 3/day continues the streak. */}
-      <View style={[styles.goalStrip, { top: insets.top + 8 }]} pointerEvents="none">
-        <View style={styles.goalPips}>
+      <View style={[s.goalStrip, { top: insets.top + 8 }]} pointerEvents="none">
+        <View style={s.goalPips}>
           {Array.from({ length: DAILY_GOAL }).map((_, i) => (
             <View
               key={`pip-${i}`}
               style={[
-                styles.goalPip,
-                i < dailyClamped ? styles.goalPipFilled : styles.goalPipEmpty,
+                s.goalPip,
+                i < dailyClamped ? s.goalPipFilled : s.goalPipEmpty,
               ]}
             ></View>
           ))}
         </View>
-        <Text style={styles.goalText} numberOfLines={1}>
-          <Text style={styles.goalTextStrong}>{dailyClamped} of {DAILY_GOAL}</Text>
+        <Text style={s.goalText} numberOfLines={1}>
+          <Text style={s.goalTextStrong}>{dailyClamped} of {DAILY_GOAL}</Text>
           <Text> · ~2 min each · </Text>
-          <Text style={styles.goalTextStrong}>🔥 {dailyStreak}</Text>
+          <Text style={s.goalTextStrong}>🔥 {dailyStreak}</Text>
         </Text>
       </View>
 
@@ -249,8 +252,23 @@ export function JourneyScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#2E3B2C' },
+// Returns the input colour with its alpha replaced. Hex inputs are
+// converted to rgba; rgba inputs have their alpha overwritten.
+function withAlpha(color: string, alpha: number): string {
+  const rgba = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*[\d.]+\s*)?\)/i);
+  if (rgba) return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${alpha})`;
+  const hex = color.replace('#', '');
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
+}
+
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: tc.reelStock },
 
   topFadeMask: {
     position: 'absolute',
@@ -277,19 +295,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   goalPipFilled: {
-    backgroundColor: '#FFD166',
+    backgroundColor: tc.gold,
   },
   goalPipEmpty: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: tc.border,
   },
   goalText: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    color: tc.textSecondary,
     letterSpacing: 0.2,
   },
   goalTextStrong: {
-    color: '#FFD166',
+    color: tc.goldOnSurface,
     fontWeight: '800',
   },
 
@@ -302,14 +320,14 @@ const styles = StyleSheet.create({
   emptyHintTitle: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#FFD166',
+    color: tc.goldOnSurface,
     letterSpacing: 0.3,
     marginBottom: 6,
   },
   emptyHintBody: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    color: tc.textSecondary,
     textAlign: 'center',
     lineHeight: 17,
   },

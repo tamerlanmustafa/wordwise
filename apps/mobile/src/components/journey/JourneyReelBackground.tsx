@@ -7,12 +7,15 @@
  * live in `JourneyReelSprockets` and travel with the scroll content
  * so the film visibly unrolls past the gutters.
  *
+ * Light/dark: the structure is identical across both modes; only the
+ * stock + leak + grain palette flips, read from `useThemeColors()`.
+ *
  * All UI chrome (header, daily-goal strip, tiles, CTA card, bottom
  * nav) is absolutely positioned on top of this; chrome should stay
  * inside x: [32, width - 32] so the sprocket gutters remain visible.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, {
   Defs,
@@ -27,6 +30,7 @@ import Svg, {
   G,
   Circle,
 } from 'react-native-svg';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 interface Props {
   width?: number;
@@ -51,7 +55,18 @@ const DUST: Array<{ x: number; y: number; r: number }> = [
   { x: 0.46, y: 0.91, r: 1.4 },
 ];
 
+// Splits an rgba(r,g,b,a) string into solid rgb() + opacity. Falls back
+// gracefully for hex values (returns the input + opacity 1).
+function splitRgba(input: string): { color: string; opacity: number } {
+  const m = input.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+))?\s*\)/i);
+  if (!m) return { color: input, opacity: 1 };
+  const r = m[1], g = m[2], b = m[3];
+  const a = m[4] != null ? parseFloat(m[4]) : 1;
+  return { color: `rgb(${r}, ${g}, ${b})`, opacity: a };
+}
+
 export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
+  const tc = useThemeColors();
   const [size, setSize] = useState<{ w: number; h: number }>({
     w: wProp ?? 402,
     h: hProp ?? 874,
@@ -68,9 +83,14 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
   const W = size.w;
   const H = size.h;
 
+  const leakWarm = useMemo(() => splitRgba(tc.reelLeakWarm), [tc.reelLeakWarm]);
+  const leakCool = useMemo(() => splitRgba(tc.reelLeakCool), [tc.reelLeakCool]);
+  const sprocketShadow = useMemo(() => splitRgba(tc.reelSprocketShadow), [tc.reelSprocketShadow]);
+  const scratchTone = useMemo(() => splitRgba(tc.reelScratch), [tc.reelScratch]);
+
   return (
     <View
-      style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1109' }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: tc.reelStock }]}
       pointerEvents="none"
       onLayout={onLayout}
     >
@@ -91,12 +111,12 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
             fx="50%"
             fy="50%"
           >
-            <Stop offset="0%" stopColor="#2a1c11" stopOpacity="1" />
-            <Stop offset="60%" stopColor="#1a1109" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#0e0805" stopOpacity="1" />
+            <Stop offset="0%" stopColor={tc.reelStockLight} stopOpacity="1" />
+            <Stop offset="60%" stopColor={tc.reelStock} stopOpacity="1" />
+            <Stop offset="100%" stopColor={tc.reelStockDeep} stopOpacity="1" />
           </RadialGradient>
 
-          {/* Light-leak gradients (closest-side approximated with radial) */}
+          {/* Warm leak (top-right) */}
           <RadialGradient
             id="reel-leak-primary"
             cx="50%"
@@ -104,10 +124,11 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
             rx="50%"
             ry="50%"
           >
-            <Stop offset="0%" stopColor="rgb(255,120,40)" stopOpacity="0.55" />
-            <Stop offset="35%" stopColor="rgb(255,80,30)" stopOpacity="0.25" />
-            <Stop offset="75%" stopColor="rgb(255,80,30)" stopOpacity="0" />
+            <Stop offset="0%" stopColor={leakWarm.color} stopOpacity={leakWarm.opacity} />
+            <Stop offset="35%" stopColor={leakWarm.color} stopOpacity={leakWarm.opacity * 0.45} />
+            <Stop offset="75%" stopColor={leakWarm.color} stopOpacity={0} />
           </RadialGradient>
+          {/* Cool leak (top-left) */}
           <RadialGradient
             id="reel-leak-secondary"
             cx="50%"
@@ -115,27 +136,20 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
             rx="50%"
             ry="50%"
           >
-            <Stop offset="0%" stopColor="rgb(255,200,90)" stopOpacity="0.28" />
-            <Stop offset="70%" stopColor="rgb(255,200,90)" stopOpacity="0" />
+            <Stop offset="0%" stopColor={leakCool.color} stopOpacity={leakCool.opacity} />
+            <Stop offset="70%" stopColor={leakCool.color} stopOpacity={0} />
           </RadialGradient>
 
           {/* Gutter gradients */}
           <LinearGradient id="reel-gutter-left" x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0%" stopColor="#120a04" stopOpacity="1" />
-            <Stop offset="80%" stopColor="#1a1109" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#1a1109" stopOpacity="0" />
+            <Stop offset="0%" stopColor={tc.reelStockDeep} stopOpacity="1" />
+            <Stop offset="80%" stopColor={tc.reelStock} stopOpacity="1" />
+            <Stop offset="100%" stopColor={tc.reelStock} stopOpacity="0" />
           </LinearGradient>
           <LinearGradient id="reel-gutter-right" x1="1" y1="0" x2="0" y2="0">
-            <Stop offset="0%" stopColor="#120a04" stopOpacity="1" />
-            <Stop offset="80%" stopColor="#1a1109" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#1a1109" stopOpacity="0" />
-          </LinearGradient>
-
-          {/* Sprocket hole hairlight gradient (warm bottom edge) */}
-          <LinearGradient id="reel-sprocket-rim" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor="rgb(0,0,0)" stopOpacity="0.9" />
-            <Stop offset="80%" stopColor="rgb(0,0,0)" stopOpacity="0" />
-            <Stop offset="100%" stopColor="rgb(255,180,80)" stopOpacity="0.10" />
+            <Stop offset="0%" stopColor={tc.reelStockDeep} stopOpacity="1" />
+            <Stop offset="80%" stopColor={tc.reelStock} stopOpacity="1" />
+            <Stop offset="100%" stopColor={tc.reelStock} stopOpacity="0" />
           </LinearGradient>
 
           {/* Film-grain filter */}
@@ -165,10 +179,10 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
         </Defs>
 
         {/* 1. Film-stock base */}
-        <Rect x={0} y={0} width={W} height={H} fill="#1a1109" />
+        <Rect x={0} y={0} width={W} height={H} fill={tc.reelStock} />
         <Rect x={0} y={0} width={W} height={H} fill="url(#reel-stock)" />
 
-        {/* 2. Light leaks — screen-blended warm blobs */}
+        {/* 2. Light leaks — screen-blended warm + cool blobs */}
         <G mixBlendMode="screen">
           <Rect
             x={W - 60 - 360}
@@ -188,8 +202,8 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
           />
         </G>
 
-        {/* 3. Film grain — overlay blend at 0.35 */}
-        <G opacity={0.35} mixBlendMode="overlay">
+        {/* 3. Film grain — blend mode flips per theme. */}
+        <G opacity={0.35} mixBlendMode={tc.reelGrainBlendMode}>
           <Rect
             x={0}
             y={0}
@@ -207,7 +221,7 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
               cx={d.x * W}
               cy={d.y * H}
               r={d.r}
-              fill="#ffffff"
+              fill={tc.reelDust}
               opacity={0.7}
             />
           ))}
@@ -223,8 +237,22 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
           fill="url(#reel-gutter-right)"
         />
         {/* Gutter inner-edge seams (1px crisp line) */}
-        <Rect x={GUTTER_W - 1} y={0} width={1} height={H} fill="rgba(0,0,0,0.4)" />
-        <Rect x={W - GUTTER_W} y={0} width={1} height={H} fill="rgba(0,0,0,0.4)" />
+        <Rect
+          x={GUTTER_W - 1}
+          y={0}
+          width={1}
+          height={H}
+          fill={sprocketShadow.color}
+          opacity={sprocketShadow.opacity * 0.5}
+        />
+        <Rect
+          x={W - GUTTER_W}
+          y={0}
+          width={1}
+          height={H}
+          fill={sprocketShadow.color}
+          opacity={sprocketShadow.opacity * 0.5}
+        />
 
         {/* 6 + 7. Sprocket perforations and edge codes are rendered by
             JourneyReelSprockets inside the ScrollView's content so they
@@ -233,7 +261,6 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
         {/* 8. Emulsion scratches — two stacked vertical repeating patterns,
             rendered as discrete rects (no repeating-linear-gradient in SVG). */}
         <G>
-          {/* Micro highlight lines: 1px wide white at every 10px */}
           {Array.from({ length: Math.ceil(W / 10) }).map((_, i) => (
             <Rect
               key={`scr-h-${i}`}
@@ -241,10 +268,10 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
               y={0}
               width={1}
               height={H}
-              fill="rgba(255,255,255,0.012)"
+              fill={scratchTone.color}
+              opacity={scratchTone.opacity * 0.5}
             />
           ))}
-          {/* Wider darker channels: 1px wide every 48px */}
           {Array.from({ length: Math.ceil(W / 48) }).map((_, i) => (
             <Rect
               key={`scr-d-${i}`}
@@ -252,7 +279,8 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
               y={0}
               width={1}
               height={H}
-              fill="rgba(0,0,0,0.18)"
+              fill={scratchTone.color}
+              opacity={scratchTone.opacity}
             />
           ))}
         </G>
@@ -260,3 +288,7 @@ export function JourneyReelBackground({ width: wProp, height: hProp }: Props) {
     </View>
   );
 }
+
+// Exported for callers that need the same tokens (e.g. JourneyScreen's
+// top-fade gradient colour-match).
+export type ReelStockTokens = Pick<ThemeColors, 'reelStock' | 'reelStockDeep' | 'reelStockLight'>;

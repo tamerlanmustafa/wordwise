@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -10,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, cefrColors } from '../theme/palette';
+import { cefrColors } from '../theme/palette';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import {
   quizApi,
   type QuizCard,
@@ -31,10 +32,6 @@ export interface QuizLessonScreenProps {
   ) => void;
 }
 
-// Normalize strings before comparing a typed answer to the expected
-// translation. Strips accents, punctuation, surrounding whitespace, and
-// collapses multiple spaces. Case-insensitive. Lenient enough that a
-// learner typing "hola!" matches "Hola".
 const COMBINING_DIACRITICS = /[̀-ͯ]/g;
 const PUNCT = /[.,!?¿¡;:'"()[\]{}]/g;
 
@@ -48,8 +45,6 @@ function normalize(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
-// Accept alternate translations separated by "/" or "," ("hola/salut" →
-// either counts). The backend sometimes returns comma-joined variants.
 function splitAlternates(s: string): string[] {
   return s.split(/[\/,]/).map((t) => t.trim()).filter(Boolean);
 }
@@ -59,20 +54,19 @@ function isTypedCorrect(userInput: string, expected: string): boolean {
   if (!a) return false;
   const alts = splitAlternates(expected).map(normalize);
   if (alts.includes(a)) return true;
-  // Also accept the full expected string as one atom (in case split removed
-  // legitimate commas inside a phrase).
   return a === normalize(expected);
 }
 
-// Card-by-card playthrough. Tracks answers in local state, batches them at
-// the end via submitCards → completeSession. We batch rather than submit
-// per-card so a flaky network doesn't interrupt the flow.
 export function QuizLessonScreen({
   session,
   level,
   onExit,
   onComplete,
 }: QuizLessonScreenProps) {
+  const tc = useThemeColors();
+  const scheme = useColorScheme();
+  const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
+
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<QuizCardResultInput[]>([]);
   const [typed, setTyped] = useState('');
@@ -85,16 +79,19 @@ export function QuizLessonScreen({
   const cards = session.cards;
   const total = cards.length;
   const card: QuizCard | undefined = cards[idx];
-  const color = cefrColors[level] || colors.primary;
+  // Primary accent for input + check button. Quiz Card uses
+  // `primaryOnSurface` so #7C5CBF pops on dark mode via primaryLight.
+  const accent = tc.primaryOnSurface;
+  const levelColor = cefrColors[level] || accent;
   const progress = total > 0 ? (idx / total) : 0;
 
   if (!card) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>No cards in this session.</Text>
-          <TouchableOpacity onPress={onExit} style={styles.exitBtn}>
-            <Text style={styles.exitBtnText}>Back</Text>
+      <SafeAreaView style={s.container} edges={['top']}>
+        <View style={s.centered}>
+          <Text style={s.emptyText}>No cards in this session.</Text>
+          <TouchableOpacity onPress={onExit} style={s.exitBtn}>
+            <Text style={s.exitBtnText}>Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -162,10 +159,10 @@ export function QuizLessonScreen({
 
   if (finishing) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={color} />
-          <Text style={styles.finishingText}>Scoring your session…</Text>
+      <SafeAreaView style={s.container} edges={['top']}>
+        <View style={s.centered}>
+          <ActivityIndicator size="large" color={accent} />
+          <Text style={s.finishingText}>Scoring your session…</Text>
         </View>
       </SafeAreaView>
     );
@@ -173,38 +170,42 @@ export function QuizLessonScreen({
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
+      <SafeAreaView style={s.container} edges={['top']}>
+        <View style={s.centered}>
+          <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity
             onPress={() => finishSession(results)}
-            style={[styles.exitBtn, { backgroundColor: color }]}
+            style={[s.exitBtn, { backgroundColor: accent }]}
           >
-            <Text style={styles.exitBtnText}>Retry</Text>
+            <Text style={s.exitBtnText}>Retry</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onExit} style={styles.exitGhost}>
-            <Text style={styles.exitGhostText}>Exit</Text>
+          <TouchableOpacity onPress={onExit} style={s.exitGhost}>
+            <Text style={s.exitGhostText}>Exit</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Check / Continue button colour: gold on dark, purple on light.
+  const ctaBg = scheme === 'dark' ? tc.gold : tc.primary;
+  const ctaFg = scheme === 'dark' ? tc.goldDeep : tc.textInverse;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={s.container} edges={['top']}>
+      <View style={s.header}>
         <TouchableOpacity onPress={onExit} hitSlop={8} style={{ width: 28 }}>
-          <Text style={styles.closeX}>✕</Text>
+          <Text style={s.closeX}>✕</Text>
         </TouchableOpacity>
-        <View style={styles.progressTrack}>
+        <View style={s.progressTrack}>
           <View
             style={[
-              styles.progressFill,
-              { width: `${progress * 100}%`, backgroundColor: color },
+              s.progressFill,
+              { width: `${progress * 100}%`, backgroundColor: levelColor },
             ]}
           />
         </View>
-        <Text style={styles.progressLabel}>{idx + 1}/{total}</Text>
+        <Text style={s.progressLabel}>{idx + 1}/{total}</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -212,20 +213,21 @@ export function QuizLessonScreen({
         style={{ flex: 1 }}
       >
         {card.card_type === 'type' ? (
-          <View style={styles.body}>
-            <Text style={styles.prompt}>Translate this word</Text>
-            <View style={[styles.wordCard, { borderColor: color }]}>
-              <Text style={styles.wordText}>{card.word}</Text>
+          <View style={s.body}>
+            <Text style={s.prompt}>Translate this word</Text>
+            <View style={[s.wordCard, { borderColor: accent }]}>
+              <Text style={s.wordText}>{card.word}</Text>
             </View>
 
             <TextInput
               style={[
-                styles.input,
-                revealed && lastCorrect && styles.inputCorrect,
-                revealed && !lastCorrect && styles.inputWrong,
+                s.input,
+                { borderColor: accent },
+                revealed && lastCorrect && s.inputCorrect,
+                revealed && !lastCorrect && s.inputWrong,
               ]}
               placeholder="Type the translation…"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={tc.textSecondary}
               value={typed}
               onChangeText={setTyped}
               autoCapitalize="none"
@@ -238,71 +240,71 @@ export function QuizLessonScreen({
             {revealed && (
               <View
                 style={[
-                  styles.feedback,
-                  lastCorrect ? styles.feedbackCorrect : styles.feedbackWrong,
+                  s.feedback,
+                  lastCorrect ? s.feedbackCorrect : s.feedbackWrong,
                 ]}
               >
-                <Text style={[styles.feedbackTitle, !lastCorrect && { color: '#B71C1C' }]}>
+                <Text style={[s.feedbackTitle, lastCorrect ? s.feedbackTitleOk : s.feedbackTitleWrong]}>
                   {lastCorrect ? 'Correct!' : 'Not quite'}
                 </Text>
-                <Text style={styles.feedbackText}>
+                <Text style={s.feedbackText}>
                   Answer: {card.translation || '—'}
                 </Text>
               </View>
             )}
 
-            <View style={styles.footer}>
+            <View style={s.footer}>
               {revealed ? (
                 <TouchableOpacity
                   onPress={handleTypeContinue}
-                  style={[styles.primaryBtn, { backgroundColor: color }]}
+                  style={[s.primaryBtn, { backgroundColor: ctaBg }]}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.primaryBtnText}>Continue →</Text>
+                  <Text style={[s.primaryBtnText, { color: ctaFg }]}>Continue →</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   onPress={handleTypeCheck}
                   disabled={!typed.trim()}
                   style={[
-                    styles.primaryBtn,
-                    { backgroundColor: color, opacity: typed.trim() ? 1 : 0.4 },
+                    s.primaryBtn,
+                    { backgroundColor: ctaBg, opacity: typed.trim() ? 1 : 0.4 },
                   ]}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.primaryBtnText}>Check</Text>
+                  <Text style={[s.primaryBtnText, { color: ctaFg }]}>Check Answer</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
         ) : (
-          <View style={styles.body}>
-            <Text style={styles.prompt}>Do you know this word?</Text>
-            <View style={[styles.wordCard, { borderColor: color }]}>
-              <Text style={styles.wordText}>{card.word}</Text>
+          <View style={s.body}>
+            <Text style={s.prompt}>Do you know this word?</Text>
+            <View style={[s.wordCard, { borderColor: accent }]}>
+              <Text style={s.wordText}>{card.word}</Text>
             </View>
 
-            <View style={styles.selfRateCol}>
+            <View style={s.selfRateCol}>
               <TouchableOpacity
                 onPress={() => handleSelfRate('know')}
-                style={[styles.rateBtn, { backgroundColor: '#4CAF50' }]}
+                style={[s.rateBtn, { backgroundColor: tc.success }]}
                 activeOpacity={0.8}
               >
-                <Text style={styles.rateBtnText}>I know it</Text>
+                <Text style={s.rateBtnText}>I know it</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleSelfRate('kinda')}
-                style={[styles.rateBtn, { backgroundColor: '#FFC107' }]}
+                style={[s.rateBtn, { backgroundColor: tc.warning }]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.rateBtnText, { color: '#3E2A00' }]}>Kind of</Text>
+                <Text style={[s.rateBtnText, { color: tc.goldDeep }]}>Kind of</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleSelfRate('dont')}
-                style={[styles.rateBtn, { backgroundColor: '#D66A6A' }]}
+                style={[s.rateBtn, { backgroundColor: tc.error }]}
                 activeOpacity={0.8}
               >
-                <Text style={styles.rateBtnText}>Don't know</Text>
+                <Text style={s.rateBtnText}>Don't know</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -312,74 +314,87 @@ export function QuizLessonScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12, gap: 12,
-    backgroundColor: colors.paper,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: tc.paper,
+    borderBottomWidth: 1, borderBottomColor: tc.border,
   },
-  closeX: { fontSize: 20, color: colors.textSecondary, fontWeight: '600' },
+  closeX: { fontSize: 20, color: tc.textSecondary, fontWeight: '600' },
   progressTrack: {
     flex: 1, height: 10, borderRadius: 5,
-    backgroundColor: colors.border, overflow: 'hidden',
+    backgroundColor: tc.border, overflow: 'hidden',
   },
   progressFill: { height: '100%', borderRadius: 5 },
-  progressLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, width: 40, textAlign: 'right' },
+  progressLabel: {
+    fontSize: 12, fontWeight: '700', color: tc.textSecondary,
+    width: 40, textAlign: 'right',
+  },
   body: { flex: 1, padding: 20 },
   prompt: {
-    fontSize: 13, color: colors.textSecondary, textAlign: 'center',
+    fontSize: 13, color: tc.textSecondary, textAlign: 'center',
     textTransform: 'uppercase', letterSpacing: 1,
   },
   wordCard: {
     marginTop: 16, marginBottom: 24,
     paddingVertical: 36, paddingHorizontal: 20,
     borderRadius: 16, borderWidth: 2,
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     alignItems: 'center',
   },
-  wordText: { fontSize: 32, fontWeight: '800', color: colors.text },
-  translationSmall: { fontSize: 14, color: colors.textSecondary, marginTop: 6 },
+  wordText: { fontSize: 32, fontWeight: '800', color: tc.text },
+  translationSmall: { fontSize: 14, color: tc.textSecondary, marginTop: 6 },
   input: {
     borderWidth: 2,
-    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 18,
-    color: colors.text,
-    backgroundColor: colors.paper,
+    color: tc.text,
+    backgroundColor: tc.paper,
   },
-  inputCorrect: { borderColor: '#4CAF50', backgroundColor: '#E8F5E9' },
-  inputWrong: { borderColor: colors.error, backgroundColor: '#FFEBEE' },
+  inputCorrect: {
+    borderColor: tc.success,
+    backgroundColor: tc.paper,
+  },
+  inputWrong: {
+    borderColor: tc.error,
+    backgroundColor: tc.errorTint,
+  },
   feedback: {
     marginTop: 16,
     paddingVertical: 14, paddingHorizontal: 16,
     borderRadius: 12,
   },
-  feedbackCorrect: { backgroundColor: '#E8F5E9' },
-  feedbackWrong: { backgroundColor: '#FFEBEE' },
-  feedbackTitle: { fontSize: 16, fontWeight: '800', color: '#1B5E20', marginBottom: 4 },
-  feedbackText: { fontSize: 14, color: colors.text },
+  feedbackCorrect: { backgroundColor: tc.paper, borderWidth: 1, borderColor: tc.success },
+  feedbackWrong: { backgroundColor: tc.errorTint },
+  feedbackTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  feedbackTitleOk: { color: tc.success },
+  feedbackTitleWrong: { color: tc.error },
+  feedbackText: { fontSize: 14, color: tc.text },
   selfRateCol: { gap: 12, marginTop: 8 },
   rateBtn: {
     paddingVertical: 18, borderRadius: 14,
     alignItems: 'center',
   },
-  rateBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  rateBtnText: { fontSize: 16, fontWeight: '700', color: tc.textInverse },
   footer: { marginTop: 'auto', paddingVertical: 16, alignItems: 'center' },
   primaryBtn: {
     paddingVertical: 14, paddingHorizontal: 40,
     borderRadius: 14, width: '100%', alignItems: 'center',
   },
-  primaryBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  primaryBtnText: { fontSize: 16, fontWeight: '700' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  finishingText: { fontSize: 14, color: colors.textSecondary, marginTop: 16 },
-  emptyText: { fontSize: 14, color: colors.textSecondary, marginBottom: 16 },
-  exitBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, backgroundColor: colors.primary },
-  exitBtnText: { color: '#FFFFFF', fontWeight: '700' },
+  finishingText: { fontSize: 14, color: tc.textSecondary, marginTop: 16 },
+  emptyText: { fontSize: 14, color: tc.textSecondary, marginBottom: 16 },
+  exitBtn: {
+    paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10,
+    backgroundColor: tc.primary,
+  },
+  exitBtnText: { color: tc.textInverse, fontWeight: '700' },
   exitGhost: { paddingVertical: 10, paddingHorizontal: 20, marginTop: 8 },
-  exitGhostText: { color: colors.textSecondary, fontWeight: '600' },
-  errorText: { color: colors.error, marginBottom: 12, textAlign: 'center' },
+  exitGhostText: { color: tc.textSecondary, fontWeight: '600' },
+  errorText: { color: tc.error, marginBottom: 12, textAlign: 'center' },
 });

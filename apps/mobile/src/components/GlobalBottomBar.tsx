@@ -10,14 +10,17 @@
  * poster-flight animation — its window-space rect is reported to
  * flightStore on layout, and a small count badge surfaces newly added
  * movies the user hasn't visited the reel for yet.
+ *
+ * Light/dark: surface + active-tab colour flip via tokens. The active
+ * accent intentionally inverts — gold on dark, purple on light — to
+ * match the Reel/Set Intro/Result CTA rule.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/palette';
-import { useThemeColors } from '../theme/tokens';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { useFlightStore } from '../stores/flightStore';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 
@@ -34,13 +37,15 @@ interface Props {
 export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
+  const scheme = useColorScheme();
+  const s = useMemo(() => makeStyles(tc), [tc]);
   const reelTabRef = useRef<View | null>(null);
   const setReelTabRect = useFlightStore((s) => s.setReelTabRect);
   const reelBadge = useReelBadgeStore((s) => s.count);
 
-  // measureInWindow returns absolute window coords, which is what the
-  // PosterFlight overlay expects. We re-measure on every layout pass in
-  // case the bar reflows (orientation, safe-area changes, etc.).
+  const activeColor = scheme === 'dark' ? tc.gold : tc.primary;
+  const inactiveColor = tc.textSecondary;
+
   const measureReelTab = () => {
     reelTabRef.current?.measureInWindow((x, y, width, height) => {
       if (width > 0 && height > 0) {
@@ -55,11 +60,18 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
 
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(6, insets.bottom), backgroundColor: tc.bottomBarBg, borderTopColor: tc.bottomBarBorder }]}
+      style={[
+        s.bar,
+        {
+          paddingBottom: Math.max(6, insets.bottom),
+          backgroundColor: tc.bottomBarBg,
+          borderTopColor: tc.bottomBarBorder,
+        },
+      ]}
       onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
     >
-      <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} />
-      <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} />
+      <TabBtn icon="home" label="Home" isActive={active === 'home'} onPress={() => onTabPress('home')} activeColor={activeColor} inactiveColor={inactiveColor} s={s} />
+      <TabBtn icon="list" label="My Lists" isActive={active === 'words'} onPress={() => onTabPress('words')} activeColor={activeColor} inactiveColor={inactiveColor} s={s} />
       <TabBtn
         icon="film"
         label="Reel"
@@ -68,9 +80,12 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
         innerRef={reelTabRef}
         onInnerLayout={measureReelTab}
         badge={reelBadge}
+        activeColor={activeColor}
+        inactiveColor={inactiveColor}
+        s={s}
       />
-      <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} />
-      <TabBtn icon="person-circle" label="Profile" isActive={active === 'profile'} onPress={() => onTabPress('profile')} />
+      <TabBtn icon="trophy" label="Rankings" isActive={active === 'rankings'} onPress={() => onTabPress('rankings')} activeColor={activeColor} inactiveColor={inactiveColor} s={s} />
+      <TabBtn icon="person-circle" label="Profile" isActive={active === 'profile'} onPress={() => onTabPress('profile')} activeColor={activeColor} inactiveColor={inactiveColor} s={s} />
     </View>
   );
 }
@@ -84,51 +99,53 @@ function TabBtn({
   innerRef,
   onInnerLayout,
   badge,
+  activeColor,
+  inactiveColor,
+  s,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   isActive: boolean;
   disabled?: boolean;
   onPress: () => void;
-  /** Forwarded ref to the icon container so callers can measureInWindow. */
   innerRef?: React.RefObject<View | null>;
   onInnerLayout?: () => void;
-  /** When > 0, renders a small red badge over the icon. */
   badge?: number;
+  activeColor: string;
+  inactiveColor: string;
+  s: ReturnType<typeof makeStyles>;
 }) {
-  const color = disabled ? '#C5C5D0' : isActive ? colors.primary : colors.textSecondary;
+  const color = disabled ? inactiveColor : isActive ? activeColor : inactiveColor;
   return (
     <TouchableOpacity
-      style={[styles.btn, disabled && styles.btnDisabled]}
+      style={[s.btn, disabled && s.btnDisabled]}
       onPress={disabled ? undefined : onPress}
       activeOpacity={disabled ? 1 : 0.7}
     >
       <View
         ref={innerRef as any}
         onLayout={onInnerLayout}
-        style={styles.iconWrap}
+        style={s.iconWrap}
       >
         <Ionicons name={icon} size={18} color={color} />
         {badge && badge > 0 ? (
-          <View style={styles.badge} pointerEvents="none">
-            <Text style={styles.badgeText} numberOfLines={1}>
+          <View style={s.badge} pointerEvents="none">
+            <Text style={s.badgeText} numberOfLines={1}>
               {badge > 9 ? '9+' : String(badge)}
             </Text>
           </View>
         ) : null}
       </View>
-      <Text style={[styles.label, { color }]}>{label}</Text>
-      {disabled && <Text style={styles.comingSoon}>Soon</Text>}
+      <Text style={[s.label, { color }]}>{label}</Text>
+      {disabled && <Text style={s.comingSoon}>Soon</Text>}
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: '#F3EEFF',
     borderTopWidth: 1,
-    borderTopColor: '#E0D4F7',
     paddingTop: 7,
     paddingHorizontal: 16,
     gap: 6,
@@ -139,7 +156,7 @@ const styles = StyleSheet.create({
   comingSoon: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#A0A0B0',
+    color: tc.textFaint,
     letterSpacing: 0.3,
     marginTop: 1,
   },
@@ -166,11 +183,11 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     paddingHorizontal: 4,
-    backgroundColor: '#F44336',
+    backgroundColor: tc.error,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#fff',
+    borderColor: tc.paper,
   },
   badgeText: {
     fontSize: 10,
