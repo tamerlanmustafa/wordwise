@@ -23,11 +23,16 @@ import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
 import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
-import { JourneyScreen, type SetIntroPayload } from '../components/JourneyScreen';
+import { JourneyScreen, type MoviePreviewPayload } from '../components/JourneyScreen';
+import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
+import type { ReelTile } from '../services/api';
+import type { NodeLevel } from '../components/journey/JourneyNode';
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
+import { PosterFlight } from '../components/PosterFlight';
+import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import type { Screen, ListFilter, MovieData } from './types';
@@ -239,6 +244,9 @@ export default function App() {
   // practice screen backed by their Watch Later list. Legacy
   // batch-builder route stays around for the old home button.
   const navigateToJourney = () => {
+    // Visiting the reel resets the "new since last visit" badge that
+    // RankedMovieList bumps when the user adds a movie from home.
+    useReelBadgeStore.getState().clear();
     setCurrentScreen('journey');
   };
 
@@ -260,49 +268,150 @@ export default function App() {
     setCurrentScreen('quizBatchJourney');
   };
 
-  // Journey tile progress — persisted to AsyncStorage so it survives
-  // cold starts. Streaks, daily goals, and the "Up next" teaser all
-  // depend on this being durable. Backend mirror is a follow-up.
-  const [journeyCompletedCount, setJourneyCompletedCount] = useState(0);
-  const [journeyProgressHydrated, setJourneyProgressHydrated] = useState(false);
-  useEffect(() => {
-    AsyncStorage.getItem('journey.completedCount').then((v) => {
-      if (v) {
-        const n = parseInt(v, 10);
-        if (Number.isFinite(n) && n >= 0) setJourneyCompletedCount(n);
-      }
-      setJourneyProgressHydrated(true);
-    }).catch(() => setJourneyProgressHydrated(true));
-  }, []);
-  // Which tile index was active when the quiz started; incremented on return.
-  const journeyTileInProgressRef = useRef<number | null>(null);
+  // ── Movie preview hub state ───────────────────────────────────────
+  // When the user taps a tile in the Journey Reel, we stash the tile
+  // here and route to the 'moviePreview' screen. The hub owns the
+  // "Study" / "Quiz me" / "Remove" branches; we keep the active tile
+  // around so post-quiz can return to the same hub.
+  type ActivePreview = { tile: ReelTile; level: NodeLevel; tileIndex: number };
+  const [activePreviewTile, setActivePreviewTile] = useState<ActivePreview | null>(null);
 
-  // Set Intro payload — populated when the user taps the active tile and
-  // we've successfully started a journey session. Held until the user
-  // taps "Start learning" (advances to quiz) or backs out.
+  // Set Intro payload — populated after the hub's Quiz CTA successfully
+  // starts a journey session. Held until the user taps "Start learning"
+  // (advances to quiz) or backs out.
+  type SetIntroPayload = {
+    session: QuizStartSessionResponse;
+    level: NodeLevel;
+    tileIndex: number;
+    movie: { title: string; poster_path: string | null };
+    setNumber: number;
+    reelNumber: number;
+  };
   const [setIntroData, setSetIntroData] = useState<SetIntroPayload | null>(null);
 
-  const handleJourneySessionStart = (session: QuizStartSessionResponse, level: string, tileIndex: number) => {
-    journeyTileInProgressRef.current = tileIndex;
-    setQuizSession({ session, level });
-    setCurrentScreen('quizLesson');
+  // Tracks where the in-flight quiz came from so we know where to land
+  // when the user dismisses the result screen. Set when a journey
+  // session is started.
+  type QuizSource =
+    | { kind: 'reel-preview'; tile: ReelTile; level: NodeLevel; tileIndex: number }
+    | { kind: 'movie-detail'; movie: MovieData };
+  const quizSourceRef = useRef<QuizSource | null>(null);
+
+  // Spinner shown on the preview hub's Quiz CTA while we wait for the
+  // backend to assemble the session payload.
+  const [hubQuizStarting, setHubQuizStarting] = useState(false);
+
+  const handleOpenMoviePreview = (payload: MoviePreviewPayload) => {
+    setActivePreviewTile({
+      tile: payload.tile,
+      level: payload.level,
+      tileIndex: payload.tileIndex,
+    });
+    setCurrentScreen('moviePreview');
   };
 
-  const handleShowSetIntro = (payload: SetIntroPayload) => {
-    setSetIntroData(payload);
-    setCurrentScreen('setIntro');
+  // Convert a reel tile into the MovieData shape MovieDetailScreen
+  // expects. The reel only has tmdb_id / title / poster_path / year;
+  // the rest is filled in later by the detail screen as it fetches.
+  const reelTileToMovieData = (tile: ReelTile): MovieData => ({
+    id: tile.tmdb_id,
+    tmdb_id: tile.tmdb_id,
+    title: tile.title,
+    poster_path: tile.poster_path,
+    release_date: tile.year ? `${tile.year}-01-01` : '',
+  });
+
+  const handleHubStudy = () => {
+    if (!activePreviewTile) return;
+    setSelectedMovie(reelTileToMovieData(activePreviewTile.tile));
+    setCurrentScreen('movieDetail');
+  };
+
+  const handleHubQuiz = async () => {
+    if (!activePreviewTile || hubQuizStarting) return;
+    setHubQuizStarting(true);
+    const { tile, level, tileIndex } = activePreviewTile;
+    try {
+      const session = await quizApi.startJourneySession(level, tileIndex, 5, tile.tmdb_id);
+      quizSourceRef.current = { kind: 'reel-preview', tile, level, tileIndex };
+      setSetIntroData({
+        session,
+        level,
+        tileIndex,
+        movie: { title: tile.title, poster_path: tile.poster_path },
+        setNumber: tileIndex + 1,
+        reelNumber: 1,
+      });
+      setCurrentScreen('setIntro');
+    } catch (err: any) {
+      Alert.alert('Could not start quiz', err?.message ?? 'Please try again.');
+    } finally {
+      setHubQuizStarting(false);
+    }
+  };
+
+  const handleHubRemove = async () => {
+    if (!activePreviewTile) return;
+    const tmdbId = activePreviewTile.tile.tmdb_id;
+    setActivePreviewTile(null);
+    setCurrentScreen('journey');
+    try {
+      await useReelStore.getState().remove(tmdbId);
+    } catch (err: any) {
+      Alert.alert('Could not remove', err?.message ?? 'Please try again.');
+    }
+  };
+
+  const handleHubBack = () => {
+    setActivePreviewTile(null);
+    setCurrentScreen('journey');
+  };
+
+  // Start a journey quiz from the MovieDetailScreen's "Quiz me" pill.
+  // Mirrors the hub path but tracks the source so post-quiz returns to
+  // the movie-detail screen instead of the preview hub.
+  const handleMovieDetailQuiz = async (movie: MovieData, level: NodeLevel) => {
+    const tmdbId = movie.tmdb_id ?? movie.id;
+    try {
+      // tileIndex 0 is safe for the standalone-movie case: it's only
+      // used by the backend for offset paging when there's no movie
+      // binding, and we always pass tmdbId so the movie-specific path
+      // wins.
+      const session = await quizApi.startJourneySession(level, 0, 5, tmdbId);
+      quizSourceRef.current = { kind: 'movie-detail', movie };
+      setSetIntroData({
+        session,
+        level,
+        tileIndex: 0,
+        movie: { title: movie.title, poster_path: movie.poster_path ?? null },
+        setNumber: 1,
+        reelNumber: 1,
+      });
+      setCurrentScreen('setIntro');
+    } catch (err: any) {
+      Alert.alert('Could not start quiz', err?.message ?? 'Please try again.');
+    }
   };
 
   const handleSetIntroStart = () => {
     if (!setIntroData) return;
-    const { session, level, tileIndex } = setIntroData;
+    const { session, level } = setIntroData;
     setSetIntroData(null);
-    handleJourneySessionStart(session, level, tileIndex);
+    setQuizSession({ session, level });
+    setCurrentScreen('quizLesson');
   };
 
   const handleSetIntroBack = () => {
     setSetIntroData(null);
-    setCurrentScreen('journey');
+    // Drop back to wherever the quiz was started from.
+    const src = quizSourceRef.current;
+    if (src?.kind === 'movie-detail') {
+      setCurrentScreen('movieDetail');
+    } else if (activePreviewTile) {
+      setCurrentScreen('moviePreview');
+    } else {
+      setCurrentScreen('journey');
+    }
   };
 
 
@@ -321,12 +430,6 @@ export default function App() {
     dailyStreak: number;
     justHit3: boolean;
     cardResults: QuizCardResultInput[];
-    upNext: {
-      tileIdx: number;
-      label: number;
-      movie: string;
-      poster: string | null;
-    } | null;
   } | null>(null);
 
   const handleQuizComplete = (
@@ -334,37 +437,19 @@ export default function App() {
     level: string,
     cardResults: QuizCardResultInput[] = [],
   ) => {
-    // Bump persisted progress + the daily counter NOW so the result
-    // screen reads fresh values. handleQuizResultDone only handles
-    // navigation after the user dismisses.
-    if (journeyTileInProgressRef.current !== null) {
-      const completedIdx = journeyTileInProgressRef.current;
-      setJourneyCompletedCount((n) => {
-        const next = Math.max(n, completedIdx + 1);
-        AsyncStorage.setItem('journey.completedCount', String(next)).catch(() => {});
-        return next;
-      });
+    // Bump the daily counter NOW so the result screen reads fresh
+    // values. Bump for ANY journey-kind quiz (reel-preview AND
+    // movie-detail) since they all share the daily-habit loop.
+    const src = quizSourceRef.current;
+    if (src) {
+      const tileIdx = src.kind === 'reel-preview' ? src.tileIndex : 0;
       const bump = useDailyGoalStore.getState().bump();
-      // Compute "Up next" from the current reel snapshot. The tile
-      // *after* the one the user just finished becomes the next active.
-      const nextIdx = completedIdx + 1;
-      const reelTiles = useReelStore.getState().tiles;
-      const nextTile = reelTiles[nextIdx];
-      const upNext = nextTile
-        ? {
-            tileIdx: nextIdx,
-            label: nextIdx + 1,
-            movie: nextTile.title,
-            poster: nextTile.poster_path ?? null,
-          }
-        : null;
       setJourneyResultMeta({
-        completedTileIdx: completedIdx,
+        completedTileIdx: tileIdx,
         dailyDone: bump.done,
         dailyStreak: bump.streak,
         justHit3: bump.justHit3,
         cardResults,
-        upNext,
       });
     } else {
       setJourneyResultMeta(null);
@@ -377,42 +462,21 @@ export default function App() {
     setQuizSession(null);
     setQuizResult(null);
     setJourneyResultMeta(null);
-    if (journeyTileInProgressRef.current !== null) {
-      journeyTileInProgressRef.current = null;
-      setCurrentScreen('journey');
+    const src = quizSourceRef.current;
+    quizSourceRef.current = null;
+    if (src?.kind === 'reel-preview' && activePreviewTile) {
+      // Return to the same movie's preview hub so the user sees fresh
+      // stars/state for what they just quizzed.
+      setCurrentScreen('moviePreview');
+      return;
+    }
+    if (src?.kind === 'movie-detail') {
+      setCurrentScreen('movieDetail');
       return;
     }
     if (batch) setCurrentScreen('quizBatchJourney');
     else setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
   };
-
-  // Chain directly into the next active tile's Set Intro instead of
-  // dropping back to the reel. Only available in journey mode and only
-  // when there IS a next tile loaded. After the daily-3 wall this is
-  // surfaced as the secondary "+1 bonus tile" path.
-  const handleJourneyNextSet = useCallback(async () => {
-    if (!journeyResultMeta?.upNext) return;
-    const nextTile = useReelStore.getState().tiles[journeyResultMeta.upNext.tileIdx];
-    if (!nextTile) return;
-    const nextIdx = journeyResultMeta.upNext.tileIdx;
-    const nextLevel = (user?.proficiency_level || 'A1').toUpperCase();
-    try {
-      const session = await quizApi.startJourneySession(nextLevel, nextIdx, 5, nextTile.tmdb_id);
-      setQuizSession(null);
-      setQuizResult(null);
-      setJourneyResultMeta(null);
-      handleShowSetIntro({
-        session,
-        level: nextLevel as any,
-        tileIndex: nextIdx,
-        movie: { title: nextTile.title, poster_path: nextTile.poster_path },
-        setNumber: nextIdx + 1,
-        reelNumber: 1,
-      });
-    } catch (err: any) {
-      Alert.alert('Could not start next set', err?.message ?? 'Please try again.');
-    }
-  }, [journeyResultMeta, user?.proficiency_level]);
 
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
@@ -476,6 +540,7 @@ export default function App() {
       case 'notebook':
       case 'review': return 'words';
       case 'journey':
+      case 'moviePreview':
       case 'setIntro': return 'journey';
       case 'leaderboard': return 'rankings';
       default: return null;
@@ -518,9 +583,17 @@ export default function App() {
         ) : currentScreen === 'journey' ? (
           <JourneyScreen
             onTabPress={handleTabPress}
-            completedCount={journeyProgressHydrated ? journeyCompletedCount : -1}
-            onShowSetIntro={handleShowSetIntro}
-            onAddMovies={() => setCurrentScreen('addToReel')}
+            onOpenMoviePreview={handleOpenMoviePreview}
+          />
+        ) : currentScreen === 'moviePreview' && activePreviewTile ? (
+          <MoviePreviewHub
+            tile={activePreviewTile.tile}
+            level={activePreviewTile.level}
+            onBack={handleHubBack}
+            onStudy={handleHubStudy}
+            onQuiz={handleHubQuiz}
+            onRemove={handleHubRemove}
+            quizStarting={hubQuizStarting}
           />
         ) : currentScreen === 'setIntro' && setIntroData ? (
           <SetIntroScreen
@@ -578,13 +651,21 @@ export default function App() {
             level={quizResult.level}
             onDone={handleQuizResultDone}
             journey={journeyResultMeta}
-            onNextSet={journeyResultMeta?.upNext ? handleJourneyNextSet : undefined}
           />
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen
             movie={selectedMovie}
-            onBack={navigateToHome}
+            onBack={() => {
+              // If we came from the reel preview hub, return there;
+              // otherwise drop back to home as before.
+              if (activePreviewTile) {
+                setCurrentScreen('moviePreview');
+              } else {
+                navigateToHome();
+              }
+            }}
             targetLanguage={targetLanguage}
+            onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
           />
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
@@ -610,6 +691,10 @@ export default function App() {
       ) : (
         <LoginScreen onLogin={handleLogin} />
       )}
+
+      {/* Global poster-flight overlay — animates added-to-reel posters
+          from the home card to the Reel tab. */}
+      <PosterFlight />
 
       {/* First-launch splash — absolute over everything, auto-dismisses */}
       <SplashIntro />

@@ -1,14 +1,11 @@
 """
-Reel — per-user ordered list of tiles for the Journey Reel screen. The
-list is the concatenation of two zones (bottom → top):
+Reel — per-user list of movies the user has added to their personal queue
+for vocab prep. The reel is purely user-curated: there is no suggested
+zone in the response. New users are bootstrapped via POST /reel/seed,
+which idempotently creates a starter set from SUGGESTED_SEED in the
+user's CEFR ±1 band so the first-time reel is never empty.
 
-  1. User picks — most-recently-added first, source='user'.
-  2. Suggested  — curated per-CEFR seed, filtered to the user's
-                  proficiency_level ± 1 level, source='suggested'.
-
-The reel must never be empty, so the suggested zone backs every user
-regardless of whether they've added any picks. The user picks zone is
-optional. Title / poster_path / year are denormalized so the reel
+Title / poster_path / year are denormalized on each row so the reel
 renders without per-row TMDB roundtrips.
 """
 from __future__ import annotations
@@ -24,13 +21,16 @@ from ..middleware.auth import get_current_active_user
 
 router = APIRouter(prefix="/reel", tags=["reel"])
 
-# CEFR ladder used for ±1 banding.
+# CEFR ladder used for ±1 banding when seeding starter movies.
 LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
+# How many starter movies to drop into a fresh reel.
+SEED_TARGET_COUNT = 6
 
-# ─── Suggested seed ────────────────────────────────────────────────────
-# Curated per-CEFR list. Each tile is a stable (tmdb_id, title,
-# poster_path, year) so the client never has to enrich. Easier levels =
+
+# ─── Starter seed ──────────────────────────────────────────────────────
+# Curated per-CEFR list used ONLY for first-time auto-seeding. Each tile
+# is a stable (tmdb_id, title, poster_path, year). Easier levels =
 # animation / family; harder levels = drama / arthouse.
 SUGGESTED_SEED: dict[str, list[tuple[int, str, str, int]]] = {
     "A1": [
@@ -96,9 +96,9 @@ SUGGESTED_SEED: dict[str, list[tuple[int, str, str, int]]] = {
 }
 
 
-def _suggested_for_level(level: str) -> list[tuple[int, str, str, int]]:
-    """Return a flat list of suggested tiles for `level` ± 1, ordered
-    easiest → hardest across that band so the user climbs naturally."""
+def _starter_for_level(level: str) -> list[tuple[int, str, str, int]]:
+    """Flat starter list for `level` ± 1, ordered easiest → hardest across
+    that band so the seeded reel climbs naturally."""
     try:
         i = LEVELS.index(level)
     except ValueError:
@@ -115,7 +115,7 @@ class ReelTile(BaseModel):
     title: str
     poster_path: Optional[str] = None
     year: Optional[int] = None
-    source: Literal["user", "suggested"]
+    source: Literal["user", "suggested"] = "user"
 
 
 class ReelListResponse(BaseModel):
@@ -130,6 +130,11 @@ class AddReelMovieRequest(BaseModel):
     year: Optional[int] = None
 
 
+class SeedReelResponse(BaseModel):
+    seeded: int
+    tiles: List[ReelTile]
+
+
 @router.get("", response_model=ReelListResponse)
 async def list_reel(
     cursor: int = Query(0, ge=0),
@@ -137,19 +142,14 @@ async def list_reel(
     db: Prisma = Depends(get_db),
     user=Depends(get_current_active_user),
 ):
-    """
-    Combined reel feed: user picks (most-recent first) → suggested. The
-    user can never see an empty reel because the suggested zone always
-    seeds at least one ±1-CEFR band of curated titles.
-
-    `cursor`/`limit` accept slice params for future pagination; today the
-    whole slice is materialized in-memory and sliced before return.
-    """
+    """User-curated reel, most-recently-added first. Empty for brand-new
+    users until POST /reel/seed runs (client calls it on first hydrate
+    when the response is empty)."""
     user_rows = await db.userreelmovie.find_many(
         where={"userId": user.id},
         order={"addedAt": "desc"},
     )
-    user_tiles = [
+    tiles = [
         ReelTile(
             tmdb_id=r.tmdbId,
             title=r.title,
@@ -159,79 +159,9 @@ async def list_reel(
         )
         for r in user_rows
     ]
-
-    # Exclude any suggested entries the user has already added so the
-    # zigzag doesn't show the same poster twice.
-    added_ids = {r.tmdbId for r in user_rows}
-    user_level_raw = user.proficiencyLevel or "A1"
-    user_level = (
-        user_level_raw.value if hasattr(user_level_raw, "value") else user_level_raw
-    ).upper()
-    band = LEVELS[max(0, LEVELS.index(user_level) - 1):
-                  min(len(LEVELS), LEVELS.index(user_level) + 2)]
-
-    # Candidate seeds in the user's CEFR ±1 band, deduped against
-    # the user's existing picks.
-    candidates = [
-        (tmdb_id, title, poster, year)
-        for (tmdb_id, title, poster, year) in _suggested_for_level(user_level)
-        if tmdb_id not in added_ids
-    ]
-
-    # Re-rank candidates by "new-lemma yield" for this user — i.e.
-    # count of distinct movie-lemma rows in the user's CEFR ±1 band
-    # that the user has NOT already added to user_words. Movies with
-    # no mapping data score 0 and fall to the bottom; among ties, we
-    # preserve the curated band-order so the climb still feels
-    # easier → harder. The query runs once for the whole candidate
-    # batch via ANY($1::int[]).
-    candidate_ids = [c[0] for c in candidates]
-    yield_by_tmdb: dict[int, int] = {}
-    if candidate_ids:
-        rows = await db.query_raw(
-            """
-            SELECT m.tmdb_id AS tmdb_id, COUNT(DISTINCT mlm.lemma_id) AS yield
-            FROM movie_lemma_mappings mlm
-            JOIN movies m ON m.id = mlm.movie_id
-            JOIN lemmas l ON l.id = mlm.lemma_id
-            WHERE m.tmdb_id = ANY($1::int[])
-              AND l.cefr_level::text = ANY($2::text[])
-              AND NOT EXISTS (
-                  SELECT 1 FROM user_words uw
-                  WHERE uw.user_id = $3
-                    AND LOWER(uw.word) = LOWER(l.lemma)
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM hidden_words hw
-                  WHERE LOWER(hw.word) = LOWER(l.lemma)
-              )
-            GROUP BY m.tmdb_id
-            """,
-            candidate_ids, band, user.id,
-        )
-        yield_by_tmdb = {int(r["tmdb_id"]): int(r["yield"]) for r in rows}
-
-    # Stable sort: yield DESC, then preserve original curated order.
-    ranked = sorted(
-        enumerate(candidates),
-        key=lambda pair: (-yield_by_tmdb.get(pair[1][0], 0), pair[0]),
-    )
-
-    suggested_tiles = [
-        ReelTile(
-            tmdb_id=tmdb_id,
-            title=title,
-            poster_path=poster,
-            year=year,
-            source="suggested",
-        )
-        for _, (tmdb_id, title, poster, year) in ranked
-    ]
-
-    combined = user_tiles + suggested_tiles
     end = cursor + limit
-    page = combined[cursor:end]
-    has_more = end < len(combined)
+    page = tiles[cursor:end]
+    has_more = end < len(tiles)
     return ReelListResponse(tiles=page, has_more=has_more)
 
 
@@ -275,6 +205,85 @@ async def add_to_reel(
         poster_path=created.posterPath,
         year=created.year,
         source="user",
+    )
+
+
+@router.post("/seed", response_model=SeedReelResponse)
+async def seed_reel(
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """Idempotent first-launch bootstrap. If the user already has any
+    picks, returns the current list unchanged. Otherwise creates
+    SEED_TARGET_COUNT starter rows from SUGGESTED_SEED in the user's
+    CEFR ±1 band and returns them.
+
+    Safe to call on every cold start — the count check guards against
+    re-seeding for returning users who chose to empty their reel."""
+    existing = await db.userreelmovie.find_many(
+        where={"userId": user.id},
+        order={"addedAt": "desc"},
+    )
+    if existing:
+        return SeedReelResponse(
+            seeded=0,
+            tiles=[
+                ReelTile(
+                    tmdb_id=r.tmdbId,
+                    title=r.title,
+                    poster_path=r.posterPath,
+                    year=r.year,
+                    source="user",
+                )
+                for r in existing
+            ],
+        )
+
+    user_level_raw = user.proficiencyLevel or "A1"
+    user_level = (
+        user_level_raw.value if hasattr(user_level_raw, "value") else user_level_raw
+    ).upper()
+    candidates = _starter_for_level(user_level)[:SEED_TARGET_COUNT]
+
+    # Order matters: addedAt is set automatically and rows added later
+    # surface higher in the reel (DESC order). We want the curated
+    # easiest→hardest band to come out bottom-up, so insert in reverse.
+    created_rows = []
+    for position, (tmdb_id, title, poster, year) in enumerate(reversed(candidates)):
+        try:
+            row = await db.userreelmovie.create(
+                data={
+                    "userId": user.id,
+                    "tmdbId": tmdb_id,
+                    "position": position,
+                    "title": title,
+                    "posterPath": poster,
+                    "year": year,
+                }
+            )
+            created_rows.append(row)
+        except Exception:
+            # Skip dupes / constraint violations defensively — seeding
+            # should never fail the request.
+            continue
+
+    # Re-fetch to return them in canonical DESC order.
+    final = await db.userreelmovie.find_many(
+        where={"userId": user.id},
+        order={"addedAt": "desc"},
+    )
+    return SeedReelResponse(
+        seeded=len(created_rows),
+        tiles=[
+            ReelTile(
+                tmdb_id=r.tmdbId,
+                title=r.title,
+                poster_path=r.posterPath,
+                year=r.year,
+                source="user",
+            )
+            for r in final
+        ],
     )
 
 

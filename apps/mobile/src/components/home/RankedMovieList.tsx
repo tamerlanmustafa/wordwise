@@ -6,11 +6,17 @@
  * deck reveals the next card — it grows from a slightly-smaller scale to
  * full size; the current card shrinks as it exits. The parent ScrollView
  * scrolls the rest of the page independently.
+ *
+ * Each card carries a small "+ Add to my list" button in the top-right
+ * corner — this is the one-tap pipeline from the home feed into the
+ * user's Journey Reel. Tap stops propagation so the card's main onPress
+ * (→ MovieDetail) is not triggered.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Image,
   ImageBackground,
   Modal,
@@ -22,6 +28,9 @@ import {
 import { colors } from '../../theme/palette';
 import { TmdbPoster } from '../movies/TmdbPoster';
 import { scoreToCefr } from '../../utils/formatting';
+import { useReelStore } from '../../stores/reelStore';
+import { useFlightStore } from '../../stores/flightStore';
+import { useReelBadgeStore } from '../../stores/reelBadgeStore';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 const CARD_H        = 116;
@@ -37,6 +46,8 @@ const CONTAINER_H   = VISIBLE_CARDS * ITEM_H + PEEK;
 const PEEK_SCALE   = 0.90;
 const PEEK_OPACITY = 0.70;
 
+const GOLD = '#FFD166';
+
 function prefetchMovieImages(movie: any) {
   if (movie.poster_path)
     Image.prefetch(`https://image.tmdb.org/t/p/w500${movie.poster_path}`).catch(() => {});
@@ -49,6 +60,114 @@ interface Props {
   onMoviePress: (movie: any) => void;
   userLevel?: string;
 }
+
+// ── Add-to-reel chip ────────────────────────────────────────────────────────
+// Small pill in the top-right of each card. Reads the live reelStore
+// membership for this tmdb_id so the label swaps between "+ Add to list"
+// and "✓ Added — tap to remove." Tapping toggles: tap once adds (and
+// triggers the poster-flight animation toward the Reel tab); tap again
+// removes the movie from the reel.
+const AddToReelChip = React.memo(({
+  movie,
+  flightSourceRef,
+}: {
+  movie: any;
+  /** Ref to the DOM node we want the flight animation to launch from
+   *  (the card's poster image). Optional — if absent, the flight skips. */
+  flightSourceRef?: React.RefObject<View | null>;
+}) => {
+  const tmdbId: number | undefined = movie.tmdb_id ?? (typeof movie.id === 'number' ? movie.id : undefined);
+  const inReel = useReelStore((s) =>
+    tmdbId != null && s.tiles.some((t) => t.tmdb_id === tmdbId && t.source === 'user'),
+  );
+  const add = useReelStore((s) => s.add);
+  const remove = useReelStore((s) => s.remove);
+  const fly = useFlightStore((s) => s.fly);
+  const bumpBadge = useReelBadgeStore((s) => s.bump);
+  const unbumpBadge = useReelBadgeStore((s) => s.unbump);
+  const [busy, setBusy] = useState(false);
+
+  // Tiny scale pulse on tap (both add and remove). The big motion lives
+  // in the global poster-flight overlay, not this chip.
+  const tapScale = useRef(new Animated.Value(1)).current;
+  const playTap = () => {
+    Animated.sequence([
+      Animated.timing(tapScale, { toValue: 0.92, duration: 90, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.spring(tapScale, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const launchFlight = () => {
+    const node = flightSourceRef?.current;
+    if (!node || !movie.poster_path) return;
+    // measureInWindow gives us window-space coords, which is what the
+    // PosterFlight overlay (StyleSheet.absoluteFill at root) expects.
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      fly({
+        posterPath: movie.poster_path,
+        from: { x, y, width, height },
+      });
+    });
+  };
+
+  const onPress = async (e: any) => {
+    e?.stopPropagation?.();
+    if (!tmdbId || busy) return;
+    setBusy(true);
+    playTap();
+    try {
+      if (inReel) {
+        unbumpBadge();
+        await remove(tmdbId);
+      } else {
+        // Kick off the flight BEFORE the await so the animation is
+        // visually tied to the tap, not to the round-trip latency.
+        launchFlight();
+        bumpBadge();
+        await add({
+          tmdb_id: tmdbId,
+          title: movie.title,
+          poster_path: movie.poster_path ?? null,
+          year: movie.release_date ? parseInt(String(movie.release_date).slice(0, 4), 10) : null,
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: tapScale }] }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.85}
+        disabled={busy}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+      >
+        <View
+          style={[
+            chipStyles.chip,
+            {
+              backgroundColor: inReel ? 'rgba(255,209,102,0.92)' : 'rgba(0,0,0,0.55)',
+              borderColor: inReel ? 'rgba(255,209,102,1)' : 'rgba(255,255,255,0.25)',
+            },
+          ]}
+        >
+          <Text
+            style={[
+              chipStyles.chipText,
+              { color: inReel ? '#3a2400' : '#fff' },
+            ]}
+            numberOfLines={1}
+          >
+            {inReel ? '✓ Added · tap to remove' : '+ Add to list'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
 
 // ── Single card with scroll-driven transforms ─────────────────────────────────
 const StackCard = React.memo(({
@@ -121,6 +240,10 @@ const StackCard = React.memo(({
     extrapolate: 'clamp',
   });
 
+  // Ref to the poster wrapper so the add chip can measure it and launch
+  // the global poster-flight animation from this exact position.
+  const posterRef = useRef<View | null>(null);
+
   return (
     <View style={s.cardSlot}>
       <Animated.View style={[s.cardWrapper, { transform: [{ translateY }, { scale }], opacity }]}>
@@ -139,23 +262,28 @@ const StackCard = React.memo(({
             >
               <View style={s.overlay} />
               <View style={s.row}>
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    if (posterUri) onZoom(posterUri, movie.title);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  {posterUri ? (
-                    <Image source={{ uri: posterUri }} style={s.poster} />
-                  ) : movie.tmdb_id ? (
-                    <TmdbPoster tmdbId={movie.tmdb_id} style={s.poster} />
-                  ) : (
-                    <View style={[s.poster, s.posterFallback]}>
-                      <Text style={{ fontSize: 22 }}>🎬</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                {/* collapsable={false} keeps the wrapper in the native
+                    view tree so measureInWindow always returns a real
+                    rect (Android collapses empty Views otherwise). */}
+                <View ref={posterRef as any} collapsable={false}>
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      if (posterUri) onZoom(posterUri, movie.title);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    {posterUri ? (
+                      <Image source={{ uri: posterUri }} style={s.poster} />
+                    ) : movie.tmdb_id ? (
+                      <TmdbPoster tmdbId={movie.tmdb_id} style={s.poster} />
+                    ) : (
+                      <View style={[s.poster, s.posterFallback]}>
+                        <Text style={{ fontSize: 22 }}>🎬</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
                 <View style={s.info}>
                   <Text style={s.title} numberOfLines={2}>{movie.title}</Text>
                   {(rating || level) && (
@@ -164,12 +292,24 @@ const StackCard = React.memo(({
                   {wordCount && <Text style={s.wordText}>{wordCount}</Text>}
                 </View>
               </View>
+              <View style={s.addChipSlot} pointerEvents="box-none">
+                <AddToReelChip movie={movie} flightSourceRef={posterRef} />
+              </View>
             </ImageBackground>
           ) : (
             <View style={[s.backdrop, s.fallback]}>
               <View style={s.row}>
-                <View style={[s.poster, s.posterFallback]}><Text>🎬</Text></View>
+                <View
+                  ref={posterRef as any}
+                  collapsable={false}
+                  style={[s.poster, s.posterFallback]}
+                >
+                  <Text>🎬</Text>
+                </View>
                 <View style={s.info}><Text style={s.title}>{movie.title}</Text></View>
+              </View>
+              <View style={s.addChipSlot} pointerEvents="box-none">
+                <AddToReelChip movie={movie} flightSourceRef={posterRef} />
               </View>
             </View>
           )}
@@ -184,6 +324,14 @@ export const RankedMovieList = ({ movies: data, onMoviePress }: Props) => {
   const scrollY  = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<any>(null);
   const [zoomed, setZoomed] = useState<{ uri: string; title: string } | null>(null);
+
+  // Hydrate the reel store once so the chip can read membership state
+  // without waiting for the user to open the Journey tab first.
+  const reelHydrated = useReelStore((st) => st.hydrated);
+  const hydrateReel = useReelStore((st) => st.hydrate);
+  useEffect(() => {
+    if (!reelHydrated) hydrateReel();
+  }, [reelHydrated, hydrateReel]);
 
   // Reset to the top whenever the movie list changes (filter/sort switch).
   // Without this, scrollY stays at whatever offset the previous sort left it,
@@ -326,6 +474,12 @@ const s = StyleSheet.create({
   subText: { fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
   wordText:{ fontSize: 11, color: 'rgba(255,255,255,0.7)' },
 
+  addChipSlot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+
   lightbox: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
@@ -338,5 +492,24 @@ const s = StyleSheet.create({
     bottom: 40,
     color: 'rgba(255,255,255,0.3)',
     fontSize: 12,
+  },
+});
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  chipText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

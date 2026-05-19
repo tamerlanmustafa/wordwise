@@ -24,6 +24,7 @@ export type Screen =
   | 'quizBatchBuilder'
   | 'quizBatchJourney'
   | 'journey'
+  | 'moviePreview'
   | 'setIntro'
   | 'addToReel';
 

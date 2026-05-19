@@ -410,10 +410,6 @@ export const wordwiseApi = {
       return {};
     }
     const data = await res.json();
-    const totalMs = Date.now() - t0;
-    console.log('[batchSentences] http ok', {
-      httpMs, totalMs, requested: words.length, returned: Object.keys(data.results || {}).length,
-    });
     return data.results || {};
   },
 };
@@ -1341,6 +1337,11 @@ export interface ReelListResponse {
 /** Legacy alias kept for callers that imported the prior name. */
 export type ReelMovieItem = ReelTile;
 
+export interface ReelSeedResponse {
+  seeded: number;
+  tiles: ReelTile[];
+}
+
 export const reelApi = {
   list: async (cursor = 0, limit = 60): Promise<ReelListResponse> => {
     const res = await authFetch(`${API_BASE_URL}/reel?cursor=${cursor}&limit=${limit}`);
@@ -1367,6 +1368,16 @@ export const reelApi = {
       method: 'DELETE',
     });
     if (!res.ok && res.status !== 204) throw new Error('Failed to remove from reel');
+  },
+
+  /** Idempotent first-launch bootstrap. Returns the user's reel; if it
+   *  was empty, the server seeds a starter set in their CEFR band first. */
+  seed: async (): Promise<ReelSeedResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/reel/seed`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to seed reel');
+    return res.json();
   },
 };
 

@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -63,6 +64,10 @@ interface Props {
   targetLanguage: string;
   readWords?: Set<string>;
   sceneStrips?: SceneStripEntry[];
+  /** Start a 5-card journey quiz drawn from this movie's vocab. The
+   *  caller (App.tsx) owns the session-start round-trip and the
+   *  post-quiz nav; we just surface a sticky CTA. */
+  onStartQuiz?: (level: string) => void;
 }
 
 export const MovieDetailScreen = ({
@@ -71,6 +76,7 @@ export const MovieDetailScreen = ({
   targetLanguage,
   readWords,
   sceneStrips,
+  onStartQuiz,
 }: Props) => {
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -1252,6 +1258,60 @@ export const MovieDetailScreen = ({
         </View>
       )}
 
+      {/* Sticky "Quiz me" pill — sits above the global bottom bar.
+          Always available once vocab has loaded, so the user can
+          jump from browsing into a 5-card quiz at any point. */}
+      {!loading && vocabulary && onStartQuiz ? (
+        <View style={quizPillStyles.pillWrap} pointerEvents="box-none">
+          <TouchableOpacity
+            style={quizPillStyles.pill}
+            onPress={() => onStartQuiz(userProficiency)}
+            activeOpacity={0.85}
+          >
+            <Text style={quizPillStyles.pillGlyph}>⚡</Text>
+            <Text style={quizPillStyles.pillText}>
+              Quiz me · 5 words
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
     </SafeAreaView>
   );
 };
+
+const quizPillStyles = StyleSheet.create({
+  pillWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 88,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: '#FFD166',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  pillGlyph: {
+    fontSize: 14,
+    color: '#3a2400',
+  },
+  pillText: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    color: '#3a2400',
+    textTransform: 'uppercase',
+  },
+});

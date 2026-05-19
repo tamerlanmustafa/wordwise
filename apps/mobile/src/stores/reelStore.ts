@@ -1,16 +1,22 @@
 /**
- * reelStore — combined "user picks + suggested" tile list for the
- * Journey Reel screen. Server is the source of truth (via /reel); we
- * keep an in-memory copy for snappy renders.
+ * reelStore — the user's personal reel queue. The reel is purely
+ * user-curated; the server has no suggested zone. New users get a
+ * starter set via POST /reel/seed on first hydrate (auto-called when
+ * hydrate finds an empty list).
  *
- * The combined list is bottom-of-reel → top-of-reel: user picks
- * (most-recently-added first) come first, then the curated suggested
- * zone. The screen reads `tiles` for rendering and `userPickCount`
- * to position the zone-boundary chips and the ＋ Add a film tile.
+ * Tiles are ordered bottom-of-reel → top-of-reel by added_at DESC, so
+ * the most-recently-added movie sits at idx 0 (closest to the user).
  */
 
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { reelApi, type ReelTile } from '../services/api';
+
+// Sticky flag: once the user has been seeded a starter reel (or has
+// added their own first movie), we never auto-seed again. Without
+// this, a user who deliberately empties their reel would get fresh
+// starter movies on the next hydrate.
+const SEED_DONE_KEY = 'journey.reelSeedDone.v1';
 
 interface ReelState {
   tiles: ReelTile[];
@@ -44,6 +50,26 @@ export const useReelStore = create<ReelState>((set, get) => ({
     set({ loading: true });
     try {
       const { tiles } = await reelApi.list();
+      const seedDone = await AsyncStorage.getItem(SEED_DONE_KEY);
+      if (tiles.length === 0 && !seedDone) {
+        // First-launch bootstrap: ask the server to seed starter movies
+        // in the user's CEFR band. We only attempt this when the user
+        // has never been seeded before; otherwise an empty reel is a
+        // deliberate choice (the user emptied it).
+        try {
+          const { tiles: seeded } = await reelApi.seed();
+          await AsyncStorage.setItem(SEED_DONE_KEY, '1');
+          set({ tiles: seeded, userPickCount: countUserPicks(seeded), hydrated: true });
+          return;
+        } catch (seedErr) {
+          console.warn('[reelStore] seed failed:', seedErr);
+        }
+      } else if (tiles.length > 0 && !seedDone) {
+        // Existing user (had movies before this flag existed) — mark
+        // the seed as done so we don't seed over their current reel
+        // if they ever empty it.
+        AsyncStorage.setItem(SEED_DONE_KEY, '1').catch(() => {});
+      }
       set({ tiles, userPickCount: countUserPicks(tiles), hydrated: true });
     } catch (e) {
       console.warn('[reelStore] hydrate failed:', e);
@@ -56,14 +82,31 @@ export const useReelStore = create<ReelState>((set, get) => ({
   add: async (input) => {
     if (get().has(input.tmdb_id)) return;
 
+    // Optimistic insert at the top of the reel so the home → reel
+    // animation has something to land on immediately.
+    const optimisticTile: ReelTile = {
+      tmdb_id: input.tmdb_id,
+      title: input.title,
+      poster_path: input.poster_path,
+      year: input.year,
+      source: 'user',
+    };
+    const before = get().tiles;
+    set({
+      tiles: [optimisticTile, ...before],
+      userPickCount: get().userPickCount + 1,
+    });
+
     try {
       await reelApi.add(input);
-      // Server is authoritative on ordering (user picks DESC by added_at,
-      // suggested may also have shifted to exclude the new pick). Refetch.
+      // A successful manual add also counts as "user has a reel" — set
+      // the flag so we never auto-seed over their explicit choices.
+      AsyncStorage.setItem(SEED_DONE_KEY, '1').catch(() => {});
       const { tiles } = await reelApi.list();
       set({ tiles, userPickCount: countUserPicks(tiles) });
     } catch (e) {
-      console.warn('[reelStore] add failed:', e);
+      console.warn('[reelStore] add failed, rolling back:', e);
+      set({ tiles: before, userPickCount: countUserPicks(before) });
     }
   },
 

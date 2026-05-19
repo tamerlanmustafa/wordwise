@@ -12,18 +12,15 @@
  *        • 🔥 streak +1 ticker
  *        • Daily-goal pips (n / DAILY_GOAL)
  *        • Per-word ✓/× recap
- *        • "Up next" teaser of tile N+1 (poster + title)
- *        • Primary CTA: "Next set →" — chains into the next tile's
- *          Set Intro instead of dropping back to the reel
- *      When the user just hit daily-3 (`justHit3 === true`), the
- *      primary CTA flips to "Stop for today" and the wall copy
- *      replaces the Up-next teaser.
+ *        • Wall copy (when justHit3) OR a simple "back to movie" CTA
+ *      The result screen no longer chains into the next reel tile —
+ *      the user returns to the just-quizzed movie's preview hub so
+ *      they can see fresh stars/progress, then decide what's next.
  */
 
 import { useEffect, useRef } from 'react';
 import {
   Animated,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -40,12 +37,6 @@ export interface JourneyResultMeta {
   dailyStreak: number;
   justHit3: boolean;
   cardResults: QuizCardResultInput[];
-  upNext: {
-    tileIdx: number;
-    label: number;
-    movie: string;
-    poster: string | null;
-  } | null;
 }
 
 export interface QuizResultScreenProps {
@@ -54,11 +45,8 @@ export interface QuizResultScreenProps {
   onDone: () => void;
   onPlayAgain?: () => void;
   /** Journey context. When present, the screen renders the streak +
-      daily-pip + recap + Up-next variant. */
+      daily-pip + recap variant. */
   journey?: JourneyResultMeta | null;
-  /** Chain to the next active tile's Set Intro. Only honored when
-      `journey` is set and the user has not yet hit the daily wall. */
-  onNextSet?: () => void;
 }
 
 const GOLD = '#FFD166';
@@ -69,7 +57,6 @@ export function QuizResultScreen({
   onDone,
   onPlayAgain,
   journey,
-  onNextSet,
 }: QuizResultScreenProps) {
   const color = cefrColors[level] || colors.primary;
   const label = cefrLabels[level] || level;
@@ -152,86 +139,30 @@ export function QuizResultScreen({
             </View>
           ) : null}
 
-          {/* Wall copy OR Up-next teaser */}
+          {/* Wall copy when the user just completed today's 3rd set. */}
           {hitWall ? (
             <View style={styles.wallCard}>
               <Text style={styles.wallTitle}>Today's done.</Text>
               <Text style={styles.wallBody}>
-                {journey.upNext
-                  ? `Come back tomorrow for tile ${journey.upNext.label}, or do an extra one for bonus XP.`
-                  : "Come back tomorrow for the next tile, or do an extra one for bonus XP."}
+                Come back tomorrow to keep the streak alive — or pick
+                another movie and keep going.
               </Text>
-            </View>
-          ) : journey.upNext ? (
-            <View style={styles.upNextCard}>
-              <Text style={styles.eyebrow}>UP NEXT</Text>
-              <View style={styles.upNextRow}>
-                {journey.upNext.poster ? (
-                  <Image
-                    source={{ uri: `https://image.tmdb.org/t/p/w185${journey.upNext.poster}` }}
-                    style={styles.upNextPoster}
-                  ></Image>
-                ) : (
-                  <View style={[styles.upNextPoster, styles.upNextPosterEmpty]}></View>
-                )}
-                <View style={styles.upNextText}>
-                  <Text style={styles.upNextLabel}>Tile {journey.upNext.label}</Text>
-                  <Text style={styles.upNextTitle} numberOfLines={2}>{journey.upNext.movie}</Text>
-                </View>
-              </View>
             </View>
           ) : null}
         </View>
 
-        {/* Footer CTAs */}
+        {/* Footer CTA — single button, always returns to wherever the
+            quiz was launched from (preview hub or movie detail). */}
         <View style={styles.footer}>
-          {hitWall ? (
-            <>
-              <TouchableOpacity
-                onPress={onDone}
-                style={[styles.primaryBtn, { backgroundColor: GOLD }]}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.primaryBtnText, { color: '#3a2400' }]}>
-                  Stop for today
-                </Text>
-              </TouchableOpacity>
-              {journey.upNext && onNextSet ? (
-                <TouchableOpacity
-                  onPress={onNextSet}
-                  style={[styles.ghostBtn, { borderColor: 'rgba(255,255,255,0.25)' }]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.ghostBtnText, { color: colors.textSecondary }]}>
-                    +1 bonus tile
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {journey.upNext && onNextSet ? (
-                <TouchableOpacity
-                  onPress={onNextSet}
-                  style={[styles.primaryBtn, { backgroundColor: GOLD }]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.primaryBtnText, { color: '#3a2400' }]}>
-                    Next set →
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                onPress={onDone}
-                style={[styles.ghostBtn, { borderColor: 'rgba(255,255,255,0.25)' }]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.ghostBtnText, { color: colors.textSecondary }]}>
-                  Back to reel
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <TouchableOpacity
+            onPress={onDone}
+            style={[styles.primaryBtn, { backgroundColor: GOLD }]}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.primaryBtnText, { color: '#3a2400' }]}>
+              {hitWall ? 'Stop for today' : 'Done'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
