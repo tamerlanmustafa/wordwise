@@ -1517,6 +1517,48 @@ export interface ReadyToWatchResponse {
   total: number;
 }
 
+// ─── Practice (v0.7 — Duolingo-style path) ───────────────────────────────
+export type PracticeLessonKind = 'recall' | 'mcq' | 'listen' | 'chest' | 'star';
+export type PracticeLessonState = 'done' | 'active' | 'locked';
+
+export interface PracticeLesson {
+  id: string;
+  kind: PracticeLessonKind;
+  label: string;
+  state: PracticeLessonState;
+  /** Word set used by the lesson (present for recall/mcq, null otherwise). */
+  words: string[] | null;
+}
+
+export interface PracticeUnit {
+  unit_id: string;
+  movie_id: number;
+  tmdb_id: number | null;
+  title: string;
+  poster_path: string | null;
+  cefr_level: string | null;
+  tagline: string | null;
+  done: number;
+  total: number;
+  lessons: PracticeLesson[];
+}
+
+export interface PracticeUnitsResponse {
+  units: PracticeUnit[];
+  total: number;
+}
+
+export const practiceApi = {
+  /** Fetch the user's Practice-tab path. One unit per in-reel movie,
+   *  5 lesson nodes each, server-derived state. See
+   *  backend/src/services/practice_service.py. */
+  listUnits: async (limit = 20): Promise<PracticeUnitsResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/practice/units?limit=${limit}`);
+    if (!res.ok) throw new Error(`GET /practice/units → ${res.status}`);
+    return res.json();
+  },
+};
+
 export const readyToWatchApi = {
   /** "Movies you can probably understand now" — ranks non-reel movies by
    *  the user's UserMovieProgress.comprehensibility_percent desc, floor

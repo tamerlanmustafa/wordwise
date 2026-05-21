@@ -23,7 +23,9 @@ import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
 import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
-import { JourneyScreen, type MoviePreviewPayload } from '../components/JourneyScreen';
+import type { MoviePreviewPayload } from '../components/journey/sharedTypes';
+import { MyMoviesScreen } from '../components/MyMoviesScreen';
+import { PracticeScreen } from '../components/PracticeScreen';
 import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
 import type { ReelTile } from '../services/api';
@@ -240,15 +242,18 @@ export default function App() {
   // Multi-movie batch journey state.
   const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
 
-  // Global Journey tab — lands the user on the new multi-section
-  // practice screen backed by their Watch Later list. Legacy
-  // batch-builder route stays around for the old home button.
-  const navigateToJourney = () => {
-    // Visiting the reel resets the "new since last visit" badge that
-    // RankedMovieList bumps when the user adds a movie from home.
+  // v0.7: navigation targets for the new two-tab world. The legacy
+  // `navigateToJourney` is retained as a redirect to `navigateToMyMovies`
+  // so any HomeScreen "Open my reel" callers keep working without a
+  // separate plumbing pass — they land on the new tab now.
+  const navigateToMyMovies = () => {
     useReelBadgeStore.getState().clear();
-    setCurrentScreen('journey');
+    setCurrentScreen('movies');
   };
+  const navigateToPractice = () => {
+    setCurrentScreen('practice');
+  };
+  const navigateToJourney = navigateToMyMovies;
 
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
@@ -257,9 +262,8 @@ export default function App() {
 
   const handleTabPress = (t: BottomTab) => {
     if (t === 'home') navigateToHome();
-    else if (t === 'words') navigateToLists();
-    else if (t === 'journey') navigateToJourney();
-    else if (t === 'rankings') navigateToLeaderboard();
+    else if (t === 'movies') navigateToMyMovies();
+    else if (t === 'practice') navigateToPractice();
     else if (t === 'profile') setShowUserSheet((prev) => !prev);
   };
 
@@ -531,19 +535,27 @@ export default function App() {
 
   // Derive the active bottom tab from current screen so the bar stays
   // highlighted correctly regardless of where the user navigates.
+  // v0.7 4-tab map: Home · My Movies · Practice · Profile.
   const activeTab: BottomTab | null = (() => {
     if (showUserSheet) return 'profile';
     switch (currentScreen) {
       case 'home':
-      case 'searchResults': return 'home';
-      case 'lists':
-      case 'notebook':
-      case 'review': return 'words';
-      case 'journey':
+      case 'searchResults':
+        return 'home';
+      case 'movies':
       case 'moviePreview':
-      case 'setIntro': return 'journey';
-      case 'leaderboard': return 'rankings';
-      default: return null;
+        return 'movies';
+      // Practice tab owns the daily SRS habit + per-movie lesson nodes.
+      // Set intro / quiz / review all originate from Practice now.
+      case 'practice':
+      case 'setIntro':
+      case 'review':
+        return 'practice';
+      // Lists, Rankings, and the legacy Journey screen no longer have
+      // dedicated tabs; they're reachable via HomeScreen menu items and
+      // render with no active tab highlight.
+      default:
+        return null;
     }
   })();
 
@@ -580,11 +592,38 @@ export default function App() {
           <PrivacyScreen onBack={navigateToHome} mode="privacy" />
         ) : currentScreen === 'terms' ? (
           <PrivacyScreen onBack={navigateToHome} mode="terms" />
-        ) : currentScreen === 'journey' ? (
-          <JourneyScreen
-            onTabPress={handleTabPress}
+        ) : currentScreen === 'movies' || currentScreen === 'journey' ? (
+          // v0.7 — `movies` is the new tab; the `journey` case is the
+          // legacy-route catch-all so any HomeScreen "open my reel"
+          // links land on the new screen rather than 404.
+          <MyMoviesScreen
+            onSearchPress={() => navigateToSearch('')}
             onOpenMoviePreview={handleOpenMoviePreview}
+          />
+        ) : currentScreen === 'practice' ? (
+          <PracticeScreen
             onStartDailyReview={navigateToReview}
+            onLessonPress={(unit, _lesson) => {
+              // For v0.7 every lesson tap routes through the existing
+              // per-movie quiz flow. SetIntro picks 5 words; the lesson
+              // identity is informational until the lesson-specific
+              // word handoff lands in v1.1.
+              const tile: ReelTile = {
+                tmdb_id: unit.tmdb_id ?? 0,
+                title: unit.title,
+                poster_path: unit.poster_path,
+                year: null,
+                source: 'user',
+                status: unit.lessons.every((l) => l.state === 'done')
+                  ? 'mastered'
+                  : 'studied',
+              };
+              const lvl: NodeLevel =
+                unit.cefr_level && ['A1','A2','B1','B2','C1','C2'].includes(unit.cefr_level)
+                  ? (unit.cefr_level as NodeLevel)
+                  : 'B1';
+              handleOpenMoviePreview({ tileIndex: 0, level: lvl, tile });
+            }}
           />
         ) : currentScreen === 'moviePreview' && activePreviewTile ? (
           <MoviePreviewHub

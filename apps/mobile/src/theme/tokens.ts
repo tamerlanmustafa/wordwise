@@ -66,9 +66,20 @@ export interface ThemeColors {
   // Misc
   scrim:              string;  // modal/sheet backdrop
 
-  // Bottom-bar specific
+  // Bottom-bar (legacy — kept for any non-migrated callers).
   bottomBarBg:        string;
   bottomBarBorder:    string;
+
+  // v0.7 two-tab redesign — Tab bar + chips (Source: tabs/CLAUDE_PROMPT.md §3)
+  tabBg:              string;  // bottom nav fill (more opaque than legacy bottomBarBg)
+  tabBorder:          string;  // bottom nav top hairline
+  chipBg:             string;  // inactive filter chips, circular icon buttons
+
+  // v0.7 Practice screen — lesson nodes + warm hero glow
+  heroGlowStart:      string;  // top vertex of the practice-screen warm vignette
+  lessonRing:         string;  // dashed ring around the active lesson node
+  nodeLocked:         string;  // locked lesson node fill
+  nodeLockedBorder:   string;  // locked lesson node border
 
   // Reel-only: the film stock substrate + sprocket palette
   reelStock:          string;  // film body colour
@@ -85,17 +96,20 @@ export interface ThemeColors {
 }
 
 // ── Light theme ───────────────────────────────────────────────────────────
+// v0.7: shifted from purple-tinted ("Studio") to warm sun-bleached
+// contact-sheet ("Reading room"). The cinema metaphor reads in daylight
+// because text + borders + dividers all warm-shift together.
 const light: ThemeColors = {
-  background:         '#EDE8F5',
+  background:         '#F4EFE3',  // warm cream paper (was #EDE8F5 purple)
   paper:              '#FFFFFF',
   surface:            '#FFFFFF',
-  border:             '#E0D4F7',
-  divider:            '#EFE9F8',
+  border:             '#E5DCC4',  // warm border (was #E0D4F7 lilac)
+  divider:            '#EEE6D2',  // warm divider (was #EFE9F8 lilac)
 
-  text:               '#2D3142',
-  textSecondary:      '#5C6378',
-  textFaint:          '#9AA0AE',
-  textMuted:          '#9AA0AE',
+  text:               '#2D2418',  // deep brown (was #2D3142 blue-grey)
+  textSecondary:      '#6E5F47',  // warm mid (was #5C6378 cool grey)
+  textFaint:          '#9C8E72',  // warm faint (was #9AA0AE cool)
+  textMuted:          '#9C8E72',
   textInverse:        '#FFFFFF',
 
   primary:            '#7C5CBF',
@@ -105,11 +119,15 @@ const light: ThemeColors = {
 
   secondary:          '#E07A5F',
 
-  gold:               '#FFD166',
+  // Gold in light mode pivots to ochre per CLAUDE_PROMPT.md §5 — bright
+  // #FFD166 against cream looks blown-out, ochre reads as aged paper.
+  // Components that need the *bright* gold (e.g. tile FINAL CUT stamp)
+  // can pick `goldDeep` for text contrast as before.
+  gold:               '#C58B1B',
   goldDeep:           '#3a2400',
   goldOnSurface:      '#8B5A00',
 
-  success:            '#4CAF9A',
+  success:            '#3F8B7B',  // warmer in light (was #4CAF9A)
   warning:            '#F4A261',
   error:              '#D66A6A',
   errorTint:          'rgba(214,106,106,0.18)',
@@ -117,7 +135,18 @@ const light: ThemeColors = {
   scrim:              'rgba(0,0,0,0.4)',
 
   bottomBarBg:        '#FFFFFF',
-  bottomBarBorder:    '#E0D4F7',
+  bottomBarBorder:    '#E5DCC4',
+
+  // v0.7 tab bar
+  tabBg:              'rgba(255,253,247,0.96)',
+  tabBorder:          '#E5DCC4',
+  chipBg:             '#EEE6D2',
+
+  // v0.7 Practice
+  heroGlowStart:      'rgba(197,139,27,0.14)',
+  lessonRing:         'rgba(197,139,27,0.55)',
+  nodeLocked:         '#E5DCC4',
+  nodeLockedBorder:   '#D7CCB0',
 
   reelStock:          '#F4EFE3',
   reelStockDeep:      '#E5DCBE',
@@ -166,6 +195,17 @@ const dark: ThemeColors = {
 
   bottomBarBg:        'rgba(0,0,0,0.6)',
   bottomBarBorder:    'rgba(255,255,255,0.06)',
+
+  // v0.7 tab bar
+  tabBg:              'rgba(20,18,28,0.92)',
+  tabBorder:          'rgba(255,255,255,0.08)',
+  chipBg:             'rgba(255,255,255,0.06)',
+
+  // v0.7 Practice
+  heroGlowStart:      'rgba(255,209,102,0.18)',
+  lessonRing:         'rgba(255,209,102,0.45)',
+  nodeLocked:         '#2a2935',
+  nodeLockedBorder:   'rgba(255,255,255,0.06)',
 
   reelStock:          '#1a1109',
   reelStockDeep:      '#0e0805',

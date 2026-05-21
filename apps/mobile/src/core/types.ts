@@ -23,7 +23,12 @@ export type Screen =
   | 'quizResult'
   | 'quizBatchBuilder'
   | 'quizBatchJourney'
+  // Legacy 'journey' screen state is unreachable from the v0.7 nav,
+  // but kept in the union so any legacy navigation paths still typecheck
+  // until they're cleaned up. App.tsx no longer routes anything here.
   | 'journey'
+  | 'movies'
+  | 'practice'
   | 'moviePreview'
   | 'setIntro'
   | 'addToReel';
