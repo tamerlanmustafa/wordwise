@@ -1,6 +1,8 @@
-# WordWise Monetization Plan — v0.5
+# WordWise Monetization Plan — v0.6
 
 > **Status:** Implementation largely complete. All client-side and server-side features from Phases 1–3 are built and functional. The remaining blocker for a live launch is **payment integration** (StoreKit / Google Play Billing). v0.4 tightened the free/premium boundary, made the SRS preview testable, and added explicit fallback paths. v0.5 updates the implementation status to reflect what has shipped and adds concrete next-step guidance.
+>
+> **v0.6 — Tier restructure (in progress, see [`docs/SRS_HABIT_ENGINE_PLAN.md`](SRS_HABIT_ENGINE_PLAN.md)).** SRS moves from a premium feature to the free daily habit (1 session/UTC day). Premium re-pivots to "remember faster": unlimited extra SRS sessions, larger queues, ad-free, freeze-pack IAP, and the analytics dashboard. §3 has been rewritten below. §4 (paywall triggers), §7 (trial flow), and §8 (daily habit loop) still need follow-up edits — TODO callouts inline.
 
 ## 0. What WordWise is
 
@@ -34,7 +36,7 @@ This plan covers how we turn the above into a sustainable business. It is delibe
 
 ## 1. Strategy in one paragraph
 
-**WordWise is free to learn from. WordWise Plus is paid to remember from.** The free product is a complete vocab discovery tool — every movie, every word, every save, every basic translation, plus a lightweight daily habit mechanism ("word of the day" from your saved deck). Premium is a single product layered on top: **spaced-repetition review + ad removal.** That's it for launch. Everything else (cross-movie context, offline, multi-language, audio, export) is Phase 3 backlog — built only after we have data showing that SRS converts.
+**WordWise is free to learn from and remember from. WordWise Plus is paid to remember *faster*.** The free product is a complete vocab discovery tool — every movie, every word, every save, every basic translation — plus a daily 2-minute SRS review (one session per UTC day) that anchors the habit loop. Premium layers on top: **unlimited extra SRS sessions, larger review queues, ad-free, freeze-pack IAP for streak protection, and the analytics dashboard.** Everything else (cross-movie context, offline, multi-language, audio, export) is Phase 3 backlog — built only after we have data showing the new tier structure converts.
 
 ## 2. Guiding principles
 
@@ -59,43 +61,38 @@ A complete vocabulary-discovery experience. No gates inside the read → underst
 - **Basic saved-words notebook.** Reverse-chronological list of saved words, grouped by movie. Re-tap to see definitions. This is a notebook, not a review system — no scheduling, no recall testing, no forgetting curve.
 - **Already-seen-word filtering.** Hides words the user has encountered in previous movies. Core personalization, free for everyone.
 
-**Daily habit (free) — "Today's Word":**
-- Each day the home screen highlights **one word from a popular movie at the user's CEFR level** — shows the word, its movie, the definition, and the in-movie sentence. This is a *discovery* nudge, not a review mechanic.
-- **Critically: this is NOT drawn from the user's saved deck.** If we pull from saved words, we create a mini-SRS that satisfies the recall need and undercuts the premium pitch. The daily word is always a *new* word the user hasn't saved yet — it's "here's something new to learn today," not "do you remember this?" The intent is:
-  1. Give free users a reason to open the app daily (retention).
-  2. Drive discovery of new movies and new vocabulary (engagement).
-  3. Prompt saving → growing the deck → making SRS more valuable when the user eventually tries it.
-- If the user taps "Save this word," it goes into their notebook like any other save. That save grows their deck, which increases the value proposition of SRS review.
-- The upgrade nudge below the card is: "You have N saved words. Want to make sure you remember them? → Plus." This frames SRS as the *answer* to the growing deck, not as a fancier version of the daily card.
+**Daily habit (free) — two surfaces, one streak:**
+
+1. **Daily 2-min SRS review (v0.6 — primary anchor).** One Leitner-driven session per UTC day, ~10 cards (~2 min). The queue is composed of:
+   - Due-today cards from the user's `user_words`, oldest-first.
+   - 1–2 fresh lemmas from the next unstudied movie in their reel at CEFR ±1 when the due queue is short, so a brand-new user with an empty deck still gets a full session.
+   - Each correct answer advances the word's Leitner box (1d/3d/7d/14d/30d intervals); each miss resets to box 1.
+   The session is the streak anchor — the Reel surfaces "Today's 2-min review" as the top CTA and the streak counter is driven by completing it. Free users get one start per UTC day; a second `POST /srs/session/start` returns HTTP 402 with `paywall: "srs_daily_cap_reached"`.
+
+2. **"Today's Word" discovery card.** Unchanged from v0.4 — the home screen still highlights one new word from a popular movie at the user's CEFR level (NOT from saved deck). Stays as a *discovery* surface, distinct from the SRS review. Saving it grows the deck; the deck feeds tomorrow's SRS session.
+
+The upgrade nudge below the daily review summary becomes: **"You have N words due this week. Burn through them all with Plus."** This frames Plus as removing the daily cap, not as enabling SRS at all.
 
 **Ads:**
 - A small **banner on the home screen** only. Not on word lists, not on word taps, not on movie detail, not on saves.
 - **No interstitials at launch.** The v0.2 plan placed an interstitial on movie-open, but that's the *start* of the learning loop, not outside it. An ad before the user sees the word list poisons the first impression. Revisit in Phase 3 only if banner eCPM is too low to sustain the free tier.
 - **No ads on the first session ever.** New users see zero ads until their second app open.
 
-### 🟣 Premium — "WordWise Plus" (launch version)
+### 🟣 Premium — "WordWise Plus" (v0.6 launch scope)
 
-**One-sentence pitch:** *Stop forgetting the words you saved.*
+**One-sentence pitch:** *Remember faster — no daily cap, no ads, and the safety net that keeps you on streak.*
 
-**Launch scope (two features only):**
+**Launch scope:**
 
-1. **Spaced-repetition review.** Every saved word enters a Leitner schedule. The app surfaces words at the moment you're about to forget them. ~5–10 minute daily session, calibrated to your actual deck. Review cards show: word, definition, translation, in-movie sentence, CEFR level. After each card: "Got it" / "Forgot" buttons that adjust the schedule.
+1. **Unlimited daily SRS sessions.** Free users get one 10-card session per UTC day; Plus removes the cap. Power learners can grind multiple sessions back-to-back, especially valuable in the first week when a new user is building their initial deck.
+2. **Larger queue caps.** Free sessions are pinned at `SRS_SESSION_SIZE = 10` (~2 min). Plus can configure 20- or 30-card sessions for users who want a longer block.
+3. **Ad-free.** Remove the home-screen banner.
+4. **Freeze-pack IAP (consumable).** $1.99 for 5 streak freezes (price subject to regional tiers). Free users get an auto-grant of 1 freeze/week (cap 2 held). Plus members get a higher cadence (TODO: rate to be set during W2). The IAP itself is sold to both tiers but bundled with Plus subscription for predictable mercy without per-pack purchase friction.
+5. **Memory analytics dashboard.** Retention rate, words due, words known, per-movie comprehensibility. Promoted from "Phase 3+ backlog" because under v0.6 it's the natural premium complement to the now-free daily session — Plus members want to *see* their progress beyond the streak counter.
 
-2. **Ad-free.** Remove the home-screen banner. Simple, tangible, immediate.
+**Why this works.** The free product delivers the core value (you *can* learn from movies, you *can* remember what you save). Plus removes the friction layer that converts dabblers into committed users — and crucially, the freeze IAP gives us a consumable revenue stream alongside the subscription, hedging against subscription fatigue.
 
-That's it. No cross-movie context, no audio, no offline, no multi-language, no export, no analytics dashboard. Not because those are bad ideas — because **we don't know yet if SRS is the thing users will pay for.** If it is, we layer on the supporting features in Phase 3. If it isn't, we've saved months of engineering on the wrong bet.
-
-**Free SRS preview (A/B testable).** The first time a user taps the "Review your words" CTA, they get a free taste of SRS before hitting the paywall. **The exact dose is a launch-day A/B test, not a fixed decision:**
-
-| Variant | What the user gets | Hypothesis |
-|---|---|---|
-| A (conservative) | 1 session, up to 10 cards | Enough to feel the mechanic; fast path to paywall. |
-| B (moderate) | 3 sessions across 3 days | Lets the user experience "the app reminded me and I remembered" — the core SRS value loop — before paying. |
-| C (generous) | 7 days unlimited | Full trial-before-trial. Risk: some users get enough free SRS to never convert. |
-
-After the free preview ends, the paywall appears: "You reviewed N words and remembered X%. Keep your streak going? → Start 7-day free trial."
-
-**Why A/B test instead of picking one:** Reviewers flagged that for a memory product, one session may not be enough — the value compounds over days, not minutes. But giving too much away risks satisfying the need for free. We don't know the right dose yet, so we ship all three behind a feature flag and let conversion data decide within the first 2 weeks.
+**No A/B preview test in v0.6.** The previous "1/3/7 session preview" structure is obsolete — there's no preview to gate because the daily session is permanently free. The conversion event becomes the user hitting the daily cap (or wanting to protect a streak), not running out of preview slots.
 
 ### 🟡 Deliberately not gated
 
@@ -117,6 +114,8 @@ These are real features that *might* become premium, but only after we've proven
 Priority ingestion (free=5, premium=0) remains an **internal QoS policy**, not a marketed premium benefit. Users won't pay for something invisible, and promoting it feels like a backend trick. Keep it as a silent perk.
 
 ## 4. Where the paywalls actually live
+
+> **TODO (v0.6):** The two triggers below describe the v0.5 model and need a rewrite. New v0.6 triggers should be: (1) free user hits `srs_daily_cap_reached` (second SRS session attempt same UTC day), (2) free user about to lose a streak with 0 freezes in inventory, (3) tap on the freeze IAP CTA from the streak repair modal. The "Today's Word" nudge stays but its copy shifts from "make sure you remember them" to "remove the daily cap."
 
 **Only two paywall triggers at launch.** Keep it simple. Add more in Phase 3 if conversion data justifies it.
 
@@ -160,15 +159,20 @@ Admins and hand-picked users get full premium access without payment.
 
 ## 7. Pricing
 
+> **TODO (v0.6):** Free-trial trigger needs revising — there's no longer "one free SRS session" to gate it on. Candidate replacements: (a) auto-fire 7-day trial when a free user hits the daily cap for the second day in a row, (b) trial on first freeze IAP CTA tap, (c) trial on first time the user crosses a 7-day streak. Decide before launch.
+
 - **Monthly:** $4.99 USD
 - **Annual:** $29.99 USD (~50% off, "2 months free" framing)
 - **No lifetime plan at launch.** Reviewers correctly flagged this as premature — it anchors pricing before we know real LTV and cannibalizes annual subscribers. Revisit only if annual churn data shows users want a one-time option.
 - **Student discount:** 50% off via .edu email or SheerID. Our audience is literally students.
 - **Regional pricing:** Apple/Google automatic regional tiers. Critical for Turkey/India/LATAM.
-- **Free trial:** 7-day, triggered after the one free SRS session. User experiences the product before the trial clock starts.
+- **Free trial:** 7-day. Trigger TBD per the v0.6 TODO above.
+- **Freeze-pack IAP:** $1.99 USD for 5 freezes (consumable). Regional tiers via Apple/Google automatic.
 - **Family plan:** defer to v2.
 
 ## 8. Daily habit loop
+
+> **TODO (v0.6):** This whole section was written for the "Today's Word is the only daily" world. Rewrite for the dual-surface model: the **daily SRS review** is the primary streak anchor (free, capped at 1/day), and **Today's Word** stays as a separate discovery card. The premise that "pulling from saved words creates a mini-SRS that blurs the free/premium boundary" is no longer the design — under v0.6 the daily review IS that mini-SRS, intentionally. Reconcile with §3 above before launch.
 
 v0.2 had no mechanism to bring free users back daily. v0.3 added "word of the day from your saved deck," but reviewers flagged that pulling from saved words creates a mini-SRS that blurs the free/premium boundary. v0.4 fixes this by making the daily card a *discovery* mechanic, not a *review* mechanic.
 

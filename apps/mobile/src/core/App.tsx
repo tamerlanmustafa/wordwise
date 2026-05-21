@@ -422,13 +422,16 @@ export default function App() {
 
   // Journey-result snapshot — populated up-front in handleQuizComplete
   // so QuizResultScreen renders the post-completion streak/pip values
-  // and can decide whether to show the daily-3 wall. Null for non-
-  // journey sessions (movie / batch quizzes use the legacy fallback).
+  // Per-tile movie-quiz result metadata. Under v0.6 these quizzes are an
+  // optional drill — the daily habit anchor moved to the SRS review
+  // (ReviewScreen), which is where the streak gets bumped. We still read
+  // the current daily state so the result screen can show the streak/pip
+  // context, but we don't trigger a bump from here.
   const [journeyResultMeta, setJourneyResultMeta] = useState<{
     completedTileIdx: number;
     dailyDone: number;
     dailyStreak: number;
-    justHit3: boolean;
+    justHitGoal: boolean;
     cardResults: QuizCardResultInput[];
   } | null>(null);
 
@@ -437,18 +440,15 @@ export default function App() {
     level: string,
     cardResults: QuizCardResultInput[] = [],
   ) => {
-    // Bump the daily counter NOW so the result screen reads fresh
-    // values. Bump for ANY journey-kind quiz (reel-preview AND
-    // movie-detail) since they all share the daily-habit loop.
     const src = quizSourceRef.current;
     if (src) {
       const tileIdx = src.kind === 'reel-preview' ? src.tileIndex : 0;
-      const bump = useDailyGoalStore.getState().bump();
+      const daily = useDailyGoalStore.getState();
       setJourneyResultMeta({
         completedTileIdx: tileIdx,
-        dailyDone: bump.done,
-        dailyStreak: bump.streak,
-        justHit3: bump.justHit3,
+        dailyDone: daily.done,
+        dailyStreak: daily.streak,
+        justHitGoal: false,  // never celebrate the wall here; that's ReviewScreen's job
         cardResults,
       });
     } else {
@@ -584,6 +584,7 @@ export default function App() {
           <JourneyScreen
             onTabPress={handleTabPress}
             onOpenMoviePreview={handleOpenMoviePreview}
+            onStartDailyReview={navigateToReview}
           />
         ) : currentScreen === 'moviePreview' && activePreviewTile ? (
           <MoviePreviewHub

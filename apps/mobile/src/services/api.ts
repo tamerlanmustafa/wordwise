@@ -568,6 +568,11 @@ export const reportsApi = {
 };
 
 // SRS review types — mirrors backend/src/routes/srs.py.
+export interface SynonymChoice {
+  word: string;
+  is_correct: boolean;
+}
+
 export interface SrsReviewCard {
   user_word_id: number;
   word: string;
@@ -578,6 +583,12 @@ export interface SrsReviewCard {
   definition: string | null;
   example_sentence: string | null;
   cefr_level: string | null;
+  /** v0.6 W4 — 'recall' (default tap-to-reveal) or 'synonym_mcq'
+   *  (4-choice; tap one and the client scores locally). */
+  card_type?: 'recall' | 'synonym_mcq';
+  /** Present iff card_type === 'synonym_mcq'. Client posts the boolean
+   *  result to /srs/review based on which choice was tapped. */
+  choices?: SynonymChoice[];
 }
 
 export interface SrsSessionStart {
@@ -626,14 +637,72 @@ export interface SrsStats {
   retention_pct: number;
 }
 
+/** v0.6 chest reward returned by POST /srs/session/complete. */
+export type ChestKind = 'xp_small' | 'xp_large' | 'freeze' | 'cosmetic';
+
+export interface ChestPayload {
+  kind: ChestKind;
+  label: string;
+  payload: {
+    xp?: number;
+    freezes?: number;
+    cosmetic_name?: string;
+  };
+}
+
+export interface CompleteSessionResponse {
+  chest: ChestPayload | null;
+  already_claimed: boolean;
+  correct_count: number;
+  total_count: number;
+  streak: number;
+  /** v0.6 W10 — full inventory of unlocked milestone slugs
+   *  ("opening_weekend" / "box_office" / "cult_classic" /
+   *  "criterion_collection"). Diff against AsyncStorage last-seen
+   *  to detect new unlocks for the celebration modal. */
+  unlocked_cosmetics: string[];
+}
+
+export interface DailyState {
+  today_done: boolean;
+  streak: number;
+  longest_streak: number;
+  freezes_held: number;
+  last_session_date: string | null;
+  repair_window_active: boolean;
+  auto_granted_weekly: boolean;
+  auto_consumed: number;
+  /** v0.6 W10 — same shape as in CompleteSessionResponse. */
+  unlocked_cosmetics: string[];
+}
+
+export interface CreditedFreezesResponse {
+  credited: number;
+  freezes_held: number;
+  capped: boolean;
+}
+
 // Thrown when /srs/session/start returns 402 (preview budget exhausted).
 // The session screen catches this and pushes the paywall screen instead.
+/** Kind of paywall fired by the SRS endpoints.
+ *  - `preview_exhausted`: legacy (pre-v0.6) — free preview sessions used up
+ *  - `daily_cap_reached`: v0.6 — free user already did today's session
+ *  Default 'preview_exhausted' for backwards compat with older clients. */
+export type SrsPaywallKind = 'preview_exhausted' | 'daily_cap_reached';
+
 export class SrsPaywallError extends Error {
+  kind: SrsPaywallKind;
   previews_used: number;
   previews_limit: number;
-  constructor(message: string, previews_used: number, previews_limit: number) {
+  constructor(
+    message: string,
+    previews_used: number,
+    previews_limit: number,
+    kind: SrsPaywallKind = 'preview_exhausted',
+  ) {
     super(message);
     this.name = 'SrsPaywallError';
+    this.kind = kind;
     this.previews_used = previews_used;
     this.previews_limit = previews_limit;
   }
@@ -653,10 +722,13 @@ export const srsApi = {
     if (res.status === 402) {
       const body = await res.json().catch(() => ({}));
       const detail = body?.detail || {};
+      const kind: SrsPaywallKind =
+        detail.paywall === 'srs_daily_cap_reached' ? 'daily_cap_reached' : 'preview_exhausted';
       throw new SrsPaywallError(
-        detail.message || 'Free review sessions used up',
+        detail.message || 'Review session unavailable',
         detail.previews_used ?? 0,
-        detail.previews_limit ?? 0
+        detail.previews_limit ?? 0,
+        kind,
       );
     }
     if (!res.ok) {
@@ -677,6 +749,25 @@ export const srsApi = {
     }
   },
 
+  /** v0.6: call once after the LAST /srs/review of a daily session.
+   *  Returns the variable-reward chest (null on subsequent same-day
+   *  calls — `already_claimed=true`). Server picks the reward to keep
+   *  the random roll tamper-proof. */
+  completeSession: async (
+    correctCount: number,
+    totalCount: number,
+  ): Promise<CompleteSessionResponse> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/session/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ correct_count: correctCount, total_count: totalCount }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`POST /srs/session/complete → ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
   todaysWord: async (skip = 0, targetLang?: string): Promise<TodaysWord | null> => {
     // Same word for the whole calendar day per language; cache locally so
     // navigation between tabs/screens doesn't re-fetch (and re-translate).
@@ -695,6 +786,30 @@ export const srsApi = {
       AsyncStorage.setItem(cacheKey, JSON.stringify(body)).catch(() => {});
     }
     return body || null;
+  },
+};
+
+/** v0.6 daily-habit hydration + freeze IAP / debug-grant. */
+export const dailyApi = {
+  state: async (): Promise<DailyState> => {
+    const res = await authFetch(`${API_BASE_URL}/daily/state`);
+    if (!res.ok) throw new Error(`GET /daily/state → ${res.status}`);
+    return res.json();
+  },
+
+  /** Dev-only shortcut to credit a freeze pack without the IAP. Returns
+   *  401/403 in production for non-admin callers. Useful for exercising
+   *  the full mercy UX before Apple/Google credentials land. */
+  debugGrantFreezes: async (): Promise<CreditedFreezesResponse> => {
+    const res = await authFetch(
+      `${API_BASE_URL}/consumables/freeze-pack/debug-grant`,
+      { method: 'POST' },
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`POST /consumables/freeze-pack/debug-grant → ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
   },
 };
 
@@ -1327,6 +1442,10 @@ export interface ReelTile {
   poster_path: string | null;
   year: number | null;
   source: ReelTileSource;
+  // v0.6 progress overlay. Backend defaults to 'unstudied'/0 for tiles
+  // with no UserMovieProgress row yet, so these are always present.
+  status?: 'unstudied' | 'studied' | 'mastered';
+  comprehensibility_percent?: number;
 }
 
 export interface ReelListResponse {
@@ -1377,6 +1496,36 @@ export const reelApi = {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Failed to seed reel');
+    return res.json();
+  },
+};
+
+// ─── Ready-to-Watch (v0.6 discovery surface) ─────────────────────────────
+export interface ReadyToWatchMovie {
+  movie_id: number;
+  tmdb_id: number | null;
+  title: string;
+  poster_url: string | null;
+  year: number | null;
+  comprehensibility_percent: number;
+  status: 'unstudied' | 'studied';
+}
+
+export interface ReadyToWatchResponse {
+  movies: ReadyToWatchMovie[];
+  floor_pct: number;
+  total: number;
+}
+
+export const readyToWatchApi = {
+  /** "Movies you can probably understand now" — ranks non-reel movies by
+   *  the user's UserMovieProgress.comprehensibility_percent desc, floor
+   *  defaulting to 40%. Empty list is a normal early-days state. */
+  list: async (limit = 5, floorPct = 40): Promise<ReadyToWatchResponse> => {
+    const res = await authFetch(
+      `${API_BASE_URL}/movies/ready-to-watch?limit=${limit}&floor_pct=${floorPct}`,
+    );
+    if (!res.ok) throw new Error('Failed to load ready-to-watch');
     return res.json();
   },
 };

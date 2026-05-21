@@ -12,7 +12,7 @@
  *        • 🔥 streak +1 ticker
  *        • Daily-goal pips (n / DAILY_GOAL)
  *        • Per-word ✓/× recap
- *        • Wall copy (when justHit3) OR a simple "back to movie" CTA
+ *        • Wall copy (when justHitGoal) OR a simple "back to movie" CTA
  *
  * Light/dark: tokens drive the surfaces, text, and CTA. The primary CTA
  * follows the same inversion rule as the Set Intro and Reel CTAs —
@@ -37,7 +37,10 @@ export interface JourneyResultMeta {
   completedTileIdx: number;
   dailyDone: number;
   dailyStreak: number;
-  justHit3: boolean;
+  /** True iff this completion pushed the user from < DAILY_GOAL to >=
+   *  DAILY_GOAL today. Drives the celebration "wall" copy. Per-tile
+   *  movie quizzes pass false; only the daily SRS review may set true. */
+  justHitGoal: boolean;
   cardResults: QuizCardResultInput[];
 }
 
@@ -92,7 +95,7 @@ export function QuizResultScreen({
   // ── Journey mode ────────────────────────────────────────────────
   if (journey) {
     const dailyClamped = Math.min(journey.dailyDone, DAILY_GOAL);
-    const hitWall = journey.justHit3;
+    const hitWall = journey.justHitGoal;
 
     return (
       <SafeAreaView style={s.container} edges={['top']}>

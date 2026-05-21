@@ -1,23 +1,28 @@
 /**
- * dailyGoalStore — tracks the daily-3 commitment that anchors the
- * Journey Reel habit loop. Three pieces of state, all persisted:
+ * dailyGoalStore — tracks the daily SRS-review commitment that anchors
+ * the Journey Reel habit loop (v0.6: collapsed from the old 3-set model
+ * to a single ~2-min SRS session per day). Three pieces of state, all
+ * persisted to AsyncStorage:
  *
  *   • `date`      — the local-calendar date the counter is for
  *                   (YYYY-MM-DD). Auto-rolls at the first interaction
  *                   on a new day.
- *   • `done`      — sets completed today (0..3 caps the goal; bonus
- *                   sets push `done` past 3 but don't change pip math).
- *   • `streak`    — consecutive days the user has hit done >= 3. Bumps
- *                   when the 3rd set lands and the previous day was
- *                   either streak day or yesterday's streak day.
+ *   • `done`      — sessions completed today. `done >= DAILY_GOAL`
+ *                   (i.e. >= 1) means today's habit is satisfied. Bonus
+ *                   sessions push `done` past the goal but don't change
+ *                   the streak — same-day re-bumps are idempotent.
+ *   • `streak`    — consecutive days the user has hit the goal. Bumps
+ *                   when today's first session lands and the previous
+ *                   day was either today already or yesterday.
  *   • `lastHitDate` — last YYYY-MM-DD the user hit goal. Drives the
  *                   streak-continuation check independent of `date`
  *                   so a skipped day breaks the streak even if the
  *                   user opens the app a week later.
  *
- * The store is intentionally simple — no backend mirror. Streak math
- * happens in the bump function so the screen reads ready-to-render
- * values.
+ * Bump only fires when the user completes a daily SRS review (see
+ * ReviewScreen). Per-tile movie quizzes used to bump too (under the old
+ * 3-set model) — they no longer do; they're an optional drill, not the
+ * habit anchor.
  */
 
 import { create } from 'zustand';
@@ -31,12 +36,14 @@ interface DailyState {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   /** Increment today's count. Returns the new state so the caller can
-   *  decide whether to show the daily-wall modal (done === 3). */
-  bump: () => { done: number; streak: number; justHit3: boolean };
+   *  decide whether to celebrate the goal (`justHitGoal === true` on the
+   *  bump that pushed `done` from < DAILY_GOAL to >= DAILY_GOAL). */
+  bump: () => { done: number; streak: number; justHitGoal: boolean };
 }
 
 const KEY = 'journey.dailyGoal.v1';
-export const DAILY_GOAL = 3;
+// v0.6: one ~2-min SRS session per day is the habit anchor.
+export const DAILY_GOAL = 1;
 
 function todayLocal(): string {
   const d = new Date();
@@ -132,10 +139,10 @@ export const useDailyGoalStore = create<DailyState>((set, get) => ({
       : { date: today, done: 0, streak: state.streak, lastHitDate: state.lastHitDate };
 
     const newDone = base.done + 1;
-    const justHit3 = base.done < DAILY_GOAL && newDone >= DAILY_GOAL;
+    const justHitGoal = base.done < DAILY_GOAL && newDone >= DAILY_GOAL;
     let newStreak = base.streak;
     let newLastHit = base.lastHitDate;
-    if (justHit3) {
+    if (justHitGoal) {
       // Streak continues if yesterday was the prior lastHitDate, or if
       // today already was (idempotent). Otherwise this starts fresh
       // at 1 — the user just hit goal today after a gap.
@@ -153,6 +160,6 @@ export const useDailyGoalStore = create<DailyState>((set, get) => ({
     };
     save(next);
     set(next);
-    return { done: newDone, streak: newStreak, justHit3 };
+    return { done: newDone, streak: newStreak, justHitGoal };
   },
 }));

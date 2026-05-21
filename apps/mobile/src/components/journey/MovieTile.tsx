@@ -41,6 +41,13 @@ export interface MovieTileProps {
   /** True when the user has completed at least one quiz session for
    *  this movie — surfaced as a small gold ✓ stamp. Optional. */
   quizzed?: boolean;
+  /** v0.6 — backend-computed mastery status from UserMovieProgress.
+   *  `mastered` swaps the ✓ for a "Final Cut" stamp; `studied` shifts
+   *  the border to gold. `unstudied` (or undefined) renders as before. */
+  status?: 'unstudied' | 'studied' | 'mastered';
+  /** v0.6 — frequency-weighted % of the movie's vocab the user knows
+   *  (0..100). Surfaced as a small chip bottom-left when > 0. */
+  comprehensibilityPercent?: number;
   /** True while the parent is fetching the preview-hub payload for
    *  this tile. Used to lock further presses and render a subtle
    *  scale-in feedback. Optional. */
@@ -73,15 +80,24 @@ export function MovieTile({
   centerX,
   centerY,
   quizzed,
+  status,
+  comprehensibilityPercent,
   busy,
   onPress,
 }: MovieTileProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  const accent = CEFR_COLOR[level] ?? CEFR_COLOR.A1;
+  // `studied` shifts the border to gold; `mastered` keeps gold + adds a
+  // film-stamp overlay. Falls back to the CEFR color otherwise.
+  const accent =
+    status === 'studied' || status === 'mastered'
+      ? tc.gold
+      : CEFR_COLOR[level] ?? CEFR_COLOR.A1;
   const left = centerX - TILE_SIZE / 2;
   const top = centerY - TILE_SIZE / 2;
+  const showPctChip =
+    typeof comprehensibilityPercent === 'number' && comprehensibilityPercent >= 1;
 
   // Press scale.
   const press = useRef(new Animated.Value(0)).current;
@@ -146,11 +162,26 @@ export function MovieTile({
             </Text>
           </LinearGradient>
 
-          {/* Quizzed ✓ stamp — top-right, only after at least one
-              completed quiz session. */}
-          {quizzed ? (
+          {/* Top-right stamp. Priority: Final Cut (mastered) > ✓ (any
+              completed quiz session). Both are bright on a dark tile so
+              they read without a backdrop. */}
+          {status === 'mastered' ? (
+            <View style={s.finalCutStamp} pointerEvents="none">
+              <Text style={s.finalCutText}>FINAL{'\n'}CUT</Text>
+            </View>
+          ) : quizzed ? (
             <View style={s.checkDisc} pointerEvents="none">
               <Text style={s.checkGlyph}>✓</Text>
+            </View>
+          ) : null}
+
+          {/* Bottom-left comprehensibility chip — only when nonzero so
+              an unstudied tile doesn't get a "0%" badge. */}
+          {showPctChip ? (
+            <View style={s.pctChip} pointerEvents="none">
+              <Text style={s.pctChipText}>
+                {Math.round(comprehensibilityPercent!)}%
+              </Text>
             </View>
           ) : null}
         </Animated.View>
@@ -240,6 +271,41 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   checkGlyph: {
     fontSize: 12, fontWeight: '900', color: tc.goldDeep,
+  },
+  finalCutStamp: {
+    position: 'absolute',
+    top: 4, right: 4,
+    paddingHorizontal: 4, paddingVertical: 2,
+    backgroundColor: tc.gold,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: tc.goldDeep,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  finalCutText: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: tc.goldDeep,
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    lineHeight: 8,
+  },
+  pctChip: {
+    position: 'absolute',
+    left: 4, bottom: 22,  // sit above the title strip
+    paddingHorizontal: 5, paddingVertical: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 6,
+  },
+  pctChipText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 0.2,
   },
   badge: {
     position: 'absolute',

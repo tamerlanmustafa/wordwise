@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -36,6 +37,7 @@ import { JourneyReelBackground } from './journey/JourneyReelBackground';
 import { JourneyReelSprockets } from './journey/JourneyReelSprockets';
 import { MovieTile } from './journey/MovieTile';
 import { JourneyConnector } from './journey/JourneyConnector';
+import { ReadyToWatchShelf } from './journey/ReadyToWatchShelf';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { ReelTile } from '../services/api';
 
@@ -51,6 +53,9 @@ export interface JourneyScreenProps {
    *  hub the user picks "Study words" (→ MovieDetail) or "Quiz me"
    *  (→ SetIntro → quiz). */
   onOpenMoviePreview: (payload: MoviePreviewPayload) => void;
+  /** v0.6 — tap on the sticky "Today's 2-min review" CTA. Opens the
+   *  SRS ReviewScreen which anchors the daily habit. */
+  onStartDailyReview: () => void;
 }
 
 const WINDOW_WIDTH  = Dimensions.get('window').width;
@@ -68,6 +73,7 @@ const LEVELS: NodeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 export function JourneyScreen({
   onTabPress: _onTabPress,
   onOpenMoviePreview,
+  onStartDailyReview,
 }: JourneyScreenProps) {
   const user = useAuthStore((s) => s.user);
   const userLevel = ((user?.proficiency_level || 'A1').toUpperCase() as NodeLevel);
@@ -82,7 +88,7 @@ export function JourneyScreen({
 
   const dailyDone = useDailyGoalStore((s) => s.done);
   const dailyStreak = useDailyGoalStore((s) => s.streak);
-  const dailyClamped = Math.min(dailyDone, DAILY_GOAL);
+  const dailyDoneToday = dailyDone >= DAILY_GOAL;
   useEffect(() => {
     if (!reelHydrated) hydrateReel();
   }, [reelHydrated, hydrateReel]);
@@ -128,6 +134,8 @@ export function JourneyScreen({
       label: i + 1,
       poster: m.poster_path ?? null,
       title: m.title,
+      status: m.status,
+      comprehensibilityPercent: m.comprehensibility_percent,
     }));
 
     return { tiles, totalHeight, rTileY };
@@ -186,7 +194,9 @@ export function JourneyScreen({
           completedCount={layout.tiles.length}
         ></JourneyConnector>
 
-        {/* Movie tiles — all evergreen, all tappable. */}
+        {/* Movie tiles — all evergreen, all tappable. v0.6 surfaces
+            mastery status (gold border / FINAL CUT stamp) and a small
+            comprehensibility chip when the user has any progress. */}
         {layout.tiles.map((t, i) => (
           <MovieTile
             key={t.id}
@@ -197,6 +207,8 @@ export function JourneyScreen({
             poster={t.poster}
             centerX={t.x}
             centerY={t.y}
+            status={t.status}
+            comprehensibilityPercent={t.comprehensibilityPercent}
             busy={busyTile === i}
             onPress={() => handleTilePress(i)}
           ></MovieTile>
@@ -227,25 +239,46 @@ export function JourneyScreen({
         pointerEvents="none"
       ></LinearGradient>
 
-      {/* Daily-goal strip — viewport-anchored. Activity-based: each
-          completed quiz fills one pip; 3/day continues the streak. */}
-      <View style={[s.goalStrip, { top: insets.top + 8 }]} pointerEvents="none">
-        <View style={s.goalPips}>
-          {Array.from({ length: DAILY_GOAL }).map((_, i) => (
-            <View
-              key={`pip-${i}`}
-              style={[
-                s.goalPip,
-                i < dailyClamped ? s.goalPipFilled : s.goalPipEmpty,
-              ]}
-            ></View>
-          ))}
-        </View>
-        <Text style={s.goalText} numberOfLines={1}>
-          <Text style={s.goalTextStrong}>{dailyClamped} of {DAILY_GOAL}</Text>
-          <Text> · ~2 min each · </Text>
-          <Text style={s.goalTextStrong}>🔥 {dailyStreak}</Text>
-        </Text>
+      {/* Daily-habit CTA — viewport-anchored. v0.6: one ~2-min SRS
+          session per day. Tap when undone → ReviewScreen; once done,
+          collapses into a "Today's done · 🔥 N" pill that's no longer
+          tappable (the user can still drill movie quizzes via tiles). */}
+      <View style={[s.goalStrip, { top: insets.top + 8 }]}>
+        {dailyDoneToday ? (
+          <View style={s.dailyDonePill} pointerEvents="none">
+            <Text style={s.dailyDoneText} numberOfLines={1}>
+              Today's done
+              {dailyStreak > 0 ? (
+                <Text style={s.dailyDoneStreak}>  ·  🔥 {dailyStreak}</Text>
+              ) : null}
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={onStartDailyReview}
+            style={({ pressed }) => [
+              s.dailyCta,
+              pressed && { opacity: 0.85 },
+            ]}
+            hitSlop={6}
+          >
+            <Text style={s.dailyCtaText} numberOfLines={1}>
+              Today's 2-min review →
+            </Text>
+            {dailyStreak > 0 ? (
+              <Text style={s.dailyCtaStreak}>🔥 {dailyStreak}</Text>
+            ) : null}
+          </Pressable>
+        )}
+      </View>
+
+      {/* Ready-to-Watch shelf — sits below the daily CTA. Self-hides
+          when the response is empty or the user dismissed it today, so
+          this absolute layer doesn't visually overlap tiles for users
+          with no qualifying recommendations. Re-hydrates the reel on
+          add so the tile appears in the user's list. */}
+      <View style={[s.shelfWrap, { top: insets.top + 58 }]}>
+        <ReadyToWatchShelf onAdded={() => { void hydrateReel(); }} />
       </View>
 
     </SafeAreaView>
@@ -284,31 +317,53 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
   },
-  goalPips: {
+  dailyCta: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 4,
-  },
-  goalPip: {
-    width: 24,
-    height: 6,
-    borderRadius: 3,
-  },
-  goalPipFilled: {
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: tc.gold,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
-  goalPipEmpty: {
-    backgroundColor: tc.border,
-  },
-  goalText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: tc.textSecondary,
+  dailyCtaText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: tc.goldDeep,
     letterSpacing: 0.2,
   },
-  goalTextStrong: {
-    color: tc.goldOnSurface,
+  dailyCtaStreak: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: tc.goldDeep,
+    opacity: 0.85,
+  },
+  dailyDonePill: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  dailyDoneText: {
+    fontSize: 12,
     fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.2,
+  },
+  dailyDoneStreak: {
+    color: tc.gold,
+    fontWeight: '900',
+  },
+
+  shelfWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
 
   emptyHint: {

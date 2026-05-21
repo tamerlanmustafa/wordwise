@@ -8,15 +8,36 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { srsApi, wordwiseApi, SrsPaywallError, type SrsReviewCard } from '../services/api';
+import {
+  srsApi,
+  wordwiseApi,
+  SrsPaywallError,
+  type ChestPayload,
+  type SrsReviewCard,
+} from '../services/api';
+import { useDailyGoalStore } from '../stores/dailyGoalStore';
+import { useTipDismissalsStore } from '../stores/tipDismissalsStore';
+import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
+import { ChestReveal } from './journey/ChestReveal';
+import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
+import { TipPopup } from './common/TipPopup';
 
-// Leitner review session UI.
+// v0.6 spacing-effect tip key — incrementable suffix lets us replace
+// the body copy without grandfathering old dismissals (`v2` would
+// re-show to users who dismissed v1).
+const SPACING_TIP_KEY = 'spacing_first_repeat_v1';
+
+// Leitner review session UI — also the v0.6 "daily 2-min" habit anchor.
 //
 // Flow:
-//   1. POST /srs/session/start → get up to N due cards (or 402 → paywall)
+//   1. POST /srs/session/start → get up to N due cards (or 402 → paywall:
+//      "srs_daily_cap_reached" for free users who already did today, or
+//      legacy "srs_preview_exhausted" for older backends).
 //   2. Card shows word. Tap "Show answer" → reveal definition/sentence.
 //   3. "Got it" / "Forgot" → POST /srs/review, advance to next card.
-//   4. When the stack empties → summary screen.
+//   4. When the stack empties → summary screen. Completing the session
+//      bumps `dailyGoalStore` — that's how the streak counter and
+//      "Today's done" pill on JourneyScreen know the habit is satisfied.
 //
 // This component intentionally keeps definition/translation lookup on the
 // client side of the SRS loop: the review endpoint only records outcomes.
@@ -55,6 +76,36 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
   const [previewsRemaining, setPreviewsRemaining] = useState<number | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Bump info for the streak/wall on the done screen. Populated once when
+  // the session finishes; not re-bumped on re-renders.
+  const [dailySummary, setDailySummary] = useState<{
+    streak: number;
+    justHitGoal: boolean;
+  } | null>(null);
+  // Chest reward returned by /srs/session/complete. `chest` is the
+  // payload to render; `chestVisible` controls the overlay so the user
+  // can dismiss it without re-firing the API call.
+  const [chest, setChest] = useState<ChestPayload | null>(null);
+  const [chestVisible, setChestVisible] = useState(false);
+  // Spacing-effect tip — shown once per session when the first
+  // SRS-resurfaced word appears (srs_box >= 2 means the user has
+  // graduated past first-encounter on this word).
+  const [spacingTipVisible, setSpacingTipVisible] = useState(false);
+  const tipHydrate = useTipDismissalsStore((s) => s.hydrate);
+  const tipHydrated = useTipDismissalsStore((s) => s.hydrated);
+  useEffect(() => {
+    if (!tipHydrated) tipHydrate();
+  }, [tipHydrated, tipHydrate]);
+
+  // Milestone unlock queue. completeSession returns the full inventory;
+  // we diff against AsyncStorage "seen" to find new ones and present
+  // them one at a time (rare multi-cross scenarios get serialized).
+  const [milestoneQueue, setMilestoneQueue] = useState<string[]>([]);
+  const milestoneHydrate = useMilestoneTrackerStore((s) => s.hydrate);
+  const milestoneHydrated = useMilestoneTrackerStore((s) => s.hydrated);
+  useEffect(() => {
+    if (!milestoneHydrated) milestoneHydrate();
+  }, [milestoneHydrated, milestoneHydrate]);
 
   const fade = useRef(new Animated.Value(1)).current;
 
@@ -94,6 +145,21 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
 
   const currentCard = cards[index];
 
+  // Spacing-effect tip trigger. Fires on the first reappearing card
+  // (srs_box >= 2 means the user has gotten this right at least once
+  // before — they're seeing it again because of the 3-day Leitner
+  // interval that the literature calls out). Guarded by
+  // `shouldShow(SPACING_TIP_KEY)` so it never repeats once dismissed
+  // or already shown this session.
+  useEffect(() => {
+    if (phase !== 'prompt' || !currentCard || !tipHydrated) return;
+    if (currentCard.srs_box < 2) return;
+    const { shouldShow, markShown } = useTipDismissalsStore.getState();
+    if (!shouldShow(SPACING_TIP_KEY)) return;
+    markShown(SPACING_TIP_KEY);
+    setSpacingTipVisible(true);
+  }, [phase, currentCard, tipHydrated]);
+
   const advance = useCallback(
     (correct: boolean) => {
       if (!currentCard) return;
@@ -114,13 +180,43 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
       ]).start();
 
       if (index + 1 >= cards.length) {
+        // Session complete — anchor the daily streak. Bump is idempotent
+        // for same-day repeats (a free user can only start once per UTC
+        // day anyway, but premium users hitting multiple sessions today
+        // shouldn't inflate the streak).
+        const bump = useDailyGoalStore.getState().bump();
+        setDailySummary({ streak: bump.streak, justHitGoal: bump.justHitGoal });
+        // Award the variable-reward chest. Fire and forget — if the
+        // network is flaky we still show the done screen; the chest
+        // simply won't appear. Server enforces one-per-day so a retry
+        // won't double-credit.
+        const justCorrect = correct ? stats.got + 1 : stats.got;
+        const total = stats.got + stats.forgot + 1;
+        srsApi.completeSession(justCorrect, total)
+          .then((res) => {
+            if (res.chest) {
+              setChest(res.chest);
+              setChestVisible(true);
+            }
+            // v0.6 W10 — queue any newly-crossed milestones for celebration.
+            // We don't markSeen here; that happens when the user dismisses
+            // each modal so a crash mid-queue doesn't lose the unlock.
+            const tracker = useMilestoneTrackerStore.getState();
+            if (tracker.hydrated && res.unlocked_cosmetics?.length) {
+              const fresh = tracker.newSince(res.unlocked_cosmetics);
+              if (fresh.length > 0) setMilestoneQueue(fresh);
+            }
+          })
+          .catch((e) => {
+            console.warn('[ReviewScreen] completeSession failed:', e?.message);
+          });
         setPhase('done');
       } else {
         setIndex(index + 1);
         setPhase('prompt');
       }
     },
-    [currentCard, index, cards.length, fade]
+    [currentCard, index, cards.length, fade, stats]
   );
 
   if (phase === 'loading') {
@@ -188,13 +284,15 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
   if (phase === 'done') {
     const total = stats.got + stats.forgot;
     const pct = total > 0 ? Math.round((stats.got / total) * 100) : 0;
+    const streak = dailySummary?.streak ?? 0;
+    const justHitGoal = dailySummary?.justHitGoal ?? false;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Session complete</Text>
+          <Text style={styles.headerTitle}>Today's done</Text>
           <View style={{ width: 60 }} />
         </View>
         <View style={styles.centered}>
@@ -202,17 +300,36 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
           <Text style={styles.emptyBody}>
             You remembered {stats.got} of {total} words.
           </Text>
-          {isPreview && previewsRemaining !== null && (
+          {streak > 0 && (
+            <Text style={styles.streakLine}>
+              🔥 {streak}-day streak{justHitGoal ? ' — +1 today!' : ''}
+            </Text>
+          )}
+          {isPreview && previewsRemaining === 0 && (
             <Text style={styles.previewHint}>
-              {previewsRemaining > 0
-                ? `${previewsRemaining} free ${previewsRemaining === 1 ? 'session' : 'sessions'} left`
-                : 'This was your last free session.'}
+              Come back tomorrow — or upgrade for unlimited reviews.
             </Text>
           )}
           <TouchableOpacity style={styles.primaryBtn} onPress={onBack}>
             <Text style={styles.primaryBtnText}>Back home</Text>
           </TouchableOpacity>
         </View>
+        {chestVisible && chest ? (
+          <ChestReveal chest={chest} onCollect={() => setChestVisible(false)} />
+        ) : null}
+        <MilestoneUnlockModal
+          slug={milestoneQueue[0] ?? null}
+          onDismiss={() => {
+            // Mark just-shown slug as seen, then advance the queue. If
+            // multiple were unlocked in the same bump, the next one
+            // springs in on the next render.
+            const [shown, ...rest] = milestoneQueue;
+            if (shown) {
+              void useMilestoneTrackerStore.getState().markSeen([shown]);
+            }
+            setMilestoneQueue(rest);
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -245,7 +362,9 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
           {currentCard?.movie_title && (
             <Text style={styles.movieHint}>from {currentCard.movie_title}</Text>
           )}
-          {showAnswer ? (
+          {currentCard?.card_type === 'synonym_mcq' ? (
+            <Text style={styles.hint}>Pick the synonym</Text>
+          ) : showAnswer ? (
             <View style={styles.answerContent}>
               {currentCard?.definition && (
                 <Text style={styles.definition}>{currentCard.definition}</Text>
@@ -266,7 +385,24 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
       </Animated.View>
 
       <View style={styles.footer}>
-        {!showAnswer ? (
+        {currentCard?.card_type === 'synonym_mcq' && currentCard.choices ? (
+          // 4-choice synonym MCQ. Client scores locally and posts the
+          // boolean to /srs/review via advance(). No "show answer" step.
+          <View style={styles.choicesGrid}>
+            {currentCard.choices.map((c, i) => (
+              <TouchableOpacity
+                key={`${c.word}-${i}`}
+                style={styles.choiceBtn}
+                onPress={() => advance(c.is_correct)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.choiceBtnText} numberOfLines={1}>
+                  {c.word}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : !showAnswer ? (
           <TouchableOpacity
             style={styles.primaryBtn}
             onPress={() => setPhase('answer')}
@@ -290,6 +426,22 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
           </View>
         )}
       </View>
+
+      <TipPopup
+        visible={spacingTipVisible}
+        eyebrow="Did you know?"
+        title="That's the spacing effect at work"
+        body={
+          'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
+          'is when memory really sticks — much better than cramming on one day. ' +
+          "You're seeing this word again on that exact rhythm."
+        }
+        onDismiss={() => setSpacingTipVisible(false)}
+        onDontShowAgain={() => {
+          void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
+          setSpacingTipVisible(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -399,6 +551,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
   },
+  // 2x2 grid for synonym MCQ choices. Wraps row to row so 4 choices
+  // land symmetrically on phones; smaller buttons than recall's Got/Forgot
+  // so the word fits.
+  choicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  choiceBtn: {
+    width: '48%',
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+  },
+  choiceBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   gotItBtn: { backgroundColor: COLORS.success },
   forgotBtn: { backgroundColor: COLORS.error },
   answerBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
@@ -418,5 +591,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   bigStat: { fontSize: 56, fontWeight: '700', color: COLORS.primary },
-  previewHint: { fontSize: 13, color: COLORS.textTertiary, fontStyle: 'italic' },
+  streakLine: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  previewHint: { fontSize: 13, color: COLORS.textTertiary, fontStyle: 'italic', textAlign: 'center' },
 });
