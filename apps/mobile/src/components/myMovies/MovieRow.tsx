@@ -126,11 +126,13 @@ export function MovieRow({
   );
 }
 
-/** Best-effort CEFR inference. v0.7: the ReelTile payload doesn't carry
- *  CEFR, so the badge is empty for now. Wired as a hook so we can
- *  enrich without changing the row component when the API grows. */
-function inferCefrFromTile(_tile: ReelTile): keyof typeof cefrColors | null {
-  return null;
+/** Best-effort CEFR inference. v0.7+: the ReelTile payload carries
+ *  `cefr_level` from `Movie.difficultyLevel`; null when the user's
+ *  added TMDB id has no internal Movie row yet (catalog ingest lag). */
+function inferCefrFromTile(tile: ReelTile): keyof typeof cefrColors | null {
+  return tile.cefr_level && tile.cefr_level in cefrColors
+    ? (tile.cefr_level as keyof typeof cefrColors)
+    : null;
 }
 
 const makeStyles = (tc: ThemeColors) =>

@@ -24,6 +24,19 @@ router = APIRouter(prefix="/reel", tags=["reel"])
 # CEFR ladder used for ±1 banding when seeding starter movies.
 LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
+# Map our internal `difficultylevel` enum (long names) → CEFR codes
+# the client renders. The DB enum predates the CEFR convention so it
+# stores ELEMENTARY/INTERMEDIATE/... rather than A2/B1. Single source
+# of truth — also used by /movies/by-level downstream.
+DIFFICULTY_TO_CEFR: dict[str, str] = {
+    "BEGINNER":          "A1",
+    "ELEMENTARY":        "A2",
+    "INTERMEDIATE":      "B1",
+    "UPPER_INTERMEDIATE": "B2",
+    "ADVANCED":          "C1",
+    "PROFICIENT":        "C2",
+}
+
 # How many starter movies to drop into a fresh reel.
 SEED_TARGET_COUNT = 6
 
@@ -122,6 +135,10 @@ class ReelTile(BaseModel):
     # for display; the float in the DB is preserved for future tuning.
     status: Literal["unstudied", "studied", "mastered"] = "unstudied"
     comprehensibility_percent: int = 0
+    # v0.7: CEFR difficulty from `Movie.difficultyLevel`. Null when the
+    # user-added TMDB id doesn't have a matching internal Movie row
+    # (rare — happens before our catalog ingest catches up).
+    cefr_level: Optional[Literal["A1", "A2", "B1", "B2", "C1", "C2"]] = None
 
 
 class ReelListResponse(BaseModel):
@@ -161,13 +178,28 @@ async def list_reel(
         order={"addedAt": "desc"},
     )
 
-    # Build the progress lookup keyed by TMDB id (what the reel tiles use)
-    # via the Movie table. One query per resolution direction.
+    # Build the progress + CEFR lookups keyed by TMDB id (what the reel
+    # tiles use) via the Movie table. One movie fetch covers both.
     progress_by_tmdb: dict[int, tuple[str, int]] = {}
+    cefr_by_tmdb: dict[int, str] = {}
     if user_rows:
         tmdb_ids = [r.tmdbId for r in user_rows]
         movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
         tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
+        # Snap CEFR off the same `movies` query — no extra round trip.
+        # The DB stores the long-name enum (ELEMENTARY/INTERMEDIATE/...);
+        # DIFFICULTY_TO_CEFR translates to the A1..C2 codes the client
+        # renders against `cefrColors`.
+        for m in movies:
+            if m.difficultyLevel is not None:
+                long_name = (
+                    m.difficultyLevel.value
+                    if hasattr(m.difficultyLevel, "value")
+                    else str(m.difficultyLevel)
+                ).upper()
+                cefr = DIFFICULTY_TO_CEFR.get(long_name)
+                if cefr is not None:
+                    cefr_by_tmdb[m.tmdbId] = cefr
         movie_ids = list(tmdb_to_movie_id.values())
         if movie_ids:
             progress_rows = await db.usermovieprogress.find_many(
@@ -194,6 +226,7 @@ async def list_reel(
             source="user",
             status=status,  # type: ignore[arg-type]
             comprehensibility_percent=pct,
+            cefr_level=cefr_by_tmdb.get(r.tmdbId),  # type: ignore[arg-type]
         ))
     end = cursor + limit
     page = tiles[cursor:end]

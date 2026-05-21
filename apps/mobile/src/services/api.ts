@@ -1446,6 +1446,9 @@ export interface ReelTile {
   // with no UserMovieProgress row yet, so these are always present.
   status?: 'unstudied' | 'studied' | 'mastered';
   comprehensibility_percent?: number;
+  // v0.7: CEFR badge on the My Movies row + reel filtering. Null when
+  // the user's added TMDB id has no matching catalog entry yet.
+  cefr_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | null;
 }
 
 export interface ReelListResponse {
