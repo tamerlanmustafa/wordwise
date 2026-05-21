@@ -40,9 +40,16 @@ export function FilterChips({ available, active, onChange }: FilterChipsProps) {
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   return (
+    // `flexGrow: 0` keeps the ScrollView's own height tied to content
+    // (otherwise the parent flex-column gives it the full remaining
+    // vertical band). `alignItems: 'center'` on the inner content prevents
+    // each chip from stretching to that band — without it the chips
+    // render as tall vertical capsules because flexDirection: row defaults
+    // its cross-axis alignment to stretch.
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={s.scroll}
       contentContainerStyle={s.row}
     >
       {available.map((f) => {
@@ -78,10 +85,15 @@ export function FilterChips({ available, active, onChange }: FilterChipsProps) {
 
 const makeStyles = (_tc: ThemeColors) =>
   StyleSheet.create({
+    scroll: {
+      flexGrow: 0,
+      flexShrink: 0,
+    },
     row: {
       paddingHorizontal: 18,
       paddingBottom: 12,
       gap: 7,
+      alignItems: 'center',
     },
     chip: {
       paddingHorizontal: 13,
