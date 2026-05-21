@@ -233,6 +233,130 @@ async def list_movies_by_cefr(
     }
 
 
+@router.get("/ready-to-watch")
+async def ready_to_watch(
+    limit: int = Query(5, ge=1, le=20),
+    floor_pct: int = Query(40, ge=0, le=100),
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """v0.6: "movies you can probably understand now" — the discovery
+    surface that ties learned vocab back to movie recommendations.
+
+    Ranks movies the user does NOT already have in their reel by
+    `UserMovieProgress.comprehensibility_percent` desc, excluding
+    already-mastered titles. Floors at `floor_pct` so we don't surface
+    rows with near-empty matches.
+
+    Returns a thin payload — the client looks up posters/year via the
+    existing reel-add flow when the user taps "Add to reel".
+
+    NOTE: must be declared BEFORE `/{movie_id}` to avoid FastAPI
+    treating "ready-to-watch" as an int path parameter (→ 422).
+    """
+    rows = await db.query_raw(
+        """
+        SELECT
+          m.id           AS movie_id,
+          m.tmdb_id      AS tmdb_id,
+          m.title        AS title,
+          m.poster_url   AS poster_url,
+          m.year         AS year,
+          ump.comprehensibility_percent AS pct,
+          ump.status::text              AS status
+        FROM user_movie_progress ump
+        JOIN movies m ON m.id = ump.movie_id
+        WHERE ump.user_id = $1
+          AND ump.status::text <> 'mastered'
+          AND ump.comprehensibility_percent >= $2
+          AND m.tmdb_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM user_reel_movies urm
+              WHERE urm.user_id = $1
+                AND urm.tmdb_id = m.tmdb_id
+          )
+        ORDER BY ump.comprehensibility_percent DESC
+        LIMIT $3
+        """,
+        current_user.id, float(floor_pct), limit,
+    )
+
+    return {
+        "movies": [
+            {
+                "movie_id": r["movie_id"],
+                "tmdb_id": r["tmdb_id"],
+                "title": r["title"],
+                "poster_url": r["poster_url"],
+                "year": r["year"],
+                "comprehensibility_percent": round(r["pct"]),
+                "status": r["status"],
+            }
+            for r in rows
+        ],
+        "floor_pct": floor_pct,
+        "total": len(rows),
+    }
+
+
+@router.get("/recommendations")
+async def get_movie_recommendations(
+    level: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    db: Prisma = Depends(get_db)
+):
+    """Generic CEFR-bucketed catalog browse. Must be declared BEFORE
+    `/{movie_id}` so FastAPI doesn't treat "recommendations" as an
+    int path parameter (→ 422)."""
+    where_clause = {}
+
+    if level:
+        from prisma.enums import difficultylevel
+        try:
+            target_level = difficultylevel(level.upper())
+            where_clause["difficultyLevel"] = target_level
+        except ValueError:
+            pass
+
+    movies = await db.movie.find_many(
+        where=where_clause,
+        take=limit,
+        order={"difficultyScore": "asc"}
+    )
+
+    return {"movies": movies, "level": level, "total": len(movies)}
+
+
+@router.get("/scripts/search", response_model=List[ScriptSearchResponse])
+async def search_scripts(
+    query: str = Query(..., min_length=1, description="Movie title to search for")
+):
+    """Search for movie scripts using STANDS4 API. Must be declared
+    BEFORE `/{movie_id}` so FastAPI doesn't treat "scripts" as an
+    int path parameter (→ 422)."""
+    if not query or len(query.strip()) == 0:
+        return []
+
+    try:
+        client = STANDS4ScriptsClient()
+        results = await client.search_script(query)
+
+        return [
+            ScriptSearchResponse(
+                title=result.title,
+                subtitle=result.subtitle,
+                writer=result.writer,
+                link=result.link
+            )
+            for result in results
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search scripts: {str(e)}"
+        )
+
+
 @router.get("/{movie_id}", response_model=MovieResponse)
 async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
     """Get a specific movie by ID"""
@@ -289,31 +413,6 @@ async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
     }
 
 
-@router.get("/recommendations")
-async def get_movie_recommendations(
-    level: Optional[str] = Query(None),
-    limit: int = Query(10, ge=1, le=50),
-    db: Prisma = Depends(get_db)
-):
-    where_clause = {}
-
-    if level:
-        from prisma.enums import difficultylevel
-        try:
-            target_level = difficultylevel(level.upper())
-            where_clause["difficultyLevel"] = target_level
-        except ValueError:
-            pass
-
-    movies = await db.movie.find_many(
-        where=where_clause,
-        take=limit,
-        order={"difficultyScore": "asc"}
-    )
-
-    return {"movies": movies, "level": level, "total": len(movies)}
-
-
 @router.post("/", response_model=MovieResponse, status_code=status.HTTP_201_CREATED)
 async def create_movie(
     movie_data: MovieCreate,
@@ -337,34 +436,6 @@ async def create_movie(
     )
 
     return new_movie
-
-
-@router.get("/scripts/search", response_model=List[ScriptSearchResponse])
-async def search_scripts(
-    query: str = Query(..., min_length=1, description="Movie title to search for")
-):
-    """Search for movie scripts using STANDS4 API"""
-    if not query or len(query.strip()) == 0:
-        return []
-
-    try:
-        client = STANDS4ScriptsClient()
-        results = await client.search_script(query)
-
-        return [
-            ScriptSearchResponse(
-                title=result.title,
-                subtitle=result.subtitle,
-                writer=result.writer,
-                link=result.link
-            )
-            for result in results
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search scripts: {str(e)}"
-        )
 
 
 @router.get("/{movie_id}/vocabulary/preview")

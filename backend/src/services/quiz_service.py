@@ -84,6 +84,38 @@ def compute_xp(correct_count: int, self_rate_count: int, stars: int) -> int:
     return xp
 
 
+def srs_outcome_for_card(
+    card_type: str,
+    is_correct: Optional[bool],
+    self_rating: Optional[str],
+) -> str:
+    """Translate a quiz-card result into the SRS box-advancement signal.
+
+    Returns one of:
+      • "correct"   — bump the user's box for this word
+      • "incorrect" — reset the box to 1
+      • "skip"      — don't touch the SRS state (kinda / no signal)
+
+    Self-rate cards: `know` → correct, `dont` → incorrect, `kinda` → skip.
+    Typed cards: `is_correct` is the signal; missing → skip.
+    Unknown card types skip rather than mis-attribute.
+    """
+    # Accept the legacy "mcq" alias scored the same as "type".
+    if card_type in ("type", "mcq"):
+        if is_correct is True:
+            return "correct"
+        if is_correct is False:
+            return "incorrect"
+        return "skip"
+    if card_type == "self_rate":
+        if self_rating == "know":
+            return "correct"
+        if self_rating == "dont":
+            return "incorrect"
+        return "skip"  # kinda or missing
+    return "skip"
+
+
 def is_unit_unlocked(
     level: str,
     level_order: List[str],

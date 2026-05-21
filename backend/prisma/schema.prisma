@@ -28,6 +28,18 @@ model User {
   srsCurrentStreak      Int?                     @default(0) @map("srs_current_streak")
   srsLongestStreak      Int?                     @default(0) @map("srs_longest_streak")
   srsLastSessionDate    DateTime?                @map("srs_last_session_date") @db.Date
+  // Set on every POST /srs/session/start. Used by the new daily-cap gate
+  // (1 free session per UTC day, premium unlimited). Distinct from
+  // srsLastSessionDate, which tracks per-card review activity for the streak.
+  srsLastSessionStartedAt DateTime?              @map("srs_last_session_started_at") @db.Timestamptz(6)
+  // UTC date of the last chest claim. Used to enforce one chest per
+  // completed daily session — see /srs/session/complete.
+  srsLastChestDate        DateTime?              @map("srs_last_chest_date") @db.Date
+  // v0.6 cinema-named streak milestones (W10). JSON array of unlocked
+  // keys: "opening_weekend" (7d), "box_office" (30d), "cult_classic"
+  // (100d), "criterion_collection" (365d). Frontend diffs against a
+  // local last-seen list to fire MilestoneUnlockModal on new entries.
+  unlockedCosmetics       Json?                  @default("[]") @map("unlocked_cosmetics")
   srsTotalReviews       Int?                     @default(0) @map("srs_total_reviews")
   srsTotalCorrect       Int?                     @default(0) @map("srs_total_correct")
   createdAt             DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -46,6 +58,8 @@ model User {
   quizStats             UserQuizStats?
   unitProgress          UnitProgress[]
   reelMovies            UserReelMovie[]
+  movieProgress         UserMovieProgress[]
+  streakFreezes         UserStreakFreeze[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -79,6 +93,7 @@ model Movie {
   lemmaMappings    MovieLemmaMapping[]
   sentences        SentenceBank[]
   wordInteractions UserWordInteraction[]
+  userProgress     UserMovieProgress[]
 
   @@index([id], map: "ix_movies_id")
   @@index([title], map: "ix_movies_title")
@@ -444,6 +459,25 @@ enum subscriptiontier {
   comped
 }
 
+// Per-(user, movie) study state shown on reel tiles and used by the
+// "Ready to Watch" recommendation surface. Tunable thresholds live in
+// services/movie_progress_service.py.
+enum moviestudystatus {
+  unstudied
+  studied
+  mastered
+}
+
+// How a streak freeze was acquired. `iap` is the consumable freeze-pack
+// purchase; `debug_grant` is dev-only credit (no IAP); `repair_grant` is
+// reserved for future repair-flow integrations.
+enum freezeacquisition {
+  auto_weekly
+  iap
+  debug_grant
+  repair_grant
+}
+
 // ============================================================
 // V2 Context-Aware Translation System Models (Phase 1+)
 // ============================================================
@@ -725,4 +759,49 @@ model UserReelMovie {
   @@unique([userId, position], map: "ux_user_reel_movies_user_position")
   @@index([userId, addedAt], map: "ix_user_reel_movies_user_added_at")
   @@map("user_reel_movies")
+}
+
+// Per-(user, movie) progress cache used by the reel UI (status badges,
+// comprehensibility %) and the "Ready to Watch" recommendation surface.
+// Recomputed after any quiz/SRS completion that touched UserWord rows.
+// See backend/src/services/movie_progress_service.py.
+model UserMovieProgress {
+  userId                   Int                @map("user_id")
+  movieId                  Int                @map("movie_id")
+  lemmasTouched            Int                @default(0) @map("lemmas_touched")
+  lemmasInBox2Plus         Int                @default(0) @map("lemmas_in_box_2_plus")
+  lemmasMastered           Int                @default(0) @map("lemmas_mastered")
+  // Frequency-weighted % of the movie's lemmas the user has reached
+  // srsBox >= 2 on. Stored 0..100 (not 0..1) for client display.
+  comprehensibilityPercent Float              @default(0) @map("comprehensibility_percent")
+  status                   moviestudystatus   @default(unstudied)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@id([userId, movieId])
+  @@index([userId], map: "ix_user_movie_progress_user")
+  @@index([userId, comprehensibilityPercent(sort: Desc)], map: "ix_user_movie_progress_comprehensibility")
+  @@map("user_movie_progress")
+}
+
+// Per-user inventory of streak freezes (v0.6 mercy infrastructure).
+// One row per freeze; `consumedAt IS NULL` means the freeze is still
+// held. Auto-granted weekly to free users (cap 2 held), credited in
+// batches by the consumable freeze-pack IAP, and lazily consumed at
+// the next /daily/state read after a missed day.
+model UserStreakFreeze {
+  id             Int               @id @default(autoincrement())
+  userId         Int               @map("user_id")
+  acquiredAt     DateTime          @default(now()) @map("acquired_at") @db.Timestamptz(6)
+  acquiredVia    freezeacquisition @map("acquired_via")
+  consumedAt     DateTime?         @map("consumed_at") @db.Timestamptz(6)
+  consumedReason String?           @map("consumed_reason") @db.VarChar
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Hot index for "how many freezes does this user have?"
+  @@index([userId, consumedAt], map: "ix_user_streak_freezes_held")
+  @@map("user_streak_freezes")
 }

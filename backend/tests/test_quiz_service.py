@@ -18,6 +18,7 @@ from src.services.quiz_service import (
     compute_xp,
     is_unit_unlocked,
     pick_card_types,
+    srs_outcome_for_card,
 )
 
 LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
@@ -84,6 +85,39 @@ class TestComputeXp:
     def test_one_star_no_bonus(self):
         # XP from cards only, no bonus.
         assert compute_xp(5, 0, 1) == 50
+
+
+class TestSrsOutcomeForCard:
+    def test_typed_correct(self):
+        assert srs_outcome_for_card("type", is_correct=True, self_rating=None) == "correct"
+
+    def test_typed_incorrect(self):
+        assert srs_outcome_for_card("type", is_correct=False, self_rating=None) == "incorrect"
+
+    def test_typed_missing_signal_skips(self):
+        assert srs_outcome_for_card("type", is_correct=None, self_rating=None) == "skip"
+
+    def test_legacy_mcq_alias_treated_as_type(self):
+        # Historical rows wrote "mcq" before the rename. Same scoring.
+        assert srs_outcome_for_card("mcq", is_correct=True, self_rating=None) == "correct"
+        assert srs_outcome_for_card("mcq", is_correct=False, self_rating=None) == "incorrect"
+
+    def test_self_rate_know_is_correct(self):
+        assert srs_outcome_for_card("self_rate", is_correct=None, self_rating="know") == "correct"
+
+    def test_self_rate_dont_is_incorrect(self):
+        assert srs_outcome_for_card("self_rate", is_correct=None, self_rating="dont") == "incorrect"
+
+    def test_self_rate_kinda_is_skip(self):
+        # "kinda" carries no SRS signal — the user neither claims mastery nor
+        # admits forgetting, so we don't move the schedule.
+        assert srs_outcome_for_card("self_rate", is_correct=None, self_rating="kinda") == "skip"
+
+    def test_self_rate_missing_rating_is_skip(self):
+        assert srs_outcome_for_card("self_rate", is_correct=None, self_rating=None) == "skip"
+
+    def test_unknown_card_type_skips(self):
+        assert srs_outcome_for_card("synonym_mcq", is_correct=True, self_rating=None) == "skip"
 
 
 class TestIsUnitUnlocked:

@@ -24,5 +24,7 @@ from .email_digest import router as email_digest_router
 from .student_discount import router as student_discount_router
 from .quiz import router as quiz_router
 from .reel import router as reel_router
+from .daily import router as daily_router
+from .consumables import router as consumables_router
 
-__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "family_router", "gamification_router", "social_router", "email_digest_router", "student_discount_router", "quiz_router", "reel_router"]
+__all__ = ["auth_router", "movies_router", "users_router", "oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "family_router", "gamification_router", "social_router", "email_digest_router", "student_discount_router", "quiz_router", "reel_router", "daily_router", "consumables_router"]

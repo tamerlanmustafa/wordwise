@@ -31,6 +31,12 @@ from ..services.quiz_service import (
     compute_xp,
     is_unit_unlocked,
     pick_card_types,
+    srs_outcome_for_card,
+)
+from ..services.movie_progress_service import recompute_for_user_movie
+from ..services.srs_engine import (
+    advance_user_rollup_after_review,
+    advance_word_after_review,
 )
 from ..services.translation_service import TranslationService
 
@@ -293,15 +299,68 @@ async def complete_session(
 
     # Finalize session.
     from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
     await db.quizsession.update(
         where={"id": session_id},
         data={
-            "completedAt": datetime.now(timezone.utc),
+            "completedAt": now,
             "stars": stars,
             "correctCount": correct,
             "totalScored": total_scored,
         },
     )
+
+    # Advance per-card SRS state. Quiz-tested IS the "studied" signal — if
+    # the user has never seen the word before, create the UserWord row so
+    # this session pulls it into the SRS queue going forward.
+    #
+    # Skipped for batch sessions (session.movieId is None) because the
+    # (userId, word, movieId) composite key has no clear value when cards
+    # span multiple movies; those are tracked via UnitProgress only.
+    if session.movieId is not None:
+        srs_correct = 0
+        srs_scored = 0
+        for c in cards:
+            outcome = srs_outcome_for_card(c.cardType, c.isCorrect, c.selfRating)
+            if outcome == "skip":
+                continue
+            card_correct = outcome == "correct"
+            existing = await db.userword.find_first(where={
+                "userId": current_user.id,
+                "word": c.word,
+                "movieId": session.movieId,
+            })
+            if existing is None:
+                existing = await db.userword.create(data={
+                    "userId": current_user.id,
+                    "word": c.word,
+                    "movieId": session.movieId,
+                })
+            await advance_word_after_review(
+                db,
+                user_word_id=existing.id,
+                current_box=existing.srsBox,
+                correct=card_correct,
+                now=now,
+            )
+            srs_scored += 1
+            if card_correct:
+                srs_correct += 1
+        if srs_scored > 0:
+            await advance_user_rollup_after_review(
+                db,
+                user_id=current_user.id,
+                correct_count=srs_correct,
+                total_count=srs_scored,
+                today=now.date(),
+            )
+            # Recompute the reel-tile progress for this movie so the status
+            # badge + comprehensibility % reflect the cards we just advanced.
+            await recompute_for_user_movie(
+                db,
+                user_id=current_user.id,
+                movie_id=session.movieId,
+            )
 
     # Unit progress (high-water mark). Upsert avoids a race on first attempt.
     # "batch" sessions store progress under sentinel movieId=-1; "unit" stores

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,16 +28,22 @@ from prisma import Prisma
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.chest_service import award_session_chest
+from ..services.milestone_service import parse_unlocked
+from ..services.movie_progress_service import recompute_for_user_movie
+from ..services.srs_engine import (
+    BOX_INTERVALS_DAYS,
+    MAX_BOX,
+    advance_user_rollup_after_review,
+    advance_word_after_review,
+    can_free_user_start_session_today,
+    next_due_after,
+)
+from ..services.synonym_service import build_synonym_mcq
 from ..utils.subscription import is_premium
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/srs", tags=["srs"])
-
-# Leitner intervals in days, indexed by (box - 1). Box 1 → 1 day after a
-# correct answer, box 5 → 30 days. A card at box 5 that the user still
-# remembers stays at box 5 and gets +30 days.
-BOX_INTERVALS_DAYS = [1, 3, 7, 14, 30]
-MAX_BOX = len(BOX_INTERVALS_DAYS)
 
 # How many cards to surface per session. Small enough to stay under the
 # "5–10 min session" target in the plan.
@@ -47,11 +53,15 @@ SESSION_SIZE = int(os.environ.get("SRS_SESSION_SIZE", "10"))
 # can start before the paywall fires. Variant B from the A/B test in §3.
 FREE_PREVIEW_SESSIONS = int(os.environ.get("SRS_FREE_PREVIEW_SESSIONS", "3"))
 
+# v0.6 W4: minimum SRS box at which we try to build a synonym MCQ.
+# Below this the word is too fresh — the user hasn't earned recall
+# confidence yet, so MCQ would just be noise. Tunable via env.
+SYNONYM_MIN_BOX = int(os.environ.get("SRS_SYNONYM_MIN_BOX", "3"))
 
-def _next_due(box: int) -> datetime:
-    """Next due timestamp for a card now in `box`. Clamped to MAX_BOX."""
-    idx = max(0, min(box, MAX_BOX) - 1)
-    return datetime.now(timezone.utc) + timedelta(days=BOX_INTERVALS_DAYS[idx])
+
+class SynonymChoice(BaseModel):
+    word: str
+    is_correct: bool
 
 
 class ReviewCard(BaseModel):
@@ -64,6 +74,15 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
+    # v0.6 W4 — card variant. Default 'recall' = existing tap-to-reveal
+    # flow. 'synonym_mcq' = 4-choice; client scores locally and posts
+    # the boolean result to /srs/review. Built only when:
+    #   • srs_box >= SYNONYM_MIN_BOX (the user has earned at least one
+    #     correct on this word — pure noise otherwise), AND
+    #   • WordNet returns synonyms AND enough CEFR-matched distractors.
+    # Falls back to 'recall' silently when generation isn't possible.
+    card_type: str = "recall"
+    choices: Optional[list[SynonymChoice]] = None
 
 
 class SessionStartResponse(BaseModel):
@@ -98,6 +117,28 @@ class ReviewResponse(BaseModel):
     user_word_id: int
     new_box: int
     next_due_at: datetime
+
+
+class ChestPayload(BaseModel):
+    kind: str   # 'xp_small' | 'xp_large' | 'freeze' | 'cosmetic'
+    label: str  # human-readable, drives the chest reveal headline
+    payload: dict  # type-specific data (xp amount, cosmetic name, …)
+
+
+class CompleteSessionResponse(BaseModel):
+    chest: Optional[ChestPayload] = None
+    already_claimed: bool
+    correct_count: int
+    total_count: int
+    streak: int
+    # v0.6 W10: full inventory; client diffs against an AsyncStorage
+    # last-seen list to fire MilestoneUnlockModal for new entries.
+    unlocked_cosmetics: list[str] = []
+
+
+class CompleteSessionBody(BaseModel):
+    correct_count: int = 0
+    total_count: int = 0
 
 
 class StatsResponse(BaseModel):
@@ -138,8 +179,14 @@ async def srs_stats(
         )
 
     premium = is_premium(current_user)
-    used = getattr(current_user, "srsFreePreviewsUsed", 0) or 0
-    remaining = max(0, FREE_PREVIEW_SESSIONS - used) if not premium else FREE_PREVIEW_SESSIONS
+    # Under the new daily-cap model: 1 free session/day, premium unlimited.
+    # `previews_remaining` is now "can the free user start one right now"
+    # (0 or 1), preserved for legacy mobile clients that read this field.
+    if premium:
+        remaining = FREE_PREVIEW_SESSIONS
+    else:
+        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
+        remaining = 1 if can_free_user_start_session_today(last_started, now=now) else 0
 
     total_reviews = getattr(current_user, "srsTotalReviews", 0) or 0
     total_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
@@ -160,44 +207,174 @@ async def srs_stats(
     )
 
 
+_CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+
+
+def _band_levels_around(level: str) -> list[str]:
+    """CEFR ±1 band (e.g. B1 → ['A2','B1','B2']). Unknown level → B1 band."""
+    try:
+        i = _CEFR_LEVELS.index(level)
+    except ValueError:
+        i = _CEFR_LEVELS.index("B1")
+    return _CEFR_LEVELS[max(0, i - 1): min(len(_CEFR_LEVELS), i + 2)]
+
+
+async def _pad_with_fresh_reel_lemmas(
+    db: Prisma,
+    *,
+    user_id: int,
+    user_level: str,
+    excluded_words: set[str],
+    needed: int,
+):
+    """Top up a short SRS queue with fresh lemmas from the user's reel.
+
+    Walks reel movies in position order, pulling top-frequency lemmas at
+    the user's CEFR ±1 band that aren't yet in `user_words` and aren't in
+    the running `excluded_words` set. Each picked lemma gets a new
+    UserWord row (defaults: srsBox=1, srsDueAt=now) so it surfaces in
+    the response with a real id and naturally enters the SRS lifecycle.
+
+    Returns the list of newly-created UserWord rows (already fetched), in
+    the order they were picked. Empty list when the reel can't fill the
+    gap (no reel, no movie data, or no fresh lemmas at this level).
+    """
+    if needed <= 0:
+        return []
+    reel = await db.userreelmovie.find_many(
+        where={"userId": user_id},
+        order={"position": "asc"},
+    )
+    if not reel:
+        return []
+    tmdb_ids = [r.tmdbId for r in reel]
+    movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
+    tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
+
+    band = _band_levels_around(user_level)
+    band_placeholders = ",".join(f"${i + 4}" for i in range(len(band)))
+
+    created_ids: list[int] = []
+    for r in reel:
+        if len(created_ids) >= needed:
+            break
+        movie_id = tmdb_to_movie_id.get(r.tmdbId)
+        if movie_id is None:
+            continue
+        # Over-fetch (2x remaining) to give us headroom against the
+        # in-flight excluded_words dedupe below.
+        remaining = needed - len(created_ids)
+        rows = await db.query_raw(
+            f"""
+            SELECT l.lemma
+            FROM movie_lemma_mappings mlm
+            JOIN lemmas l ON l.id = mlm.lemma_id
+            WHERE mlm.movie_id = $1
+              AND l.cefr_level::text IN ({band_placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM user_words uw
+                  WHERE uw.user_id = $2
+                    AND LOWER(uw.word) = LOWER(l.lemma)
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM hidden_words hw
+                  WHERE LOWER(hw.word) = LOWER(l.lemma)
+              )
+            ORDER BY mlm.frequency_in_movie DESC, l.frequency_rank ASC NULLS LAST
+            LIMIT $3
+            """,
+            movie_id, user_id, remaining * 2, *band,
+        )
+        for row in rows:
+            if len(created_ids) >= needed:
+                break
+            word = row["lemma"].lower()
+            if word in excluded_words:
+                continue
+            uw = await db.userword.create(data={
+                "userId": user_id,
+                "word": word,
+                "movieId": movie_id,
+            })
+            created_ids.append(uw.id)
+            excluded_words.add(word)
+
+    if not created_ids:
+        return []
+    # Refetch in creation order so the caller can hydrate uniformly with
+    # the existing due_rows path.
+    fresh = await db.userword.find_many(where={"id": {"in": created_ids}})
+    by_id = {r.id: r for r in fresh}
+    return [by_id[i] for i in created_ids if i in by_id]
+
+
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
     """
-    Claim a new review session. For free users this consumes one of their
-    preview sessions. Premium users call this freely.
+    Claim a new review session.
 
-    Paywall contract: when a non-premium user is out of previews we return
-    HTTP 402 (Payment Required) with a {paywall, previews_used, previews_limit}
-    payload that the mobile app translates into the upgrade screen.
+    Free users: one session per UTC day (the daily 2-min habit). Hitting
+    /srs/session/start a second time the same day returns HTTP 402 with
+    a `srs_daily_cap_reached` paywall payload — premium unlocks unlimited.
+
+    Composition: due cards first (`srsDueAt <= now`, oldest first), then
+    fresh lemmas drawn from the next unstudied reel movie at CEFR ±1 to
+    keep the daily session at SESSION_SIZE cards even when the user has
+    nothing currently due.
+
+    The legacy `srsFreePreviewsUsed` counter is no longer consulted; the
+    column remains in the schema for backward compatibility with older
+    mobile builds that still poll /srs/stats.
     """
     premium = is_premium(current_user)
-    used = getattr(current_user, "srsFreePreviewsUsed", 0) or 0
-
-    if not premium and used >= FREE_PREVIEW_SESSIONS:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "paywall": "srs_preview_exhausted",
-                "previews_used": used,
-                "previews_limit": FREE_PREVIEW_SESSIONS,
-                "message": "You've used your free review sessions. "
-                           "Start a 7-day trial to keep reviewing.",
-            },
-        )
-
     now = datetime.now(timezone.utc)
+
+    if not premium:
+        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
+        if not can_free_user_start_session_today(last_started, now=now):
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "paywall": "srs_daily_cap_reached",
+                    "message": "You've finished today's free review. "
+                               "Come back tomorrow — or upgrade for unlimited sessions.",
+                },
+            )
+
+    # Count true due-now debt before padding so the header value reflects
+    # what the user actually has waiting, not the inflated post-padding total.
+    total_due = await db.userword.count(
+        where={"userId": current_user.id, "srsDueAt": {"lte": now}}
+    )
+
     due_rows = await db.userword.find_many(
         where={"userId": current_user.id, "srsDueAt": {"lte": now}},
         order=[{"srsDueAt": "asc"}, {"id": "asc"}],
         take=SESSION_SIZE,
     )
 
+    # Pad short sessions with fresh lemmas from the next reel movie so
+    # the daily 2-min habit always has SESSION_SIZE cards to chew on.
+    session_rows = list(due_rows)
+    if len(session_rows) < SESSION_SIZE:
+        raw_level = getattr(current_user, "proficiencyLevel", None)
+        user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
+        excluded = {r.word.lower() for r in session_rows}
+        fresh_rows = await _pad_with_fresh_reel_lemmas(
+            db,
+            user_id=current_user.id,
+            user_level=str(user_level),
+            excluded_words=excluded,
+            needed=SESSION_SIZE - len(session_rows),
+        )
+        session_rows.extend(fresh_rows)
+
     # Hydrate cards with definitions and movie titles
-    word_texts = list({r.word for r in due_rows})
-    movie_ids = list({r.movieId for r in due_rows if r.movieId})
+    word_texts = list({r.word for r in session_rows})
+    movie_ids = list({r.movieId for r in session_rows if r.movieId})
 
     def_map: dict[str, tuple] = {}
     if word_texts:
@@ -225,8 +402,10 @@ async def start_session(
         for r in cefr_rows:
             cefr_map[r["word"]] = r["cefr_level"]
 
-    cards = [
-        ReviewCard(
+    cards: list[ReviewCard] = []
+    for r in session_rows:
+        cefr = cefr_map.get(r.word)
+        card = ReviewCard(
             user_word_id=r.id,
             word=r.word,
             movie_id=r.movieId,
@@ -235,27 +414,37 @@ async def start_session(
             srs_due_at=r.srsDueAt,
             definition=def_map.get(r.word, (None,))[0],
             example_sentence=def_map.get(r.word, (None, None))[1] if r.word in def_map else None,
-            cefr_level=cefr_map.get(r.word),
+            cefr_level=cefr,
         )
-        for r in due_rows
-    ]
+        # v0.6 W4 — try to upgrade box-3+ cards to synonym MCQ. Silent
+        # fall-through to recall when WordNet/distractors aren't enough.
+        if (r.srsBox or 1) >= SYNONYM_MIN_BOX and cefr:
+            mcq = await build_synonym_mcq(
+                db, target_word=r.word, target_cefr=cefr,
+            )
+            if mcq:
+                card.card_type = "synonym_mcq"
+                card.choices = [SynonymChoice(**c) for c in mcq["choices"]]
+        cards.append(card)
 
-    # Count total due (for the "N words due" header) without paying for
-    # another find_many.
-    total_due = await db.userword.count(
-        where={"userId": current_user.id, "srsDueAt": {"lte": now}}
-    )
-
-    # Only consume a preview slot if there was actually work to do. Don't
-    # penalize users who tap "review" and find an empty queue.
-    if not premium and cards:
+    # Stamp the daily-cap field only when there was actually work to do.
+    # Don't penalize a free user who taps "review" into an empty queue.
+    if cards:
         await db.user.update(
             where={"id": current_user.id},
-            data={"srsFreePreviewsUsed": used + 1},
+            data={"srsLastSessionStartedAt": now},
         )
-        used += 1
 
-    remaining = max(0, FREE_PREVIEW_SESSIONS - used) if not premium else FREE_PREVIEW_SESSIONS
+    # `previews_remaining` is preserved in the response shape for legacy
+    # mobile clients. Under the new daily-cap model it answers a different
+    # question: "can the free user start a session right now?" 0 or 1 for
+    # free, sentinel-high for premium.
+    if premium:
+        remaining = FREE_PREVIEW_SESSIONS
+    else:
+        # `cards` may have stamped the field above; if so, we just used today's
+        # slot. Otherwise the queue was empty and the slot remains available.
+        remaining = 0 if cards else 1
 
     return SessionStartResponse(
         cards=cards,
@@ -275,59 +464,98 @@ async def record_review(
     """
     Record one card outcome. Correct → advance box, Forgot → reset to box 1.
     No preview budget consumed here — the cost was paid at session start.
+
+    Both the per-card box update and the per-user rollup go through
+    `srs_engine` so the quiz→SRS bridge (called from quiz completion)
+    uses the exact same logic.
     """
     word_row = await db.userword.find_unique(where={"id": body.user_word_id})
     if word_row is None or word_row.userId != current_user.id:
         raise HTTPException(404, detail="card not found")
 
-    if body.correct:
-        new_box = min(MAX_BOX, (word_row.srsBox or 1) + 1)
-    else:
-        new_box = 1
-
-    next_due = _next_due(new_box)
     now = datetime.now(timezone.utc)
-    today = now.date()
-    await db.userword.update(
-        where={"id": word_row.id},
-        data={
-            "srsBox": new_box,
-            "srsDueAt": next_due,
-            "srsLastReviewedAt": now,
-        },
+    new_box, next_due = await advance_word_after_review(
+        db,
+        user_word_id=word_row.id,
+        current_box=word_row.srsBox,
+        correct=body.correct,
+        now=now,
+    )
+    await advance_user_rollup_after_review(
+        db,
+        user_id=current_user.id,
+        correct_count=1 if body.correct else 0,
+        total_count=1,
+        today=now.date(),
     )
 
-    # Update aggregate stats on the user row.
-    prev_total = getattr(current_user, "srsTotalReviews", 0) or 0
-    prev_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
-    prev_streak = getattr(current_user, "srsCurrentStreak", 0) or 0
-    prev_longest = getattr(current_user, "srsLongestStreak", 0) or 0
-    last_date = getattr(current_user, "srsLastSessionDate", None)
-
-    new_streak = prev_streak
-    if last_date is None or (today - last_date).days >= 2:
-        new_streak = 1
-    elif (today - last_date).days == 1:
-        new_streak = prev_streak + 1
-    # same day → streak unchanged
-
-    new_longest = max(prev_longest, new_streak)
-
-    await db.user.update(
-        where={"id": current_user.id},
-        data={
-            "srsTotalReviews": prev_total + 1,
-            "srsTotalCorrect": prev_correct + (1 if body.correct else 0),
-            "srsCurrentStreak": new_streak,
-            "srsLongestStreak": new_longest,
-            "srsLastSessionDate": today,
-        },
-    )
+    # Refresh the per-movie progress cache so the reel tile reflects this
+    # card. No-op when the word isn't tied to a movie (e.g. cross-movie
+    # SRS-only words created via the daily padding from a global pool).
+    if word_row.movieId is not None:
+        await recompute_for_user_movie(
+            db,
+            user_id=current_user.id,
+            movie_id=word_row.movieId,
+        )
 
     return ReviewResponse(
         user_word_id=word_row.id,
         new_box=new_box,
         next_due_at=next_due,
+    )
+
+
+@router.post("/session/complete", response_model=CompleteSessionResponse)
+async def complete_session(
+    body: CompleteSessionBody,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """End-of-session chest reveal.
+
+    Called by the client once after the last /srs/review of a daily
+    session. Awards one chest per UTC day (enforced via
+    `User.srsLastChestDate`); subsequent same-day calls return
+    `already_claimed=true` with `chest=null` so the client can decide
+    whether to suppress the reveal animation.
+
+    `correct_count` / `total_count` are accepted for analytics / future
+    chest-weighting; they're echoed back so the client UI doesn't need
+    to redundantly compute them.
+    """
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    user = await db.user.find_unique(where={"id": current_user.id})
+    streak = (user.srsCurrentStreak or 0) if user else 0
+    last_chest = user.srsLastChestDate if user else None
+    unlocked = parse_unlocked(user.unlockedCosmetics) if user else []
+
+    if last_chest == today:
+        return CompleteSessionResponse(
+            chest=None,
+            already_claimed=True,
+            correct_count=body.correct_count,
+            total_count=body.total_count,
+            streak=streak,
+            unlocked_cosmetics=unlocked,
+        )
+
+    reward = await award_session_chest(db, user_id=current_user.id)
+    await db.user.update(
+        where={"id": current_user.id},
+        data={"srsLastChestDate": today},
+    )
+    # Re-read in case the chest reward bumped XP/freezes which the
+    # client wants to reconcile. Streak itself doesn't change here.
+    return CompleteSessionResponse(
+        chest=ChestPayload(**reward.as_dict()),
+        already_claimed=False,
+        correct_count=body.correct_count,
+        total_count=body.total_count,
+        streak=streak,
+        unlocked_cosmetics=unlocked,
     )
 
 

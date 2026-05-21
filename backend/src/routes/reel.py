@@ -116,6 +116,12 @@ class ReelTile(BaseModel):
     poster_path: Optional[str] = None
     year: Optional[int] = None
     source: Literal["user", "suggested"] = "user"
+    # v0.6: progress overlay. `status` defaults to "unstudied" for tiles
+    # with no UserMovieProgress row yet (new reel, movie has no lemma data,
+    # or simply not recomputed). `comprehensibility_percent` is rounded
+    # for display; the float in the DB is preserved for future tuning.
+    status: Literal["unstudied", "studied", "mastered"] = "unstudied"
+    comprehensibility_percent: int = 0
 
 
 class ReelListResponse(BaseModel):
@@ -144,21 +150,51 @@ async def list_reel(
 ):
     """User-curated reel, most-recently-added first. Empty for brand-new
     users until POST /reel/seed runs (client calls it on first hydrate
-    when the response is empty)."""
+    when the response is empty).
+
+    v0.6: each tile is decorated with `status` + `comprehensibility_percent`
+    from UserMovieProgress (joined via TMDB id → internal Movie.id). Tiles
+    with no progress row yet stay at the schema defaults (unstudied, 0%).
+    """
     user_rows = await db.userreelmovie.find_many(
         where={"userId": user.id},
         order={"addedAt": "desc"},
     )
-    tiles = [
-        ReelTile(
+
+    # Build the progress lookup keyed by TMDB id (what the reel tiles use)
+    # via the Movie table. One query per resolution direction.
+    progress_by_tmdb: dict[int, tuple[str, int]] = {}
+    if user_rows:
+        tmdb_ids = [r.tmdbId for r in user_rows]
+        movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
+        tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
+        movie_ids = list(tmdb_to_movie_id.values())
+        if movie_ids:
+            progress_rows = await db.usermovieprogress.find_many(
+                where={"userId": user.id, "movieId": {"in": movie_ids}},
+            )
+            movie_id_to_progress = {p.movieId: p for p in progress_rows}
+            for tmdb_id, movie_id in tmdb_to_movie_id.items():
+                p = movie_id_to_progress.get(movie_id)
+                if p is None:
+                    continue
+                progress_by_tmdb[tmdb_id] = (
+                    p.status if isinstance(p.status, str) else p.status.value,
+                    round(p.comprehensibilityPercent),
+                )
+
+    tiles = []
+    for r in user_rows:
+        status, pct = progress_by_tmdb.get(r.tmdbId, ("unstudied", 0))
+        tiles.append(ReelTile(
             tmdb_id=r.tmdbId,
             title=r.title,
             poster_path=r.posterPath,
             year=r.year,
             source="user",
-        )
-        for r in user_rows
-    ]
+            status=status,  # type: ignore[arg-type]
+            comprehensibility_percent=pct,
+        ))
     end = cursor + limit
     page = tiles[cursor:end]
     has_more = end < len(tiles)
