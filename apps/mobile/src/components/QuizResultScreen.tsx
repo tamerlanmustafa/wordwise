@@ -92,6 +92,15 @@ export function QuizResultScreen({
     ? Math.round((result.correct_count / result.total_scored) * 100)
     : null;
 
+  // v0.7 §7.5 — frequency-weighted comprehension % delta for this
+  // movie. The single most motivating feedback loop; render as the
+  // headline reward when both figures are present.
+  const compBefore = result.comprehension_before;
+  const compAfter = result.comprehension_after;
+  const showComp =
+    typeof compBefore === 'number' && typeof compAfter === 'number';
+  const compDelta = showComp ? Math.round(compAfter! - compBefore!) : 0;
+
   // ── Journey mode ────────────────────────────────────────────────
   if (journey) {
     const dailyClamped = Math.min(journey.dailyDone, DAILY_GOAL);
@@ -116,6 +125,22 @@ export function QuizResultScreen({
               {hitWall ? 'day streak — +1 today!' : 'day streak'}
             </Text>
           </View>
+
+          {showComp ? (
+            <View style={s.compCard}>
+              <Text style={s.compEyebrow}>COMPREHENSION</Text>
+              <View style={s.compRow}>
+                <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
+                <Text style={s.compArrow}>→</Text>
+                <Text style={s.compAfter}>{Math.round(compAfter!)}%</Text>
+                {compDelta !== 0 ? (
+                  <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
+                    {compDelta > 0 ? `+${compDelta}` : `${compDelta}`}%
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
 
           {/* Daily-goal pips */}
           <View style={s.pipsRow}>
@@ -217,6 +242,22 @@ export function QuizResultScreen({
           <StatRow label="Correct" value={`${result.correct_count} / ${result.total_scored}`} s={s} />
           <StatRow label="XP earned" value={`+${result.xp_earned}`} emphasis s={s} />
         </View>
+
+        {showComp ? (
+          <View style={s.compCard}>
+            <Text style={s.compEyebrow}>COMPREHENSION</Text>
+            <View style={s.compRow}>
+              <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
+              <Text style={s.compArrow}>→</Text>
+              <Text style={s.compAfter}>{Math.round(compAfter!)}%</Text>
+              {compDelta !== 0 ? (
+                <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
+                  {compDelta > 0 ? `+${compDelta}` : `${compDelta}`}%
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
 
         <View style={s.footer}>
           {onPlayAgain ? (
@@ -344,6 +385,71 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   },
   upNextTitle: {
     fontSize: 16, fontWeight: '800', color: tc.text, letterSpacing: -0.2,
+  },
+
+  // v0.7 §7.5 — comprehension delta card. The headline reward.
+  compCard: {
+    width: '100%',
+    marginTop: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderRadius: 14,
+    backgroundColor: tc.paper,
+    borderWidth: 1,
+    borderColor: tc.border,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  compEyebrow: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.8,
+    color: tc.goldOnSurface,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  compRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  compBefore: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: tc.textFaint,
+  },
+  compArrow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: tc.textFaint,
+  },
+  compAfter: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: tc.text,
+    letterSpacing: -0.6,
+  },
+  compDelta: {
+    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  compDeltaUp: {
+    color: tc.goldDeep,
+    backgroundColor: tc.gold,
+  },
+  compDeltaDown: {
+    color: '#fff',
+    backgroundColor: tc.error,
   },
 
   wallCard: {

@@ -170,7 +170,20 @@ export default function App() {
 
   const [paywallProps, setPaywallProps] = useState({ previewsUsed: 0, previewsLimit: 3 });
 
-  const navigateToReview = () => {
+  // v0.7.2 — when the Practice screen launches a review it passes the
+  // tile kind (+ optional movie id for Deep-Dive). Legacy callers
+  // (StatsScreen, HomeScreen) pass nothing → falls through to
+  // quick_recall server-side.
+  const [reviewLaunch, setReviewLaunch] = useState<{
+    kind?: import('../services/api').SessionKind;
+    movieId?: number;
+  }>({});
+
+  const navigateToReview = (
+    kind?: import('../services/api').SessionKind,
+    movieId?: number,
+  ) => {
+    setReviewLaunch({ kind, movieId });
     setCurrentScreen('review');
   };
 
@@ -228,6 +241,10 @@ export default function App() {
   const [quizSession, setQuizSession] = useState<{
     session: QuizStartSessionResponse;
     level: string;
+    /** v0.7 §7 — movie title for the QuizHeader chip. Captured at
+     *  setQuizSession time because by the time the lesson renders the
+     *  upstream context (setIntroData, preview tile) is usually cleared. */
+    movieTitle?: string;
   } | null>(null);
   const [quizResult, setQuizResult] = useState<{
     result: QuizCompleteResponse;
@@ -399,9 +416,9 @@ export default function App() {
 
   const handleSetIntroStart = () => {
     if (!setIntroData) return;
-    const { session, level } = setIntroData;
+    const { session, level, movie } = setIntroData;
     setSetIntroData(null);
-    setQuizSession({ session, level });
+    setQuizSession({ session, level, movieTitle: movie.title });
     setCurrentScreen('quizLesson');
   };
 
@@ -420,7 +437,11 @@ export default function App() {
 
 
   const handleQuizSessionStart = (session: QuizStartSessionResponse, level: string) => {
-    setQuizSession({ session, level });
+    setQuizSession({
+      session,
+      level,
+      movieTitle: selectedMovie?.title ?? activePreviewTile?.tile.title,
+    });
     setCurrentScreen('quizLesson');
   };
 
@@ -573,7 +594,12 @@ export default function App() {
         ) : currentScreen === 'admin' ? (
           <AdminScreen onBack={navigateToHome} />
         ) : currentScreen === 'review' ? (
-          <ReviewScreen onBack={navigateToHome} onPaywall={navigateToPaywall} />
+          <ReviewScreen
+            kind={reviewLaunch.kind}
+            movieId={reviewLaunch.movieId}
+            onBack={navigateToHome}
+            onPaywall={navigateToPaywall}
+          />
         ) : currentScreen === 'paywall' ? (
           <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
         ) : currentScreen === 'stats' ? (
@@ -601,30 +627,10 @@ export default function App() {
             onOpenMoviePreview={handleOpenMoviePreview}
           />
         ) : currentScreen === 'practice' ? (
-          <PracticeScreen
-            onStartDailyReview={navigateToReview}
-            onLessonPress={(unit, _lesson) => {
-              // For v0.7 every lesson tap routes through the existing
-              // per-movie quiz flow. SetIntro picks 5 words; the lesson
-              // identity is informational until the lesson-specific
-              // word handoff lands in v1.1.
-              const tile: ReelTile = {
-                tmdb_id: unit.tmdb_id ?? 0,
-                title: unit.title,
-                poster_path: unit.poster_path,
-                year: null,
-                source: 'user',
-                status: unit.lessons.every((l) => l.state === 'done')
-                  ? 'mastered'
-                  : 'studied',
-              };
-              const lvl: NodeLevel =
-                unit.cefr_level && ['A1','A2','B1','B2','C1','C2'].includes(unit.cefr_level)
-                  ? (unit.cefr_level as NodeLevel)
-                  : 'B1';
-              handleOpenMoviePreview({ tileIndex: 0, level: lvl, tile });
-            }}
-          />
+          // v0.7.1 — Practice is a one-action habit dashboard.
+          // Movie-by-movie study lives on My Movies; the daily SRS
+          // session is the only action surface here.
+          <PracticeScreen onStartDailyReview={navigateToReview} />
         ) : currentScreen === 'moviePreview' && activePreviewTile ? (
           <MoviePreviewHub
             tile={activePreviewTile.tile}
@@ -679,6 +685,7 @@ export default function App() {
           <QuizLessonScreen
             session={quizSession.session}
             level={quizSession.level}
+            movieTitle={quizSession.movieTitle}
             onExit={() => {
               setQuizSession(null);
               setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');

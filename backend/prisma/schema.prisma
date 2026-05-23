@@ -32,6 +32,12 @@ model User {
   // (1 free session per UTC day, premium unlimited). Distinct from
   // srsLastSessionDate, which tracks per-card review activity for the streak.
   srsLastSessionStartedAt DateTime?              @map("srs_last_session_started_at") @db.Timestamptz(6)
+  // v0.7.2 — which "practice tile" the user picked today (e.g.
+  // 'quick_recall', 'synonym_round', 'tough_words', 'movie_deep_dive').
+  // Cleared at UTC rollover by the daily-cap gate. The PracticeScreen
+  // reads this back via /daily/state to render the matching tile as
+  // "done today" + the others as "locked until tomorrow".
+  srsLastSessionKind      String?                @map("srs_last_session_kind") @db.VarChar(40)
   // UTC date of the last chest claim. Used to enforce one chest per
   // completed daily session — see /srs/session/complete.
   srsLastChestDate        DateTime?              @map("srs_last_chest_date") @db.Date

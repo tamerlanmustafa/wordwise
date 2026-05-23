@@ -81,6 +81,12 @@ export interface ThemeColors {
   nodeLocked:         string;  // locked lesson node fill
   nodeLockedBorder:   string;  // locked lesson node border
 
+  // v0.7 §7 Quiz screens (synonym MCQ + translation typing)
+  wordBoxBg:          string;  // inner word card on quiz screens (off-paper by 1 step)
+  successTint:        string;  // correct-flash bg on choices + input
+  successBorder:      string;  // correct-flash border
+  errorBorder:        string;  // wrong-choice border (errorTint already exists)
+
   // Reel-only: the film stock substrate + sprocket palette
   reelStock:          string;  // film body colour
   reelStockDeep:      string;  // shadow/vignette inner colour
@@ -130,7 +136,7 @@ const light: ThemeColors = {
   success:            '#3F8B7B',  // warmer in light (was #4CAF9A)
   warning:            '#F4A261',
   error:              '#D66A6A',
-  errorTint:          'rgba(214,106,106,0.18)',
+  errorTint:          'rgba(214,106,106,0.16)',
 
   scrim:              'rgba(0,0,0,0.4)',
 
@@ -147,6 +153,12 @@ const light: ThemeColors = {
   lessonRing:         'rgba(197,139,27,0.55)',
   nodeLocked:         '#E5DCC4',
   nodeLockedBorder:   '#D7CCB0',
+
+  // v0.7 §7 Quiz
+  wordBoxBg:          '#FAF7EE',
+  successTint:        'rgba(63,139,123,0.14)',
+  successBorder:      'rgba(63,139,123,0.55)',
+  errorBorder:        'rgba(214,106,106,0.55)',
 
   reelStock:          '#F4EFE3',
   reelStockDeep:      '#E5DCBE',
@@ -206,6 +218,12 @@ const dark: ThemeColors = {
   lessonRing:         'rgba(255,209,102,0.45)',
   nodeLocked:         '#2a2935',
   nodeLockedBorder:   'rgba(255,255,255,0.06)',
+
+  // v0.7 §7 Quiz
+  wordBoxBg:          '#0a090d',
+  successTint:        'rgba(76,175,154,0.20)',
+  successBorder:      'rgba(76,175,154,0.55)',
+  errorBorder:        'rgba(229,115,115,0.55)',
 
   reelStock:          '#1a1109',
   reelStockDeep:      '#0e0805',

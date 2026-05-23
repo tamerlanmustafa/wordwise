@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from prisma import Prisma
 
@@ -31,6 +31,11 @@ from ..middleware.auth import get_current_active_user
 from ..services.chest_service import award_session_chest
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
+from ..services.session_kinds import (
+    VALID_KINDS,
+    compose_for_kind,
+    is_kind_unlocked,
+)
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
     MAX_BOX,
@@ -92,6 +97,10 @@ class SessionStartResponse(BaseModel):
     # Free-preview budget the client uses to show the paywall nudge.
     is_preview: bool
     previews_remaining: int
+    # v0.7.2 — which practice tile produced this session. Echoed back so
+    # the client can confirm + cross-check against `last_session_kind`
+    # on the next /daily/state read.
+    kind: str = "quick_recall"
 
 
 class TodaysWordResponse(BaseModel):
@@ -226,6 +235,7 @@ async def _pad_with_fresh_reel_lemmas(
     user_level: str,
     excluded_words: set[str],
     needed: int,
+    restrict_movie_id: Optional[int] = None,
 ):
     """Top up a short SRS queue with fresh lemmas from the user's reel.
 
@@ -234,6 +244,10 @@ async def _pad_with_fresh_reel_lemmas(
     the running `excluded_words` set. Each picked lemma gets a new
     UserWord row (defaults: srsBox=1, srsDueAt=now) so it surfaces in
     the response with a real id and naturally enters the SRS lifecycle.
+
+    `restrict_movie_id` constrains the pull to that one movie — used by
+    the v0.7.2 Movie Deep-Dive tile so padding stays inside the user's
+    pick rather than spilling into other reel movies.
 
     Returns the list of newly-created UserWord rows (already fetched), in
     the order they were picked. Empty list when the reel can't fill the
@@ -260,6 +274,9 @@ async def _pad_with_fresh_reel_lemmas(
             break
         movie_id = tmdb_to_movie_id.get(r.tmdbId)
         if movie_id is None:
+            continue
+        # Deep-dive: skip every reel movie except the picked one.
+        if restrict_movie_id is not None and movie_id != restrict_movie_id:
             continue
         # Over-fetch (2x remaining) to give us headroom against the
         # in-flight excluded_words dedupe below.
@@ -310,6 +327,10 @@ async def _pad_with_fresh_reel_lemmas(
 
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
+    kind: str = Query("quick_recall", description="Practice tile (v0.7.2). One of "
+                                                 "quick_recall / synonym_round / "
+                                                 "tough_words / movie_deep_dive."),
+    movie_id: Optional[int] = Query(None, description="Required when kind=movie_deep_dive."),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
@@ -320,15 +341,45 @@ async def start_session(
     /srs/session/start a second time the same day returns HTTP 402 with
     a `srs_daily_cap_reached` paywall payload — premium unlocks unlimited.
 
-    Composition: due cards first (`srsDueAt <= now`, oldest first), then
-    fresh lemmas drawn from the next unstudied reel movie at CEFR ±1 to
-    keep the daily session at SESSION_SIZE cards even when the user has
-    nothing currently due.
+    v0.7.2: the user picks a "practice tile" (`kind` param) before
+    starting. Default `quick_recall` matches the v0.7.1 behaviour for
+    older clients that don't pass the param. Each kind has its own
+    queue composer in `services/session_kinds.py`. The kind is stamped
+    on `User.srsLastSessionKind` so the Practice tab can render the
+    matching tile as done-today.
+
+    Streak gates: synonym_round (3d), tough_words (5d), movie_deep_dive
+    (7d). Picking a locked kind returns 403.
 
     The legacy `srsFreePreviewsUsed` counter is no longer consulted; the
     column remains in the schema for backward compatibility with older
     mobile builds that still poll /srs/stats.
     """
+    # v0.7.2 — validate kind + streak gate + movie_id requirement.
+    if kind not in VALID_KINDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown session kind: {kind}. "
+                   f"Expected one of {sorted(VALID_KINDS)}.",
+        )
+    current_streak = getattr(current_user, "srsCurrentStreak", 0) or 0
+    if not is_kind_unlocked(kind, current_streak):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "reason": "kind_locked",
+                "kind": kind,
+                "current_streak": current_streak,
+                "message": f"'{kind}' unlocks at a higher streak. "
+                           f"Keep going on Quick Recall to earn it.",
+            },
+        )
+    if kind == "movie_deep_dive" and movie_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="movie_deep_dive requires the `movie_id` query parameter.",
+        )
+
     premium = is_premium(current_user)
     now = datetime.now(timezone.utc)
 
@@ -346,18 +397,27 @@ async def start_session(
 
     # Count true due-now debt before padding so the header value reflects
     # what the user actually has waiting, not the inflated post-padding total.
+    # Note: this stays scoped to all due cards (not kind-restricted) so the
+    # header value reflects total debt, not the slice this tile carved.
     total_due = await db.userword.count(
         where={"userId": current_user.id, "srsDueAt": {"lte": now}}
     )
 
-    due_rows = await db.userword.find_many(
-        where={"userId": current_user.id, "srsDueAt": {"lte": now}},
-        order=[{"srsDueAt": "asc"}, {"id": "asc"}],
-        take=SESSION_SIZE,
+    # v0.7.2 — dispatch to the per-kind composer instead of the fixed
+    # due-today query. `compose_for_kind` raises ValueError for invalid
+    # combos; we already validated above so it shouldn't trigger.
+    due_rows = await compose_for_kind(
+        db,
+        kind=kind,
+        user_id=current_user.id,
+        movie_id=movie_id,
+        now=now,
     )
 
     # Pad short sessions with fresh lemmas from the next reel movie so
     # the daily 2-min habit always has SESSION_SIZE cards to chew on.
+    # Movie Deep-Dive constrains padding to the picked movie so the
+    # session stays "about that one film".
     session_rows = list(due_rows)
     if len(session_rows) < SESSION_SIZE:
         raw_level = getattr(current_user, "proficiencyLevel", None)
@@ -369,6 +429,7 @@ async def start_session(
             user_level=str(user_level),
             excluded_words=excluded,
             needed=SESSION_SIZE - len(session_rows),
+            restrict_movie_id=movie_id if kind == "movie_deep_dive" else None,
         )
         session_rows.extend(fresh_rows)
 
@@ -427,12 +488,16 @@ async def start_session(
                 card.choices = [SynonymChoice(**c) for c in mcq["choices"]]
         cards.append(card)
 
-    # Stamp the daily-cap field only when there was actually work to do.
-    # Don't penalize a free user who taps "review" into an empty queue.
+    # Stamp the daily-cap field + the picked kind only when there was
+    # actually work to do. Don't penalize a free user who taps "review"
+    # into an empty queue.
     if cards:
         await db.user.update(
             where={"id": current_user.id},
-            data={"srsLastSessionStartedAt": now},
+            data={
+                "srsLastSessionStartedAt": now,
+                "srsLastSessionKind": kind,
+            },
         )
 
     # `previews_remaining` is preserved in the response shape for legacy
@@ -452,6 +517,7 @@ async def start_session(
         session_size=SESSION_SIZE,
         is_preview=not premium,
         previews_remaining=remaining,
+        kind=kind,
     )
 
 

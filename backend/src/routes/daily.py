@@ -50,6 +50,11 @@ class DailyStateResponse(BaseModel):
     # diffs against an AsyncStorage last-seen list to fire the unlock
     # modal for newly-added entries.
     unlocked_cosmetics: list[str]
+    # v0.7.2: which Practice-tab tile the user picked today (or null
+    # when they haven't started today's session yet). The streak chip /
+    # tile-state derivation reads this so the right tile renders as
+    # "done today".
+    last_session_kind: str | None = None
 
 
 @router.get("/state", response_model=DailyStateResponse)
@@ -76,6 +81,15 @@ async def daily_state(
     streak = (user.srsCurrentStreak or 0) if user else 0
     longest = (user.srsLongestStreak or 0) if user else 0
 
+    # v0.7.2 — the `last_session_kind` column persists across UTC days
+    # since we don't actively clear it on rollover. Treat it as the
+    # "today's pick" only when the user actually started a session today.
+    last_kind: str | None = None
+    if user is not None:
+        started = getattr(user, "srsLastSessionStartedAt", None)
+        if started is not None and started.date() == today:
+            last_kind = getattr(user, "srsLastSessionKind", None)
+
     return DailyStateResponse(
         today_done=last_date == today,
         streak=streak,
@@ -86,4 +100,5 @@ async def daily_state(
         auto_granted_weekly=mercy["auto_granted"],
         auto_consumed=mercy["auto_consumed"],
         unlocked_cosmetics=parse_unlocked(user.unlockedCosmetics) if user else [],
+        last_session_kind=last_kind,
     )

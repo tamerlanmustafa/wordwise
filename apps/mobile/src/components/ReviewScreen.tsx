@@ -13,6 +13,7 @@ import {
   wordwiseApi,
   SrsPaywallError,
   type ChestPayload,
+  type SessionKind,
   type SrsReviewCard,
 } from '../services/api';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
@@ -21,6 +22,9 @@ import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { ChestReveal } from './journey/ChestReveal';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
+import { QuizHeader } from './quiz/QuizHeader';
+import { SynonymMCQCard } from './quiz/SynonymMCQCard';
+import { cefrColors } from '../theme/palette';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -57,6 +61,11 @@ const COLORS = {
 };
 
 export interface ReviewScreenProps {
+  /** v0.7.2 — which Practice tile to start. Omit / pass undefined for
+   *  the legacy quick_recall default. */
+  kind?: SessionKind;
+  /** Required when `kind === 'movie_deep_dive'`. */
+  movieId?: number;
   onBack: () => void;
   onPaywall: (previews_used: number, previews_limit: number) => void;
 }
@@ -68,7 +77,12 @@ const cefrColor = (level: string) => {
   return map[level] || COLORS.primary;
 };
 
-export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
+export function ReviewScreen({
+  kind,
+  movieId,
+  onBack,
+  onPaywall,
+}: ReviewScreenProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [cards, setCards] = useState<SrsReviewCard[]>([]);
   const [index, setIndex] = useState(0);
@@ -114,15 +128,19 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
     setIndex(0);
     setStats({ got: 0, forgot: 0 });
     try {
-      const session = await srsApi.startSession();
+      // v0.7.2 — kind + movieId are passed through to the backend so
+      // the queue composer matches the Practice-tab tile the user
+      // tapped. Undefined kind hits the legacy quick_recall default.
+      const session = await srsApi.startSession({ kind, movieId });
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
-      wordwiseApi.logInteraction('_srs', 'SRS_SESSION_START', undefined, {
-        card_count: session.cards.length,
-        is_preview: session.is_preview,
-        previews_remaining: session.previews_remaining,
-      });
+      // Session-level analytics (SRS_SESSION_START) deliberately not
+      // emitted: /user/interactions is keyed on per-word events and
+      // its Prisma enum rejects this type with a 400. A proper events
+      // table is a separate workstream; until then, server-side
+      // `srs_last_session_started_at` + `quiz_sessions` already
+      // capture session-start with more fidelity than this would have.
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
@@ -137,7 +155,7 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
       setErrorMessage(e?.message || 'Failed to start review session');
       setPhase('error');
     }
-  }, [onPaywall]);
+  }, [onPaywall, kind, movieId]);
 
   useEffect(() => {
     loadSession();
@@ -336,6 +354,49 @@ export function ReviewScreen({ onBack, onPaywall }: ReviewScreenProps) {
 
   // phase === 'prompt' | 'answer'
   const showAnswer = phase === 'answer';
+
+  // v0.7 §7.1 — `synonym_mcq` cards render with the shared QuizHeader +
+  // the new stacked-4-choice SynonymMCQCard (replaces the v0.6 2×2 grid).
+  // The recall flow below is untouched.
+  if (currentCard && currentCard.card_type === 'synonym_mcq' && currentCard.choices) {
+    const lvl = (currentCard.cefr_level && currentCard.cefr_level in cefrColors)
+      ? (currentCard.cefr_level as keyof typeof cefrColors)
+      : null;
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <QuizHeader
+          movie={currentCard.movie_title ?? 'Daily review'}
+          level={lvl}
+          index={index + 1}
+          total={cards.length}
+          onBack={onBack}
+        />
+        <SynonymMCQCard
+          word={currentCard.word}
+          pos={undefined /* not on SrsReviewCard payload yet */}
+          example={currentCard.example_sentence}
+          choices={currentCard.choices}
+          onAnswer={(correct) => advance(correct)}
+        />
+        <TipPopup
+          visible={spacingTipVisible}
+          eyebrow="Did you know?"
+          title="That's the spacing effect at work"
+          body={
+            'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
+            'is when memory really sticks — much better than cramming on one day. ' +
+            "You're seeing this word again on that exact rhythm."
+          }
+          onDismiss={() => setSpacingTipVisible(false)}
+          onDontShowAgain={() => {
+            void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
+            setSpacingTipVisible(false);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>

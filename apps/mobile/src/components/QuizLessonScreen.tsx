@@ -5,7 +5,6 @@ import {
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,10 +19,17 @@ import {
   type QuizSelfRating,
   type QuizStartSessionResponse,
 } from '../services/api';
+import { QuizHeader } from './quiz/QuizHeader';
+import { SynonymMCQCard } from './quiz/SynonymMCQCard';
+import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 
 export interface QuizLessonScreenProps {
   session: QuizStartSessionResponse;
   level: string;
+  /** v0.7 §7 — movie title for the shared QuizHeader. Optional so
+   *  legacy callers don't have to change all at once; falls back to
+   *  the level label when absent. */
+  movieTitle?: string;
   onExit: () => void;
   onComplete: (
     result: QuizCompleteResponse,
@@ -60,6 +66,7 @@ function isTypedCorrect(userInput: string, expected: string): boolean {
 export function QuizLessonScreen({
   session,
   level,
+  movieTitle,
   onExit,
   onComplete,
 }: QuizLessonScreenProps) {
@@ -69,9 +76,6 @@ export function QuizLessonScreen({
 
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<QuizCardResultInput[]>([]);
-  const [typed, setTyped] = useState('');
-  const [revealed, setRevealed] = useState(false);
-  const [lastCorrect, setLastCorrect] = useState<boolean | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedAtRef = useRef<number>(Date.now());
@@ -79,11 +83,15 @@ export function QuizLessonScreen({
   const cards = session.cards;
   const total = cards.length;
   const card: QuizCard | undefined = cards[idx];
-  // Primary accent for input + check button. Quiz Card uses
-  // `primaryOnSurface` so #7C5CBF pops on dark mode via primaryLight.
+  // Primary accent retained for the self-rate / empty paths that still
+  // use the old styles. The new card components key off `tc.gold` /
+  // `tc.success` etc. directly.
   const accent = tc.primaryOnSurface;
-  const levelColor = cefrColors[level] || accent;
-  const progress = total > 0 ? (idx / total) : 0;
+  // CEFR level for the QuizHeader badge — only render the badge when
+  // the level is one we recognize from the palette.
+  const headerLevel = (level && level in cefrColors)
+    ? (level as keyof typeof cefrColors)
+    : null;
 
   if (!card) {
     return (
@@ -101,9 +109,6 @@ export function QuizLessonScreen({
   const recordAndAdvance = (entry: QuizCardResultInput) => {
     const next = [...results, entry];
     setResults(next);
-    setTyped('');
-    setRevealed(false);
-    setLastCorrect(null);
     startedAtRef.current = Date.now();
 
     if (idx + 1 >= total) {
@@ -127,20 +132,30 @@ export function QuizLessonScreen({
     }
   };
 
-  const handleTypeCheck = () => {
-    if (revealed) return;
-    const expected = card.translation || '';
-    const correct = expected ? isTypedCorrect(typed, expected) : false;
-    setLastCorrect(correct);
-    setRevealed(true);
-  };
-
-  const handleTypeContinue = () => {
+  // v0.7 §7.2 — the TranslationTypeCard owns its own input state +
+  // alias matching. `onAnswer(correct)` fires once per card with the
+  // final result; we just record it.
+  const handleTypeAnswer = (correct: boolean) => {
     const answerMs = Date.now() - startedAtRef.current;
     recordAndAdvance({
       word: card.word,
       card_type: 'type',
-      is_correct: !!lastCorrect,
+      is_correct: correct,
+      self_rating: null,
+      answer_ms: answerMs,
+    });
+  };
+
+  // v0.7 §7.1 — synonym MCQ entry point for journey/movie quizzes.
+  // The backend can start surfacing `synonym_mcq` card_type from
+  // /quiz/start when it has the synonym data; the screen already
+  // handles it now.
+  const handleSynonymMcqAnswer = (correct: boolean) => {
+    const answerMs = Date.now() - startedAtRef.current;
+    recordAndAdvance({
+      word: card.word,
+      card_type: 'synonym_mcq',
+      is_correct: correct,
       self_rating: null,
       answer_ms: answerMs,
     });
@@ -187,96 +202,39 @@ export function QuizLessonScreen({
     );
   }
 
-  // Check / Continue button colour: gold on dark, purple on light.
-  const ctaBg = scheme === 'dark' ? tc.gold : tc.primary;
-  const ctaFg = scheme === 'dark' ? tc.goldDeep : tc.textInverse;
-
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={onExit} hitSlop={8} style={{ width: 28 }}>
-          <Text style={s.closeX}>✕</Text>
-        </TouchableOpacity>
-        <View style={s.progressTrack}>
-          <View
-            style={[
-              s.progressFill,
-              { width: `${progress * 100}%`, backgroundColor: levelColor },
-            ]}
-          />
-        </View>
-        <Text style={s.progressLabel}>{idx + 1}/{total}</Text>
-      </View>
+      <QuizHeader
+        movie={movieTitle ?? `${level} session`}
+        level={headerLevel}
+        index={idx + 1}
+        total={total}
+        onBack={onExit}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        {card.card_type === 'type' ? (
-          <View style={s.body}>
-            <Text style={s.prompt}>Translate this word</Text>
-            <View style={[s.wordCard, { borderColor: accent }]}>
-              <Text style={s.wordText}>{card.word}</Text>
-            </View>
-
-            <TextInput
-              style={[
-                s.input,
-                { borderColor: accent },
-                revealed && lastCorrect && s.inputCorrect,
-                revealed && !lastCorrect && s.inputWrong,
-              ]}
-              placeholder="Type the translation…"
-              placeholderTextColor={tc.textSecondary}
-              value={typed}
-              onChangeText={setTyped}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!revealed}
-              onSubmitEditing={!revealed && typed.trim() ? handleTypeCheck : undefined}
-              returnKeyType="done"
-            />
-
-            {revealed && (
-              <View
-                style={[
-                  s.feedback,
-                  lastCorrect ? s.feedbackCorrect : s.feedbackWrong,
-                ]}
-              >
-                <Text style={[s.feedbackTitle, lastCorrect ? s.feedbackTitleOk : s.feedbackTitleWrong]}>
-                  {lastCorrect ? 'Correct!' : 'Not quite'}
-                </Text>
-                <Text style={s.feedbackText}>
-                  Answer: {card.translation || '—'}
-                </Text>
-              </View>
-            )}
-
-            <View style={s.footer}>
-              {revealed ? (
-                <TouchableOpacity
-                  onPress={handleTypeContinue}
-                  style={[s.primaryBtn, { backgroundColor: ctaBg }]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.primaryBtnText, { color: ctaFg }]}>Continue →</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={handleTypeCheck}
-                  disabled={!typed.trim()}
-                  style={[
-                    s.primaryBtn,
-                    { backgroundColor: ctaBg, opacity: typed.trim() ? 1 : 0.4 },
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.primaryBtnText, { color: ctaFg }]}>Check Answer</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+        {card.card_type === 'synonym_mcq' && card.choices ? (
+          <SynonymMCQCard
+            word={card.word}
+            pos={card.pos}
+            example={card.example_sentence}
+            choices={card.choices}
+            onAnswer={handleSynonymMcqAnswer}
+          />
+        ) : card.card_type === 'type' ? (
+          <TranslationTypeCard
+            word={card.word}
+            translation={card.translation ?? ''}
+            translationAliases={card.translation_aliases ?? undefined}
+            pos={card.pos}
+            example={card.example_sentence}
+            syllables={card.syllables}
+            firstLetter={card.first_letter ?? deriveFirstLetter(card.translation)}
+            onAnswer={handleTypeAnswer}
+          />
         ) : (
           <View style={s.body}>
             <Text style={s.prompt}>Do you know this word?</Text>
@@ -312,6 +270,14 @@ export function QuizLessonScreen({
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/** Best-effort first-letter hint when the backend hasn't supplied one.
+ *  Strips obvious quoting / whitespace so we don't show `starts with "'"`. */
+function deriveFirstLetter(translation: string | null): string | null {
+  if (!translation) return null;
+  const cleaned = translation.trim().replace(/^["'«»“”]+/, '');
+  return cleaned.length > 0 ? cleaned[0] : null;
 }
 
 const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.create({

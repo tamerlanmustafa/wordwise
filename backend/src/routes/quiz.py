@@ -100,6 +100,13 @@ class CompleteSessionResponse(BaseModel):
     xp_earned: int
     correct_count: int
     total_scored: int
+    # v0.7 §7.5 — movie-anchored sessions return the user's
+    # comprehension % before and after the SRS advance for this lesson.
+    # The frontend renders the delta as the headline reward on
+    # QuizResultScreen. Null for batch / cross-movie sessions where
+    # the per-movie figure doesn't apply.
+    comprehension_before: Optional[float] = None
+    comprehension_after: Optional[float] = None
 
 
 class UnitStatePayload(BaseModel):
@@ -297,6 +304,18 @@ async def complete_session(
     stars = compute_stars(correct, total_scored)
     xp = compute_xp(correct, self_rate_count, stars)
 
+    # v0.7 §7.5 — snapshot the user's pre-session comprehension % for
+    # this movie before SRS advancement runs. The post-session figure
+    # is read back after `recompute_for_user_movie`. Both are null for
+    # batch / no-movie sessions; the client uses null to suppress the
+    # delta UI on QuizResultScreen.
+    comprehension_before: Optional[float] = None
+    if session.movieId is not None:
+        before_row = await db.usermovieprogress.find_unique(
+            where={"userId_movieId": {"userId": current_user.id, "movieId": session.movieId}}
+        )
+        comprehension_before = float(before_row.comprehensibilityPercent) if before_row else 0.0
+
     # Finalize session.
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -429,9 +448,22 @@ async def complete_session(
             "xp": xp,
         })
 
+    # v0.7 §7.5 — read the post-session comprehension % back. The
+    # earlier `recompute_for_user_movie` already wrote the fresh figure;
+    # we just re-fetch it for the response. Null when the session
+    # wasn't movie-anchored or the user has no progress row yet.
+    comprehension_after: Optional[float] = None
+    if session.movieId is not None and comprehension_before is not None:
+        after_row = await db.usermovieprogress.find_unique(
+            where={"userId_movieId": {"userId": current_user.id, "movieId": session.movieId}}
+        )
+        comprehension_after = float(after_row.comprehensibilityPercent) if after_row else comprehension_before
+
     return CompleteSessionResponse(
         stars=stars, xp_earned=xp,
         correct_count=correct, total_scored=total_scored,
+        comprehension_before=comprehension_before,
+        comprehension_after=comprehension_after,
     )
 
 

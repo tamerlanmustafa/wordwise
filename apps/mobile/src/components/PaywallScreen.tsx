@@ -29,9 +29,11 @@ const FEATURES = [
 ];
 
 export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallScreenProps) {
-  useEffect(() => {
-    wordwiseApi.logInteraction('_srs', 'PAYWALL_VIEW', undefined, { previews_used: previewsUsed, previews_limit: previewsLimit });
-  }, [previewsUsed, previewsLimit]);
+  // Session-level analytics (PAYWALL_VIEW) deliberately not emitted —
+  // see ReviewScreen for the same drop. /user/interactions is per-word
+  // only; a proper events table is a separate workstream.
+  void previewsUsed;
+  void previewsLimit;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -64,7 +66,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
 
         <View style={styles.cta}>
           <TouchableOpacity style={styles.trialBtn} onPress={async () => {
-            wordwiseApi.logInteraction('_srs', 'TRIAL_START_TAP', undefined, { previews_used: previewsUsed });
+            // TRIAL_START_TAP analytics drop — see top of file.
             const success = await purchaseProduct(PRODUCTS.MONTHLY);
             if (success) {
               Alert.alert('Welcome to Plus!', 'Your subscription is now active.');
@@ -76,7 +78,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
           <Text style={styles.priceHint}>Then $4.99/month · Cancel anytime</Text>
 
           <TouchableOpacity style={styles.annualBtn} onPress={async () => {
-            wordwiseApi.logInteraction('_srs', 'ANNUAL_TAP', undefined, { previews_used: previewsUsed });
+            // ANNUAL_TAP analytics drop — see top of file.
             const success = await purchaseProduct(PRODUCTS.ANNUAL);
             if (success) {
               Alert.alert('Welcome to Plus!', 'Your annual subscription is now active.');

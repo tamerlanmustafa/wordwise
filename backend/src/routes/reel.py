@@ -139,6 +139,11 @@ class ReelTile(BaseModel):
     # user-added TMDB id doesn't have a matching internal Movie row
     # (rare — happens before our catalog ingest catches up).
     cefr_level: Optional[Literal["A1", "A2", "B1", "B2", "C1", "C2"]] = None
+    # v0.7.2: internal Movie.id when we have a matching catalog entry.
+    # Needed by the Movie Deep-Dive practice tile, which calls
+    # /srs/session/start?kind=movie_deep_dive&movie_id=… The TMDB id on
+    # the tile alone isn't enough — the SRS engine keys on Movie.id.
+    movie_id: Optional[int] = None
 
 
 class ReelListResponse(BaseModel):
@@ -216,6 +221,11 @@ async def list_reel(
                 )
 
     tiles = []
+    tmdb_to_movie_id_local = (
+        {m.tmdbId: m.id for m in movies}
+        if user_rows
+        else {}
+    )
     for r in user_rows:
         status, pct = progress_by_tmdb.get(r.tmdbId, ("unstudied", 0))
         tiles.append(ReelTile(
@@ -227,6 +237,7 @@ async def list_reel(
             status=status,  # type: ignore[arg-type]
             comprehensibility_percent=pct,
             cefr_level=cefr_by_tmdb.get(r.tmdbId),  # type: ignore[arg-type]
+            movie_id=tmdb_to_movie_id_local.get(r.tmdbId),
         ))
     end = cursor + limit
     page = tiles[cursor:end]

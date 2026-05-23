@@ -1,48 +1,68 @@
 /**
- * PracticeScreen — v0.7 "Practice" tab.
+ * PracticeScreen — v0.7.2 "Practice" tab.
  *
- * The Duolingo-style learning path. Daily SRS hero up top (the streak
- * anchor), then a vertical scroll of per-movie "units" with 5 lesson
- * nodes each.
+ * Daily-habit dashboard with a path of practice-tile circles. The user
+ * picks ONE tile per UTC day; that pick stamps `srsLastSessionKind` on
+ * the User row and runs the kind-specific SRS queue composer. Mercy
+ * infrastructure (auto-grant + auto-consume freezes) already protects
+ * the streak across missed days — see `services/streak_service.py`.
  *
- * Data:
- *   • daily SRS state ← `dailyGoalStore` (local) + the existing
- *     `srsApi.startSession` flow when the user taps START.
- *   • streak counter ← `dailyGoalStore.streak`.
- *   • units ← `practiceApi.listUnits()`.
+ * Sections, top → bottom:
+ *   1. Header (eyebrow + serif title + streak chip)
+ *   2. Mini stats row
+ *   3. DailyReviewHero (still the headline "today's task" affordance)
+ *   4. Vertical tile path — bottom-anchored so today's pickable tile
+ *      is in the user's eye when the tab opens
  *
- * Spec: `tabs/practice.jsx → PracticeScreen` (all visual values 1:1).
+ * The hero card and the bottom tile mean the same thing (start today's
+ * session) — different surfaces for different intents. Tapping either
+ * route into ReviewScreen with the chosen kind.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useDailyGoalStore, DAILY_GOAL } from '../stores/dailyGoalStore';
-import { practiceApi, type PracticeLesson, type PracticeUnit } from '../services/api';
+import { useReelStore } from '../stores/reelStore';
+import {
+  dailyApi,
+  srsApi,
+  SrsPaywallError,
+  type DailyState,
+  type SessionKind,
+  KIND_UNLOCK_THRESHOLDS,
+} from '../services/api';
 import { DailyReviewHero } from './practice/DailyReviewHero';
-import { UnitMarquee } from './practice/UnitMarquee';
-import { UnitPath } from './practice/UnitPath';
+import { PracticeTilePath } from './practice/PracticeTilePath';
+import {
+  MoviePickerModal,
+  type DeepDiveMovieOption,
+} from './practice/MoviePickerModal';
 
 const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'JetBrains Mono';
 
 export interface PracticeScreenProps {
-  /** Opens the existing ReviewScreen (App.tsx navigateToReview). */
-  onStartDailyReview: () => void;
-  /** Optional: deep-link a tap on a lesson node into the per-movie quiz
-   *  flow. For v0.7 we just open the unit's movie quiz; SetIntro then
-   *  QuizLessonScreen handle the rest. */
-  onLessonPress?: (unit: PracticeUnit, lesson: PracticeLesson) => void;
+  /** Open the ReviewScreen with a specific session kind. Falls back to
+   *  quick_recall when called with no args (kept for backward compat
+   *  with the journey/legacy paths). */
+  onStartDailyReview: (kind?: SessionKind, movieId?: number) => void;
+  /** Surfaced when the SRS endpoint returns 402 "daily_cap_reached" —
+   *  same handler the journey flow uses. */
+  onPaywall?: (previewsUsed: number, previewsLimit: number) => void;
 }
 
-export function PracticeScreen({ onStartDailyReview, onLessonPress }: PracticeScreenProps) {
+export function PracticeScreen({
+  onStartDailyReview,
+  onPaywall,
+}: PracticeScreenProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  // Daily-habit state. The store hydrates itself on first mount via the
-  // existing DAILY_GOAL pipeline; we just read.
+  // Local mirror of the streak / done state — reads optimistic, then
+  // gets corrected once /daily/state resolves.
   const dailyDone = useDailyGoalStore((st) => st.done);
   const dailyStreak = useDailyGoalStore((st) => st.streak);
   const dailyHydrated = useDailyGoalStore((st) => st.hydrated);
@@ -51,45 +71,114 @@ export function PracticeScreen({ onStartDailyReview, onLessonPress }: PracticeSc
     if (!dailyHydrated) void hydrateDaily();
   }, [dailyHydrated, hydrateDaily]);
 
-  const doneToday = dailyDone >= DAILY_GOAL;
-
-  // Units — one network call on mount. No pagination for v0.7; the
-  // endpoint caps at 50 server-side.
-  const [units, setUnits] = useState<PracticeUnit[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    practiceApi
-      .listUnits(20)
-      .then((res) => {
-        if (cancelled) return;
-        setUnits(res.units);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        console.warn('[PracticeScreen] listUnits failed:', e?.message);
-        setError(e?.message || 'Failed to load practice path');
-        setUnits([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  // Authoritative server state — gives us `last_session_kind` so we
+  // can render the right tile as "done today".
+  const [serverState, setServerState] = useState<DailyState | null>(null);
+  const refreshServerState = useCallback(async () => {
+    try {
+      const next = await dailyApi.state();
+      setServerState(next);
+    } catch (e) {
+      console.warn('[PracticeScreen] daily/state failed:', (e as Error)?.message);
+    }
   }, []);
+  useEffect(() => {
+    void refreshServerState();
+  }, [refreshServerState]);
+
+  // Reel tiles for the Movie Deep-Dive picker. Cheap re-use — the reel
+  // store is already hydrated by My Movies / Home elsewhere.
+  const reelTiles = useReelStore((st) => st.tiles);
+  const hydrateReel = useReelStore((st) => st.hydrate);
+  const reelHydrated = useReelStore((st) => st.hydrated);
+  useEffect(() => {
+    if (!reelHydrated) void hydrateReel();
+  }, [reelHydrated, hydrateReel]);
+
+  // Effective streak / done — prefer server when present, fall back to
+  // the local optimistic counter for the brief gap before the network
+  // resolves on cold start.
+  const effectiveStreak = serverState?.streak ?? dailyStreak;
+  const doneToday = (serverState?.today_done ?? dailyDone >= DAILY_GOAL);
+  const lastKind: SessionKind | null = serverState?.last_session_kind ?? null;
+
+  // ── Movie picker modal state ────────────────────────────────────
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const deepDiveOptions = useMemo<DeepDiveMovieOption[]>(
+    () =>
+      reelTiles
+        .filter(
+          (t) =>
+            typeof t.movie_id === 'number' &&
+            (t.comprehensibility_percent ?? 0) > 0,
+        )
+        .map((t) => ({
+          movieId: t.movie_id!,
+          title: t.title,
+          posterPath: t.poster_path,
+          comprehensibilityPercent: t.comprehensibility_percent ?? 0,
+          cefrLevel: t.cefr_level ?? null,
+        })),
+    [reelTiles],
+  );
+
+  // ── Session-start handlers ──────────────────────────────────────
+  const startKind = useCallback(
+    (kind: SessionKind, movieId?: number) => {
+      // We don't pre-check the daily cap client-side; the server's
+      // 402 response is the authority. The paywall handler routes the
+      // user to upgrade copy. For a kind that's locked by streak we
+      // already filter the tap server-side; surface a soft toast if
+      // the user somehow taps a locked tile (e.g. server <-> client
+      // streak drift).
+      if (kind !== 'quick_recall' && effectiveStreak < KIND_UNLOCK_THRESHOLDS[kind]) {
+        Alert.alert(
+          'Locked',
+          `Keep your streak going to ${KIND_UNLOCK_THRESHOLDS[kind]} days to unlock this tile.`,
+        );
+        return;
+      }
+      onStartDailyReview(kind, movieId);
+    },
+    [effectiveStreak, onStartDailyReview],
+  );
+
+  const handleHeroPress = useCallback(() => {
+    // Hero always starts Quick Recall — the no-decision default.
+    startKind('quick_recall');
+  }, [startKind]);
+
+  const handleTilePress = useCallback(
+    (kind: SessionKind) => {
+      if (kind === 'movie_deep_dive') {
+        if (deepDiveOptions.length === 0) {
+          Alert.alert(
+            'No movies ready',
+            'Finish a Quick Recall or two so the Deep-Dive pool has words to pull from.',
+          );
+          return;
+        }
+        setPickerOpen(true);
+        return;
+      }
+      startKind(kind);
+    },
+    [deepDiveOptions.length, startKind],
+  );
+
+  const handleMoviePicked = useCallback(
+    (movieId: number) => {
+      setPickerOpen(false);
+      startKind('movie_deep_dive', movieId);
+    },
+    [startKind],
+  );
+
+  // ── Stat figures ────────────────────────────────────────────────
+  const cardsDue = 12; // TODO: wire to srsApi.stats().due_today when surfaced
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
-      {/* Warm vertical glow at the top — RN's expo-linear-gradient
-          doesn't do radial, so we use a vertical gold-to-transparent
-          fade. Visually close to the radial in `tabs/practice.jsx`
-          on phone-sized canvases where the radial's curvature is
-          imperceptible anyway. */}
       <LinearGradient
         colors={[tc.heroGlowStart, 'transparent']}
         locations={[0, 1]}
@@ -97,7 +186,6 @@ export function PracticeScreen({ onStartDailyReview, onLessonPress }: PracticeSc
         pointerEvents="none"
       />
 
-      {/* Header row */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <Text style={s.eyebrow}>DAILY PRACTICE</Text>
@@ -105,67 +193,53 @@ export function PracticeScreen({ onStartDailyReview, onLessonPress }: PracticeSc
         </View>
         <View style={s.streakChip}>
           <Text style={s.streakFire}>🔥</Text>
-          <Text style={s.streakNumber}>{dailyStreak}</Text>
-          <Text style={s.streakLabel}>{dailyStreak === 1 ? 'DAY' : 'DAYS'}</Text>
+          <Text style={s.streakNumber}>{effectiveStreak}</Text>
+          <Text style={s.streakLabel}>{effectiveStreak === 1 ? 'DAY' : 'DAYS'}</Text>
         </View>
       </View>
 
-      {/* Scrolling content */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={s.scrollPad}
         showsVerticalScrollIndicator={false}
       >
         <DailyReviewHero
-          cardsDue={12}
-          streak={dailyStreak}
+          cardsDue={cardsDue}
+          streak={effectiveStreak}
           doneToday={doneToday}
-          onStartPress={onStartDailyReview}
+          onStartPress={handleHeroPress}
         />
 
-        {/* 3 mini stats. v0.7 placeholders — wired to dailyGoalStore +
-            simple counts. Real XP/words/in-progress values can flow
-            in once UserQuizStats is exposed on the practice payload. */}
         <View style={s.statRow}>
-          <MiniStat icon="⭐" n="—"            l="XP today" tc={tc} s={s} />
-          <MiniStat icon="📚" n={`${dailyStreak}`} l="streak" tc={tc} s={s} />
-          <MiniStat icon="🎬" n={`${units?.length ?? 0}`} l="in progress" tc={tc} s={s} />
+          <MiniStat icon="⭐" n="—" l="XP today" s={s} />
+          <MiniStat icon="📚" n={`${effectiveStreak}`} l="streak" s={s} />
+          <MiniStat
+            icon="🛡️"
+            n={`${serverState?.freezes_held ?? 0}`}
+            l="freezes"
+            s={s}
+          />
         </View>
 
-        {/* Section header */}
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>YOUR STUDY PATH</Text>
-          {/* "See all" reserved for the (future) full path screen.
-              For v0.7 we render every unit returned so the link
-              would be a no-op — leaving the affordance off rather
-              than wiring an inert tap target. */}
+        {/* The tile chain. Bottom-to-top — visible bottom tile is the
+            most accessible. The path itself doesn't know about the
+            paywall / daily cap; the parent's `handleTilePress` does. */}
+        <View style={s.pathWrap}>
+          <Text style={s.pathHeading}>YOUR PRACTICE PATH</Text>
+          <PracticeTilePath
+            streak={effectiveStreak}
+            lastSessionKind={lastKind}
+            onTilePress={handleTilePress}
+          />
         </View>
-
-        {loading ? (
-          <View style={s.loadingWrap}>
-            <ActivityIndicator size="small" color={tc.gold} />
-          </View>
-        ) : units && units.length > 0 ? (
-          units.map((unit, i) => (
-            <View key={unit.unit_id}>
-              <UnitMarquee unit={unit} first={i === 0} />
-              <UnitPath unit={unit} onLessonPress={onLessonPress} />
-              {i < units.length - 1 ? <Intermission tc={tc} /> : null}
-            </View>
-          ))
-        ) : (
-          <View style={s.emptyState}>
-            <Text style={s.emptyTitle}>No units yet</Text>
-            <Text style={s.emptyBody}>
-              {error
-                ? "We couldn't load your practice path — try again in a moment."
-                : 'Add a movie to your library and your study path will appear here.'}
-            </Text>
-          </View>
-        )}
-
-        <View style={{ height: 32 }} />
       </ScrollView>
+
+      <MoviePickerModal
+        visible={pickerOpen}
+        options={deepDiveOptions}
+        onPick={handleMoviePicked}
+        onClose={() => setPickerOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -174,19 +248,13 @@ function MiniStat({
   icon,
   n,
   l,
-  tc,
   s,
 }: {
   icon: string;
   n: string;
   l: string;
-  tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
 }) {
-  // tc kept on the API for symmetry with other helpers; styling lives
-  // in the parent's StyleSheet so tokens cascade without per-call
-  // useThemeColors() invocations.
-  void tc;
   return (
     <View style={s.statCard}>
       <Text style={s.statIcon}>{icon}</Text>
@@ -197,37 +265,6 @@ function MiniStat({
     </View>
   );
 }
-
-function Intermission({ tc }: { tc: ThemeColors }) {
-  return (
-    <View style={styles.intermissionRow}>
-      <View style={[styles.intermissionRule, { backgroundColor: tc.divider }]} />
-      <Text style={[styles.intermissionText, { color: tc.textFaint }]}>
-        INTERMISSION
-      </Text>
-      <View style={[styles.intermissionRule, { backgroundColor: tc.divider }]} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  intermissionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-  },
-  intermissionRule: {
-    flex: 1,
-    height: 1,
-  },
-  intermissionText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-});
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
@@ -296,7 +333,7 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 0.6,
     },
     scrollPad: {
-      paddingBottom: 24,
+      paddingBottom: 64,
     },
     statRow: {
       flexDirection: 'row',
@@ -337,40 +374,22 @@ const makeStyles = (tc: ThemeColors) =>
       marginTop: 2,
       textTransform: 'uppercase',
     },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 22,
-      paddingBottom: 4,
+    pathWrap: {
+      paddingHorizontal: 18,
+      paddingTop: 8,
     },
-    sectionTitle: {
+    pathHeading: {
       fontSize: 11,
       fontWeight: '900',
       letterSpacing: 1.8,
       color: tc.textFaint,
       textTransform: 'uppercase',
-    },
-    loadingWrap: {
-      paddingVertical: 40,
-      alignItems: 'center',
-    },
-    emptyState: {
-      paddingHorizontal: 28,
-      paddingTop: 32,
-      paddingBottom: 16,
-      gap: 8,
-    },
-    emptyTitle: {
-      fontFamily: SERIF_FAMILY,
-      fontSize: 20,
-      fontWeight: '700',
-      color: tc.text,
-      letterSpacing: -0.3,
-    },
-    emptyBody: {
-      fontSize: 13,
-      lineHeight: 19,
-      color: tc.textSecondary,
+      textAlign: 'center',
+      marginBottom: 4,
     },
   });
+
+// Re-export to silence "exported but never imported" warnings when
+// callers want a stronger handle on the paywall flow downstream.
+export { SrsPaywallError } from '../services/api';
+void srsApi; // referenced indirectly via dailyApi/srsApi import chain

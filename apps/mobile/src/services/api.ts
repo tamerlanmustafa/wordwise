@@ -591,12 +591,35 @@ export interface SrsReviewCard {
   choices?: SynonymChoice[];
 }
 
+/** v0.7.2 — Practice-tab "session kind". The user picks one tile per
+ *  UTC day on the Practice screen; that pick is passed to
+ *  `srsApi.startSession({ kind })`. Server-side dispatch in
+ *  `services/session_kinds.py`. */
+export type SessionKind =
+  | 'quick_recall'
+  | 'synonym_round'
+  | 'tough_words'
+  | 'movie_deep_dive';
+
+/** Streak thresholds that mirror the backend. Used by the tile-state
+ *  derivation so the client doesn't have to re-fetch /daily/state to
+ *  know which tiles to grey out. Keep in sync with
+ *  `backend/src/services/session_kinds.py::KIND_UNLOCK_THRESHOLDS`. */
+export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
+  quick_recall:    0,
+  synonym_round:   3,
+  tough_words:     5,
+  movie_deep_dive: 7,
+};
+
 export interface SrsSessionStart {
   cards: SrsReviewCard[];
   total_due: number;
   session_size: number;
   is_preview: boolean;
   previews_remaining: number;
+  /** v0.7.2 — echoed back so the client confirms which tile was claimed. */
+  kind?: SessionKind;
 }
 
 export interface SavedWordEntry {
@@ -674,6 +697,9 @@ export interface DailyState {
   auto_consumed: number;
   /** v0.6 W10 — same shape as in CompleteSessionResponse. */
   unlocked_cosmetics: string[];
+  /** v0.7.2 — Practice tile picked today, or null when today's session
+   *  hasn't started yet. Drives the tile-state matrix on PracticeScreen. */
+  last_session_kind?: SessionKind | null;
 }
 
 export interface CreditedFreezesResponse {
@@ -715,10 +741,25 @@ export const srsApi = {
     return res.json();
   },
 
-  startSession: async (): Promise<SrsSessionStart> => {
-    const res = await authFetch(`${API_BASE_URL}/srs/session/start`, {
-      method: 'POST',
-    });
+  startSession: async (opts: {
+    /** v0.7.2 — Practice-tab tile. Defaults to `quick_recall` when
+     *  unspecified; backward-compatible with older callers. */
+    kind?: SessionKind;
+    /** Required when `kind === 'movie_deep_dive'`. The internal Movie.id. */
+    movieId?: number;
+  } = {}): Promise<SrsSessionStart> => {
+    // RN's URLSearchParams polyfill lacks .set, so we build the query
+    // string by hand. Both params are optional; older callers that pass
+    // no opts at all hit the backend default (quick_recall).
+    const qsParts: string[] = [];
+    if (opts.kind) qsParts.push(`kind=${encodeURIComponent(opts.kind)}`);
+    if (typeof opts.movieId === 'number') {
+      qsParts.push(`movie_id=${opts.movieId}`);
+    }
+    const url = qsParts.length
+      ? `${API_BASE_URL}/srs/session/start?${qsParts.join('&')}`
+      : `${API_BASE_URL}/srs/session/start`;
+    const res = await authFetch(url, { method: 'POST' });
     if (res.status === 402) {
       const body = await res.json().catch(() => ({}));
       const detail = body?.detail || {};
@@ -1237,7 +1278,7 @@ export const studentApi = {
 // Quiz / Gamification
 // =====================================================================
 
-export type QuizCardType = 'type' | 'self_rate';
+export type QuizCardType = 'type' | 'self_rate' | 'synonym_mcq';
 export type QuizSelfRating = 'know' | 'kinda' | 'dont';
 export type QuizSessionKind = 'unit' | 'pre_movie' | 'batch';
 export type QuizLeaderboardMetric = 'stars' | 'xp' | 'retention';
@@ -1246,6 +1287,19 @@ export interface QuizCard {
   word: string;
   card_type: QuizCardType;
   translation: string | null;
+  /** v0.7 §7.2 hint chips. All optional — the backend ships them when
+   *  it can compute them, otherwise the hint row degrades to whatever
+   *  fields ARE present (chip row may be empty). */
+  pos?: string | null;
+  syllables?: number | null;
+  first_letter?: string | null;
+  example_sentence?: string | null;
+  /** Accepted alternate spellings for the typed-translation check.
+   *  Server-supplied morphology / diacritic variants. */
+  translation_aliases?: string[] | null;
+  /** v0.7 §7 — synonym MCQ choices, when card_type === 'synonym_mcq'. */
+  choices?: { word: string; is_correct: boolean }[] | null;
+  cefr_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | null;
 }
 
 export interface QuizStartSessionResponse {
@@ -1266,6 +1320,11 @@ export interface QuizCompleteResponse {
   xp_earned: number;
   correct_count: number;
   total_scored: number;
+  /** v0.7 §7.5 — frequency-weighted comprehension % of the session's
+   *  movie, snapshotted before vs after SRS advance. Null for batch /
+   *  cross-movie sessions where the per-movie figure doesn't apply. */
+  comprehension_before?: number | null;
+  comprehension_after?: number | null;
 }
 
 export interface QuizUnitState {
@@ -1449,6 +1508,9 @@ export interface ReelTile {
   // v0.7: CEFR badge on the My Movies row + reel filtering. Null when
   // the user's added TMDB id has no matching catalog entry yet.
   cefr_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | null;
+  // v0.7.2: internal Movie.id when we have a matching catalog row.
+  // Required by the Movie Deep-Dive practice tile.
+  movie_id?: number | null;
 }
 
 export interface ReelListResponse {
@@ -1519,48 +1581,6 @@ export interface ReadyToWatchResponse {
   floor_pct: number;
   total: number;
 }
-
-// ─── Practice (v0.7 — Duolingo-style path) ───────────────────────────────
-export type PracticeLessonKind = 'recall' | 'mcq' | 'listen' | 'chest' | 'star';
-export type PracticeLessonState = 'done' | 'active' | 'locked';
-
-export interface PracticeLesson {
-  id: string;
-  kind: PracticeLessonKind;
-  label: string;
-  state: PracticeLessonState;
-  /** Word set used by the lesson (present for recall/mcq, null otherwise). */
-  words: string[] | null;
-}
-
-export interface PracticeUnit {
-  unit_id: string;
-  movie_id: number;
-  tmdb_id: number | null;
-  title: string;
-  poster_path: string | null;
-  cefr_level: string | null;
-  tagline: string | null;
-  done: number;
-  total: number;
-  lessons: PracticeLesson[];
-}
-
-export interface PracticeUnitsResponse {
-  units: PracticeUnit[];
-  total: number;
-}
-
-export const practiceApi = {
-  /** Fetch the user's Practice-tab path. One unit per in-reel movie,
-   *  5 lesson nodes each, server-derived state. See
-   *  backend/src/services/practice_service.py. */
-  listUnits: async (limit = 20): Promise<PracticeUnitsResponse> => {
-    const res = await authFetch(`${API_BASE_URL}/practice/units?limit=${limit}`);
-    if (!res.ok) throw new Error(`GET /practice/units → ${res.status}`);
-    return res.json();
-  },
-};
 
 export const readyToWatchApi = {
   /** "Movies you can probably understand now" — ranks non-reel movies by
