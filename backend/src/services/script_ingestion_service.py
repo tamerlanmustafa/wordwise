@@ -163,6 +163,14 @@ class ScriptIngestionService:
                 logger.info(f"[DB] No cached script found for '{movie_title}'")
                 return None
 
+            # Legacy rows persisted metadata without text — treat as cache miss so the pipeline refetches and overwrites.
+            if not script.cleanedScriptText:
+                logger.warning(
+                    f"[DB] Cached script id={script.id} has empty cleanedScriptText "
+                    f"(words={script.cleanedWordCount}) — treating as cache miss"
+                )
+                return None
+
             logger.info(f"[DB] Found cached script (source={script.sourceUsed}, words={script.cleanedWordCount})")
 
             return {
