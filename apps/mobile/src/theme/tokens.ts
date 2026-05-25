@@ -86,6 +86,8 @@ export interface ThemeColors {
   successTint:        string;  // correct-flash bg on choices + input
   successBorder:      string;  // correct-flash border
   errorBorder:        string;  // wrong-choice border (errorTint already exists)
+  warningTint:        string;  // "showed you" reveal callout bg (yellow per §7.2)
+  warningBorder:      string;  // "showed you" reveal callout border
 
   // Reel-only: the film stock substrate + sprocket palette
   reelStock:          string;  // film body colour
@@ -159,6 +161,8 @@ const light: ThemeColors = {
   successTint:        'rgba(63,139,123,0.14)',
   successBorder:      'rgba(63,139,123,0.55)',
   errorBorder:        'rgba(214,106,106,0.55)',
+  warningTint:        'rgba(244,162,97,0.16)',
+  warningBorder:      'rgba(244,162,97,0.55)',
 
   reelStock:          '#F4EFE3',
   reelStockDeep:      '#E5DCBE',
@@ -224,6 +228,8 @@ const dark: ThemeColors = {
   successTint:        'rgba(76,175,154,0.20)',
   successBorder:      'rgba(76,175,154,0.55)',
   errorBorder:        'rgba(229,115,115,0.55)',
+  warningTint:        'rgba(244,162,97,0.20)',
+  warningBorder:      'rgba(244,162,97,0.55)',
 
   reelStock:          '#1a1109',
   reelStockDeep:      '#0e0805',

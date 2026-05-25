@@ -583,12 +583,21 @@ export interface SrsReviewCard {
   definition: string | null;
   example_sentence: string | null;
   cefr_level: string | null;
-  /** v0.6 W4 — 'recall' (default tap-to-reveal) or 'synonym_mcq'
-   *  (4-choice; tap one and the client scores locally). */
-  card_type?: 'recall' | 'synonym_mcq';
-  /** Present iff card_type === 'synonym_mcq'. Client posts the boolean
-   *  result to /srs/review based on which choice was tapped. */
+  /** v0.7 §7 — 'synonym_mcq' (4-choice synonym pick) or 'type'
+   *  (free-text translation typing). Client scores locally and posts
+   *  the boolean to /srs/review. Legacy 'recall' is no longer emitted
+   *  by the server; old server builds get skipped on the client. */
+  card_type?: 'synonym_mcq' | 'type';
+  /** Present iff card_type === 'synonym_mcq'. */
   choices?: SynonymChoice[];
+  /** Present iff card_type === 'type' — canonical translation + hints.
+   *  Optional everywhere else; the type-card surface degrades cleanly
+   *  when any hint field is missing. */
+  pos?: string | null;
+  translation?: string | null;
+  translation_aliases?: string[] | null;
+  syllables?: number | null;
+  first_letter?: string | null;
 }
 
 /** v0.7.2 — Practice-tab "session kind". The user picks one tile per

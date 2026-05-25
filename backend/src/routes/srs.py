@@ -45,7 +45,37 @@ from ..services.srs_engine import (
     next_due_after,
 )
 from ..services.synonym_service import build_synonym_mcq
+from ..services.translation_service import TranslationService
 from ..utils.subscription import is_premium
+
+
+def _count_syllables_en(word: str) -> int:
+    """Cheap English-syllable heuristic for the typing-card hint chip.
+    Counts vowel groups, drops a silent trailing 'e', floors at 1. Good
+    enough for one-word vocabulary cards — we're not parsing Beowulf."""
+    w = (word or "").strip().lower()
+    if not w:
+        return 0
+    count = 0
+    prev_vowel = False
+    for ch in w:
+        is_vowel = ch in "aeiouy"
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    if w.endswith("e") and count > 1:
+        count -= 1
+    return max(1, count)
+
+
+def _first_letter(translation: str) -> Optional[str]:
+    """First non-punctuation character of the translation — used as the
+    `starts with "X"` hint. Strips wrapping quotes that some providers
+    return so we don't show `starts with '"'`."""
+    if not translation:
+        return None
+    cleaned = translation.strip().lstrip('"\'«»“”')
+    return cleaned[0] if cleaned else None
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/srs", tags=["srs"])
@@ -79,15 +109,24 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
-    # v0.6 W4 — card variant. Default 'recall' = existing tap-to-reveal
-    # flow. 'synonym_mcq' = 4-choice; client scores locally and posts
-    # the boolean result to /srs/review. Built only when:
-    #   • srs_box >= SYNONYM_MIN_BOX (the user has earned at least one
-    #     correct on this word — pure noise otherwise), AND
-    #   • WordNet returns synonyms AND enough CEFR-matched distractors.
-    # Falls back to 'recall' silently when generation isn't possible.
-    card_type: str = "recall"
+    # v0.7 §7 — card variant. We never ship 'recall' anymore: the build
+    # loop picks 'synonym_mcq' when WordNet + CEFR data line up
+    # (srs_box >= SYNONYM_MIN_BOX), 'type' (translation typing) for
+    # everything else with a usable translation, and SKIPS the word
+    # outright when neither can be built. 'recall' remains in the union
+    # only for forward-compat with old client builds that may still
+    # check for it.
+    card_type: str = "type"
+    # Present iff card_type == 'synonym_mcq'.
     choices: Optional[list[SynonymChoice]] = None
+    # Present iff card_type == 'type'. The translation is what the user
+    # types; aliases are accepted variants; pos / syllables / first_letter
+    # power the hint chips on the typing card.
+    pos: Optional[str] = None
+    translation: Optional[str] = None
+    translation_aliases: Optional[list[str]] = None
+    syllables: Optional[int] = None
+    first_letter: Optional[str] = None
 
 
 class SessionStartResponse(BaseModel):
@@ -438,11 +477,14 @@ async def start_session(
     movie_ids = list({r.movieId for r in session_rows if r.movieId})
 
     def_map: dict[str, tuple] = {}
+    pos_map: dict[str, Optional[str]] = {}
     if word_texts:
         defs = await db.word.find_many(where={"word": {"in": word_texts}})
         for d in defs:
             if d.word not in def_map and d.definition:
                 def_map[d.word] = (d.definition, d.example_sentence, getattr(d, "difficulty_level", None))
+            if d.word not in pos_map and getattr(d, "part_of_speech", None):
+                pos_map[d.word] = d.part_of_speech
 
     movie_map: dict[int, str] = {}
     if movie_ids:
@@ -463,10 +505,35 @@ async def start_session(
         for r in cefr_rows:
             cefr_map[r["word"]] = r["cefr_level"]
 
+    # v0.7 §7 — batch-translate all session words up front so type-cards
+    # have a translation to score against. English natives get an empty
+    # map (translating en→en is gibberish), which means their sessions
+    # are synonym-only; words with no synonym path get skipped.
+    target_lang = (getattr(current_user, "nativeLanguage", None) or "en").upper()
+    translation_map: dict[str, str] = {}
+    if word_texts and target_lang != "EN":
+        try:
+            ts = TranslationService(db)
+            results = await ts.batch_translate(
+                texts=word_texts,
+                target_lang=target_lang,
+                source_lang="en",
+                user_id=current_user.id,
+            )
+            for w, res in zip(word_texts, results):
+                if not isinstance(res, dict) or "error" in res:
+                    continue
+                t = res.get("translated") or res.get("translation")
+                if t and t.lower() != w.lower():
+                    translation_map[w] = t
+        except Exception as e:
+            logger.warning(f"[srs.start] batch translate failed: {e}")
+
     cards: list[ReviewCard] = []
+    skipped: list[str] = []
     for r in session_rows:
         cefr = cefr_map.get(r.word)
-        card = ReviewCard(
+        base = dict(
             user_word_id=r.id,
             word=r.word,
             movie_id=r.movieId,
@@ -477,16 +544,48 @@ async def start_session(
             example_sentence=def_map.get(r.word, (None, None))[1] if r.word in def_map else None,
             cefr_level=cefr,
         )
-        # v0.6 W4 — try to upgrade box-3+ cards to synonym MCQ. Silent
-        # fall-through to recall when WordNet/distractors aren't enough.
+        # v0.7 §7 — synonym_mcq for box ≥ SYNONYM_MIN_BOX (the user has
+        # earned at least one correct, so MCQ adds signal); translation
+        # typing for early-box cards; skip the word entirely when
+        # neither can be built. No more 'recall' fallback.
         if (r.srsBox or 1) >= SYNONYM_MIN_BOX and cefr:
             mcq = await build_synonym_mcq(
                 db, target_word=r.word, target_cefr=cefr,
             )
             if mcq:
-                card.card_type = "synonym_mcq"
-                card.choices = [SynonymChoice(**c) for c in mcq["choices"]]
-        cards.append(card)
+                cards.append(ReviewCard(
+                    **base,
+                    card_type="synonym_mcq",
+                    pos=pos_map.get(r.word),
+                    choices=[SynonymChoice(**c) for c in mcq["choices"]],
+                ))
+                continue
+            # MCQ couldn't build — fall through to type so we still
+            # surface this high-box word.
+
+        translation = translation_map.get(r.word)
+        if translation:
+            cards.append(ReviewCard(
+                **base,
+                card_type="type",
+                pos=pos_map.get(r.word),
+                translation=translation,
+                translation_aliases=None,
+                syllables=_count_syllables_en(r.word),
+                first_letter=_first_letter(translation),
+            ))
+            continue
+
+        # No synonym path, no translation — drop the word from the
+        # session. It stays in the SRS queue and gets retried next time
+        # when data may have caught up.
+        skipped.append(r.word)
+
+    if skipped:
+        logger.info(
+            "[srs.start] dropped %d card(s) with neither synonym nor translation: %s",
+            len(skipped), skipped[:10],
+        )
 
     # Stamp the daily-cap field + the picked kind only when there was
     # actually work to do. Don't penalize a free user who taps "review"

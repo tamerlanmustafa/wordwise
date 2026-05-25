@@ -29,22 +29,22 @@ export function WordCard({ word, pos, example, size = 36 }: WordCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  // Compose subtitle. We accept either pos or example or both; the
-  // separator dot only renders when both are present so we don't
-  // emit awkward " · " trailing punctuation.
-  const subtitleParts: string[] = [];
-  if (pos) subtitleParts.push(`${pos.replace(/\.$/, '')}.`);
-  const subtitle = subtitleParts.join('');
+  // Compose `${pos} · "${example}"` per §7. The separator only appears
+  // when both halves are present so we don't emit a trailing " · ".
+  const posLabel = pos ? `${pos.replace(/\.$/, '')}.` : '';
   const exampleQuoted = example ? `"${example}"` : '';
+  const subtitle =
+    posLabel && exampleQuoted ? `${posLabel} · ${exampleQuoted}`
+    : posLabel || exampleQuoted;
 
   return (
     <View style={s.card}>
       <Text style={[s.word, { fontSize: size }]} allowFontScaling>
         {word}
       </Text>
-      {(subtitle || exampleQuoted) ? (
+      {subtitle ? (
         <Text style={s.subtitle} numberOfLines={3}>
-          {subtitle && exampleQuoted ? `${subtitle} ${exampleQuoted}` : subtitle || exampleQuoted}
+          {subtitle}
         </Text>
       ) : null}
     </View>
@@ -73,7 +73,6 @@ const makeStyles = (tc: ThemeColors) =>
       fontWeight: '600',
       color: tc.text,
       letterSpacing: -0.6,
-      lineHeight: 0,         // overridden by Text's intrinsic line height
       textAlign: 'center',
     },
     subtitle: {

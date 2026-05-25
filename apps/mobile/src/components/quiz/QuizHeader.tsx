@@ -4,9 +4,10 @@
  * Spec: `tabs2/quiz.jsx → QuizHeader`.
  *
  * Layout (top → bottom):
- *   62px top safe-area spacer (clears dynamic island; SafeAreaView's
- *   inset already handles modern devices, the 62px is the design
- *   canvas value — we use insets.top + 6 to match).
+ *   Total 62px from device top to first row (clears dynamic island).
+ *   Parents wrap in `SafeAreaView edges={['top']}` so `insets.top` is
+ *   already applied above us; we add `max(12, 62 - insets.top)` to
+ *   reach the canvas value on every device.
  *   ─ Row: 36×36 round back · centered movie chip (CEFR badge +
  *      title in serif) · 36×36 round N/total counter (monospace).
  *   ─ 4px gold progress bar at `index/total` fill.
@@ -14,9 +15,15 @@
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+
+// Spec §7: 62px total clearance from the device top to the first row.
+// Parents wrap in `SafeAreaView edges={['top']}`, which already pushes
+// content down by `insets.top`. We add whatever's needed to reach 62.
+const HEADER_TOP_TARGET = 62;
 
 const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'JetBrains Mono';
@@ -35,14 +42,18 @@ export interface QuizHeaderProps {
 
 export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderProps) {
   const tc = useThemeColors();
+  const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const pct = Math.max(0, Math.min(100, total > 0 ? (index / total) * 100 : 0));
   const cefrColor = level ? cefrColors[level] : tc.gold;
+  // Clears the dynamic island on every device. Floor at 12 so non-notch
+  // devices (where insets.top can be 20) still get breathing room.
+  const extraTop = Math.max(12, HEADER_TOP_TARGET - insets.top);
 
   return (
     <View>
       {/* Top row: back · movie chip · counter */}
-      <View style={s.row}>
+      <View style={[s.row, { paddingTop: extraTop }]}>
         <Pressable
           onPress={onBack}
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.85 }]}
@@ -97,7 +108,6 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 18,
-      paddingTop: 6,
       paddingBottom: 12,
       gap: 10,
     },
@@ -121,7 +131,7 @@ const makeStyles = (tc: ThemeColors) =>
       backgroundColor: tc.paper,
       borderWidth: 1.5,
       borderColor: tc.gold,
-      maxWidth: 220,
+      maxWidth: 240,
       shadowColor: '#000',
       shadowOpacity: 0.08,
       shadowRadius: 14,
@@ -144,10 +154,10 @@ const makeStyles = (tc: ThemeColors) =>
     movieTitle: {
       flexShrink: 1,
       fontFamily: SERIF_FAMILY,
-      fontSize: 13,
+      fontSize: 17,
       fontWeight: '600',
       color: tc.text,
-      letterSpacing: -0.2,
+      letterSpacing: -0.3,
     },
     counter: {
       minWidth: 36,

@@ -24,6 +24,7 @@ import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { SynonymMCQCard } from './quiz/SynonymMCQCard';
+import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 import { cefrColors } from '../theme/palette';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
@@ -70,12 +71,11 @@ export interface ReviewScreenProps {
   onPaywall: (previews_used: number, previews_limit: number) => void;
 }
 
-type Phase = 'loading' | 'prompt' | 'answer' | 'done' | 'empty' | 'error';
-
-const cefrColor = (level: string) => {
-  const map: Record<string, string> = { A1: '#4CAF50', A2: '#8BC34A', B1: '#FFC107', B2: '#FF9800', C1: '#F44336', C2: '#9C27B0' };
-  return map[level] || COLORS.primary;
-};
+// v0.7 §7 — `recall` is gone. The server only ships `synonym_mcq` /
+// `type` cards now, both of which own their own internal interaction
+// state, so the screen-level phase machine only tracks the high-level
+// session lifecycle.
+type Phase = 'loading' | 'card' | 'done' | 'empty' | 'error';
 
 export function ReviewScreen({
   kind,
@@ -144,7 +144,7 @@ export function ReviewScreen({
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
-        setPhase('prompt');
+        setPhase('card');
       }
     } catch (e: any) {
       if (e instanceof SrsPaywallError) {
@@ -169,8 +169,26 @@ export function ReviewScreen({
   // interval that the literature calls out). Guarded by
   // `shouldShow(SPACING_TIP_KEY)` so it never repeats once dismissed
   // or already shown this session.
+  // v0.7 §7 — skip any card the client can't render (server shouldn't
+  // emit these post-refactor, but old server builds could). We do it
+  // in an effect so render stays pure and the skip fires exactly once
+  // per card index.
   useEffect(() => {
-    if (phase !== 'prompt' || !currentCard || !tipHydrated) return;
+    if (phase !== 'card' || !currentCard) return;
+    const renderable =
+      (currentCard.card_type === 'synonym_mcq' && currentCard.choices) ||
+      (currentCard.card_type === 'type' && currentCard.translation);
+    if (renderable) return;
+    console.warn('[ReviewScreen] skipping unrenderable card:', currentCard.card_type, currentCard.word);
+    advance(true);
+    // We intentionally exclude `advance` from deps to avoid the effect
+    // re-running on every advance() call (which mutates state on the
+    // next render). Keying off currentCard + phase fires once per card.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCard, phase]);
+
+  useEffect(() => {
+    if (phase !== 'card' || !currentCard || !tipHydrated) return;
     if (currentCard.srs_box < 2) return;
     const { shouldShow, markShown } = useTipDismissalsStore.getState();
     if (!shouldShow(SPACING_TIP_KEY)) return;
@@ -231,7 +249,7 @@ export function ReviewScreen({
         setPhase('done');
       } else {
         setIndex(index + 1);
-        setPhase('prompt');
+        // Phase stays 'card' — the next card mounts on the same surface.
       }
     },
     [currentCard, index, cards.length, fade, stats]
@@ -352,157 +370,97 @@ export function ReviewScreen({
     );
   }
 
-  // phase === 'prompt' | 'answer'
-  const showAnswer = phase === 'answer';
-
-  // v0.7 §7.1 — `synonym_mcq` cards render with the shared QuizHeader +
-  // the new stacked-4-choice SynonymMCQCard (replaces the v0.6 2×2 grid).
-  // The recall flow below is untouched.
-  if (currentCard && currentCard.card_type === 'synonym_mcq' && currentCard.choices) {
-    const lvl = (currentCard.cefr_level && currentCard.cefr_level in cefrColors)
-      ? (currentCard.cefr_level as keyof typeof cefrColors)
-      : null;
+  // v0.7 §7 — every card is either synonym_mcq or type. The server
+  // skips any word that can't build either, so we should never see a
+  // recall here. If we do (old server build), drop the card on the
+  // floor and advance silently so the queue doesn't black-screen.
+  if (!currentCard) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <QuizHeader
-          movie={currentCard.movie_title ?? 'Daily review'}
-          level={lvl}
-          index={index + 1}
-          total={cards.length}
-          onBack={onBack}
-        />
-        <SynonymMCQCard
-          word={currentCard.word}
-          pos={undefined /* not on SrsReviewCard payload yet */}
-          example={currentCard.example_sentence}
-          choices={currentCard.choices}
-          onAnswer={(correct) => advance(correct)}
-        />
-        <TipPopup
-          visible={spacingTipVisible}
-          eyebrow="Did you know?"
-          title="That's the spacing effect at work"
-          body={
-            'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
-            'is when memory really sticks — much better than cramming on one day. ' +
-            "You're seeing this word again on that exact rhythm."
-          }
-          onDismiss={() => setSpacingTipVisible(false)}
-          onDontShowAgain={() => {
-            void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
-            setSpacingTipVisible(false);
-          }}
-        />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+  const lvl = (currentCard.cefr_level && currentCard.cefr_level in cefrColors)
+    ? (currentCard.cefr_level as keyof typeof cefrColors)
+    : null;
+  const sharedHeader = (
+    <QuizHeader
+      movie={currentCard.movie_title ?? 'Daily review'}
+      level={lvl}
+      index={index + 1}
+      total={cards.length}
+      onBack={onBack}
+    />
+  );
+  const sharedTip = (
+    <TipPopup
+      visible={spacingTipVisible}
+      eyebrow="Did you know?"
+      title="That's the spacing effect at work"
+      body={
+        'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
+        'is when memory really sticks — much better than cramming on one day. ' +
+        "You're seeing this word again on that exact rhythm."
+      }
+      onDismiss={() => setSpacingTipVisible(false)}
+      onDontShowAgain={() => {
+        void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
+        setSpacingTipVisible(false);
+      }}
+    />
+  );
+
+  if (currentCard.card_type === 'synonym_mcq' && currentCard.choices) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {sharedHeader}
+        <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
+          <SynonymMCQCard
+            word={currentCard.word}
+            pos={currentCard.pos ?? undefined}
+            example={currentCard.example_sentence}
+            choices={currentCard.choices}
+            onAnswer={(correct) => advance(correct)}
+          />
+        </Animated.View>
+        {sharedTip}
       </SafeAreaView>
     );
   }
 
+  if (currentCard.card_type === 'type' && currentCard.translation) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {sharedHeader}
+        <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
+          <TranslationTypeCard
+            word={currentCard.word}
+            translation={currentCard.translation}
+            translationAliases={currentCard.translation_aliases ?? undefined}
+            pos={currentCard.pos ?? undefined}
+            example={currentCard.example_sentence}
+            syllables={currentCard.syllables ?? undefined}
+            firstLetter={currentCard.first_letter ?? undefined}
+            onAnswer={(correct) => advance(correct)}
+          />
+        </Animated.View>
+        {sharedTip}
+      </SafeAreaView>
+    );
+  }
+
+  // Unrenderable card — the skip effect above has already queued an
+  // `advance(true)`. Show the spinner for the brief gap.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Exit</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {index + 1} / {cards.length}
-        </Text>
-        <View style={{ width: 60 }} />
+      {sharedHeader}
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
-
-      <Animated.View style={[styles.cardArea, { opacity: fade }]}>
-        <View style={styles.card}>
-          <View style={styles.cardTopRow}>
-            <Text style={styles.boxBadge}>Box {currentCard?.srs_box ?? 1}</Text>
-            {currentCard?.cefr_level && (
-              <Text style={[styles.cefrBadge, { backgroundColor: cefrColor(currentCard.cefr_level) }]}>
-                {currentCard.cefr_level}
-              </Text>
-            )}
-          </View>
-          <Text style={styles.word}>{currentCard?.word}</Text>
-          {currentCard?.movie_title && (
-            <Text style={styles.movieHint}>from {currentCard.movie_title}</Text>
-          )}
-          {currentCard?.card_type === 'synonym_mcq' ? (
-            <Text style={styles.hint}>Pick the synonym</Text>
-          ) : showAnswer ? (
-            <View style={styles.answerContent}>
-              {currentCard?.definition && (
-                <Text style={styles.definition}>{currentCard.definition}</Text>
-              )}
-              {currentCard?.example_sentence && (
-                <Text style={styles.exampleSentence}>"{currentCard.example_sentence}"</Text>
-              )}
-              {!currentCard?.definition && !currentCard?.example_sentence && (
-                <Text style={styles.hint}>Do you remember what this means?</Text>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.hint}>
-              Try to recall the meaning, then tap below.
-            </Text>
-          )}
-        </View>
-      </Animated.View>
-
-      <View style={styles.footer}>
-        {currentCard?.card_type === 'synonym_mcq' && currentCard.choices ? (
-          // 4-choice synonym MCQ. Client scores locally and posts the
-          // boolean to /srs/review via advance(). No "show answer" step.
-          <View style={styles.choicesGrid}>
-            {currentCard.choices.map((c, i) => (
-              <TouchableOpacity
-                key={`${c.word}-${i}`}
-                style={styles.choiceBtn}
-                onPress={() => advance(c.is_correct)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.choiceBtnText} numberOfLines={1}>
-                  {c.word}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : !showAnswer ? (
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => setPhase('answer')}
-          >
-            <Text style={styles.primaryBtnText}>Show answer</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.answerRow}>
-            <TouchableOpacity
-              style={[styles.answerBtn, styles.forgotBtn]}
-              onPress={() => advance(false)}
-            >
-              <Text style={styles.answerBtnText}>Forgot</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.answerBtn, styles.gotItBtn]}
-              onPress={() => advance(true)}
-            >
-              <Text style={styles.answerBtnText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      <TipPopup
-        visible={spacingTipVisible}
-        eyebrow="Did you know?"
-        title="That's the spacing effect at work"
-        body={
-          'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
-          'is when memory really sticks — much better than cramming on one day. ' +
-          "You're seeing this word again on that exact rhythm."
-        }
-        onDismiss={() => setSpacingTipVisible(false)}
-        onDontShowAgain={() => {
-          void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
-          setSpacingTipVisible(false);
-        }}
-      />
+      {sharedTip}
     </SafeAreaView>
   );
 }
@@ -528,114 +486,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 16,
   },
-  cardArea: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: {
-    width: '100%',
-    backgroundColor: COLORS.paper,
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 12,
-  },
-  boxBadge: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  cefrBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  word: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  movieHint: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    marginBottom: 16,
-    fontStyle: 'italic',
-  },
-  answerContent: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 12,
-  },
-  definition: {
-    fontSize: 16,
-    color: COLORS.text,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-  },
-  exampleSentence: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-    fontStyle: 'italic',
-  },
-  hint: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  footer: { padding: 24 },
-  answerRow: { flexDirection: 'row', gap: 12 },
-  answerBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  // 2x2 grid for synonym MCQ choices. Wraps row to row so 4 choices
-  // land symmetrically on phones; smaller buttons than recall's Got/Forgot
-  // so the word fits.
-  choicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  choiceBtn: {
-    width: '48%',
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-  },
-  choiceBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  gotItBtn: { backgroundColor: COLORS.success },
-  forgotBtn: { backgroundColor: COLORS.error },
-  answerBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   primaryBtn: {
     backgroundColor: COLORS.primary,
     paddingVertical: 16,

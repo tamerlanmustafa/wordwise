@@ -80,52 +80,97 @@
 
   const TMDB = (p) => p ? `https://image.tmdb.org/t/p/w185${p}` : null;
 
-  // Horizontal x-positions for the 5 lesson nodes inside a unit. Gentle
-  // zigzag (Duolingo's pattern), NOT the rejected film-reel scroll.
+  // Hex → rgba(a) helper for the fade-out scrim above the bottom nav.
+  function withAlpha(c, a) {
+    const m = c.match(/^#([0-9a-f]{6})$/i);
+    if (m) {
+      const n = parseInt(m[1], 16);
+      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+    }
+    const rgba = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (rgba) return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${a})`;
+    return c;
+  }
+
+  // Horizontal x-offsets (in px from center) for the 5 lesson nodes inside
+  // a unit. Gentle zigzag, NOT the rejected film-reel scroll.
   const X_OFFSETS = [0, 56, 24, -32, -8];
 
-  // ── Lesson node ────────────────────────────────────────────────
-  function LessonNode({ kind, state, t, label }) {
+  // Vertical spacing between node centers within a unit.
+  const NODE_SIZE = 68;          // film-cell body
+  const NODE_HIT  = 84;          // includes perforation rows
+  const NODE_GAP  = 36;          // visual gap between two cells
+  const ROW_H     = NODE_HIT + NODE_GAP;  // 120
+
+  // ── Lesson node — FILM CELL (rounded square + perforations) ────
+  function LessonNode({ kind, state, t, number }) {
     const isDone   = state === 'done';
     const isActive = state === 'active';
     const isLocked = state === 'locked';
 
-    const bg = isLocked ? t.nodeLocked : t.gold;
-    const fg = isLocked ? t.text3      : t.goldDeep;
-    const ring = isActive;
+    const bg     = isLocked ? t.nodeLocked : t.gold;
+    const fg     = isLocked ? t.text3      : t.goldDeep;
+    const perfFg = isLocked ? t.text3      : t.goldDeep;
 
     return (
       <div style={{
         position: 'relative',
-        width: 76, height: 76,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: NODE_SIZE, height: NODE_HIT,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
-        {/* Active glow ring */}
-        {ring ? (
+        {/* Active glow ring sits behind everything */}
+        {isActive ? (
           <div style={{
-            position: 'absolute', inset: -10,
-            borderRadius: '50%',
+            position: 'absolute', top: 0, bottom: 0, left: -10, right: -10,
+            borderRadius: 18,
             border: `2.5px dashed ${t.lessonRing}`,
             animation: 'wwSpin 18s linear infinite',
           }} />
         ) : null}
 
-        {/* Node body */}
+        {/* Top perforation strip */}
+        <Perforations color={perfFg} dim={isLocked} />
+
+        {/* Cell body */}
         <div style={{
-          width: 68, height: 68, borderRadius: '50%',
+          position: 'relative',
+          width: NODE_SIZE, height: NODE_SIZE,
+          borderRadius: 12,
           background: bg,
           border: isLocked ? `2px solid ${t.nodeLockedB}` : 'none',
           boxShadow: isLocked ? t.shadowNodeLocked : t.shadowNode,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: fg,
+          marginTop: 2,
         }}>
           <NodeIcon kind={isDone ? 'check' : (isLocked ? 'lock' : kind)} color={fg} />
+
+          {/* Number badge — overflows top-left so user always sees progress 1..N */}
+          {number != null ? (
+            <div style={{
+              position: 'absolute',
+              top: -10, left: -10,
+              minWidth: 22, height: 22,
+              padding: '0 5px',
+              borderRadius: 11,
+              background: isLocked ? t.paper : t.text,
+              color: isLocked ? t.text3 : t.gold,
+              border: `2px solid ${isLocked ? t.nodeLockedB : t.goldDeep}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 900, fontFamily: MONO,
+              letterSpacing: -0.2,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+            }}>{number}</div>
+          ) : null}
         </div>
+
+        {/* Bottom perforation strip */}
+        <Perforations color={perfFg} dim={isLocked} bottom />
 
         {/* "START" callout below active */}
         {isActive ? (
           <div style={{
-            position: 'absolute', top: 78, left: '50%',
+            position: 'absolute', top: NODE_HIT + 6, left: '50%',
             transform: 'translateX(-50%)',
             background: t.text, color: t.bg,
             padding: '4px 10px', borderRadius: 6,
@@ -135,11 +180,34 @@
           }}>
             START
             <div style={{
-              position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%) rotate(45deg)',
+              position: 'absolute', top: -3, left: '50%',
+              transform: 'translateX(-50%) rotate(45deg)',
               width: 8, height: 8, background: t.text,
             }} />
           </div>
         ) : null}
+      </div>
+    );
+  }
+
+  function Perforations({ color, dim, bottom }) {
+    // 5 small rounded rects across the top or bottom edge — reads as
+    // film-strip sprocket holes. Stops the cell from feeling generic.
+    const opacity = dim ? 0.35 : 0.55;
+    return (
+      <div style={{
+        width: NODE_SIZE,
+        height: 6,
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+        marginTop: bottom ? 2 : 0,
+        marginBottom: bottom ? 0 : 0,
+      }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} style={{
+            width: 7, height: 4, borderRadius: 1.5,
+            background: color, opacity,
+          }} />
+        ))}
       </div>
     );
   }
@@ -228,26 +296,71 @@
   }
 
   // ── Lesson path inside a unit ──────────────────────────────────
-  function UnitPath({ unit, t }) {
-    return (
-      <div style={{ padding: '8px 0 4px', position: 'relative' }}>
-        {unit.lessons.map((l, i) => {
-          const x = X_OFFSETS[i % X_OFFSETS.length];
-          const prev = i > 0 ? X_OFFSETS[(i - 1) % X_OFFSETS.length] : null;
-          return (
-            <div key={l.id} style={{ position: 'relative' }}>
-              {/* connector */}
-              {i > 0 ? (
-                <Connector x1={prev} x2={x} t={t} done={unit.lessons[i - 1].state === 'done'} />
-              ) : null}
+  // Single positioned container: SVG underlay draws connectors as small
+  // film-strip segments (band + sprocket holes), then nodes are absolute-
+  // positioned on top. The container's height is fixed, so nothing bleeds
+  // past it into the bottom nav.
+  function UnitPath({ unit, t, startIndex = 1 }) {
+    const W = 320;
+    const N = unit.lessons.length;
+    const H = (N - 1) * ROW_H + NODE_HIT + 22;
 
-              <div style={{
-                display: 'flex', justifyContent: 'center',
-                transform: `translateX(${x}px)`,
-                padding: '14px 0',
-              }}>
-                <LessonNode kind={l.kind} state={l.state} t={t} label={l.label} />
-              </div>
+    const centers = unit.lessons.map((l, i) => {
+      const x = (W / 2) + X_OFFSETS[i % X_OFFSETS.length];
+      // Path climbs UP: lesson 1 sits near the bottom of the unit, the
+      // final lesson at the top. Numbers therefore read 1 → N from
+      // bottom-to-top, like a hill the user is climbing.
+      const y = H - 6 - i * ROW_H - NODE_HIT / 2;
+      return { x, y };
+    });
+
+    return (
+      <div style={{
+        position: 'relative',
+        width: W, height: H,
+        margin: '8px auto 4px',
+      }}>
+        {/* SVG connectors — each is a tiny filmstrip */}
+        <svg
+          width={W} height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+        >
+          {centers.slice(0, -1).map((p, i) => {
+            // start/end pulled in so the strip doesn't peek out past the cell
+            const inset = NODE_HIT / 2 - 4;
+            const dx = centers[i + 1].x - p.x;
+            const dy = centers[i + 1].y - p.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            const stripLen = len - inset * 2;
+            if (stripLen <= 0) return null;
+
+            const done = unit.lessons[i].state === 'done';
+            return (
+              <FilmStripSegment
+                key={`conn-${i}`}
+                x={p.x + Math.cos(angle * Math.PI / 180) * inset}
+                y={p.y + Math.sin(angle * Math.PI / 180) * inset}
+                length={stripLen}
+                angle={angle}
+                done={done}
+                t={t}
+              />
+            );
+          })}
+        </svg>
+
+        {/* Nodes on top */}
+        {unit.lessons.map((l, i) => {
+          const c = centers[i];
+          return (
+            <div key={l.id} style={{
+              position: 'absolute',
+              left: c.x - NODE_SIZE / 2,
+              top:  c.y - NODE_HIT / 2,
+            }}>
+              <LessonNode kind={l.kind} state={l.state} t={t} number={startIndex + i} />
             </div>
           );
         })}
@@ -255,25 +368,62 @@
     );
   }
 
-  function Connector({ x1, x2, t, done }) {
-    // SVG sized to span 1 row height (~58px gap). Centered.
-    const W = 200, H = 58;
-    const cx = W / 2;
-    const x1c = cx + x1;
-    const x2c = cx + x2;
-    const color = done ? t.gold : t.divider;
-    const dash = done ? '0' : '4 6';
+  // A short filmstrip used to connect two cells. Two parallel sprocket
+  // rails with a row of tiny rectangle perforations between them. Far more
+  // on-brand than a flat line, and reads instantly as "frame to frame".
+  function FilmStripSegment({ x, y, length, angle, done, t }) {
+    const railColor = done ? t.gold : t.divider;
+    const holeColor = done ? t.goldDeep : 'transparent';
+    const opacity   = done ? 1 : 0.85;
+    const stripH    = 12;
+    const railH     = 1.6;
+
+    // Perforations: ~one every 9px, leaving 5px end-pads.
+    const holePitch = 9;
+    const usableLen = Math.max(0, length - 10);
+    const nHoles    = Math.max(2, Math.floor(usableLen / holePitch));
+    const startX    = 5 + (usableLen - (nHoles - 1) * holePitch) / 2;
+
     return (
-      <div style={{
-        position: 'relative', height: H, marginTop: -14, marginBottom: -14,
-        display: 'flex', justifyContent: 'center', pointerEvents: 'none',
-      }}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-          <line x1={x1c} y1={0} x2={x2c} y2={H}
-            stroke={color} strokeWidth={done ? 4 : 3}
-            strokeDasharray={dash} strokeLinecap="round" />
-        </svg>
-      </div>
+      <g
+        transform={`translate(${x} ${y}) rotate(${angle})`}
+        opacity={opacity}
+        style={{ pointerEvents: 'none' }}
+      >
+        {/* top rail */}
+        <rect
+          x={0} y={-stripH / 2}
+          width={length} height={railH}
+          fill={railColor}
+          rx={railH / 2}
+          strokeDasharray={done ? '0' : '4 4'}
+          stroke={done ? 'none' : railColor}
+          strokeWidth={done ? 0 : 1.4}
+        />
+        {/* bottom rail */}
+        <rect
+          x={0} y={stripH / 2 - railH}
+          width={length} height={railH}
+          fill={railColor}
+          rx={railH / 2}
+          strokeDasharray={done ? '0' : '4 4'}
+          stroke={done ? 'none' : railColor}
+          strokeWidth={done ? 0 : 1.4}
+        />
+        {/* perforations between rails (only on completed strips — keeps
+            locked segments lighter and obviously "not yet") */}
+        {done
+          ? Array.from({ length: nHoles }).map((_, i) => (
+              <rect
+                key={`h-${i}`}
+                x={startX + i * holePitch}
+                y={-2}
+                width={4} height={4} rx={0.8}
+                fill={holeColor}
+              />
+            ))
+          : null}
+      </g>
     );
   }
 
@@ -327,7 +477,10 @@
         </div>
 
         {/* ── Scrolling content ──────────────────────────── */}
-        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 90, position: 'relative', zIndex: 1 }}>
+        {/* paddingBottom guarantees the last lesson node can scroll well
+            above the 78px bottom nav. A fade-out gradient just above the
+            nav softens any chrome that hasn't scrolled away yet. */}
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 160, position: 'relative', zIndex: 1 }}>
 
           {/* Daily review hero */}
           <div style={{
@@ -389,7 +542,7 @@
           {data.units.map((unit, i) => (
             <React.Fragment key={unit.id}>
               <UnitMarquee unit={unit} t={t} first={i === 0} />
-              <UnitPath unit={unit} t={t} />
+              <UnitPath unit={unit} t={t} startIndex={1} />
               {/* between-unit divider */}
               {i < data.units.length - 1 ? (
                 <div style={{
@@ -407,6 +560,14 @@
 
           <div style={{ height: 32 }} />
         </div>
+
+        {/* Fade-out scrim sitting just above the bottom nav so any lesson
+            node still on screen doesn't visually crash into the tabs. */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 78, height: 56,
+          background: `linear-gradient(to bottom, ${withAlpha(t.bg, 0)}, ${t.bg} 75%)`,
+          pointerEvents: 'none', zIndex: 3,
+        }} />
 
         <BottomNav active="practice" t={t} />
       </div>

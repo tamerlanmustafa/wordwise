@@ -12,9 +12,14 @@
  *     immediately. The actual right answer is always highlighted in
  *     green (`reveal-correct` state) even when the user picked wrong.
  *     Other rows fade to opacity 0.4.
- *   • 600ms after tap, the CTA pulses once and becomes the primary
- *     action ("Continue →" on correct, "Got it · Continue →" on wrong).
- *   • Tap CTA → `onAnswer(correct)` — parent records the outcome.
+ *   • 600ms after a correct tap, `onAnswer(true)` fires automatically
+ *     (the CTA also pulses + becomes "Continue →" in case the user
+ *     wants to advance manually before then; either path is fine).
+ *   • On a wrong tap the CTA flips to "Got it · Continue →" and
+ *     stays there until the user taps it — we don't auto-advance on
+ *     misses so they can read the NOT QUITE callout.
+ *   • Idle CTA is ghosted "Pick a synonym" copy — never "Check" —
+ *     because the tap on a choice IS the answer (no Check step).
  *
  * The card relies on `card.choices` (from the v0.6 SRS payload) where
  * each choice has `{ word, is_correct }`. The first `is_correct: true`
@@ -63,19 +68,24 @@ export function SynonymMCQCard({
   const userWasCorrect = pickedIdx != null && choices[pickedIdx]?.is_correct === true;
   const correctChoice = correctIdx >= 0 ? choices[correctIdx] : null;
 
-  // CTA pulse — runs once 600ms after the user picks. We animate a
-  // single scale 1 → 1.04 → 1 spring per the spec.
+  // CTA pulse + auto-advance. 600ms after the user picks we either
+  // (a) auto-advance if they got it right (no point making them tap
+  // twice), or (b) pulse the manual CTA so the eye lands on it.
   const ctaScale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (phase !== 'answered') return;
     const t = setTimeout(() => {
+      if (userWasCorrect) {
+        onAnswer(true);
+        return;
+      }
       Animated.sequence([
         Animated.timing(ctaScale, { toValue: 1.04, duration: 150, useNativeDriver: true }),
         Animated.timing(ctaScale, { toValue: 1.0, duration: 150, useNativeDriver: true }),
       ]).start();
     }, 600);
     return () => clearTimeout(t);
-  }, [phase, ctaScale]);
+  }, [phase, ctaScale, userWasCorrect, onAnswer]);
 
   const handleChoicePress = useCallback(
     (idx: number) => {
@@ -113,16 +123,18 @@ export function SynonymMCQCard({
     return true;
   };
 
+  // Idle uses a ghost pill ("Pick a synonym") — never "Check", because
+  // there's no Check step in this card type.
   const ctaBg = phase === 'idle'
-    ? tc.gold
+    ? tc.chipBg
     : userWasCorrect
       ? tc.success
       : tc.error;
   const ctaFg = phase === 'idle'
-    ? tc.goldDeep
+    ? tc.textFaint
     : '#fff';
   const ctaLabel = phase === 'idle'
-    ? 'Check answer'
+    ? 'Pick a synonym'
     : userWasCorrect
       ? 'Continue →'
       : 'Got it · Continue →';
@@ -165,8 +177,8 @@ export function SynonymMCQCard({
             style={({ pressed }) => [
               s.cta,
               { backgroundColor: ctaBg },
+              !ctaEnabled && s.ctaGhost,
               pressed && ctaEnabled && { opacity: 0.9 },
-              !ctaEnabled && { opacity: 0.7 },
             ]}
           >
             <Text style={[s.ctaText, { color: ctaFg }]}>{ctaLabel}</Text>
@@ -244,6 +256,14 @@ const makeStyles = (tc: ThemeColors) =>
       shadowRadius: 24,
       shadowOffset: { width: 0, height: 10 },
       elevation: 6,
+    },
+    ctaGhost: {
+      // No shadow when the button is the idle "Pick a synonym" hint —
+      // it shouldn't compete with the choices for attention.
+      shadowOpacity: 0,
+      elevation: 0,
+      borderWidth: 1,
+      borderColor: tc.border,
     },
     ctaText: {
       fontSize: 14,

@@ -79,6 +79,14 @@ export function TranslationTypeCard({
   // Input shake on wrong-with-content. Reanimated would be smoother
   // but Animated covers the 3-pulse sequence we need.
   const shake = useRef(new Animated.Value(0)).current;
+  // 220ms green-flash on the input border when the user lands a
+  // correct match. We drive a 0→1 progress value and interpolate it
+  // into the actual colors at render time so the transition runs even
+  // when the phase prop has already flipped to `correct`.
+  const correctFlash = useRef(new Animated.Value(0)).current;
+  // Entry animation for the correct/revealed callouts — opacity 0→1
+  // + translateY 8→0 over 220ms (spec §7.2).
+  const calloutAnim = useRef(new Animated.Value(0)).current;
 
   // Update phase as the user types — keeps the CTA matrix synced.
   useEffect(() => {
@@ -129,15 +137,39 @@ export function TranslationTypeCard({
     setValue(translation);
   }, [phase, translation]);
 
+  // Drive the correct-flash + callout entry animations whenever phase
+  // flips into a terminal state. Both run for 220ms per spec.
+  useEffect(() => {
+    if (phase === 'correct') {
+      correctFlash.setValue(0);
+      Animated.timing(correctFlash, {
+        toValue: 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: false,
+      }).start();
+    }
+    if (phase === 'correct' || phase === 'revealed') {
+      calloutAnim.setValue(0);
+      Animated.timing(calloutAnim, {
+        toValue: 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      }).start();
+    }
+  }, [phase, correctFlash, calloutAnim]);
+
   // ── Visual state derived from phase ─────────────────────────────
-  const inputBg = phase === 'correct' ? tc.successTint
-                : phase === 'revealed' ? tc.errorTint
-                : tc.paper;
-  const inputBorder = phase === 'correct' ? tc.successBorder
-                    : phase === 'revealed' ? tc.errorBorder
-                    : tc.border;
+  // Revealed (after skip) uses the warning/yellow palette per §7.2 —
+  // "yellow callout" — to distinguish "we showed you the answer" from
+  // a hard wrong tap. Correct flashes from neutral → success via the
+  // 220ms interpolated transition below; we only set the terminal
+  // colors directly for the `revealed` branch.
+  const revealBg = phase === 'revealed' ? tc.warningTint : tc.paper;
+  const revealBorder = phase === 'revealed' ? tc.warningBorder : tc.border;
+  const inputBg = phase === 'correct'
+    ? correctFlash.interpolate({ inputRange: [0, 1], outputRange: [tc.paper, tc.successTint] })
+    : revealBg;
+  const inputBorder = phase === 'correct'
+    ? correctFlash.interpolate({ inputRange: [0, 1], outputRange: [tc.border, tc.successBorder] })
+    : revealBorder;
   const inputFg = phase === 'correct' ? tc.success
-                : phase === 'revealed' ? tc.error
+                : phase === 'revealed' ? tc.warning
                 : tc.text;
 
   // CTA per matrix.
@@ -184,31 +216,33 @@ export function TranslationTypeCard({
           </View>
         ) : null}
 
-        <Animated.View style={{ transform: [{ translateX: shake }] }}>
-          <View
-            style={[
-              s.inputRow,
-              { backgroundColor: inputBg, borderColor: inputBorder },
-            ]}
-          >
-            <TextInput
-              value={value}
-              onChangeText={setValue}
-              placeholder="Type the translation…"
-              placeholderTextColor={tc.textFaint}
-              editable={phase !== 'correct' && phase !== 'revealed'}
-              style={[s.input, { color: inputFg }]}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={handleCheckPress}
-            />
-            {phase === 'correct' ? (
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={tc.success} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M5 12l4 4 10-10" />
-              </Svg>
-            ) : null}
-          </View>
+        <Animated.View
+          style={[
+            s.inputRow,
+            {
+              transform: [{ translateX: shake }],
+              backgroundColor: inputBg,
+              borderColor: inputBorder,
+            },
+          ]}
+        >
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            placeholder="Type the translation…"
+            placeholderTextColor={tc.textFaint}
+            editable={phase !== 'correct' && phase !== 'revealed'}
+            style={[s.input, { color: inputFg }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={handleCheckPress}
+          />
+          {phase === 'correct' ? (
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={tc.success} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M5 12l4 4 10-10" />
+            </Svg>
+          ) : null}
         </Animated.View>
 
         {phase === 'idle' || phase === 'typing' ? (
@@ -218,20 +252,46 @@ export function TranslationTypeCard({
         ) : null}
 
         {phase === 'correct' ? (
-          <View style={s.correctCallout}>
+          <Animated.View
+            style={[
+              s.correctCallout,
+              {
+                opacity: calloutAnim,
+                transform: [{
+                  translateY: calloutAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
             <Text style={s.correctEyebrow}>CORRECT!</Text>
             <Text style={s.correctBody}>Added to your known words. +5 XP</Text>
-          </View>
+          </Animated.View>
         ) : null}
 
         {phase === 'revealed' ? (
-          <View style={s.revealedCallout}>
+          <Animated.View
+            style={[
+              s.revealedCallout,
+              {
+                opacity: calloutAnim,
+                transform: [{
+                  translateY: calloutAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
             <Text style={s.revealedEyebrow}>SHOWED YOU</Text>
             <Text style={s.revealedBody}>
               <Text style={s.revealedAnswer}>{translation}</Text>
               {' — counted as a miss so it surfaces again soon.'}
             </Text>
-          </View>
+          </Animated.View>
         ) : null}
       </ScrollView>
 
@@ -337,15 +397,15 @@ const makeStyles = (tc: ThemeColors) =>
       paddingHorizontal: 16,
       paddingVertical: 14,
       borderRadius: 12,
-      backgroundColor: tc.errorTint,
+      backgroundColor: tc.warningTint,
       borderWidth: 1,
-      borderColor: tc.errorBorder,
+      borderColor: tc.warningBorder,
     },
     revealedEyebrow: {
       fontSize: 11,
       fontWeight: '900',
       letterSpacing: 1.4,
-      color: tc.error,
+      color: tc.warning,
       textTransform: 'uppercase',
     },
     revealedBody: {
