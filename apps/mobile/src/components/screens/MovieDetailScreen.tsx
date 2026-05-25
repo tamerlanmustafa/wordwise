@@ -694,6 +694,12 @@ export const MovieDetailScreen = ({
   const [sentencesRetryTick, setSentencesRetryTick] = useState(0);
   const sentencesStatusRef = useRef<Record<string, FetchStatus>>({});
 
+  // Chunked so fast-path words paint progressively. A single big batch blocks
+  // on the slowest word in it — if one of 60 words misses the cache and the
+  // backend takes ~3-5s to LLM-generate it, the other 59 sentences sit behind
+  // it. Splitting into smaller parallel batches lets chunks without slow-path
+  // misses return in ~200ms while the slow chunks finish on their own clock.
+  const SENTENCE_BATCH_CHUNK = 12;
   useEffect(() => {
     if (!movieId) return;
     const words = wordsView === 'foryou'
@@ -713,43 +719,56 @@ export const MovieDetailScreen = ({
     missing.forEach((w) => {
       status[w] = status[w] === 'miss-recent' ? 'in-flight-retry' : 'in-flight';
     });
-    // No cancel-on-rerun guard: the request is for `missing` words on this
-    // movie, and setSentencePreviews only merges. If MovieDetailScreen has
-    // unmounted (movie navigation), React no-ops the setState. If the effect
-    // re-ran for the same movie (e.g. background vocab refresh changed
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < missing.length; i += SENTENCE_BATCH_CHUNK) {
+      chunks.push(missing.slice(i, i + SENTENCE_BATCH_CHUNK));
+    }
+
+    // Schedule the 5s retry-tick at most once per effect run, even if several
+    // chunks come back with first-pass misses.
+    let retryTickScheduled = false;
+
+    // No cancel-on-rerun guard: each chunk request is for its own `chunk` words
+    // on this movie, and setSentencePreviews only merges. If MovieDetailScreen
+    // has unmounted (movie navigation), React no-ops the setState. If the
+    // effect re-ran for the same movie (e.g. background vocab refresh changed
     // suggestedWords' identity), in-flight status prevents a duplicate fetch
     // and the original promise still updates state when it resolves.
-    wordwiseApi.batchSentences(movieId, missing).then((results) => {
-      let firstMisses = 0;
-      setSentencePreviews((prev) => {
-        const next = { ...prev };
-        for (const w of missing) {
-          const wasRetry = status[w] === 'in-flight-retry';
-          const list = results[w] || [];
-          if (list.length > 0) {
-            next[w] = list[0];
-            status[w] = 'hit';
-          } else {
-            next[w] = { sentence: '', word_position: 0, matched_form: w };
-            if (wasRetry) {
-              status[w] = 'miss-confirmed';
+    chunks.forEach((chunk) => {
+      wordwiseApi.batchSentences(movieId, chunk).then((results) => {
+        let firstMisses = 0;
+        setSentencePreviews((prev) => {
+          const next = { ...prev };
+          for (const w of chunk) {
+            const wasRetry = status[w] === 'in-flight-retry';
+            const list = results[w] || [];
+            if (list.length > 0) {
+              next[w] = list[0];
+              status[w] = 'hit';
             } else {
-              status[w] = 'miss-recent';
-              firstMisses++;
+              next[w] = { sentence: '', word_position: 0, matched_form: w };
+              if (wasRetry) {
+                status[w] = 'miss-confirmed';
+              } else {
+                status[w] = 'miss-recent';
+                firstMisses++;
+              }
             }
           }
+          return next;
+        });
+        if (firstMisses > 0 && !retryTickScheduled) {
+          retryTickScheduled = true;
+          setTimeout(() => setSentencesRetryTick((t) => t + 1), 5000);
         }
-        return next;
-      });
-      if (firstMisses > 0) {
-        setTimeout(() => setSentencesRetryTick((t) => t + 1), 5000);
-      }
-    }).catch(() => {
-      // Reset so a future render can re-attempt.
-      missing.forEach((w) => {
-        if (status[w] === 'in-flight' || status[w] === 'in-flight-retry') {
-          delete status[w];
-        }
+      }).catch(() => {
+        // Reset so a future render can re-attempt.
+        chunk.forEach((w) => {
+          if (status[w] === 'in-flight' || status[w] === 'in-flight-retry') {
+            delete status[w];
+          }
+        });
       });
     });
   }, [movieId, wordsView, suggestedWords, activeItems, sentencesRetryTick]);
