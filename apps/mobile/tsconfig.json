@@ -5,16 +5,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@wordwise/types": ["../../packages/types/src"],
-      "@wordwise/api-client": ["src/services/api"]
+      "@wordwise/types": ["../../packages/types/src"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": [
     "**/node_modules",
-    "**/Pods",
-    "src/features/**",
-    "src/navigation/**",
-    "src/_deprecated/**"
+    "**/Pods"
   ]
 }

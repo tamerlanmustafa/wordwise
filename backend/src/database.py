@@ -3,7 +3,11 @@ Database connection using Prisma Client Python.
 Replaces SQLAlchemy session management.
 """
 
+import logging
+
 from prisma import Prisma
+
+logger = logging.getLogger(__name__)
 
 # Global Prisma client instance
 prisma = Prisma()
@@ -13,14 +17,14 @@ async def connect_db():
     """Connect to database on startup"""
     if not prisma.is_connected():
         await prisma.connect()
-    print("✅ Connected to database via Prisma")
+    logger.info("Connected to database via Prisma")
 
 
 async def disconnect_db():
     """Disconnect from database on shutdown"""
     if prisma.is_connected():
         await prisma.disconnect()
-    print("❌ Disconnected from database")
+    logger.info("Disconnected from database")
 
 
 async def get_db() -> Prisma:

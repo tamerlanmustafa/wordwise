@@ -1,4 +1,5 @@
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
@@ -7,6 +8,8 @@ from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse, ScriptSearchResponse
 from ..middleware.auth import get_current_active_user
 from ..services import STANDS4ScriptsClient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
@@ -507,8 +510,8 @@ async def get_vocabulary_preview(
                 }
                 for phrase, expr_type, level in idiom_results
             ]
-        except Exception as e:
-            print(f"Error detecting idioms: {e}")
+        except Exception:
+            logger.exception("Error detecting idioms")
             idioms = []
 
     return {
@@ -638,8 +641,8 @@ async def get_vocabulary_full(
                 }
                 for phrase, expr_type, level in idiom_results
             ]
-        except Exception as e:
-            print(f"Error detecting idioms: {e}")
+        except Exception:
+            logger.exception("Error detecting idioms")
             idioms = []
 
     return {

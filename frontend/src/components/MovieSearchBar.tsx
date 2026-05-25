@@ -29,7 +29,6 @@ export default function MovieSearchBar({ onSearch, disabled = false }: MovieSear
     }
 
     setShowDropdown(false);
-    console.log('[SEARCH] Query:', trimmedQuery);
     onSearch(trimmedQuery);
   };
 

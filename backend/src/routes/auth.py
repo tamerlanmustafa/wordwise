@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from prisma import Prisma
 from datetime import timedelta
@@ -6,6 +7,8 @@ from ..schemas.user import UserCreate, UserResponse, UserLogin, AuthResponse, Us
 from ..utils.auth import verify_password, get_password_hash, create_access_token
 from ..config import get_settings
 from ..middleware.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -63,7 +66,7 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
 @router.post("/login", response_model=AuthResponse)
 async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
     """Login user and return JWT token"""
-    print(f"[AUTH] Login attempt for email: {credentials.email}")
+    logger.info("Login attempt for email: %s", credentials.email)
     user = await db.user.find_unique(where={"email": credentials.email})
 
     if not user or not user.passwordHash or not verify_password(credentials.password, user.passwordHash):

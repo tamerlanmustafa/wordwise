@@ -233,8 +233,8 @@ export default function BookDetailPage() {
         if (pageResponse.data.total_pages) {
           setPageRange([1, Math.min(10, pageResponse.data.total_pages)]);
         }
-      } catch (pageErr) {
-        console.log('[BookDetail] No page info available');
+      } catch {
+        // No page info available
       }
 
     } catch (err: any) {

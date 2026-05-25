@@ -182,9 +182,8 @@ wordwise/
 │   │   ├── components/
 │   │   │   ├── VocabularyView.tsx  # Main vocabulary display
 │   │   │   ├── WordListWorkerBased.tsx # Worker-powered word list
-│   │   │   ├── VirtualizedWordList.tsx # TanStack Virtual list
+│   │   │   ├── WordListVirtualized.tsx # TanStack Virtual list
 │   │   │   ├── WordRow.tsx         # Expandable word row with MUI Collapse
-│   │   │   ├── EnrichmentStatus.tsx # Sentence enrichment status/button
 │   │   │   ├── TopBar.tsx          # Navigation bar
 │   │   │   └── LanguageSelector.tsx # Language picker
 │   │   ├── workers/
@@ -208,8 +207,7 @@ wordwise/
 │   ├── Dockerfile.frontend
 │   └── nginx.conf
 ├── docker-compose.yml
-├── CHANGELOG.md
-└── ROADMAP.md
+└── README.md
 ```
 
 ## API Documentation

@@ -235,13 +235,6 @@ export async function classifyMovieScript(
       }
     );
 
-    // console.log('[API RESPONSE - CEFR CLASSIFICATION]', {
-    //   total_words: response.data.total_words,
-    //   unique_words: response.data.unique_words,
-    //   average_confidence: response.data.average_confidence,
-    //   wordlist_coverage: response.data.wordlist_coverage
-    // });
-
     return response.data;
   } catch (error) {
     console.error('[API ERROR - CLASSIFY SCRIPT]', error);

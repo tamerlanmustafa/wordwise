@@ -65,7 +65,7 @@ export default function BookReaderPage() {
           );
           setBookId(analyzedResponse.data.id);
         } catch {
-          console.log('Book not analyzed yet');
+          // Book not analyzed yet
         }
 
         // Get book details
