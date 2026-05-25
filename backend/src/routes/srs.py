@@ -48,6 +48,45 @@ from ..services.synonym_service import build_synonym_mcq
 from ..services.translation_service import TranslationService
 from ..utils.subscription import is_premium
 
+# Friendly POS labels surfaced on the typing-card hint chip. Anything
+# spaCy returns outside this map gets dropped (no chip rather than a
+# confusing "X" / "PART" tag).
+_POS_FRIENDLY: dict[str, str] = {
+    "NOUN": "noun",
+    "PROPN": "noun",
+    "VERB": "verb",
+    "AUX":  "verb",
+    "ADJ":  "adj",
+    "ADV":  "adv",
+}
+
+
+def _lemmatize_one(word: str) -> tuple[str, Optional[str]]:
+    """Return `(lemma, friendly_pos)` for a single surface form via
+    spaCy (the same singleton the lemmatization service uses for full
+    scripts). Falls back to the input + None on any error so a flaky
+    spaCy load never breaks card composition.
+
+    The lemma is lowercased so display + downstream lookups
+    (translation, synonym MCQ) all key on a canonical form."""
+    w = (word or "").strip()
+    if not w:
+        return word, None
+    try:
+        from ..services.lemmatization_service import get_nlp
+        nlp = get_nlp()
+        doc = nlp(w)
+        if len(doc) == 0:
+            return w.lower(), None
+        tok = doc[0]
+        lemma = (tok.lemma_ or w).lower().strip()
+        if not lemma:
+            lemma = w.lower()
+        return lemma, _POS_FRIENDLY.get(tok.pos_)
+    except Exception as e:
+        logger.warning(f"[srs.start] lemmatize failed for '{word}': {e}")
+        return w.lower(), None
+
 
 def _count_syllables_en(word: str) -> int:
     """Cheap English-syllable heuristic for the typing-card hint chip.
@@ -476,15 +515,72 @@ async def start_session(
     word_texts = list({r.word for r in session_rows})
     movie_ids = list({r.movieId for r in session_rows if r.movieId})
 
+    # v0.7 §7 — lemmatize every surface form once up front. Downstream
+    # translation/synonym/CEFR lookups all key on the lemma so 'hated'
+    # is studied as 'hate'. user_word_id keeps pointing at the original
+    # row, so /srs/review still maps the correct DB record on submit.
+    lemma_pos_map: dict[str, tuple[str, Optional[str]]] = {
+        w: _lemmatize_one(w) for w in word_texts
+    }
+    unique_lemmas = list({lemma_pos_map[w][0] for w in word_texts})
+
     def_map: dict[str, tuple] = {}
     pos_map: dict[str, Optional[str]] = {}
     if word_texts:
-        defs = await db.word.find_many(where={"word": {"in": word_texts}})
+        # Look up definitions / example sentences for BOTH the surface
+        # forms and the lemmas — `words` rows are sparse and may be
+        # keyed on either depending on how they were ingested.
+        defs = await db.word.find_many(
+            where={"word": {"in": list(set(word_texts + unique_lemmas))}}
+        )
         for d in defs:
-            if d.word not in def_map and d.definition:
+            # Keep the row whether or not it has a definition — the
+            # example sentence is independently useful (we surface it
+            # on the typing card's IN CONTEXT callout).
+            if d.word not in def_map:
                 def_map[d.word] = (d.definition, d.example_sentence, getattr(d, "difficulty_level", None))
             if d.word not in pos_map and getattr(d, "part_of_speech", None):
                 pos_map[d.word] = d.part_of_speech
+
+    # v0.7 §7 — example sentences for the IN CONTEXT callout. The
+    # canonical store is `sentence_bank` joined via `sentence_lemma_links`
+    # on the `lemmas` table: one global pedagogical sentence per lemma,
+    # plus optional movie-tied rows when `movie_id IS NOT NULL`. We
+    # prefer the representative + highest-scoring link, and prefer
+    # movie-tied rows over global when both are available for the
+    # session's movies. One raw SQL query covers the join.
+    example_by_lemma: dict[str, str] = {}
+    if unique_lemmas:
+        try:
+            rows = await db.query_raw(
+                """
+                SELECT DISTINCT ON (l.lemma)
+                       l.lemma,
+                       sb.sentence,
+                       sb.movie_id
+                FROM lemmas l
+                JOIN sentence_lemma_links sll ON sll.lemma_id = l.id
+                JOIN sentence_bank sb ON sb.id = sll.sentence_id
+                WHERE l.lemma = ANY($1::text[])
+                ORDER BY
+                  l.lemma,
+                  CASE WHEN sb.movie_id = ANY($2::int[]) THEN 0 ELSE 1 END,
+                  sll.is_representative DESC,
+                  sll.score DESC NULLS LAST,
+                  sb.id ASC
+                """,
+                unique_lemmas,
+                [r.movieId for r in session_rows if r.movieId] or [0],
+            )
+            for row in rows:
+                example_by_lemma[row["lemma"]] = row["sentence"]
+            logger.info(
+                "[srs.start] sentence_bank hits: %d / %d lemmas (%s)",
+                len(example_by_lemma), len(unique_lemmas),
+                ",".join(sorted(example_by_lemma.keys())[:8]),
+            )
+        except Exception as e:
+            logger.warning(f"[srs.start] sentence_bank lookup failed: {e}")
 
     movie_map: dict[int, str] = {}
     if movie_ids:
@@ -492,7 +588,9 @@ async def start_session(
         for m in movies:
             movie_map[m.id] = m.title
 
-    # Look up CEFR levels from word classifications
+    # Look up CEFR levels from word classifications. We probe both
+    # surface form and lemma so 'hated' (rare in classifications) still
+    # picks up CEFR through 'hate'.
     cefr_map: dict[str, str] = {}
     if word_texts:
         cefr_rows = await db.query_raw(
@@ -500,27 +598,27 @@ async def start_session(
                FROM word_classifications wc
                WHERE wc.word = ANY($1::text[])
                ORDER BY wc.word, wc.id DESC""",
-            word_texts,
+            list(set(word_texts + unique_lemmas)),
         )
         for r in cefr_rows:
             cefr_map[r["word"]] = r["cefr_level"]
 
-    # v0.7 §7 — batch-translate all session words up front so type-cards
-    # have a translation to score against. English natives get an empty
-    # map (translating en→en is gibberish), which means their sessions
-    # are synonym-only; words with no synonym path get skipped.
+    # v0.7 §7 — batch-translate the LEMMAS (not surface forms) so the
+    # type-card hint matches the canonical word the user is studying.
+    # English natives get an empty map (translating en→en is gibberish),
+    # which means their sessions are synonym-only.
     target_lang = (getattr(current_user, "nativeLanguage", None) or "en").upper()
     translation_map: dict[str, str] = {}
-    if word_texts and target_lang != "EN":
+    if unique_lemmas and target_lang != "EN":
         try:
             ts = TranslationService(db)
             results = await ts.batch_translate(
-                texts=word_texts,
+                texts=unique_lemmas,
                 target_lang=target_lang,
                 source_lang="en",
                 user_id=current_user.id,
             )
-            for w, res in zip(word_texts, results):
+            for w, res in zip(unique_lemmas, results):
                 if not isinstance(res, dict) or "error" in res:
                     continue
                 t = res.get("translated") or res.get("translation")
@@ -532,16 +630,27 @@ async def start_session(
     cards: list[ReviewCard] = []
     skipped: list[str] = []
     for r in session_rows:
-        cefr = cefr_map.get(r.word)
+        lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
+        # Prefer CEFR / definitions keyed on the lemma; fall back to
+        # the surface form when the canonical row isn't classified yet.
+        cefr = cefr_map.get(lemma) or cefr_map.get(r.word)
+        def_entry = def_map.get(lemma) or def_map.get(r.word)
+        pos_label = spacy_pos or pos_map.get(lemma) or pos_map.get(r.word)
+        # Example sentence: sentence_bank (lemma-keyed) → legacy
+        # Word.example_sentence (sparsest). Lemma resolves irregular
+        # forms ("ran" → "run") to the canonical entry.
+        example_sentence: Optional[str] = example_by_lemma.get(lemma)
+        if not example_sentence and def_entry:
+            example_sentence = def_entry[1]
         base = dict(
             user_word_id=r.id,
-            word=r.word,
+            word=lemma,
             movie_id=r.movieId,
             movie_title=movie_map.get(r.movieId) if r.movieId else None,
             srs_box=r.srsBox,
             srs_due_at=r.srsDueAt,
-            definition=def_map.get(r.word, (None,))[0],
-            example_sentence=def_map.get(r.word, (None, None))[1] if r.word in def_map else None,
+            definition=def_entry[0] if def_entry else None,
+            example_sentence=example_sentence,
             cefr_level=cefr,
         )
         # v0.7 §7 — synonym_mcq for box ≥ SYNONYM_MIN_BOX (the user has
@@ -550,28 +659,28 @@ async def start_session(
         # neither can be built. No more 'recall' fallback.
         if (r.srsBox or 1) >= SYNONYM_MIN_BOX and cefr:
             mcq = await build_synonym_mcq(
-                db, target_word=r.word, target_cefr=cefr,
+                db, target_word=lemma, target_cefr=cefr,
             )
             if mcq:
                 cards.append(ReviewCard(
                     **base,
                     card_type="synonym_mcq",
-                    pos=pos_map.get(r.word),
+                    pos=pos_label,
                     choices=[SynonymChoice(**c) for c in mcq["choices"]],
                 ))
                 continue
             # MCQ couldn't build — fall through to type so we still
             # surface this high-box word.
 
-        translation = translation_map.get(r.word)
+        translation = translation_map.get(lemma)
         if translation:
             cards.append(ReviewCard(
                 **base,
                 card_type="type",
-                pos=pos_map.get(r.word),
+                pos=pos_label,
                 translation=translation,
                 translation_aliases=None,
-                syllables=_count_syllables_en(r.word),
+                syllables=_count_syllables_en(lemma),
                 first_letter=_first_letter(translation),
             ))
             continue
@@ -579,7 +688,7 @@ async def start_session(
         # No synonym path, no translation — drop the word from the
         # session. It stays in the SRS queue and gets retried next time
         # when data may have caught up.
-        skipped.append(r.word)
+        skipped.append(lemma)
 
     if skipped:
         logger.info(

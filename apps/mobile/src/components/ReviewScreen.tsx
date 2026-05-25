@@ -19,6 +19,7 @@ import {
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useTipDismissalsStore } from '../stores/tipDismissalsStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
+import { useReviewSessionStore } from '../stores/reviewSessionStore';
 import { ChestReveal } from './journey/ChestReveal';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
@@ -127,6 +128,27 @@ export function ReviewScreen({
     setPhase('loading');
     setIndex(0);
     setStats({ got: 0, forgot: 0 });
+
+    // v0.7 §7 — try resuming a cached in-flight session for this tile
+    // before hitting the server. The cache is scoped by kind+movieId
+    // and expires after 24h; if it's not eligible we fall through to a
+    // fresh /srs/session/start. We need the store hydrated first so
+    // resumable() reads from AsyncStorage, not stale defaults.
+    const session_store = useReviewSessionStore.getState();
+    if (!session_store.hydrated) {
+      await session_store.hydrate();
+    }
+    const resolvedKind: SessionKind = kind ?? 'quick_recall';
+    const resumable = useReviewSessionStore.getState().resumable(resolvedKind, movieId);
+    if (resumable) {
+      setCards(resumable.remaining);
+      setIsPreview(false);
+      setPreviewsRemaining(null);
+      setStats({ got: resumable.got, forgot: resumable.forgot });
+      setPhase('card');
+      return;
+    }
+
     try {
       // v0.7.2 — kind + movieId are passed through to the backend so
       // the queue composer matches the Practice-tab tile the user
@@ -135,16 +157,20 @@ export function ReviewScreen({
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
-      // Session-level analytics (SRS_SESSION_START) deliberately not
-      // emitted: /user/interactions is keyed on per-word events and
-      // its Prisma enum rejects this type with a 400. A proper events
-      // table is a separate workstream; until then, server-side
-      // `srs_last_session_started_at` + `quiz_sessions` already
-      // capture session-start with more fidelity than this would have.
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
         setPhase('card');
+        // Cache the fresh session so a future quit-and-reopen resumes
+        // the same deck (within 24h, same kind+movie).
+        useReviewSessionStore.getState().start({
+          kind: resolvedKind,
+          movieId: movieId ?? null,
+          remaining: session.cards,
+          got: 0,
+          forgot: 0,
+          totalCards: session.cards.length,
+        });
       }
     } catch (e: any) {
       if (e instanceof SrsPaywallError) {
@@ -209,6 +235,10 @@ export function ReviewScreen({
         got: s.got + (correct ? 1 : 0),
         forgot: s.forgot + (correct ? 0 : 1),
       }));
+      // Pop the answered card from the persistent cache so a quit-and-
+      // reopen resumes at the NEXT card. Stats inside the store mirror
+      // ours so /srs/session/complete totals stay coherent on resume.
+      useReviewSessionStore.getState().consume(correct);
 
       Animated.sequence([
         Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true }),
@@ -216,10 +246,13 @@ export function ReviewScreen({
       ]).start();
 
       if (index + 1 >= cards.length) {
-        // Session complete — anchor the daily streak. Bump is idempotent
-        // for same-day repeats (a free user can only start once per UTC
-        // day anyway, but premium users hitting multiple sessions today
-        // shouldn't inflate the streak).
+        // Session complete — clear the persistent cache first so a
+        // future open of the same tile gets a fresh queue.
+        useReviewSessionStore.getState().clear();
+        // Anchor the daily streak. Bump is idempotent for same-day
+        // repeats (a free user can only start once per UTC day anyway,
+        // but premium users hitting multiple sessions today shouldn't
+        // inflate the streak).
         const bump = useDailyGoalStore.getState().bump();
         setDailySummary({ streak: bump.streak, justHitGoal: bump.justHitGoal });
         // Award the variable-reward chest. Fire and forget — if the
@@ -419,6 +452,9 @@ export function ReviewScreen({
         {sharedHeader}
         <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
           <SynonymMCQCard
+            // Key by card identity so internal state (picked choice,
+            // answered phase) resets cleanly between cards.
+            key={`mcq-${currentCard.user_word_id}-${index}`}
             word={currentCard.word}
             pos={currentCard.pos ?? undefined}
             example={currentCard.example_sentence}
@@ -437,6 +473,10 @@ export function ReviewScreen({
         {sharedHeader}
         <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
           <TranslationTypeCard
+            // Key by card identity so the input value + phase reset
+            // cleanly between cards (otherwise the previous answer
+            // text persists into the next typing prompt).
+            key={`type-${currentCard.user_word_id}-${index}`}
             word={currentCard.word}
             translation={currentCard.translation}
             translationAliases={currentCard.translation_aliases ?? undefined}

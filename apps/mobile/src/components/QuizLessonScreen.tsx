@@ -218,6 +218,8 @@ export function QuizLessonScreen({
       >
         {card.card_type === 'synonym_mcq' && card.choices ? (
           <SynonymMCQCard
+            // Reset internal state when the card index advances.
+            key={`mcq-${idx}-${card.word}`}
             word={card.word}
             pos={card.pos}
             example={card.example_sentence}
@@ -226,6 +228,10 @@ export function QuizLessonScreen({
           />
         ) : card.card_type === 'type' ? (
           <TranslationTypeCard
+            // Reset internal state when the card index advances —
+            // otherwise the previous typed answer persists into the
+            // next card and the phase stays in 'correct'.
+            key={`type-${idx}-${card.word}`}
             word={card.word}
             translation={card.translation ?? ''}
             translationAliases={card.translation_aliases ?? undefined}

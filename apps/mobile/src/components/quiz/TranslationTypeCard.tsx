@@ -21,6 +21,7 @@
  * (which reveals miss) or Skip.
  */
 
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -36,6 +37,35 @@ import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { WordCard } from './WordCard';
 import { HintChip } from './HintChip';
+
+/**
+ * Split the example sentence into Text spans so we can highlight every
+ * surface form of the target word/lemma. We do a simple stem-prefix
+ * match (case-insensitive) — so the lemma "hate" lights up "hated",
+ * "hates", "hating" too without needing a full lemmatizer on-device.
+ * Cheap and good enough for vocab UI.
+ */
+function renderExampleWithHighlight(
+  sentence: string,
+  target: string,
+  colors: { base: string; accent: string },
+): ReactNode {
+  const stem = (target || '').trim().toLowerCase();
+  if (!stem) return sentence;
+  // Tokenize on word boundaries while preserving spaces + punctuation
+  // so the rendered sentence reads naturally.
+  const parts = sentence.split(/(\s+|[.,!?;:"'()‘’“”—–-])/);
+  return parts.map((part, i) => {
+    const lower = part.toLowerCase();
+    const isMatch = lower.length >= stem.length && lower.startsWith(stem)
+      && /^[a-z]+$/.test(lower);
+    return (
+      <Text key={i} style={{ color: isMatch ? colors.accent : colors.base, fontWeight: isMatch ? '800' : '600' }}>
+        {part}
+      </Text>
+    );
+  });
+}
 
 export interface TranslationTypeCardProps {
   word: string;
@@ -206,7 +236,10 @@ export function TranslationTypeCard({
     <View style={s.root}>
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
         <Text style={s.eyebrow}>TYPE THE TRANSLATION</Text>
-        <WordCard word={word} pos={pos} example={example} size={34} />
+        {/* Hide `example` on the word card so it doesn't reveal the
+            answer before the user types — we surface the sentence in
+            its own IN CONTEXT callout below once they've answered. */}
+        <WordCard word={word} pos={pos} example={null} size={34} />
 
         {hintLabels.length > 0 ? (
           <View style={s.hintRow}>
@@ -290,6 +323,31 @@ export function TranslationTypeCard({
             <Text style={s.revealedBody}>
               <Text style={s.revealedAnswer}>{translation}</Text>
               {' — counted as a miss so it surfaces again soon.'}
+            </Text>
+          </Animated.View>
+        ) : null}
+
+        {(phase === 'correct' || phase === 'revealed') && example ? (
+          <Animated.View
+            style={[
+              s.contextCallout,
+              {
+                opacity: calloutAnim,
+                transform: [{
+                  translateY: calloutAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <Text style={s.contextEyebrow}>IN CONTEXT</Text>
+            <Text style={s.contextBody}>
+              {renderExampleWithHighlight(example, word, {
+                base: s.contextBody.color as string,
+                accent: phase === 'correct' ? s.contextAccentCorrect.color as string : s.contextAccentRevealed.color as string,
+              })}
             </Text>
           </Animated.View>
         ) : null}
@@ -417,6 +475,36 @@ const makeStyles = (tc: ThemeColors) =>
     revealedAnswer: {
       color: tc.text,
       fontWeight: '800',
+    },
+    contextCallout: {
+      marginTop: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: tc.paper,
+      borderWidth: 1,
+      borderColor: tc.border,
+    },
+    contextEyebrow: {
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 1.4,
+      color: tc.goldOnSurface,
+      textTransform: 'uppercase',
+    },
+    contextBody: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: tc.text,
+      marginTop: 6,
+      lineHeight: 20,
+      fontStyle: 'italic',
+    },
+    contextAccentCorrect: {
+      color: tc.success,
+    },
+    contextAccentRevealed: {
+      color: tc.warning,
     },
     ctaBar: {
       paddingHorizontal: 18,

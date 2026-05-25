@@ -174,7 +174,13 @@ async def auto_apply_mercy(
             "auto_consumed": 0,
         }
 
-    last_date = user.srsLastSessionDate
+    # Prisma Python surfaces `@db.Date` as a `datetime`, but the gap
+    # math below subtracts `today: date - last_date`. Normalize to
+    # `date` at the boundary so the operands match.
+    last_date_raw = user.srsLastSessionDate
+    last_date: Optional[date] = (
+        last_date_raw.date() if isinstance(last_date_raw, datetime) else last_date_raw
+    )
     burn = freezes_to_consume_for_gap(today, last_date, held)
     consumed = 0
     for _ in range(burn):
