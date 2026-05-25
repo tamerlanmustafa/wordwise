@@ -15,19 +15,19 @@ export interface TMDBMovie {
   genre_ids: number[];
 }
 
-export interface TMDBGenre {
+interface TMDBGenre {
   id: number;
   name: string;
 }
 
-export interface TMDBMoviesResponse {
+interface TMDBMoviesResponse {
   page: number;
   results: TMDBMovie[];
   total_pages: number;
   total_results: number;
 }
 
-export interface TMDBGenresResponse {
+interface TMDBGenresResponse {
   genres: TMDBGenre[];
 }
 

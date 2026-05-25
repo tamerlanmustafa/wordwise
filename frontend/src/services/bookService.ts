@@ -31,7 +31,7 @@ export interface BookSearchResult {
   match_score?: number;
 }
 
-export interface BookSearchResponse {
+interface BookSearchResponse {
   query: string;
   books: BookSearchResult[];
   total: number;
@@ -39,7 +39,7 @@ export interface BookSearchResponse {
   source: string;
 }
 
-export interface BookDetails {
+interface BookDetails {
   id: number;
   title: string;
   author: string | null;
@@ -54,7 +54,7 @@ export interface BookDetails {
   content_type: string;
 }
 
-export interface BookAnalysisResult {
+interface BookAnalysisResult {
   book_id: number;
   title: string;
   author: string | null;
@@ -133,48 +133,3 @@ export async function getBook(bookId: number): Promise<BookDetails> {
   return response.json();
 }
 
-/**
- * Book metadata type for display (similar to TMDBMetadata)
- */
-export interface BookMetadata {
-  id: number;
-  title: string;
-  year: number | null;
-  poster: string | null;
-  overview: string;
-  genres: string[];
-  author: string | null;
-  popularity: number;
-}
-
-/**
- * Convert book search result to metadata format
- */
-export function bookToMetadata(book: BookSearchResult): BookMetadata {
-  return {
-    id: book.gutenberg_id,
-    title: book.title,
-    year: book.first_publish_year || book.author_death_year || null,
-    poster: book.cover_large || book.cover_medium || book.cover_small,
-    overview: book.subjects.slice(0, 3).join(', ') || 'Public domain book',
-    genres: book.subjects.slice(0, 5),
-    author: book.author,
-    popularity: book.download_count || 0,
-  };
-}
-
-/**
- * Convert book details to metadata format
- */
-export function bookDetailsToMetadata(book: BookDetails): BookMetadata {
-  return {
-    id: book.id,
-    title: book.title,
-    year: book.year,
-    poster: book.poster_url,
-    overview: book.description || 'Public domain book',
-    genres: [],
-    author: book.author,
-    popularity: 0,
-  };
-}

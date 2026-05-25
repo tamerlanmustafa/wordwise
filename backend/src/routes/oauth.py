@@ -9,9 +9,7 @@ from ..database import get_db
 from ..schemas.oauth import (
     GoogleLoginRequest,
     GoogleLoginResponse,
-    GoogleSignupRequest,
-    GoogleSignupResponse,
-    UserInfo
+    UserInfo,
 )
 from ..utils.google_auth import verify_google_token, generate_username_from_email
 from ..utils.auth import create_access_token
@@ -168,58 +166,6 @@ def _create_user_response(user) -> UserInfo:
         default_tab=user.defaultTab or "movies",
         is_admin=user.isAdmin or False
     )
-
-
-@router.post("/signup", response_model=GoogleSignupResponse, status_code=status.HTTP_201_CREATED)
-async def google_signup(request: GoogleSignupRequest, db: Prisma = Depends(get_db)):
-    """Sign up a new user with Google OAuth 2.0 using Prisma."""
-    try:
-        # Verify Google ID token
-        google_user_info = _verify_and_get_google_user_info(request.id_token)
-
-        # Check if user already exists
-        google_id = google_user_info['google_id']
-        email = google_user_info['email']
-
-        existing_user = await db.user.find_first(
-            where={
-                "OR": [
-                    {"googleId": google_id},
-                    {"email": email}
-                ]
-            }
-        )
-
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this Google account or email already exists. Please use the login endpoint."
-            )
-
-        # Create new user
-        user, is_new_user = await _create_or_update_user(google_user_info, db, allow_new=True)
-
-        # Generate JWT access token
-        access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
-        access_token = create_access_token(
-            data={"sub": str(user.id), "email": user.email},
-            expires_delta=access_token_expires
-        )
-
-        return GoogleSignupResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=_create_user_response(user),
-            is_new_user=is_new_user
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred during signup: {str(e)}"
-        )
 
 
 @router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)

@@ -56,14 +56,6 @@ class NewlyUnlocked(BaseModel):
     icon: Optional[str]
 
 
-@router.get("/catalog", response_model=list[AchievementDef])
-async def list_achievements(db: Prisma = Depends(get_db)):
-    rows = await db.query_raw(
-        "SELECT key, title, description, icon, category, threshold FROM achievements ORDER BY category, threshold"
-    )
-    return [AchievementDef(**r) for r in rows]
-
-
 @router.get("/me", response_model=AchievementsResponse)
 async def my_achievements(
     current_user=Depends(get_current_active_user),

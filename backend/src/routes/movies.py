@@ -5,9 +5,8 @@ from prisma import Prisma
 from prisma.enums import difficultylevel
 from typing import Optional, List, Dict, Any
 from ..database import get_db
-from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse, ScriptSearchResponse
+from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
 from ..middleware.auth import get_current_active_user
-from ..services import STANDS4ScriptsClient
 
 logger = logging.getLogger(__name__)
 
@@ -300,64 +299,6 @@ async def ready_to_watch(
         "floor_pct": floor_pct,
         "total": len(rows),
     }
-
-
-@router.get("/recommendations")
-async def get_movie_recommendations(
-    level: Optional[str] = Query(None),
-    limit: int = Query(10, ge=1, le=50),
-    db: Prisma = Depends(get_db)
-):
-    """Generic CEFR-bucketed catalog browse. Must be declared BEFORE
-    `/{movie_id}` so FastAPI doesn't treat "recommendations" as an
-    int path parameter (→ 422)."""
-    where_clause = {}
-
-    if level:
-        from prisma.enums import difficultylevel
-        try:
-            target_level = difficultylevel(level.upper())
-            where_clause["difficultyLevel"] = target_level
-        except ValueError:
-            pass
-
-    movies = await db.movie.find_many(
-        where=where_clause,
-        take=limit,
-        order={"difficultyScore": "asc"}
-    )
-
-    return {"movies": movies, "level": level, "total": len(movies)}
-
-
-@router.get("/scripts/search", response_model=List[ScriptSearchResponse])
-async def search_scripts(
-    query: str = Query(..., min_length=1, description="Movie title to search for")
-):
-    """Search for movie scripts using STANDS4 API. Must be declared
-    BEFORE `/{movie_id}` so FastAPI doesn't treat "scripts" as an
-    int path parameter (→ 422)."""
-    if not query or len(query.strip()) == 0:
-        return []
-
-    try:
-        client = STANDS4ScriptsClient()
-        results = await client.search_script(query)
-
-        return [
-            ScriptSearchResponse(
-                title=result.title,
-                subtitle=result.subtitle,
-                writer=result.writer,
-                link=result.link
-            )
-            for result in results
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search scripts: {str(e)}"
-        )
 
 
 @router.get("/{movie_id}", response_model=MovieResponse)

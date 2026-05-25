@@ -183,14 +183,3 @@ async def update_user_profile(
     return updated_user
 
 
-@router.get("/languages")
-async def get_supported_languages():
-    """Get list of supported languages for learning and translation"""
-    return {
-        "languages": [
-            {"code": code, "name": name}
-            for code, name in SUPPORTED_LANGUAGES.items()
-        ]
-    }
-
-

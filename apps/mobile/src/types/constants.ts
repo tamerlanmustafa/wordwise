@@ -2,13 +2,13 @@
 // mobile uses this local copy because Metro doesn't resolve cross-package imports
 // without extra monorepo setup). Any new shared constant should land in BOTH files.
 
-export interface LanguageOption {
+interface LanguageOption {
   code: string;
   name: string;
   nativeName?: string;
 }
 
-export interface ProficiencyLevel {
+interface ProficiencyLevel {
   code: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   name: string;
 }

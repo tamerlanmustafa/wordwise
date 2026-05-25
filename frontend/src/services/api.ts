@@ -296,14 +296,6 @@ apiClient.interceptors.response.use(
 export default apiClient;
 
 /**
- * Helper function to check if user is authenticated
- * @returns true if user has a valid token in localStorage
- */
-export function hasAuthToken(): boolean {
-  return !!localStorage.getItem('wordwise_token');
-}
-
-/**
  * Helper function to manually trigger token refresh
  * Useful for proactive refresh before long-running operations
  * @returns Promise that resolves with new token or rejects on failure
@@ -345,7 +337,7 @@ export async function refreshAuthToken(): Promise<string> {
 
 import type { ReportReason, WordReport, ReportStats } from '../types/report';
 
-export interface CreateReportData {
+interface CreateReportData {
   word: string;
   movie_id?: number;
   movie_title?: string;

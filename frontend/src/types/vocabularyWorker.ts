@@ -25,22 +25,6 @@ export interface WordsStructOfArrays {
 }
 
 // ============================================================================
-// WORKER MESSAGE TYPES
-// ============================================================================
-
-export type WorkerMessageType =
-  | 'INIT_WORDS'
-  | 'APPLY_FILTER'
-  | 'REQUEST_BATCH'
-  | 'TRANSLATION_UPDATE'
-  | 'GET_IDIOMS_FOR_WORD'
-  | 'IDIOMS_RESULT'
-  | 'BATCH_READY'
-  | 'ALL_LOADED'
-  | 'ERROR'
-  | 'RESET';
-
-// ============================================================================
 // OUTGOING MESSAGES (Main Thread → Worker)
 // ============================================================================
 

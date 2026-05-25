@@ -23,14 +23,14 @@ export interface TMDBMetadata {
   popularity: number;
 }
 
-export interface MovieSearchResponse {
+interface MovieSearchResponse {
   query: string;
   results: MovieSearchResult[];
   total: number;
   tmdb_metadata: TMDBMetadata | null;  // TMDB metadata for UI display only
 }
 
-export interface ScriptResponse {
+interface ScriptResponse {
   script_id: number;
   movie_id: number;
   source_used: string;
@@ -57,7 +57,7 @@ export interface IdiomInfo {
   words: string[];
 }
 
-export interface CEFRClassificationResponse {
+interface CEFRClassificationResponse {
   movie_id: number;
   script_id: number;
   total_words: number;
@@ -83,13 +83,6 @@ export interface CEFRClassificationResponse {
   idioms?: IdiomInfo[];
 }
 
-export interface TranslationRequest {
-  text: string;
-  target_lang: string;
-  source_lang?: string;
-  user_id?: number;
-}
-
 export interface TranslationResponse {
   source: string;
   translated: string;
@@ -100,27 +93,20 @@ export interface TranslationResponse {
   created_at?: string;
 }
 
-export interface BatchTranslationRequest {
-  texts: string[];
-  target_lang: string;
-  source_lang?: string;
-  user_id?: number;
-}
-
-export interface BatchTranslationResponse {
+interface BatchTranslationResponse {
   results: TranslationResponse[];
   total: number;
   cached_count: number;
   api_calls: number;
 }
 
-export interface TranslationCacheStats {
+interface TranslationCacheStats {
   total_translations: number;
   languages: Record<string, number>;
   cache_enabled: boolean;
 }
 
-export interface DifficultWord {
+interface DifficultWord {
   word: string;
   target_lang: string;
   translation: string;
@@ -130,13 +116,13 @@ export interface DifficultWord {
   providers_used: string[];
 }
 
-export interface DifficultWordsResponse {
+interface DifficultWordsResponse {
   words: DifficultWord[];
   total: number;
   min_attempts: number;
 }
 
-export interface UserTranslationStats {
+interface UserTranslationStats {
   user_id: number;
   total_translations: number;
   unique_words: number;

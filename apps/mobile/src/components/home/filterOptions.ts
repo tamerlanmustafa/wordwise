@@ -1,16 +1,3 @@
-export const GENRE_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
-  { value: '',          label: 'All Genres',       icon: '🎬' },
-  { value: 'Drama',     label: 'Drama',            icon: '🎭' },
-  { value: 'Comedy',    label: 'Comedy',           icon: '😂' },
-  { value: 'Crime',     label: 'Crime & Thriller', icon: '🔍' },
-  { value: 'Family',    label: 'Family',           icon: '🏠' },
-  { value: 'Romance',   label: 'Romance',          icon: '💞' },
-  { value: 'Animation', label: 'Animation',        icon: '🎨' },
-  { value: 'Action',    label: 'Action',           icon: '💥' },
-  { value: 'Horror',    label: 'Horror',           icon: '👻' },
-  { value: 'Science Fiction', label: 'Sci-Fi',     icon: '🚀' },
-];
-
 export const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
   { value: 'A1', label: 'A1 Beginner',       icon: '🟢' },
   { value: 'A2', label: 'A2 Elementary',      icon: '🟢' },

@@ -32,7 +32,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { WordCard } from './WordCard';
 import { MCQChoice, type MCQChoiceState } from './MCQChoice';
 
-export interface SynonymChoicePayload {
+interface SynonymChoicePayload {
   word: string;
   is_correct: boolean;
 }

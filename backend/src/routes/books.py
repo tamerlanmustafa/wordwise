@@ -56,26 +56,6 @@ async def search_books(
     }
 
 
-@router.get("/gutenberg/search")
-async def search_gutenberg_books(
-    q: str = Query(..., min_length=1, description="Search query"),
-    page: int = Query(1, ge=1, description="Page number")
-):
-    """
-    Search Project Gutenberg directly for public domain books.
-    """
-    client = get_gutendex_client()
-    results = await client.search_public_domain(query=q, page=page)
-
-    return {
-        "query": q,
-        "books": results.get("books", []),
-        "total": results.get("total", 0),
-        "next": results.get("next"),
-        "previous": results.get("previous"),
-    }
-
-
 @router.get("/gutenberg/{gutenberg_id}")
 async def get_gutenberg_book(gutenberg_id: int):
     """

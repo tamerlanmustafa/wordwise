@@ -83,7 +83,9 @@ class MovieExamplesResponse(BaseModel):
 
 # === Endpoints ===
 
-@router.post("/examples", response_model=EnrichExamplesResponse)
+# V1 enrichment: no longer routed (V2 is the active client-facing path),
+# but `cefr.py:auto_enrich_after_classification` still invokes this directly
+# as a background task, so the function body is retained.
 async def enrich_movie_examples(
     request: EnrichExamplesRequest,
     db: Prisma = Depends(get_db)

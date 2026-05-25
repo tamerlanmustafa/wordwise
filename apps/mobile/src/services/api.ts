@@ -9,7 +9,7 @@ const API_BASE_URL = config.API_URL;
 const TMDB_API_KEY = '9dece7a38786ac0c58794d6db4af3d51';
 
 // Types
-export interface TMDBMovie {
+interface TMDBMovie {
   id: number;
   title: string;
   poster_path: string | null;
@@ -30,7 +30,7 @@ export interface MovieSearchResult {
   link: string;
 }
 
-export interface TMDBMetadata {
+interface TMDBMetadata {
   id: number;
   title: string;
   year: number | null;
@@ -82,7 +82,7 @@ export interface VocabularyResponse {
   idioms?: IdiomInfo[];
 }
 
-export interface ScriptResponse {
+interface ScriptResponse {
   script_id: number;
   movie_id: number;
   source_used: string;
@@ -100,7 +100,7 @@ export interface ScriptResponse {
   fetched_at: string | null;
 }
 
-export interface TranslationResponse {
+interface TranslationResponse {
   source: string;
   translated: string;
   target_lang: string;
@@ -568,7 +568,7 @@ export const reportsApi = {
 };
 
 // SRS review types — mirrors backend/src/routes/srs.py.
-export interface SynonymChoice {
+interface SynonymChoice {
   word: string;
   is_correct: boolean;
 }
@@ -621,7 +621,7 @@ export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
   movie_deep_dive: 7,
 };
 
-export interface SrsSessionStart {
+interface SrsSessionStart {
   cards: SrsReviewCard[];
   total_due: number;
   session_size: number;
@@ -682,7 +682,7 @@ export interface ChestPayload {
   };
 }
 
-export interface CompleteSessionResponse {
+interface CompleteSessionResponse {
   chest: ChestPayload | null;
   already_claimed: boolean;
   correct_count: number;
@@ -711,7 +711,7 @@ export interface DailyState {
   last_session_kind?: SessionKind | null;
 }
 
-export interface CreditedFreezesResponse {
+interface CreditedFreezesResponse {
   credited: number;
   freezes_held: number;
   capped: boolean;
@@ -723,7 +723,7 @@ export interface CreditedFreezesResponse {
  *  - `preview_exhausted`: legacy (pre-v0.6) — free preview sessions used up
  *  - `daily_cap_reached`: v0.6 — free user already did today's session
  *  Default 'preview_exhausted' for backwards compat with older clients. */
-export type SrsPaywallKind = 'preview_exhausted' | 'daily_cap_reached';
+type SrsPaywallKind = 'preview_exhausted' | 'daily_cap_reached';
 
 export class SrsPaywallError extends Error {
   kind: SrsPaywallKind;
@@ -1037,25 +1037,11 @@ export const adminApi = {
 // Feature Flags
 // =====================================================================
 
-export interface FeatureFlag {
-  flag_key: string;
-  enabled: boolean;
-  variant: string | null;
-}
-
-export const flagsApi = {
-  getMyFlags: async (): Promise<FeatureFlag[]> => {
-    const res = await authFetch(`${API_BASE_URL}/flags/me`);
-    if (!res.ok) return [];
-    return res.json();
-  },
-};
-
 // =====================================================================
 // Billing / Subscriptions
 // =====================================================================
 
-export interface SubscriptionStatus {
+interface SubscriptionStatus {
   tier: string;
   is_premium: boolean;
   expires_at: string | null;
@@ -1063,7 +1049,7 @@ export interface SubscriptionStatus {
   platform?: string | null;
 }
 
-export interface RestoreResult {
+interface RestoreResult {
   restored: boolean;
   tier: string;
   message: string;
@@ -1180,7 +1166,7 @@ export interface AchievementsResponse {
   total_available: number;
 }
 
-export interface NewlyUnlocked {
+interface NewlyUnlocked {
   key: string;
   title: string;
   icon: string | null;
@@ -1218,7 +1204,7 @@ export interface LeaderboardResponse {
   your_score: number | null;
 }
 
-export interface PublicProfile {
+interface PublicProfile {
   user_id: number;
   username: string;
   profile_picture_url: string | null;
@@ -1259,7 +1245,7 @@ export const socialApi = {
 // Student Discount
 // =====================================================================
 
-export interface StudentStatus {
+interface StudentStatus {
   verified: boolean;
   method: string | null;
   discount_pct: number;

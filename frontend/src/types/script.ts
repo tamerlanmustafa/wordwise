@@ -1,12 +1,5 @@
 export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'IDIOMS';
 
-export interface ScriptSearchResult {
-  title: string;
-  subtitle?: string;
-  writer?: string;
-  link: string;
-}
-
 export interface WordFrequency {
   word: string;
   lemma: string;
@@ -16,7 +9,7 @@ export interface WordFrequency {
   frequency_rank?: number | null;
 }
 
-export interface DifficultyCategory {
+interface DifficultyCategory {
   level: CEFRLevel;
   words: WordFrequency[];
   description: string;

@@ -77,7 +77,7 @@ const PREMIUM_ENTITLEMENTS: Entitlements = {
  * directly in UI code; doing so bypasses the preview toggle and leaves
  * admins unable to test the free experience.
  */
-export function useEffectiveEntitlements(): Entitlements {
+function useEffectiveEntitlements(): Entitlements {
   const user = useAuthStore((s) => s.user);
   const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
 

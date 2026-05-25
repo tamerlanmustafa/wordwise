@@ -12,7 +12,7 @@ export interface MovieDifficultyResult {
   breakdown: Record<string, number>;
 }
 
-export interface WordData {
+interface WordData {
   cefrLevel: CEFRLevel;
   confidence: number;
   frequencyRank?: number;

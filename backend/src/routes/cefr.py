@@ -207,66 +207,6 @@ class FrequencyThresholdUpdate(BaseModel):
 
 # === Endpoints ===
 
-@router.post("/classify-word", response_model=WordClassificationResponse)
-async def classify_word(request: WordClassificationRequest):
-    """
-    Classify a single word with CEFR level
-    """
-    try:
-        classifier = get_classifier()
-        result = classifier.classify_word(request.word, request.pos)
-
-        return WordClassificationResponse(
-            word=result.word,
-            lemma=result.lemma,
-            pos=result.pos,
-            cefr_level=result.cefr_level.value,
-            confidence=result.confidence,
-            source=result.source.value,
-            frequency_rank=result.frequency_rank,
-            is_multi_word=result.is_multi_word
-        )
-
-    except Exception as e:
-        logger.error(f"Error classifying word '{request.word}': {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/classify-text", response_model=TextClassificationResponse)
-async def classify_text(request: TextClassificationRequest):
-    """
-    Classify all words in a text
-    """
-    try:
-        classifier = get_classifier()
-        classifications = classifier.classify_text(request.text)
-
-        response_classifications = [
-            WordClassificationResponse(
-                word=cls.word,
-                lemma=cls.lemma,
-                pos=cls.pos,
-                cefr_level=cls.cefr_level.value,
-                confidence=cls.confidence,
-                source=cls.source.value,
-                frequency_rank=cls.frequency_rank,
-                is_multi_word=cls.is_multi_word
-            )
-            for cls in classifications
-        ]
-
-        statistics = classifier.get_statistics(classifications) if request.include_statistics else None
-
-        return TextClassificationResponse(
-            classifications=response_classifications,
-            statistics=statistics
-        )
-
-    except Exception as e:
-        logger.error(f"Error classifying text: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 async def populate_sentence_bank_bg(movie_id: int):
     """
     Background task: populate SentenceBank + SentenceLemmaLink for a movie's
@@ -718,54 +658,6 @@ async def classify_script(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/statistics/{movie_id}")
-async def get_script_statistics(movie_id: int, db: Prisma = Depends(get_db)):
-    """
-    Get CEFR statistics for a previously classified script
-    """
-    try:
-        movie = await db.movie.find_unique(
-            where={'id': movie_id},
-            include={'movieScripts': True}
-        )
-
-        if not movie or not movie.movieScripts:
-            raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found")
-
-        script = movie.movieScripts[0]
-
-        classifications = await db.wordclassification.find_many(
-            where={'scriptId': script.id}
-        )
-
-        if not classifications:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No classifications found for movie {movie_id}. Run /classify-script first."
-            )
-
-        level_counts = {}
-        total_conf = 0
-
-        for cls in classifications:
-            level_counts[cls.cefrLevel] = level_counts.get(cls.cefrLevel, 0) + 1
-            total_conf += cls.confidence
-
-        return {
-            'movie_id': movie_id,
-            'script_id': script.id,
-            'total_words': len(classifications),
-            'level_distribution': level_counts,
-            'average_confidence': total_conf / len(classifications),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting statistics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.put("/update-thresholds")
 async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
     """
@@ -794,25 +686,6 @@ async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
     except Exception as e:
         logger.error(f"Error updating thresholds: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/health")
-async def health_check():
-    """
-    Health check for CEFR classifier
-    """
-    try:
-        classifier = get_classifier()
-        return {
-            'status': 'healthy',
-            'wordlist_entries': len(classifier.cefr_wordlist),
-            'multi_word_expressions': len(classifier.multi_word_expressions),
-            'has_frequency_data': classifier.has_wordfreq,
-            'has_embedding_classifier': classifier.has_embedding_classifier
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Classifier not available")
 
 
 @router.post("/v2/backfill-lemmas")

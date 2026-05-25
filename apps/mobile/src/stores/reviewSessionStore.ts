@@ -30,7 +30,7 @@ const KEY = 'srs.reviewSession.v2';
 // and a fresh queue is almost certainly more useful.
 const STALE_MS = 24 * 60 * 60 * 1000;
 
-export interface CachedSession {
+interface CachedSession {
   kind: SessionKind;
   movieId: number | null;
   /** Cards not yet answered. First entry is the next card to show. */

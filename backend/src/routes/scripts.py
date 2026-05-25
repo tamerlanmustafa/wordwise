@@ -15,7 +15,6 @@ from ..schemas.script import (
     ScriptResponse,
     ScriptFetchRequest,
     ScriptSearchResponse,
-    ScriptStatsResponse
 )
 from prisma import Prisma
 
@@ -105,77 +104,6 @@ async def fetch_script(
             )
 
 
-@router.get("/get", response_model=ScriptResponse)
-async def get_script(
-    title: str = Query(..., min_length=1, description="Movie title"),
-    movie_id: Optional[int] = Query(None, description="Movie database ID"),
-    db: Prisma = Depends(get_db)
-):
-    """
-    Get a script from the database ONLY (no external fetching).
-
-    Use this endpoint to check if a script is already cached without
-    triggering any external API calls.
-
-    Args:
-        title: Movie title
-        movie_id: Optional movie database ID
-
-    Returns:
-        ScriptResponse if found in database
-
-    Raises:
-        404: Script not found in database
-    """
-    logger.info(f"[API] Script get request: title='{title}', movie_id={movie_id}")
-
-    try:
-        # Search database
-        if movie_id:
-            script = await db.moviescript.find_unique(
-                where={"movieId": movie_id},
-                include={"movie": True}
-            )
-        else:
-            movie = await db.movie.find_first(
-                where={"title": {"contains": title, "mode": "insensitive"}},
-                include={"movieScripts": True}
-            )
-
-            if movie and movie.movieScripts:
-                script = movie.movieScripts[0]
-            else:
-                script = None
-
-        if not script:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No cached script found for '{title}'"
-            )
-
-        logger.info(f"[API] ✓ Script found in database for '{title}'")
-
-        return ScriptResponse(
-            script_id=script.id,
-            movie_id=script.movieId,
-            source_used=script.sourceUsed,
-            cleaned_text=script.cleanedScriptText or "",
-            word_count=script.cleanedWordCount or 0,
-            is_complete=script.isComplete,
-            is_truncated=script.isTruncated,
-            from_cache=True,
-            metadata={},
-            fetched_at=script.fetchedAt
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[API] Failed to get script for '{title}': {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve script: {str(e)}"
-        )
 
 
 @router.get("/search")
@@ -255,73 +183,6 @@ async def search_movies(
         raise HTTPException(
             status_code=500,
             detail=f"Search failed: {str(e)}"
-        )
-
-
-# =============================================================================
-# STATISTICS & ADMIN ENDPOINTS
-# =============================================================================
-
-@router.get("/stats", response_model=ScriptStatsResponse)
-async def get_script_stats(db: Prisma = Depends(get_db)):
-    """
-    Get statistics about the script library.
-
-    Returns:
-        ScriptStatsResponse with aggregate statistics
-    """
-    logger.info("[API] Fetching script statistics")
-
-    try:
-        # Get all scripts
-        scripts = await db.moviescript.find_many()
-
-        if not scripts:
-            return ScriptStatsResponse(
-                total_scripts=0,
-                by_source={},
-                total_words=0,
-                avg_words_per_script=0,
-                complete_scripts=0,
-                truncated_scripts=0
-            )
-
-        # Calculate stats
-        by_source = {}
-        total_words = 0
-        complete_count = 0
-        truncated_count = 0
-
-        for script in scripts:
-            # Count by source
-            source = script.sourceUsed
-            by_source[source] = by_source.get(source, 0) + 1
-
-            # Sum words
-            total_words += script.cleanedWordCount or 0
-
-            # Count complete/truncated
-            if script.isComplete:
-                complete_count += 1
-            if script.isTruncated:
-                truncated_count += 1
-
-        avg_words = total_words / len(scripts) if scripts else 0
-
-        return ScriptStatsResponse(
-            total_scripts=len(scripts),
-            by_source=by_source,
-            total_words=total_words,
-            avg_words_per_script=round(avg_words, 2),
-            complete_scripts=complete_count,
-            truncated_scripts=truncated_count
-        )
-
-    except Exception as e:
-        logger.error(f"[API] Failed to fetch stats: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch statistics: {str(e)}"
         )
 
 

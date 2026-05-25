@@ -87,8 +87,7 @@ export function PracticeTilePath({
   );
 }
 
-/** Pure state-machine derivation. Exported for unit tests. */
-export function deriveTileStates(
+function deriveTileStates(
   streak: number,
   lastSessionKind: SessionKind | null,
 ): Record<SessionKind, PracticeTileState> {

@@ -10,7 +10,7 @@ import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
-export type ResolvedTheme   = 'light' | 'dark';
+type ResolvedTheme = 'light' | 'dark';
 
 const KEY = 'wordwise.theme.v1';
 
