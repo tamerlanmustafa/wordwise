@@ -4,12 +4,18 @@
  * The Practice tab is now a linear, never-ending chain of lesson tiles.
  * `cursor` is the index of the user's next active tile; it increments
  * by one on each completed SRS session (see ReviewScreen). The kind at
- * any index is derived deterministically from a fixed 4-step cycle:
+ * any index is derived deterministically from a fixed 3-step cycle:
  *
- *   index % 4 === 0  → quick_recall
- *   index % 4 === 1  → synonym_round
- *   index % 4 === 2  → tough_words
- *   index % 4 === 3  → movie_deep_dive
+ *   index % 3 === 0  → quick_recall
+ *   index % 3 === 1  → tough_words
+ *   index % 3 === 2  → movie_deep_dive
+ *
+ * Note: there's no separate `synonym_round` tile anymore. Synonym MCQs
+ * and translation-typing prompts are intermixed *within every session*
+ * — the server picks the card type per-card from each row's `srsBox`
+ * (box ≥ 3 → MCQ, otherwise type). So a quick_recall session already
+ * delivers both formats; carving them into separate tiles was creating
+ * artificial monotony per session.
  *
  * Persisted to AsyncStorage so a relaunch lands the user on the same
  * active tile. There is no day-rollover here — the path is a counter,
@@ -29,10 +35,11 @@ import type { SessionKind } from '../services/api';
 const KEY = 'practice.path.cursor.v1';
 const ADVANCE_DEBOUNCE_MS = 800;
 
-/** The 4-step cycle. Keep in sync with `kindAtIndex` below. */
+/** The 3-step cycle. Keep in sync with `kindAtIndex` below.
+ *  `synonym_round` is intentionally absent — synonym MCQs are blended
+ *  into every session at the card-type layer (see `routes/srs.py`). */
 export const PRACTICE_KIND_CYCLE: SessionKind[] = [
   'quick_recall',
-  'synonym_round',
   'tough_words',
   'movie_deep_dive',
 ];

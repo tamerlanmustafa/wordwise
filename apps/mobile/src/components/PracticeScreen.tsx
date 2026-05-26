@@ -115,15 +115,15 @@ export function PracticeScreen({
   const activeKind = kindAtIndex(cursor);
 
   // ── Movie picker modal state ────────────────────────────────────
+  // We surface every reel movie that has a catalog `movie_id` — the
+  // session composer pulls UserWord rows by movie and pads with fresh
+  // lemmas from the same film, so a 0%-comprehensibility movie still
+  // produces a perfectly fine all-fresh-vocab session.
   const [pickerOpen, setPickerOpen] = useState(false);
   const deepDiveOptions = useMemo<DeepDiveMovieOption[]>(
     () =>
       reelTiles
-        .filter(
-          (t) =>
-            typeof t.movie_id === 'number' &&
-            (t.comprehensibility_percent ?? 0) > 0,
-        )
+        .filter((t) => typeof t.movie_id === 'number')
         .map((t) => ({
           movieId: t.movie_id!,
           title: t.title,
@@ -151,8 +151,8 @@ export function PracticeScreen({
       if (kind === 'movie_deep_dive') {
         if (deepDiveOptions.length === 0) {
           Alert.alert(
-            'No movies ready',
-            'Finish a Quick Recall or two so the Deep-Dive pool has words to pull from.',
+            'Your reel is empty',
+            'Add a movie to your reel (My Movies tab) so Deep-Dive has something to dive into.',
           );
           return;
         }

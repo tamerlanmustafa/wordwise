@@ -8,24 +8,30 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 import { buildWindow } from '../PracticeTilePath';
 import { kindAtIndex } from '../../../stores/practicePathStore';
 
-describe('kindAtIndex (4-step cycle)', () => {
-  it('cycles through the four kinds in order', () => {
+describe('kindAtIndex (3-step cycle, synonyms blended into other kinds)', () => {
+  it('cycles through the three kinds in order', () => {
     expect(kindAtIndex(0)).toBe('quick_recall');
-    expect(kindAtIndex(1)).toBe('synonym_round');
-    expect(kindAtIndex(2)).toBe('tough_words');
-    expect(kindAtIndex(3)).toBe('movie_deep_dive');
+    expect(kindAtIndex(1)).toBe('tough_words');
+    expect(kindAtIndex(2)).toBe('movie_deep_dive');
   });
 
   it('wraps around after each full cycle', () => {
-    expect(kindAtIndex(4)).toBe('quick_recall');
-    expect(kindAtIndex(5)).toBe('synonym_round');
-    expect(kindAtIndex(8)).toBe('quick_recall');
-    expect(kindAtIndex(15)).toBe('movie_deep_dive');
+    expect(kindAtIndex(3)).toBe('quick_recall');
+    expect(kindAtIndex(4)).toBe('tough_words');
+    expect(kindAtIndex(5)).toBe('movie_deep_dive');
+    expect(kindAtIndex(9)).toBe('quick_recall');
+    expect(kindAtIndex(11)).toBe('movie_deep_dive');
+  });
+
+  it('never returns the deprecated synonym_round kind', () => {
+    for (let i = 0; i < 30; i += 1) {
+      expect(kindAtIndex(i)).not.toBe('synonym_round');
+    }
   });
 
   it('handles a defensively negative index', () => {
     expect(kindAtIndex(-1)).toBe('movie_deep_dive');
-    expect(kindAtIndex(-4)).toBe('quick_recall');
+    expect(kindAtIndex(-3)).toBe('quick_recall');
   });
 });
 
@@ -35,14 +41,13 @@ describe('buildWindow', () => {
     expect(w).toHaveLength(7);
     expect(w[0]).toEqual({ index: 0, kind: 'quick_recall', state: 'active' });
     expect(w.slice(1).every((t) => t.state === 'locked')).toBe(true);
-    // Indices walk forward by 1.
     expect(w.map((t) => t.index)).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 
   it('shows one completed above when cursor=1', () => {
     const w = buildWindow(1);
     expect(w[0]).toEqual({ index: 0, kind: 'quick_recall', state: 'completed' });
-    expect(w[1]).toEqual({ index: 1, kind: 'synonym_round', state: 'active' });
+    expect(w[1]).toEqual({ index: 1, kind: 'tough_words', state: 'active' });
     expect(w.slice(2).every((t) => t.state === 'locked')).toBe(true);
   });
 
@@ -50,7 +55,7 @@ describe('buildWindow', () => {
     const w = buildWindow(2);
     expect(w[0].state).toBe('completed');
     expect(w[1].state).toBe('completed');
-    expect(w[2]).toEqual({ index: 2, kind: 'tough_words', state: 'active' });
+    expect(w[2]).toEqual({ index: 2, kind: 'movie_deep_dive', state: 'active' });
     expect(w.slice(3).every((t) => t.state === 'locked')).toBe(true);
   });
 
@@ -59,16 +64,17 @@ describe('buildWindow', () => {
     expect(w.map((t) => t.index)).toEqual([3, 4, 5, 6, 7, 8, 9]);
     expect(w[0].state).toBe('completed');
     expect(w[1].state).toBe('completed');
-    expect(w[2]).toEqual({ index: 5, kind: 'synonym_round', state: 'active' });
+    // cursor=5, 5 % 3 === 2 → movie_deep_dive active.
+    expect(w[2]).toEqual({ index: 5, kind: 'movie_deep_dive', state: 'active' });
     expect(w.slice(3).every((t) => t.state === 'locked')).toBe(true);
   });
 
   it('still cycles kinds correctly past the first full loop', () => {
-    // cursor=4: second pass through the cycle starts.
-    const w = buildWindow(4);
-    expect(w[2]).toEqual({ index: 4, kind: 'quick_recall', state: 'active' });
+    // cursor=3: second pass through the 3-step cycle starts.
+    const w = buildWindow(3);
+    expect(w[2]).toEqual({ index: 3, kind: 'quick_recall', state: 'active' });
     // The two completed tiles just before should be from the end of the
-    // first cycle: tough_words (idx 2) and movie_deep_dive (idx 3).
+    // first cycle: tough_words (idx 1) and movie_deep_dive (idx 2).
     expect(w[0].kind).toBe('tough_words');
     expect(w[1].kind).toBe('movie_deep_dive');
   });
@@ -77,8 +83,7 @@ describe('buildWindow', () => {
     const w = buildWindow(100);
     expect(w[2].index).toBe(100);
     expect(w[2].state).toBe('active');
-    expect(w[2].kind).toBe('quick_recall'); // 100 % 4 === 0
-    // All earlier are completed, all later are locked.
+    expect(w[2].kind).toBe('tough_words'); // 100 % 3 === 1
     expect(w.filter((t) => t.state === 'completed')).toHaveLength(2);
     expect(w.filter((t) => t.state === 'locked')).toHaveLength(4);
     expect(w.filter((t) => t.state === 'active')).toHaveLength(1);

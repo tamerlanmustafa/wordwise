@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import logging
+import random
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -126,10 +127,14 @@ SESSION_SIZE = int(os.environ.get("SRS_SESSION_SIZE", "10"))
 # can start before the paywall fires. Variant B from the A/B test in §3.
 FREE_PREVIEW_SESSIONS = int(os.environ.get("SRS_FREE_PREVIEW_SESSIONS", "3"))
 
-# v0.6 W4: minimum SRS box at which we try to build a synonym MCQ.
-# Below this the word is too fresh — the user hasn't earned recall
-# confidence yet, so MCQ would just be noise. Tunable via env.
-SYNONYM_MIN_BOX = int(os.environ.get("SRS_SYNONYM_MIN_BOX", "3"))
+# v0.7.3 — probability that any individual review card attempts the
+# synonym MCQ format. The old behavior (`SRS_SYNONYM_MIN_BOX=3`) gated
+# MCQ to high-box cards only, which left users with a fresh-feeling
+# deck never seeing MCQs at all. The new gate is purely probabilistic
+# per card: 60% try MCQ first (falls back to typing if WordNet has no
+# synonyms or distractors don't exist at the target CEFR), 40% go
+# straight to typing. Tune the rate via env without redeploying.
+SYNONYM_MCQ_RATE = float(os.environ.get("SRS_SYNONYM_MCQ_RATE", "0.6"))
 
 
 class SynonymChoice(BaseModel):
@@ -147,13 +152,13 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
-    # v0.7 §7 — card variant. We never ship 'recall' anymore: the build
-    # loop picks 'synonym_mcq' when WordNet + CEFR data line up
-    # (srs_box >= SYNONYM_MIN_BOX), 'type' (translation typing) for
-    # everything else with a usable translation, and SKIPS the word
-    # outright when neither can be built. 'recall' remains in the union
-    # only for forward-compat with old client builds that may still
-    # check for it.
+    # v0.7.3 — card variant. We never ship 'recall' anymore: each card
+    # rolls against SYNONYM_MCQ_RATE; on a hit we try 'synonym_mcq'
+    # (requires WordNet + CEFR data + enough distractors) and fall back
+    # to 'type' if the MCQ can't be built. Cards with neither path
+    # (no synonyms AND no translation) are skipped. 'recall' remains
+    # in the union only for forward-compat with old client builds that
+    # may still check for it.
     card_type: str = "type"
     # Present iff card_type == 'synonym_mcq'.
     choices: Optional[list[SynonymChoice]] = None
@@ -620,6 +625,9 @@ async def start_session(
 
     cards: list[ReviewCard] = []
     skipped: list[str] = []
+    # Fresh per-request RNG. Pass it down into build_synonym_mcq so the
+    # whole card-type roll + choice ordering shares the same source.
+    rng = random.Random()
     for r in session_rows:
         lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
         # Prefer CEFR / definitions keyed on the lemma; fall back to
@@ -644,13 +652,16 @@ async def start_session(
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
-        # v0.7 §7 — synonym_mcq for box ≥ SYNONYM_MIN_BOX (the user has
-        # earned at least one correct, so MCQ adds signal); translation
-        # typing for early-box cards; skip the word entirely when
-        # neither can be built. No more 'recall' fallback.
-        if (r.srsBox or 1) >= SYNONYM_MIN_BOX and cefr:
+        # v0.7.3 — probabilistic card-type pick. Each card rolls once
+        # against SYNONYM_MCQ_RATE; on a hit we attempt MCQ, otherwise
+        # we go straight to typing. The MCQ build still falls back to
+        # typing on the small slice of words where WordNet has no
+        # synonyms or distractors can't be built at the target CEFR —
+        # so the achieved MCQ rate sits a notch below the configured
+        # one in practice, which is fine.
+        if cefr and rng.random() < SYNONYM_MCQ_RATE:
             mcq = await build_synonym_mcq(
-                db, target_word=lemma, target_cefr=cefr,
+                db, target_word=lemma, target_cefr=cefr, rng=rng,
             )
             if mcq:
                 cards.append(ReviewCard(
@@ -660,8 +671,8 @@ async def start_session(
                     choices=[SynonymChoice(**c) for c in mcq["choices"]],
                 ))
                 continue
-            # MCQ couldn't build — fall through to type so we still
-            # surface this high-box word.
+            # MCQ couldn't build — fall through to typing so the word
+            # still shows up rather than being skipped.
 
         translation = translation_map.get(lemma)
         if translation:
