@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, cefrColors, cefrLabels } from '../../theme/palette';
 import { useThemeColors } from '../../theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -121,55 +122,6 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
-  // Hide-on-scroll-down, show-on-scroll-up pattern for the back+title bar.
-  // The filter tabs always stay visible; only the navigation row slides away.
-  const NAV_BAR_HEIGHT = insets.top + 44;
-  const navSlide = useRef(new Animated.Value(0)).current; // 0 = shown, 1 = hidden
-  const lastScrollY = useRef(0);
-  const navHiddenRef = useRef(false);
-  const animateNav = useCallback((hidden: boolean) => {
-    if (navHiddenRef.current === hidden) return;
-    navHiddenRef.current = hidden;
-    Animated.timing(navSlide, {
-      toValue: hidden ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [navSlide]);
-  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
-    const y = e.nativeEvent.contentOffset.y;
-    const dy = y - lastScrollY.current;
-    // Near the top, always show the nav bar.
-    if (y < NAV_BAR_HEIGHT) {
-      animateNav(false);
-    } else if (Math.abs(dy) > 6) {
-      // Hide on a meaningful downward gesture, show on upward.
-      if (dy > 0) animateNav(true);
-      else animateNav(false);
-    }
-    lastScrollY.current = y;
-  }, [NAV_BAR_HEIGHT, animateNav]);
-
-  const navTranslateY = navSlide.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -NAV_BAR_HEIGHT],
-  });
-  // Counter-translate keeps the filter tabs visually fixed just below the
-  // dynamic island while the nav row slides off. The parent View's bg fills
-  // the area above the tabs because the parent extends across that region.
-  const tabsCounterTranslateY = navSlide.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, insets.top],
-  });
-  // tabsHeight is measured via onLayout once the filter tabs render. The
-  // top-of-list spacer matches the visible area of the absolute top bar:
-  // (navBar + tabs) when shown, (inset + tabs) when the nav has slid away.
-  const [tabsHeight, setTabsHeight] = useState(0);
-  const spacerHeight = navSlide.interpolate({
-    inputRange: [0, 1],
-    outputRange: [NAV_BAR_HEIGHT + tabsHeight, insets.top + tabsHeight],
-  });
   const prevLevelRef = useRef<string>(activeLevel);
 
   useEffect(() => {
@@ -806,143 +758,15 @@ export const MovieDetailScreen = ({
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
       <StatusBar barStyle="light-content" />
 
-      {/* Unified top bar: back+title slides away on scroll down; tabs stay anchored. */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10,
-          backgroundColor: tc.background,
-          transform: [{ translateY: navTranslateY }],
-        }}
-      >
-        <View style={[styles.detailHeader, { paddingTop: insets.top + 8, backgroundColor: tc.background, borderBottomWidth: 0 }]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-            {movie.title}
-          </Text>
-          <View style={{ width: 60 }} />
-        </View>
-        {vocabulary ? (
-          <Animated.View
-            onLayout={(e) => setTabsHeight(e.nativeEvent.layout.height)}
-            style={[
-              styles.stickyVocabHeader,
-              { backgroundColor: tc.background, transform: [{ translateY: tabsCounterTranslateY }] },
-            ]}
-          >
-            <View style={styles.unifiedTabsRowWrapper}>
-            <View style={styles.unifiedTabsLeftFixed}>
-              {(() => {
-                const foryouActive = wordsView === 'foryou';
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.unifiedTab,
-                      foryouActive && { backgroundColor: `${colors.primary}20` },
-                    ]}
-                    onPress={() => {
-                      startTransition(() => setWordsView('foryou'));
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.unifiedTabLabel,
-                      foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
-                    ]}>
-                      ★ For You
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })()}
-              <View style={styles.unifiedTabDivider} />
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
-            >
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.unifiedTabIndicator,
-                  {
-                    left: indicatorX,
-                    width: indicatorWidth,
-                    opacity: indicatorOpacity,
-                    backgroundColor: activeIndicatorColor,
-                  },
-                ]}
-              />
-              {wordLevels.map((lvl) => {
-                const active = wordsView === 'all' && activeLevel === lvl.level;
-                const c = cefrColors[lvl.level] || colors.primary;
-                return (
-                  <TouchableOpacity
-                    key={lvl.level}
-                    style={[styles.unifiedTab, styles.unifiedTabLevel]}
-                    onLayout={handleScrollTabLayout(lvl.level)}
-                    onPress={() => {
-                      startTransition(() => setWordsView('all'));
-                      setActiveLevel(lvl.level);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.unifiedTabLabel,
-                      active && [styles.unifiedTabLabelActive, { color: c }],
-                    ]}>
-                      {lvl.level}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            <LinearGradient
-              colors={['rgba(228,220,240,0)', '#E4DCF0']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.unifiedTabsRightFade}
-              pointerEvents="none"
-            />
-            </View>
-            {wordsView === 'foryou' ? (
-              suggestedWords.length === 0 ? (
-                <Text style={styles.forYouEmpty}>No new words at your level</Text>
-              ) : null
-            ) : (
-              <TouchableOpacity
-                style={styles.countSortRow}
-                onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
-                activeOpacity={0.6}
-              >
-                <Text style={styles.countSortText}>
-                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
-                  </Text>
-                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
-        ) : null}
-      </Animated.View>
-
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           scrollEventThrottle={16}
-          onScroll={handleScroll}
+          stickyHeaderIndices={[1]}
         >
-          {/* Spacer matches the visible area of the absolute top bar */}
-          <Animated.View style={{ height: spacerHeight }} />
-          {/* Hero — scrolls away naturally */}
+          {/* 0: Hero — extends to the very top, including the dynamic island */}
           <View>
             <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
             {movie.backdrop_path ? (
@@ -963,11 +787,6 @@ export const MovieDetailScreen = ({
               locations={[0, 0.3, 0.7, 1]}
               style={styles.heroBottomGradient}
             />
-            <View style={[styles.heroBackButtonOverlay, { top: insets.top + 4 }]}>
-              <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.heroBackButtonText}>← Back</Text>
-              </TouchableOpacity>
-            </View>
             <View style={styles.heroFloating}>
               <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
                 <Image
@@ -1024,7 +843,112 @@ export const MovieDetailScreen = ({
           ) : null}
           </View>
 
-          {/* Child 1: sticky vocab tabs, or loading / error shown below the hero */}
+          {/* 1: Sticky tabs — sit below the hero, stick to the top of the
+              viewport once scrolled past. paddingTop reserves space for the
+              dynamic island; paddingLeft clears the floating back button so
+              the ★ For You tab stays tappable when the bar is stuck. */}
+          <View style={{ backgroundColor: tc.background, paddingTop: insets.top, paddingLeft: 48 }}>
+            {vocabulary ? (
+              <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
+                <View style={styles.unifiedTabsRowWrapper}>
+                  <View style={styles.unifiedTabsLeftFixed}>
+                    {(() => {
+                      const foryouActive = wordsView === 'foryou';
+                      return (
+                        <TouchableOpacity
+                          style={[
+                            styles.unifiedTab,
+                            foryouActive && { backgroundColor: `${colors.primary}20` },
+                          ]}
+                          onPress={() => {
+                            startTransition(() => setWordsView('foryou'));
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.unifiedTabLabel,
+                            foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
+                          ]}>
+                            ★ For You
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+                    <View style={styles.unifiedTabDivider} />
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
+                  >
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.unifiedTabIndicator,
+                        {
+                          left: indicatorX,
+                          width: indicatorWidth,
+                          opacity: indicatorOpacity,
+                          backgroundColor: activeIndicatorColor,
+                        },
+                      ]}
+                    />
+                    {wordLevels.map((lvl) => {
+                      const active = wordsView === 'all' && activeLevel === lvl.level;
+                      const c = cefrColors[lvl.level] || colors.primary;
+                      return (
+                        <TouchableOpacity
+                          key={lvl.level}
+                          style={[styles.unifiedTab, styles.unifiedTabLevel]}
+                          onLayout={handleScrollTabLayout(lvl.level)}
+                          onPress={() => {
+                            startTransition(() => setWordsView('all'));
+                            setActiveLevel(lvl.level);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.unifiedTabLabel,
+                            active && [styles.unifiedTabLabelActive, { color: c }],
+                          ]}>
+                            {lvl.level}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  <LinearGradient
+                    colors={['rgba(228,220,240,0)', '#E4DCF0']}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.unifiedTabsRightFade}
+                    pointerEvents="none"
+                  />
+                </View>
+                {wordsView === 'foryou' ? (
+                  suggestedWords.length === 0 ? (
+                    <Text style={styles.forYouEmpty}>No new words at your level</Text>
+                  ) : null
+                ) : (
+                  <TouchableOpacity
+                    style={styles.countSortRow}
+                    onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={styles.countSortText}>
+                      <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                        {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                      </Text>
+                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
+          </View>
+
+          {/* 2: Body (loading / error / word list) */}
+          <View>
           {loading ? (
             <View style={[styles.container, styles.centered]}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -1041,7 +965,6 @@ export const MovieDetailScreen = ({
             </View>
           ) : null}
 
-          {/* Child 2: word list */}
           {vocabulary ? (
           <View
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
@@ -1219,6 +1142,7 @@ export const MovieDetailScreen = ({
             </View>
           </View>
           ) : null}
+          </View>
         </ScrollView>
       <Modal
         visible={posterZoomOpen}
@@ -1277,6 +1201,19 @@ export const MovieDetailScreen = ({
         </View>
       )}
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        onPress={onBack}
+        style={({ pressed }) => [
+          backBtnStyles.backBtn,
+          { top: insets.top + 8, opacity: pressed ? 0.7 : 1 },
+        ]}
+        hitSlop={8}
+      >
+        <Ionicons name="chevron-back" size={18} color="#fff" />
+      </Pressable>
+
       {/* Sticky "Quiz me" pill — sits above the global bottom bar.
           Always available once vocab has loaded, so the user can
           jump from browsing into a 5-card quiz at any point. */}
@@ -1298,6 +1235,22 @@ export const MovieDetailScreen = ({
     </SafeAreaView>
   );
 };
+
+const backBtnStyles = StyleSheet.create({
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+});
 
 const quizPillStyles = StyleSheet.create({
   pillWrap: {
