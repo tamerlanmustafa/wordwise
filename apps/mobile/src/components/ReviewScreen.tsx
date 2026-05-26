@@ -17,6 +17,7 @@ import {
   type SrsReviewCard,
 } from '../services/api';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
+import { usePracticePathStore } from '../stores/practicePathStore';
 import { useTipDismissalsStore } from '../stores/tipDismissalsStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
@@ -255,6 +256,10 @@ export function ReviewScreen({
         // inflate the streak).
         const bump = useDailyGoalStore.getState().bump();
         setDailySummary({ streak: bump.streak, justHitGoal: bump.justHitGoal });
+        // v0.7.3 — advance the Practice-path cursor so the next tile
+        // becomes active. The store debounces against accidental
+        // double-fires within the same completion.
+        usePracticePathStore.getState().advance();
         // Award the variable-reward chest. Fire and forget — if the
         // network is flaky we still show the done screen; the chest
         // simply won't appear. Server enforces one-per-day so a retry

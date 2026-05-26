@@ -1,19 +1,19 @@
 /**
- * PracticeTile — v0.7.2 Practice-tab tile.
+ * PracticeTile — v0.7.3 Practice-tab tile (Duolingo-style path).
  *
- * A single 60px circle with a kind glyph + a label below. Five visual
- * states, derived by the parent path component:
+ * A single 60px circle with a kind glyph + a label below. Four visual
+ * states, derived by the parent path component from the cursor:
  *
- *   • available    → gold bg, kind glyph, spinning dashed ring, START
- *                    callout. Tappable. Exactly one of these per render.
- *   • done-today   → gold bg + check glyph, faded. Today's pick.
- *   • locked-other → dim, kind glyph, "tomorrow" badge. Other tiles
- *                    after the user already picked one today.
- *   • locked-streak→ dim, kind glyph, "🔒 N-day streak" badge.
- *   • repair       → red bg, alarm glyph, RESCUE STREAK callout.
- *                    (Reserved — pseudo-tile injected when
- *                    repair_window_active. Not yet implemented as a
- *                    real tappable flow; v1 just renders the visual.)
+ *   • active    → gold bg, kind glyph, spinning dashed ring, START
+ *                 callout. Tappable. Exactly one of these per render.
+ *                 (= cursor position)
+ *   • completed → gold bg + check glyph, faded. Past tiles already done.
+ *   • locked    → dim, kind glyph, no badge. Future tiles — unlocks
+ *                 when the user reaches them by walking the path.
+ *   • repair    → red bg, alarm glyph, RESCUE STREAK callout.
+ *                 (Reserved — pseudo-tile injected when
+ *                 repair_window_active. Not yet implemented as a
+ *                 real tappable flow; v1 just renders the visual.)
  *
  * The kind glyphs reuse the v0.7 vocabulary: speech-bubble (recall),
  * 4-grid (mcq), flame (tough), film (deep-dive). All stroked SVGs at
@@ -27,10 +27,9 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import type { SessionKind } from '../../services/api';
 
 export type PracticeTileState =
-  | 'available'
-  | 'done-today'
-  | 'locked-other'
-  | 'locked-streak'
+  | 'active'
+  | 'completed'
+  | 'locked'
   | 'repair';
 
 export interface PracticeTileProps {
@@ -38,8 +37,6 @@ export interface PracticeTileProps {
   /** Title shown under the circle (e.g. "Quick Recall"). */
   label: string;
   state: PracticeTileState;
-  /** Required when state === 'locked-streak' — the streak target. */
-  unlockAt?: number;
   onPress?: () => void;
 }
 
@@ -47,7 +44,6 @@ export function PracticeTile({
   kind,
   label,
   state,
-  unlockAt,
   onPress,
 }: PracticeTileProps) {
   const tc = useThemeColors();
@@ -57,7 +53,7 @@ export function PracticeTile({
   // archived LessonNode used. 18s/360°.
   const rotate = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (state !== 'available') return;
+    if (state !== 'active') return;
     const anim = Animated.loop(
       Animated.timing(rotate, {
         toValue: 1,
@@ -77,28 +73,26 @@ export function PracticeTile({
     outputRange: ['0deg', '360deg'],
   });
 
-  const tappable = state === 'available';
+  const tappable = state === 'active';
 
-  // Body color + glyph color matrix.
+  const isGold = state === 'active' || state === 'completed';
   const bodyBg = state === 'repair'
     ? tc.error
-    : state === 'available' || state === 'done-today'
+    : isGold
       ? tc.gold
       : tc.nodeLocked;
   const fgColor = state === 'repair'
     ? '#fff'
-    : state === 'available' || state === 'done-today'
+    : isGold
       ? tc.goldDeep
       : tc.textFaint;
-  const bodyBorderColor = state === 'locked-streak' || state === 'locked-other'
-    ? tc.nodeLockedBorder
-    : 'transparent';
-  const bodyBorderWidth = state === 'locked-streak' || state === 'locked-other' ? 2 : 0;
+  const bodyBorderColor = state === 'locked' ? tc.nodeLockedBorder : 'transparent';
+  const bodyBorderWidth = state === 'locked' ? 2 : 0;
 
   // Glyph shown in the center of the circle.
   const glyphKind: SessionKind | 'check' | 'lock' | 'alarm' =
-    state === 'done-today' ? 'check'
-  : state === 'repair'     ? 'alarm'
+    state === 'completed' ? 'check'
+  : state === 'repair'    ? 'alarm'
   : kind;
 
   return (
@@ -111,7 +105,7 @@ export function PracticeTile({
       hitSlop={6}
     >
       <View style={s.circleWrap}>
-        {state === 'available' ? (
+        {state === 'active' ? (
           <Animated.View
             style={[s.ring, { borderColor: tc.lessonRing, transform: [{ rotate: spin }] }]}
             pointerEvents="none"
@@ -126,13 +120,14 @@ export function PracticeTile({
               borderColor: bodyBorderColor,
               borderWidth: bodyBorderWidth,
             },
-            (state === 'locked-other' || state === 'locked-streak') && { opacity: 0.85 },
+            state === 'locked' && { opacity: 0.85 },
+            state === 'completed' && { opacity: 0.75 },
           ]}
         >
           <TileGlyph kind={glyphKind} color={fgColor} />
         </View>
 
-        {state === 'available' ? (
+        {state === 'active' ? (
           <View style={s.startCallout} pointerEvents="none">
             <View style={[s.startTail, { backgroundColor: tc.text }]} />
             <View style={[s.startBody, { backgroundColor: tc.text }]}>
@@ -140,26 +135,10 @@ export function PracticeTile({
             </View>
           </View>
         ) : null}
-
-        {state === 'locked-streak' && typeof unlockAt === 'number' ? (
-          <View style={[s.lockBadge, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-            <Text style={[s.lockBadgeText, { color: tc.textFaint }]}>
-              🔒 {unlockAt}d
-            </Text>
-          </View>
-        ) : null}
-
-        {state === 'locked-other' ? (
-          <View style={[s.lockBadge, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-            <Text style={[s.lockBadgeText, { color: tc.textFaint }]}>
-              Tomorrow
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       <Text
-        style={[s.label, { color: state === 'available' ? tc.text : tc.textFaint }]}
+        style={[s.label, { color: state === 'active' ? tc.text : tc.textFaint }]}
         numberOfLines={1}
       >
         {label}
@@ -306,21 +285,12 @@ const makeStyles = (_tc: ThemeColors) =>
       fontWeight: '900',
       letterSpacing: 1.2,
     },
-    lockBadge: {
-      position: 'absolute',
-      top: 64,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 999,
-      borderWidth: 1,
-    },
-    lockBadgeText: {
-      fontSize: 10,
-      fontWeight: '800',
-      letterSpacing: 0.4,
-    },
     label: {
-      marginTop: 12,
+      // 28px clears the absolute-positioned START callout on the
+      // active tile (callout extends ~24px below the circle); all
+      // other states have a benign empty space below the circle, so
+      // the uniform margin keeps the path visually evenly spaced.
+      marginTop: 28,
       fontSize: 12,
       fontWeight: '800',
       letterSpacing: 0.3,

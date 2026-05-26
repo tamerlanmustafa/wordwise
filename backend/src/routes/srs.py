@@ -34,7 +34,6 @@ from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.session_kinds import (
     VALID_KINDS,
     compose_for_kind,
-    is_kind_unlocked,
 )
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
@@ -426,31 +425,23 @@ async def start_session(
     on `User.srsLastSessionKind` so the Practice tab can render the
     matching tile as done-today.
 
-    Streak gates: synonym_round (3d), tough_words (5d), movie_deep_dive
-    (7d). Picking a locked kind returns 403.
+    v0.7.3: streak-based per-kind unlocks have been retired. The
+    Practice tab is now a linear path with a client-side cursor — any
+    kind is reachable in order, and progression is sequential. The
+    KIND_UNLOCK_THRESHOLDS table is preserved in session_kinds.py for
+    backward compatibility with stale clients but is no longer
+    enforced server-side.
 
     The legacy `srsFreePreviewsUsed` counter is no longer consulted; the
     column remains in the schema for backward compatibility with older
     mobile builds that still poll /srs/stats.
     """
-    # v0.7.2 — validate kind + streak gate + movie_id requirement.
+    # v0.7.2 — validate kind + movie_id requirement.
     if kind not in VALID_KINDS:
         raise HTTPException(
             status_code=422,
             detail=f"Unknown session kind: {kind}. "
                    f"Expected one of {sorted(VALID_KINDS)}.",
-        )
-    current_streak = getattr(current_user, "srsCurrentStreak", 0) or 0
-    if not is_kind_unlocked(kind, current_streak):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "reason": "kind_locked",
-                "kind": kind,
-                "current_streak": current_streak,
-                "message": f"'{kind}' unlocks at a higher streak. "
-                           f"Keep going on Quick Recall to earn it.",
-            },
         )
     if kind == "movie_deep_dive" and movie_id is None:
         raise HTTPException(

@@ -1,37 +1,34 @@
 /**
- * PracticeTilePath — v0.7.2 vertical chain of practice tiles.
+ * PracticeTilePath — v0.7.3 Duolingo-style endless chain.
  *
- * Bottom-to-top: Quick Recall (always-on) sits at the bottom of the
- * chain; more specialized tiles climb up as the user earns longer
- * streaks. Subtle zigzag x-offsets (matching the v0.7 reel) for visual
- * rhythm without the per-movie path's aggressive sweep.
+ * The path is a linear, never-ending sequence of lesson tiles. A single
+ * client-side cursor (see `practicePathStore`) points at the user's
+ * next active tile. The kind shown at each index is derived from a
+ * fixed 4-step cycle in `practicePathStore.ts::kindAtIndex`.
  *
- * State derivation rules (pure):
- *   • If the user already started today AND `last_session_kind` is set
- *     → that tile is `done-today`; everything else is `locked-other`.
- *   • Otherwise → for each tile, if `streak >= unlockAt` it's
- *     `available` (in practice only one can be tapped per day, but
- *     all unlocked tiles are visually pickable until one is chosen);
- *     if streak < unlockAt it's `locked-streak`.
+ * Rendering window:
+ *   • Show {@link WINDOW_SIZE} tiles around the cursor — up to
+ *     {@link COMPLETED_ABOVE} completed tiles above (capped by what's
+ *     actually been completed; a brand-new user shows zero), then the
+ *     active tile, then locked tiles below until the window fills.
+ *   • The visible range is always WINDOW_SIZE rows; the window slides
+ *     down as the user advances.
+ *
+ * State derivation rules (pure, per index `i`):
+ *   • i  < cursor → 'completed'
+ *   • i == cursor → 'active'
+ *   • i  > cursor → 'locked'
+ *
+ * The path itself doesn't know about session APIs / movie picks / the
+ * free-tier daily cap; the parent screen wires the tap of the active
+ * tile into the right side-effects.
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  KIND_UNLOCK_THRESHOLDS,
-  type SessionKind,
-} from '../../services/api';
+import { kindAtIndex } from '../../stores/practicePathStore';
+import type { SessionKind } from '../../services/api';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
-
-/** Top-to-bottom order in the rendered array. Bottom of the chain
- *  (most accessible) is the LAST entry so we can render the chain
- *  reversed and have the always-on tile at the visual bottom. */
-const ORDER_TOP_TO_BOTTOM: SessionKind[] = [
-  'movie_deep_dive',
-  'tough_words',
-  'synonym_round',
-  'quick_recall',
-];
 
 const TILE_LABELS: Record<SessionKind, string> = {
   quick_recall:    'Quick Recall',
@@ -40,45 +37,55 @@ const TILE_LABELS: Record<SessionKind, string> = {
   movie_deep_dive: 'Movie Deep-Dive',
 };
 
-/** Gentle zigzag — same energy as the v0.7 reel offsets but tighter
- *  so the chain reads as a column-with-rhythm, not a Duolingo path. */
-const X_OFFSETS = [0, 24, -16, 12];
+/** Total tiles rendered at once. */
+const WINDOW_SIZE = 7;
+/** How many completed tiles to show above the active one (capped by
+ *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
+const COMPLETED_ABOVE = 2;
+
+/** Gentle zigzag — same energy as the v0.7 reel offsets. Cycles by
+ *  rendered-position so the path's overall shape stays put as the
+ *  cursor advances (tiles slide vertically, not horizontally). */
+const X_OFFSETS = [0, 24, -16, 12, -8, 18, -20];
 
 export interface PracticeTilePathProps {
-  /** User's current streak — drives the per-tile unlock check. */
-  streak: number;
-  /** What the user picked today (or null/undefined if they haven't yet). */
-  lastSessionKind?: SessionKind | null;
-  /** Tap on an `available` tile. The path doesn't know what the tile
-   *  does — the parent screen wires the actual session-start call. */
-  onTilePress: (kind: SessionKind) => void;
+  /** Number of sessions the user has already completed — the index of
+   *  the next active tile in the kind cycle. */
+  cursor: number;
+  /** Tap on the active tile. The path doesn't know what the tile does
+   *  — the parent screen wires the actual session-start call. */
+  onTilePress: (kind: SessionKind, index: number) => void;
+}
+
+interface RenderedTile {
+  index: number;
+  kind: SessionKind;
+  state: PracticeTileState;
 }
 
 export function PracticeTilePath({
-  streak,
-  lastSessionKind,
+  cursor,
   onTilePress,
 }: PracticeTilePathProps) {
-  const states = useMemo<Record<SessionKind, PracticeTileState>>(
-    () => deriveTileStates(streak, lastSessionKind ?? null),
-    [streak, lastSessionKind],
+  const tiles = useMemo<RenderedTile[]>(
+    () => buildWindow(cursor),
+    [cursor],
   );
 
   return (
     <View style={styles.wrap}>
-      {ORDER_TOP_TO_BOTTOM.map((kind, i) => {
-        const x = X_OFFSETS[i % X_OFFSETS.length];
+      {tiles.map((t, renderIdx) => {
+        const x = X_OFFSETS[renderIdx % X_OFFSETS.length];
         return (
           <View
-            key={kind}
+            key={t.index}
             style={[styles.tileRow, { transform: [{ translateX: x }] }]}
           >
             <PracticeTile
-              kind={kind}
-              label={TILE_LABELS[kind]}
-              state={states[kind]}
-              unlockAt={KIND_UNLOCK_THRESHOLDS[kind]}
-              onPress={() => onTilePress(kind)}
+              kind={t.kind}
+              label={TILE_LABELS[t.kind]}
+              state={t.state}
+              onPress={() => onTilePress(t.kind, t.index)}
             />
           </View>
         );
@@ -87,28 +94,24 @@ export function PracticeTilePath({
   );
 }
 
-function deriveTileStates(
-  streak: number,
-  lastSessionKind: SessionKind | null,
-): Record<SessionKind, PracticeTileState> {
-  const out = {} as Record<SessionKind, PracticeTileState>;
-  const allKinds: SessionKind[] = [
-    'quick_recall', 'synonym_round', 'tough_words', 'movie_deep_dive',
-  ];
-
-  if (lastSessionKind) {
-    // User picked today already — exactly one tile renders as
-    // done-today; the rest are locked-other until UTC rollover.
-    for (const k of allKinds) {
-      out[k] = k === lastSessionKind ? 'done-today' : 'locked-other';
-    }
-    return out;
-  }
-
-  // No pick yet — open the gates. Each tile is either available
-  // (streak meets threshold) or locked-streak.
-  for (const k of allKinds) {
-    out[k] = streak >= KIND_UNLOCK_THRESHOLDS[k] ? 'available' : 'locked-streak';
+/** Pure — given the cursor, return WINDOW_SIZE consecutive tiles
+ *  (top-to-bottom) with their absolute indices and per-tile state.
+ *  Exported for unit testing. */
+export function buildWindow(cursor: number): RenderedTile[] {
+  const completedAbove = Math.min(COMPLETED_ABOVE, Math.max(0, cursor));
+  const startIndex = Math.max(0, cursor - completedAbove);
+  const out: RenderedTile[] = [];
+  for (let i = 0; i < WINDOW_SIZE; i += 1) {
+    const absolute = startIndex + i;
+    let state: PracticeTileState;
+    if (absolute < cursor) state = 'completed';
+    else if (absolute === cursor) state = 'active';
+    else state = 'locked';
+    out.push({
+      index: absolute,
+      kind: kindAtIndex(absolute),
+      state,
+    });
   }
   return out;
 }
@@ -121,8 +124,5 @@ const styles = StyleSheet.create({
   },
   tileRow: {
     alignItems: 'center',
-    // No vertical padding — the inter-tile gap is handled by `gap` on
-    // the parent. The translateX on each row is what produces the
-    // gentle zigzag.
   },
 });

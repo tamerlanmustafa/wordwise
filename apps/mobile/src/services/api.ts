@@ -610,15 +610,15 @@ export type SessionKind =
   | 'tough_words'
   | 'movie_deep_dive';
 
-/** Streak thresholds that mirror the backend. Used by the tile-state
- *  derivation so the client doesn't have to re-fetch /daily/state to
- *  know which tiles to grey out. Keep in sync with
- *  `backend/src/services/session_kinds.py::KIND_UNLOCK_THRESHOLDS`. */
+/** @deprecated v0.7.3 — streak-based unlocks were retired in favor of
+ *  the Duolingo-style linear path (see `stores/practicePathStore.ts`).
+ *  Kept here so any stale references compile while we sweep callers;
+ *  remove when the next backend version drops the column entirely. */
 export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
   quick_recall:    0,
-  synonym_round:   3,
-  tough_words:     5,
-  movie_deep_dive: 7,
+  synonym_round:   0,
+  tough_words:     0,
+  movie_deep_dive: 0,
 };
 
 interface SrsSessionStart {

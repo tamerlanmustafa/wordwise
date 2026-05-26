@@ -1,22 +1,24 @@
 /**
- * PracticeScreen — v0.7.2 "Practice" tab.
+ * PracticeScreen — v0.7.3 "Practice" tab (Duolingo-style endless path).
  *
- * Daily-habit dashboard with a path of practice-tile circles. The user
- * picks ONE tile per UTC day; that pick stamps `srsLastSessionKind` on
- * the User row and runs the kind-specific SRS queue composer. Mercy
- * infrastructure (auto-grant + auto-consume freezes) already protects
- * the streak across missed days — see `services/streak_service.py`.
+ * The tab is a linear chain of practice-tile circles, cycled through
+ * the four lesson kinds. A single client-side cursor (see
+ * `practicePathStore`) points at the next active tile; tapping it
+ * starts that kind's session and the cursor advances on completion.
+ * Streak-based unlocks have been retired — progression is purely
+ * sequential. Mercy infrastructure (auto-grant + auto-consume freezes)
+ * continues to protect the daily streak across missed days — see
+ * `services/streak_service.py`.
  *
  * Sections, top → bottom:
  *   1. Header (eyebrow + serif title + streak chip)
  *   2. Mini stats row
- *   3. DailyReviewHero (still the headline "today's task" affordance)
- *   4. Vertical tile path — bottom-anchored so today's pickable tile
- *      is in the user's eye when the tab opens
+ *   3. DailyReviewHero (quick-start for the cursor's current kind)
+ *   4. Vertical tile path — window of WINDOW_SIZE tiles around cursor
  *
- * The hero card and the bottom tile mean the same thing (start today's
- * session) — different surfaces for different intents. Tapping either
- * route into ReviewScreen with the chosen kind.
+ * The hero card and the active path tile both start the same session
+ * (cursor's kind). Free users still hit the daily cap on the second
+ * attempt — the server returns 402 and we route through `onPaywall`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +27,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useDailyGoalStore, DAILY_GOAL } from '../stores/dailyGoalStore';
+import {
+  usePracticePathStore,
+  kindAtIndex,
+} from '../stores/practicePathStore';
 import { useReelStore } from '../stores/reelStore';
 import {
   dailyApi,
@@ -32,7 +38,6 @@ import {
   SrsPaywallError,
   type DailyState,
   type SessionKind,
-  KIND_UNLOCK_THRESHOLDS,
 } from '../services/api';
 import { DailyReviewHero } from './practice/DailyReviewHero';
 import { PracticeTilePath } from './practice/PracticeTilePath';
@@ -71,8 +76,15 @@ export function PracticeScreen({
     if (!dailyHydrated) void hydrateDaily();
   }, [dailyHydrated, hydrateDaily]);
 
-  // Authoritative server state — gives us `last_session_kind` so we
-  // can render the right tile as "done today".
+  // Practice-path cursor — drives which tile is active and the kind cycle.
+  const cursor = usePracticePathStore((st) => st.cursor);
+  const pathHydrated = usePracticePathStore((st) => st.hydrated);
+  const hydratePath = usePracticePathStore((st) => st.hydrate);
+  useEffect(() => {
+    if (!pathHydrated) void hydratePath();
+  }, [pathHydrated, hydratePath]);
+
+  // Authoritative server state — streak + freezes for the header chip.
   const [serverState, setServerState] = useState<DailyState | null>(null);
   const refreshServerState = useCallback(async () => {
     try {
@@ -100,7 +112,7 @@ export function PracticeScreen({
   // resolves on cold start.
   const effectiveStreak = serverState?.streak ?? dailyStreak;
   const doneToday = (serverState?.today_done ?? dailyDone >= DAILY_GOAL);
-  const lastKind: SessionKind | null = serverState?.last_session_kind ?? null;
+  const activeKind = kindAtIndex(cursor);
 
   // ── Movie picker modal state ────────────────────────────────────
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -123,30 +135,16 @@ export function PracticeScreen({
   );
 
   // ── Session-start handlers ──────────────────────────────────────
+  // The daily cap is server-side: free users get one session/day, the
+  // server returns 402 and we route through `onPaywall`. Streak-based
+  // unlocks have been retired — the path is purely sequential, so any
+  // tap that reaches here is on the active tile.
   const startKind = useCallback(
     (kind: SessionKind, movieId?: number) => {
-      // We don't pre-check the daily cap client-side; the server's
-      // 402 response is the authority. The paywall handler routes the
-      // user to upgrade copy. For a kind that's locked by streak we
-      // already filter the tap server-side; surface a soft toast if
-      // the user somehow taps a locked tile (e.g. server <-> client
-      // streak drift).
-      if (kind !== 'quick_recall' && effectiveStreak < KIND_UNLOCK_THRESHOLDS[kind]) {
-        Alert.alert(
-          'Locked',
-          `Keep your streak going to ${KIND_UNLOCK_THRESHOLDS[kind]} days to unlock this tile.`,
-        );
-        return;
-      }
       onStartDailyReview(kind, movieId);
     },
-    [effectiveStreak, onStartDailyReview],
+    [onStartDailyReview],
   );
-
-  const handleHeroPress = useCallback(() => {
-    // Hero always starts Quick Recall — the no-decision default.
-    startKind('quick_recall');
-  }, [startKind]);
 
   const handleTilePress = useCallback(
     (kind: SessionKind) => {
@@ -165,6 +163,12 @@ export function PracticeScreen({
     },
     [deepDiveOptions.length, startKind],
   );
+
+  // Hero starts whatever the cursor is pointing at — same as tapping
+  // the active tile, just a bigger surface.
+  const handleHeroPress = useCallback(() => {
+    handleTilePress(activeKind);
+  }, [activeKind, handleTilePress]);
 
   const handleMoviePicked = useCallback(
     (movieId: number) => {
@@ -221,14 +225,14 @@ export function PracticeScreen({
           />
         </View>
 
-        {/* The tile chain. Bottom-to-top — visible bottom tile is the
-            most accessible. The path itself doesn't know about the
+        {/* The tile chain — endless cycle of the 4 kinds. The active
+            tile is at the cursor; the rest are completed (past) or
+            locked (future). The path itself doesn't know about the
             paywall / daily cap; the parent's `handleTilePress` does. */}
         <View style={s.pathWrap}>
           <Text style={s.pathHeading}>YOUR PRACTICE PATH</Text>
           <PracticeTilePath
-            streak={effectiveStreak}
-            lastSessionKind={lastKind}
+            cursor={cursor}
             onTilePress={handleTilePress}
           />
         </View>
