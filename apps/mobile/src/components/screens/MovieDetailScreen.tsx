@@ -845,9 +845,10 @@ export const MovieDetailScreen = ({
 
           {/* 1: Sticky tabs — sit below the hero, stick to the top of the
               viewport once scrolled past. paddingTop reserves space for the
-              dynamic island; paddingLeft clears the floating back button so
-              the ★ For You tab stays tappable when the bar is stuck. */}
-          <View style={{ backgroundColor: tc.background, paddingTop: insets.top, paddingLeft: 48 }}>
+              dynamic island. The bar spans the full screen width; the ★ For
+              You tab carries its own left inset (see unifiedTabsLeftFixed) so
+              it stays clear of the floating back button when the bar sticks. */}
+          <View style={{ backgroundColor: tc.background, paddingTop: insets.top }}>
             {vocabulary ? (
               <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
                 <View style={styles.unifiedTabsRowWrapper}>
@@ -879,7 +880,7 @@ export const MovieDetailScreen = ({
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 120 }]}
+                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 164 }]}
                   >
                     <Animated.View
                       pointerEvents="none"

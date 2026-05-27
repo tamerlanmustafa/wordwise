@@ -1073,7 +1073,9 @@ export const styles = StyleSheet.create({
     left: 0,
     flexDirection: 'row',
     alignItems: 'stretch',
-    paddingLeft: 6,
+    // Inset the ★ For You tab so it clears the floating back button
+    // (left:16, width:38 + hitSlop) when the full-width bar sticks to the top.
+    paddingLeft: 50,
     paddingVertical: 6,
     backgroundColor: '#E4DCF0',
     zIndex: 2,
