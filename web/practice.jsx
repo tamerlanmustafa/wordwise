@@ -374,48 +374,10 @@
               t={t}
               right={
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <Stat n="480" l="XP today" t={t} />
                   <Stat n="124" l="words known" t={t} />
-                  <Stat n="14"  l="day streak" t={t} accent />
                 </div>
               }
             />
-
-            {/* Daily review hero band */}
-            <div style={{ padding: '0 32px 24px' }}>
-              <div style={{
-                padding: '24px 28px', borderRadius: 18,
-                background: t.gold, color: t.goldDeep,
-                position: 'relative', overflow: 'hidden',
-                boxShadow: `0 18px 32px ${mode === 'dark' ? 'rgba(255,209,102,0.25)' : 'rgba(197,139,27,0.30)'}, 0 2px 0 rgba(0,0,0,0.18)`,
-                display: 'flex', alignItems: 'center', gap: 24,
-              }}>
-                <div style={{
-                  position: 'absolute', top: 0, bottom: 0, left: 0, width: 10,
-                  backgroundImage: `linear-gradient(${t.goldDeep} 50%, transparent 50%)`,
-                  backgroundSize: '100% 14px', opacity: 0.25,
-                }} />
-                <div style={{ paddingLeft: 12, flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2, opacity: 0.75, textTransform: 'uppercase' }}>
-                    Today's review · spaced repetition
-                  </div>
-                  <div style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 700, letterSpacing: -0.6, marginTop: 6, lineHeight: 1.05 }}>
-                    12 words to review · ~2 min
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, opacity: 0.8 }}>
-                    +25 XP · keeps your 14-day streak alive
-                  </div>
-                </div>
-                <div style={{
-                  padding: '14px 28px', borderRadius: 12,
-                  background: t.goldDeep, color: t.gold,
-                  fontSize: 14, fontWeight: 900, letterSpacing: 0.6, textTransform: 'uppercase',
-                  cursor: 'pointer',
-                }}>
-                  Start session →
-                </div>
-              </div>
-            </div>
 
             {/* Study path + side rail */}
             <div style={{ display: 'flex', gap: 24, padding: '0 0 32px 32px' }}>

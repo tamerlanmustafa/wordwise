@@ -11,14 +11,12 @@
  * `services/streak_service.py`.
  *
  * Sections, top → bottom:
- *   1. Header (eyebrow + serif title + streak chip)
- *   2. Mini stats row
- *   3. DailyReviewHero (quick-start for the cursor's current kind)
- *   4. Vertical tile path — window of WINDOW_SIZE tiles around cursor
+ *   1. Header (eyebrow + serif title + freeze/streak chips)
+ *   2. Vertical tile path — window of WINDOW_SIZE tiles around cursor
  *
- * The hero card and the active path tile both start the same session
- * (cursor's kind). Free users still hit the daily cap on the second
- * attempt — the server returns 402 and we route through `onPaywall`.
+ * Tapping the active path tile starts that kind's session. Free users
+ * still hit the daily cap on the second attempt — the server returns
+ * 402 and we route through `onPaywall`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -26,11 +24,8 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
-import { useDailyGoalStore, DAILY_GOAL } from '../stores/dailyGoalStore';
-import {
-  usePracticePathStore,
-  kindAtIndex,
-} from '../stores/practicePathStore';
+import { useDailyGoalStore } from '../stores/dailyGoalStore';
+import { usePracticePathStore } from '../stores/practicePathStore';
 import { useReelStore } from '../stores/reelStore';
 import {
   dailyApi,
@@ -39,7 +34,6 @@ import {
   type DailyState,
   type SessionKind,
 } from '../services/api';
-import { DailyReviewHero } from './practice/DailyReviewHero';
 import { PracticeTilePath } from './practice/PracticeTilePath';
 import {
   MoviePickerModal,
@@ -66,9 +60,8 @@ export function PracticeScreen({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  // Local mirror of the streak / done state — reads optimistic, then
-  // gets corrected once /daily/state resolves.
-  const dailyDone = useDailyGoalStore((st) => st.done);
+  // Local mirror of the streak — reads optimistic, then gets corrected
+  // once /daily/state resolves.
   const dailyStreak = useDailyGoalStore((st) => st.streak);
   const dailyHydrated = useDailyGoalStore((st) => st.hydrated);
   const hydrateDaily = useDailyGoalStore((st) => st.hydrate);
@@ -108,12 +101,10 @@ export function PracticeScreen({
     if (!reelHydrated) void hydrateReel();
   }, [reelHydrated, hydrateReel]);
 
-  // Effective streak / done — prefer server when present, fall back to
-  // the local optimistic counter for the brief gap before the network
+  // Effective streak — prefer server when present, fall back to the
+  // local optimistic counter for the brief gap before the network
   // resolves on cold start.
   const effectiveStreak = serverState?.streak ?? dailyStreak;
-  const doneToday = (serverState?.today_done ?? dailyDone >= DAILY_GOAL);
-  const activeKind = kindAtIndex(cursor);
 
   // ── Movie picker modal state ────────────────────────────────────
   // We surface every reel movie that has a catalog `movie_id` — the
@@ -179,12 +170,6 @@ export function PracticeScreen({
     [deepDiveOptions.length, reelHydrated, reelLoadError, hydrateReel, startKind],
   );
 
-  // Hero starts whatever the cursor is pointing at — same as tapping
-  // the active tile, just a bigger surface.
-  const handleHeroPress = useCallback(() => {
-    handleTilePress(activeKind);
-  }, [activeKind, handleTilePress]);
-
   const handleMoviePicked = useCallback(
     (movieId: number) => {
       setPickerOpen(false);
@@ -192,9 +177,6 @@ export function PracticeScreen({
     },
     [startKind],
   );
-
-  // ── Stat figures ────────────────────────────────────────────────
-  const cardsDue = 12; // TODO: wire to srsApi.stats().due_today when surfaced
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
@@ -210,10 +192,19 @@ export function PracticeScreen({
           <Text style={s.eyebrow}>DAILY PRACTICE</Text>
           <Text style={s.title}>Practice</Text>
         </View>
-        <View style={s.streakChip}>
-          <Text style={s.streakFire}>🔥</Text>
-          <Text style={s.streakNumber}>{effectiveStreak}</Text>
-          <Text style={s.streakLabel}>{effectiveStreak === 1 ? 'DAY' : 'DAYS'}</Text>
+        <View style={s.headerChips}>
+          <View style={s.streakChip}>
+            <Text style={s.streakFire}>🛡️</Text>
+            <Text style={s.streakNumber}>{serverState?.freezes_held ?? 0}</Text>
+            <Text style={s.streakLabel}>
+              {(serverState?.freezes_held ?? 0) === 1 ? 'FREEZE' : 'FREEZES'}
+            </Text>
+          </View>
+          <View style={s.streakChip}>
+            <Text style={s.streakFire}>🔥</Text>
+            <Text style={s.streakNumber}>{effectiveStreak}</Text>
+            <Text style={s.streakLabel}>{effectiveStreak === 1 ? 'DAY' : 'DAYS'}</Text>
+          </View>
         </View>
       </View>
 
@@ -222,24 +213,6 @@ export function PracticeScreen({
         contentContainerStyle={s.scrollPad}
         showsVerticalScrollIndicator={false}
       >
-        <DailyReviewHero
-          cardsDue={cardsDue}
-          streak={effectiveStreak}
-          doneToday={doneToday}
-          onStartPress={handleHeroPress}
-        />
-
-        <View style={s.statRow}>
-          <MiniStat icon="⭐" n="—" l="XP today" s={s} />
-          <MiniStat icon="📚" n={`${effectiveStreak}`} l="streak" s={s} />
-          <MiniStat
-            icon="🛡️"
-            n={`${serverState?.freezes_held ?? 0}`}
-            l="freezes"
-            s={s}
-          />
-        </View>
-
         {/* The tile chain — endless cycle of the 4 kinds. The active
             tile is at the cursor; the rest are completed (past) or
             locked (future). The path itself doesn't know about the
@@ -260,28 +233,6 @@ export function PracticeScreen({
         onClose={() => setPickerOpen(false)}
       />
     </SafeAreaView>
-  );
-}
-
-function MiniStat({
-  icon,
-  n,
-  l,
-  s,
-}: {
-  icon: string;
-  n: string;
-  l: string;
-  s: ReturnType<typeof makeStyles>;
-}) {
-  return (
-    <View style={s.statCard}>
-      <Text style={s.statIcon}>{icon}</Text>
-      <View>
-        <Text style={s.statNumber}>{n}</Text>
-        <Text style={s.statLabel}>{l}</Text>
-      </View>
-    </View>
   );
 }
 
@@ -322,6 +273,11 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.text,
       lineHeight: 32,
     },
+    headerChips: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
     streakChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -353,45 +309,6 @@ const makeStyles = (tc: ThemeColors) =>
     },
     scrollPad: {
       paddingBottom: 64,
-    },
-    statRow: {
-      flexDirection: 'row',
-      gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 18,
-    },
-    statCard: {
-      flex: 1,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 12,
-      backgroundColor: tc.paper,
-      borderWidth: 1,
-      borderColor: tc.border,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      shadowColor: '#000',
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 2,
-    },
-    statIcon: { fontSize: 18 },
-    statNumber: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 14,
-      fontWeight: '900',
-      color: tc.text,
-      lineHeight: 14,
-    },
-    statLabel: {
-      fontSize: 9,
-      color: tc.textFaint,
-      letterSpacing: 0.8,
-      fontWeight: '800',
-      marginTop: 2,
-      textTransform: 'uppercase',
     },
     pathWrap: {
       paddingHorizontal: 18,

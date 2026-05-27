@@ -288,6 +288,8 @@ export default function App() {
   const [barHeight, setBarHeight] = useState(0);
 
   const handleTabPress = (t: BottomTab) => {
+    // Switching to any other tab collapses the profile sheet if it's open.
+    if (t !== 'profile') setShowUserSheet(false);
     if (t === 'home') navigateToHome();
     else if (t === 'movies') navigateToMyMovies();
     else if (t === 'practice') navigateToPractice();
