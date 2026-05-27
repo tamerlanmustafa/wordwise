@@ -686,7 +686,8 @@ async def start_session(
         # one in practice, which is fine.
         if cefr and rng.random() < SYNONYM_MCQ_RATE:
             mcq = await build_synonym_mcq(
-                db, target_word=lemma, target_cefr=cefr, rng=rng,
+                db, target_word=lemma, target_cefr=cefr,
+                target_pos=pos_label, rng=rng,
             )
             if mcq:
                 cards.append(ReviewCard(

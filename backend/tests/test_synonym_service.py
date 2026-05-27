@@ -52,3 +52,43 @@ class TestGetSynonyms:
         # WordNet corpus may not be downloaded.
         result = get_synonyms(word)
         assert len(result) >= 1, f"no WordNet synonyms for {word!r}"
+
+
+class TestSynonymFiltering:
+    """Guards for the three nonsense-synonym fixes: POS scoping,
+    dominant-sense restriction, and morphological-derivative filtering."""
+
+    def test_pos_scoping_drops_cross_pos_derivative(self):
+        # "coldness" is a lemma of the NOUN sense of "cold"; scoping to the
+        # adjective must keep it out (also caught by the derivative filter).
+        assert "coldness" not in get_synonyms("cold", "adj")
+
+    def test_morphological_derivative_dropped(self):
+        # Same-stem inflections are never synonyms, regardless of POS.
+        assert "coldness" not in get_synonyms("cold")
+        assert "quickly" not in get_synonyms("quick")
+
+    def test_rare_sense_verb_synonyms_dropped(self):
+        # "wander" links to "betray" only via a low-frequency
+        # marriage-infidelity sense; "draw" links to "make" via a rare
+        # "derive in the mind" sense. Both live past the dominant senses.
+        assert "wander" not in get_synonyms("betray", "verb")
+        assert "draw" not in get_synonyms("make", "verb")
+
+    def test_common_synonym_survives_filtering(self):
+        # The filters must not be so aggressive they drop good synonyms:
+        # "glad" is a common synonym of "happy" and should remain.
+        assert "glad" in get_synonyms("happy", "adj")
+
+    def test_unknown_pos_falls_back_to_all_senses(self):
+        # An unrecognized POS label must degrade to no-POS behavior rather
+        # than emptying the pool.
+        assert get_synonyms("happy", "gibberish") == get_synonyms("happy")
+
+    def test_max_senses_is_tunable(self):
+        # Widening the sense window can only add synonyms, never remove.
+        narrow = get_synonyms("betray", "verb", max_senses=3)
+        wide = get_synonyms("betray", "verb", max_senses=99)
+        assert narrow <= wide
+        # The rare "wander" sense reappears once the tail is included.
+        assert "wander" in wide
