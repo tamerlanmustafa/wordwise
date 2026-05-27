@@ -14,7 +14,7 @@ import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
 import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
-import { registerForPushNotifications, scheduleDailyWordReminder, scheduleReviewReminder } from '../services/notifications';
+import { registerForPushNotifications, scheduleWordReminder, scheduleReviewReminder } from '../services/notifications';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
 import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
@@ -35,7 +35,7 @@ import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
-import { quizApi, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
+import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import type { Screen, ListFilter, MovieData } from './types';
 import { colors } from '../theme/palette';
@@ -89,6 +89,15 @@ export default function App() {
     );
   }, []);
 
+  // When a token refresh fails (refresh token expired/revoked), tear the
+  // session down so the user lands on the login screen instead of silently
+  // hitting empty/401 responses everywhere.
+  useEffect(() => {
+    setOnSessionExpired(() => {
+      void useAuthStore.getState().logout();
+    });
+  }, []);
+
   useEffect(() => {
     initialize();
     // Hydrate the admin preview toggle from AsyncStorage so a refresh
@@ -96,10 +105,11 @@ export default function App() {
     useEntitlementsStore.getState().hydrate();
     useThemeStore.getState().hydrate();
     useDailyGoalStore.getState().hydrate();
-    // Schedule daily notifications (Today's Word at 9am, review reminder at 6pm).
-    // registerForPushNotifications is a no-op on simulator.
+    // Schedule notifications (Word of the Hour reminder at the user's chosen
+    // cadence, review reminder at 6pm). registerForPushNotifications is a no-op
+    // on simulator.
     registerForPushNotifications().then(() => {
-      scheduleDailyWordReminder();
+      scheduleWordReminder();
       scheduleReviewReminder();
     }).catch(() => {});
   }, [initialize]);
@@ -126,8 +136,8 @@ export default function App() {
     });
   }, [user?.learning_language, targetLanguageLoaded]);
 
-  const handleLogin = async (user: any, token: string) => {
-    await login(user, token, token);
+  const handleLogin = async (user: any, token: string, refreshToken: string) => {
+    await login(user, token, refreshToken);
   };
 
   const navigateToMovie = (movie: MovieData) => {

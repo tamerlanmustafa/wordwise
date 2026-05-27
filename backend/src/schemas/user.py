@@ -94,6 +94,20 @@ class Token(BaseModel):
 class AuthResponse(BaseModel):
     user: UserResponse
     token: str
+    refresh_token: str
+
+
+class RefreshRequest(BaseModel):
+    # Optional so the legacy web client (which posts an empty body and the
+    # access token in the Authorization header) still validates. Mobile
+    # sends the long-lived refresh token here.
+    refresh_token: Optional[str] = None
+
+
+class RefreshResponse(BaseModel):
+    token: str
+    refresh_token: str
+    user: UserResponse
 
 
 # Supported languages with their names

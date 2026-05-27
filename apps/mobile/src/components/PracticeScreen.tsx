@@ -103,6 +103,7 @@ export function PracticeScreen({
   const reelTiles = useReelStore((st) => st.tiles);
   const hydrateReel = useReelStore((st) => st.hydrate);
   const reelHydrated = useReelStore((st) => st.hydrated);
+  const reelLoadError = useReelStore((st) => st.loadError);
   useEffect(() => {
     if (!reelHydrated) void hydrateReel();
   }, [reelHydrated, hydrateReel]);
@@ -150,6 +151,20 @@ export function PracticeScreen({
     (kind: SessionKind) => {
       if (kind === 'movie_deep_dive') {
         if (deepDiveOptions.length === 0) {
+          // Distinguish "we couldn't load your reel" from "your reel is
+          // genuinely empty" — an empty list after a failed/pending load
+          // is unknown, not empty, so we offer a retry instead of lying.
+          if (!reelHydrated || reelLoadError) {
+            Alert.alert(
+              "Couldn't load your reel",
+              'We had trouble reaching your movies. Check your connection and try again.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Retry', onPress: () => void hydrateReel() },
+              ],
+            );
+            return;
+          }
           Alert.alert(
             'Your reel is empty',
             'Add a movie to your reel (My Movies tab) so Deep-Dive has something to dive into.',
@@ -161,7 +176,7 @@ export function PracticeScreen({
       }
       startKind(kind);
     },
-    [deepDiveOptions.length, startKind],
+    [deepDiveOptions.length, reelHydrated, reelLoadError, hydrateReel, startKind],
   );
 
   // Hero starts whatever the cursor is pointing at — same as tapping

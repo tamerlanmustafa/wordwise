@@ -1,4 +1,25 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/** How often the "Word of the Hour" reminder fires. Defaults to once a day. */
+export type WordReminderMode = 'daily' | 'hourly';
+const WORD_REMINDER_MODE_KEY = 'notif_word_mode';
+
+export async function getWordReminderMode(): Promise<WordReminderMode> {
+  try {
+    return (await AsyncStorage.getItem(WORD_REMINDER_MODE_KEY)) === 'hourly'
+      ? 'hourly'
+      : 'daily';
+  } catch {
+    return 'daily';
+  }
+}
+
+export async function setWordReminderMode(mode: WordReminderMode): Promise<void> {
+  try {
+    await AsyncStorage.setItem(WORD_REMINDER_MODE_KEY, mode);
+  } catch {}
+}
 
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
@@ -50,24 +71,38 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 }
 
-export async function scheduleDailyWordReminder(): Promise<void> {
+/**
+ * Schedule the "Word of the Hour" reminder. The word itself rotates hourly, but
+ * the reminder defaults to once a day at 9 AM so we don't spam the user; pass
+ * (or persist via setWordReminderMode) 'hourly' to nudge them every hour.
+ * When `mode` is omitted the persisted preference is used.
+ */
+export async function scheduleWordReminder(mode?: WordReminderMode): Promise<void> {
   if (!Notifications) return;
+  const resolved = mode ?? (await getWordReminderMode());
   try {
     await Notifications.cancelScheduledNotificationAsync('daily-word');
     await Notifications.scheduleNotificationAsync({
       identifier: 'daily-word',
       content: {
-        title: "Today's Word is ready",
-        body: 'A new word from a popular movie is waiting for you. Tap to learn it!',
+        title: 'Your Word of the Hour is ready',
+        body: 'WordWise has a fresh word for you to learn. Tap to check it out!',
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 9,
-        minute: 0,
-      },
+      trigger:
+        resolved === 'hourly'
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 3600,
+              repeats: true,
+            }
+          : {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: 9,
+              minute: 0,
+            },
     });
   } catch (e) {
-    console.warn('[notifications] schedule daily word failed:', e);
+    console.warn('[notifications] schedule word reminder failed:', e);
   }
 }
 

@@ -108,7 +108,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
       >
         <View style={s.header}>
-          <Text style={s.label}>Today's Word</Text>
+          <Text style={s.label}>Word of the Hour</Text>
         </View>
         <View style={s.wordRow}>
           <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>

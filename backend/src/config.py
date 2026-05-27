@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
+    # Refresh tokens outlive the access token so a client can mint a new
+    # access token without forcing the user to log in again every day.
+    jwt_refresh_expiration_days: int = 60
 
     #TMDB API
     tmdb_api_key: str

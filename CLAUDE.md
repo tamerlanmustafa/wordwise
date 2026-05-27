@@ -9,3 +9,7 @@
 
 ## Clarification
 - Never guess or invent solutions when uncertain. Ask before proceeding.
+
+## WEB app versus Mobile app
+- Make sure our web app is up to date with the changes/features we add to our mobile app. 
+- Make sure they share the same code whenever/wherever possible to avoid writing the same code separately for each of them

@@ -151,11 +151,20 @@ export const HomeScreen = ({
     }).catch(() => {});
   }, []);
 
-  // Today's word is cached per-day per-language inside srsApi.todaysWord, so
-  // this effect is a no-op on tab switches and only hits the network when the
-  // user changes their translation language (or the date rolls over).
+  // Word of the hour is cached per-hour per-language inside srsApi.todaysWord,
+  // so this is a no-op on tab switches and only hits the network when the user
+  // changes their translation language or the clock hour rolls over. The timer
+  // re-fetches at the top of each (UTC) hour so the card rotates even while the
+  // screen stays mounted.
   useEffect(() => {
-    srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {});
+    let timeout: ReturnType<typeof setTimeout>;
+    const load = () => {
+      srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {});
+      const msToNextHour = 3600_000 - (Date.now() % 3600_000);
+      timeout = setTimeout(load, msToNextHour + 1000);
+    };
+    load();
+    return () => clearTimeout(timeout);
   }, [targetLanguage]);
 
   const fetchLevelMovies = async (level: string) => {

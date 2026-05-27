@@ -118,15 +118,77 @@ const getAuthToken = async (): Promise<string | null> => {
   }
 };
 
-// Helper for authenticated requests
-const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+// ─── Token refresh ──────────────────────────────────────────────────────
+// The access token is short-lived (24h). Rather than logging the user out
+// the moment it expires, authFetch transparently exchanges the long-lived
+// refresh token for a new pair on a 401, then retries the request once.
+//
+// Registered by the app on boot; called when refresh itself fails (refresh
+// token missing/expired/revoked) so the session can be torn down and the
+// login screen shown — instead of silently 401-ing every request forever.
+let onSessionExpired: (() => void) | null = null;
+export const setOnSessionExpired = (fn: () => void): void => {
+  onSessionExpired = fn;
+};
+
+// Single-flight: a burst of parallel requests that all 401 share one
+// refresh round-trip instead of stampeding /auth/refresh.
+let refreshPromise: Promise<string | null> | null = null;
+
+const doRefresh = async (): Promise<string | null> => {
+  const refresh = await tokenStorage.getRefreshToken();
+  if (!refresh) return null;
+  try {
+    // Plain fetch (not authFetch) — must not recurse through the 401 path.
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.token || !data?.refresh_token) return null;
+    await tokenStorage.saveTokens(data.token, data.refresh_token);
+    return data.token as string;
+  } catch {
+    return null;
+  }
+};
+
+const refreshAccessToken = (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
+// Helper for authenticated requests. On a 401 it refreshes once and retries;
+// if the refresh fails, it tears down the session via onSessionExpired.
+const authFetch = async (
+  url: string,
+  options: RequestInit = {},
+  retry = true,
+): Promise<Response> => {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401 && retry && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry once with the refreshed token; don't retry again on a 2nd 401.
+      return authFetch(url, options, false);
+    }
+    // Refresh token is gone/expired — the session is genuinely dead.
+    onSessionExpired?.();
+  }
+  return res;
 };
 
 // TMDB API
@@ -819,10 +881,10 @@ export const srsApi = {
   },
 
   todaysWord: async (skip = 0, targetLang?: string): Promise<TodaysWord | null> => {
-    // Same word for the whole calendar day per language; cache locally so
+    // Same word for the whole clock hour per language; cache locally so
     // navigation between tabs/screens doesn't re-fetch (and re-translate).
-    const today = new Date().toISOString().slice(0, 10);
-    const cacheKey = `todays_word_v1:${today}:${targetLang ?? 'native'}:skip${skip}`;
+    const hour = new Date().toISOString().slice(0, 13);
+    const cacheKey = `word_of_hour_v1:${hour}:${targetLang ?? 'native'}:skip${skip}`;
     try {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) return JSON.parse(cached) as TodaysWord;

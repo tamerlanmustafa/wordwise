@@ -846,8 +846,8 @@ async def todays_word(
     db: Prisma = Depends(get_db),
 ):
     """
-    One word per day matched to the user's proficiency level.
-    Pass skip=N to get the Nth next word (used by the reload button).
+    One word per hour matched to the user's proficiency level — the "Word of
+    the Hour". Pass skip=N to get the Nth next word (used by the reload button).
 
     The word is drawn from the global Lemma table (any source) — not tied to a
     specific movie — and is guaranteed to have a globally-cached LLM example
@@ -856,8 +856,9 @@ async def todays_word(
     """
     import hashlib
 
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    seed = int(hashlib.md5(f"{current_user.id}:{today_str}".encode()).hexdigest()[:8], 16) + skip
+    # Seed by UTC hour so the pick is stable within an hour and rotates hourly.
+    hour_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+    seed = int(hashlib.md5(f"{current_user.id}:{hour_str}".encode()).hexdigest()[:8], 16) + skip
 
     raw_level = current_user.proficiencyLevel
     user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()

@@ -195,15 +195,15 @@ export const srsApi = {
     return res.data;
   },
 
-  /** Today's word — same word for the whole calendar day per language.
+  /** Word of the hour — same word for the whole clock hour per language.
    *  Cached in localStorage so a tab switch doesn't re-fetch (and the
    *  server doesn't re-translate). */
   todaysWord: async (
     skip = 0,
     targetLang?: string,
   ): Promise<TodaysWord | null> => {
-    const today = new Date().toISOString().slice(0, 10);
-    const cacheKey = `todays_word_v1:${today}:${targetLang ?? 'native'}:skip${skip}`;
+    const hour = new Date().toISOString().slice(0, 13);
+    const cacheKey = `word_of_hour_v1:${hour}:${targetLang ?? 'native'}:skip${skip}`;
     try {
       const cached = window.localStorage.getItem(cacheKey);
       if (cached) return JSON.parse(cached) as TodaysWord;

@@ -23,6 +23,11 @@ interface ReelState {
   userPickCount: number;
   hydrated: boolean;
   loading: boolean;
+  // True when the last hydrate failed to reach the server (e.g. network
+  // error or an auth failure that even a token refresh couldn't fix). The
+  // UI must treat this differently from a genuinely empty reel — an empty
+  // `tiles` here means "we don't know", not "you have no movies".
+  loadError: boolean;
   hydrate: () => Promise<void>;
   add: (input: {
     tmdb_id: number;
@@ -44,10 +49,11 @@ export const useReelStore = create<ReelState>((set, get) => ({
   userPickCount: 0,
   hydrated: false,
   loading: false,
+  loadError: false,
 
   hydrate: async () => {
     if (get().loading) return;
-    set({ loading: true });
+    set({ loading: true, loadError: false });
     try {
       const { tiles } = await reelApi.list();
       const seedDone = await AsyncStorage.getItem(SEED_DONE_KEY);
@@ -72,8 +78,12 @@ export const useReelStore = create<ReelState>((set, get) => ({
       }
       set({ tiles, userPickCount: countUserPicks(tiles), hydrated: true });
     } catch (e) {
+      // Mark the load as failed rather than leaving an empty `tiles` that
+      // looks identical to "you have no movies". `hydrated` still flips to
+      // true so screens stop showing spinners, but `loadError` lets them
+      // offer a retry instead of lying about an empty reel.
       console.warn('[reelStore] hydrate failed:', e);
-      set({ hydrated: true });
+      set({ hydrated: true, loadError: true });
     } finally {
       set({ loading: false });
     }
@@ -129,5 +139,5 @@ export const useReelStore = create<ReelState>((set, get) => ({
   has: (tmdbId) =>
     get().tiles.some((t) => t.tmdb_id === tmdbId && t.source === 'user'),
 
-  reset: () => set({ tiles: [], userPickCount: 0, hydrated: false, loading: false }),
+  reset: () => set({ tiles: [], userPickCount: 0, hydrated: false, loading: false, loadError: false }),
 }));

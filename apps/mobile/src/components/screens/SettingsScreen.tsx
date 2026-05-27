@@ -18,7 +18,13 @@ import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { API_BASE_URL } from '../../services/api';
-import { scheduleDailyWordReminder, scheduleReviewReminder } from '../../services/notifications';
+import {
+  scheduleWordReminder,
+  scheduleReviewReminder,
+  getWordReminderMode,
+  setWordReminderMode,
+  type WordReminderMode,
+} from '../../services/notifications';
 import { settingsStyles } from './settingsStyles';
 
 interface Props {
@@ -55,6 +61,7 @@ export const SettingsScreen = ({
   const [showLearningLangPicker, setShowLearningLangPicker] = useState(false);
   const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
   const [dailyWordNotif, setDailyWordNotif] = useState(true);
+  const [wordReminderMode, setWordReminderModeState] = useState<WordReminderMode>('daily');
   const [reviewNotif, setReviewNotif] = useState(true);
   const [accordionMode, setAccordionMode] = useState(true);
 
@@ -65,6 +72,7 @@ export const SettingsScreen = ({
 
   useEffect(() => {
     AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
+    getWordReminderMode().then(setWordReminderModeState);
     AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
     AsyncStorage.getItem('accordion_mode').then((v) => { if (v === 'off') setAccordionMode(false); });
   }, []);
@@ -80,13 +88,21 @@ export const SettingsScreen = ({
     setDailyWordNotif(next);
     await AsyncStorage.setItem('notif_daily_word', next ? 'on' : 'off');
     if (next) {
-      scheduleDailyWordReminder();
+      scheduleWordReminder(wordReminderMode);
     } else {
       try {
         const Notif = require('expo-notifications');
         await Notif.cancelScheduledNotificationAsync('daily-word');
       } catch {}
     }
+  };
+
+  const toggleWordReminderMode = async () => {
+    const next: WordReminderMode = wordReminderMode === 'hourly' ? 'daily' : 'hourly';
+    setWordReminderModeState(next);
+    await setWordReminderMode(next);
+    // Re-schedule with the new cadence only if the reminder is currently on.
+    if (dailyWordNotif) scheduleWordReminder(next);
   };
 
   const toggleReview = async () => {
@@ -386,8 +402,8 @@ export const SettingsScreen = ({
         <Text style={settingsStyles.sectionTitle}>Notifications</Text>
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>Today's Word (9:00 AM)</Text>
-            <Text style={settingsStyles.notifDesc}>Daily word discovery from popular movies</Text>
+            <Text style={settingsStyles.notifLabel}>Word of the Hour</Text>
+            <Text style={settingsStyles.notifDesc}>A fresh word to discover and learn</Text>
           </View>
           <TouchableOpacity
             style={[settingsStyles.notifToggle, dailyWordNotif && settingsStyles.notifToggleOn]}
@@ -396,6 +412,26 @@ export const SettingsScreen = ({
             <Text style={settingsStyles.notifToggleText}>{dailyWordNotif ? 'ON' : 'OFF'}</Text>
           </TouchableOpacity>
         </View>
+        {dailyWordNotif && (
+          <View style={settingsStyles.notifRow}>
+            <View style={settingsStyles.notifInfo}>
+              <Text style={settingsStyles.notifLabel}>Reminder frequency</Text>
+              <Text style={settingsStyles.notifDesc}>
+                {wordReminderMode === 'hourly'
+                  ? 'Remind me every hour'
+                  : 'Remind me once a day at 9:00 AM'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[settingsStyles.notifToggle, wordReminderMode === 'hourly' && settingsStyles.notifToggleOn]}
+              onPress={toggleWordReminderMode}
+            >
+              <Text style={settingsStyles.notifToggleText}>
+                {wordReminderMode === 'hourly' ? 'HOURLY' : 'DAILY'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
             <Text style={settingsStyles.notifLabel}>Review Reminder (6:00 PM)</Text>

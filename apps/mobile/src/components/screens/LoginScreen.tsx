@@ -13,7 +13,7 @@ import { colors } from '../../theme/palette';
 import { styles } from '../../core/styles';
 
 interface Props {
-  onLogin: (user: any, token: string) => void;
+  onLogin: (user: any, token: string, refreshToken: string) => void;
 }
 
 export const LoginScreen = ({ onLogin }: Props) => {
@@ -83,7 +83,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
         is_admin: data.user.is_admin || data.user.isAdmin || false,
       };
 
-      onLogin(user, data.access_token || data.token);
+      onLogin(user, data.access_token || data.token, data.refresh_token);
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
         setError('Sign-in cancelled');
@@ -137,7 +137,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
         is_admin: data.user.isAdmin,
       };
 
-      onLogin(user, data.token);
+      onLogin(user, data.token, data.refresh_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

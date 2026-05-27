@@ -1,10 +1,16 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from prisma import Prisma
 from datetime import timedelta
 from ..database import get_db
-from ..schemas.user import UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate, SUPPORTED_LANGUAGES
-from ..utils.auth import verify_password, get_password_hash, create_access_token
+from ..schemas.user import (
+    UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate,
+    RefreshRequest, RefreshResponse, SUPPORTED_LANGUAGES,
+)
+from ..utils.auth import (
+    verify_password, get_password_hash, create_access_token,
+    create_refresh_token, verify_token,
+)
 from ..config import get_settings
 from ..middleware.auth import get_current_user
 
@@ -12,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+
+
+def _issue_tokens(user) -> tuple[str, str]:
+    """Mint an (access, refresh) token pair for a user. Single source of
+    truth so every auth entry point (register/login/refresh) stays in sync."""
+    payload = {"sub": str(user.id), "email": user.email}
+    access_token = create_access_token(
+        data=payload,
+        expires_delta=timedelta(hours=settings.jwt_expiration_hours),
+    )
+    refresh_token = create_refresh_token(
+        data=payload,
+        expires_delta=timedelta(days=settings.jwt_refresh_expiration_days),
+    )
+    return access_token, refresh_token
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -50,16 +71,13 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
         }
     )
 
-    # Create access token (sub must be a string for JWT compliance)
-    access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
-    access_token = create_access_token(
-        data={"sub": str(new_user.id), "email": new_user.email},
-        expires_delta=access_token_expires
-    )
+    # Create token pair (sub must be a string for JWT compliance)
+    access_token, refresh_token = _issue_tokens(new_user)
 
     return {
         "user": new_user,
-        "token": access_token
+        "token": access_token,
+        "refresh_token": refresh_token,
     }
 
 
@@ -82,16 +100,13 @@ async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
             detail="Inactive user"
         )
 
-    # Create access token (sub must be a string for JWT compliance)
-    access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email},
-        expires_delta=access_token_expires
-    )
+    # Create token pair (sub must be a string for JWT compliance)
+    access_token, refresh_token = _issue_tokens(user)
 
     return {
         "user": user,
-        "token": access_token
+        "token": access_token,
+        "refresh_token": refresh_token,
     }
 
 
@@ -105,19 +120,60 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
     return UserResponse.model_validate(current_user)
 
 
-@router.post("/refresh")
-async def refresh_token(current_user = Depends(get_current_user)):
-    """Refresh JWT token for authenticated user"""
-    # Create new access token with same expiration time
-    access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
-    access_token = create_access_token(
-        data={"sub": current_user.id, "email": current_user.email},
-        expires_delta=access_token_expires
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_token(
+    body: RefreshRequest | None = None,
+    authorization: str | None = Header(default=None),
+    db: Prisma = Depends(get_db),
+):
+    """Exchange a token for a fresh access+refresh pair.
+
+    Deliberately does NOT depend on `get_current_user`: the whole point is
+    to work when the *access* token has expired. Two accepted shapes:
+
+      • Mobile (preferred): a long-lived refresh token in the JSON body.
+        We require `type == "refresh"` and rotate the refresh token, so a
+        leaked-and-used token dies as soon as the real client refreshes.
+      • Web (legacy): the access token in the Authorization header with an
+        empty body. Only succeeds while that access token is still valid —
+        unchanged from the endpoint's prior behavior.
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
+    token_str = body.refresh_token if body else None
+    # Only enforce the refresh-type guard on the body path; the legacy
+    # header path carries an access token by design.
+    require_refresh_type = token_str is not None
+    if token_str is None and authorization and authorization.lower().startswith("bearer "):
+        token_str = authorization[7:].strip()
+    if not token_str:
+        raise invalid
+
+    payload = verify_token(token_str)
+    # verify_token returns None on bad signature OR expiry. On the body
+    # path also reject an access token presented as a refresh token.
+    if payload is None or (require_refresh_type and payload.get("type") != "refresh"):
+        raise invalid
+
+    user_id_str = payload.get("sub")
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise invalid
+
+    user = await db.user.find_unique(where={"id": user_id})
+    if user is None or not user.isActive:
+        raise invalid
+
+    access_token, new_refresh_token = _issue_tokens(user)
     return {
         "token": access_token,
-        "user": current_user
+        "refresh_token": new_refresh_token,
+        "user": user,
     }
 
 

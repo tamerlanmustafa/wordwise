@@ -42,6 +42,7 @@ class UserInfo(BaseModel):
 class GoogleLoginResponse(BaseModel):
     """Response for successful Google OAuth login"""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserInfo
 

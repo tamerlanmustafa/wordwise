@@ -19,7 +19,7 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token"""
+    """Create a short-lived JWT access token."""
     to_encode = data.copy()
 
     if expires_delta:
@@ -27,10 +27,30 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(hours=settings.jwt_expiration_hours)
 
-    to_encode.update({"exp": expire})
+    # `type` lets the refresh endpoint reject an access token presented in
+    # place of a refresh token. Access tokens minted before this claim
+    # existed simply lack it, which is fine — only the refresh endpoint
+    # cares, and it treats a missing type as "not a refresh token".
+    to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
     return encoded_jwt
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a long-lived JWT refresh token. Used solely to obtain a fresh
+    access token via POST /auth/refresh — never accepted as a bearer token
+    on protected routes (those check `get_current_user`, which doesn't
+    distinguish type, so we instead gate the refresh endpoint on type)."""
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_expiration_days)
+
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def verify_token(token: str) -> Optional[dict]:

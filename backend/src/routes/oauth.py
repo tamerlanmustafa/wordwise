@@ -12,7 +12,7 @@ from ..schemas.oauth import (
     UserInfo,
 )
 from ..utils.google_auth import verify_google_token, generate_username_from_email
-from ..utils.auth import create_access_token
+from ..utils.auth import create_access_token, create_refresh_token
 from ..config import get_settings
 
 router = APIRouter(prefix="/auth/google", tags=["oauth"])
@@ -184,15 +184,20 @@ async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)
             learning_language=request.learning_language
         )
 
-        # Generate JWT access token
-        access_token_expires = timedelta(hours=settings.jwt_expiration_hours)
+        # Generate JWT token pair
+        token_payload = {"sub": str(user.id), "email": user.email}
         access_token = create_access_token(
-            data={"sub": str(user.id), "email": user.email},
-            expires_delta=access_token_expires
+            data=token_payload,
+            expires_delta=timedelta(hours=settings.jwt_expiration_hours),
+        )
+        refresh_token = create_refresh_token(
+            data=token_payload,
+            expires_delta=timedelta(days=settings.jwt_refresh_expiration_days),
         )
 
         return GoogleLoginResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             user=_create_user_response(user)
         )
