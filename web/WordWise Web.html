@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordWise · Web Templates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@600;700;800;900&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #ece8df; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; }
+    #root { width: 100%; height: 100%; }
+    .ww-artboard-inner *::-webkit-scrollbar { display: none; }
+    .ww-artboard-inner * { scrollbar-width: none; }
+    @keyframes wwSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes wwCaret { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="../design-canvas.jsx"></script>
+
+  <script type="text/babel" src="shell.jsx"></script>
+  <script type="text/babel" src="my-movies.jsx"></script>
+  <script type="text/babel" src="practice.jsx"></script>
+  <script type="text/babel" src="quiz.jsx"></script>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard } = window;
+    const { MyMoviesWeb }     = window.WW_WEB_MY_MOVIES;
+    const { PracticeWeb }     = window.WW_WEB_PRACTICE;
+    const { SynonymMCQWeb, TypingWeb } = window.WW_WEB_QUIZ;
+
+    function Browser({ children }) {
+      return (
+        <div className="ww-artboard-inner" style={{
+          width: '100%', height: '100%',
+          background: '#000', borderRadius: 12, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 24px 56px rgba(0,0,0,0.35)',
+        }}>
+          {/* Chrome */}
+          <div style={{
+            height: 36, background: '#1f1f24', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FF5F57' }} />
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FEBC2E' }} />
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#28C840' }} />
+            <div style={{
+              flex: 1, height: 22, margin: '0 16px', borderRadius: 5,
+              background: '#2a2a30', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, color: 'rgba(255,255,255,0.55)', fontFamily: 'system-ui',
+              fontWeight: 600,
+            }}>app.wordwise.com</div>
+            <div style={{ width: 60 }} />
+          </div>
+          {/* App */}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas
+          title="WordWise · web templates"
+          subtitle="Desktop counterparts to the mobile redesign. Same brand language; web-native layout (sidebar, multi-column grids, hover states, keyboard hints). Light and dark for each tab."
+          initialZoom={0.40}
+        >
+          <DCSection
+            id="my-movies-web"
+            title="Tab 1 — My Movies (web)"
+            subtitle="Sidebar nav + 4-column poster grid + left filter rail. Posters carry CEFR badge, FINAL CUT stamp on mastered, hover gradient with progress."
+          >
+            <DCArtboard id="movies-web-dark"  label="① My Movies — dark"  width={1440} height={960}>
+              <Browser><MyMoviesWeb mode="dark"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="movies-web-light" label="② My Movies — light" width={1440} height={960}>
+              <Browser><MyMoviesWeb mode="light" /></Browser>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection
+            id="practice-web"
+            title="Tab 2 — Practice (web)"
+            subtitle="Daily review band on top, study path in the centre (film-cell nodes climbing upward, filmstrip connectors), right-side rail with the active lesson detail + the actual words it covers."
+          >
+            <DCArtboard id="practice-web-dark"  label="③ Practice — dark"  width={1440} height={960}>
+              <Browser><PracticeWeb mode="dark"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="practice-web-light" label="④ Practice — light" width={1440} height={960}>
+              <Browser><PracticeWeb mode="light" /></Browser>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection
+            id="quiz-mcq-web"
+            title="Quiz — synonym MCQ (web)"
+            subtitle="Centred word card, 2-col choice grid, keyboard shortcuts (1–4, Enter). Wrong state reveals the correct answer."
+          >
+            <DCArtboard id="mcq-web-dark-idle"   label="⑤ MCQ · idle · dark"            width={1440} height={960}>
+              <Browser><SynonymMCQWeb mode="dark"  state="idle"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="mcq-web-light-idle"  label="⑥ MCQ · idle · light"           width={1440} height={960}>
+              <Browser><SynonymMCQWeb mode="light" state="idle"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="mcq-web-dark-wrong"  label="⑦ MCQ · wrong answered · dark"  width={1440} height={960}>
+              <Browser><SynonymMCQWeb mode="dark"  state="wrong" /></Browser>
+            </DCArtboard>
+            <DCArtboard id="mcq-web-light-wrong" label="⑧ MCQ · wrong answered · light" width={1440} height={960}>
+              <Browser><SynonymMCQWeb mode="light" state="wrong" /></Browser>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection
+            id="quiz-type-web"
+            title="Quiz — translation typing (web)"
+            subtitle="Word card + hint chips + text input + skip link. Comprehension delta shown on correct."
+          >
+            <DCArtboard id="type-web-dark-prompt"   label="⑨  Typing · prompt · dark"   width={1440} height={960}>
+              <Browser><TypingWeb mode="dark"  state="prompt"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="type-web-light-prompt"  label="⑩ Typing · prompt · light"   width={1440} height={960}>
+              <Browser><TypingWeb mode="light" state="prompt"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="type-web-dark-correct"  label="⑪ Typing · correct · dark"   width={1440} height={960}>
+              <Browser><TypingWeb mode="dark"  state="correct" /></Browser>
+            </DCArtboard>
+            <DCArtboard id="type-web-light-correct" label="⑫ Typing · correct · light"  width={1440} height={960}>
+              <Browser><TypingWeb mode="light" state="correct" /></Browser>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

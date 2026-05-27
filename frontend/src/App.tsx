@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Box } from '@mui/material';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
@@ -17,15 +16,15 @@ import BookReaderPage from './pages/BookReaderPage';
 import PricingPage from './pages/PricingPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
+import MyMoviesPage from './pages/MyMoviesPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { TopBarVisibilityProvider } from './contexts/TopBarVisibilityContext';
-import TopBar from './components/TopBar';
-import Breadcrumbs from './components/Breadcrumbs';
+import { AppShell } from './components/shell/AppShell';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-// APP
+
 function App() {
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
@@ -34,30 +33,30 @@ function App() {
           <AuthProvider>
             <TopBarVisibilityProvider>
               <Router>
-                <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-                  <TopBar />
-                  <Box component="main" sx={{ flexGrow: 1 }}>
-                    <Breadcrumbs />
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/search" element={<SearchPage />} />
-                      <Route path="/movie/:id" element={<MovieDetailPage />} />
-                      <Route path="/book/:id" element={<BookDetailPage />} />
-                      <Route path="/book/:id/read" element={<BookReaderPage />} />
-                      <Route path="/books/search" element={<BookSearchPage />} />
-                      <Route path="/analyze" element={<MovieSearchPage />} />
-                      <Route path="/signup" element={<SignUpPage />} />
-                      <Route path="/login" element={<LoginPage />} />
-                      <Route path="/lists" element={<AllListsPage />} />
-                      <Route path="/lists/:listName" element={<SavedWordsPage />} />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="/admin/reports" element={<AdminReportsPage />} />
-                      <Route path="/pricing" element={<PricingPage />} />
-                      <Route path="/privacy" element={<PrivacyPage />} />
-                      <Route path="/terms" element={<TermsPage />} />
-                    </Routes>
-                  </Box>
-                </Box>
+                <Routes>
+                  {/* Full-bleed auth pages — no sidebar */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignUpPage />} />
+
+                  {/* Everything else lives inside the redesigned shell */}
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/my-movies" element={<MyMoviesPage />} />
+                    <Route path="/search" element={<SearchPage />} />
+                    <Route path="/movie/:id" element={<MovieDetailPage />} />
+                    <Route path="/book/:id" element={<BookDetailPage />} />
+                    <Route path="/book/:id/read" element={<BookReaderPage />} />
+                    <Route path="/books/search" element={<BookSearchPage />} />
+                    <Route path="/analyze" element={<MovieSearchPage />} />
+                    <Route path="/lists" element={<AllListsPage />} />
+                    <Route path="/lists/:listName" element={<SavedWordsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/admin/reports" element={<AdminReportsPage />} />
+                    <Route path="/pricing" element={<PricingPage />} />
+                    <Route path="/privacy" element={<PrivacyPage />} />
+                    <Route path="/terms" element={<TermsPage />} />
+                  </Route>
+                </Routes>
               </Router>
             </TopBarVisibilityProvider>
           </AuthProvider>
