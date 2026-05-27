@@ -492,16 +492,33 @@ async def start_session(
     # the daily 2-min habit always has SESSION_SIZE cards to chew on.
     # Movie Deep-Dive constrains padding to the picked movie so the
     # session stays "about that one film".
-    session_rows = list(due_rows)
+    # Dedupe by lemma before padding. Cards display `word=lemma` (below),
+    # so two saved inflections of one word — e.g. "run" and "running",
+    # both lemmatize to "run" — would otherwise surface as two
+    # identical-looking cards: the user answers one and is immediately
+    # asked the "same word" again, with the session counter ticking up.
+    # Keep the first (oldest-due / lowest-id, per composer ordering) row
+    # for each lemma. The lemma set we build here also seeds the padding
+    # exclusion so fresh reel lemmas can't reintroduce a collision — the
+    # padding filter keyed on surface form, which let a freshly-padded
+    # "run" slip past an already-saved "running".
+    session_rows: list = []
+    seen_lemmas: set[str] = set()
+    for r in due_rows:
+        lemma = _lemmatize_one(r.word)[0]
+        if lemma in seen_lemmas:
+            continue
+        seen_lemmas.add(lemma)
+        session_rows.append(r)
+
     if len(session_rows) < SESSION_SIZE:
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
-        excluded = {r.word.lower() for r in session_rows}
         fresh_rows = await _pad_with_fresh_reel_lemmas(
             db,
             user_id=current_user.id,
             user_level=str(user_level),
-            excluded_words=excluded,
+            excluded_words=set(seen_lemmas),
             needed=SESSION_SIZE - len(session_rows),
             restrict_movie_id=movie_id if kind == "movie_deep_dive" else None,
         )
@@ -625,11 +642,19 @@ async def start_session(
 
     cards: list[ReviewCard] = []
     skipped: list[str] = []
+    # Last-line guard against a duplicate *displayed* word reaching the
+    # client. session_rows is already deduped by lemma above, but the
+    # hydration lemma (lemma_pos_map) is recomputed here, so we re-check
+    # against the form actually shown to be safe against any drift.
+    carded_lemmas: set[str] = set()
     # Fresh per-request RNG. Pass it down into build_synonym_mcq so the
     # whole card-type roll + choice ordering shares the same source.
     rng = random.Random()
     for r in session_rows:
         lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
+        if lemma in carded_lemmas:
+            continue
+        carded_lemmas.add(lemma)
         # Prefer CEFR / definitions keyed on the lemma; fall back to
         # the surface form when the canonical row isn't classified yet.
         cefr = cefr_map.get(lemma) or cefr_map.get(r.word)
