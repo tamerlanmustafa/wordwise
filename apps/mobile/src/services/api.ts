@@ -247,6 +247,35 @@ export const tmdbApi = {
   },
 };
 
+/**
+ * Enriches WordWise/CEFR movie rows (which only carry tmdb_id + poster_url)
+ * with the poster_path / backdrop_path / overview / release_date the cards
+ * render. Requests run in parallel and any failure falls back to the original
+ * row, so one bad TMDB lookup never blocks a page. Call this per page as the
+ * infinite list loads — never on the whole catalog at once.
+ */
+export async function enrichMoviesWithTmdb<
+  T extends { tmdb_id?: number | null; description?: string | null; year?: number | null }
+>(movies: T[]): Promise<T[]> {
+  return Promise.all(
+    movies.map(async (m) => {
+      if (!m.tmdb_id) return m;
+      try {
+        const t: any = await tmdbApi.getMovieDetails(m.tmdb_id);
+        return {
+          ...m,
+          overview: t.overview || m.description || '',
+          poster_path: t.poster_path || null,
+          backdrop_path: t.backdrop_path || null,
+          release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
+        };
+      } catch {
+        return m;
+      }
+    })
+  );
+}
+
 // WordWise API
 export const wordwiseApi = {
   // Search for movies with scripts
@@ -332,9 +361,19 @@ export const wordwiseApi = {
     return res.json();
   },
 
-  getMoviesByCefr: async (level: string, limit: number = 50): Promise<{
+  getMoviesByCefr: async (
+    level: string,
+    limit: number = 50,
+    opts?: {
+      offset?: number;
+      sort?: 'rating' | 'popularity' | 'level';
+      order?: 'asc' | 'desc';
+    }
+  ): Promise<{
     level: string;
     total: number;
+    offset: number;
+    has_more: boolean;
     movies: Array<{
       movie_id: number;
       tmdb_id: number | null;
@@ -347,9 +386,11 @@ export const wordwiseApi = {
       vote_count: number | null;
     }>;
   }> => {
-    const res = await fetch(
-      `${API_BASE_URL}/movies/by-cefr?level=${encodeURIComponent(level)}&limit=${limit}`
-    );
+    let query = `level=${encodeURIComponent(level)}&limit=${limit}`;
+    if (opts?.offset != null) query += `&offset=${opts.offset}`;
+    if (opts?.sort) query += `&sort=${opts.sort}`;
+    if (opts?.order) query += `&order=${opts.order}`;
+    const res = await fetch(`${API_BASE_URL}/movies/by-cefr?${query}`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /movies/by-cefr → ${res.status} ${body.slice(0, 120)}`);

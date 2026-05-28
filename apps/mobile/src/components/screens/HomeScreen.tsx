@@ -19,7 +19,6 @@ import type { MovieData } from '../../core/types';
 import {
   tmdbApi,
   srsApi,
-  API_BASE_URL,
   type TodaysWord,
 } from '../../services/api';
 import { useEntitlementsStore, useShowAds } from '../../stores/entitlementsStore';
@@ -27,6 +26,7 @@ import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
 import { LEVEL_OPTIONS } from '../home/filterOptions';
 import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
+import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 
 interface Props {
   onLogout: () => void;
@@ -81,12 +81,21 @@ export const HomeScreen = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
-  const [topRatedMovies, setTopRatedMovies] = useState<any[]>([]);
   const [homeTab, setHomeTab] = useState<'level' | 'trending'>('level');
-  const [tabSwitching, setTabSwitching] = useState(false);
   const [levelSort, setLevelSort] = useState<'rating' | 'popularity' | 'level'>('rating');
   const [levelSortAsc, setLevelSortAsc] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
+
+  // Server-sorted, paginated CEFR feed for the ranked list. The backend does
+  // the ordering, so each sort/level reflects the full catalog (not a reshuffle
+  // of one page) and the list scrolls infinitely with per-page TMDB enrichment.
+  const {
+    movies: levelMovies,
+    loading: levelLoading,
+    loadingMore: levelLoadingMore,
+    hasMore: levelHasMore,
+    loadMore: loadMoreLevel,
+  } = useInfiniteCefrMovies(selectedLevel, levelSort, levelSortAsc ? 'asc' : 'desc');
   const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
@@ -167,43 +176,13 @@ export const HomeScreen = ({
     return () => clearTimeout(timeout);
   }, [targetLanguage]);
 
-  const fetchLevelMovies = async (level: string) => {
-    try {
-      const levelRes = await fetch(`${API_BASE_URL}/movies/by-cefr?level=${level}&limit=15`);
-      if (levelRes.ok) {
-        const levelData = await levelRes.json();
-        const raw = (levelData.movies || []).map((m: any) => ({
-          ...m,
-          id: m.tmdb_id || m.movie_id,
-        }));
-        const enriched = await Promise.all(
-          raw.map(async (m: any) => {
-            if (!m.tmdb_id) return m;
-            try {
-              const r = await fetch(`https://api.themoviedb.org/3/movie/${m.tmdb_id}?api_key=9dece7a38786ac0c58794d6db4af3d51`);
-              const t = await r.json();
-              return {
-                ...m,
-                overview: t.overview || m.description || '',
-                poster_path: t.poster_path || null,
-                backdrop_path: t.backdrop_path || null,
-                release_date: t.release_date || (m.year ? `${m.year}-01-01` : ''),
-              };
-            } catch { return m; }
-          })
-        );
-        setTopRatedMovies(enriched);
-      }
-    } catch {}
-  };
-
+  // Trending tab data. The level tab's feed is owned by useInfiniteCefrMovies.
   useEffect(() => {
     (async () => {
       try {
         const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
         const trendingData = await trendingRes.json();
         setTrendingMovies(trendingData.results?.slice(0, 15) || []);
-        await fetchLevelMovies(selectedLevel);
       } catch (error) {
         console.error('Failed to fetch movies:', error);
       } finally {
@@ -457,13 +436,10 @@ export const HomeScreen = ({
                     { borderBottomColor: tc.border },
                     opt.value === selectedLevel && styles.levelPickerItemActive,
                   ]}
-                  onPress={async () => {
+                  onPress={() => {
                     setLevelDropdownOpen(false);
                     if (opt.value !== selectedLevel) {
                       setSelectedLevel(opt.value);
-                      setTabSwitching(true);
-                      await fetchLevelMovies(opt.value);
-                      setTabSwitching(false);
                     }
                   }}
                   activeOpacity={0.7}
@@ -477,7 +453,7 @@ export const HomeScreen = ({
         </View>
 
         <View style={styles.section}>
-          {loading || tabSwitching ? (
+          {(homeTab === 'level' ? levelLoading : loading) ? (
             <View style={styles.skeletonContainer}>
               {[0, 1, 2, 3].map((i) => (
                 <View key={i} style={styles.skeletonRow}>
@@ -491,15 +467,12 @@ export const HomeScreen = ({
             </View>
           ) : homeTab === 'level' ? (
             <RankedMovieList
-              movies={[...topRatedMovies].sort((a, b) => {
-                let diff = 0;
-                if (levelSort === 'rating') diff = (b.vote_average || 0) - (a.vote_average || 0);
-                else if (levelSort === 'popularity') diff = (b.vote_count || 0) - (a.vote_count || 0);
-                else diff = (a.difficulty_score || 0) - (b.difficulty_score || 0);
-                return levelSortAsc ? -diff : diff;
-              })}
+              movies={levelMovies}
               onMoviePress={handleMoviePress}
               userLevel={selectedLevel}
+              onEndReached={loadMoreLevel}
+              loadingMore={levelLoadingMore}
+              hasMore={levelHasMore}
             />
           ) : (
             <SnapPager

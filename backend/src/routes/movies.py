@@ -111,17 +111,45 @@ CEFR_SCORE_RANGES = {
 }
 
 
+# Maps the client-facing `sort` value to a real DB column. Keeping this a
+# whitelist (rather than interpolating the raw query param) is what makes it
+# safe to f-string the column into the ORDER BY clause below.
+CEFR_SORT_COLUMNS = {
+    "rating": "m.tmdb_vote_average",
+    "popularity": "m.tmdb_vote_count",
+    "level": "m.difficulty_score",
+}
+
+
 @router.get("/by-cefr")
 async def list_movies_by_cefr(
     level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
     genre: Optional[str] = Query(None, description="Genre name to filter by (e.g. Drama, Comedy)"),
     limit: int = Query(15, ge=1, le=100),
+    offset: int = Query(0, ge=0, description="Pagination offset for infinite scroll"),
+    sort: str = Query("rating", description="Sort key: rating | popularity | level"),
+    order: str = Query("desc", description="Sort direction: asc | desc"),
     db: Prisma = Depends(get_db),
 ):
-    """List movies whose difficulty score falls within a CEFR level range, optionally filtered by genre."""
+    """List movies whose difficulty score falls within a CEFR level range, optionally filtered by genre.
+
+    Paginated for infinite scroll: pass `offset` to fetch the next page. The
+    response includes `has_more` so the client knows whether to keep loading.
+    """
     key = level.upper()
     if key not in CEFR_SCORE_RANGES:
         raise HTTPException(status_code=400, detail=f"Invalid CEFR level: {level}")
+
+    sort_col = CEFR_SORT_COLUMNS.get(sort.lower())
+    if sort_col is None:
+        raise HTTPException(status_code=400, detail=f"Invalid sort: {sort}")
+    direction = "ASC" if order.lower() == "asc" else "DESC"
+    # `m.id ASC` is a stable tiebreaker — without it, rows with equal sort
+    # values can shuffle between pages and cause OFFSET pagination to skip or
+    # duplicate movies.
+    order_by = f"ORDER BY {sort_col} {direction} NULLS LAST, m.id ASC"
+    # Over-fetch by one row to detect whether another page exists, then trim.
+    fetch_limit = limit + 1
 
     lo, hi = CEFR_SCORE_RANGES[key]
 
@@ -160,13 +188,16 @@ async def list_movies_by_cefr(
               AND m.genre IS NOT NULL
               AND m.genre ILIKE '%' || $3 || '%'
               AND COALESCE(m.tmdb_vote_count, 0) >= 50
-            ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
-            LIMIT $4
+            """
+            + order_by
+            + """
+            LIMIT $4 OFFSET $5
             """,
             lo,
             hi,
             genre,
-            limit,
+            fetch_limit,
+            offset,
         )
     else:
         rows = await db.query_raw(
@@ -201,13 +232,19 @@ async def list_movies_by_cefr(
             WHERE m.difficulty_score >= $1
               AND m.difficulty_score <= $2
               AND COALESCE(m.tmdb_vote_count, 0) >= 50
-            ORDER BY m.tmdb_vote_average DESC NULLS LAST, m.difficulty_score ASC
-            LIMIT $3
+            """
+            + order_by
+            + """
+            LIMIT $3 OFFSET $4
             """,
             lo,
             hi,
-            limit,
+            fetch_limit,
+            offset,
         )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
 
     return {
         "level": key,
@@ -232,6 +269,8 @@ async def list_movies_by_cefr(
             for r in rows
         ],
         "total": len(rows),
+        "offset": offset,
+        "has_more": has_more,
     }
 
 
