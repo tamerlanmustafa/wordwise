@@ -19,7 +19,7 @@
  * 402 and we route through `onPaywall`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,11 +51,18 @@ export interface PracticeScreenProps {
   /** Surfaced when the SRS endpoint returns 402 "daily_cap_reached" —
    *  same handler the journey flow uses. */
   onPaywall?: (previewsUsed: number, previewsLimit: number) => void;
+  /** True while this tab is the visible one. The screen is kept mounted
+   *  across tab switches (KeepAlive), so we re-fetch the daily server
+   *  state each time it becomes visible again — e.g. after finishing a
+   *  review — instead of relying on a one-time mount fetch. Defaults to
+   *  true so standalone usage keeps working. */
+  active?: boolean;
 }
 
 export function PracticeScreen({
   onStartDailyReview,
   onPaywall,
+  active = true,
 }: PracticeScreenProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -90,6 +97,16 @@ export function PracticeScreen({
   useEffect(() => {
     void refreshServerState();
   }, [refreshServerState]);
+
+  // Re-fetch when the tab is re-shown (KeepAlive keeps us mounted, so the
+  // mount effect above only fires once). Skip the initial mount — a ref
+  // tracks the previous visibility so we only refresh on a hidden→visible
+  // transition, e.g. returning here after completing a review.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) void refreshServerState();
+    wasActive.current = active;
+  }, [active, refreshServerState]);
 
   // Reel tiles for the Movie Deep-Dive picker. Cheap re-use — the reel
   // store is already hydrated by My Movies / Home elsewhere.

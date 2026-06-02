@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar, Alert, Platform, UIManager, View } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -33,6 +33,7 @@ import type { NodeLevel } from '../components/journey/JourneyNode';
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
+import { KeepAlive } from '../components/KeepAlive';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
@@ -597,6 +598,24 @@ export default function App() {
       <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.paper} />
       {isAuthenticated ? (
         <View style={{ flex: 1 }}>
+        {/* Persistent bottom-tab layer. Each tab is mounted lazily on first
+            visit and then kept alive (hidden via display:none) so switching
+            tabs — or opening a detail screen and pressing back — retains its
+            scroll position and list/data state instead of remounting. Deep
+            screens render in the ternary below, on top of this layer. */}
+        <KeepAlive visible={currentScreen === 'home'}>
+          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} onNavigateToProfile={() => setShowUserSheet(true)} />
+        </KeepAlive>
+        <KeepAlive visible={currentScreen === 'movies' || currentScreen === 'journey'}>
+          <MyMoviesScreen
+            onSearchPress={() => navigateToSearch('')}
+            onOpenMoviePreview={handleOpenMoviePreview}
+          />
+        </KeepAlive>
+        <KeepAlive visible={currentScreen === 'practice'}>
+          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} />
+        </KeepAlive>
+
         {currentScreen === 'settings' ? (
           <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
         ) : currentScreen === 'vocabulary' ? (
@@ -630,19 +649,6 @@ export default function App() {
           <PrivacyScreen onBack={navigateToHome} mode="privacy" />
         ) : currentScreen === 'terms' ? (
           <PrivacyScreen onBack={navigateToHome} mode="terms" />
-        ) : currentScreen === 'movies' || currentScreen === 'journey' ? (
-          // v0.7 — `movies` is the new tab; the `journey` case is the
-          // legacy-route catch-all so any HomeScreen "open my reel"
-          // links land on the new screen rather than 404.
-          <MyMoviesScreen
-            onSearchPress={() => navigateToSearch('')}
-            onOpenMoviePreview={handleOpenMoviePreview}
-          />
-        ) : currentScreen === 'practice' ? (
-          // v0.7.1 — Practice is a one-action habit dashboard.
-          // Movie-by-movie study lives on My Movies; the daily SRS
-          // session is the only action surface here.
-          <PracticeScreen onStartDailyReview={navigateToReview} />
         ) : currentScreen === 'moviePreview' && activePreviewTile ? (
           <MoviePreviewHub
             tile={activePreviewTile.tile}
@@ -729,7 +735,10 @@ export default function App() {
         ) : currentScreen === 'searchResults' && searchQueryNav ? (
           <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} onNavigateToProfile={() => setShowUserSheet(true)} />
+          // Home, My Movies and Practice are rendered by the persistent
+          // KeepAlive layer above, so the deep-screen ternary renders
+          // nothing for them — the live tab shows through.
+          null
         )}
         <UserMenuSheet
           visible={showUserSheet}
