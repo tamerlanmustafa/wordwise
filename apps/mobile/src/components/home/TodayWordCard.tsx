@@ -10,6 +10,7 @@ import {
 import { wordwiseApi, type TodaysWord } from '../../services/api';
 import { useDoubleTap } from '../../hooks/useDoubleTap';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { Skeleton } from '../ui/Skeleton';
 import { HomeIcon } from './HomeIcons';
 
 /**
@@ -196,11 +197,11 @@ export const TodayWordCardSkeleton = () => {
     <View style={s.container}>
       <View style={[s.face, s.skeletonFace]}>
         <View style={s.header}>
-          <View style={[s.skeletonLine, { width: 90, height: 10 }]} />
-          <View style={[s.skeletonLine, { width: 80, height: 10 }]} />
+          <Skeleton width={90} height={10} radius={7} color={tc.divider} />
+          <Skeleton width={80} height={10} radius={7} color={tc.divider} />
         </View>
-        <View style={[s.skeletonLine, { width: '55%', height: 30, marginTop: 12, marginBottom: 12 }]} />
-        <View style={[s.skeletonLine, { width: '80%', height: 13 }]} />
+        <Skeleton width="55%" height={30} radius={7} color={tc.divider} style={s.skeletonWord} />
+        <Skeleton width="80%" height={13} radius={7} color={tc.divider} />
       </View>
     </View>
   );
@@ -315,8 +316,8 @@ const makeStyles = (tc: ThemeColors) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
-    skeletonLine: {
-      borderRadius: 7,
-      backgroundColor: tc.divider,
+    skeletonWord: {
+      marginTop: 12,
+      marginBottom: 12,
     },
   });

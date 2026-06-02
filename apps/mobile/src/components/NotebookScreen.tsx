@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { wordwiseApi, type SavedWordEntry } from '../services/api';
+import { Skeleton } from './ui/Skeleton';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -54,6 +54,14 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
 
   useEffect(() => { load(); }, [load]);
 
+  // Optimistic unsave: drop the word from the list immediately so the tap feels
+  // instant, then fire the toggle in the background. On failure we re-sync from
+  // the server rather than leaving a phantom removal (playbook §1).
+  const handleUnsave = useCallback((entry: SavedWordEntry) => {
+    setWords((prev) => prev.filter((w) => w.id !== entry.id));
+    wordwiseApi.saveWord(entry.word, entry.movie_id).catch(() => { load(); });
+  }, [load]);
+
   const movieGrouped = useMemo(() => {
     const map = new Map<string, SavedWordEntry[]>();
     for (const w of words) {
@@ -76,8 +84,15 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header onBack={onBack} title={headerTitle} />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+        {/* Skeleton rows mirror the real word list so nothing shifts when the
+            data lands, and read as "almost there" rather than a blank spinner. */}
+        <View style={styles.listContent}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <View key={i} style={styles.wordItem}>
+              <Skeleton width={140} height={16} radius={5} color={COLORS.border} />
+              <Skeleton width={44} height={11} radius={5} color={COLORS.border} />
+            </View>
+          ))}
         </View>
       </SafeAreaView>
     );
@@ -132,7 +147,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
           data={words}
           keyExtractor={(item) => `${item.id}`}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => <WordItem word={item} onUnsave={load} />}
+          renderItem={({ item }) => <WordItem word={item} onUnsave={handleUnsave} />}
         />
       ) : (
         <FlatList
@@ -144,7 +159,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
               <Text style={styles.movieGroupTitle}>{item.title}</Text>
               <Text style={styles.movieGroupCount}>{item.items.length} word{item.items.length === 1 ? '' : 's'}</Text>
               {item.items.map((w) => (
-                <WordItem key={w.id} word={w} onUnsave={load} compact />
+                <WordItem key={w.id} word={w} onUnsave={handleUnsave} compact />
               ))}
             </View>
           )}
@@ -166,14 +181,7 @@ function Header({ onBack, title }: { onBack: () => void; title?: string }) {
   );
 }
 
-function WordItem({ word, onUnsave, compact }: { word: SavedWordEntry; onUnsave: () => void; compact?: boolean }) {
-  const handleUnsave = async () => {
-    try {
-      await wordwiseApi.saveWord(word.word, word.movie_id);
-      onUnsave();
-    } catch {}
-  };
-
+function WordItem({ word, onUnsave, compact }: { word: SavedWordEntry; onUnsave: (word: SavedWordEntry) => void; compact?: boolean }) {
   const date = new Date(word.created_at);
   const dateStr = `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 
@@ -189,7 +197,7 @@ function WordItem({ word, onUnsave, compact }: { word: SavedWordEntry; onUnsave:
       </View>
       <View style={styles.wordItemRight}>
         <Text style={styles.wordItemDate}>{dateStr}</Text>
-        <TouchableOpacity onPress={handleUnsave} hitSlop={8}>
+        <TouchableOpacity onPress={() => onUnsave(word)} hitSlop={8}>
           <Text style={styles.unsaveIcon}>★</Text>
         </TouchableOpacity>
       </View>

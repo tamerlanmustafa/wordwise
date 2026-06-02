@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -20,8 +19,14 @@ import {
   type QuizStartSessionResponse,
 } from '../services/api';
 import { QuizHeader } from './quiz/QuizHeader';
+import { SessionFinishing } from './quiz/SessionFinishing';
 import { SynonymMCQCard } from './quiz/SynonymMCQCard';
 import { TranslationTypeCard } from './quiz/TranslationTypeCard';
+
+// Minimum time the celebratory finish beat stays on screen, so the reward
+// always lands even when the network resolves instantly. The submit + score
+// calls run *behind* this (see SMOOTHNESS_AND_DESIGN_PLAYBOOK §3).
+const MIN_CELEBRATION_MS = 900;
 
 export interface QuizLessonScreenProps {
   session: QuizStartSessionResponse;
@@ -121,9 +126,16 @@ export function QuizLessonScreen({
   const finishSession = async (final: QuizCardResultInput[]) => {
     setFinishing(true);
     setError(null);
+    // Run the network work and a minimum celebration delay in parallel so the
+    // reward beat (SessionFinishing) always plays for at least MIN_CELEBRATION_MS
+    // — the animation masks the latency instead of a dead spinner.
+    const minBeat = new Promise<void>((resolve) => setTimeout(resolve, MIN_CELEBRATION_MS));
     try {
-      await quizApi.submitCards(session.session_id, final);
-      const result = await quizApi.completeSession(session.session_id);
+      const work = (async () => {
+        await quizApi.submitCards(session.session_id, final);
+        return quizApi.completeSession(session.session_id);
+      })();
+      const [result] = await Promise.all([work, minBeat]);
       onComplete(result, level, final);
     } catch (e) {
       console.warn('[QuizLesson] finish failed:', e);
@@ -173,14 +185,7 @@ export function QuizLessonScreen({
   };
 
   if (finishing) {
-    return (
-      <SafeAreaView style={s.container} edges={['top']}>
-        <View style={s.centered}>
-          <ActivityIndicator size="large" color={accent} />
-          <Text style={s.finishingText}>Scoring your session…</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <SessionFinishing />;
   }
 
   if (error) {
@@ -359,7 +364,6 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   },
   primaryBtnText: { fontSize: 16, fontWeight: '700' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  finishingText: { fontSize: 14, color: tc.textSecondary, marginTop: 16 },
   emptyText: { fontSize: 14, color: tc.textSecondary, marginBottom: 16 },
   exitBtn: {
     paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10,
