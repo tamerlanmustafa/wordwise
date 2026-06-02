@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "WordWise"
     app_version: str = "1.0.0"
-    debug: bool = True
+    # Default OFF so production never leaks tracebacks; set DEBUG=true in a
+    # local .env for development.
+    debug: bool = False
 
     # CORS
     allowed_origins: str = "http://localhost:3000"

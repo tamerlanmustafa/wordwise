@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../theme/palette';
-import { wordwiseApi, API_BASE_URL, type IdiomInfo } from '../../services/api';
+import { wordwiseApi, authFetch, API_BASE_URL, type IdiomInfo } from '../../services/api';
 import { rowStyles as styles } from './rowStyles';
 import type { SentenceExample } from './WordRow';
 
@@ -79,7 +79,7 @@ const _IdiomRow = ({
       if (movieId) {
         const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
         promises.push(
-          fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(phrase)}?max_examples=1${langParam}`)
+          authFetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(phrase)}?max_examples=1${langParam}`)
             .then((res) => res.json())
             .then((data) => {
               if (data.sentences && Array.isArray(data.sentences)) {

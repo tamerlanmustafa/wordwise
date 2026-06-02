@@ -283,8 +283,10 @@ export async function translateText(
     if (movieId) body.movie_id = movieId;
     if (sentence) body.sentence = sentence;
 
-    const response = await axios.post<TranslationResponse>(
-      `${API_BASE_URL}/translate`,
+    // apiClient attaches the auth token (endpoint now requires login) and
+    // handles silent refresh on 401.
+    const response = await apiClient.post<TranslationResponse>(
+      `/translate`,
       body
     );
 
@@ -307,8 +309,8 @@ export async function translateBatch(
   userId?: number
 ): Promise<BatchTranslationResponse> {
   try {
-    const response = await axios.post<BatchTranslationResponse>(
-      `${API_BASE_URL}/translate/batch`,
+    const response = await apiClient.post<BatchTranslationResponse>(
+      `/translate/batch`,
       {
         texts,
         target_lang: targetLang,
@@ -356,8 +358,8 @@ export async function getUserDifficultWords(
       params.target_lang = targetLang;
     }
 
-    const response = await axios.get<DifficultWordsResponse>(
-      `${API_BASE_URL}/translate/user/${userId}/difficult-words`,
+    const response = await apiClient.get<DifficultWordsResponse>(
+      `/translate/user/${userId}/difficult-words`,
       { params }
     );
 
@@ -382,8 +384,8 @@ export async function getUserTranslationStats(
       params.target_lang = targetLang;
     }
 
-    const response = await axios.get<UserTranslationStats>(
-      `${API_BASE_URL}/translate/user/${userId}/stats`,
+    const response = await apiClient.get<UserTranslationStats>(
+      `/translate/user/${userId}/stats`,
       { params }
     );
 

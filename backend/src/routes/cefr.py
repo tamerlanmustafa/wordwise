@@ -25,6 +25,7 @@ from src.services.lemmatization_service import (
     backfill_lemmas_from_classifications,
 )
 from src.database import get_db
+from src.middleware.auth import get_admin_user
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -298,7 +299,8 @@ async def auto_enrich_after_classification(movie_id: int, target_lang: str):
 async def classify_script(
     request: ScriptClassificationRequest,
     background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Classify an entire movie script from the database.
@@ -659,7 +661,10 @@ async def classify_script(
 
 
 @router.put("/update-thresholds")
-async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
+async def update_frequency_thresholds(
+    thresholds: FrequencyThresholdUpdate,
+    admin_user = Depends(get_admin_user),
+):
     """
     Modify frequency thresholds used to map ranks → CEFR levels
     """
@@ -692,6 +697,7 @@ async def update_frequency_thresholds(thresholds: FrequencyThresholdUpdate):
 async def backfill_lemmas(
     background_tasks: BackgroundTasks,
     db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Migration endpoint: Backfill the Lemma table from existing WordClassification data.

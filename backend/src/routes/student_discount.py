@@ -98,6 +98,20 @@ async def verify_student(
         )"""
     )
 
+    # The submitted email must be the one on the authenticated account.
+    # Otherwise anyone could claim the discount with an arbitrary `*.edu`
+    # string they don't control (e.g. "someone@harvard.edu"). Tying it to
+    # the account email means a Google-OAuth user's address is already
+    # provider-verified; for password signups it at least prevents trivially
+    # claiming someone else's institution.
+    submitted = (body.email or "").strip().lower()
+    account_email = (getattr(current_user, "email", "") or "").strip().lower()
+    if not submitted or "@" not in submitted or submitted != account_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Student verification must use your account's email address.",
+        )
+
     if SHEERID_PROGRAM_ID and SHEERID_API_KEY:
         # TODO: Call SheerID verification API
         # import httpx

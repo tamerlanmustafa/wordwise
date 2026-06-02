@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse
 
 from ..database import get_db
+from ..middleware.auth import get_admin_user
 from ..services.script_ingestion_service import ScriptIngestionService
 from ..schemas.script import (
     ScriptResponse,
@@ -189,7 +190,8 @@ async def search_movies(
 @router.delete("/{script_id}")
 async def delete_script(
     script_id: int,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Delete a script from the database.

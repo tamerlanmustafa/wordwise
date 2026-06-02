@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import type { DisplayWord } from '../types/vocabularyWorker';
 import type { IdiomInfo } from '../services/scriptService';
+import apiClient from '../services/api';
 
 // ============================================================================
 // STYLED COMPONENTS
@@ -266,8 +267,9 @@ export const WordRow = memo<WordRowProps>(({
     if (movieId) {
       const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
       promises.push(
-        fetch(`/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
-          .then((res) => res.json())
+        // apiClient sends the auth token (endpoint now requires login).
+        apiClient.get(`/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
+          .then((res) => res.data)
           .then((data) => {
             if (data.sentences && Array.isArray(data.sentences)) {
               results.sentenceExamples = data.sentences;

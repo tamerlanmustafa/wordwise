@@ -67,16 +67,23 @@ async def upload_file(
             detail=f"Unsupported file type '{extension}'. Supported: {', '.join(SUPPORTED_EXTENSIONS)}"
         )
 
-    # Read file content
+    # Read file content in chunks, aborting the moment we exceed the cap.
+    # Reading the whole UploadFile first and checking the size after would
+    # let an attacker force the server to buffer an arbitrarily large body
+    # into memory (DoS); this bounds peak memory to ~MAX_FILE_SIZE + 1 chunk.
     try:
-        content = await file.read()
-
-        # Check file size
-        if len(content) > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB"
-            )
+        chunks = bytearray()
+        while True:
+            chunk = await file.read(1024 * 1024)  # 1 MB
+            if not chunk:
+                break
+            chunks.extend(chunk)
+            if len(chunks) > MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB"
+                )
+        content = bytes(chunks)
 
         if len(content) == 0:
             raise HTTPException(

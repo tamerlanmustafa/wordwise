@@ -166,7 +166,9 @@ const refreshAccessToken = (): Promise<string | null> => {
 
 // Helper for authenticated requests. On a 401 it refreshes once and retries;
 // if the refresh fails, it tears down the session via onSessionExpired.
-const authFetch = async (
+// Exported so components doing one-off enrichment/translation fetches can
+// reuse the same auth + refresh handling instead of bare fetch().
+export const authFetch = async (
   url: string,
   options: RequestInit = {},
   retry = true,
@@ -424,9 +426,9 @@ export const wordwiseApi = {
     };
     if (movieId) body.movie_id = movieId;
 
-    const res = await fetch(`${API_BASE_URL}/translate`, {
+    // authFetch attaches the bearer token (endpoint now requires login).
+    const res = await authFetch(`${API_BASE_URL}/translate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('Failed to translate');
@@ -502,9 +504,8 @@ export const wordwiseApi = {
   ): Promise<Record<string, { sentence: string; word_position: number; matched_form: string }[]>> => {
     if (!words.length) return {};
     const t0 = Date.now();
-    const res = await fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/batch`, {
+    const res = await authFetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ words, max_examples: maxExamples }),
     });
     const httpMs = Date.now() - t0;

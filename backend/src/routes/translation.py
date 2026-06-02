@@ -11,6 +11,8 @@ import logging
 
 from prisma import Prisma
 from ..database import get_db
+from ..middleware.auth import get_current_active_user, get_admin_user
+from ..utils.rate_limit import rate_limit
 from ..services.translation_service import TranslationService
 from ..utils.deepl_client import (
     DeepLError,
@@ -26,6 +28,12 @@ _google_error_logged = False
 _deepl_quota_error_logged = False
 
 router = APIRouter(prefix="/translate", tags=["translation"])
+
+# Translation hits paid MT providers (DeepL/Google), so cap per-caller volume
+# even for logged-in users to bound runaway cost from a compromised/abusive
+# client. Keyed by user id when authenticated.
+_translate_throttle = rate_limit(120, 60.0, scope="translate")
+_translate_batch_throttle = rate_limit(30, 60.0, scope="translate-batch")
 
 
 # Request/Response Models
@@ -114,7 +122,9 @@ class CacheStatsResponse(BaseModel):
 @router.post("/", response_model=TranslationResponse)
 async def translate_text(
     request: TranslationRequest,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+    _: None = Depends(_translate_throttle),
 ):
     """
     Translate text to target language
@@ -142,6 +152,9 @@ async def translate_text(
     - Free tier: 500,000 characters/month
     - Check DeepL documentation for latest limits
     """
+    # Attribution comes from the verified token, not the client-supplied
+    # body — otherwise a caller could write attempts to any user's history.
+    request.user_id = current_user.id
     try:
         # V2: Try TranslationMemory first (sense-aware, zero API cost)
         if request.sentence or request.movie_id:
@@ -222,7 +235,9 @@ async def translate_text(
 @router.post("/batch", response_model=BatchTranslationResponse)
 async def translate_batch(
     request: BatchTranslationRequest,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+    _: None = Depends(_translate_batch_throttle),
 ):
     """
     Translate multiple texts in a single request
@@ -232,6 +247,8 @@ async def translate_batch(
     - Max 100 texts per request
     - Each text max 5000 characters
     """
+    # Attribution comes from the verified token, not the client body.
+    request.user_id = current_user.id
     logger.info(f"[BATCH TRANSLATE] Received {len(request.texts)} texts, target={request.target_lang}")
     logger.debug(f"[BATCH TRANSLATE] First 5 texts: {request.texts[:5]}")
     try:
@@ -298,7 +315,8 @@ async def get_cache_statistics(db: Prisma = Depends(get_db)):
 @router.delete("/cache")
 async def clear_translation_cache(
     target_lang: Optional[str] = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user=Depends(get_admin_user),
 ):
     """
     Clear translation cache
@@ -380,7 +398,8 @@ async def get_difficult_words(
     target_lang: Optional[str] = None,
     min_attempts: int = 2,
     limit: int = 50,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
 ):
     """
     Get words that user has translated multiple times (indicating difficulty)
@@ -397,6 +416,9 @@ async def get_difficult_words(
     Returns:
         List of difficult words sorted by attempt count (highest first)
     """
+    # A user may only read their own translation history.
+    if user_id != current_user.id and not current_user.isAdmin:
+        raise HTTPException(status_code=403, detail="Forbidden")
     try:
         service = TranslationService(db)
         words = await service.get_user_difficult_words(
@@ -424,7 +446,8 @@ async def get_difficult_words(
 async def get_user_translation_stats(
     user_id: int,
     target_lang: Optional[str] = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
 ):
     """
     Get user's translation statistics
@@ -442,6 +465,9 @@ async def get_user_translation_stats(
     Returns:
         User translation statistics
     """
+    # A user may only read their own translation stats.
+    if user_id != current_user.id and not current_user.isAdmin:
+        raise HTTPException(status_code=403, detail="Forbidden")
     try:
         service = TranslationService(db)
         stats = await service.get_user_translation_stats(

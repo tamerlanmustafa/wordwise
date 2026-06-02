@@ -14,9 +14,16 @@ from ..schemas.oauth import (
 from ..utils.google_auth import verify_google_token, generate_username_from_email
 from ..utils.auth import create_access_token, create_refresh_token
 from ..config import get_settings
+from ..utils.rate_limit import rate_limit
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/google", tags=["oauth"])
 settings = get_settings()
+
+# Same brute-force/abuse ceiling as the password login path.
+_google_login_throttle = rate_limit(10, 60.0, scope="auth-google")
 
 
 def _verify_and_get_google_user_info(id_token: str) -> dict:
@@ -169,7 +176,11 @@ def _create_user_response(user) -> UserInfo:
 
 
 @router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
-async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)):
+async def google_login(
+    request: GoogleLoginRequest,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_google_login_throttle),
+):
     """Authenticate user with Google OAuth 2.0 using Prisma."""
     try:
         # Verify Google ID token
@@ -204,8 +215,11 @@ async def google_login(request: GoogleLoginRequest, db: Prisma = Depends(get_db)
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        # Log the real cause server-side; never echo internal error text to
+        # the client (it can leak stack/library details).
+        logger.exception("Google authentication failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred during authentication: {str(e)}"
+            detail="An error occurred during authentication."
         )

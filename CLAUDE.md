@@ -19,6 +19,13 @@
 - Read the nearest existing example first and follow its patterns (naming, file layout, imports) instead of inventing new ones.
 - Keep changes scoped to the task. Don't reformat or refactor unrelated lines.
 
+## Testing (write tests as part of the feature, not after)
+- When you add or change a feature, add or extend a test that covers it in the same change. New behavior shouldn't land untested.
+- Put tests next to the code in a `__tests__/` folder and follow the nearest existing test's structure before inventing a new one. Jest/pytest auto-discover them.
+- Mobile (`apps/mobile`): **logic + integration only — do NOT add a component-render library** (`@testing-library/react-native`). Cover features via stores, services, hooks, pure helpers, and cross-store user-story flows. Use `src/test-utils/renderHook` for hooks, and `jest.setup.js` for the shared AsyncStorage/SecureStore mocks. Watch the known gotchas: native `import()` can't run under jest, flush microtasks (not `setImmediate`) when fake timers are on, and drive dates with `jest.setSystemTime`.
+- Backend: pytest under `backend/tests`. Web (`frontend/`): gated by typecheck + build, not a unit runner — keep web/mobile parity per the WEB-vs-Mobile section.
+- The mobile jest suite + typechecks run automatically on **pre-push** (`.husky/pre-push`) and in **CI** (`.github/workflows/ci.yml`), so any test you add is exercised on every push/PR — no extra wiring needed.
+
 ## Verify your work (run before considering a task done)
 - Typecheck: `npm run typecheck` (both web + mobile), or `npm run typecheck:frontend` / `npm run typecheck:mobile`.
 - Lint: web → `cd frontend && npm run lint`; mobile → `cd apps/mobile && npm run lint`; backend is auto-linted by ruff on commit.

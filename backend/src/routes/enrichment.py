@@ -10,6 +10,7 @@ from typing import List, Optional, Dict
 import logging
 
 from src.database import get_db
+from src.middleware.auth import get_current_active_user, get_admin_user
 from prisma import Prisma
 from src.config import get_settings
 from src.services.sentence_example_service import SentenceExampleService
@@ -279,7 +280,8 @@ async def enrich_movie_examples(
 async def get_movie_examples(
     movie_id: int,
     lang: str,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Fetch all enriched word examples for a movie.
@@ -353,7 +355,8 @@ async def get_movie_examples(
 async def get_enrichment_status(
     movie_id: int,
     lang: str,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Check enrichment status for a movie + language combination.
@@ -417,7 +420,8 @@ async def start_enrichment(
     movie_id: int,
     lang: str,
     background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Start background enrichment for a movie + language combination.
@@ -618,7 +622,8 @@ async def get_word_sentences(
     word: str,
     target_lang: str = None,
     max_examples: int = 1,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Get sentences containing a word from a movie, with optional cached translation.
@@ -792,6 +797,7 @@ async def get_word_sentences_batch(
     movie_id: int,
     request: BatchSentencesRequest,
     db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Look up cached sentences for many words in a single round trip.
@@ -993,7 +999,8 @@ async def get_word_examples(
     movie_id: int,
     word: str,
     lang: str,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Fetch sentence examples for a specific word in a movie.
@@ -1064,7 +1071,8 @@ async def start_v2_enrichment(
     movie_id: int,
     request: V2EnrichRequest,
     background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Start V2 enrichment Stage B (translation) for a movie.
@@ -1122,7 +1130,8 @@ async def start_v2_enrichment(
 async def get_translation_memory_word(
     word: str,
     lang: str,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Look up all sense-aware translations for a word from TranslationMemory.
@@ -1185,7 +1194,8 @@ async def get_translation_memory_word(
 async def report_translation(
     tm_id: int,
     background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Report a bad translation. Increments reportCount.
@@ -1203,7 +1213,8 @@ async def report_translation(
 @router.get("/v2/translation-memory/stats")
 async def get_tm_stats(
     lang: Optional[str] = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """Get TranslationMemory statistics."""
     try:
@@ -1222,7 +1233,8 @@ async def get_tm_stats(
 @router.post("/v2/backfill")
 async def backfill_all_movies(
     background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Backfill all existing movies through V2 Stage A pipeline
@@ -1248,7 +1260,8 @@ async def backfill_all_movies(
 async def migrate_translation_cache(
     lang: Optional[str] = None,
     background_tasks: BackgroundTasks = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Migrate V1 TranslationCache entries into TranslationMemory.
@@ -1268,7 +1281,8 @@ async def refine_clusters_minilm(
     lemma_id: Optional[int] = None,
     merge_threshold: float = 0.88,
     background_tasks: BackgroundTasks = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Run MiniLM hybrid clustering refinement.
@@ -1299,7 +1313,8 @@ async def refine_clusters_minilm(
 
 @router.post("/v2/recalculate-priorities")
 async def recalculate_priority_scores(
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Recompute priorityScore for all lemmas using fresh usage data.
@@ -1317,7 +1332,8 @@ async def recalculate_priority_scores(
 @router.get("/v2/cost-monitoring")
 async def get_cost_monitoring(
     lang: Optional[str] = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Get cost monitoring dashboard: cache hit rates, API call counts,
@@ -1334,7 +1350,8 @@ async def get_cost_monitoring(
 @router.get("/v2/quality-metrics")
 async def get_quality_metrics(
     lang: Optional[str] = None,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Get quality metrics: reported translations, retranslation candidates,
@@ -1350,7 +1367,8 @@ async def get_quality_metrics(
 
 @router.get("/v2/benchmarks")
 async def run_benchmarks(
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Run performance benchmarks: TM lookup, sense selection, spaCy lemmatization.
@@ -1366,7 +1384,8 @@ async def run_benchmarks(
 
 @router.get("/v2/migration-readiness")
 async def check_migration_readiness(
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    admin_user = Depends(get_admin_user),
 ):
     """
     Check whether V2 is ready to fully replace V1 dual-write.

@@ -13,11 +13,18 @@ from ..utils.auth import (
 )
 from ..config import get_settings
 from ..middleware.auth import get_current_user
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+
+# Throttle the unauthenticated credential endpoints to blunt brute-force /
+# credential-stuffing / account-enumeration attempts. Keyed per-IP.
+_login_throttle = rate_limit(10, 60.0, scope="auth-login")
+_register_throttle = rate_limit(5, 60.0, scope="auth-register")
+_refresh_throttle = rate_limit(30, 60.0, scope="auth-refresh")
 
 
 def _issue_tokens(user) -> tuple[str, str]:
@@ -36,7 +43,11 @@ def _issue_tokens(user) -> tuple[str, str]:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_register_throttle),
+):
     """Register a new user"""
     # Check if email already exists
     existing_user = await db.user.find_unique(where={"email": user_data.email})
@@ -82,7 +93,11 @@ async def register(user_data: UserCreate, db: Prisma = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(credentials: UserLogin, db: Prisma = Depends(get_db)):
+async def login(
+    credentials: UserLogin,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_login_throttle),
+):
     """Login user and return JWT token"""
     logger.info("Login attempt for email: %s", credentials.email)
     user = await db.user.find_unique(where={"email": credentials.email})
@@ -125,6 +140,7 @@ async def refresh_token(
     body: RefreshRequest | None = None,
     authorization: str | None = Header(default=None),
     db: Prisma = Depends(get_db),
+    _: None = Depends(_refresh_throttle),
 ):
     """Exchange a token for a fresh access+refresh pair.
 

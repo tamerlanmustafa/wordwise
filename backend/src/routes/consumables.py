@@ -37,9 +37,10 @@ router = APIRouter(prefix="/consumables", tags=["consumables"])
 # Tunable per-SKU when we ship multiple pack sizes.
 FREEZE_PACK_SIZE: int = 5
 
-# Whether the debug-grant endpoint is reachable. Defaults to True in dev
-# (no PRODUCTION env var set) and False in prod — admins still bypass.
-DEBUG_GRANTS_ENABLED: bool = os.environ.get("PRODUCTION", "").lower() not in {"1", "true"}
+# Whether the debug-grant endpoint is reachable for non-admins. Fail CLOSED:
+# off unless ENABLE_DEBUG_GRANTS is explicitly truthy. A forgotten env var in
+# prod must never hand out free consumables. Admins always bypass.
+DEBUG_GRANTS_ENABLED: bool = os.environ.get("ENABLE_DEBUG_GRANTS", "").lower() in {"1", "true"}
 
 
 class CreditedResponse(BaseModel):
@@ -139,10 +140,10 @@ async def debug_grant_freeze_pack(
 ):
     """Dev-only shortcut: credit a freeze pack without an actual IAP.
 
-    Restricted to admins, OR to any caller when DEBUG_GRANTS_ENABLED
-    (true outside PRODUCTION). Lets the mobile app exercise the full UX
-    flow before real receipt validation lands. Production builds with
-    PRODUCTION=true block non-admin callers.
+    Restricted to admins, OR to any caller only when ENABLE_DEBUG_GRANTS is
+    explicitly set truthy (fail-closed). Lets the mobile app exercise the full
+    UX flow before real receipt validation lands. Any environment that doesn't
+    set ENABLE_DEBUG_GRANTS blocks non-admin callers.
     """
     is_admin = bool(getattr(current_user, "isAdmin", False))
     if not (is_admin or DEBUG_GRANTS_ENABLED):

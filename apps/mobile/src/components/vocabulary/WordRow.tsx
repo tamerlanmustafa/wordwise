@@ -6,7 +6,7 @@ import {
   View,
 } from 'react-native';
 import { colors, cefrColors } from '../../theme/palette';
-import { wordwiseApi, premiumApi, API_BASE_URL, type WordInfo, type CrossMovieSentence } from '../../services/api';
+import { wordwiseApi, premiumApi, authFetch, API_BASE_URL, type WordInfo, type CrossMovieSentence } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { rowStyles as styles } from './rowStyles';
@@ -126,7 +126,7 @@ const _WordRow = ({
     if (movieId) {
       const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
       promises.push(
-        fetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
+        authFetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(word.word)}?max_examples=1${langParam}`)
           .then((res) => res.json())
           .then((data) => {
             if (data.sentences && Array.isArray(data.sentences)) {
