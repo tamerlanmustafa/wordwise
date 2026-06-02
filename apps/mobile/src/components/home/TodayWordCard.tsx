@@ -303,7 +303,7 @@ const makeStyles = (tc: ThemeColors) =>
       fontWeight: '700',
       color: tc.text,
       letterSpacing: -0.4,
-      marginBottom: 8,
+      marginBottom: 1,
     },
     sentenceTranslation: {
       fontSize: 12,

@@ -290,7 +290,15 @@ export const HomeScreen = ({
         {/* Word of the Hour — between the ad slot and the level controls.
             Rotates hourly via the srsApi.todaysWord timer in this screen. */}
         {todaysWord ? (
-          <TodayWordCard word={todaysWord} targetLanguage={targetLanguage} />
+          // key by the word so the hourly rotation remounts the card. Its
+          // translation/flip state is seeded from the `word` prop on mount
+          // only; without a fresh mount the front face shows the new word
+          // while the back face keeps the previous hour's translation.
+          <TodayWordCard
+            key={todaysWord.word}
+            word={todaysWord}
+            targetLanguage={targetLanguage}
+          />
         ) : (
           <TodayWordCardSkeleton />
         )}
