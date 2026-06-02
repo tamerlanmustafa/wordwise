@@ -303,8 +303,10 @@ export const HomeScreen = ({
           onSortPress={handleSortPress}
         />
 
-        {/* Ranked feed — RankedMovieList is rendered exactly as before. */}
-        <View style={styles.section}>
+        {/* Ranked feed — RankedMovieList is rendered exactly as before. The
+            cards themselves are untouched; we only widen them by trimming the
+            container's horizontal padding. */}
+        <View style={s.feedSection}>
           {(homeTab === 'level' ? levelLoading : loading) ? (
             <View style={styles.skeletonContainer}>
               {[0, 1, 2, 3].map((i) => (
@@ -374,5 +376,11 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 2,
       color: tc.textFaint,
       textTransform: 'uppercase',
+    },
+    feedSection: {
+      // Narrower side padding than the old `styles.section` (16) so the
+      // ranked cards render a touch wider. The card geometry itself is
+      // unchanged — only this container's gutters shrink.
+      paddingHorizontal: 10,
     },
   });
