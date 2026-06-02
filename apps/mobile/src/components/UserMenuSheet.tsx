@@ -3,6 +3,11 @@
  * overlay (no Modal) so the GlobalBottomBar rendered after it in the tree
  * stays fully interactive. The scrim and sheet both stop at `bottomOffset`
  * so the bar is never covered.
+ *
+ * Styled to the v0.7 cinema / reading-room system (theme/tokens): warm
+ * surfaces, gold accents, serif identity name, and stroked SVG icons in
+ * circular chips — matching HomeHeader / My Movies / the bottom bar (which
+ * uses gold for its active tab). No emoji.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -16,7 +21,10 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+
+const SERIF_FAMILY = 'Source Serif 4';
 
 interface Props {
   visible: boolean;
@@ -65,19 +73,19 @@ export function UserMenuSheet({
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
-  const navItems = [
-    { icon: '📊', label: 'My Progress', action: wrap(onNavigateToStats) },
-    { icon: '🏅', label: 'Badges', action: wrap(onNavigateToAchievements) },
-    { icon: '📚', label: 'My Lists', action: wrap(onNavigateToLists) },
-    { icon: '📖', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
-    { icon: '⚙️', label: 'Settings', action: wrap(onNavigateToSettings) },
-    ...(isAdmin ? [{ icon: '🛠', label: 'Admin Panel', action: wrap(onNavigateToAdmin) }] : []),
+  const navItems: { icon: MenuIconName; label: string; action: () => void }[] = [
+    { icon: 'progress', label: 'My Progress', action: wrap(onNavigateToStats) },
+    { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
+    { icon: 'lists', label: 'My Lists', action: wrap(onNavigateToLists) },
+    { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
+    { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
+    ...(isAdmin ? [{ icon: 'admin' as MenuIconName, label: 'Admin Panel', action: wrap(onNavigateToAdmin) }] : []),
   ];
 
-  const themeOpts: { key: ThemePreference; label: string; icon: string }[] = [
-    { key: 'light',  label: 'Light',  icon: '☀️' },
-    { key: 'system', label: 'Auto',   icon: '📱' },
-    { key: 'dark',   label: 'Dark',   icon: '🌙' },
+  const themeOpts: { key: ThemePreference; label: string; icon: MenuIconName }[] = [
+    { key: 'light',  label: 'Light',  icon: 'sun' },
+    { key: 'system', label: 'Auto',   icon: 'phone' },
+    { key: 'dark',   label: 'Dark',   icon: 'moon' },
   ];
 
   return (
@@ -108,7 +116,8 @@ export function UserMenuSheet({
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>{user?.username || 'User'}</Text>
+            <Text style={styles.eyebrow}>YOUR ACCOUNT</Text>
+            <Text style={styles.userName} numberOfLines={1}>{user?.username || 'User'}</Text>
             <Text style={styles.userEmail} numberOfLines={1}>{user?.email}</Text>
           </View>
         </View>
@@ -116,31 +125,35 @@ export function UserMenuSheet({
         <View style={styles.divider} />
 
         {navItems.map(({ icon, label, action }) => (
-          <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.7}>
-            <Text style={styles.rowIcon}>{icon}</Text>
+          <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.6}>
+            <View style={styles.iconChip}>
+              <MenuIcon name={icon} size={18} color={tc.textSecondary} />
+            </View>
             <Text style={styles.rowLabel}>{label}</Text>
-            <Text style={styles.rowArrow}>›</Text>
+            <MenuIcon name="chevron" size={16} color={tc.textFaint} />
           </TouchableOpacity>
         ))}
 
         <View style={styles.divider} />
 
-        <View style={styles.themeRow}>
-          <View style={styles.themeChips}>
-            {themeOpts.map((o) => (
+        <Text style={styles.sectionLabel}>APPEARANCE</Text>
+        <View style={styles.themeChips}>
+          {themeOpts.map((o) => {
+            const on = pref === o.key;
+            return (
               <TouchableOpacity
                 key={o.key}
-                style={[styles.themeChip, pref === o.key && styles.themeChipActive]}
+                style={[styles.themeChip, on && styles.themeChipActive]}
                 onPress={() => useThemeStore.getState().setPreference(o.key)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.themeChipIcon}>{o.icon}</Text>
-                <Text style={[styles.themeChipLabel, pref === o.key && styles.themeChipLabelActive]}>
+                <MenuIcon name={o.icon} size={16} color={on ? tc.primary : tc.textSecondary} />
+                <Text style={[styles.themeChipLabel, on && styles.themeChipLabelActive]}>
                   {o.label}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
         </View>
 
         <View style={styles.divider} />
@@ -148,14 +161,124 @@ export function UserMenuSheet({
         <TouchableOpacity
           style={styles.row}
           onPress={() => { onClose(); setTimeout(onLogout, 200); }}
-          activeOpacity={0.7}
+          activeOpacity={0.6}
         >
-          <Text style={styles.rowIcon}>🚪</Text>
+          <View style={[styles.iconChip, styles.iconChipDanger]}>
+            <MenuIcon name="logout" size={18} color={tc.error} />
+          </View>
           <Text style={[styles.rowLabel, { color: tc.error }]}>Logout</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
   );
+}
+
+// ── Stroked icon set (no emoji) — mirrors the cinema system used across
+//    Home / My Movies / the bottom bar. ─────────────────────────────────
+type MenuIconName =
+  | 'progress'
+  | 'badge'
+  | 'lists'
+  | 'book'
+  | 'settings'
+  | 'admin'
+  | 'logout'
+  | 'sun'
+  | 'moon'
+  | 'phone'
+  | 'chevron';
+
+function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; size?: number; color?: string }) {
+  const p = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: color,
+    strokeWidth: 1.9,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+  switch (name) {
+    case 'progress':
+      return (
+        <Svg {...p}>
+          <Path d="M4 20h16" />
+          <Path d="M6 20v-6M11 20V6M16 20v-9" />
+        </Svg>
+      );
+    case 'badge':
+      return (
+        <Svg {...p}>
+          <Circle cx={12} cy={9} r={5} />
+          <Path d="M8.5 13L7 21l5-2.6L17 21l-1.5-8" />
+        </Svg>
+      );
+    case 'lists':
+      return (
+        <Svg {...p}>
+          <Path d="M9 6h11M9 12h11M9 18h11" />
+          <Path d="M4 6h.01M4 12h.01M4 18h.01" />
+        </Svg>
+      );
+    case 'book':
+      return (
+        <Svg {...p}>
+          <Path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 0 5 20.5z" />
+          <Path d="M5 17.5A1.5 1.5 0 0 1 6.5 16H19" />
+        </Svg>
+      );
+    case 'settings':
+      return (
+        <Svg {...p}>
+          <Path d="M4 7h9M17 7h3" />
+          <Path d="M4 17h3M11 17h9" />
+          <Circle cx={15} cy={7} r={2.2} />
+          <Circle cx={9} cy={17} r={2.2} />
+        </Svg>
+      );
+    case 'admin':
+      return (
+        <Svg {...p}>
+          <Path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z" />
+          <Path d="M9 12l2 2 4-4" />
+        </Svg>
+      );
+    case 'logout':
+      return (
+        <Svg {...p}>
+          <Path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
+          <Path d="M16 17l5-5-5-5M21 12H9" />
+        </Svg>
+      );
+    case 'sun':
+      return (
+        <Svg {...p}>
+          <Circle cx={12} cy={12} r={4} />
+          <Path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </Svg>
+      );
+    case 'moon':
+      return (
+        <Svg {...p}>
+          <Path d="M21 12.8A8 8 0 1 1 11.2 3a6 6 0 0 0 9.8 9.8z" />
+        </Svg>
+      );
+    case 'phone':
+      return (
+        <Svg {...p}>
+          <Rect x={7} y={3} width={10} height={18} rx={2.5} />
+          <Path d="M11 18h2" />
+        </Svg>
+      );
+    case 'chevron':
+    default:
+      return (
+        <Svg {...p}>
+          <Path d="M9 6l6 6-6 6" />
+        </Svg>
+      );
+  }
 }
 
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
@@ -169,11 +292,13 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: tc.paper,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderTopWidth: 1,
+    borderColor: tc.border,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 16,
+    paddingBottom: 18,
   },
   handle: {
     width: 40,
@@ -181,50 +306,91 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     borderRadius: 2,
     backgroundColor: tc.border,
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingBottom: 10,
+    gap: 14,
+    paddingBottom: 12,
   },
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: tc.gold,
+  },
   avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: tc.primary,
+    borderWidth: 2,
+    borderColor: tc.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  userName: { fontSize: 15, fontWeight: '700', color: tc.text },
-  userEmail: { fontSize: 12, color: tc.textSecondary, marginTop: 1 },
-  divider: { height: 1, backgroundColor: tc.divider, marginVertical: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
-  rowIcon: { fontSize: 16, width: 26, textAlign: 'center' },
-  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: tc.text },
-  rowArrow: { fontSize: 16, color: tc.textSecondary },
-  themeRow: { paddingVertical: 4 },
+  avatarInitial: { fontSize: 21, fontWeight: '700', color: '#FFFFFF', fontFamily: SERIF_FAMILY },
+  eyebrow: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: tc.goldOnSurface,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: tc.text,
+    fontFamily: SERIF_FAMILY,
+  },
+  userEmail: { fontSize: 12.5, color: tc.textSecondary, marginTop: 2 },
+  divider: { height: 1, backgroundColor: tc.divider, marginVertical: 8 },
+  sectionLabel: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 1.8,
+    color: tc.textFaint,
+    textTransform: 'uppercase',
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 14 },
+  iconChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: tc.chipBg,
+    borderWidth: 1,
+    borderColor: tc.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconChipDanger: {
+    backgroundColor: tc.errorTint,
+    borderColor: tc.errorBorder,
+  },
+  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: tc.text },
   themeChips: { flexDirection: 'row', gap: 8 },
   themeChip: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: tc.border,
     backgroundColor: tc.background,
-    gap: 4,
+    gap: 6,
   },
   themeChipActive: {
     borderColor: tc.primary,
-    backgroundColor: tc.primary + '22',
+    backgroundColor: tc.primaryTint,
   },
-  themeChipIcon: { fontSize: 14 },
-  themeChipLabel: { fontSize: 12, fontWeight: '600', color: tc.textSecondary },
-  themeChipLabelActive: { color: tc.primary, fontWeight: '700' },
+  themeChipLabel: { fontSize: 12.5, fontWeight: '600', color: tc.textSecondary },
+  themeChipLabelActive: { color: tc.primary, fontWeight: '800' },
 });
