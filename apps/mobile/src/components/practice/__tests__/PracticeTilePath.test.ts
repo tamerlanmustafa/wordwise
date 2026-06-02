@@ -5,7 +5,13 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
-import { buildWindow } from '../PracticeTilePath';
+import {
+  buildWindow,
+  offsetForIndex,
+  sectionForIndex,
+  isSectionStart,
+  SECTION_SIZE,
+} from '../PracticeTilePath';
 import { kindAtIndex } from '../../../stores/practicePathStore';
 
 describe('kindAtIndex (3-step cycle, synonyms blended into other kinds)', () => {
@@ -87,5 +93,45 @@ describe('buildWindow', () => {
     expect(w.filter((t) => t.state === 'completed')).toHaveLength(2);
     expect(w.filter((t) => t.state === 'locked')).toHaveLength(4);
     expect(w.filter((t) => t.state === 'active')).toHaveLength(1);
+  });
+});
+
+describe('offsetForIndex (zigzag anchored to absolute index)', () => {
+  it('is keyed on absolute index, repeating every 7', () => {
+    expect(offsetForIndex(0)).toBe(0);
+    expect(offsetForIndex(1)).toBe(24);
+    expect(offsetForIndex(7)).toBe(offsetForIndex(0));
+    expect(offsetForIndex(8)).toBe(offsetForIndex(1));
+  });
+
+  it('handles a defensively negative index', () => {
+    // ((-1 % 7) + 7) % 7 === 6 → last offset.
+    expect(offsetForIndex(-1)).toBe(-20);
+  });
+
+  it('scrolls the path shape as the cursor advances (not frozen)', () => {
+    // The bug this fixes: keying the offset on the rendered slot made
+    // every window an identical frozen shape. Keying on the absolute
+    // index means consecutive cursors render a shifted zigzag.
+    const shapeAt = (cursor: number) =>
+      buildWindow(cursor).map((t) => offsetForIndex(t.index));
+    expect(shapeAt(3)).not.toEqual(shapeAt(4));
+  });
+});
+
+describe('section checkpoints', () => {
+  it('groups indices into 1-based sections of SECTION_SIZE', () => {
+    expect(sectionForIndex(0)).toBe(1);
+    expect(sectionForIndex(SECTION_SIZE - 1)).toBe(1);
+    expect(sectionForIndex(SECTION_SIZE)).toBe(2);
+    expect(sectionForIndex(SECTION_SIZE * 2)).toBe(3);
+  });
+
+  it('marks only the first index of each section as a section start', () => {
+    expect(isSectionStart(0)).toBe(true);
+    expect(isSectionStart(SECTION_SIZE)).toBe(true);
+    expect(isSectionStart(SECTION_SIZE * 2)).toBe(true);
+    expect(isSectionStart(1)).toBe(false);
+    expect(isSectionStart(SECTION_SIZE - 1)).toBe(false);
   });
 });

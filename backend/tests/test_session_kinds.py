@@ -6,13 +6,18 @@ Here we lock down `is_kind_unlocked` + the thresholds table.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from src.services.session_kinds import (
     KIND_SESSION_SIZE,
     KIND_UNLOCK_THRESHOLDS,
+    REVIEW_COOLDOWN_HOURS,
     VALID_KINDS,
+    cooldown_where_fragment,
     is_kind_unlocked,
+    recently_reviewed_cutoff,
 )
 
 
@@ -60,3 +65,37 @@ class TestValidKindsSet:
         assert kind in KIND_UNLOCK_THRESHOLDS
         assert isinstance(KIND_UNLOCK_THRESHOLDS[kind], int)
         assert KIND_UNLOCK_THRESHOLDS[kind] >= 0
+
+
+class TestReviewCooldown:
+    NOW = datetime(2026, 6, 2, 12, 0, tzinfo=timezone.utc)
+
+    def test_cutoff_subtracts_default_window(self):
+        cutoff = recently_reviewed_cutoff(self.NOW)
+        assert cutoff == self.NOW - timedelta(hours=REVIEW_COOLDOWN_HOURS)
+
+    def test_cutoff_honours_explicit_hours(self):
+        assert recently_reviewed_cutoff(self.NOW, hours=24) == self.NOW - timedelta(hours=24)
+
+    def test_default_window_is_positive(self):
+        # A non-positive window would make the cooldown a no-op (every row
+        # is "older than now"), silently disabling the anti-repetition fix.
+        assert REVIEW_COOLDOWN_HOURS > 0
+
+    def test_fragment_admits_never_reviewed_or_pre_cutoff(self):
+        cutoff = recently_reviewed_cutoff(self.NOW)
+        frag = cooldown_where_fragment(cutoff)
+        # Shape: an OR of "never reviewed" and "reviewed before cutoff".
+        assert frag == {
+            "OR": [
+                {"srsLastReviewedAt": None},
+                {"srsLastReviewedAt": {"lt": cutoff}},
+            ]
+        }
+
+    def test_fragment_is_a_pure_or_only_clause(self):
+        # It must contribute only the OR key so callers can spread it
+        # alongside their scalar filters (userId / srsBox / movieId)
+        # without clobbering them.
+        frag = cooldown_where_fragment(self.NOW)
+        assert set(frag.keys()) == {"OR"}

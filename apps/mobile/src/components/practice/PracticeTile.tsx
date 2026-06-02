@@ -73,6 +73,39 @@ export function PracticeTile({
     outputRange: ['0deg', '360deg'],
   });
 
+  // Active-state gentle bounce — draws the eye to the one tappable tile
+  // and reads as "this is your next step forward". Pauses for every
+  // other state so the rest of the path stays calm.
+  const bounce = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (state !== 'active') return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounce, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounce, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => {
+      anim.stop();
+      bounce.setValue(0);
+    };
+  }, [state, bounce]);
+  const translateY = bounce.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -6],
+  });
+
   const tappable = state === 'active';
 
   const isGold = state === 'active' || state === 'completed';
@@ -112,7 +145,7 @@ export function PracticeTile({
           />
         ) : null}
 
-        <View
+        <Animated.View
           style={[
             s.body,
             {
@@ -120,12 +153,13 @@ export function PracticeTile({
               borderColor: bodyBorderColor,
               borderWidth: bodyBorderWidth,
             },
-            state === 'locked' && { opacity: 0.85 },
+            state === 'locked' && { opacity: 0.6 },
             state === 'completed' && { opacity: 0.75 },
+            state === 'active' && { transform: [{ translateY }] },
           ]}
         >
           <TileGlyph kind={glyphKind} color={fgColor} />
-        </View>
+        </Animated.View>
 
         {state === 'active' ? (
           <View style={s.startCallout} pointerEvents="none">

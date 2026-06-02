@@ -24,9 +24,10 @@
  * tile into the right side-effects.
  */
 
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Fragment, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { kindAtIndex } from '../../stores/practicePathStore';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import type { SessionKind } from '../../services/api';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
@@ -43,10 +44,35 @@ const WINDOW_SIZE = 7;
  *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
 const COMPLETED_ABOVE = 2;
 
-/** Gentle zigzag — same energy as the v0.7 reel offsets. Cycles by
- *  rendered-position so the path's overall shape stays put as the
- *  cursor advances (tiles slide vertically, not horizontally). */
+/** Gentle zigzag — same energy as the v0.7 reel offsets. Keyed on each
+ *  tile's *absolute* index (see {@link offsetForIndex}) rather than its
+ *  rendered slot, so the path's shape scrolls past as the cursor
+ *  advances — the road moves, instead of the window showing an identical
+ *  frozen shape every session. */
 const X_OFFSETS = [0, 24, -16, 12, -8, 18, -20];
+
+/** Horizontal zigzag offset for a tile at absolute path index. Pure +
+ *  exported for unit testing. */
+export function offsetForIndex(index: number): number {
+  const n = X_OFFSETS.length;
+  return X_OFFSETS[((index % n) + n) % n];
+}
+
+/** How many tiles make up one "section" — the landmark cadence. A
+ *  checkpoint divider is rendered above each section's first tile so the
+ *  user sees named landmarks scroll past as they advance, instead of an
+ *  undifferentiated infinite chain. */
+export const SECTION_SIZE = 5;
+
+/** 1-based section number a given absolute index belongs to. */
+export function sectionForIndex(index: number): number {
+  return Math.floor(index / SECTION_SIZE) + 1;
+}
+
+/** True when this index opens a new section (gets a divider above it). */
+export function isSectionStart(index: number): boolean {
+  return index % SECTION_SIZE === 0;
+}
 
 export interface PracticeTilePathProps {
   /** Number of sessions the user has already completed — the index of
@@ -74,22 +100,56 @@ export function PracticeTilePath({
 
   return (
     <View style={styles.wrap}>
-      {tiles.map((t, renderIdx) => {
-        const x = X_OFFSETS[renderIdx % X_OFFSETS.length];
+      {tiles.map((t) => {
+        const x = offsetForIndex(t.index);
         return (
-          <View
-            key={t.index}
-            style={[styles.tileRow, { transform: [{ translateX: x }] }]}
-          >
-            <PracticeTile
-              kind={t.kind}
-              label={TILE_LABELS[t.kind]}
-              state={t.state}
-              onPress={() => onTilePress(t.kind, t.index)}
-            />
-          </View>
+          <Fragment key={t.index}>
+            {isSectionStart(t.index) ? (
+              <SectionDivider
+                section={sectionForIndex(t.index)}
+                completed={cursor >= t.index + SECTION_SIZE}
+                current={t.index <= cursor && cursor < t.index + SECTION_SIZE}
+              />
+            ) : null}
+            <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
+              <PracticeTile
+                kind={t.kind}
+                label={TILE_LABELS[t.kind]}
+                state={t.state}
+                onPress={() => onTilePress(t.kind, t.index)}
+              />
+            </View>
+          </Fragment>
         );
       })}
+    </View>
+  );
+}
+
+/** Checkpoint banner between sections. A completed section reads gold +
+ *  checked (a landmark you've walked past); the section holding the
+ *  cursor gets the bright gold accent; future sections stay faint. */
+function SectionDivider({
+  section,
+  completed,
+  current,
+}: {
+  section: number;
+  completed: boolean;
+  current: boolean;
+}) {
+  const tc = useThemeColors();
+  const ds = useMemo(() => makeDividerStyles(tc), [tc]);
+  const accent = completed ? tc.goldOnSurface : current ? tc.gold : tc.textFaint;
+  return (
+    <View style={ds.wrap}>
+      <View style={[ds.line, { backgroundColor: tc.border }]} />
+      <View style={[ds.pill, { borderColor: accent, backgroundColor: tc.paper }]}>
+        <Text style={[ds.label, { color: accent }]}>
+          {completed ? '✓ ' : ''}SECTION {section}
+        </Text>
+      </View>
+      <View style={[ds.line, { backgroundColor: tc.border }]} />
     </View>
   );
 }
@@ -126,3 +186,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
+const makeDividerStyles = (_tc: ThemeColors) =>
+  StyleSheet.create({
+    wrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 4,
+    },
+    line: {
+      flex: 1,
+      height: 1,
+    },
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 999,
+      borderWidth: 1.5,
+    },
+    label: {
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 1.4,
+    },
+  });

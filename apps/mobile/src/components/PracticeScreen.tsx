@@ -236,6 +236,7 @@ export function PracticeScreen({
             paywall / daily cap; the parent's `handleTilePress` does. */}
         <View style={s.pathWrap}>
           <Text style={s.pathHeading}>YOUR PRACTICE PATH</Text>
+          <Text style={s.pathLesson}>LESSON {cursor + 1}</Text>
           <PracticeTilePath
             cursor={cursor}
             onTilePress={handleTilePress}
@@ -339,6 +340,14 @@ const makeStyles = (tc: ThemeColors) =>
       textTransform: 'uppercase',
       textAlign: 'center',
       marginBottom: 4,
+    },
+    pathLesson: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 16,
+      fontWeight: '900',
+      letterSpacing: 1.2,
+      color: tc.goldOnSurface,
+      textAlign: 'center',
     },
   });
 
