@@ -333,8 +333,6 @@ export const HomeScreen = ({
             />
           )}
         </View>
-
-        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
