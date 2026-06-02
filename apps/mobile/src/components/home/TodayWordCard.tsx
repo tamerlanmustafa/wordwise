@@ -212,6 +212,7 @@ const makeStyles = (tc: ThemeColors) =>
       alignSelf: 'stretch',
       marginHorizontal: 18,
       marginTop: 4,
+      marginBottom: 16,
       height: CARD_HEIGHT,
       borderRadius: 14,
     },
