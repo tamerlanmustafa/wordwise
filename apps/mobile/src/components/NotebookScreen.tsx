@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { wordwiseApi, type SavedWordEntry } from '../services/api';
+import { swr, writeCache } from '../services/swrCache';
 import { Skeleton } from './ui/Skeleton';
 
 const COLORS = {
@@ -37,30 +38,41 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
 
   const headerTitle = title ?? (filter === 'learned' ? 'Learned Words' : 'Saved Words');
 
+  // Cache the already-filtered list per filter so each view stays self-consistent.
+  const cacheKey = `saved_words_${filter}`;
+
+  // Stale-while-revalidate: show last-known words instantly from disk, then
+  // refresh from the network (playbook §7 instant loads, §9 offline resilience).
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const data = await wordwiseApi.getSavedWords();
-      const filtered = filter === 'learned'
-        ? data.filter((w) => w.is_learned)
-        : data;
-      setWords(filtered);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+    await swr<SavedWordEntry[]>(
+      cacheKey,
+      async () => {
+        const data = await wordwiseApi.getSavedWords();
+        return filter === 'learned' ? data.filter((w) => w.is_learned) : data;
+      },
+      {
+        onData: (data) => { setWords(data); setLoading(false); },
+        onError: () => setLoading(false),
+      },
+    );
+  }, [filter, cacheKey]);
 
   useEffect(() => { load(); }, [load]);
 
   // Optimistic unsave: drop the word from the list immediately so the tap feels
-  // instant, then fire the toggle in the background. On failure we re-sync from
-  // the server rather than leaving a phantom removal (playbook §1).
+  // instant, then fire the toggle in the background. We also write the trimmed
+  // list back to the cache so it doesn't briefly reappear on the next open. On
+  // failure we re-sync from the server rather than leaving a phantom removal
+  // (playbook §1).
   const handleUnsave = useCallback((entry: SavedWordEntry) => {
-    setWords((prev) => prev.filter((w) => w.id !== entry.id));
+    setWords((prev) => {
+      const next = prev.filter((w) => w.id !== entry.id);
+      writeCache(cacheKey, next).catch(() => {});
+      return next;
+    });
     wordwiseApi.saveWord(entry.word, entry.movie_id).catch(() => { load(); });
-  }, [load]);
+  }, [load, cacheKey]);
 
   const movieGrouped = useMemo(() => {
     const map = new Map<string, SavedWordEntry[]>();

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +18,7 @@ import {
   type QuizSelfRating,
   type QuizStartSessionResponse,
 } from '../services/api';
+import { track } from '../services/analytics';
 import { QuizHeader } from './quiz/QuizHeader';
 import { SessionFinishing } from './quiz/SessionFinishing';
 import { SynonymMCQCard } from './quiz/SynonymMCQCard';
@@ -88,6 +89,12 @@ export function QuizLessonScreen({
   const cards = session.cards;
   const total = cards.length;
   const card: QuizCard | undefined = cards[idx];
+
+  // §10 — instrument the lesson journey. `level`/`total` are fixed for a
+  // session, so this fires once on mount.
+  useEffect(() => {
+    track('lesson_start', { level, cards: total });
+  }, [level, total]);
   // Primary accent retained for the self-rate / empty paths that still
   // use the old styles. The new card components key off `tc.gold` /
   // `tc.success` etc. directly.
@@ -136,6 +143,12 @@ export function QuizLessonScreen({
         return quizApi.completeSession(session.session_id);
       })();
       const [result] = await Promise.all([work, minBeat]);
+      track('lesson_end', {
+        level,
+        correct: result.correct_count,
+        total: result.total_scored,
+        xp: result.xp_earned,
+      });
       onComplete(result, level, final);
     } catch (e) {
       console.warn('[QuizLesson] finish failed:', e);

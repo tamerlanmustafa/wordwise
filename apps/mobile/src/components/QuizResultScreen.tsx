@@ -24,7 +24,6 @@ import {
   Animated,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +31,8 @@ import { cefrColors, cefrLabels } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { DAILY_GOAL } from '../stores/dailyGoalStore';
 import type { QuizCompleteResponse, QuizCardResultInput } from '../services/api';
+import { PressableScale } from './ui/PressableScale';
+import { FadeInUp } from './ui/FadeInUp';
 
 export interface JourneyResultMeta {
   completedTileIdx: number;
@@ -190,15 +191,14 @@ export function QuizResultScreen({
         {/* Footer CTA — single button, always returns to wherever the
             quiz was launched from (preview hub or movie detail). */}
         <View style={s.footer}>
-          <TouchableOpacity
+          <PressableScale
             onPress={onDone}
             style={[s.primaryBtn, { backgroundColor: ctaBg }]}
-            activeOpacity={0.8}
           >
             <Text style={[s.primaryBtnText, { color: ctaFg }]}>
               {hitWall ? 'Stop for today' : 'Done'}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </SafeAreaView>
     );
@@ -235,16 +235,16 @@ export function QuizResultScreen({
           ))}
         </View>
 
-        <View style={s.statsCard}>
+        <FadeInUp delay={120} style={s.statsCard}>
           {accuracy !== null ? (
             <StatRow label="Accuracy" value={`${accuracy}%`} s={s} />
           ) : null}
           <StatRow label="Correct" value={`${result.correct_count} / ${result.total_scored}`} s={s} />
           <StatRow label="XP earned" value={`+${result.xp_earned}`} emphasis s={s} />
-        </View>
+        </FadeInUp>
 
         {showComp ? (
-          <View style={s.compCard}>
+          <FadeInUp delay={240} style={s.compCard}>
             <Text style={s.compEyebrow}>COMPREHENSION</Text>
             <View style={s.compRow}>
               <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
@@ -256,26 +256,24 @@ export function QuizResultScreen({
                 </Text>
               ) : null}
             </View>
-          </View>
+          </FadeInUp>
         ) : null}
 
         <View style={s.footer}>
           {onPlayAgain ? (
-            <TouchableOpacity
+            <PressableScale
               onPress={onPlayAgain}
               style={[s.ghostBtn, { borderColor: accent }]}
-              activeOpacity={0.7}
             >
               <Text style={[s.ghostBtnText, { color: accent }]}>Play again</Text>
-            </TouchableOpacity>
+            </PressableScale>
           ) : null}
-          <TouchableOpacity
+          <PressableScale
             onPress={onDone}
             style={[s.primaryBtn, { backgroundColor: ctaBg }]}
-            activeOpacity={0.8}
           >
             <Text style={[s.primaryBtnText, { color: ctaFg }]}>Done</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </View>
     </SafeAreaView>

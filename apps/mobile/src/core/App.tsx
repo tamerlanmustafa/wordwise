@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar, Alert, Platform, UIManager, View, StyleSheet } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View, StyleSheet, InteractionManager } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -15,6 +15,7 @@ import { PaywallScreen } from '../components/PaywallScreen';
 import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
 import { registerForPushNotifications, scheduleWordReminder, scheduleReviewReminder } from '../services/notifications';
+import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
 import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
@@ -106,13 +107,18 @@ export default function App() {
     useEntitlementsStore.getState().hydrate();
     useThemeStore.getState().hydrate();
     useDailyGoalStore.getState().hydrate();
-    // Schedule notifications (Word of the Hour reminder at the user's chosen
-    // cadence, review reminder at 6pm). registerForPushNotifications is a no-op
-    // on simulator.
-    registerForPushNotifications().then(() => {
-      scheduleWordReminder();
-      scheduleReviewReminder();
-    }).catch(() => {});
+    track('app_open');
+    // Defer notification setup until after first paint/interactions so it never
+    // contends with getting the user to the home screen (playbook §4). Push
+    // registration touches native permissions + network and is non-critical to
+    // render. registerForPushNotifications is a no-op on simulator.
+    const task = InteractionManager.runAfterInteractions(() => {
+      registerForPushNotifications().then(() => {
+        scheduleWordReminder();
+        scheduleReviewReminder();
+      }).catch(() => {});
+    });
+    return () => task.cancel();
   }, [initialize]);
 
   // On first mount, try to restore the last chosen target language before
