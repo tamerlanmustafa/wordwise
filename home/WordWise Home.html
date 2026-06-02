@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordWise · Home redesign</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@600;700;800;900&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #ece8df; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; }
+    #root { width: 100%; height: 100%; }
+    .ww-artboard-inner *::-webkit-scrollbar { display: none; }
+    .ww-artboard-inner * { scrollbar-width: none; }
+    @keyframes wwSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes wwCaret { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="../design-canvas.jsx"></script>
+  <script type="text/babel" src="../ios-frame.jsx"></script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="../web/shell.jsx"></script>
+  <script type="text/babel" src="home-mobile.jsx"></script>
+  <script type="text/babel" src="home-web.jsx"></script>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard, IOSDevice } = window;
+    const { HomeScreen } = window.WW_HOME;
+    const { HomeWeb } = window.WW_WEB_HOME;
+
+    function Frame({ children, dark = true }) {
+      return (
+        <div className="ww-artboard-inner" style={{ width: '100%', height: '100%' }}>
+          <IOSDevice width={402} height={874} dark={dark}>
+            <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>{children}</div>
+          </IOSDevice>
+        </div>
+      );
+    }
+
+    function Browser({ children }) {
+      return (
+        <div className="ww-artboard-inner" style={{
+          width: '100%', height: '100%', background: '#000', borderRadius: 12, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', boxShadow: '0 24px 56px rgba(0,0,0,0.35)',
+        }}>
+          <div style={{ height: 36, background: '#1f1f24', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FF5F57' }} />
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FEBC2E' }} />
+            <div style={{ width: 12, height: 12, borderRadius: 6, background: '#28C840' }} />
+            <div style={{ flex: 1, height: 22, margin: '0 16px', borderRadius: 5, background: '#2a2a30', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>app.wordwise.com</div>
+            <div style={{ width: 60 }} />
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+        </div>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas
+          title="WordWise · Home redesign"
+          subtitle="The ranked-feed home, re-skinned into the cinema / contact-sheet system from the Practice & Quiz tabs. The movie cards (RankedMovieList) are kept 1:1 — only the chrome around them changes. Every emoji is replaced with a stroked icon. Mobile + web, light + dark."
+          initialZoom={0.55}
+        >
+          <DCSection
+            id="home-mobile"
+            title="Mobile — Home (iOS)"
+            subtitle="Header (serif ‘Now Showing’ + level eyebrow), cinema search field, gold level/sort controls, the unchanged ranked movie cards, restyled Today’s Word, glass Continue pill, and the 4-tab nav (Journey removed)."
+          >
+            <DCArtboard id="home-dark"   label="① Home — dark"  width={402} height={874}>
+              <Frame dark><HomeScreen mode="dark"  scenario="default" /></Frame>
+            </DCArtboard>
+            <DCArtboard id="home-light"  label="② Home — light" width={402} height={874}>
+              <Frame dark={false}><HomeScreen mode="light" scenario="default" /></Frame>
+            </DCArtboard>
+            <DCArtboard id="home-search" label="③ Search active — dark" width={402} height={874}>
+              <Frame dark><HomeScreen mode="dark" scenario="search" /></Frame>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection
+            id="home-web"
+            title="Web — Home (desktop)"
+            subtitle="Cinema-lobby sidebar + top bar + page header. Same ranked cards as a wide single-column feed with a rank numeral; right rail carries Continue + Today’s Word."
+          >
+            <DCArtboard id="home-web-dark"  label="④ Home — dark"  width={1440} height={960}>
+              <Browser><HomeWeb mode="dark"  /></Browser>
+            </DCArtboard>
+            <DCArtboard id="home-web-light" label="⑤ Home — light" width={1440} height={960}>
+              <Browser><HomeWeb mode="light" /></Browser>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

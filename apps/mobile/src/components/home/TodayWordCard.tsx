@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -9,9 +9,25 @@ import {
 } from 'react-native';
 import { wordwiseApi, type TodaysWord } from '../../services/api';
 import { useDoubleTap } from '../../hooks/useDoubleTap';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { HomeIcon } from './HomeIcons';
 
-const CARD_HEIGHT = 148;
-const FACE_PADDING = 16;
+/**
+ * TodayWordCard — "Today's Word" on the redesigned Home.
+ *
+ * Re-skinned into the cinema paper system (paper card, 1px border, soft
+ * shadow; gold eyebrow; serif word) to match My Movies / Practice. The
+ * tap-to-flip → translation behaviour is preserved: the real `TodaysWord`
+ * payload carries no definition/pos, so the back face (translated word +
+ * translated example) is the card's substance. Front face shows the word,
+ * its CEFR level, the example sentence, and a Save button with a stroked
+ * bookmark icon (→ stroked check + success tint when saved). No emoji /
+ * ★☆ glyphs survive.
+ */
+
+const SERIF_FAMILY = 'Source Serif 4';
+const CARD_HEIGHT = 152;
+const FACE_PADDING = 18;
 
 interface Props {
   word: TodaysWord;
@@ -19,6 +35,9 @@ interface Props {
 }
 
 const _TodayWordCard = ({ word, targetLanguage }: Props) => {
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +60,8 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
     outputRange: ['180deg', '360deg', '540deg', '720deg'],
   });
 
-  const handleSave = async () => {
+  const handleSave = async (e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
     if (saving) return;
     setSaving(true);
     setSaved(prev => !prev);
@@ -108,14 +128,20 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
       >
         <View style={s.header}>
-          <Text style={s.label}>Word of the Hour</Text>
+          <Text style={s.eyebrow}>WORD OF THE HOUR</Text>
         </View>
         <View style={s.wordRow}>
           <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>
-            <Text style={s.word}>{word.word}</Text>
+            <Text style={s.word} numberOfLines={1}>{word.word}</Text>
           </Pressable>
-          <Pressable onPress={handleSave} hitSlop={14} style={s.starBtn}>
-            <Text style={[s.star, saved && s.starSaved]}>{saved ? '★' : '☆'}</Text>
+          <Pressable
+            onPress={handleSave}
+            hitSlop={14}
+            style={s.starBtn}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Saved to your words' : 'Save this word'}
+          >
+            <HomeIcon name="star" size={24} color={saved ? tc.gold : tc.textFaint} />
           </Pressable>
         </View>
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone} />
@@ -128,25 +154,28 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
       {/* BACK face */}
       <Animated.View
         pointerEvents={showingFront ? 'none' : 'auto'}
-        style={[s.face, s.back, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
+        style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
       >
+        <View style={s.header}>
+          <Text style={s.eyebrow}>WORD OF THE HOUR</Text>
+        </View>
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
           {translating ? (
             <View style={s.loadingBox}>
-              <ActivityIndicator size="small" color="#7C5CBF" />
+              <ActivityIndicator size="small" color={tc.goldOnSurface} />
             </View>
           ) : (
             <View>
-              {translation && !isSameAsWord(translation) && (
-                <View><Text style={s.translationWord}>{translation}</Text></View>
-              )}
+              {translation && !isSameAsWord(translation) ? (
+                <Text style={s.translationWord} numberOfLines={1}>{translation}</Text>
+              ) : null}
               {sentence ? (
                 <View>
                   <Text style={s.sentence} numberOfLines={3}>"{sentence.replace(/\n/g, ' ')}"</Text>
                   {sentenceTranslation ? (
-                    <View style={{ marginTop: 6 }}>
-                      <Text style={s.sentenceTranslation} numberOfLines={2}>{sentenceTranslation.replace(/\n/g, ' ')}</Text>
-                    </View>
+                    <Text style={s.sentenceTranslation} numberOfLines={2}>
+                      {sentenceTranslation.replace(/\n/g, ' ')}
+                    </Text>
                   ) : null}
                 </View>
               ) : null}
@@ -160,81 +189,133 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
 
 export const TodayWordCard = memo(_TodayWordCard);
 
-export const TodayWordCardSkeleton = () => (
-  <View style={s.container}>
-    <View style={s.skeletonFace}>
-      <View style={s.header}>
-        <View style={[s.skeletonLine, { width: 90, height: 10 }]} />
-        <View style={[s.skeletonLine, { width: 80, height: 10 }]} />
+export const TodayWordCardSkeleton = () => {
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+  return (
+    <View style={s.container}>
+      <View style={[s.face, s.skeletonFace]}>
+        <View style={s.header}>
+          <View style={[s.skeletonLine, { width: 90, height: 10 }]} />
+          <View style={[s.skeletonLine, { width: 80, height: 10 }]} />
+        </View>
+        <View style={[s.skeletonLine, { width: '55%', height: 30, marginTop: 12, marginBottom: 12 }]} />
+        <View style={[s.skeletonLine, { width: '80%', height: 13 }]} />
       </View>
-      <View style={[s.skeletonLine, { width: '55%', height: 30, marginTop: 10, marginBottom: 10 }]} />
-      <View style={[s.skeletonLine, { width: '30%', height: 14 }]} />
     </View>
-  </View>
-);
+  );
+};
 
-const s = StyleSheet.create({
-  container: {
-    alignSelf: 'stretch',
-    marginHorizontal: 16,
-    marginTop: 8,
-    height: CARD_HEIGHT,
-    borderRadius: 16,
-  },
-  face: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#6B46C1',
-    borderRadius: 16,
-    backfaceVisibility: 'hidden',
-    overflow: 'hidden',
-    padding: FACE_PADDING,
-  },
-  back: {},
-  skeletonFace: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#6B46C1',
-    borderRadius: 16,
-    padding: FACE_PADDING,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  level: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 0.6,
-  },
-  wordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  wordPressable: { flexShrink: 1 },
-  word: { fontSize: 30, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  starBtn: { paddingLeft: 8, paddingVertical: 4 },
-  star: { fontSize: 26, color: 'rgba(255,255,255,0.35)' },
-  starSaved: { color: '#FACC15' },
-  flipZone: { flex: 1 },
-  frontFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hint: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
-  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  translationWord: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    marginBottom: 3,
-  },
-  sentence: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 16, marginBottom: 2 },
-  sentenceTranslation: { fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 15 },
-  skeletonLine: { borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.15)' },
-});
+const makeStyles = (tc: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      alignSelf: 'stretch',
+      marginHorizontal: 18,
+      marginTop: 4,
+      height: CARD_HEIGHT,
+      borderRadius: 14,
+    },
+    face: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: tc.paper,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: tc.border,
+      backfaceVisibility: 'hidden',
+      overflow: 'hidden',
+      padding: FACE_PADDING,
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+    skeletonFace: {
+      position: 'relative',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    eyebrow: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: tc.goldOnSurface,
+      textTransform: 'uppercase',
+      letterSpacing: 1.8,
+    },
+    level: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: tc.textSecondary,
+      letterSpacing: 0.6,
+    },
+    hint: {
+      fontSize: 12,
+      color: tc.textFaint,
+      fontWeight: '600',
+    },
+    wordRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    wordPressable: {
+      flexShrink: 1,
+    },
+    starBtn: {
+      paddingLeft: 8,
+      paddingVertical: 4,
+    },
+    word: {
+      flexShrink: 1,
+      fontFamily: SERIF_FAMILY,
+      fontSize: 30,
+      fontWeight: '700',
+      color: tc.text,
+      letterSpacing: -0.6,
+    },
+    flipZone: {
+      flex: 1,
+    },
+    frontFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    sentence: {
+      fontSize: 13,
+      color: tc.textSecondary,
+      fontStyle: 'italic',
+      lineHeight: 18,
+    },
+    translationWord: {
+      fontFamily: SERIF_FAMILY,
+      fontSize: 26,
+      fontWeight: '700',
+      color: tc.text,
+      letterSpacing: -0.4,
+      marginBottom: 8,
+    },
+    sentenceTranslation: {
+      fontSize: 12,
+      color: tc.textFaint,
+      lineHeight: 16,
+      marginTop: 6,
+    },
+    loadingBox: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    skeletonLine: {
+      borderRadius: 7,
+      backgroundColor: tc.divider,
+    },
+  });

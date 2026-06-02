@@ -1,19 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  Image,
   Keyboard,
   ScrollView,
+  StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useThemeColors } from '../../theme/tokens';
-import { GlobalBottomBar } from '../GlobalBottomBar';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AVAILABLE_LANGUAGES } from '../../types';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import {
@@ -21,11 +17,13 @@ import {
   srsApi,
   type TodaysWord,
 } from '../../services/api';
-import { useEntitlementsStore, useShowAds } from '../../stores/entitlementsStore';
+import { useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
-import { LEVEL_OPTIONS } from '../home/filterOptions';
 import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
+import { HomeHeader } from '../home/HomeHeader';
+import { HomeSearchBar } from '../home/HomeSearchBar';
+import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 
 interface Props {
@@ -68,21 +66,18 @@ export const HomeScreen = ({
   onNavigateToProfile,
 }: Props) => {
   const tc = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
-  const showViewAsBadge = !!user?.is_admin && adminViewMode !== 'admin';
+  const s = useMemo(() => makeStyles(tc), [tc]);
   const showAdsEntitlement = useShowAds();
   const [isFirstSession, setIsFirstSession] = useState(true);
   const showAds = showAdsEntitlement && !isFirstSession;
-  const [activeTab] = useState<'movies' | 'books'>('movies');
+  const [homeTab] = useState<'level' | 'trending'>('level');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [allResults, setAllResults] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
-  const [homeTab, setHomeTab] = useState<'level' | 'trending'>('level');
-  const [levelSort, setLevelSort] = useState<'rating' | 'popularity' | 'level'>('rating');
+  const [levelSort, setLevelSort] = useState<LevelSort>('rating');
   const [levelSortAsc, setLevelSortAsc] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
 
@@ -96,38 +91,11 @@ export const HomeScreen = ({
     hasMore: levelHasMore,
     loadMore: loadMoreLevel,
   } = useInfiniteCefrMovies(selectedLevel, levelSort, levelSortAsc ? 'asc' : 'desc');
-  const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [srsDueCount, setSrsDueCount] = useState<number | null>(null);
-  const [srsTotalSaved, setSrsTotalSaved] = useState(0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const SEARCH_BAR_H = 66;
-  const searchBarAnim = useRef(new Animated.Value(0)).current;
-  const lastScrollY = useRef(0);
-  const searchBarVisible = useRef(true);
-
-  const handleScroll = (e: any) => {
-    const y = e.nativeEvent.contentOffset.y;
-    const dy = y - lastScrollY.current;
-    lastScrollY.current = y;
-    if (y < SEARCH_BAR_H) {
-      if (!searchBarVisible.current) {
-        searchBarVisible.current = true;
-        Animated.timing(searchBarAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-      }
-      return;
-    }
-    if (dy > 3 && searchBarVisible.current) {
-      searchBarVisible.current = false;
-      Animated.timing(searchBarAnim, { toValue: -SEARCH_BAR_H, duration: 200, useNativeDriver: true }).start();
-    } else if (dy < -3 && !searchBarVisible.current) {
-      searchBarVisible.current = true;
-      Animated.timing(searchBarAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    }
-  };
 
   useEffect(() => {
     (async () => {
@@ -153,11 +121,6 @@ export const HomeScreen = ({
       if (val) setIsFirstSession(false);
       else AsyncStorage.setItem('has_opened_before', '1');
     });
-
-    srsApi.stats().then((s) => {
-      setSrsDueCount(s.due_now);
-      setSrsTotalSaved(s.total_saved);
-    }).catch(() => {});
   }, []);
 
   // Word of the hour is cached per-hour per-language inside srsApi.todaysWord,
@@ -220,6 +183,13 @@ export const HomeScreen = ({
     setShowSuggestions(false);
   };
 
+  const submitSearch = () => {
+    if (searchQuery.trim()) {
+      onSearch(searchQuery.trim());
+      clearSearch();
+    }
+  };
+
   const handleMoviePress = (movie: any) => {
     const normalized = {
       id: movie.id || movie.tmdb_id || movie.movie_id,
@@ -243,215 +213,97 @@ export const HomeScreen = ({
     onMoviePress(normalized);
   };
 
-  const currentLang = AVAILABLE_LANGUAGES.find(l => l.code === targetLanguage) || AVAILABLE_LANGUAGES[0];
+  const onSearchMoviePress = (movie: any) => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setSearchFocused(false);
+    handleMoviePress(movie);
+    clearSearch();
+  };
+
+  const handleSortPress = (key: LevelSort) => {
+    if (levelSort === key) {
+      setLevelSortAsc((v) => !v);
+    } else {
+      setLevelSort(key);
+      setLevelSortAsc(false);
+    }
+  };
+
+  const dropdownOpen = (showSuggestions && suggestions.length > 0) ||
+    (searchFocused && !searchQuery && recentlyViewed.length > 0);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+    <SafeAreaView style={s.root} edges={['top']}>
+      {/* Warm hero glow behind the top ~240px, matching the other tabs. */}
+      <LinearGradient
+        colors={[tc.heroGlowStart, 'transparent']}
+        locations={[0, 1]}
+        style={s.glow}
+        pointerEvents="none"
+      />
 
-      <Animated.View style={[styles.searchBarFixed, { top: insets.top, backgroundColor: tc.background, transform: [{ translateY: searchBarAnim }] }]}>
-        <View style={styles.searchContainer}>
-          <Text style={[styles.searchBrandLabel, { color: tc.primary }]}>WW</Text>
-          <View style={styles.searchInputWrapper}>
-            <TextInput
-              style={[styles.searchInput, { backgroundColor: tc.paper, color: tc.text, borderColor: tc.border }]}
-              placeholder={activeTab === 'movies' ? 'Search movies...' : 'Search books...'}
-              placeholderTextColor={tc.textMuted}
-              value={searchQuery}
-              onChangeText={onSearchTextChange}
-              onFocus={() => {
-                if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-                setSearchFocused(true);
-              }}
-              onBlur={() => {
-                blurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
-              }}
-              onSubmitEditing={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={clearSearch} style={styles.searchClear}>
-                <Text style={[styles.searchClearText, { color: tc.textSecondary }]}>✕</Text>
-              </TouchableOpacity>
-            )}
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={[styles.autocompleteDropdown, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-                {suggestions.map((movie: any) => (
-                  <TouchableOpacity
-                    key={movie.id}
-                    style={[styles.searchResultItem, { borderBottomColor: tc.border }]}
-                    onPress={() => {
-                      handleMoviePress(movie);
-                      clearSearch();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    {movie.poster_path ? (
-                      <Image
-                        source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
-                        style={styles.searchResultPoster}
-                      />
-                    ) : (
-                      <View style={[styles.searchResultPoster, { backgroundColor: tc.border }]} />
-                    )}
-                    <View style={styles.searchResultInfo}>
-                      <Text style={[styles.searchResultTitle, { color: tc.text }]} numberOfLines={1}>{movie.title}</Text>
-                      <Text style={[styles.searchResultYear, { color: tc.textSecondary }]}>{movie.release_date?.slice(0, 4)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {allResults.length > 5 && (
-                  <TouchableOpacity
-                    style={[styles.seeAllButton, { borderTopColor: tc.border }]}
-                    onPress={() => {
-                      onSearch(searchQuery.trim());
-                      clearSearch();
-                    }}
-                  >
-                    <Text style={[styles.seeAllText, { color: tc.primary }]}>See all {allResults.length} results</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-            {searchFocused && !searchQuery && recentlyViewed.length > 0 && (
-              <View style={[styles.autocompleteDropdown, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-                <Text style={[styles.recentlyViewedLabel, { color: tc.textSecondary }]}>Recently Viewed</Text>
-                {recentlyViewed.slice(0, 5).map((movie: any) => (
-                  <TouchableOpacity
-                    key={movie.id}
-                    style={[styles.searchResultItem, { borderBottomColor: tc.border }]}
-                    onPress={() => {
-                      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-                      setSearchFocused(false);
-                      handleMoviePress(movie);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    {movie.poster_path ? (
-                      <Image
-                        source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
-                        style={styles.searchResultPoster}
-                      />
-                    ) : (
-                      <View style={[styles.searchResultPoster, { backgroundColor: tc.border }]} />
-                    )}
-                    <View style={styles.searchResultInfo}>
-                      <Text style={[styles.searchResultTitle, { color: tc.text }]} numberOfLines={1}>{movie.title}</Text>
-                      <Text style={[styles.searchResultYear, { color: tc.textSecondary }]}>{movie.release_date?.slice(0, 4)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={() => { if (searchQuery.trim()) { onSearch(searchQuery.trim()); clearSearch(); } }}
-          >
-            <Text style={styles.searchButtonText}>🔍</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+      <HomeHeader
+        level={selectedLevel}
+        hasUnread
+        onNotificationsPress={onNavigateToProfile}
+      />
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={16}
         onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
-        onScroll={handleScroll}
-        contentContainerStyle={{ paddingTop: SEARCH_BAR_H }}
       >
-
-        {showAds && (
-          <View style={styles.adBanner}>
-            <Text style={styles.adBannerText}>Ad</Text>
-          </View>
-        )}
-
-        {todaysWord ? (
-          <TodayWordCard
-            word={todaysWord}
-            targetLanguage={targetLanguage}
+        {/* Search — paper field with autocomplete dropdown. zIndex keeps the
+            dropdown above the ad slot / controls below it. */}
+        <View style={s.searchLayer}>
+          <HomeSearchBar
+            query={searchQuery}
+            onChangeText={onSearchTextChange}
+            onSubmit={submitSearch}
+            onClear={clearSearch}
+            focused={searchFocused}
+            onFocus={() => {
+              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+              setSearchFocused(true);
+            }}
+            onBlur={() => {
+              blurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
+            }}
+            suggestions={suggestions}
+            allResultsCount={allResults.length}
+            showSuggestions={showSuggestions}
+            recentlyViewed={recentlyViewed}
+            onMoviePress={onSearchMoviePress}
+            onSeeAll={submitSearch}
           />
+        </View>
+
+        {/* Ad slot — chipBg fill, 1px dashed border, centered ADVERTISEMENT.
+            Hidden while the search dropdown is open. */}
+        {showAds && !dropdownOpen ? (
+          <View style={s.adSlot}>
+            <Text style={s.adText}>ADVERTISEMENT</Text>
+          </View>
+        ) : null}
+
+        {/* Word of the Hour — between the ad slot and the level controls.
+            Rotates hourly via the srsApi.todaysWord timer in this screen. */}
+        {todaysWord ? (
+          <TodayWordCard word={todaysWord} targetLanguage={targetLanguage} />
         ) : (
           <TodayWordCardSkeleton />
         )}
 
-        <View style={{ zIndex: 50, overflow: 'visible' }}>
-          <View style={styles.levelSortRow}>
-            <TouchableOpacity
-              style={[styles.levelSortChip, { backgroundColor: tc.paper, borderColor: tc.border }, styles.levelSortChipActive]}
-              onPress={() => setLevelDropdownOpen((v) => !v)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.levelSortTextActive}>
-                {selectedLevel === (user?.proficiency_level || 'B1')
-                  ? `⭐ ${selectedLevel}`
-                  : `⭐ ${selectedLevel}`}{' '}
-                {levelDropdownOpen ? '▲' : '▼'}
-              </Text>
-            </TouchableOpacity>
-            {([
-              { key: 'rating' as const, label: 'Rating' },
-              { key: 'popularity' as const, label: 'Popularity' },
-              { key: 'level' as const, label: 'Level %' },
-            ]).map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[
-                  styles.levelSortChip,
-                  { backgroundColor: tc.paper, borderColor: tc.border },
-                  levelSort === opt.key && styles.levelSortChipActive,
-                ]}
-                onPress={() => {
-                  if (levelSort === opt.key) {
-                    setLevelSortAsc((v) => !v);
-                  } else {
-                    setLevelSort(opt.key);
-                    setLevelSortAsc(false);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.levelSortText,
-                    { color: tc.textSecondary },
-                    levelSort === opt.key && styles.levelSortTextActive,
-                  ]}
-                >
-                  {opt.label} {levelSort === opt.key ? (levelSortAsc ? '↑' : '↓') : ''}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        <LevelSortControls
+          level={selectedLevel}
+          onLevelChange={setSelectedLevel}
+          sort={levelSort}
+          sortAsc={levelSortAsc}
+          onSortPress={handleSortPress}
+        />
 
-          {levelDropdownOpen && (
-            <View style={[styles.levelPickerMenu, { left: 16, backgroundColor: tc.paper, borderColor: tc.border }]}>
-              {LEVEL_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[
-                    styles.levelPickerItem,
-                    { borderBottomColor: tc.border },
-                    opt.value === selectedLevel && styles.levelPickerItemActive,
-                  ]}
-                  onPress={() => {
-                    setLevelDropdownOpen(false);
-                    if (opt.value !== selectedLevel) {
-                      setSelectedLevel(opt.value);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.levelPickerIcon}>{opt.icon}</Text>
-                  <Text style={[styles.levelPickerText, { color: tc.text }, opt.value === selectedLevel && styles.levelPickerTextActive]}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
+        {/* Ranked feed — RankedMovieList is rendered exactly as before. */}
         <View style={styles.section}>
           {(homeTab === 'level' ? levelLoading : loading) ? (
             <View style={styles.skeletonContainer}>
@@ -482,17 +334,47 @@ export const HomeScreen = ({
           )}
         </View>
 
-        <View style={{ height: 16 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
-
-      {(searchFocused && !searchQuery && recentlyViewed.length > 0) && (
-        <TouchableOpacity
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 98 }}
-          activeOpacity={1}
-          onPress={() => { Keyboard.dismiss(); setSearchFocused(false); }}
-        />
-      )}
-
     </SafeAreaView>
   );
 };
+
+const makeStyles = (tc: ThemeColors) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: tc.background,
+    },
+    glow: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 240,
+    },
+    searchLayer: {
+      // Above the ad slot + controls so the autocomplete dropdown overlays them.
+      zIndex: 300,
+      position: 'relative',
+    },
+    adSlot: {
+      marginHorizontal: 18,
+      marginBottom: 14,
+      height: 58,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: tc.border,
+      backgroundColor: tc.chipBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    adText: {
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 2,
+      color: tc.textFaint,
+      textTransform: 'uppercase',
+    },
+  });
