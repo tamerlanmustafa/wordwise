@@ -307,11 +307,10 @@ export const wordwiseApi = {
     return res.json();
   },
 
-  // Classify movie vocabulary with CEFR levels
+  // Classify movie vocabulary with CEFR levels (requires an authenticated user)
   classifyVocabulary: async (movieId: number, targetLanguage: string = 'ES', genres?: string[]): Promise<VocabularyResponse> => {
-    const res = await fetch(`${API_BASE_URL}/api/cefr/classify-script`, {
+    const res = await authFetch(`${API_BASE_URL}/api/cefr/classify-script`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         movie_id: movieId,
         save_to_db: true,

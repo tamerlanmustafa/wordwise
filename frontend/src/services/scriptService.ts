@@ -211,8 +211,10 @@ export async function classifyMovieScript(
   genres?: string[]
 ): Promise<CEFRClassificationResponse> {
   try {
-    const response = await axios.post<CEFRClassificationResponse>(
-      `${API_BASE_URL}/api/cefr/classify-script`,
+    // Use apiClient (not raw axios) so the auth interceptor attaches the
+    // bearer token — classify-script now requires an authenticated user.
+    const response = await apiClient.post<CEFRClassificationResponse>(
+      `/api/cefr/classify-script`,
       {
         movie_id: movieId,
         save_to_db: true,

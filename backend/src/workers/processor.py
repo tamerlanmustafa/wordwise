@@ -227,29 +227,51 @@ async def process_job(
             raise TransientError(f"script fetch failed: {exc}") from exc
         raise PermanentError(f"script fetch failed: {exc}") from exc
 
-    # 4. Classify. This call is local-only — no external APIs — so it does
-    #    NOT consume a token, but we still record latency for observability.
+    # 4. Classify in-process. This used to POST to our own
+    #    /api/cefr/classify-script, but that endpoint now requires an
+    #    authenticated user and the worker has no user to act as. We call the
+    #    classification service directly instead — no auth, no HTTP hop. It's
+    #    local-only (no external APIs), so it does NOT consume a token; we
+    #    still record latency for observability. Imported lazily to avoid
+    #    pulling the API route module (and the classifier it loads) at import
+    #    time and to sidestep any import cycle.
+    from prisma import Prisma
+
+    from src.routes.cefr import (
+        ScriptClassificationRequest,
+        populate_sentence_bank_bg,
+        run_script_classification,
+    )
+
     t0 = time.monotonic()
+    db = Prisma()
     try:
-        resp = await client.post(
-            f"{API_BASE_URL}/api/cefr/classify-script",
-            json={
-                "movie_id": movie_id,
-                "save_to_db": True,
-                "genres": genres,
-            },
-            timeout=600.0,  # cold-cache classification of a feature film is slow
+        await db.connect()
+        result = await run_script_classification(
+            db,
+            ScriptClassificationRequest(
+                movie_id=movie_id,
+                save_to_db=True,
+                genres=genres,
+            ),
         )
-        resp.raise_for_status()
-        payload = resp.json()
     except Exception as exc:
-        # Classification failures are local — typically a code bug, not
+        # Classification failures are local — typically a code/data bug, not
         # rate-limit pressure. Mark as transient so it retries with backoff,
         # but don't poison the AIMD signal: classification didn't fail
         # because of upstream rate limiting.
         raise TransientError(f"classify failed: {exc}") from exc
+    finally:
+        if db.is_connected():
+            await db.disconnect()
 
-    vocab_count = sum((payload.get("level_distribution") or {}).values())
+    # Mirror the HTTP route's post-classify step: populate the SentenceBank.
+    # The route fires this as a fire-and-forget BackgroundTask; the worker
+    # awaits it so the job isn't marked done until it finishes. It owns its
+    # own connection, is idempotent, and swallows its own errors.
+    await populate_sentence_bank_bg(movie_id)
+
+    vocab_count = sum((result.level_distribution or {}).values())
     logger.info(
         "[worker] movie_id=%s tmdb_id=%s classified vocab=%d",
         movie_id,

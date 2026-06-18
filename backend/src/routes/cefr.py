@@ -25,7 +25,7 @@ from src.services.lemmatization_service import (
     backfill_lemmas_from_classifications,
 )
 from src.database import get_db
-from src.middleware.auth import get_admin_user
+from src.middleware.auth import get_admin_user, get_current_active_user
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -295,22 +295,23 @@ async def auto_enrich_after_classification(movie_id: int, target_lang: str):
             await db.disconnect()
 
 
-@router.post("/classify-script", response_model=ScriptClassificationResponse)
-async def classify_script(
+async def run_script_classification(
+    db: Prisma,
     request: ScriptClassificationRequest,
-    background_tasks: BackgroundTasks,
-    db: Prisma = Depends(get_db),
-    admin_user = Depends(get_admin_user),
-):
+) -> ScriptClassificationResponse:
     """
-    Classify an entire movie script from the database.
+    Core CEFR classification for a movie script. Shared by the HTTP route
+    below and the ingestion worker, which calls this in-process (no auth, no
+    HTTP hop) rather than POSTing to its own API.
 
     PERFORMANCE OPTIMIZATION:
     If classifications already exist in DB, returns cached data immediately
     WITHOUT initializing the CEFR classifier or loading any word lists.
 
-    NEW: Automatically triggers sentence example enrichment in background
-    for the specified target language.
+    NOTE: This does NOT schedule SentenceBank population — the caller is
+    responsible for kicking off populate_sentence_bank_bg(movie_id) after a
+    successful return (the route does it via BackgroundTasks; the worker
+    awaits it directly).
     """
     try:
         movie = await db.movie.find_unique(
@@ -432,10 +433,6 @@ async def classify_script(
                     logger.info(f"✓ Updated difficulty with genres {request.genres}: {level.value}, score: {score}")
                 except Exception as e:
                     logger.warning(f"Failed to update difficulty with genres: {e}")
-
-            # Schedule SentenceBank population if this movie hasn't been
-            # indexed yet. The task is idempotent and translation-free.
-            background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
 
             # Return immediately without initializing classifier
             return ScriptClassificationResponse(
@@ -631,12 +628,6 @@ async def classify_script(
         ]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
-        # Schedule SentenceBank population in the background. This is the
-        # cheap (no-LLM) path: only sentence extraction + DB writes. The
-        # heavier translation-bearing /enrich endpoint is still the explicit
-        # opt-in for filling translation_memory / WordSentenceExample.
-        background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
-
         # Final response
         script_word_count = script.cleanedWordCount or 0
         unique_words = len(set(cls.lemma for cls in classifications))
@@ -658,6 +649,26 @@ async def classify_script(
     except Exception as e:
         logger.error(f"Error classifying script: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/classify-script", response_model=ScriptClassificationResponse)
+async def classify_script(
+    request: ScriptClassificationRequest,
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db),
+    current_user = Depends(get_current_active_user),
+):
+    """
+    Classify an entire movie script from the database. Available to any
+    authenticated user (e.g. classifying a movie's vocabulary from the app).
+
+    After classification, schedules background SentenceBank population (the
+    cheap, translation-free path). The heavier translation-bearing /enrich
+    endpoint is still the explicit opt-in.
+    """
+    result = await run_script_classification(db, request)
+    background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
+    return result
 
 
 @router.put("/update-thresholds")
