@@ -14,6 +14,7 @@ import { wordwiseApi, tmdbApi } from '../../services/api';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
+import { requestAddFilm } from '../../stores/addFilmStore';
 
 interface Props {
   query: string;
@@ -37,7 +38,6 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
   const effectiveQuery = mode === 'addToReel' ? liveQuery : query;
 
   const reelTiles = useReelStore((s) => s.tiles);
-  const reelAdd = useReelStore((s) => s.add);
   const reelRemove = useReelStore((s) => s.remove);
   // Only user-source rows count as "in your reel" — suggested tiles
   // are server-curated, not user-picked, so the + button stays active.
@@ -154,7 +154,9 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
         reelRemove(movie.id);
       } else {
         const year = movie.release_date ? Number(movie.release_date.slice(0, 4)) || null : null;
-        reelAdd({
+        // Route through the branded analyzing → reel-ready overlay (§B)
+        // instead of an instant add. The overlay owns reelStore.add.
+        requestAddFilm({
           tmdb_id: movie.id,
           title: movie.title,
           poster_path: movie.poster_path ?? null,

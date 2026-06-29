@@ -37,6 +37,7 @@ import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
 import { KeepAlive } from '../components/KeepAlive';
 import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
+import { AddFilmFlow } from '../components/movies/AddFilmFlow';
 import { ToastHost } from '../components/common/Toast';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
@@ -784,6 +785,9 @@ export default function App() {
       {/* Global poster-flight overlay — animates added-to-reel posters
           from the home card to the Reel tab. */}
       <PosterFlight />
+
+      {/* Add-a-film analyzing → reel-ready overlay (Add-a-film §B) */}
+      <AddFilmFlow />
 
       {/* Transient confirmation toasts (Motion §E5) */}
       <ToastHost />
