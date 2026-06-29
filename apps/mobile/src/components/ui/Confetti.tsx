@@ -67,7 +67,7 @@ export function Confetti({ count = 28 }: ConfettiProps) {
   if (reduceMotion || done) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { zIndex: 20 }]} pointerEvents="none">
       {pieces.map((p, i) => {
         const a = anims[i];
         const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [-20, height + 40] });

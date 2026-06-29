@@ -29,6 +29,8 @@ import { SynonymMCQCard } from './quiz/SynonymMCQCard';
 import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 import { cefrColors } from '../theme/palette';
 import { EmptyState } from './common/EmptyState';
+import { Confetti } from './ui/Confetti';
+import { CountUp } from './ui/CountUp';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -364,6 +366,7 @@ export function ReviewScreen({
     const justHitGoal = dailySummary?.justHitGoal ?? false;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <Confetti />
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
@@ -372,13 +375,13 @@ export function ReviewScreen({
           <View style={{ width: 60 }} />
         </View>
         <View style={styles.centered}>
-          <Text style={styles.bigStat}>{pct}%</Text>
+          <CountUp style={styles.bigStat} value={pct} suffix="%" duration={1100} delay={250} />
           <Text style={styles.emptyBody}>
             You remembered {stats.got} of {total} words.
           </Text>
           {streak > 0 && (
             <Text style={styles.streakLine}>
-              🔥 {streak}-day streak{justHitGoal ? ' — +1 today!' : ''}
+              🔥 <CountUp value={streak} duration={700} delay={300} />-day streak{justHitGoal ? ' — +1 today!' : ''}
             </Text>
           )}
           {isPreview && previewsRemaining === 0 && (
