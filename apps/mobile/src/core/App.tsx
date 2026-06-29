@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { useThemeColors } from '../theme/tokens';
 import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
@@ -35,6 +36,8 @@ import { UserMenuSheet } from '../components/UserMenuSheet';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
 import { KeepAlive } from '../components/KeepAlive';
+import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
+import { ToastHost } from '../components/common/Toast';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
@@ -73,6 +76,11 @@ export default function App() {
   const tc = useThemeColors();
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
+  // First-run onboarding gate (Launch §A). We hold the app behind a loader
+  // until the store hydrates so a returning user never flashes the flow.
+  const onboardingHydrated = useOnboardingStore((s) => s.hydrated);
+  const onboardingDone = useOnboardingStore((s) => s.completed);
+
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
@@ -107,6 +115,7 @@ export default function App() {
     useEntitlementsStore.getState().hydrate();
     useThemeStore.getState().hydrate();
     useDailyGoalStore.getState().hydrate();
+    useOnboardingStore.getState().hydrate();
     track('app_open');
     // Defer notification setup until after first paint/interactions so it never
     // contends with getting the user to the home screen (playbook §4). Push
@@ -602,7 +611,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.paper} />
-      {isAuthenticated ? (
+      {isAuthenticated && !onboardingHydrated ? (
+        // Authenticated but onboarding state hasn't loaded yet — hold on a
+        // loader so we never flash the first-run flow at a returning user.
+        <LoadingScreen />
+      ) : isAuthenticated && !onboardingDone ? (
+        <OnboardingFlow initialLanguage={targetLanguage} onLanguageChange={setTargetLanguage} />
+      ) : isAuthenticated ? (
         <View style={{ flex: 1 }}>
         {/* Persistent bottom-tab layer. Each tab is mounted lazily on first
             visit and then kept alive (hidden via display:none) so switching
@@ -769,6 +784,9 @@ export default function App() {
       {/* Global poster-flight overlay — animates added-to-reel posters
           from the home card to the Reel tab. */}
       <PosterFlight />
+
+      {/* Transient confirmation toasts (Motion §E5) */}
+      <ToastHost />
 
       {/* First-launch splash — absolute over everything, auto-dismisses */}
       <SplashIntro />

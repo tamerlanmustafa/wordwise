@@ -17,6 +17,7 @@ import PricingPage from './pages/PricingPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import MyMoviesPage from './pages/MyMoviesPage';
+import OnboardingPage from './pages/OnboardingPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -37,6 +38,9 @@ function App() {
                   {/* Full-bleed auth pages — no sidebar */}
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignUpPage />} />
+
+                  {/* Full-bleed first-run flow (Launch §A) — no sidebar */}
+                  <Route path="/onboarding" element={<OnboardingPage />} />
 
                   {/* Everything else lives inside the redesigned shell */}
                   <Route element={<AppShell />}>

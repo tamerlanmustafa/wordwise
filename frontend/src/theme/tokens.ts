@@ -77,6 +77,10 @@ export interface ThemeTokens {
 
   // Quiz
   wordBox: string;
+
+  // Skeleton loaders (motion §E3) — base block tint + the moving sheen.
+  skeleton: string;
+  skeletonSheen: string;
 }
 
 const dark: ThemeTokens = {
@@ -118,6 +122,8 @@ const dark: ThemeTokens = {
   nodeLocked: '#2a2935',
   nodeLockedB: 'rgba(255,255,255,0.06)',
   wordBox: '#0a090d',
+  skeleton: 'rgba(255,255,255,0.06)',
+  skeletonSheen: 'rgba(255,255,255,0.13)',
 };
 
 const light: ThemeTokens = {
@@ -160,6 +166,8 @@ const light: ThemeTokens = {
   nodeLocked: '#E5DCC4',
   nodeLockedB: '#D7CCB0',
   wordBox: '#FAF7EE',
+  skeleton: 'rgba(45,36,24,0.07)',
+  skeletonSheen: 'rgba(255,255,255,0.65)',
 };
 
 export const WW_TOKENS: Record<ThemeMode, ThemeTokens> = { dark, light };

@@ -7,8 +7,19 @@ export interface LanguageOption {
   nativeName?: string;
 }
 
+/**
+ * The six CEFR proficiency bands, ordered from beginner (A1) to mastery
+ * (C2). The single source of truth for the level union — prefer this over
+ * re-typing the literal union inline. Used for placement results, word
+ * difficulty, and per-level comprehension.
+ */
+export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
+
+/** CEFR bands in ascending order — handy for ramps, ranges, and indexing. */
+export const CEFR_LEVELS: ReadonlyArray<CefrLevel> = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
 export interface ProficiencyLevel {
-  code: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
+  code: CefrLevel;
   name: string;
 }
 

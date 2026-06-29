@@ -1,19 +1,28 @@
-import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { wordwiseApi } from '../services/api';
-import { purchaseProduct, restorePurchases, PRODUCTS, type ProductId } from '../services/billing';
+/**
+ * PaywallScreen — WordWise Plus upgrade (States §D). Premium feature list,
+ * selectable annual (with a computed "SAVE N%" badge) vs monthly plan cards,
+ * a "Start 7-day free trial" CTA and a restore link.
+ *
+ * Migrated off the hard-coded COLORS snapshot onto useThemeColors/makeStyles.
+ * Purchases go through the existing billing service; premium state is read from
+ * entitlementsStore (useIsPremium) — no new purchase path is invented.
+ */
 
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  accent: '#F4A261',
-};
+import { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { purchaseProduct, restorePurchases, PRODUCTS } from '../services/billing';
+import { useIsPremium } from '../stores/entitlementsStore';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { SERIF_FAMILY } from '../theme/fonts';
+import { PressableScale } from './ui/PressableScale';
+import {
+  PAYWALL_FEATURES,
+  annualSavingsPercent,
+  MONTHLY_PRICE_LABEL,
+  ANNUAL_PRICE_LABEL,
+} from './paywallPricing';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -21,158 +30,229 @@ export interface PaywallScreenProps {
   previewsLimit: number;
 }
 
-const FEATURES = [
-  { icon: '🧠', title: 'Unlimited SRS Reviews', desc: 'Review all your saved words with spaced repetition — no session limits.' },
-  { icon: '🚫', title: 'No Ads', desc: 'Clean, distraction-free learning experience.' },
-  { icon: '📊', title: 'Detailed Stats', desc: 'Track your retention rate and box progression over time.' },
-  { icon: '🎯', title: 'Priority Support', desc: 'Get help directly from the WordWise team.' },
-];
+type Plan = 'annual' | 'monthly';
 
 export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallScreenProps) {
-  // Session-level analytics (PAYWALL_VIEW) deliberately not emitted —
-  // see ReviewScreen for the same drop. /user/interactions is per-word
-  // only; a proper events table is a separate workstream.
-  void previewsUsed;
-  void previewsLimit;
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+  const isPremium = useIsPremium();
+  const [plan, setPlan] = useState<Plan>('annual');
+  const [busy, setBusy] = useState(false);
+  const savings = annualSavingsPercent();
+
+  const buy = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const product = plan === 'annual' ? PRODUCTS.ANNUAL : PRODUCTS.MONTHLY;
+      const success = await purchaseProduct(product);
+      if (success) {
+        Alert.alert('Welcome to Plus!', 'Your subscription is now active.');
+        onBack();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    const result = await restorePurchases();
+    Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
+    if (result.restored) onBack();
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>WordWise Plus</Text>
-        <View style={{ width: 60 }} />
+    <SafeAreaView style={s.container} edges={['top']}>
+      <View style={s.header}>
+        <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
+          <Ionicons name="chevron-back" size={22} color={tc.text} />
+        </PressableScale>
+        <Text style={s.headerTitle}>WordWise Plus</Text>
+        <View style={{ width: 22 }} />
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.heroTitle}>Unlock your full{'\n'}vocabulary potential</Text>
-        <Text style={styles.heroSub}>
-          You've used {previewsUsed} of {previewsLimit} free review sessions.
-          Upgrade to keep learning with spaced repetition.
-        </Text>
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <Text style={s.heroTitle}>Unlock your full{'\n'}vocabulary potential</Text>
+        {isPremium ? (
+          <Text style={s.heroSub}>You're on WordWise Plus — everything's unlocked. Thank you!</Text>
+        ) : (
+          <Text style={s.heroSub}>
+            You've used {previewsUsed} of {previewsLimit} free review sessions. Upgrade to keep learning with
+            spaced repetition.
+          </Text>
+        )}
 
-        <View style={styles.featureList}>
-          {FEATURES.map((f) => (
-            <View key={f.title} style={styles.featureRow}>
-              <Text style={styles.featureIcon}>{f.icon}</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureDesc}>{f.desc}</Text>
+        <View style={s.featureList}>
+          {PAYWALL_FEATURES.map((f) => (
+            <View key={f.title} style={s.featureRow}>
+              <Text style={s.featureIcon}>{f.icon}</Text>
+              <View style={s.featureText}>
+                <Text style={s.featureTitle}>{f.title}</Text>
+                <Text style={s.featureDesc}>{f.desc}</Text>
               </View>
             </View>
           ))}
         </View>
 
-        <View style={styles.cta}>
-          <TouchableOpacity style={styles.trialBtn} onPress={async () => {
-            // TRIAL_START_TAP analytics drop — see top of file.
-            const success = await purchaseProduct(PRODUCTS.MONTHLY);
-            if (success) {
-              Alert.alert('Welcome to Plus!', 'Your subscription is now active.');
-              onBack();
-            }
-          }}>
-            <Text style={styles.trialBtnText}>Start 7-Day Free Trial</Text>
-          </TouchableOpacity>
-          <Text style={styles.priceHint}>Then $4.99/month · Cancel anytime</Text>
+        {isPremium ? (
+          <PressableScale style={s.manageBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Done">
+            <Text style={s.manageBtnText}>Done</Text>
+          </PressableScale>
+        ) : (
+          <>
+            <View style={s.plans}>
+              <PlanCard
+                tc={tc}
+                selected={plan === 'annual'}
+                onPress={() => setPlan('annual')}
+                title="Annual"
+                price={ANNUAL_PRICE_LABEL}
+                cadence="/year"
+                badge={`SAVE ${savings}%`}
+              />
+              <PlanCard
+                tc={tc}
+                selected={plan === 'monthly'}
+                onPress={() => setPlan('monthly')}
+                title="Monthly"
+                price={MONTHLY_PRICE_LABEL}
+                cadence="/month"
+              />
+            </View>
 
-          <TouchableOpacity style={styles.annualBtn} onPress={async () => {
-            // ANNUAL_TAP analytics drop — see top of file.
-            const success = await purchaseProduct(PRODUCTS.ANNUAL);
-            if (success) {
-              Alert.alert('Welcome to Plus!', 'Your annual subscription is now active.');
-              onBack();
-            }
-          }}>
-            <Text style={styles.annualBtnText}>Annual — $29.99/year (save 50%)</Text>
-          </TouchableOpacity>
+            <PressableScale
+              style={[s.trialBtn, busy && { opacity: 0.6 }]}
+              onPress={buy}
+              accessibilityRole="button"
+              accessibilityLabel="Start 7-day free trial"
+            >
+              <Text style={s.trialBtnText}>{busy ? 'Starting…' : 'Start 7-day free trial'}</Text>
+            </PressableScale>
+            <Text style={s.priceHint}>
+              Then {plan === 'annual' ? `${ANNUAL_PRICE_LABEL}/year` : `${MONTHLY_PRICE_LABEL}/month`} · Cancel
+              anytime
+            </Text>
 
-          <TouchableOpacity style={styles.restoreBtn} onPress={async () => {
-            const result = await restorePurchases();
-            Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
-            if (result.restored) onBack();
-          }}>
-            <Text style={styles.restoreBtnText}>Restore Purchases</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel="Restore purchases">
+              <Text style={s.restoreBtnText}>Restore purchases</Text>
+            </PressableScale>
+          </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    justifyContent: 'space-between',
-    paddingBottom: 24,
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.text,
-    textAlign: 'center',
-    lineHeight: 36,
-  },
-  heroSub: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginTop: 12,
-  },
-  featureList: { marginTop: 32, gap: 20 },
-  featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  featureIcon: { fontSize: 24, marginTop: 2 },
-  featureText: { flex: 1 },
-  featureTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  featureDesc: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
-  cta: { alignItems: 'center', marginTop: 32 },
-  trialBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
-    borderRadius: 14,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  trialBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
-  priceHint: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    marginTop: 10,
-  },
-  annualBtn: {
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  annualBtnText: { color: COLORS.primary, fontSize: 15, fontWeight: '700' },
-  restoreBtn: { marginTop: 16 },
-  restoreBtnText: { fontSize: 13, color: COLORS.textTertiary, textDecorationLine: 'underline' },
-});
+function PlanCard({
+  tc,
+  selected,
+  onPress,
+  title,
+  price,
+  cadence,
+  badge,
+}: {
+  tc: ThemeColors;
+  selected: boolean;
+  onPress: () => void;
+  title: string;
+  price: string;
+  cadence: string;
+  badge?: string;
+}) {
+  const s = useMemo(() => makeStyles(tc), [tc]);
+  return (
+    <PressableScale
+      style={[s.planCard, { borderColor: selected ? tc.gold : tc.border, backgroundColor: selected ? tc.primaryTint : tc.paper }]}
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${title} ${price} ${cadence}`}
+    >
+      {badge ? (
+        <View style={s.planBadge}>
+          <Text style={s.planBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+      <Text style={s.planTitle}>{title}</Text>
+      <Text style={s.planPrice}>{price}</Text>
+      <Text style={s.planCadence}>{cadence}</Text>
+      <View style={[s.planRadio, { borderColor: selected ? tc.gold : tc.border, backgroundColor: selected ? tc.gold : 'transparent' }]}>
+        {selected ? <Ionicons name="checkmark" size={12} color={tc.goldDeep} /> : null}
+      </View>
+    </PressableScale>
+  );
+}
+
+const makeStyles = (tc: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: tc.background },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: tc.paper,
+      borderBottomWidth: 1,
+      borderBottomColor: tc.border,
+    },
+    headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
+    content: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 28 },
+    heroTitle: { fontFamily: SERIF_FAMILY, fontSize: 28, fontWeight: '800', color: tc.text, textAlign: 'center', lineHeight: 34 },
+    heroSub: { fontSize: 14, color: tc.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 12 },
+    featureList: { marginTop: 28, gap: 18 },
+    featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+    featureIcon: { fontSize: 24, marginTop: 2 },
+    featureText: { flex: 1 },
+    featureTitle: { fontSize: 16, fontWeight: '700', color: tc.text, marginBottom: 2 },
+    featureDesc: { fontSize: 13, color: tc.textSecondary, lineHeight: 18 },
+    plans: { flexDirection: 'row', gap: 12, marginTop: 28 },
+    planCard: {
+      flex: 1,
+      borderWidth: 2,
+      borderRadius: 16,
+      paddingVertical: 18,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+    },
+    planBadge: {
+      position: 'absolute',
+      top: -10,
+      backgroundColor: tc.gold,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    planBadgeText: { fontSize: 10, fontWeight: '900', color: tc.goldDeep, letterSpacing: 0.4 },
+    planTitle: { fontSize: 13, fontWeight: '800', color: tc.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 },
+    planPrice: { fontFamily: SERIF_FAMILY, fontSize: 26, fontWeight: '800', color: tc.text, marginTop: 6 },
+    planCadence: { fontSize: 12, color: tc.textFaint, marginTop: 1 },
+    planRadio: {
+      marginTop: 12,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    trialBtn: {
+      backgroundColor: tc.gold,
+      paddingVertical: 16,
+      borderRadius: 14,
+      alignItems: 'center',
+      marginTop: 24,
+      shadowColor: '#000',
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 5,
+    },
+    trialBtnText: { color: tc.goldDeep, fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+    priceHint: { fontSize: 12, color: tc.textFaint, marginTop: 10, textAlign: 'center' },
+    manageBtn: { backgroundColor: tc.gold, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 28 },
+    manageBtnText: { color: tc.goldDeep, fontSize: 16, fontWeight: '900' },
+    restoreBtn: { marginTop: 16, alignItems: 'center' },
+    restoreBtnText: { fontSize: 13, color: tc.textSecondary, textDecorationLine: 'underline' },
+  });

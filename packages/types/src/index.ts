@@ -12,6 +12,8 @@ export interface Entitlements {
 
 export * from './constants';
 
+import type { CefrLevel } from './constants';
+
 // User types
 export interface User {
   id: number;
@@ -72,7 +74,7 @@ export interface Book {
 export interface Word {
   id: number;
   word: string;
-  cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
+  cefr_level: CefrLevel;
   frequency_rank: number | null;
   translation: string | null;
   definition: string | null;

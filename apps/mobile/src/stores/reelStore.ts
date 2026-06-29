@@ -11,6 +11,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { reelApi, type ReelTile } from '../services/api';
+import { showToast } from './toastStore';
 
 // Sticky flag: once the user has been seeded a starter reel (or has
 // added their own first movie), we never auto-seed again. Without
@@ -114,9 +115,11 @@ export const useReelStore = create<ReelState>((set, get) => ({
       AsyncStorage.setItem(SEED_DONE_KEY, '1').catch(() => {});
       const { tiles } = await reelApi.list();
       set({ tiles, userPickCount: countUserPicks(tiles) });
+      showToast({ message: `${input.title} added to your reel`, tone: 'success' });
     } catch (e) {
       console.warn('[reelStore] add failed, rolling back:', e);
       set({ tiles: before, userPickCount: countUserPicks(before) });
+      showToast({ message: "Couldn't add that film — try again", tone: 'error' });
     }
   },
 

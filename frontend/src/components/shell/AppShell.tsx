@@ -19,10 +19,12 @@
  */
 
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useThemeColors } from '../../theme/tokens';
 import { Sidebar, type SidebarItemId } from './Sidebar';
 import { AppTopBar } from './TopBar';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOnboardingStore } from '../../stores/onboardingStore';
 
 const ROUTE_FOR: Record<SidebarItemId, string> = {
   home: '/',
@@ -55,7 +57,14 @@ export function AppShell() {
   const t = useThemeColors();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const onboardingDone = useOnboardingStore((s) => s.completed);
+
+  // First-run gate (Launch §A): an authenticated user who hasn't finished
+  // onboarding is sent to the full-bleed flow before they reach the shell.
+  if (isAuthenticated && !onboardingDone) {
+    return <Navigate to="/onboarding" replace />;
+  }
 
   const handleNav = (id: SidebarItemId) => {
     navigate(ROUTE_FOR[id]);

@@ -33,6 +33,8 @@ import { DAILY_GOAL } from '../stores/dailyGoalStore';
 import type { QuizCompleteResponse, QuizCardResultInput } from '../services/api';
 import { PressableScale } from './ui/PressableScale';
 import { FadeInUp } from './ui/FadeInUp';
+import { Confetti } from './ui/Confetti';
+import { CountUp } from './ui/CountUp';
 
 export interface JourneyResultMeta {
   completedTileIdx: number;
@@ -109,6 +111,7 @@ export function QuizResultScreen({
 
     return (
       <SafeAreaView style={s.container} edges={['top']}>
+        <Confetti />
         <View style={s.body}>
           {/* Headline: correct / total */}
           <Text style={s.headline}>
@@ -121,7 +124,7 @@ export function QuizResultScreen({
           {/* Streak +1 ticker (only emphasized when hit3) */}
           <View style={s.streakRow}>
             <Text style={s.streakGlyph}>🔥</Text>
-            <Text style={s.streakNumber}>{journey.dailyStreak}</Text>
+            <CountUp style={s.streakNumber} value={journey.dailyStreak} duration={800} delay={300} />
             <Text style={s.streakLabel}>
               {hitWall ? 'day streak — +1 today!' : 'day streak'}
             </Text>
@@ -133,7 +136,7 @@ export function QuizResultScreen({
               <View style={s.compRow}>
                 <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
                 <Text style={s.compArrow}>→</Text>
-                <Text style={s.compAfter}>{Math.round(compAfter!)}%</Text>
+                <CountUp style={s.compAfter} value={Math.round(compAfter!)} suffix="%" duration={1100} delay={650} />
                 {compDelta !== 0 ? (
                   <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
                     {compDelta > 0 ? `+${compDelta}` : `${compDelta}`}%
@@ -213,6 +216,7 @@ export function QuizResultScreen({
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
+      {result.stars > 0 ? <Confetti /> : null}
       <View style={s.body}>
         <View style={[s.levelBadge, { backgroundColor: accent }]}>
           <Text style={s.levelBadgeText}>{level}</Text>

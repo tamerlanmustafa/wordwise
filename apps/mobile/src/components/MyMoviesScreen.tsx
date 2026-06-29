@@ -36,6 +36,7 @@ import { FilterChips, labelFor } from './myMovies/FilterChips';
 import { MovieRow } from './myMovies/MovieRow';
 import { SortPill } from './myMovies/SortPill';
 import { ReadyToWatchShelf } from './journey/ReadyToWatchShelf';
+import { OfflineBanner } from './common/OfflineBanner';
 import type { MoviePreviewPayload, NodeLevel } from './journey/sharedTypes';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -129,6 +130,9 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
           </IconBtn>
         </View>
       </View>
+
+      {/* ── Offline banner (States §D) — above the still-usable reel ── */}
+      <OfflineBanner />
 
       {/* ── Stat strip ─────────────────────────────────────────────── */}
       <View style={s.statStrip}>

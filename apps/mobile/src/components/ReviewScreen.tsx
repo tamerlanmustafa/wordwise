@@ -28,6 +28,7 @@ import { QuizHeader } from './quiz/QuizHeader';
 import { SynonymMCQCard } from './quiz/SynonymMCQCard';
 import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 import { cefrColors } from '../theme/palette';
+import { EmptyState } from './common/EmptyState';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -320,13 +321,16 @@ export function ReviewScreen({
           <Text style={styles.headerTitle}>Review</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>Something went wrong</Text>
-          <Text style={styles.emptyBody}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={loadSession}>
-            <Text style={styles.primaryBtnText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="cloud-offline-outline"
+          tone="error"
+          title="Something went wrong"
+          body={`${errorMessage}\n\nDon't worry — your progress is saved.`}
+          ctaLabel="Try again"
+          onCta={loadSession}
+          subCtaLabel="Continue offline"
+          onSubCta={onBack}
+        />
       </SafeAreaView>
     );
   }
@@ -341,16 +345,14 @@ export function ReviewScreen({
           <Text style={styles.headerTitle}>Review</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>Nothing due right now</Text>
-          <Text style={styles.emptyBody}>
-            All your saved words are scheduled for later. Come back tomorrow —
-            or save more words from a new movie.
-          </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={onBack}>
-            <Text style={styles.primaryBtnText}>Back home</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="checkmark-circle"
+          tone="success"
+          title="You're all caught up"
+          body="All your saved words are scheduled for later. Come back tomorrow — or save more words from a new film."
+          ctaLabel="Back home"
+          onCta={onBack}
+        />
       </SafeAreaView>
     );
   }

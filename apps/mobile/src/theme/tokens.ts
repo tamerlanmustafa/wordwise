@@ -66,6 +66,10 @@ export interface ThemeColors {
   // Misc
   scrim:              string;  // modal/sheet backdrop
 
+  // Skeleton loaders (motion §E3) — base block tint + the moving sheen.
+  skeleton:           string;  // resting skeleton block fill
+  skeletonSheen:      string;  // brighter band that sweeps across it
+
   // Bottom-bar (legacy — kept for any non-migrated callers).
   bottomBarBg:        string;
   bottomBarBorder:    string;
@@ -142,6 +146,9 @@ const light: ThemeColors = {
 
   scrim:              'rgba(0,0,0,0.4)',
 
+  skeleton:           'rgba(45,36,24,0.07)',
+  skeletonSheen:      'rgba(255,255,255,0.65)',
+
   bottomBarBg:        '#FFFFFF',
   bottomBarBorder:    '#E5DCC4',
 
@@ -208,6 +215,9 @@ const dark: ThemeColors = {
   errorTint:          'rgba(229,115,115,0.18)',
 
   scrim:              'rgba(0,0,0,0.6)',
+
+  skeleton:           'rgba(255,255,255,0.06)',
+  skeletonSheen:      'rgba(255,255,255,0.13)',
 
   bottomBarBg:        'rgba(0,0,0,0.6)',
   bottomBarBorder:    'rgba(255,255,255,0.06)',

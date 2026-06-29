@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ import { useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
 import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
+import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
@@ -140,19 +142,36 @@ export const HomeScreen = ({
   }, [targetLanguage]);
 
   // Trending tab data. The level tab's feed is owned by useInfiniteCefrMovies.
-  useEffect(() => {
-    (async () => {
-      try {
-        const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
-        const trendingData = await trendingRes.json();
-        setTrendingMovies(trendingData.results?.slice(0, 15) || []);
-      } catch (error) {
-        console.error('Failed to fetch movies:', error);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadTrending = useCallback(async () => {
+    try {
+      const trendingRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?api_key=9dece7a38786ac0c58794d6db4af3d51');
+      const trendingData = await trendingRes.json();
+      setTrendingMovies(trendingData.results?.slice(0, 15) || []);
+    } catch (error) {
+      console.error('Failed to fetch movies:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTrending();
+  }, [loadTrending]);
+
+  // Pull-to-refresh (Motion §E5) — branded gold RefreshControl. Re-pulls the
+  // trending feed and today's word; the level feed owns its own refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadTrending(),
+        srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {}),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadTrending, targetLanguage]);
 
   const onSearchTextChange = (text: string) => {
     setSearchQuery(text);
@@ -253,6 +272,14 @@ export const HomeScreen = ({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tc.gold}
+            colors={[tc.gold]}
+          />
+        }
       >
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the
             dropdown above the ad slot / controls below it. */}
@@ -316,17 +343,7 @@ export const HomeScreen = ({
             container's horizontal padding. */}
         <View style={s.feedSection}>
           {(homeTab === 'level' ? levelLoading : loading) ? (
-            <View style={styles.skeletonContainer}>
-              {[0, 1, 2, 3].map((i) => (
-                <View key={i} style={styles.skeletonRow}>
-                  <View style={styles.skeletonPoster} />
-                  <View style={styles.skeletonInfo}>
-                    <View style={[styles.skeletonLine, { width: '70%' }]} />
-                    <View style={[styles.skeletonLine, { width: '40%', marginTop: 8 }]} />
-                  </View>
-                </View>
-              ))}
-            </View>
+            <FeedSkeleton />
           ) : homeTab === 'level' ? (
             <RankedMovieList
               movies={levelMovies}
