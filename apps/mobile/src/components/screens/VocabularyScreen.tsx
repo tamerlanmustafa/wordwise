@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../../theme/palette';
+import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
-import { settingsStyles } from './settingsStyles';
+import { makeSettingsStyles } from './settingsStyles';
 
 interface Props {
   onBack: () => void;
@@ -14,6 +14,8 @@ interface Props {
 // vocabulary-related sub-sections (currently just Learned Words; room
 // for future things like custom word lists, etc.).
 export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) => {
+  const tc = useThemeColors();
+  const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
   const [learnedCount, setLearnedCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) =>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToLearnedWords}>
           <View style={{ flex: 1 }}>
             <Text style={settingsStyles.settingsLinkText}>Learned Words</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+            <Text style={{ color: tc.textSecondary, fontSize: 12, marginTop: 2 }}>
               {learnedCount === null
                 ? 'Words you already know'
                 : `${learnedCount} word${learnedCount === 1 ? '' : 's'} hidden from movie lists`}

@@ -12,7 +12,7 @@
  * CEFR-colored pill.
  */
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { cefrColors, cefrLabels } from '../theme/palette';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 import type { ReelTile } from '../services/api';
 
@@ -52,9 +53,8 @@ export interface MoviePreviewHubProps {
 
 const STATUS_PAD    = 44;
 const HERO_H        = 320;
-const GOLD          = '#FFD166';
-const BG            = '#0e0d10';
-const FALLBACK_DARK = '#221710';
+const GOLD          = '#FFD166';  // bright gold over the dark poster hero
+const FALLBACK_DARK = '#221710';  // hero fill when a poster is missing
 
 const SERIF_FAMILY = Platform.select({
   ios: 'Georgia',
@@ -71,6 +71,8 @@ export function MoviePreviewHub({
   onRemove,
   quizStarting,
 }: MoviePreviewHubProps) {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const levelColor = cefrColors[level] ?? GOLD;
   const levelLabel = cefrLabels[level] ?? level;
 
@@ -180,7 +182,7 @@ export function MoviePreviewHub({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.strap}>
-          <Text style={styles.eyebrowGold}>WHAT'S NEXT</Text>
+          <Text style={styles.eyebrowGoldSurface}>WHAT'S NEXT</Text>
           <Text style={styles.strapHeadline}>
             Prep for this film
           </Text>
@@ -197,6 +199,8 @@ export function MoviePreviewHub({
             title="Study all words"
             subtitle="Browse the full vocab list and mark words learned"
             onPress={onStudy}
+            styles={styles}
+            tc={tc}
           />
           <ActionRow
             icon="trash-outline"
@@ -205,6 +209,8 @@ export function MoviePreviewHub({
             destructive
             disabled={removing}
             onPress={handleRemove}
+            styles={styles}
+            tc={tc}
           />
         </View>
       </ScrollView>
@@ -250,7 +256,7 @@ export function MoviePreviewHub({
             accessibilityLabel="Quiz me on 5 words"
           >
             {quizStarting ? (
-              <ActivityIndicator size="small" color="#3a2400" />
+              <ActivityIndicator size="small" color={tc.goldDeep} />
             ) : (
               <Text style={[styles.ctaText, styles.ctaTextPrimary]}>
                 Quiz me · 5 words →
@@ -270,6 +276,8 @@ function ActionRow({
   destructive,
   disabled,
   onPress,
+  styles,
+  tc,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
@@ -277,6 +285,8 @@ function ActionRow({
   destructive?: boolean;
   disabled?: boolean;
   onPress: () => void;
+  styles: Styles;
+  tc: ThemeColors;
 }) {
   return (
     <Pressable
@@ -284,28 +294,28 @@ function ActionRow({
       disabled={disabled}
       style={({ pressed }) => [
         styles.actionRow,
-        pressed && !disabled && { backgroundColor: 'rgba(255,255,255,0.07)' },
+        pressed && !disabled && { backgroundColor: tc.divider },
         disabled && { opacity: 0.5 },
       ]}
-      android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
+      android_ripple={{ color: tc.divider }}
     >
       <View
         style={[
           styles.actionIconBox,
-          destructive && { backgroundColor: 'rgba(244,67,54,0.15)' },
+          destructive && { backgroundColor: tc.errorTint },
         ]}
       >
         <Ionicons
           name={icon}
           size={18}
-          color={destructive ? '#F44336' : GOLD}
+          color={destructive ? tc.error : tc.goldOnSurface}
         />
       </View>
       <View style={styles.actionTextCol}>
         <Text
           style={[
             styles.actionTitle,
-            destructive && { color: '#F44336' },
+            destructive && { color: tc.error },
           ]}
         >
           {title}
@@ -317,16 +327,18 @@ function ActionRow({
       <Ionicons
         name="chevron-forward"
         size={16}
-        color="rgba(255,255,255,0.4)"
+        color={tc.textFaint}
       />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+type Styles = ReturnType<typeof makeStyles>;
+
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: tc.background,
   },
 
   // Hero
@@ -442,23 +454,30 @@ const styles = StyleSheet.create({
   strapHeadline: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#fff',
+    color: tc.text,
     letterSpacing: -0.3,
     marginTop: 4,
   },
   strapSubhead: {
     fontSize: 12.5,
     fontWeight: '400',
-    color: 'rgba(255,255,255,0.6)',
+    color: tc.textSecondary,
     marginTop: 6,
     lineHeight: 17,
   },
 
-  // Shared eyebrow
+  // Eyebrow — bright gold over the dark poster hero (filmCard)…
   eyebrowGold: {
     fontSize: 10,
     fontWeight: '900',
     color: GOLD,
+    letterSpacing: 1.8,
+  },
+  // …and the readable gold-on-surface variant for the themed strap below it.
+  eyebrowGoldSurface: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: tc.goldOnSurface,
     letterSpacing: 1.8,
   },
 
@@ -475,15 +494,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: tc.border,
   },
   actionIconBox: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,209,102,0.15)',
+    backgroundColor: tc.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -494,13 +513,13 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#fff',
+    color: tc.text,
     letterSpacing: -0.2,
   },
   actionSubtitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.55)',
+    color: tc.textSecondary,
     marginTop: 2,
   },
 
@@ -525,16 +544,16 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   ctaBtnPrimary: {
-    backgroundColor: GOLD,
-    shadowColor: GOLD,
+    backgroundColor: tc.gold,
+    shadowColor: tc.gold,
     shadowOpacity: 0.35,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
   },
   ctaBtnSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: tc.border,
   },
   ctaText: {
     fontSize: 13,
@@ -543,9 +562,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   ctaTextPrimary: {
-    color: '#3a2400',
+    color: tc.goldDeep,
   },
   ctaTextSecondary: {
-    color: '#fff',
+    color: tc.text,
   },
 });

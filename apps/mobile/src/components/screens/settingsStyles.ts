@@ -1,13 +1,17 @@
 import { StyleSheet } from 'react-native';
-import { colors } from '../../theme/palette';
+import type { ThemeColors } from '../../theme/tokens';
 
 // Shared styles for Settings, Vocabulary, LearnedWords and other
 // header-with-back-button "sub-page" screens navigated to from the
 // user icon / profile area.
-export const settingsStyles = StyleSheet.create({
+//
+// Theme-aware: build per-render with `useMemo(() => makeSettingsStyles(tc), [tc])`
+// so these sub-pages follow the light/dark theme instead of the old light-only
+// `colors` snapshot.
+export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: tc.background,
   },
   header: {
     flexDirection: 'row',
@@ -15,22 +19,22 @@ export const settingsStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: tc.border,
   },
   backButton: {
     width: 60,
   },
   backButtonText: {
     fontSize: 16,
-    color: colors.primary,
+    color: tc.primaryOnSurface,
     fontWeight: '500',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
+    color: tc.text,
   },
   scrollContent: {
     flex: 1,
@@ -53,14 +57,14 @@ export const settingsStyles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.primary,
+    backgroundColor: tc.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
+    color: tc.textInverse,
   },
   profileInfo: {
     marginLeft: 16,
@@ -68,42 +72,42 @@ export const settingsStyles = StyleSheet.create({
   profileTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.text,
+    color: tc.text,
   },
   profileEmail: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: tc.textSecondary,
     marginTop: 2,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
+    backgroundColor: tc.border,
     marginVertical: 20,
   },
   alertError: {
-    backgroundColor: '#FDEAEA',
+    backgroundColor: tc.errorTint,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   alertErrorText: {
-    color: colors.error,
+    color: tc.error,
     fontSize: 14,
   },
   alertSuccess: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: tc.successTint,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   alertSuccessText: {
-    color: colors.success,
+    color: tc.success,
     fontSize: 14,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: tc.text,
     marginBottom: 12,
   },
   inputContainer: {
@@ -111,23 +115,23 @@ export const settingsStyles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: tc.textSecondary,
     marginBottom: 6,
   },
   textInput: {
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: tc.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: colors.text,
+    color: tc.text,
   },
   selectButton: {
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: tc.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -138,18 +142,18 @@ export const settingsStyles = StyleSheet.create({
   },
   selectLabel: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: tc.textSecondary,
   },
   selectValue: {
     fontSize: 14,
-    color: colors.text,
+    color: tc.text,
     fontWeight: '500',
   },
   tabToggle: {
     flexDirection: 'row',
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: tc.border,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -159,18 +163,18 @@ export const settingsStyles = StyleSheet.create({
     alignItems: 'center',
   },
   tabOptionActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: tc.primary,
   },
   tabOptionText: {
     fontSize: 15,
     fontWeight: '500',
-    color: colors.textSecondary,
+    color: tc.textSecondary,
   },
   tabOptionTextActive: {
-    color: '#fff',
+    color: tc.textInverse,
   },
   saveButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: tc.primary,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',
@@ -180,17 +184,17 @@ export const settingsStyles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: '#fff',
+    color: tc.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: tc.scrim,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.paper,
+    backgroundColor: tc.paper,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: '60%',
@@ -202,17 +206,17 @@ export const settingsStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: tc.border,
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: colors.text,
+    color: tc.text,
   },
   modalClose: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.primary,
+    color: tc.primaryOnSurface,
   },
   modalScroll: {
     paddingBottom: 30,
@@ -224,22 +228,22 @@ export const settingsStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: tc.border,
   },
   modalItemSelected: {
-    backgroundColor: `${colors.primary}10`,
+    backgroundColor: tc.primaryTint,
   },
   modalItemText: {
     fontSize: 16,
-    color: colors.text,
+    color: tc.text,
   },
   modalItemTextSelected: {
-    color: colors.primary,
+    color: tc.primaryOnSurface,
     fontWeight: '600',
   },
   checkmark: {
     fontSize: 16,
-    color: colors.primary,
+    color: tc.primaryOnSurface,
     fontWeight: '700',
   },
   notifRow: {
@@ -248,25 +252,25 @@ export const settingsStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: tc.border,
   },
   notifInfo: { flex: 1 },
-  notifLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
-  notifDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  notifLabel: { fontSize: 14, fontWeight: '600', color: tc.text },
+  notifDesc: { fontSize: 12, color: tc.textSecondary, marginTop: 2 },
   notifToggle: {
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#E0DDD8',
+    backgroundColor: tc.chipBg,
     marginLeft: 12,
   },
-  notifToggleOn: { backgroundColor: colors.primary },
-  notifToggleText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  notifToggleOn: { backgroundColor: tc.primary },
+  notifToggleText: { fontSize: 12, fontWeight: '700', color: tc.textInverse },
   settingsLink: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.paper,
-    borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: colors.border,
+    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: tc.paper,
+    borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: tc.border,
   },
-  settingsLinkText: { fontSize: 15, color: colors.text },
-  settingsLinkArrow: { fontSize: 16, color: colors.textSecondary },
+  settingsLinkText: { fontSize: 15, color: tc.text },
+  settingsLinkArrow: { fontSize: 16, color: tc.textSecondary },
 });

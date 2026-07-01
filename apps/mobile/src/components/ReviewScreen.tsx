@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   srsApi,
-  wordwiseApi,
   SrsPaywallError,
   type ChestPayload,
   type SessionKind,
@@ -28,6 +27,7 @@ import { QuizHeader } from './quiz/QuizHeader';
 import { SynonymMCQCard } from './quiz/SynonymMCQCard';
 import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 import { cefrColors } from '../theme/palette';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import { Confetti } from './ui/Confetti';
 import { CountUp } from './ui/CountUp';
@@ -54,18 +54,6 @@ const SPACING_TIP_KEY = 'spacing_first_repeat_v1';
 // If we want richer card content later (examples, images, audio), extend
 // /srs/session/start to include it rather than fanning out N extra calls.
 
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  success: '#4CAF9A',
-  error: '#D66A6A',
-};
-
 export interface ReviewScreenProps {
   /** v0.7.2 — which Practice tile to start. Omit / pass undefined for
    *  the legacy quick_recall default. */
@@ -88,6 +76,8 @@ export function ReviewScreen({
   onBack,
   onPaywall,
 }: ReviewScreenProps) {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const [phase, setPhase] = useState<Phase>('loading');
   const [cards, setCards] = useState<SrsReviewCard[]>([]);
   const [index, setIndex] = useState(0);
@@ -307,7 +297,7 @@ export function ReviewScreen({
           <View style={{ width: 60 }} />
         </View>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
         </View>
       </SafeAreaView>
     );
@@ -421,7 +411,7 @@ export function ReviewScreen({
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
         </View>
       </SafeAreaView>
     );
@@ -508,27 +498,27 @@ export function ReviewScreen({
     <SafeAreaView style={styles.container} edges={['top']}>
       {sharedHeader}
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={tc.primaryOnSurface} />
       </View>
       {sharedTip}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.paper,
+    backgroundColor: tc.paper,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: tc.border,
   },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  backText: { fontSize: 16, color: tc.primaryOnSurface, fontWeight: '500', width: 60 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -537,26 +527,26 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   primaryBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: tc.primary,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  primaryBtnText: { color: tc.textInverse, fontSize: 16, fontWeight: '700' },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: tc.text, textAlign: 'center' },
   emptyBody: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: tc.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
-  bigStat: { fontSize: 56, fontWeight: '700', color: COLORS.primary },
+  bigStat: { fontSize: 56, fontWeight: '700', color: tc.primaryOnSurface },
   streakLine: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.text,
+    color: tc.text,
     textAlign: 'center',
   },
-  previewHint: { fontSize: 13, color: COLORS.textTertiary, fontStyle: 'italic', textAlign: 'center' },
+  previewHint: { fontSize: 13, color: tc.textFaint, fontStyle: 'italic', textAlign: 'center' },
 });

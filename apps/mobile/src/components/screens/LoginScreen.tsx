@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -9,14 +10,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { colors } from '../../theme/palette';
-import { styles } from '../../core/styles';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 interface Props {
   onLogin: (user: any, token: string, refreshToken: string) => void;
 }
 
 export const LoginScreen = ({ onLogin }: Props) => {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -160,7 +162,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             disabled={isLoading}
           >
             {googleLoading ? (
-              <ActivityIndicator color={colors.text} />
+              <ActivityIndicator color={tc.text} />
             ) : (
               <>
                 <Text style={styles.googleIcon}>G</Text>
@@ -179,7 +181,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="Username"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={tc.textFaint}
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
@@ -188,7 +190,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={tc.textFaint}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -197,7 +199,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={tc.textFaint}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -211,7 +213,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             disabled={isLoading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={tc.textInverse} />
             ) : (
               <Text style={styles.primaryButtonText}>
                 {isLoginMode ? 'Login' : 'Register'}
@@ -234,3 +236,46 @@ export const LoginScreen = ({ onLogin }: Props) => {
     </SafeAreaView>
   );
 };
+
+// Local theme-aware styles (the shared core/styles sheet is a light-only
+// snapshot; the auth screen owns its own themed copy until that sheet is
+// migrated). Mirrors the login keys from core/styles.
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
+  loginContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  logo: { fontSize: 36, fontWeight: '700', color: tc.primaryOnSurface, marginBottom: 8 },
+  tagline: { fontSize: 16, color: tc.textSecondary, marginBottom: 48, textAlign: 'center' },
+  formContainer: { width: '100%', gap: 12 },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: tc.paper,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: tc.border,
+    gap: 10,
+  },
+  googleIcon: { fontSize: 18, fontWeight: '700', color: '#4285F4' }, // Google brand blue
+  googleButtonText: { fontSize: 16, fontWeight: '500', color: tc.text },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: tc.border },
+  dividerText: { paddingHorizontal: 16, color: tc.textSecondary, fontSize: 14 },
+  input: {
+    backgroundColor: tc.paper,
+    borderWidth: 1,
+    borderColor: tc.border,
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: tc.text,
+  },
+  primaryButton: { backgroundColor: tc.primary, paddingVertical: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  buttonDisabled: { opacity: 0.7 },
+  primaryButtonText: { color: tc.textInverse, fontSize: 16, fontWeight: '600' },
+  switchButton: { alignItems: 'center', paddingVertical: 12 },
+  switchButtonText: { color: tc.primaryOnSurface, fontSize: 14 },
+  loginError: { color: tc.error, fontSize: 14, textAlign: 'center' },
+});

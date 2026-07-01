@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -12,25 +11,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { srsApi, premiumApi, type SrsStats } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  success: '#4CAF9A',
-  error: '#D66A6A',
-  box1: '#D66A6A',
-  box2: '#F4A261',
-  box3: '#E9C46A',
-  box4: '#7EC8A0',
-  box5: '#4CAF9A',
-};
-
-const BOX_COLORS = [COLORS.box1, COLORS.box2, COLORS.box3, COLORS.box4, COLORS.box5];
+// Leitner box colours are semantic (box 1 = weakest → box 5 = mastered) and
+// theme-independent, like the CEFR palette — kept as literals.
+const BOX_COLORS = ['#D66A6A', '#F4A261', '#E9C46A', '#7EC8A0', '#4CAF9A'];
 const BOX_LABELS = ['1 day', '3 days', '7 days', '14 days', '30 days'];
 
 export interface StatsScreenProps {
@@ -39,6 +24,8 @@ export interface StatsScreenProps {
 }
 
 export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const [stats, setStats] = useState<SrsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const isPremium = useIsPremium();
@@ -60,9 +47,9 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} />
+        <Header onBack={onBack} styles={styles} />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
         </View>
       </SafeAreaView>
     );
@@ -71,7 +58,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   if (!stats || stats.total_saved === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} />
+        <Header onBack={onBack} styles={styles} />
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>No words saved yet</Text>
           <Text style={styles.emptyBody}>
@@ -90,7 +77,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={onBack} />
+      <Header onBack={onBack} styles={styles} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Streak + Retention hero */}
         <View style={styles.heroRow}>
@@ -98,13 +85,15 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
             value={`${stats.current_streak}`}
             label="Day streak"
             sub={`Best: ${stats.longest_streak}`}
-            color={COLORS.primary}
+            color={tc.primaryOnSurface}
+            styles={styles}
           />
           <StatCard
             value={`${stats.retention_pct}%`}
             label="Retention"
             sub={`${stats.total_correct}/${stats.total_reviews}`}
-            color={COLORS.success}
+            color={tc.success}
+            styles={styles}
           />
         </View>
 
@@ -201,7 +190,9 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   );
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+type Styles = ReturnType<typeof makeStyles>;
+
+function Header({ onBack, styles }: { onBack: () => void; styles: Styles }) {
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={8}>
@@ -218,11 +209,13 @@ function StatCard({
   label,
   sub,
   color,
+  styles,
 }: {
   value: string;
   label: string;
   sub: string;
   color: string;
+  styles: Styles;
 }) {
   return (
     <View style={styles.statCard}>
@@ -233,8 +226,8 @@ function StatCard({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   header: {
     flexDirection: 'row',
@@ -242,70 +235,70 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.paper,
+    backgroundColor: tc.paper,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: tc.border,
   },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  backText: { fontSize: 16, color: tc.primaryOnSurface, fontWeight: '500', width: 60 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
   scrollContent: { padding: 16, gap: 16, paddingBottom: 32 },
   heroRow: { flexDirection: 'row', gap: 12 },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.paper,
+    backgroundColor: tc.paper,
     borderRadius: 14,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: tc.border,
   },
   statValue: { fontSize: 36, fontWeight: '800' },
-  statLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginTop: 4 },
-  statSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
+  statLabel: { fontSize: 14, fontWeight: '600', color: tc.text, marginTop: 4 },
+  statSub: { fontSize: 12, color: tc.textFaint, marginTop: 2 },
   card: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: tc.paper,
     borderRadius: 14,
     padding: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: tc.border,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  cardSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: tc.text, marginBottom: 4 },
+  cardSub: { fontSize: 13, color: tc.textSecondary, marginBottom: 16 },
   dueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   dueItem: { flex: 1, alignItems: 'center' },
-  dueDivider: { width: 1, height: 32, backgroundColor: COLORS.border },
-  dueCount: { fontSize: 28, fontWeight: '800', color: COLORS.text },
-  dueLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  dueDivider: { width: 1, height: 32, backgroundColor: tc.border },
+  dueCount: { fontSize: 28, fontWeight: '800', color: tc.text },
+  dueLabel: { fontSize: 12, color: tc.textSecondary, marginTop: 2 },
   reviewBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: tc.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
   },
-  reviewBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  reviewBtnText: { color: tc.textInverse, fontSize: 15, fontWeight: '700' },
   barRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 },
-  barLabel: { width: 46, fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
+  barLabel: { width: 46, fontSize: 13, color: tc.textSecondary, fontWeight: '600' },
   barTrack: {
     flex: 1,
     height: 18,
-    backgroundColor: '#F0EDE8',
+    backgroundColor: tc.divider,
     borderRadius: 9,
     overflow: 'hidden',
   },
   barFill: { height: 18, borderRadius: 9 },
-  barCount: { width: 28, fontSize: 13, fontWeight: '700', color: COLORS.text, textAlign: 'right' },
-  barInterval: { width: 48, fontSize: 11, color: COLORS.textTertiary },
-  legendText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
-  emptyBody: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  barCount: { width: 28, fontSize: 13, fontWeight: '700', color: tc.text, textAlign: 'right' },
+  barInterval: { width: 48, fontSize: 11, color: tc.textFaint },
+  legendText: { fontSize: 13, color: tc.textSecondary, lineHeight: 20 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: tc.text, textAlign: 'center' },
+  emptyBody: { fontSize: 14, color: tc.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
   exportRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
   exportBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: tc.primary,
   },
-  exportBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  exportBtnText: { color: tc.textInverse, fontSize: 14, fontWeight: '700' },
 });

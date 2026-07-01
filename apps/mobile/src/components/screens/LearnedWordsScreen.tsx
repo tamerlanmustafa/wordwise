@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,9 +9,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../../theme/palette';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
-import { settingsStyles } from './settingsStyles';
+import { makeSettingsStyles } from './settingsStyles';
 
 interface Props {
   onBack: () => void;
@@ -20,6 +20,9 @@ interface Props {
 // Shows every word the user has globally marked "never show again".
 // Tap a row to unlearn it (word reappears in movie lists on next load).
 export const LearnedWordsScreen = ({ onBack }: Props) => {
+  const tc = useThemeColors();
+  const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const [words, setWords] = useState<Array<{ id: number; word: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,21 +67,21 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={tc.primaryOnSurface} />
         </View>
       ) : error ? (
         <View style={{ padding: 20 }}>
-          <Text style={{ color: colors.textSecondary }}>{error}</Text>
+          <Text style={{ color: tc.textSecondary }}>{error}</Text>
         </View>
       ) : words.length === 0 ? (
         <View style={{ padding: 24, alignItems: 'center' }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: 'center' }}>
+          <Text style={{ color: tc.textSecondary, fontSize: 14, textAlign: 'center' }}>
             No learned words yet. Swipe left on a word in any movie to mark it as known.
           </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
+          <Text style={{ color: tc.textSecondary, fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
             {words.length} word{words.length === 1 ? '' : 's'} hidden from movie lists. Tap to restore.
           </Text>
           {words.map((w) => (
@@ -106,7 +109,7 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -114,16 +117,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    borderBottomColor: tc.divider,
   },
   rowWord: {
     fontSize: 16,
-    color: colors.text,
+    color: tc.text,
     fontWeight: '500',
   },
   rowAction: {
     fontSize: 13,
-    color: colors.primary,
+    color: tc.primaryOnSurface,
     fontWeight: '600',
   },
 });

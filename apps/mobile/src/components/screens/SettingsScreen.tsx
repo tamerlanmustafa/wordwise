@@ -25,7 +25,7 @@ import {
   setWordReminderMode,
   type WordReminderMode,
 } from '../../services/notifications';
-import { settingsStyles } from './settingsStyles';
+import { makeSettingsStyles } from './settingsStyles';
 
 interface Props {
   onBack: () => void;
@@ -69,6 +69,7 @@ export const SettingsScreen = ({
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
   const appearanceStyles = useMemo(() => makeAppearanceStyles(tc), [tc]);
+  const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
 
   useEffect(() => {
     AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
