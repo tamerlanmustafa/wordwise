@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
@@ -30,7 +31,6 @@ import { useReelStore } from '../stores/reelStore';
 import {
   dailyApi,
   srsApi,
-  SrsPaywallError,
   type DailyState,
   type SessionKind,
 } from '../services/api';
@@ -48,9 +48,6 @@ export interface PracticeScreenProps {
    *  quick_recall when called with no args (kept for backward compat
    *  with the journey/legacy paths). */
   onStartDailyReview: (kind?: SessionKind, movieId?: number) => void;
-  /** Surfaced when the SRS endpoint returns 402 "daily_cap_reached" —
-   *  same handler the journey flow uses. */
-  onPaywall?: (previewsUsed: number, previewsLimit: number) => void;
   /** True while this tab is the visible one. The screen is kept mounted
    *  across tab switches (KeepAlive), so we re-fetch the daily server
    *  state each time it becomes visible again — e.g. after finishing a
@@ -61,7 +58,6 @@ export interface PracticeScreenProps {
 
 export function PracticeScreen({
   onStartDailyReview,
-  onPaywall,
   active = true,
 }: PracticeScreenProps) {
   const tc = useThemeColors();
@@ -211,14 +207,14 @@ export function PracticeScreen({
         </View>
         <View style={s.headerChips}>
           <View style={s.streakChip}>
-            <Text style={s.streakFire}>🛡️</Text>
+            <Ionicons name="shield-checkmark" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
             <Text style={s.streakNumber}>{serverState?.freezes_held ?? 0}</Text>
             <Text style={s.streakLabel}>
               {(serverState?.freezes_held ?? 0) === 1 ? 'FREEZE' : 'FREEZES'}
             </Text>
           </View>
           <View style={s.streakChip}>
-            <Text style={s.streakFire}>🔥</Text>
+            <Ionicons name="flame" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
             <Text style={s.streakNumber}>{effectiveStreak}</Text>
             <Text style={s.streakLabel}>{effectiveStreak === 1 ? 'DAY' : 'DAYS'}</Text>
           </View>
@@ -312,7 +308,7 @@ const makeStyles = (tc: ThemeColors) =>
       shadowOffset: { width: 0, height: 4 },
       elevation: 2,
     },
-    streakFire: { fontSize: 16 },
+    streakIcon: { marginRight: 3 },
     streakNumber: {
       fontFamily: MONO_FAMILY,
       fontSize: 14,

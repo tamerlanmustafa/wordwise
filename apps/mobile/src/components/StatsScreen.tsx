@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Linking,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { ContributionCalendar } from './stats/ContributionCalendar';
 import { calendarIntensity } from './stats/statsSelectors';
+import { Skeleton } from './ui/Skeleton';
 
 const CALENDAR_WEEKS = 5;
 
@@ -68,11 +68,18 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   useEffect(() => { load(); }, [load]);
 
   if (loading) {
+    // Skeleton that mirrors the dashboard's shape (hero stat row + cards) so
+    // the screen reads as "almost there" rather than a dead spinner (F-015).
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header onBack={onBack} styles={styles} />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
+        <View style={styles.scrollContent}>
+          <View style={styles.heroRow}>
+            <Skeleton height={96} radius={14} sheen style={{ flex: 1 }} />
+            <Skeleton height={96} radius={14} sheen style={{ flex: 1 }} delay={80} />
+          </View>
+          <Skeleton height={150} radius={14} sheen delay={120} />
+          <Skeleton height={190} radius={14} sheen delay={180} />
         </View>
       </SafeAreaView>
     );

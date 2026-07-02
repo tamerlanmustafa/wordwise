@@ -22,7 +22,7 @@ export type SidebarItemId =
   | 'discover'
   | 'stats';
 
-type IconKind = 'home' | 'film' | 'spark' | 'compass' | 'chart';
+type IconKind = 'home' | 'film' | 'spark' | 'compass' | 'chart' | 'flame';
 
 interface SidebarItem {
   id: SidebarItemId;
@@ -247,7 +247,7 @@ export function Sidebar({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>🔥</span>
+            <SidebarIcon kind="flame" color={sb.gold} />
             <div>
               <div
                 style={{
@@ -419,6 +419,12 @@ function SidebarIcon({
     return (
       <svg {...p}>
         <path d="M4 19V5M4 19h16M8 15v-3M12 15V8M16 15v-5" />
+      </svg>
+    );
+  if (kind === 'flame')
+    return (
+      <svg {...p}>
+        <path d="M12 3c1 3-2 4-2 7a2 2 0 0 0 4 0c0-1-.5-2-.5-2 2 1 3.5 3 3.5 5.5A5 5 0 0 1 7 13c0-3 3-5 5-10z" />
       </svg>
     );
   return null;

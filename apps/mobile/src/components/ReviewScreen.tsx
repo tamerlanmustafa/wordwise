@@ -30,6 +30,7 @@ import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import { SessionComplete } from './common/SessionComplete';
+import { Skeleton } from './ui/Skeleton';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -286,6 +287,8 @@ export function ReviewScreen({
   );
 
   if (phase === 'loading') {
+    // Skeleton shaped like a review card (progress bar + word card + choices)
+    // instead of a bare spinner (F-015).
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -295,8 +298,12 @@ export function ReviewScreen({
           <Text style={styles.headerTitle}>Review</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
+        <View style={{ padding: 20, gap: 16 }}>
+          <Skeleton height={6} radius={3} sheen />
+          <Skeleton height={160} radius={16} sheen delay={80} />
+          <Skeleton height={52} radius={12} sheen delay={140} />
+          <Skeleton height={52} radius={12} sheen delay={200} />
+          <Skeleton height={52} radius={12} sheen delay={260} />
         </View>
       </SafeAreaView>
     );
