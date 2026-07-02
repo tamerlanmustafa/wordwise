@@ -29,42 +29,22 @@ import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 
 interface Props {
-  onLogout: () => void;
   onMoviePress: (movie: MovieData) => void;
   onSearch: (query: string) => void;
   user: any;
   targetLanguage: string;
-  setTargetLanguage: (lang: string) => void;
-  onNavigateToSettings: () => void;
-  onNavigateToAdmin: () => void;
-  onNavigateToReview: () => void;
-  onNavigateToStats: () => void;
-  onNavigateToNotebook: () => void;
-  onNavigateToLists: () => void;
-  onNavigateToAchievements: () => void;
-  onNavigateToLeaderboard: () => void;
-  onNavigateToVocabulary: () => void;
-  onNavigateToBatchJourney?: () => void;
   onNavigateToProfile?: () => void;
 }
 
+// Deep-screen navigation (Stats, Lists, Settings, Leaderboard, …) now lives in
+// the Profile sheet (UserMenuSheet), not a Home menu — the pre-v0.7 Home menu
+// was removed in the 4-tab refactor, so those callbacks were dead here and have
+// been dropped (UX audit F-030).
 export const HomeScreen = ({
-  onLogout,
   onMoviePress,
   onSearch,
   user,
   targetLanguage,
-  setTargetLanguage,
-  onNavigateToSettings,
-  onNavigateToAdmin,
-  onNavigateToReview,
-  onNavigateToStats,
-  onNavigateToNotebook,
-  onNavigateToLists,
-  onNavigateToAchievements,
-  onNavigateToLeaderboard,
-  onNavigateToVocabulary,
-  onNavigateToBatchJourney,
   onNavigateToProfile,
 }: Props) => {
   const tc = useThemeColors();

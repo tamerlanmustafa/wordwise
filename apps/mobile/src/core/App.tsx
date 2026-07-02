@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar, Alert, Platform, UIManager, View, StyleSheet, InteractionManager } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View, InteractionManager } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -44,7 +44,6 @@ import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import type { Screen, ListFilter, MovieData } from './types';
-import { colors } from '../theme/palette';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
 import { LoginScreen } from '../components/screens/LoginScreen';
@@ -286,10 +285,7 @@ export default function App() {
   // Multi-movie batch journey state.
   const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
 
-  // v0.7: navigation targets for the new two-tab world. The legacy
-  // `navigateToJourney` is retained as a redirect to `navigateToMyMovies`
-  // so any HomeScreen "Open my reel" callers keep working without a
-  // separate plumbing pass — they land on the new tab now.
+  // v0.7: navigation targets for the new two-tab world.
   const navigateToMyMovies = () => {
     useReelBadgeStore.getState().clear();
     setCurrentScreen('movies');
@@ -297,7 +293,6 @@ export default function App() {
   const navigateToPractice = () => {
     setCurrentScreen('practice');
   };
-  const navigateToJourney = navigateToMyMovies;
 
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
@@ -626,7 +621,7 @@ export default function App() {
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
         <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onLogout={logout} onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} onNavigateToSettings={navigateToSettings} onNavigateToAdmin={navigateToAdmin} onNavigateToReview={navigateToReview} onNavigateToStats={navigateToStats} onNavigateToNotebook={navigateToNotebook} onNavigateToLists={navigateToLists} onNavigateToAchievements={navigateToAchievements} onNavigateToLeaderboard={navigateToLeaderboard} onNavigateToVocabulary={navigateToVocabulary} onNavigateToBatchJourney={navigateToJourney} onNavigateToProfile={() => setShowUserSheet(true)} />
+          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} onNavigateToProfile={() => setShowUserSheet(true)} />
         </KeepAlive>
         <KeepAlive visible={currentScreen === 'movies' || currentScreen === 'journey'}>
           <MyMoviesScreen
@@ -772,6 +767,7 @@ export default function App() {
           onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
           onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
+          onNavigateToLeaderboard={() => { setShowUserSheet(false); navigateToLeaderboard(); }}
           onLogout={() => { setShowUserSheet(false); logout(); }}
           isAdmin={!!user?.is_admin}
           bottomOffset={barHeight}

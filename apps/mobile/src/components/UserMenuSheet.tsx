@@ -36,6 +36,7 @@ interface Props {
   onNavigateToVocabulary: () => void;
   onNavigateToStats: () => void;
   onNavigateToAchievements: () => void;
+  onNavigateToLeaderboard: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
   /** Height of GlobalBottomBar — sheet and scrim stop above it. */
@@ -52,6 +53,7 @@ export function UserMenuSheet({
   onNavigateToVocabulary,
   onNavigateToStats,
   onNavigateToAchievements,
+  onNavigateToLeaderboard,
   onLogout,
   isAdmin,
   bottomOffset,
@@ -76,6 +78,7 @@ export function UserMenuSheet({
   const navItems: { icon: MenuIconName; label: string; action: () => void }[] = [
     { icon: 'progress', label: 'My Progress', action: wrap(onNavigateToStats) },
     { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
+    { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
     { icon: 'lists', label: 'My Lists', action: wrap(onNavigateToLists) },
     { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
     { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
@@ -178,6 +181,7 @@ export function UserMenuSheet({
 type MenuIconName =
   | 'progress'
   | 'badge'
+  | 'leaderboard'
   | 'lists'
   | 'book'
   | 'settings'
@@ -212,6 +216,14 @@ function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; siz
         <Svg {...p}>
           <Circle cx={12} cy={9} r={5} />
           <Path d="M8.5 13L7 21l5-2.6L17 21l-1.5-8" />
+        </Svg>
+      );
+    case 'leaderboard':
+      return (
+        <Svg {...p}>
+          <Path d="M8 21h8M12 17v4" />
+          <Path d="M7 4h10v4a5 5 0 0 1-10 0z" />
+          <Path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3" />
         </Svg>
       );
     case 'lists':

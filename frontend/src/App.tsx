@@ -18,6 +18,7 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import MyMoviesPage from './pages/MyMoviesPage';
 import OnboardingPage from './pages/OnboardingPage';
+import NotFoundPage from './pages/NotFoundPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -59,6 +60,8 @@ function App() {
                     <Route path="/pricing" element={<PricingPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/terms" element={<TermsPage />} />
+                    {/* Catch-all — no unknown URL should render an empty shell (F-032/F-035) */}
+                    <Route path="*" element={<NotFoundPage />} />
                   </Route>
                 </Routes>
               </Router>

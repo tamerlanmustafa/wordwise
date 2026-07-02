@@ -52,7 +52,6 @@ export const SettingsScreen = ({
   const [nativeLanguage, setNativeLanguage] = useState(user?.native_language || 'en');
   const [learningLanguage, setLearningLanguage] = useState(user?.learning_language || 'en');
   const [proficiencyLevel, setProficiencyLevel] = useState(user?.proficiency_level || 'A1');
-  const [defaultTab, setDefaultTab] = useState<'movies' | 'books'>(user?.default_tab || 'movies');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -143,7 +142,9 @@ export const SettingsScreen = ({
           native_language: nativeLanguage,
           learning_language: learningLanguage,
           proficiency_level: proficiencyLevel,
-          default_tab: defaultTab,
+          // `default_tab` intentionally omitted — mobile has no Books tab and
+          // never reads it, so it must not clobber the web user's choice
+          // (UX audit F-005/F-025).
         }),
       });
 
@@ -347,28 +348,6 @@ export const SettingsScreen = ({
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-
-        <View style={settingsStyles.divider} />
-
-        <Text style={settingsStyles.sectionTitle}>Default Home Tab</Text>
-        <View style={settingsStyles.tabToggle}>
-          <TouchableOpacity
-            style={[settingsStyles.tabOption, defaultTab === 'movies' && settingsStyles.tabOptionActive]}
-            onPress={() => setDefaultTab('movies')}
-          >
-            <Text style={[settingsStyles.tabOptionText, defaultTab === 'movies' && settingsStyles.tabOptionTextActive]}>
-              Movies
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[settingsStyles.tabOption, defaultTab === 'books' && settingsStyles.tabOptionActive]}
-            onPress={() => setDefaultTab('books')}
-          >
-            <Text style={[settingsStyles.tabOptionText, defaultTab === 'books' && settingsStyles.tabOptionTextActive]}>
-              Books
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <TouchableOpacity

@@ -28,14 +28,17 @@ interface SidebarItem {
   id: SidebarItemId;
   label: string;
   icon: IconKind;
+  /** Not built on web yet — render disabled with a "soon" tag rather than
+   *  navigating to a route that doesn't exist (UX audit F-032). */
+  soon?: boolean;
 }
 
 const ITEMS: SidebarItem[] = [
   { id: 'home', label: 'Home', icon: 'home' },
   { id: 'movies', label: 'My Movies', icon: 'film' },
-  { id: 'practice', label: 'Practice', icon: 'spark' },
+  { id: 'practice', label: 'Practice', icon: 'spark', soon: true },
   { id: 'discover', label: 'Discover', icon: 'compass' },
-  { id: 'stats', label: 'Stats', icon: 'chart' },
+  { id: 'stats', label: 'Stats', icon: 'chart', soon: true },
 ];
 
 // Sidebar palette is intentionally independent of theme mode — always the
@@ -163,11 +166,15 @@ export function Sidebar({
       >
         {ITEMS.map((it) => {
           const on = it.id === active;
+          const soon = !!it.soon;
           return (
             <button
               key={it.id}
               type="button"
-              onClick={() => onNavigate?.(it.id)}
+              onClick={() => { if (!soon) onNavigate?.(it.id); }}
+              disabled={soon}
+              aria-disabled={soon}
+              title={soon ? 'Coming to web soon' : undefined}
               style={{
                 ...buttonReset,
                 display: 'flex',
@@ -181,7 +188,8 @@ export function Sidebar({
                 fontWeight: 700,
                 letterSpacing: 0.1,
                 position: 'relative',
-                cursor: 'pointer',
+                cursor: soon ? 'default' : 'pointer',
+                opacity: soon ? 0.4 : 1,
                 textAlign: 'left',
                 width: '100%',
               }}
@@ -202,6 +210,24 @@ export function Sidebar({
               ) : null}
               <SidebarIcon kind={it.icon} color={on ? sb.gold : sb.text2} />
               <span>{it.label}</span>
+              {soon ? (
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontFamily: MONO,
+                    fontSize: 8,
+                    fontWeight: 800,
+                    letterSpacing: 0.6,
+                    textTransform: 'uppercase',
+                    color: sb.text2,
+                    border: `1px solid ${sb.border}`,
+                    borderRadius: 4,
+                    padding: '1px 5px',
+                  }}
+                >
+                  soon
+                </span>
+              ) : null}
             </button>
           );
         })}

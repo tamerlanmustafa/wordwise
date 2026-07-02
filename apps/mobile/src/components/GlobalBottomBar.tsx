@@ -4,9 +4,10 @@
  *   Home · My Movies · Practice · Profile
  *
  * Replaces the v0.6 5-tab bar (Home / My Lists / Reel / Rankings /
- * Profile). The Journey/Reel surface is gone; My Lists and Rankings
- * stay reachable from HomeScreen's menu (already wired) and from
- * Profile. Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon`
+ * Profile). The Journey/Reel surface is gone; My Lists, Rankings
+ * (Leaderboard), Progress, Badges, etc. are reachable from the Profile
+ * sheet (UserMenuSheet) — the old HomeScreen menu was removed in this
+ * refactor. Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon`
  * translated to `react-native-svg` (stroke 1.9, 22px, rounded caps).
  *
  * Light/dark: surface + active accent flip via tokens. Active = gold
