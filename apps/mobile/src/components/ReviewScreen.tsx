@@ -29,8 +29,7 @@ import { TranslationTypeCard } from './quiz/TranslationTypeCard';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
-import { Confetti } from './ui/Confetti';
-import { CountUp } from './ui/CountUp';
+import { SessionComplete } from './common/SessionComplete';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -356,7 +355,6 @@ export function ReviewScreen({
     const justHitGoal = dailySummary?.justHitGoal ?? false;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Confetti />
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
@@ -364,25 +362,24 @@ export function ReviewScreen({
           <Text style={styles.headerTitle}>Today's done</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={styles.centered}>
-          <CountUp style={styles.bigStat} value={pct} suffix="%" duration={1100} delay={250} />
-          <Text style={styles.emptyBody}>
-            You remembered {stats.got} of {total} words.
-          </Text>
-          {streak > 0 && (
-            <Text style={styles.streakLine}>
-              🔥 <CountUp value={streak} duration={700} delay={300} />-day streak{justHitGoal ? ' — +1 today!' : ''}
-            </Text>
-          )}
-          {isPreview && previewsRemaining === 0 && (
+        <SessionComplete
+          eyebrow="Daily review"
+          title={streak > 0 ? `Streak extended — day ${streak}${justHitGoal ? '!' : ''}` : 'Nice work'}
+          stats={[
+            { value: pct, suffix: '%', label: 'accuracy', accent: true },
+            { value: stats.got, label: 'remembered' },
+            { value: total, label: 'reviewed' },
+          ]}
+          primaryLabel="Done"
+          onPrimary={onBack}
+          celebrate
+        >
+          {isPreview && previewsRemaining === 0 ? (
             <Text style={styles.previewHint}>
               Come back tomorrow — or upgrade for unlimited reviews.
             </Text>
-          )}
-          <TouchableOpacity style={styles.primaryBtn} onPress={onBack}>
-            <Text style={styles.primaryBtnText}>Back home</Text>
-          </TouchableOpacity>
-        </View>
+          ) : null}
+        </SessionComplete>
         {chestVisible && chest ? (
           <ChestReveal chest={chest} onCollect={() => setChestVisible(false)} />
         ) : null}

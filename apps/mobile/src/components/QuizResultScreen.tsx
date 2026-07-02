@@ -34,7 +34,7 @@ import type { QuizCompleteResponse, QuizCardResultInput } from '../services/api'
 import { PressableScale } from './ui/PressableScale';
 import { FadeInUp } from './ui/FadeInUp';
 import { Confetti } from './ui/Confetti';
-import { CountUp } from './ui/CountUp';
+import { SessionComplete } from './common/SessionComplete';
 
 export interface JourneyResultMeta {
   completedTileIdx: number;
@@ -111,98 +111,53 @@ export function QuizResultScreen({
 
     return (
       <SafeAreaView style={s.container} edges={['top']}>
-        <Confetti />
-        <View style={s.body}>
-          {/* Headline: correct / total */}
-          <Text style={s.headline}>
-            {result.correct_count} of {result.total_scored} correct
-          </Text>
-          {accuracy !== null ? (
-            <Text style={s.subHeadline}>{accuracy}% · +{result.xp_earned} XP</Text>
-          ) : null}
-
-          {/* Streak +1 ticker (only emphasized when hit3) */}
-          <View style={s.streakRow}>
-            <Text style={s.streakGlyph}>🔥</Text>
-            <CountUp style={s.streakNumber} value={journey.dailyStreak} duration={800} delay={300} />
-            <Text style={s.streakLabel}>
-              {hitWall ? 'day streak — +1 today!' : 'day streak'}
-            </Text>
-          </View>
-
-          {showComp ? (
-            <View style={s.compCard}>
-              <Text style={s.compEyebrow}>COMPREHENSION</Text>
-              <View style={s.compRow}>
-                <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
-                <Text style={s.compArrow}>→</Text>
-                <CountUp style={s.compAfter} value={Math.round(compAfter!)} suffix="%" duration={1100} delay={650} />
-                {compDelta !== 0 ? (
-                  <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
-                    {compDelta > 0 ? `+${compDelta}` : `${compDelta}`}%
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Daily-goal pips */}
-          <View style={s.pipsRow}>
-            {Array.from({ length: DAILY_GOAL }).map((_, i) => (
-              <View
-                key={`pip-${i}`}
-                style={[
-                  s.pip,
-                  i < dailyClamped ? s.pipFilled : s.pipEmpty,
-                ]}
-              ></View>
-            ))}
-            <Text style={s.pipsLabel}>{dailyClamped} / {DAILY_GOAL}</Text>
-          </View>
-
-          {/* Per-word ✓/× recap */}
-          {journey.cardResults.length > 0 ? (
-            <View style={s.recapCard}>
-              {journey.cardResults.map((r, i) => (
-                <View key={`${r.word}-${i}`} style={s.recapRow}>
-                  <Text
-                    style={[
-                      s.recapMark,
-                      r.is_correct ? s.recapMarkOk : s.recapMarkX,
-                    ]}
-                  >
-                    {r.is_correct ? '✓' : '×'}
-                  </Text>
-                  <Text style={s.recapWord} numberOfLines={1}>{r.word}</Text>
-                </View>
+        <SessionComplete
+          eyebrow="Set complete"
+          title={`${result.correct_count} of ${result.total_scored} correct`}
+          stats={[
+            ...(accuracy !== null ? [{ value: accuracy, suffix: '%', label: 'accuracy', accent: true }] : []),
+            { value: result.xp_earned, label: 'XP earned' },
+            { value: journey.dailyStreak, label: 'day streak' },
+          ]}
+          comprehension={showComp ? { before: compBefore!, after: compAfter! } : null}
+          primaryLabel={hitWall ? 'Stop for today' : 'Done'}
+          onPrimary={onDone}
+          celebrate
+        >
+          <View style={s.journeyExtras}>
+            {/* Daily-goal pips */}
+            <View style={s.pipsRow}>
+              {Array.from({ length: DAILY_GOAL }).map((_, i) => (
+                <View key={`pip-${i}`} style={[s.pip, i < dailyClamped ? s.pipFilled : s.pipEmpty]} />
               ))}
+              <Text style={s.pipsLabel}>{dailyClamped} / {DAILY_GOAL}</Text>
             </View>
-          ) : null}
 
-          {/* Wall copy when the user just completed today's 3rd set. */}
-          {hitWall ? (
-            <View style={s.wallCard}>
-              <Text style={s.wallTitle}>Today's done.</Text>
-              <Text style={s.wallBody}>
-                Come back tomorrow to keep the streak alive — or pick
-                another movie and keep going.
-              </Text>
-            </View>
-          ) : null}
-        </View>
+            {/* Per-word ✓/× recap */}
+            {journey.cardResults.length > 0 ? (
+              <View style={s.recapCard}>
+                {journey.cardResults.map((r, i) => (
+                  <View key={`${r.word}-${i}`} style={s.recapRow}>
+                    <Text style={[s.recapMark, r.is_correct ? s.recapMarkOk : s.recapMarkX]}>
+                      {r.is_correct ? '✓' : '×'}
+                    </Text>
+                    <Text style={s.recapWord} numberOfLines={1}>{r.word}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-        {/* Footer CTA — single button, always returns to wherever the
-            quiz was launched from (preview hub or movie detail). */}
-        <View style={s.footer}>
-          <PressableScale
-            onPress={onDone}
-            style={[s.primaryBtn, { backgroundColor: ctaBg }]}
-          >
-            <Text style={[s.primaryBtnText, { color: ctaFg }]}>
-              {hitWall ? 'Stop for today' : 'Done'}
-            </Text>
-          </PressableScale>
-        </View>
+            {/* Wall copy when the user just completed today's daily goal. */}
+            {hitWall ? (
+              <View style={s.wallCard}>
+                <Text style={s.wallTitle}>Today's done.</Text>
+                <Text style={s.wallBody}>
+                  Come back tomorrow to keep the streak alive — or pick another movie and keep going.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </SessionComplete>
       </SafeAreaView>
     );
   }
@@ -335,6 +290,7 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   ghostBtnText: { fontSize: 14, fontWeight: '700' },
 
   // Journey-mode pieces
+  journeyExtras: { width: '100%', marginTop: 18, gap: 0 },
   streakRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 6, marginTop: 20,
