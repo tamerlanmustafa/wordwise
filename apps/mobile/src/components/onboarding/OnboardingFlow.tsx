@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useReelStore } from '../../stores/reelStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { authApi } from '../../services/api';
 import type { CefrLevel } from '../../types';
 import { derivePlacementLevel, PLACEMENT_WORDS, type PlacementAnswer, type PlacementRating } from './placement';
 import { ScriptAnalyzing } from '../movies/ScriptAnalyzing';
@@ -94,6 +95,9 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
     // persisted the same way the header picker does it.
     onLanguageChange?.(language);
     AsyncStorage.setItem('targetLanguage', language).catch(() => {});
+    // Reconcile the placement-derived level with the server profile the rest
+    // of the app reads (feed, Settings) so the two levels never disagree (F-003).
+    authApi.updateProfile({ proficiency_level: level }).catch(() => {});
     addToReel({ tmdb_id: film.tmdb_id, title: film.title, poster_path: film.poster_path, year: film.year })
       .catch(() => {
         /* optimistic + best-effort — never block finishing on a network error */

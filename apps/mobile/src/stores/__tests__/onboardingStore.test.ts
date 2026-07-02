@@ -77,6 +77,18 @@ describe('onboardingStore', () => {
     });
   });
 
+  describe('setDailyGoalMinutes', () => {
+    it('updates the goal and persists the merged shape', async () => {
+      await useOnboardingStore.getState().complete({ targetLanguage: 'ES', startingLevel: 'B1', dailyGoalMinutes: 6 });
+      await useOnboardingStore.getState().setDailyGoalMinutes(12);
+      expect(useOnboardingStore.getState().dailyGoalMinutes).toBe(12);
+
+      await flush();
+      const raw = await AsyncStorage.getItem(KEY);
+      expect(JSON.parse(raw!)).toMatchObject({ completed: true, targetLanguage: 'ES', startingLevel: 'B1', dailyGoalMinutes: 12 });
+    });
+  });
+
   describe('reset', () => {
     it('clears completion + persisted state (back to the flow)', async () => {
       await useOnboardingStore.getState().complete({ targetLanguage: 'ES', startingLevel: 'C1', dailyGoalMinutes: 20 });

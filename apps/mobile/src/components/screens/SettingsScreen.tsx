@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
+import { useOnboardingStore } from '../../stores/onboardingStore';
+import { DAILY_GOAL_OPTIONS } from '../onboarding/placement';
 import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
@@ -53,6 +55,8 @@ export const SettingsScreen = ({
   const [learningLanguage, setLearningLanguage] = useState(user?.learning_language || 'en');
   const [proficiencyLevel, setProficiencyLevel] = useState(user?.proficiency_level || 'A1');
   const [saving, setSaving] = useState(false);
+  const dailyGoalMinutes = useOnboardingStore((st) => st.dailyGoalMinutes);
+  const setDailyGoalMinutes = useOnboardingStore((st) => st.setDailyGoalMinutes);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -298,6 +302,28 @@ export const SettingsScreen = ({
           <Text style={settingsStyles.selectLabel}>Proficiency Level</Text>
           <Text style={settingsStyles.selectValue}>{getProfName(proficiencyLevel)} ▼</Text>
         </TouchableOpacity>
+
+        <View style={settingsStyles.divider} />
+
+        {/* Daily goal — set once in onboarding, now editable here (F-026). */}
+        <Text style={settingsStyles.sectionTitle}>Daily Goal</Text>
+        <View style={appearanceStyles.segmented}>
+          {DAILY_GOAL_OPTIONS.map((g) => {
+            const isActive = dailyGoalMinutes === g.mins;
+            return (
+              <TouchableOpacity
+                key={g.mins}
+                onPress={() => { void setDailyGoalMinutes(g.mins); }}
+                style={[appearanceStyles.segment, isActive && appearanceStyles.segmentActive]}
+                activeOpacity={0.7}
+              >
+                <Text style={[appearanceStyles.segmentText, isActive && appearanceStyles.segmentTextActive]}>
+                  {g.mins}m
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <View style={settingsStyles.divider} />
 

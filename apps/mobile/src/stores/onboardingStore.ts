@@ -38,6 +38,8 @@ interface OnboardingState extends Partial<OnboardingCompletion> {
   hydrate: () => Promise<void>;
   /** Mark onboarding done and persist the user's choices. */
   complete: (payload: OnboardingCompletion) => Promise<void>;
+  /** Update the daily-goal minutes after onboarding (e.g. from Settings). */
+  setDailyGoalMinutes: (mins: number) => Promise<void>;
   /** Clear onboarding — used on sign-out and in tests. */
   reset: () => Promise<void>;
 }
@@ -90,6 +92,18 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
     const next: PersistShape = { completed: true, ...payload };
     await save(next);
     set({ ...next, hydrated: true });
+  },
+
+  setDailyGoalMinutes: async (mins) => {
+    set({ dailyGoalMinutes: mins });
+    const st = useOnboardingStore.getState();
+    // Persist the merged shape so a later hydrate keeps the new goal.
+    await save({
+      completed: st.completed,
+      targetLanguage: st.targetLanguage ?? '',
+      startingLevel: st.startingLevel ?? 'A1',
+      dailyGoalMinutes: mins,
+    });
   },
 
   reset: async () => {

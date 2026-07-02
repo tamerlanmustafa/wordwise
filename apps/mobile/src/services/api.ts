@@ -1005,6 +1005,18 @@ export const authApi = {
       return null;
     }
   },
+
+  // PATCH a subset of the profile (e.g. proficiency_level). Used so onboarding
+  // can reconcile its derived starting level with the server profile the rest
+  // of the app reads (UX audit F-003).
+  updateProfile: async (patch: Record<string, unknown>): Promise<import('../types').User> => {
+    const res = await authFetch(`${API_BASE_URL}/auth/me`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error(`Failed to update profile (${res.status})`);
+    return res.json();
+  },
 };
 
 export const adminApi = {
