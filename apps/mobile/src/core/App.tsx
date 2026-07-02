@@ -694,7 +694,7 @@ export default function App() {
         ) : currentScreen === 'notebook' ? (
           <NotebookScreen onBack={navigateToLists} filter={listFilter} />
         ) : currentScreen === 'lists' ? (
-          <ListsScreen onBack={navigateToHome} onOpenList={navigateToNotebook} />
+          <ListsScreen onBack={backToProfile} onOpenList={navigateToNotebook} />
         ) : currentScreen === 'achievements' ? (
           <AchievementsScreen onBack={backToProfile} />
         ) : currentScreen === 'leaderboard' ? (
@@ -802,7 +802,7 @@ export default function App() {
           user={user}
           onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
           onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
-          onNavigateToLists={() => { setShowUserSheet(false); navigateToNotebook(); }}
+          onNavigateToLists={() => { setShowUserSheet(false); navigateToLists(); }}
           onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
           onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { wordwiseApi } from '../../services/api';
 import { styles } from '../../core/styles';
 import { useThemeColors } from '../../theme/tokens';
@@ -34,7 +35,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
 
   const lists: Array<{
     key: ListFilter;
-    icon: string;
+    icon: keyof typeof Ionicons.glyphMap;
     name: string;
     description: string;
     count: number | null;
@@ -42,7 +43,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
   }> = [
     {
       key: 'saved',
-      icon: '🔖',
+      icon: 'bookmark-outline',
       name: 'Saved Words',
       description: 'All words you have saved from movies',
       count: savedCount,
@@ -50,7 +51,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
     },
     {
       key: 'learned',
-      icon: '✅',
+      icon: 'checkmark-circle-outline',
       name: 'Learned Words',
       description: 'Words you have marked as learned',
       count: learnedCount,
@@ -77,7 +78,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
             activeOpacity={0.75}
           >
             <View style={[styles.listsCardIcon, { backgroundColor: list.color + '22' }]}>
-              <Text style={{ fontSize: 22 }}>{list.icon}</Text>
+              <Ionicons name={list.icon} size={22} color={list.color} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.listsCardName, { color: tc.text }]}>{list.name}</Text>
