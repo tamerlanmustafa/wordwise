@@ -37,6 +37,7 @@ import { MovieRow } from './myMovies/MovieRow';
 import { SortPill } from './myMovies/SortPill';
 import { ReadyToWatchShelf } from './journey/ReadyToWatchShelf';
 import { OfflineBanner } from './common/OfflineBanner';
+import { EmptyState } from './common/EmptyState';
 import type { MoviePreviewPayload, NodeLevel } from './journey/sharedTypes';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -113,19 +114,16 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
       {/* ── Header row ─────────────────────────────────────────────── */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>YOUR LIBRARY</Text>
+          <Text style={s.eyebrow}>YOUR REEL</Text>
           <Text style={s.title}>My Movies</Text>
         </View>
         <View style={s.headerBtns}>
+          {/* Search is the only header action — the old sliders button beside
+              it had no handler (dead control); sort/filter live below. */}
           <IconBtn onPress={onSearchPress} tc={tc}>
             <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={tc.textSecondary} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
               <Circle cx={11} cy={11} r={7} />
               <Path d="M21 21l-4.3-4.3" />
-            </Svg>
-          </IconBtn>
-          <IconBtn tc={tc}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={tc.textSecondary} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M3 6h18M6 12h12M10 18h4" />
             </Svg>
           </IconBtn>
         </View>
@@ -135,10 +133,10 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
       <OfflineBanner />
 
       {/* ── Stat strip ─────────────────────────────────────────────── */}
+      {/* "words known" was hard-coded to 0 (no real per-reel count exists yet),
+          so it's dropped rather than shipping a permanently-zero headline stat. */}
       <View style={s.statStrip}>
         <Stat n={String(filmsCount)} l="films" tc={tc} />
-        <View style={s.statDivider} />
-        <Stat n={String(0)} l="words known" tc={tc} />
         <View style={s.statDivider} />
         <Stat n={`${avgComp}%`} l="avg comp." accent tc={tc} />
       </View>
@@ -159,12 +157,15 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
 
       {/* ── List card OR empty state ───────────────────────────────── */}
       {filmsCount === 0 ? (
-        <View style={s.emptyState}>
-          <Text style={s.emptyTitle}>Your library is empty</Text>
-          <Text style={s.emptyBody}>
-            Add a movie to start building your vocab deck. We'll pull words
-            from its script and slot them into your daily practice.
-          </Text>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}>
+          <EmptyState
+            icon="film-outline"
+            title="Your reel is empty"
+            body="Add your first film and we'll pull its key words into your daily practice."
+            ctaLabel="Add your first film"
+            onCta={onSearchPress}
+            style={s.emptyStateInline}
+          />
           <View style={s.shelfEmptyWrap}>
             <ReadyToWatchShelf
               onAdded={() => {
@@ -172,12 +173,12 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
               }}
             />
           </View>
-        </View>
+        </ScrollView>
       ) : sorted.length === 0 ? (
         <View style={s.emptyState}>
           <Text style={s.emptyTitle}>No films match</Text>
           <Text style={s.emptyBody}>
-            Your current filter excludes everything in your library. Try
+            Your current filter excludes everything in your reel. Try
             another chip — or clear the filter.
           </Text>
           <Pressable
@@ -450,6 +451,13 @@ const makeStyles = (tc: ThemeColors) =>
       paddingTop: 32,
       gap: 12,
     },
+    // Empty-reel EmptyState sits above the suggestions shelf (not centered in
+    // the whole viewport), so size it to content rather than flex:1.
+    emptyStateInline: {
+      flex: 0,
+      paddingTop: 40,
+      paddingBottom: 20,
+    },
     emptyTitle: {
       fontFamily: SERIF_FAMILY,
       fontSize: 20,
@@ -463,7 +471,6 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.textSecondary,
     },
     shelfEmptyWrap: {
-      marginHorizontal: -28,
       marginTop: 4,
     },
     resetBtn: {
