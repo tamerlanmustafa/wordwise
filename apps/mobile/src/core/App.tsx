@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StatusBar, Alert, Platform, UIManager, View, InteractionManager } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View, InteractionManager, BackHandler } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -222,6 +222,13 @@ export default function App() {
     setCurrentScreen('stats');
   };
 
+  // Back from a Profile-sheet-launched screen returns to the sheet (its
+  // origin) rather than teleporting to Home (UX audit F-006).
+  const backToProfile = () => {
+    navigateToHome();
+    setShowUserSheet(true);
+  };
+
   const navigateToNotebook = (filter: ListFilter = 'saved') => {
     setListFilter(filter);
     setCurrentScreen('notebook');
@@ -307,6 +314,26 @@ export default function App() {
     else if (t === 'practice') navigateToPractice();
     else if (t === 'profile') setShowUserSheet((prev) => !prev);
   };
+
+  // Android hardware back — map it to in-app navigation so it never exits the
+  // app mid-flow from a deep screen (UX audit F-036). No-op on iOS.
+  useEffect(() => {
+    const authed = status === 'authenticated' || status === 'offline_authenticated';
+    const onHardwareBack = () => {
+      if (showUserSheet) {
+        setShowUserSheet(false);
+        return true;
+      }
+      const rootTabs: Screen[] = ['home', 'movies', 'journey', 'practice'];
+      if (authed && !rootTabs.includes(currentScreen)) {
+        navigateToHome();
+        return true;
+      }
+      return false; // on a root tab (or login) — let Android do its default
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [currentScreen, showUserSheet, status]);
 
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
@@ -596,9 +623,21 @@ export default function App() {
       case 'setIntro':
       case 'review':
         return 'practice';
-      // Lists, Rankings, and the legacy Journey screen no longer have
-      // dedicated tabs; they're reachable via HomeScreen menu items and
-      // render with no active tab highlight.
+      // Account / profile-area screens are all reached from the Profile sheet,
+      // so keep the Profile tab lit while they're open (UX audit F-006).
+      case 'settings':
+      case 'stats':
+      case 'achievements':
+      case 'leaderboard':
+      case 'vocabulary':
+      case 'learnedWords':
+      case 'notebook':
+      case 'lists':
+      case 'admin':
+      case 'familyPlan':
+      case 'privacy':
+      case 'terms':
+        return 'profile';
       default:
         return null;
     }
@@ -634,9 +673,9 @@ export default function App() {
         </KeepAlive>
 
         {currentScreen === 'settings' ? (
-          <SettingsScreen onBack={navigateToHome} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
+          <SettingsScreen onBack={backToProfile} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
         ) : currentScreen === 'vocabulary' ? (
-          <VocabularyScreen onBack={navigateToHome} onNavigateToLearnedWords={navigateToLearnedWords} />
+          <VocabularyScreen onBack={backToProfile} onNavigateToLearnedWords={navigateToLearnedWords} />
         ) : currentScreen === 'learnedWords' ? (
           <LearnedWordsScreen onBack={() => setCurrentScreen('vocabulary')} />
         ) : currentScreen === 'admin' ? (
@@ -651,15 +690,15 @@ export default function App() {
         ) : currentScreen === 'paywall' ? (
           <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
         ) : currentScreen === 'stats' ? (
-          <StatsScreen onBack={navigateToHome} onStartReview={navigateToReview} />
+          <StatsScreen onBack={backToProfile} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (
           <NotebookScreen onBack={navigateToLists} filter={listFilter} />
         ) : currentScreen === 'lists' ? (
           <ListsScreen onBack={navigateToHome} onOpenList={navigateToNotebook} />
         ) : currentScreen === 'achievements' ? (
-          <AchievementsScreen onBack={navigateToHome} />
+          <AchievementsScreen onBack={backToProfile} />
         ) : currentScreen === 'leaderboard' ? (
-          <LeaderboardScreen onBack={navigateToHome} />
+          <LeaderboardScreen onBack={backToProfile} />
         ) : currentScreen === 'familyPlan' ? (
           <FamilyPlanScreen onBack={navigateToHome} userId={user!.id} />
         ) : currentScreen === 'privacy' ? (
