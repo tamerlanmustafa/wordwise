@@ -9,9 +9,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { srsApi, premiumApi, type SrsStats } from '../services/api';
+import { srsApi, premiumApi, wordwiseApi, type SrsStats } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { ContributionCalendar } from './stats/ContributionCalendar';
+import { calendarIntensity } from './stats/statsSelectors';
+
+const CALENDAR_WEEKS = 5;
+
+/** Local YYYY-MM-DD key (matches calendarIntensity's day keys). */
+function localDateKey(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // Leitner box colours are semantic (box 1 = weakest → box 5 = mastered) and
 // theme-independent, like the CEFR palette — kept as literals.
@@ -27,14 +38,26 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const [stats, setStats] = useState<SrsStats | null>(null);
+  // Contribution-calendar intensities, derived from real saved-word activity
+  // (SavedWordEntry.created_at) — the only per-day signal the API exposes.
+  const [calendar, setCalendar] = useState<Array<0 | 1 | 2 | 3>>([]);
   const [loading, setLoading] = useState(true);
   const isPremium = useIsPremium();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const s = await srsApi.stats();
+      const [s, saved] = await Promise.all([
+        srsApi.stats(),
+        wordwiseApi.getSavedWords().catch(() => []),
+      ]);
       setStats(s);
+      const countsByDate: Record<string, number> = {};
+      for (const w of saved) {
+        const key = localDateKey(w.created_at);
+        if (key) countsByDate[key] = (countsByDate[key] ?? 0) + 1;
+      }
+      setCalendar(calendarIntensity(countsByDate, new Date(), CALENDAR_WEEKS));
     } catch {
       // silent — screen just stays empty
     } finally {
@@ -150,6 +173,15 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
             </View>
           ))}
         </View>
+
+        {/* Activity — contribution calendar of words saved per day */}
+        {calendar.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Activity</Text>
+            <Text style={styles.cardSub}>Words saved over the last {CALENDAR_WEEKS} weeks</Text>
+            <ContributionCalendar grid={calendar} weeks={CALENDAR_WEEKS} />
+          </View>
+        ) : null}
 
         {/* Legend */}
         <View style={styles.card}>
