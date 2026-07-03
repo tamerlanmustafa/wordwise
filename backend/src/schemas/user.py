@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
 from prisma.enums import proficiencylevel
@@ -13,6 +13,19 @@ class UserCreate(BaseModel):
     native_language: Optional[str] = "en"  # User's native language (ISO 639-1 code)
     learning_language: Optional[str] = "en"  # Language user is learning (ISO 639-1 code)
     proficiency_level: Optional[proficiencylevel] = proficiencylevel.A1
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        # Min 8 matches the signup form's client-side rule (SignUpPage.tsx).
+        # Max 72 *bytes* because bcrypt silently truncates beyond that —
+        # without the cap, characters past byte 72 wouldn't participate in
+        # the hash at all.
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes long")
+        return v
 
 
 class UserLogin(BaseModel):

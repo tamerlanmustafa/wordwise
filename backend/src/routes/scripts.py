@@ -10,18 +10,27 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse
 
 from ..database import get_db
-from ..middleware.auth import get_admin_user
+from ..middleware.auth import get_admin_user, get_current_active_user
 from ..services.script_ingestion_service import ScriptIngestionService
 from ..schemas.script import (
     ScriptResponse,
     ScriptFetchRequest,
     ScriptSearchResponse,
 )
+from ..utils.rate_limit import rate_limit
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scripts", tags=["scripts"])
+
+# Both endpoints fan out to paid upstream APIs (STANDS4, OpenSubtitles, TMDB)
+# and /fetch also persists Movie/MovieScript rows, so they must never be
+# reachable anonymously or unthrottled. The background worker no longer goes
+# through this route — it calls ScriptIngestionService directly (see
+# workers/processor.py), same as it already does for classification.
+_fetch_throttle = rate_limit(5, 60.0, scope="scripts-fetch")
+_search_throttle = rate_limit(20, 60.0, scope="scripts-search")
 
 
 # =============================================================================
@@ -31,7 +40,9 @@ router = APIRouter(prefix="/api/scripts", tags=["scripts"])
 @router.post("/fetch", response_model=ScriptResponse)
 async def fetch_script(
     request: ScriptFetchRequest,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+    _: None = Depends(_fetch_throttle),
 ):
     """
     Fetch or retrieve a movie script.
@@ -110,7 +121,9 @@ async def fetch_script(
 @router.get("/search")
 async def search_movies(
     query: str = Query(..., min_length=1, description="Movie title to search"),
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+    _: None = Depends(_search_throttle),
 ):
     """
     Search for movies matching the query.

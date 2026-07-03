@@ -27,6 +27,14 @@ async def get_current_user(
         logger.error("[AUTH] Token verification failed")
         raise credentials_exception
 
+    # Refresh tokens are only valid at POST /auth/refresh. Without this
+    # check a leaked 60-day refresh token doubles as a bearer credential
+    # on every protected route. Legacy access tokens minted before the
+    # `type` claim existed have no type at all — those stay accepted.
+    if payload.get("type") == "refresh":
+        logger.error("[AUTH] Refresh token presented as access token")
+        raise credentials_exception
+
     user_id_str = payload.get("sub")
     if user_id_str is None:
         logger.error("[AUTH] No user_id in token payload")

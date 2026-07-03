@@ -26,11 +26,24 @@ def _expires_at(user: Any) -> datetime | None:
     )
 
 
+def _expiry_in_future(user: Any) -> bool:
+    exp = _expires_at(user)
+    if exp is None:
+        return False
+    # Prisma returns tz-aware; guard against naive just in case.
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return exp > datetime.now(timezone.utc)
+
+
 def is_premium(user: Any) -> bool:
     """
     Entitlement check for Plus features. True when:
       - user is an admin (admins get full access, see §6)
-      - tier is 'premium' or 'comped' (comped never expires)
+      - tier is 'comped' (never expires)
+      - tier is 'premium' with no expiry set (perpetual manual grant, per
+        admin grant-premium) or an expiry still in the future — a lapsed
+        subscription drops to free instead of staying premium forever
       - tier is 'trial' and the expiry is still in the future
 
     Everything else is free.
@@ -41,17 +54,12 @@ def is_premium(user: Any) -> bool:
         return True
 
     tier = _tier(user)
-    if tier in ("premium", "comped"):
+    if tier == "comped":
         return True
+    if tier == "premium":
+        return _expires_at(user) is None or _expiry_in_future(user)
     if tier == "trial":
-        exp = _expires_at(user)
-        if exp is None:
-            return False
-        # Prisma returns tz-aware; guard against naive just in case.
-        now = datetime.now(timezone.utc)
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        return exp > now
+        return _expiry_in_future(user)
     return False
 
 

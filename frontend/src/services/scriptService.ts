@@ -137,8 +137,10 @@ interface UserTranslationStats {
  */
 export async function searchMovies(query: string): Promise<MovieSearchResponse> {
   try {
-    const response = await axios.get<MovieSearchResponse>(
-      `${API_BASE_URL}/api/scripts/search`,
+    // apiClient (not bare axios): /api/scripts/search now requires auth,
+    // and apiClient attaches the token + handles silent refresh.
+    const response = await apiClient.get<MovieSearchResponse>(
+      '/api/scripts/search',
       {
         params: { query }
       }
@@ -157,8 +159,8 @@ export async function searchMovies(query: string): Promise<MovieSearchResponse> 
  */
 export async function fetchMovieScriptById(scriptId: string, movieTitle?: string): Promise<ScriptResponse> {
   try {
-    const response = await axios.post<ScriptResponse>(
-      `${API_BASE_URL}/api/scripts/fetch`,
+    const response = await apiClient.post<ScriptResponse>(
+      '/api/scripts/fetch',
       {
         script_id: scriptId,
         movie_title: movieTitle,
@@ -181,8 +183,8 @@ export async function fetchMovieScriptById(scriptId: string, movieTitle?: string
  */
 export async function fetchMovieScript(movieTitle: string): Promise<ScriptResponse> {
   try {
-    const response = await axios.post<ScriptResponse>(
-      `${API_BASE_URL}/api/scripts/fetch`,
+    const response = await apiClient.post<ScriptResponse>(
+      '/api/scripts/fetch',
       {
         movie_title: movieTitle,
         force_refresh: false

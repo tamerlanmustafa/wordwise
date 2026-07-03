@@ -277,22 +277,22 @@ export async function enrichMoviesWithTmdb<
 
 // WordWise API
 export const wordwiseApi = {
-  // Search for movies with scripts
+  // Search for movies with scripts (requires an authenticated user — the
+  // backend gates this because it fans out to paid script/subtitle APIs)
   searchMovies: async (query: string): Promise<MovieSearchResponse> => {
-    const res = await fetch(`${API_BASE_URL}/api/scripts/search?query=${encodeURIComponent(query)}`);
+    const res = await authFetch(`${API_BASE_URL}/api/scripts/search?query=${encodeURIComponent(query)}`);
     if (!res.ok) throw new Error('Failed to search movies');
     return res.json();
   },
 
-  // Fetch script for a movie
+  // Fetch script for a movie (requires an authenticated user)
   fetchScript: async (
     scriptId: string,
     movieTitle?: string,
     tmdbId?: number,
   ): Promise<ScriptResponse> => {
-    const res = await fetch(`${API_BASE_URL}/api/scripts/fetch`, {
+    const res = await authFetch(`${API_BASE_URL}/api/scripts/fetch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         script_id: scriptId,
         movie_title: movieTitle,

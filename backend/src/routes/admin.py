@@ -4,7 +4,7 @@ from prisma import Prisma
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from src.database import get_db
-from src.middleware.auth import get_current_active_user, get_admin_user
+from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.difficulty_scorer import compute_difficulty
 from src.utils.subscription import entitlements_payload
@@ -292,7 +292,7 @@ def get_classifier():
 @router.post("/reprocess-script/{script_id}")
 async def reprocess_script(
     script_id: int,
-    current_user=Depends(get_current_active_user),
+    admin_user=Depends(get_admin_user),
     db: Prisma = Depends(get_db)
 ):
     script = await db.moviescript.find_unique(
@@ -378,7 +378,7 @@ async def reprocess_script(
 
 @router.post("/reprocess-all-scripts")
 async def reprocess_all_scripts(
-    current_user=Depends(get_current_active_user),
+    admin_user=Depends(get_admin_user),
     db: Prisma = Depends(get_db)
 ):
     """Reprocess all scripts with the latest CEFR wordlists"""

@@ -10,62 +10,67 @@ datasource db {
 }
 
 model User {
-  id                    Int                      @id @default(autoincrement())
-  email                 String                   @unique(map: "ix_users_email") @db.VarChar
-  username              String                   @unique(map: "ix_users_username") @db.VarChar
-  passwordHash          String?                  @map("password_hash") @db.VarChar
-  languagePreference    String?                  @map("language_preference") @db.VarChar
-  nativeLanguage        String?                  @default("en") @map("native_language") @db.VarChar(10)
-  learningLanguage      String?                  @default("en") @map("learning_language") @db.VarChar(10)
-  proficiencyLevel      proficiencylevel?        @map("proficiency_level")
-  defaultTab            String?                  @default("movies") @map("default_tab") @db.VarChar(10)
-  isActive              Boolean?                 @map("is_active")
-  isAdmin               Boolean?                 @map("is_admin")
-  subscriptionTier      subscriptiontier?        @default(free) @map("subscription_tier")
-  subscriptionExpiresAt DateTime?                @map("subscription_expires_at") @db.Timestamptz(6)
-  adsEligible           Boolean?                 @default(true) @map("ads_eligible")
-  srsFreePreviewsUsed   Int?                     @default(0) @map("srs_free_previews_used")
-  srsCurrentStreak      Int?                     @default(0) @map("srs_current_streak")
-  srsLongestStreak      Int?                     @default(0) @map("srs_longest_streak")
-  srsLastSessionDate    DateTime?                @map("srs_last_session_date") @db.Date
+  id                      Int                      @id @default(autoincrement())
+  email                   String                   @unique(map: "ix_users_email") @db.VarChar
+  username                String                   @unique(map: "ix_users_username") @db.VarChar
+  passwordHash            String?                  @map("password_hash") @db.VarChar
+  languagePreference      String?                  @map("language_preference") @db.VarChar
+  nativeLanguage          String?                  @default("en") @map("native_language") @db.VarChar(10)
+  learningLanguage        String?                  @default("en") @map("learning_language") @db.VarChar(10)
+  proficiencyLevel        proficiencylevel?        @map("proficiency_level")
+  defaultTab              String?                  @default("movies") @map("default_tab") @db.VarChar(10)
+  isActive                Boolean?                 @map("is_active")
+  isAdmin                 Boolean?                 @map("is_admin")
+  subscriptionTier        subscriptiontier?        @default(free) @map("subscription_tier")
+  subscriptionExpiresAt   DateTime?                @map("subscription_expires_at") @db.Timestamptz(6)
+  adsEligible             Boolean?                 @default(true) @map("ads_eligible")
+  srsFreePreviewsUsed     Int?                     @default(0) @map("srs_free_previews_used")
+  srsCurrentStreak        Int?                     @default(0) @map("srs_current_streak")
+  srsLongestStreak        Int?                     @default(0) @map("srs_longest_streak")
+  srsLastSessionDate      DateTime?                @map("srs_last_session_date") @db.Date
   // Set on every POST /srs/session/start. Used by the new daily-cap gate
   // (1 free session per UTC day, premium unlimited). Distinct from
   // srsLastSessionDate, which tracks per-card review activity for the streak.
-  srsLastSessionStartedAt DateTime?              @map("srs_last_session_started_at") @db.Timestamptz(6)
+  srsLastSessionStartedAt DateTime?                @map("srs_last_session_started_at") @db.Timestamptz(6)
   // v0.7.2 — which "practice tile" the user picked today (e.g.
   // 'quick_recall', 'synonym_round', 'tough_words', 'movie_deep_dive').
   // Cleared at UTC rollover by the daily-cap gate. The PracticeScreen
   // reads this back via /daily/state to render the matching tile as
   // "done today" + the others as "locked until tomorrow".
-  srsLastSessionKind      String?                @map("srs_last_session_kind") @db.VarChar(40)
+  srsLastSessionKind      String?                  @map("srs_last_session_kind") @db.VarChar(40)
   // UTC date of the last chest claim. Used to enforce one chest per
   // completed daily session — see /srs/session/complete.
-  srsLastChestDate        DateTime?              @map("srs_last_chest_date") @db.Date
+  srsLastChestDate        DateTime?                @map("srs_last_chest_date") @db.Date
   // v0.6 cinema-named streak milestones (W10). JSON array of unlocked
   // keys: "opening_weekend" (7d), "box_office" (30d), "cult_classic"
   // (100d), "criterion_collection" (365d). Frontend diffs against a
   // local last-seen list to fire MilestoneUnlockModal on new entries.
-  unlockedCosmetics       Json?                  @default("[]") @map("unlocked_cosmetics")
-  srsTotalReviews       Int?                     @default(0) @map("srs_total_reviews")
-  srsTotalCorrect       Int?                     @default(0) @map("srs_total_correct")
-  createdAt             DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime?                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  oauthProvider         oauthprovider            @map("oauth_provider")
-  googleId              String?                  @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
-  profilePictureUrl     String?                  @map("profile_picture_url") @db.VarChar
-  wordLists             UserWordList[]
-  translationHistory    UserTranslationHistory[]
-  userWords             UserWord[]
-  wordInteractions      UserWordInteraction[]
-  reportsMade           WordReport[]             @relation("ReportedBy")
-  reportsReviewed       WordReport[]             @relation("ReviewedBy")
-  hiddenWords           HiddenWord[]             @relation("HiddenWordBy")
-  quizSessions          QuizSession[]
-  quizStats             UserQuizStats?
-  unitProgress          UnitProgress[]
-  reelMovies            UserReelMovie[]
-  movieProgress         UserMovieProgress[]
-  streakFreezes         UserStreakFreeze[]
+  unlockedCosmetics       Json?                    @default("[]") @map("unlocked_cosmetics")
+  srsTotalReviews         Int?                     @default(0) @map("srs_total_reviews")
+  srsTotalCorrect         Int?                     @default(0) @map("srs_total_correct")
+  createdAt               DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime?                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  oauthProvider           oauthprovider            @map("oauth_provider")
+  googleId                String?                  @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
+  profilePictureUrl       String?                  @map("profile_picture_url") @db.VarChar
+  wordLists               UserWordList[]
+  translationHistory      UserTranslationHistory[]
+  userWords               UserWord[]
+  wordInteractions        UserWordInteraction[]
+  reportsMade             WordReport[]             @relation("ReportedBy")
+  reportsReviewed         WordReport[]             @relation("ReviewedBy")
+  hiddenWords             HiddenWord[]             @relation("HiddenWordBy")
+  quizSessions            QuizSession[]
+  quizStats               UserQuizStats?
+  unitProgress            UnitProgress[]
+  reelMovies              UserReelMovie[]
+  movieProgress           UserMovieProgress[]
+  streakFreezes           UserStreakFreeze[]
+  featureFlags            UserFeatureFlag[]
+  achievements            UserAchievement[]
+  familyPlanOwned         FamilyPlan?
+  familyMemberships       FamilyMember[]
+  studentVerifications    StudentVerification[]
 
   @@index([id], map: "ix_users_id")
   @@map("users")
@@ -772,16 +777,16 @@ model UserReelMovie {
 // Recomputed after any quiz/SRS completion that touched UserWord rows.
 // See backend/src/services/movie_progress_service.py.
 model UserMovieProgress {
-  userId                   Int                @map("user_id")
-  movieId                  Int                @map("movie_id")
-  lemmasTouched            Int                @default(0) @map("lemmas_touched")
-  lemmasInBox2Plus         Int                @default(0) @map("lemmas_in_box_2_plus")
-  lemmasMastered           Int                @default(0) @map("lemmas_mastered")
+  userId                   Int              @map("user_id")
+  movieId                  Int              @map("movie_id")
+  lemmasTouched            Int              @default(0) @map("lemmas_touched")
+  lemmasInBox2Plus         Int              @default(0) @map("lemmas_in_box_2_plus")
+  lemmasMastered           Int              @default(0) @map("lemmas_mastered")
   // Frequency-weighted % of the movie's lemmas the user has reached
   // srsBox >= 2 on. Stored 0..100 (not 0..1) for client display.
-  comprehensibilityPercent Float              @default(0) @map("comprehensibility_percent")
-  status                   moviestudystatus   @default(unstudied)
-  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  comprehensibilityPercent Float            @default(0) @map("comprehensibility_percent")
+  status                   moviestudystatus @default(unstudied)
+  updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
@@ -810,4 +815,122 @@ model UserStreakFreeze {
   // Hot index for "how many freezes does this user have?"
   @@index([userId, consumedAt], map: "ix_user_streak_freezes_held")
   @@map("user_streak_freezes")
+}
+
+// ============================================================
+// Scaffold-feature tables (feature flags, gamification badges,
+// family plan, student discount).
+//
+// These were previously created only by hand outside the repo — the
+// routes in feature_flags.py / gamification.py / family.py /
+// student_discount.py query them with raw SQL and 500'd on any fresh
+// database. Defining them here makes the schema reproducible; the raw
+// SQL in those routes keeps working because the @map names match.
+// Provisioning SQL for existing environments lives in
+// migrations_manual/2026_07_03_scaffold_tables.sql.
+// ============================================================
+
+model FeatureFlag {
+  id          Int      @id @default(autoincrement())
+  flagKey     String   @unique @map("flag_key") @db.VarChar(100)
+  description String?  @db.Text
+  enabled     Boolean  @default(false)
+  rolloutPct  Int      @default(100) @map("rollout_pct")
+  variants    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  // DB-side default (not just Prisma @updatedAt) because the flag routes
+  // write via raw SQL, which bypasses Prisma's client-side timestamps.
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  userAssignments UserFeatureFlag[]
+
+  @@map("feature_flags")
+}
+
+model UserFeatureFlag {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  flagKey    String   @map("flag_key") @db.VarChar(100)
+  variant    String?  @db.VarChar(50)
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flag FeatureFlag @relation(fields: [flagKey], references: [flagKey], onDelete: Cascade)
+
+  // Backs the ON CONFLICT (user_id, flag_key) upsert in /flags/me.
+  @@unique([userId, flagKey])
+  @@map("user_feature_flags")
+}
+
+model Achievement {
+  key         String  @id @db.VarChar(50)
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+  icon        String? @db.VarChar(20)
+  category    String  @db.VarChar(30)
+  threshold   Int     @default(1)
+
+  userProgress UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id             Int       @id @default(autoincrement())
+  userId         Int       @map("user_id")
+  achievementKey String    @map("achievement_key") @db.VarChar(50)
+  progress       Int       @default(0)
+  unlocked       Boolean   @default(false)
+  unlockedAt     DateTime? @map("unlocked_at") @db.Timestamptz(6)
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementKey], references: [key], onDelete: Cascade)
+
+  // Backs the ON CONFLICT (user_id, achievement_key) upsert in check_and_unlock.
+  @@unique([userId, achievementKey])
+  @@map("user_achievements")
+}
+
+model FamilyPlan {
+  id         Int      @id @default(autoincrement())
+  // One plan per owner — /family/plan assumes a single row per user.
+  ownerId    Int      @unique @map("owner_id")
+  maxMembers Int      @default(5) @map("max_members")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  owner   User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members FamilyMember[]
+
+  @@map("family_plans")
+}
+
+model FamilyMember {
+  id       Int      @id @default(autoincrement())
+  planId   Int      @map("plan_id")
+  userId   Int      @map("user_id")
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  plan FamilyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, userId])
+  @@map("family_members")
+}
+
+model StudentVerification {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @map("user_id")
+  email      String?   @db.VarChar(255)
+  method     String    @db.VarChar(20)
+  verified   Boolean   @default(false)
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Backs the ON CONFLICT (user_id, method) upsert in /student/verify.
+  // Map matches the constraint name Postgres already generated in
+  // environments where the old request-time CREATE TABLE ran.
+  @@unique([userId, method], map: "student_verifications_user_id_method_key")
+  @@map("student_verifications")
 }

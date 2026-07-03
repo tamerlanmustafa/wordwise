@@ -22,6 +22,7 @@ from ..middleware.auth import get_current_active_user, get_admin_user
 from ..services.book_ingestion_service import get_book_ingestion_service
 from ..services.gutendex_client import get_gutendex_client
 from ..services.open_library_client import get_open_library_client
+from ..utils.rate_limit import rate_limit
 from .cefr import get_classifier, should_keep_word
 from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms
 
@@ -29,12 +30,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
+# These stay public (anonymous browse + the EPUB reader loads by URL, so it
+# can't attach an Authorization header), but both relay upstream traffic —
+# search fans out to Gutendex/Open Library, epub proxies whole books. The
+# throttle keeps us from being farmed as a free proxy.
+_search_throttle = rate_limit(30, 60.0, scope="books-search")
+_epub_throttle = rate_limit(10, 60.0, scope="books-epub")
+
 
 @router.get("/search")
 async def search_books(
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Maximum results"),
-    page: int = Query(1, ge=1, description="Page number")
+    page: int = Query(1, ge=1, description="Page number"),
+    _: None = Depends(_search_throttle),
 ):
     """
     Search for public domain books.
@@ -157,7 +166,8 @@ async def download_gutenberg_book(
 @router.get("/gutenberg/{gutenberg_id}/epub")
 async def stream_gutenberg_epub(
     gutenberg_id: int,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_epub_throttle),
 ):
     """
     Stream EPUB content for in-browser reading.

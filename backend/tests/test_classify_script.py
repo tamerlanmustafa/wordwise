@@ -7,9 +7,10 @@ Two behavioral guarantees are covered, both as pure-unit (no DB, no network):
    NOT get_admin_user. Regression guard for the bug where classifying a
    movie's vocabulary — a normal user action — 401/403'd for everyone.
 
-2. The ingestion worker classifies IN-PROCESS by calling
-   run_script_classification directly, instead of POSTing to its own
-   /api/cefr/classify-script (which now requires auth the worker can't supply).
+2. The ingestion worker runs fully IN-PROCESS: it fetches scripts via
+   ScriptIngestionService and classifies via run_script_classification
+   directly, instead of POSTing to its own /api/scripts/fetch or
+   /api/cefr/classify-script (both now require auth the worker can't supply).
 """
 from __future__ import annotations
 
@@ -78,6 +79,7 @@ async def test_process_job_classifies_in_process(monkeypatch):
     import prisma
 
     import src.routes.cefr as cefr
+    import src.services.script_ingestion_service as ingestion
     import src.workers.processor as processor
     from src.workers.queue import Job
 
@@ -95,6 +97,16 @@ async def test_process_job_classifies_in_process(monkeypatch):
         }),
     )
 
+    # --- stub the in-process script fetch (step 3) --------------------------
+    # process_job does `from ... import ScriptIngestionService` at call time,
+    # so patching the source module is what takes effect.
+    fetch_service = MagicMock()
+    fetch_service.get_or_fetch_script = AsyncMock(return_value={"from_cache": True})
+    fetch_service.close = AsyncMock()
+    monkeypatch.setattr(
+        ingestion, "ScriptIngestionService", MagicMock(return_value=fetch_service)
+    )
+
     # --- stub the in-process classification path ---------------------------
     fake_db = MagicMock()
     fake_db.connect = AsyncMock()
@@ -109,16 +121,22 @@ async def test_process_job_classifies_in_process(monkeypatch):
     sentence_bank_mock = AsyncMock()
     monkeypatch.setattr(cefr, "populate_sentence_bank_bg", sentence_bank_mock)
 
-    # --- fake httpx client: only /scripts/fetch should be POSTed -----------
-    fetch_resp = MagicMock()
-    fetch_resp.raise_for_status = MagicMock()
     client = MagicMock()
-    client.post = AsyncMock(return_value=fetch_resp)
+    client.post = AsyncMock()
 
     pool = _FakePool()
     job = Job(id=1, tmdb_id=603, title="The Matrix", year=1999, priority=0, attempts=0, movie_id=55)
 
     result = await processor.process_job(pool, job, client)
+
+    # Script fetch happened in-process via the ingestion service.
+    fetch_service.get_or_fetch_script.assert_awaited_once_with(
+        movie_title="The Matrix",
+        movie_id=55,
+        year=1999,
+        force_refresh=False,
+    )
+    fetch_service.close.assert_awaited_once()
 
     # Classification happened in-process, with genres from TMDB.
     classify_mock.assert_awaited_once()
@@ -131,14 +149,14 @@ async def test_process_job_classifies_in_process(monkeypatch):
     # SentenceBank population mirrors the route's post-classify step.
     sentence_bank_mock.assert_awaited_once_with(55)
 
-    # The worker no longer POSTs to its own classify-script endpoint.
-    posted_urls = [c.args[0] for c in client.post.await_args_list]
-    assert not any("classify-script" in url for url in posted_urls)
+    # The worker makes NO POSTs to its own API anymore — /api/scripts/fetch
+    # and /api/cefr/classify-script both require auth the worker can't supply.
+    client.post.assert_not_awaited()
 
     # vocab_count is summed from the in-process result.
     assert result.movie_id == 55
     assert result.vocab_count == 5
 
-    # Prisma connection was opened and cleanly closed.
-    fake_db.connect.assert_awaited_once()
-    fake_db.disconnect.assert_awaited_once()
+    # Two Prisma connections (script fetch + classification), both closed.
+    assert fake_db.connect.await_count == 2
+    assert fake_db.disconnect.await_count == 2

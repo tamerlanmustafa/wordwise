@@ -12,7 +12,6 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-import spacy
 from prisma import Prisma
 from prisma import Json
 
@@ -31,6 +30,12 @@ def get_nlp():
     """Load spaCy model (singleton, ~12MB, loads once)."""
     global _nlp
     if _nlp is None:
+        # Lazy import, same as the other analyzers: spacy is a heavy ML dep
+        # that isn't installed in the CI test env, and route modules import
+        # this module transitively — an eager import would make the whole
+        # test suite uncollectable there.
+        import spacy
+
         logger.info("Loading spaCy en_core_web_sm model...")
         _nlp = spacy.load("en_core_web_sm", disable=["ner"])  # NER not needed
         logger.info("spaCy model loaded")

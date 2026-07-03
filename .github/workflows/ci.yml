@@ -98,6 +98,11 @@ jobs:
         # are not needed to run unit tests. Add a separate integration job
         # later if/when we need them.
         run: pip install -r requirements-dev.txt
+      - name: Generate Prisma client
+        # Tests import route/service modules, which import `prisma.enums` and
+        # the generated client. Generation is pure codegen — no database
+        # connection is made (and none exists in this job).
+        run: python -m prisma generate --schema=prisma/schema.prisma
       - name: Ruff
         run: ruff check src tests
       - name: Pytest

@@ -9,15 +9,16 @@ Provides runtime sense selection for word clicks.
 import logging
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics.pairwise import cosine_similarity
-
 from prisma import Prisma
 from prisma import Json
 
 logger = logging.getLogger(__name__)
+
+# sklearn is imported lazily inside each function that needs it (same
+# treatment as sentence_transformers in get_minilm below): it's a heavy ML
+# dep that isn't installed in the CI test env, and route modules import this
+# module transitively — an eager import would make the whole test suite
+# uncollectable there.
 
 # MiniLM model singleton (lazy-loaded, ~80MB)
 _minilm_model = None
@@ -53,6 +54,9 @@ def cluster_sentences(sentences: List[str], threshold: float = 0.6) -> List[int]
         return [0] * len(sentences)
 
     try:
+        from sklearn.cluster import AgglomerativeClustering
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
         vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
         tfidf_matrix = vectorizer.fit_transform(sentences)
 
@@ -74,6 +78,8 @@ def label_sense(sentences: List[str], n_keywords: int = 3) -> str:
     if not sentences:
         return ""
     try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
         vectorizer = TfidfVectorizer(stop_words="english", max_features=100)
         tfidf = vectorizer.fit_transform(sentences)
         feature_names = vectorizer.get_feature_names_out()
@@ -127,6 +133,9 @@ def select_sense_at_runtime(
     all_sentences = rep_sentences + [clicked_sentence]
 
     try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+
         vectorizer = TfidfVectorizer(stop_words="english", max_features=500)
         tfidf_matrix = vectorizer.fit_transform(all_sentences)
 
@@ -146,6 +155,8 @@ def select_sense_at_runtime(
 
 def compute_minilm_similarity(sentence_a: str, sentence_b: str) -> float:
     """Compute cosine similarity between two sentences using MiniLM."""
+    from sklearn.metrics.pairwise import cosine_similarity
+
     model = get_minilm()
     embeddings = model.encode([sentence_a, sentence_b])
     sim = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
@@ -170,6 +181,8 @@ def find_reusable_sense(
     """
     if not existing_senses:
         return None
+
+    from sklearn.metrics.pairwise import cosine_similarity
 
     model = get_minilm()
     new_emb = model.encode([new_representative])
@@ -315,6 +328,8 @@ async def cluster_and_store_senses(
                 # Create new sense
                 # Compute TF-IDF centroid for future reuse comparison
                 try:
+                    from sklearn.feature_extraction.text import TfidfVectorizer
+
                     vec = TfidfVectorizer(
                         stop_words="english", max_features=200
                     )

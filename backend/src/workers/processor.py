@@ -200,32 +200,44 @@ async def process_job(
             movie_id,
         )
 
-    # 3. Fetch the script. The /scripts/fetch endpoint is a LOCAL hop
-    #    that internally fans out to STANDS4/OpenSubtitles. Its 500s could
-    #    mean upstream is angry OR our route hit a code/data bug — we
-    #    can't tell from here. We still gate it with the token bucket
-    #    (so a slow upstream naturally backpressures us) but we DO NOT
-    #    record_event() — feeding ambiguous signals into AIMD lets a
-    #    single bad movie collapse target_qps for the whole pool.
-    #    TMDB direct calls (step 2) remain the clean backpressure signal.
+    # 3. Fetch the script. This used to POST to our own /api/scripts/fetch,
+    #    but that endpoint now requires an authenticated user and the worker
+    #    has no user to act as — so we call ScriptIngestionService directly,
+    #    the same move step 4 made for classification. It still fans out to
+    #    STANDS4/OpenSubtitles, so it keeps the token-bucket gate (a slow
+    #    upstream naturally backpressures us) but does NOT record_event() —
+    #    feeding ambiguous signals into AIMD lets a single bad movie collapse
+    #    target_qps for the whole pool. TMDB direct calls (step 2) remain the
+    #    clean backpressure signal.
     await rate.acquire_token(pool)
+    from prisma import Prisma
+
+    from src.services.script_ingestion_service import ScriptIngestionService
+
+    fetch_db = Prisma()
     try:
-        resp = await client.post(
-            f"{API_BASE_URL}/api/scripts/fetch",
-            json={
-                "movie_title": job.title,
-                "movie_id": movie_id,
-                "year": job.year,
-                "force_refresh": False,
-            },
-            timeout=120.0,
-        )
-        resp.raise_for_status()
+        await fetch_db.connect()
+        service = ScriptIngestionService(fetch_db)
+        try:
+            await service.get_or_fetch_script(
+                movie_title=job.title,
+                movie_id=movie_id,
+                year=job.year,
+                force_refresh=False,
+            )
+        finally:
+            await service.close()
     except Exception as exc:
-        _, transient = _classify_http_error(exc)
-        if transient:
-            raise TransientError(f"script fetch failed: {exc}") from exc
-        raise PermanentError(f"script fetch failed: {exc}") from exc
+        # Mirror the route's error split: "not found anywhere" is permanent
+        # (park the job, don't retry); anything else is transient.
+        err_lower = str(exc).lower()
+        not_found_signals = ("not found", "no results", "all sources failed")
+        if any(sig in err_lower for sig in not_found_signals):
+            raise PermanentError(f"script fetch failed: {exc}") from exc
+        raise TransientError(f"script fetch failed: {exc}") from exc
+    finally:
+        if fetch_db.is_connected():
+            await fetch_db.disconnect()
 
     # 4. Classify in-process. This used to POST to our own
     #    /api/cefr/classify-script, but that endpoint now requires an
@@ -235,8 +247,6 @@ async def process_job(
     #    still record latency for observability. Imported lazily to avoid
     #    pulling the API route module (and the classifier it loads) at import
     #    time and to sidestep any import cycle.
-    from prisma import Prisma
-
     from src.routes.cefr import (
         ScriptClassificationRequest,
         populate_sentence_bank_bg,

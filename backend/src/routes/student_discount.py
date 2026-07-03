@@ -47,25 +47,15 @@ async def student_status(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
+    # Table is provisioned by schema.prisma /
+    # migrations_manual/2026_07_03_scaffold_tables.sql — the old
+    # request-time CREATE TABLE ran *after* this SELECT, so the first
+    # call on a fresh database always 500'd.
     rows = await db.query_raw(
         """SELECT verified, method, verified_at FROM student_verifications
            WHERE user_id = $1 AND verified = true
            ORDER BY verified_at DESC LIMIT 1""",
         current_user.id,
-    )
-
-    # Ensure table exists on first call
-    await db.execute_raw(
-        """CREATE TABLE IF NOT EXISTS student_verifications (
-            id SERIAL PRIMARY KEY,
-            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            email VARCHAR(255),
-            method VARCHAR(20) NOT NULL,
-            verified BOOLEAN DEFAULT false,
-            verified_at TIMESTAMPTZ,
-            expires_at TIMESTAMPTZ,
-            UNIQUE(user_id, method)
-        )"""
     )
 
     if rows and rows[0]["verified"]:
@@ -85,19 +75,6 @@ async def verify_student(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
-    await db.execute_raw(
-        """CREATE TABLE IF NOT EXISTS student_verifications (
-            id SERIAL PRIMARY KEY,
-            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            email VARCHAR(255),
-            method VARCHAR(20) NOT NULL,
-            verified BOOLEAN DEFAULT false,
-            verified_at TIMESTAMPTZ,
-            expires_at TIMESTAMPTZ,
-            UNIQUE(user_id, method)
-        )"""
-    )
-
     # The submitted email must be the one on the authenticated account.
     # Otherwise anyone could claim the discount with an arbitrary `*.edu`
     # string they don't control (e.g. "someone@harvard.edu"). Tying it to
