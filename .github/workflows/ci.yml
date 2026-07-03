@@ -69,7 +69,13 @@ jobs:
         # the class of bug that almost dropped 5 tables last sprint when the
         # schema and DB diverged. Uses the node-based prisma CLI via npx so
         # we don't install a query engine into the Python env.
+        # DATABASE_URL is a dummy: `validate` resolves env("DATABASE_URL")
+        # from the datasource block but never connects. Locally the CLI
+        # auto-loads backend/.env; CI has no .env, so without this the step
+        # fails with P1012 before checking anything.
         run: npx --yes prisma@5.4.2 validate --schema=prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       - name: Check schema is formatted
         # `prisma format` is idempotent — if it rewrites the file, we haven't
         # committed a formatted version. Fail the job so reviewers see the

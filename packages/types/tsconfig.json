@@ -1,0 +1,17 @@
+{
+  // Self-contained on purpose — do NOT extend the root tsconfig. Both apps
+  // compile these sources via path aliases (frontend vite alias, mobile
+  // tsconfig paths), and vite/esbuild resolves the nearest tsconfig for
+  // files in this package. Without this file it walks up to the repo-root
+  // tsconfig, which extends "expo/tsconfig.base" — unresolvable in the
+  // frontend CI job (no root node_modules there) and the web build fails.
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}
