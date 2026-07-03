@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Image, ImageStyle, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { colors } from '../../theme/palette';
+import { TMDB_API_KEY } from '../../config/env';
 
 // Module-level cache: same tmdbId fetched from several screens only hits TMDB once.
 const tmdbPosterCache: Record<number, string | null> = {};
-
-// TODO: move the TMDB API key to config/env instead of hard-coding it here.
-const TMDB_API_KEY = '9dece7a38786ac0c58794d6db4af3d51';
 
 interface Props {
   tmdbId: number;

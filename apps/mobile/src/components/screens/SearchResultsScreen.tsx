@@ -15,6 +15,7 @@ import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
+import { TMDB_API_KEY } from '../../config/env';
 
 interface Props {
   query: string;
@@ -103,8 +104,8 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
       // only process English subtitles right now, so foreign titles would
       // just dead-end at script fetch.
       const url = isGenre
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&with_genres=${encodeURIComponent(genreIds)}&with_original_language=en&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
-        : `https://api.themoviedb.org/3/search/movie?api_key=9dece7a38786ac0c58794d6db4af3d51&query=${encodeURIComponent(effectiveQuery)}&page=${pageNum}`;
+        ? `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${encodeURIComponent(genreIds)}&with_original_language=en&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
+        : `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(effectiveQuery)}&page=${pageNum}`;
       const res = await fetch(url);
       const data = await res.json();
       return {

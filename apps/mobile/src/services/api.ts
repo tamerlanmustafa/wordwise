@@ -1,12 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { config } from '../config/env';
+import { config, TMDB_API_KEY } from '../config/env';
 import { tokenStorage } from './auth/tokenStorage';
 
 // Use centralized config for API URL
 const API_BASE_URL = config.API_URL;
-
-// TMDB API Key (same as web app)
-const TMDB_API_KEY = '9dece7a38786ac0c58794d6db4af3d51';
 
 // Types
 interface TMDBMovie {
