@@ -11,7 +11,8 @@ import { SERIF, useThemeColors } from '../../theme/tokens';
 
 export interface PageHeaderProps {
   eyebrow: string;
-  title: string;
+  /** Serif page title. Optional — omit for a title-less header (e.g. Home). */
+  title?: string;
   subtitle?: string;
   right?: ReactNode;
 }
@@ -41,19 +42,21 @@ export function PageHeader({ eyebrow, title, subtitle, right }: PageHeaderProps)
         >
           {eyebrow}
         </div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: SERIF,
-            fontSize: 44,
-            fontWeight: 600,
-            letterSpacing: -1.2,
-            lineHeight: 1.05,
-            color: t.text,
-          }}
-        >
-          {title}
-        </h1>
+        {title ? (
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: SERIF,
+              fontSize: 44,
+              fontWeight: 600,
+              letterSpacing: -1.2,
+              lineHeight: 1.05,
+              color: t.text,
+            }}
+          >
+            {title}
+          </h1>
+        ) : null}
         {subtitle ? (
           <div
             style={{

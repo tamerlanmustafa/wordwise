@@ -1,12 +1,12 @@
 /**
- * HomePage — the redesigned web Home ("Now Showing").
+ * HomePage — the redesigned web Home (the ranked film feed).
  *
  * Desktop counterpart to the mobile ranked-feed home, re-skinned into the
  * cinema / contact-sheet system (home/home-web.jsx). Renders inside the
  * shared AppShell (always-dark sidebar + top bar), so this page only owns
  * the content column:
- *   • PageHeader — eyebrow `YOUR FEED · {level} LEVEL`, serif `Now Showing`,
- *     subtitle, right-aligned gold level pill.
+ *   • PageHeader — eyebrow `YOUR FEED · {level} LEVEL`, subtitle,
+ *     right-aligned gold level pill (no serif title).
  *   • Feed column — toolbar (`{n} FILMS AT YOUR LEVEL` + SORT chips) over a
  *     single-column list of RankedFeedRow cards (same fields + Add affordance
  *     as the mobile card; rank numerals differ).
@@ -103,7 +103,6 @@ export default function HomePage() {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <PageHeader
         eyebrow={`Your feed · ${level} level`}
-        title="Now Showing"
         subtitle="Top-rated films matched to your level. Add any to your list to start learning its words."
         right={<LevelPill level={level} t={t} />}
       />
