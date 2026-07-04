@@ -16,7 +16,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -42,6 +42,7 @@ type RowItem = WordInfo | IdiomInfo;
 const isIdiom = (item: RowItem): item is IdiomInfo => 'phrase' in item;
 import { useAuthStore } from '../../stores/authStore';
 import { offlineCache } from '../../services/offlineCache';
+import { stickySpacerRange } from './stickyHeaderSpacer';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
@@ -123,6 +124,24 @@ export const MovieDetailScreen = ({
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const prevLevelRef = useRef<string>(activeLevel);
+
+  // Scroll-driven headroom for the sticky tabs header: 0 at rest (tabs sit
+  // flush under the overview), growing to insets.top just as the header pins
+  // so it clears the status bar / dynamic island. See stickySpacerRange.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [stickyHeaderY, setStickyHeaderY] = useState(0);
+  const spacerRange = stickySpacerRange(insets.top, stickyHeaderY);
+  const stickySpacerHeight = spacerRange
+    ? scrollY.interpolate({ ...spacerRange, extrapolate: 'clamp' })
+    : 0;
+
+  // The floating back button fades out over the same scroll range: once the
+  // tabs bar docks it would sit on top of the ★ For You tab (both live at
+  // the screen's left edge), so it yields — scrolling back up restores it.
+  const backBtnOpacity = spacerRange
+    ? scrollY.interpolate({ ...spacerRange, outputRange: [1, 0], extrapolate: 'clamp' })
+    : 1;
+  const [headerDocked, setHeaderDocked] = useState(false);
 
   useEffect(() => {
     if (prevLevelRef.current !== activeLevel) {
@@ -548,6 +567,9 @@ export const MovieDetailScreen = ({
 
   // Sliding tab indicator for the scrollable level row. The For You tab
   // lives in a separate fixed container so it isn't part of the slide.
+  // The fixed section's measured width becomes the scroll row's left
+  // padding, so the A1 tab starts exactly where the fixed section ends.
+  const [tabsLeftWidth, setTabsLeftWidth] = useState(120);
   const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorWidth = useRef(new Animated.Value(0)).current;
@@ -592,7 +614,10 @@ export const MovieDetailScreen = ({
   const handleScrollTabLayout = (key: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
     const { x, width } = e.nativeEvent.layout;
     tabLayouts.current[key] = { x, width };
-    if (key === activeScrollKey && !indicatorPositioned.current) {
+    // Snap the indicator whenever the active tab's layout lands or shifts
+    // (e.g. the measured left-section width replaces the initial guess).
+    // Tab-change animations aren't affected: they don't relayout the tabs.
+    if (key === activeScrollKey) {
       indicatorX.setValue(x);
       indicatorWidth.setValue(width);
       indicatorOpacity.setValue(1);
@@ -755,7 +780,10 @@ export const MovieDetailScreen = ({
   }, [renderLimit, activeListLength]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['bottom']}>
+    // Plain View, no bottom safe-area edge: the GlobalBottomBar rendered
+    // below this screen already pads for the home indicator, so a bottom
+    // inset here would double up as dead space above the bar.
+    <View style={[styles.container, { backgroundColor: tc.background }]}>
       <StatusBar barStyle="light-content" />
 
       <View style={{ flex: 1 }}>
@@ -764,10 +792,19 @@ export const MovieDetailScreen = ({
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           scrollEventThrottle={16}
+          onScroll={(e) => {
+            const y = e.nativeEvent.contentOffset.y;
+            scrollY.setValue(y);
+            // Docked = tabs bar pinned to the top; disables the (fully
+            // faded) back button so it can't steal taps from the tabs.
+            setHeaderDocked(stickyHeaderY > 0 && y >= stickyHeaderY);
+          }}
           stickyHeaderIndices={[1]}
         >
-          {/* 0: Hero — extends to the very top, including the dynamic island */}
-          <View>
+          {/* 0: Hero — extends to the very top, including the dynamic island.
+              Its height is where the sticky header pins, which drives the
+              status-bar spacer inside the header below. */}
+          <View onLayout={(e) => setStickyHeaderY(e.nativeEvent.layout.height)}>
             <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
             {movie.backdrop_path ? (
               <Image
@@ -844,15 +881,21 @@ export const MovieDetailScreen = ({
           </View>
 
           {/* 1: Sticky tabs — sit below the hero, stick to the top of the
-              viewport once scrolled past. paddingTop reserves space for the
-              dynamic island. The bar spans the full screen width; the ★ For
-              You tab carries its own left inset (see unifiedTabsLeftFixed) so
-              it stays clear of the floating back button when the bar sticks. */}
-          <View style={{ backgroundColor: tc.background, paddingTop: insets.top }}>
+              viewport once scrolled past. The animated spacer expands to
+              insets.top only as the header pins, so the tabs clear the
+              dynamic island when stuck without leaving a gap under the
+              overview at rest. The floating back button fades out on the
+              same range so it never overlaps the ★ For You tab when the
+              bar is docked. */}
+          <View style={{ backgroundColor: tc.background }}>
+            <Animated.View style={{ height: stickySpacerHeight }} />
             {vocabulary ? (
               <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
                 <View style={styles.unifiedTabsRowWrapper}>
-                  <View style={styles.unifiedTabsLeftFixed}>
+                  <View
+                    style={styles.unifiedTabsLeftFixed}
+                    onLayout={(e) => setTabsLeftWidth(Math.round(e.nativeEvent.layout.width))}
+                  >
                     {(() => {
                       const foryouActive = wordsView === 'foryou';
                       return (
@@ -880,7 +923,7 @@ export const MovieDetailScreen = ({
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: 164 }]}
+                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: tabsLeftWidth }]}
                   >
                     <Animated.View
                       pointerEvents="none"
@@ -1202,22 +1245,25 @@ export const MovieDetailScreen = ({
         </View>
       )}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        onPress={onBack}
-        style={({ pressed }) => [
-          backBtnStyles.backBtn,
-          { top: insets.top + 8, opacity: pressed ? 0.7 : 1 },
-        ]}
-        hitSlop={8}
+      <Animated.View
+        style={[backBtnStyles.wrap, { top: insets.top + 8, opacity: backBtnOpacity }]}
+        pointerEvents={headerDocked ? 'none' : 'auto'}
       >
-        <Ionicons name="chevron-back" size={18} color="#fff" />
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={({ pressed }) => [backBtnStyles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          hitSlop={8}
+        >
+          <Ionicons name="chevron-back" size={18} color="#fff" />
+        </Pressable>
+      </Animated.View>
 
-      {/* Sticky "Quiz me" pill — sits above the global bottom bar.
-          Always available once vocab has loaded, so the user can
-          jump from browsing into a 5-card quiz at any point. */}
+      {/* Sticky "Quiz me" pill — fixed at the bottom-left corner, just
+          above the global bottom bar. Always available once vocab has
+          loaded, so the user can jump from browsing into a 5-card quiz
+          at any point. */}
       {!loading && vocabulary && onStartQuiz ? (
         <View style={quizPillStyles.pillWrap} pointerEvents="box-none">
           <TouchableOpacity
@@ -1233,14 +1279,17 @@ export const MovieDetailScreen = ({
         </View>
       ) : null}
 
-    </SafeAreaView>
+    </View>
   );
 };
 
 const backBtnStyles = StyleSheet.create({
-  backBtn: {
+  wrap: {
     position: 'absolute',
     left: 16,
+    zIndex: 20,
+  },
+  backBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -1249,18 +1298,17 @@ const backBtnStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 20,
   },
 });
 
 const quizPillStyles = StyleSheet.create({
   pillWrap: {
+    // The screen container ends at the top of the global bottom bar, so
+    // bottom:16 floats the pill 16pt above the bar, pinned to the left.
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 88,
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    left: 16,
+    bottom: 16,
+    alignItems: 'flex-start',
   },
   pill: {
     flexDirection: 'row',

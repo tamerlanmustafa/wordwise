@@ -956,7 +956,9 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 24,
+    // Clears the "Quiz me" pill pinned at the bottom-left (bottom:16,
+    // ~44pt tall) so the two never stack on top of each other.
+    bottom: 68,
     alignItems: 'center',
     paddingHorizontal: 16,
   },
@@ -1073,9 +1075,10 @@ export const styles = StyleSheet.create({
     left: 0,
     flexDirection: 'row',
     alignItems: 'stretch',
-    // Inset the ★ For You tab so it clears the floating back button
-    // (left:16, width:38 + hitSlop) when the full-width bar sticks to the top.
-    paddingLeft: 50,
+    // Matches unifiedTabsRow's horizontal padding so the ★ For You tab sits
+    // flush at the pill's left edge. The floating back button fades out as
+    // the bar docks (see MovieDetailScreen), so no clearance inset is needed.
+    paddingLeft: 6,
     paddingVertical: 6,
     backgroundColor: '#E4DCF0',
     zIndex: 2,
