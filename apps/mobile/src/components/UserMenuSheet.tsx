@@ -10,7 +10,7 @@
  * uses gold for its active tab). No emoji.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import {
   Animated,
@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
@@ -60,18 +61,34 @@ export function UserMenuSheet({
 }: Props) {
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
-  const slideAnim = useRef(new Animated.Value(600)).current;
+  // Start hidden well off-screen; the real distance is set once we measure the
+  // sheet's height (below) so it always fully clears the bar, however tall the
+  // menu grows (admin row, etc.).
+  const slideAnim = useRef(new Animated.Value(900)).current;
+  // Distance to translate the sheet down so it sits fully below the bottom bar.
+  const hiddenY = useRef(900);
 
   const pref = useThemeStore((s) => s.preference);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
-      toValue: visible ? 0 : 600,
+      toValue: visible ? 0 : hiddenY.current,
       useNativeDriver: true,
       bounciness: 0,
       speed: 18,
     }).start();
   }, [visible, slideAnim]);
+
+  // Measure the sheet so the hidden position is exactly its own height plus the
+  // bar offset — enough to slide the whole thing off-screen. Snap immediately
+  // when closed so it never peeks before the first open.
+  const onSheetLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      hiddenY.current = e.nativeEvent.layout.height + bottomOffset + 24;
+      if (!visible) slideAnim.setValue(hiddenY.current);
+    },
+    [visible, bottomOffset, slideAnim],
+  );
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
@@ -105,7 +122,10 @@ export function UserMenuSheet({
       )}
 
       {/* Sheet */}
-      <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View
+        onLayout={onSheetLayout}
+        style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+      >
         <View style={styles.handle} />
 
         <View style={styles.identity}>
