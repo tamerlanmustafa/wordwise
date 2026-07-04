@@ -8,7 +8,7 @@ export const GOOGLE_CLIENT_ID_IOS = '400446242104-a9laa57dook0og2k93g9amjgieqo2m
 // rotation; centralizing it here is the prerequisite (one place to change).
 // (Deliberately a plain literal, not `process.env.EXPO_PUBLIC_*`: that form
 // makes babel-preset-expo pull in `expo/virtual/env`, which breaks Jest.)
-export const TMDB_API_KEY = '9dece7a38786ac0c58794d6db4af3d51';
+export const TMDB_API_KEY = '1870027496e94e64c86a36fbcb709320';
 
 const configs = {
   development: {

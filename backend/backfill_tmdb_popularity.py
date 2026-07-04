@@ -9,7 +9,7 @@ import os
 import asyncpg
 import httpx
 
-TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "9dece7a38786ac0c58794d6db4af3d51")
+TMDB_API_KEY = os.environ["TMDB_API_KEY"]  # required; no fallback — keep keys out of the repo
 
 
 async def main():

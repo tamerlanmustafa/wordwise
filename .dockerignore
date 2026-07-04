@@ -55,6 +55,9 @@ QUICK*.md
 # Database backups
 *.sql
 backup*.sql
+# ...but Prisma migration history MUST ship in the image — `prisma migrate
+# deploy` runs from it at release time (docker/Dockerfile.backend).
+!backend/prisma/migrations/**/*.sql
 
 # Temporary files
 tmp/

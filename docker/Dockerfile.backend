@@ -1,0 +1,55 @@
+# Production image for the WordWise backend — one image, two services:
+#   API:    (default CMD) uvicorn on $PORT
+#   Worker: bash /app/scripts/start-workers.sh  (queue worker + AIMD controller)
+#
+# Build from the repo root:
+#   docker build -f docker/Dockerfile.backend -t wordwise-backend .
+#
+# All ML assets (spaCy model, NLTK data, MiniLM sentence-transformer, Prisma
+# engines) are baked in at build time so containers never download them on
+# cold start (DEPLOYMENT.md §9).
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    NLTK_DATA=/usr/local/share/nltk_data \
+    HF_HOME=/opt/hf
+
+WORKDIR /app
+
+# curl: platform health checks
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# CPU-only torch BEFORE requirements.txt: sentence-transformers would pull the
+# CUDA build otherwise — ~2 GB of GPU kernels this app never uses (MiniLM
+# embeddings run fine on CPU).
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY backend/requirements.txt ./
+RUN pip install -r requirements.txt
+
+# Bake model assets into the image
+RUN python -m spacy download en_core_web_sm \
+    && python -c "import nltk; [nltk.download(p, download_dir='${NLTK_DATA}') for p in ('wordnet', 'omw-1.4', 'punkt', 'stopwords')]" \
+    && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Prisma codegen. Also caches the query-engine + CLI binaries in the image, so
+# `python -m prisma migrate deploy` works at release time without downloads.
+COPY backend/prisma ./prisma
+RUN python -m prisma generate --schema=prisma/schema.prisma
+
+# App code + CEFR classifier datasets (git-tracked, loaded lazily at runtime)
+COPY backend/src ./src
+COPY backend/data ./data
+COPY docker/start-workers.sh ./scripts/start-workers.sh
+RUN chmod +x ./scripts/start-workers.sh
+
+EXPOSE 8000
+
+# Railway/Render inject PORT; default to 8000 for local runs. Single uvicorn
+# process on purpose: each process lazy-loads ~1 GB of ML models on first
+# classification request, so scale with instances/RAM, not --workers.
+CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}

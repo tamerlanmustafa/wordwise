@@ -10,6 +10,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "wordwise",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f"
+    },
     "splash": {
       "backgroundColor": "#2196F3"
     },

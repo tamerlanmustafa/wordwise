@@ -213,16 +213,12 @@ The app uses **native modules** (`@react-native-google-signin/google-signin`) an
 
 These are real blockers found in the repo:
 
-1. **Missing backend Dockerfile.** `docker-compose.prod.yml` and the README reference `docker/Dockerfile.backend` + `docker/Dockerfile.frontend`, but **no Dockerfiles exist** in the repo. You need a production **backend** Dockerfile that:
-   - installs `requirements.txt`,
-   - runs `prisma generate`,
-   - **bakes in model assets at build time** so they aren't downloaded on every cold start: `python -m spacy download en_core_web_sm`, NLTK data (`wordnet`, `omw-1.4`, `punkt`, `stopwords`), and pre-fetches the `all-MiniLM-L6-v2` sentence-transformer.
-   - (Frontend Dockerfile is **not needed** under the mobile-only scope.)
-2. **`eas.json` is empty/missing** — add build + submit profiles (§7.3).
-3. **`runtimeVersion`** not set in `app.json` — needed for safe OTA updates.
-4. **Secrets:** set `DATABASE_URL`, `JWT_SECRET_KEY` (rotate the example value), `GOOGLE_CLIENT_ID/SECRET`, `ANTHROPIC_API_KEY`, translation creds, `STANDS4_*`, `ALLOWED_ORIGINS` as **platform environment variables** — never commit `.env` (per `CLAUDE.md`).
+1. ~~**Missing backend Dockerfile.**~~ ✅ **Done (2026-07-03):** `docker/Dockerfile.backend` exists — one image for both services (API via default CMD on `$PORT`, worker via `scripts/start-workers.sh` which runs the queue worker + AIMD controller together). It installs CPU-only torch (avoids the ~2 GB CUDA build), bakes in spaCy `en_core_web_sm`, NLTK data (`wordnet`, `omw-1.4`, `punkt`, `stopwords`), the `all-MiniLM-L6-v2` sentence-transformer, the Prisma engines, and copies the git-tracked `backend/data/cefr` datasets the classifier loads at runtime. Build from the repo root: `docker build -f docker/Dockerfile.backend .`
+2. ~~**`eas.json` is empty/missing**~~ ✅ **Done (2026-07-03):** `apps/mobile/eas.json` has `development` / `preview` / `production` build profiles (+ submit config, remote app-version source, update channels).
+3. ~~**`runtimeVersion`** not set in `app.json`~~ ✅ **Done (2026-07-03):** `runtimeVersion: {"policy": "appVersion"}` + `updates.url` set in `app.json`.
+4. **Secrets:** set `DATABASE_URL`, `JWT_SECRET_KEY` (rotate the example value), `GOOGLE_CLIENT_ID/SECRET`, `ANTHROPIC_API_KEY`, translation creds, `STANDS4_*`, `ALLOWED_ORIGINS` as **platform environment variables** — never commit `.env` (per `CLAUDE.md`). The TMDB key was rotated 2026-07-03; the web deploy workflow now reads `VITE_TMDB_API_KEY` from GitHub Actions secrets (must be configured in repo settings).
 5. **`DEBUG=False`** in production; restrict `ALLOWED_ORIGINS` (mobile native requests send no `Origin`, so this mainly guards any browser callers).
-6. **DB migrations:** switch from `prisma db push` to a committed migration history + `prisma migrate deploy` on release.
+6. ~~**DB migrations:** switch from `prisma db push` to a committed migration history~~ ✅ **Done (2026-07-03):** baseline migration `backend/prisma/migrations/20260703000000_init/` generated from `schema.prisma` (Prisma 0.11.0 CLI, `migrate diff --from-empty`). Fresh databases: just run `prisma migrate deploy`. **Existing databases** (local dev, any previously-pushed env): mark the baseline as already applied once with `prisma migrate resolve --applied 20260703000000_init`. Note the baseline is schema-only — the **achievement definition rows** still come from the idempotent seed in `prisma/migrations_manual/2026_07_03_scaffold_tables.sql` (run its `INSERT` once per environment, or `psql -f` the whole file — it's `IF NOT EXISTS`-safe).
 7. **Health check:** `/health` already exists — wire it to the platform's health-check + Cloudflare uptime.
 8. **Worker scaling for MVP:** the worker auto-seeds the TMDB catalog on start. Decide whether to run it **always-on** (continuously grows catalog) or **burst it** to build an initial catalog, then scale to a single small instance to save money.
 9. **Known security gaps** flagged in prior review (access-control/IDOR on some endpoints, fail-open discount/consumables) should be triaged **before** a public launch — see the project security-scan notes.
