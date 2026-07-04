@@ -34,6 +34,7 @@ import {
   type DailyState,
   type SessionKind,
 } from '../services/api';
+import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
 import {
   MoviePickerModal,
@@ -199,6 +200,7 @@ export function PracticeScreen({
         style={s.glow}
         pointerEvents="none"
       />
+      <PracticeBackdrop />
 
       <View style={s.header}>
         <View style={{ flex: 1 }}>

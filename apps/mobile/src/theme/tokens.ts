@@ -84,6 +84,9 @@ export interface ThemeColors {
   lessonRing:         string;  // dashed ring around the active lesson node
   nodeLocked:         string;  // locked lesson node fill
   nodeLockedBorder:   string;  // locked lesson node border
+  nodeGoldEdge:       string;  // 3D bottom edge under gold (active/completed) tiles
+  nodeLockedEdge:     string;  // 3D bottom edge under locked tiles
+  nodeRepairEdge:     string;  // 3D bottom edge under the repair (rescue-streak) tile
 
   // v0.7 §7 Quiz screens (synonym MCQ + translation typing)
   wordBoxBg:          string;  // inner word card on quiz screens (off-paper by 1 step)
@@ -162,6 +165,9 @@ const light: ThemeColors = {
   lessonRing:         'rgba(197,139,27,0.55)',
   nodeLocked:         '#E5DCC4',
   nodeLockedBorder:   '#D7CCB0',
+  nodeGoldEdge:       '#96660A',
+  nodeLockedEdge:     '#CDC0A0',
+  nodeRepairEdge:     '#A94B4B',
 
   // v0.7 §7 Quiz
   wordBoxBg:          '#FAF7EE',
@@ -232,6 +238,9 @@ const dark: ThemeColors = {
   lessonRing:         'rgba(255,209,102,0.45)',
   nodeLocked:         '#2a2935',
   nodeLockedBorder:   'rgba(255,255,255,0.06)',
+  nodeGoldEdge:       '#C08F21',
+  nodeLockedEdge:     '#1c1b25',
+  nodeRepairEdge:     '#B25050',
 
   // v0.7 §7 Quiz
   wordBoxBg:          '#0a090d',

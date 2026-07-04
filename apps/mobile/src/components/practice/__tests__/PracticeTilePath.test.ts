@@ -8,6 +8,8 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 import {
   buildWindow,
   offsetForIndex,
+  connectorXs,
+  CONNECTOR_DOTS,
   sectionForIndex,
   isSectionStart,
   SECTION_SIZE,
@@ -116,6 +118,27 @@ describe('offsetForIndex (zigzag anchored to absolute index)', () => {
     const shapeAt = (cursor: number) =>
       buildWindow(cursor).map((t) => offsetForIndex(t.index));
     expect(shapeAt(3)).not.toEqual(shapeAt(4));
+  });
+});
+
+describe('connectorXs (dotted trail between consecutive tiles)', () => {
+  it('steps evenly between the two tiles’ zigzag offsets', () => {
+    // offsetForIndex: 0 → 0, 1 → 24. Dots at t = ¼, ½, ¾ of the span.
+    expect(connectorXs(0, 1)).toEqual([6, 12, 18]);
+  });
+
+  it('interpolates across a negative→positive span', () => {
+    // offsetForIndex: 2 → -16, 3 → 12 (span 28).
+    expect(connectorXs(2, 3)).toEqual([-9, -2, 5]);
+  });
+
+  it('always returns CONNECTOR_DOTS offsets', () => {
+    expect(connectorXs(4, 5)).toHaveLength(CONNECTOR_DOTS);
+  });
+
+  it('wraps absolute indices the same way offsetForIndex does', () => {
+    // Indices 7/8 land on the same zigzag slots as 0/1.
+    expect(connectorXs(7, 8)).toEqual(connectorXs(0, 1));
   });
 });
 

@@ -58,6 +58,22 @@ export function offsetForIndex(index: number): number {
   return X_OFFSETS[((index % n) + n) % n];
 }
 
+/** Dots drawn in the trail between two consecutive tiles. */
+export const CONNECTOR_DOTS = 3;
+
+/** X offsets for the connector dots between tiles `prevIndex` →
+ *  `nextIndex`, stepping evenly between the two tiles' zigzag offsets
+ *  so the trail leans toward the next circle instead of running
+ *  straight down. Pure + exported for unit testing. */
+export function connectorXs(prevIndex: number, nextIndex: number): number[] {
+  const a = offsetForIndex(prevIndex);
+  const b = offsetForIndex(nextIndex);
+  return Array.from({ length: CONNECTOR_DOTS }, (_, i) => {
+    const t = (i + 1) / (CONNECTOR_DOTS + 1);
+    return Math.round(a + (b - a) * t);
+  });
+}
+
 /** How many tiles make up one "section" — the landmark cadence. A
  *  checkpoint divider is rendered above each section's first tile so the
  *  user sees named landmarks scroll past as they advance, instead of an
@@ -100,8 +116,9 @@ export function PracticeTilePath({
 
   return (
     <View style={styles.wrap}>
-      {tiles.map((t) => {
+      {tiles.map((t, slot) => {
         const x = offsetForIndex(t.index);
+        const prev = slot > 0 ? tiles[slot - 1] : null;
         return (
           <Fragment key={t.index}>
             {isSectionStart(t.index) ? (
@@ -109,6 +126,15 @@ export function PracticeTilePath({
                 section={sectionForIndex(t.index)}
                 completed={cursor >= t.index + SECTION_SIZE}
                 current={t.index <= cursor && cursor < t.index + SECTION_SIZE}
+              />
+            ) : prev ? (
+              // Dotted trail tying consecutive circles into one road.
+              // Skipped at section boundaries — the divider is the
+              // visual break there.
+              <PathConnector
+                prevIndex={prev.index}
+                nextIndex={t.index}
+                walked={t.index <= cursor}
               />
             ) : null}
             <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
@@ -122,6 +148,40 @@ export function PracticeTilePath({
           </Fragment>
         );
       })}
+    </View>
+  );
+}
+
+/** Three small dots between two tiles, leaning from the previous tile's
+ *  x offset toward the next one's. Walked segments (up to and including
+ *  the active tile) read gold; the road ahead stays faint. */
+function PathConnector({
+  prevIndex,
+  nextIndex,
+  walked,
+}: {
+  prevIndex: number;
+  nextIndex: number;
+  walked: boolean;
+}) {
+  const tc = useThemeColors();
+  const xs = connectorXs(prevIndex, nextIndex);
+  const color = walked ? tc.goldOnSurface : tc.textFaint;
+  return (
+    <View style={styles.connector} pointerEvents="none">
+      {xs.map((x, i) => (
+        <View
+          key={i}
+          style={[
+            styles.connectorDot,
+            {
+              backgroundColor: color,
+              opacity: walked ? 0.9 : 0.35,
+              transform: [{ translateX: x }],
+            },
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -180,10 +240,21 @@ const styles = StyleSheet.create({
   wrap: {
     paddingTop: 12,
     paddingBottom: 24,
-    gap: 24, // breathing room between tiles + their labels
+    // No flex gap — the space between rows is owned by the connector
+    // trail (or the section divider's margins at boundaries).
   },
   tileRow: {
     alignItems: 'center',
+  },
+  connector: {
+    height: 26,
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+  },
+  connectorDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
 });
 
@@ -194,6 +265,8 @@ const makeDividerStyles = (_tc: ThemeColors) =>
       alignItems: 'center',
       gap: 10,
       paddingHorizontal: 4,
+      // Owns its own breathing room now that the path has no flex gap.
+      marginVertical: 14,
     },
     line: {
       flex: 1,

@@ -18,6 +18,12 @@
  * The kind glyphs reuse the v0.7 vocabulary: speech-bubble (recall),
  * 4-grid (mcq), flame (tough), film (deep-dive). All stroked SVGs at
  * 24px inside the 60px body.
+ *
+ * Depth: each circle is a two-layer "button" — a face over a darker
+ * bottom edge (Duolingo-style 3D lip). Pressing the active tile pushes
+ * the face down onto its edge, so the tap physically depresses the
+ * button instead of just dimming it. The edge replaces the old
+ * hard-offset shadow, which rendered differently on iOS vs Android.
  */
 
 import { useEffect, useRef } from 'react';
@@ -114,6 +120,11 @@ export function PracticeTile({
     : isGold
       ? tc.gold
       : tc.nodeLocked;
+  const edgeBg = state === 'repair'
+    ? tc.nodeRepairEdge
+    : isGold
+      ? tc.nodeGoldEdge
+      : tc.nodeLockedEdge;
   const fgColor = state === 'repair'
     ? '#fff'
     : isGold
@@ -121,6 +132,8 @@ export function PracticeTile({
       : tc.textFaint;
   const bodyBorderColor = state === 'locked' ? tc.nodeLockedBorder : 'transparent';
   const bodyBorderWidth = state === 'locked' ? 2 : 0;
+  // Matte states (locked) skip the glossy top sheen.
+  const hasSheen = isGold || state === 'repair';
 
   // Glyph shown in the center of the circle.
   const glyphKind: SessionKind | 'check' | 'lock' | 'alarm' =
@@ -131,52 +144,64 @@ export function PracticeTile({
   return (
     <Pressable
       onPress={tappable ? onPress : undefined}
-      style={({ pressed }) => [
-        s.hit,
-        pressed && tappable && { opacity: 0.9 },
-      ]}
+      style={s.hit}
       hitSlop={6}
     >
-      <View style={s.circleWrap}>
-        {state === 'active' ? (
-          <Animated.View
-            style={[s.ring, { borderColor: tc.lessonRing, transform: [{ rotate: spin }] }]}
-            pointerEvents="none"
-          />
-        ) : null}
+      {({ pressed }) => (
+        <>
+          <View style={s.circleWrap}>
+            {state === 'active' ? (
+              <Animated.View
+                style={[s.ring, { borderColor: tc.lessonRing, transform: [{ rotate: spin }] }]}
+                pointerEvents="none"
+              />
+            ) : null}
 
-        <Animated.View
-          style={[
-            s.body,
-            {
-              backgroundColor: bodyBg,
-              borderColor: bodyBorderColor,
-              borderWidth: bodyBorderWidth,
-            },
-            state === 'locked' && { opacity: 0.6 },
-            state === 'completed' && { opacity: 0.75 },
-            state === 'active' && { transform: [{ translateY }] },
-          ]}
-        >
-          <TileGlyph kind={glyphKind} color={fgColor} />
-        </Animated.View>
+            {/* Face + edge move as one unit so the bounce never splits
+                the button apart; pressing sinks only the face. */}
+            <Animated.View
+              style={[
+                s.button,
+                state === 'locked' && { opacity: 0.6 },
+                state === 'completed' && { opacity: 0.75 },
+                state === 'active' && { transform: [{ translateY }] },
+              ]}
+            >
+              <View style={[s.edge, { backgroundColor: edgeBg }]} />
+              <View
+                style={[
+                  s.face,
+                  {
+                    backgroundColor: bodyBg,
+                    borderColor: bodyBorderColor,
+                    borderWidth: bodyBorderWidth,
+                  },
+                  pressed && tappable && s.facePressed,
+                ]}
+              >
+                {hasSheen ? <View style={s.sheen} /> : null}
+                <TileGlyph kind={glyphKind} color={fgColor} />
+              </View>
+            </Animated.View>
 
-        {state === 'active' ? (
-          <View style={s.startCallout} pointerEvents="none">
-            <View style={[s.startTail, { backgroundColor: tc.text }]} />
-            <View style={[s.startBody, { backgroundColor: tc.text }]}>
-              <Text style={[s.startText, { color: tc.background }]}>START</Text>
-            </View>
+            {state === 'active' ? (
+              <View style={s.startCallout} pointerEvents="none">
+                <View style={[s.startTail, { backgroundColor: tc.text }]} />
+                <View style={[s.startBody, { backgroundColor: tc.text }]}>
+                  <Text style={[s.startText, { color: tc.background }]}>START</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
-        ) : null}
-      </View>
 
-      <Text
-        style={[s.label, { color: state === 'active' ? tc.text : tc.textFaint }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+          <Text
+            style={[s.label, { color: state === 'active' ? tc.text : tc.textFaint }]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -262,6 +287,8 @@ function TileGlyph({
 
 const RING_INSET = 8;
 const CIRCLE = 60;
+/** Height of the 3D bottom lip under the face. */
+const EDGE = 5;
 
 const makeStyles = (_tc: ThemeColors) =>
   StyleSheet.create({
@@ -273,7 +300,10 @@ const makeStyles = (_tc: ThemeColors) =>
       width: 76,
       height: 76,
       alignItems: 'center',
-      justifyContent: 'center',
+      // Top-aligned with padding (not centered) so the face's centre
+      // stays at the wrap's centre despite the extra EDGE below it —
+      // keeps the spinning ring concentric with the face.
+      paddingTop: (76 - CIRCLE) / 2,
       position: 'relative',
     },
     ring: {
@@ -286,21 +316,41 @@ const makeStyles = (_tc: ThemeColors) =>
       borderWidth: 2.5,
       borderStyle: 'dashed',
     },
-    body: {
+    button: {
+      width: CIRCLE,
+      height: CIRCLE + EDGE,
+    },
+    edge: {
+      position: 'absolute',
+      top: EDGE,
+      left: 0,
+      width: CIRCLE,
+      height: CIRCLE,
+      borderRadius: CIRCLE / 2,
+    },
+    face: {
       width: CIRCLE,
       height: CIRCLE,
       borderRadius: CIRCLE / 2,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.4,
-      shadowRadius: 0,
-      shadowOffset: { width: 0, height: 5 },
-      elevation: 4,
+      overflow: 'hidden',
+    },
+    facePressed: {
+      transform: [{ translateY: EDGE }],
+    },
+    sheen: {
+      position: 'absolute',
+      top: 6,
+      left: (CIRCLE - 32) / 2,
+      width: 32,
+      height: 12,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.26)',
     },
     startCallout: {
       position: 'absolute',
-      top: 70,
+      top: 74,
       alignItems: 'center',
     },
     startTail: {
