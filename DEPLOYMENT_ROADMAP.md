@@ -13,11 +13,16 @@ Chosen setup (option 2): **Railway** (backend, usage-based ~$20–40/mo) +
 
 ---
 
-## A. GitHub Actions secret — do this first (5 min)
+## A. GitHub repo settings — do this first (5 min)
 
 The web deploy workflow no longer contains a hard-coded TMDB key; it reads a
 repo secret. Until you add it, a Pages deploy builds with an **empty** key.
 
+- [ ] **Enable GitHub Pages**: repo → **Settings → Pages** → Source: **GitHub Actions**.
+  (The "Deploy Vite App to GitHub Pages" workflow currently fails at *Setup
+  Pages* with `HttpError: Not Found` because Pages isn't enabled — observed
+  2026-07-04, and the failure predates the deployment-prep changes. Once
+  enabled, re-run the workflow from the Actions tab.)
 - [ ] GitHub repo → **Settings → Secrets and variables → Actions** → *New repository secret*
   - Name: `VITE_TMDB_API_KEY`
   - Value: the current key (see `TMDB_API_KEY` in `apps/mobile/src/config/env.ts`)
