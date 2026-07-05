@@ -18,9 +18,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# curl: platform health checks
+# curl: platform health checks.
+# libatomic1: the Node binary that prisma-python (nodeenv) downloads to run the
+#   Prisma CLI is dynamically linked against libatomic, which python:*-slim omits
+#   — without it `prisma generate` dies with "libatomic.so.1: cannot open ...".
+# openssl + ca-certificates: required by the Prisma query engine at generate/runtime.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libatomic1 openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # CPU-only torch BEFORE requirements.txt: sentence-transformers would pull the
