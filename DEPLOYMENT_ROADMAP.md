@@ -35,15 +35,26 @@ repo secret. Until you add it, a Pages deploy builds with an **empty** key.
 - [ ] Sign up at [railway.app](https://railway.app) with GitHub; choose the **Pro** plan ($20/mo minimum, usage-based).
 - [ ] **New project** → **Deploy from GitHub repo** → select this repo.
 - [ ] Add **PostgreSQL** to the project (right-click canvas → Database → PostgreSQL).
+
+> **⚠️ Gotcha — Railway must be told to use our Dockerfile.** The repo has a
+> root `package.json` (it's a monorepo), so Railway's auto-detector (Railpack)
+> assumes it's a plain Node app and fails with *"No start command detected."*
+> It won't find `docker/Dockerfile.backend` on its own because that file isn't
+> at the repo root. This is fixed by the committed **`railway.json`** at the
+> repo root (`builder: DOCKERFILE`, `dockerfilePath: docker/Dockerfile.backend`),
+> which applies to **both** services. If a build still runs Railpack, either the
+> `railway.json` isn't on the deployed branch yet, or override it per-service
+> with a variable `RAILWAY_DOCKERFILE_PATH=docker/Dockerfile.backend` and redeploy.
+
 - [ ] Configure the first service as the **API**:
-  - Settings → Build → **Dockerfile path**: `docker/Dockerfile.backend` (root directory stays the repo root).
+  - Build: uses `docker/Dockerfile.backend` via the committed `railway.json` (root directory stays the repo root — no dashboard build change needed).
   - Region: **US-East** (balanced global default; pick EU-West if early users skew European). Keep **all services + DB in the same region**.
   - Memory: ~**1 GB**. Health check path: `/health`.
   - **Pre-deploy command**: `python -m prisma migrate deploy --schema=prisma/schema.prisma`
   - Start command: leave default (the image CMD runs uvicorn on `$PORT`).
 - [ ] Add a **second service** from the same repo — the **worker**:
-  - Same Dockerfile path.
-  - **Custom start command**: `bash scripts/start-workers.sh`
+  - Same Dockerfile (also picked up from `railway.json`; no build change needed).
+  - **Custom start command**: `bash scripts/start-workers.sh` (overrides the image's uvicorn CMD).
   - **No public networking** (remove the domain/port). Memory: ~**2 GB**.
 - [ ] Set **environment variables on both services** (Variables tab; use a shared variable group if offered):
   | Variable | Value |
