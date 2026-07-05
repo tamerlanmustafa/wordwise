@@ -119,7 +119,15 @@ class CacheStatsResponse(BaseModel):
 
 
 # Routes
-@router.post("/", response_model=TranslationResponse)
+#
+# Registered at the prefix root with no trailing slash ("" not "/") so the
+# canonical path is exactly `/translate` — what both the web and mobile
+# clients call. With "/" the path is `/translate/`, and a client request to
+# `/translate` gets a 307 redirect to add the slash; React Native's fetch
+# drops the Authorization header when following that redirect, so the
+# retried request 401s. Matches the `@router.post("")` convention in
+# interactions.py.
+@router.post("", response_model=TranslationResponse)
 async def translate_text(
     request: TranslationRequest,
     db: Prisma = Depends(get_db),
