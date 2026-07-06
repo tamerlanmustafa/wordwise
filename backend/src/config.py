@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     google_client_id: str
     google_client_id_prod: str = ""
     google_client_id_mobile: str = ""
-    google_client_secret: str
+    # Optional: auth uses Google ID-token verification (google_auth.py), which
+    # only needs the client ID(s). No code reads the secret today; it's kept for
+    # a future authorization-code flow. Defaulted so deploys don't require it.
+    google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:3000/auth/callback"
 
     # External APIs
