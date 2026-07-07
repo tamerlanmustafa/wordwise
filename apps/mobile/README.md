@@ -167,10 +167,10 @@ const configs = {
     API_URL: 'http://10.0.2.2:8000',  // Android emulator
   },
   staging: {
-    API_URL: 'https://staging-api.wordwise.app',
+    API_URL: 'https://staging-api.getwordwise.us',
   },
   production: {
-    API_URL: 'https://api.wordwise.app',
+    API_URL: 'https://api.getwordwise.us',
   },
 };
 ```

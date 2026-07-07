@@ -16,7 +16,7 @@ const configs = {
     DEBUG: true,
   },
   production: {
-    API_URL: 'https://api.wordwise.app',
+    API_URL: 'https://api.getwordwise.us',
     DEBUG: false,
   },
 } as const;

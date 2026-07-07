@@ -37,7 +37,7 @@ jobs:
       - name: Build
         working-directory: ./frontend
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.wordwise.app' }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.getwordwise.us' }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID || '400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com' }}
           VITE_TMDB_API_KEY: ${{ secrets.VITE_TMDB_API_KEY }}
         run: npm run build
