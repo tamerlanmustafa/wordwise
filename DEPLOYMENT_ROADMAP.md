@@ -1,117 +1,129 @@
-# WordWise — Launch Roadmap (your side)
+# WordWise — Launch Roadmap v2 (post-backend-deploy)
 
-> Companion to [DEPLOYMENT.md](DEPLOYMENT.md). The repo-side prerequisites are **done**
-> (2026-07-03): backend Dockerfile, Prisma migration baseline, `eas.json` +
-> `runtimeVersion`, TMDB key rotation, deploy workflow reads secrets.
-> This file is the checklist of steps only *you* can do — accounts, secrets,
-> DNS, store registration. Work top to bottom; A → C are sequential,
-> D can start in parallel today.
-
-Chosen setup (option 2): **Railway** (backend, usage-based ~$20–40/mo) +
-**Cloudflare free** (edge/TLS) + **EAS free** (mobile builds) + GitHub Pages
-(web, already wired). Expected all-in: **~$30–60/mo** + $99/yr Apple + $25 Google.
+> Rewritten 2026-07-07 after the backend went live. The old roadmap (Railway
+> setup, DNS, data migration) is **done** — this file is what stands between
+> the current state and a store launch that doesn't get rejected, hacked, or
+> lost to an outage. Work the phases in order; items marked **[Claude]** are
+> code changes I can make in-repo, **[You]** are dashboard/account actions
+> only you can do.
 
 ---
 
-## A. GitHub repo settings — do this first (5 min)
+## ✅ Where we are (verified live, 2026-07-07)
 
-The web deploy workflow no longer contains a hard-coded TMDB key; it reads a
-repo secret. Until you add it, a Pages deploy builds with an **empty** key.
-
-- [ ] **Enable GitHub Pages**: repo → **Settings → Pages** → Source: **GitHub Actions**.
-  (The "Deploy Vite App to GitHub Pages" workflow currently fails at *Setup
-  Pages* with `HttpError: Not Found` because Pages isn't enabled — observed
-  2026-07-04, and the failure predates the deployment-prep changes. Once
-  enabled, re-run the workflow from the Actions tab.)
-- [ ] GitHub repo → **Settings → Secrets and variables → Actions** → *New repository secret*
-  - Name: `VITE_TMDB_API_KEY`
-  - Value: the current key (see `TMDB_API_KEY` in `apps/mobile/src/config/env.ts`)
-- [ ] (Optional, only if the API URL ever differs from `https://api.wordwise.app`)
-  add a repository **variable** `VITE_API_URL` — the workflow falls back to
-  `https://api.wordwise.app` when unset.
-
-## B. Railway — backend hosting + CD (~1 hour)
-
-- [ ] Sign up at [railway.app](https://railway.app) with GitHub; choose the **Pro** plan ($20/mo minimum, usage-based).
-- [ ] **New project** → **Deploy from GitHub repo** → select this repo.
-- [ ] Add **PostgreSQL** to the project (right-click canvas → Database → PostgreSQL).
-
-> **⚠️ Gotcha — Railway must be told to use our Dockerfile.** The repo has a
-> root `package.json` (it's a monorepo), so Railway's auto-detector (Railpack)
-> assumes it's a plain Node app and fails with *"No start command detected."*
-> It won't find `docker/Dockerfile.backend` on its own because that file isn't
-> at the repo root. This is fixed by the committed **`railway.json`** at the
-> repo root (`builder: DOCKERFILE`, `dockerfilePath: docker/Dockerfile.backend`),
-> which applies to **both** services. If a build still runs Railpack, either the
-> `railway.json` isn't on the deployed branch yet, or override it per-service
-> with a variable `RAILWAY_DOCKERFILE_PATH=docker/Dockerfile.backend` and redeploy.
-
-- [ ] Configure the first service as the **API**:
-  - Build: uses `docker/Dockerfile.backend` via the committed `railway.json` (root directory stays the repo root — no dashboard build change needed).
-  - Region: **US-East** (balanced global default; pick EU-West if early users skew European). Keep **all services + DB in the same region**.
-  - Memory: ~**1 GB**. Health check path: `/health`.
-  - **Pre-deploy command**: `python -m prisma migrate deploy --schema=prisma/schema.prisma`
-  - Start command: leave default (the image CMD runs uvicorn on `$PORT`).
-- [ ] Add a **second service** from the same repo — the **worker**:
-  - Same Dockerfile (also picked up from `railway.json`; no build change needed).
-  - **Custom start command**: `bash scripts/start-workers.sh` (overrides the image's uvicorn CMD).
-  - **No public networking** (remove the domain/port). Memory: ~**2 GB**.
-- [ ] Set **environment variables on both services** (Variables tab; use a shared variable group if offered):
-  | Variable | Value |
-  |---|---|
-  | `DATABASE_URL` | reference the Postgres service (`${{Postgres.DATABASE_URL}}`) |
-  | `JWT_SECRET_KEY` | freshly generated: `openssl rand -hex 32` — do NOT reuse the example value |
-  | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from Google Cloud Console (same project as the mobile OAuth client) |
-  | `ANTHROPIC_API_KEY` | your key (spend already ledger-capped at $50) |
-  | `TMDB_API_KEY` | the current key |
-  | Google Translate / `STANDS4_*` creds | as in `backend/env.example` |
-  | `ALLOWED_ORIGINS` | your web origin(s), e.g. the GitHub Pages URL |
-  | `DEBUG` | `False` |
-- [ ] Trigger the first deploy and **watch the build logs** — this is the
-  Dockerfile's first real build (Docker isn't installed locally, so it has
-  never been exercised; expect possibly one round of fixes).
-- [ ] After the API is green, seed the achievement definitions **once**
-  (idempotent): `psql "$DATABASE_URL" -f backend/prisma/migrations_manual/2026_07_03_scaffold_tables.sql`
-- [ ] Sanity: from now on, **merging to main auto-deploys the backend**. CI
-  (`ci.yml`) still gates PRs; Railway's pre-deploy runs migrations.
-
-## C. Domain + Cloudflare (~30 min)
-
-- [ ] **Confirm you own `wordwise.app`** — the mobile app hard-codes
-  `https://api.wordwise.app` in production (`apps/mobile/src/config/env.ts`).
-  If you don't own it, buy it (or pick another domain and update `env.ts` +
-  the `VITE_API_URL` repo variable before shipping binaries).
-- [ ] Add the domain to **Cloudflare** (free plan) and switch nameservers at your registrar.
-- [ ] Railway → API service → Settings → Networking → **Custom domain** `api.wordwise.app`; create the CNAME Cloudflare shows, **proxied** (orange cloud).
-- [ ] Smoke-test from a real device/browser: `https://api.wordwise.app/health`, then auth + Google sign-in + a movie vocabulary fetch against prod.
-- [ ] (Later, optional win) Cloudflare **cache rules** for the static-ish GET
-  endpoints (movie vocabulary/CEFR) once they send `Cache-Control` headers —
-  biggest latency win for the global audience.
-
-## D. App store accounts — start today, approval takes days
-
-- [ ] **Apple Developer Program** — $99/yr, [developer.apple.com](https://developer.apple.com). Identity verification can take 1–2 days.
-- [ ] **Google Play Console** — $25 one-time, [play.google.com/console](https://play.google.com/console). Verification can also take days.
-- [ ] `npm i -g eas-cli && eas login` (Expo owner: `tamerleinn`; project already linked in `app.json`).
-- [ ] Verify the **production Google OAuth client**: iOS client matches bundle id `com.wordwise.mobile`; add the **SHA-1 of the Android release keystore** (EAS manages the keystore — `eas credentials` shows it) in Google Cloud Console; backend `GOOGLE_CLIENT_ID` matches.
-- [ ] Once the API is live (end of C): `eas build --platform all --profile production`
-- [ ] `eas submit --platform all` → TestFlight + Play internal testing → QA on real devices → submit for review.
-- [ ] JS-only hotfixes between store releases: `eas update --channel production`.
-
-## E. Local dev database — one-time (5 min)
-
-Your local DB predates the migration history, so mark the baseline as applied
-(fresh databases skip this — `migrate deploy` handles them):
-
-- [ ] `cd backend && prisma migrate resolve --applied 20260703000000_init`
-- [ ] Going forward use `npm run db:migrate` (creates history), **not** `db:push`.
+| Piece | Status |
+|---|---|
+| Backend API | Live at `https://api.getwordwise.us` (Railway + Cloudflare proxy, Full SSL, 133 routes, ~150ms) |
+| PostgreSQL | Railway, Prisma migration baseline applied via pre-deploy command; **all local data imported & verified** (50k sentence bank, 89k lemma links, 5k classifications); sequences fixed |
+| Worker | Deployed (`bash scripts/start-workers.sh`), seeding catalog (5 → 10+ movies), `schema.sql` applied |
+| Domain | `getwordwise.us` on Cloudflare (free), `api.` CNAME proxied, TLS Full — **no redirect loops, verified** |
+| Mobile config | `eas.json` + `runtimeVersion` + prod URL `api.getwordwise.us`; EAS CLI installed, logged in as `tamerleinn` |
+| Store accounts | Apple Developer **active**; Google Play created (developer name: GetWordWise) |
+| CI | Green (backend, frontend, mobile, schema jobs on every push) |
 
 ---
 
-## Follow-ups to queue (not launch blockers)
+## Phase 1 — Finish the build pipeline (this week)
 
-- **Proxy TMDB through the backend** so the client key stops shipping in app bundles (rotation done; this is the durable fix).
-- **Persist the worker's seed cursor to the DB** — `.seed_cursor.json` lives on the container filesystem and resets every deploy (harmless/idempotent, but re-walks TMDB discover).
-- **Cache-Control headers** on the cacheable GET endpoints + Cloudflare cache rules (see C).
-- Open security items: store **webhook signature validation** (Apple/Google billing), **refresh-token revocation** (jti denylist), bump the yanked `requests==2.32.0` pin to 2.32.3+.
-- Watch as you grow: Railway usage dashboard, Google Translate character count, Anthropic ledger, Cloudflare cache-hit ratio (§8 of DEPLOYMENT.md).
+Goal: an installable build on a real phone, talking to prod.
+
+- [ ] **[You]** Android preview build: `cd apps/mobile && eas build --platform android --profile preview`. Say **Yes** to "Generate a new Android Keystore". Install the APK on a phone and smoke-test movies/vocab against prod.
+- [ ] **[You]** Register the release keystore's SHA-1 for Google Sign-In: `eas credentials` (Android → production → Keystore) → copy **SHA-1** → Google Cloud Console → the Android OAuth client for `com.wordwise.mobile` → add fingerprint. *Until this is done, Google login fails on EAS builds.*
+- [ ] **[You]** iOS build (Apple account is active): `eas build --platform ios --profile preview`. EAS will walk you through signing (let it manage certificates). Test via TestFlight internal.
+- [ ] **[You]** Recruit **~12 friends/testers now** for Google Play closed testing. New personal Play accounts must run a closed test (currently 12 testers for 14 consecutive days) **before Google grants production access**. This is the longest pole in the whole launch — start the clock ASAP. Apple has no equivalent gate.
+
+---
+
+## Phase 2 — Store-rejection blockers (fix BEFORE submitting)
+
+Each of these is a known, common rejection reason. Verified against the codebase 2026-07-07 — none of them exist yet.
+
+### 2.1 Account deletion — **Apple hard requirement** (Guideline 5.1.1(v))
+Apps that let users create accounts **must** let them delete the account in-app. Google Play additionally requires a **web link** where users can request deletion (goes in the Data Safety form).
+- [ ] **[Claude]** Backend: `DELETE /auth/me` endpoint — deletes the user row (cascades already exist on user-owned tables) after re-auth/confirmation.
+- [ ] **[Claude]** Mobile: "Delete account" action in the profile sheet (UserMenuSheet), with confirm dialog.
+- [ ] **[Claude]** Web: same action in settings, plus a small public "request deletion" page/URL for the Play form.
+
+### 2.2 Sign in with Apple — **Apple requirement when Google Sign-In is present** (Guideline 4.8)
+The app offers Google Sign-In, so Apple requires an equivalent privacy-focused option. Email/password does **not** satisfy 4.8.
+- [ ] **[Claude]** Add `expo-apple-authentication` to mobile (iOS-only button), backend verification of Apple identity tokens (mirror of `google_auth.py`), `apple_id` column via Prisma migration.
+- [ ] Estimate: ~half a day of work. Skipping it risks a 4.8 rejection on first review.
+
+### 2.3 In-app purchases — decide now: ship v1 FREE or finish billing
+The paywall/billing surface exists (`billing.py`: apple/google verify, restore, webhooks) but the June security scan flagged **receipt validation & webhook signatures as stubbed**, and consumables as fail-open. Shipping a live paywall that takes money without server-verified receipts = revenue loss + store trouble.
+- [ ] **Decision**: launch v1 with premium **feature-flagged OFF** (fastest, recommended — the `feature_flags` table exists for exactly this), or
+- [ ] implement real StoreKit2/Play Billing receipt validation + webhook signature verification (Apple `signedPayload` JWS, Google Pub/Sub) before launch. *If the paywall is visible in the binary, reviewers will test it.*
+
+### 2.4 Review-pass essentials
+- [ ] **[Claude]** `ITSAppUsesNonExemptEncryption: false` in `app.json` `ios.infoPlist` (app only uses HTTPS — this skips the export-compliance interrogation on every single build upload).
+- [ ] **[You]** **Demo account** for reviewers: create a prod account (e.g. `review@getwordwise.us` / strong password), pre-populate with a movie + saved words, and put credentials in App Review notes on both stores. Login-gated apps without demo creds get rejected same-day.
+- [ ] **[Claude]** **TMDB attribution**: TMDB's API terms require the notice "This product uses the TMDB API but is not endorsed or certified by TMDB" + logo. Add to the app's settings/about screen and web footer. Poster-heavy apps get flagged for this.
+- [ ] **[You]** Copyright question prep: the app shows movie scripts/subtitles. Have a ready answer for review ("educational fair-use excerpts, vocabulary learning context") — and expect Apple may push back; worst case, script *excerpts* (sentence-length) are far safer than full scripts.
+- [ ] **[You]** Data Safety form (Play) + Privacy Nutrition Labels (Apple): declare email, name, Google ID, usage data; no ads SDK currently; data deletable via 2.1.
+- [ ] **[You]** Age rating questionnaires (both stores). Movie content → likely 12+/Teen; answer honestly, mismatches cause rejection.
+
+### 2.5 Live privacy policy & terms URLs (store forms require public URLs)
+The pages exist in the web app but the web app **isn't deployed** (GitHub Pages never enabled) and both pages list dead `@wordwise.app` emails.
+- [ ] **[You]** Set up email at your domain: Cloudflare → Email Routing (free) → forward `support@getwordwise.us` + `privacy@getwordwise.us` → your Gmail. 5 minutes.
+- [ ] **[Claude]** Update Terms/Privacy pages (web + mobile screens) to the new addresses.
+- [ ] **[You]** Enable GitHub Pages (repo Settings → Pages → Source: GitHub Actions) + add `VITE_TMDB_API_KEY` secret so the deploy workflow goes green.
+- [ ] Result: `https://<pages-url>/privacy` and `/terms` become the URLs you paste into both store forms.
+
+---
+
+## Phase 3 — Security hardening (before public traffic)
+
+From the June security scan + what deployment exposed. Ordered by risk.
+
+- [ ] **[You]** Confirm Railway env: `DEBUG=False`, fresh `JWT_SECRET_KEY` (not the example value), `ALLOWED_ORIGINS` set to the real web origin (until then, web browser calls will be CORS-blocked; mobile is unaffected).
+- [ ] **[Claude]** Gate `/docs` + `/openapi.json` behind `DEBUG` — currently the full 133-route API surface is publicly enumerable (that's how I audited it).
+- [ ] **[Claude]** Bump `requests==2.32.0` (yanked, CVE-mitigation conflict) → `2.32.3+` in both requirements files.
+- [ ] **[Claude]** Proxy TMDB through the backend (`/api/tmdb/*` passthrough with caching). The rotated key still ships inside every app bundle — extractable by anyone. Backend proxy = key becomes truly server-side; also unlocks Cloudflare caching of poster/search responses.
+- [ ] **[Claude]** Refresh-token revocation (jti denylist or per-user generation counter): today, a stolen refresh token works for 60 days and logout can't kill it. Required before real users; fine to do in week 1 post-launch if timeline is tight.
+- [ ] Deferred (fine for single-instance MVP): in-memory rate limiter → Upstash Redis when you scale past one API instance; JWT-in-localStorage on web → httpOnly cookie refactor.
+
+---
+
+## Phase 4 — Ops gaps in the Cloudflare + Railway + Postgres architecture
+
+What "seamless" is still missing. None block submission; the first two protect you from disaster.
+
+### 4.1 Database backups — **the only irreplaceable thing you have**
+Your 400MB of enriched data is the product. Railway Postgres has backups on paid plans but verify, don't assume.
+- [ ] **[You]** Railway → Postgres service → Backups tab: confirm daily backups are ON and note retention.
+- [ ] **[Claude]** Belt-and-suspenders: GitHub Actions weekly cron that `pg_dump`s prod (secret: `DATABASE_PUBLIC_URL`) and uploads to the workflow artifacts / a private bucket. Restore drill documented in this repo.
+
+### 4.2 Monitoring — right now, users find your outages before you do
+- [ ] **[You]** Uptime: UptimeRobot / BetterStack free tier → monitor `https://api.getwordwise.us/health` every 1–5 min, email/push alert on failure.
+- [ ] **[Claude]** Error tracking: Sentry free tier — `sentry-sdk[fastapi]` in the backend, `@sentry/react-native` in mobile (catches crashes you'll otherwise never hear about), `@sentry/react` on web. One DSN per platform, ~1h total.
+- [ ] **[You]** Railway usage alerts (Settings → Usage) so a runaway worker doesn't surprise the bill.
+
+### 4.3 Edge caching — the reason Cloudflare is in the stack (global users!)
+- [ ] **[Claude]** Add `Cache-Control: public, max-age=…` headers to the static-ish GETs (`/movies/*`, vocabulary previews, CEFR data — same response for every user) and `private, no-store` on auth/user endpoints.
+- [ ] **[You]** Cloudflare Cache Rule: cache `api.getwordwise.us/movies/*` respecting origin headers. Result: a user in Jakarta gets posters/vocab from a nearby PoP instead of a US round-trip — the single biggest latency win available.
+
+### 4.4 Deploy pipeline polish
+- [ ] **[Claude]** CI job that builds `docker/Dockerfile.backend` on amd64 (path-filtered to `backend/**`, `docker/**`) — catches image breakage in PR instead of on Railway (we hit this twice: libatomic, Railpack).
+- [ ] **[Claude]** Persist worker seed cursor to DB (currently `.seed_cursor.json` on container FS — resets every deploy, re-walks TMDB discover; wasteful, not harmful).
+- [ ] Later: staging environment (Railway PR environments), and `eas update` OTA channel discipline (prod hotfixes JS-only between store releases).
+
+---
+
+## Phase 5 — Store listing & submission (after Phases 1–2)
+
+- [ ] **[You]** Assets: app icon (done — in repo), feature graphic 1024×500 (Play), screenshots per device class (6.7" + 5.5" iPhone, phone + 7"/10" tablet for Play — can be generated from simulator), short + full descriptions.
+- [ ] **[You]** Listing name: use **GetWordWise** or "WordWise — Movie Vocabulary" carefully — the bare "WordWise" name is owned by someone else; a trademark complaint post-launch can take the listing down. Safer to brand as GetWordWise.
+- [ ] **[You]** Production builds: `eas build --platform all --profile production` → `eas submit --platform ios` (TestFlight → App Review) and `eas submit --platform android` (closed testing track first — see Phase 1 gate).
+- [ ] **[You]** Play: run the 14-day closed test → apply for production → staged rollout (20% → 100%).
+- [ ] **[You]** Apple: expect 24–48h review; first submissions of login+content apps often get one rejection — the Phase 2 list is exactly the usual reasons, so clearing it first is the fast path.
+
+---
+
+## Suggested order of attack
+
+1. **Today**: Phase 1 (Android preview build + SHA-1) — momentum + validates everything.
+2. **This week**: Phase 2.1–2.2 (account deletion, Apple sign-in — I can start both now), 2.5 (email + Pages), Phase 3 quick wins (`/docs` gate, requests bump, ALLOWED_ORIGINS), 4.1–4.2 (backups + uptime monitor — 30 min total).
+3. **Next**: Phase 2.3 decision (premium off vs. billing build-out), TMDB proxy, cache headers.
+4. **Then**: Phase 5 submission, with the Play closed-test clock already running from step 1.
+
+*Previous roadmap (Railway/DNS/data-migration steps) is archived in git history (`git log -- DEPLOYMENT_ROADMAP.md`).*
