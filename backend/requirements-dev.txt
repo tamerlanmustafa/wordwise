@@ -18,6 +18,7 @@ pydantic==2.9.0
 pydantic-settings==2.5.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 breaks with bcrypt>=4.1 (see requirements.txt)
 python-dotenv==1.0.0
 
 # Import-level deps for test modules that import route/service modules
