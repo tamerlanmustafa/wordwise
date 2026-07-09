@@ -51,8 +51,12 @@ describe('derivePlacementLevel', () => {
 });
 
 describe('placement data', () => {
-  it('ships exactly one word per CEFR band, in ascending order', () => {
-    expect(PLACEMENT_WORDS.map((w) => w.level)).toEqual([...CEFR_LEVELS]);
+  it('ships exactly two words per CEFR band, in ascending order (#81)', () => {
+    // Two per band halves the one-lucky-word variance of the original quiz
+    // while keeping it quick; scoring scales with list length automatically.
+    expect(PLACEMENT_WORDS.map((w) => w.level)).toEqual(
+      CEFR_LEVELS.flatMap((level) => [level, level]),
+    );
   });
 
   it('offers the four daily-goal tiers from the prototype', () => {

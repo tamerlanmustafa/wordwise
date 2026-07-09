@@ -28,14 +28,25 @@ export interface PlacementAnswer {
   rating: PlacementRating;
 }
 
-/** One word per band, ascending difficulty — the prototype shows "ephemeral". */
+/**
+ * Two words per band, ascending difficulty (issue #81): a single word per band
+ * made the result swing a full level on one lucky/unlucky word. Doubling the
+ * sample halves that variance while keeping the quiz ~30 seconds; the scoring
+ * below scales with list length automatically.
+ */
 export const PLACEMENT_WORDS: ReadonlyArray<PlacementWord> = [
   { word: 'house', pos: 'noun', level: 'A1' },
+  { word: 'water', pos: 'noun', level: 'A1' },
   { word: 'borrow', pos: 'verb', level: 'A2' },
+  { word: 'luggage', pos: 'noun', level: 'A2' },
   { word: 'reliable', pos: 'adjective', level: 'B1' },
+  { word: 'persuade', pos: 'verb', level: 'B1' },
   { word: 'overwhelm', pos: 'verb', level: 'B2' },
+  { word: 'deteriorate', pos: 'verb', level: 'B2' },
   { word: 'ephemeral', pos: 'adjective', level: 'C1' },
+  { word: 'meticulous', pos: 'adjective', level: 'C1' },
   { word: 'ostensible', pos: 'adjective', level: 'C2' },
+  { word: 'perfunctory', pos: 'adjective', level: 'C2' },
 ];
 
 /** Self-rating → points. Familiar is worth half a "known" word. */
@@ -49,8 +60,9 @@ const RATING_POINTS: Record<PlacementRating, number> = {
  * Maps placement answers to a starting CEFR level.
  *
  * Each answer scores 0–2 (unknown/familiar/know); the total (0…2·N) is bucketed
- * evenly across the six bands. With the canonical 6 words the buckets are:
- *   0–2 → A1 · 3–4 → A2 · 5–6 → B1 · 7–8 → B2 · 9–10 → C1 · 11–12 → C2
+ * evenly across the six bands. With the canonical 12 words (2 per band) the
+ * buckets are:
+ *   0–3 → A1 · 4–7 → A2 · 8–11 → B1 · 12–15 → B2 · 16–19 → C1 · 20–24 → C2
  * No answers (the "Skip — I'm a beginner" escape hatch) → A1.
  */
 export function derivePlacementLevel(answers: ReadonlyArray<PlacementAnswer>): CefrLevel {

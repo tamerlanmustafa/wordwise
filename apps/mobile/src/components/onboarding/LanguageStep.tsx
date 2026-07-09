@@ -6,13 +6,13 @@
  * "learner count" is dropped (we don't invent data).
  */
 
-import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
-import { AVAILABLE_LANGUAGES } from '../../types';
+import { AVAILABLE_LANGUAGES, filterLanguages } from '../../types';
 import { StepHeader } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 
@@ -26,12 +26,35 @@ export interface LanguageStepProps {
 export function LanguageStep({ selected, onSelect, onBack, onContinue }: LanguageStepProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  const [query, setQuery] = useState('');
+  const shown = useMemo(() => filterLanguages(AVAILABLE_LANGUAGES, query), [query]);
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <StepHeader step={1} total={5} eyebrow="Step 1 of 5" title="What are you learning?" onBack={onBack} />
-      <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
-        {AVAILABLE_LANGUAGES.map((l) => {
+      {/* Search/filter (issue #80) — same box style as the film-picker step. */}
+      <View style={s.searchBox}>
+        <Ionicons name="search" size={16} color={tc.textFaint} />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search languages"
+          placeholderTextColor={tc.textFaint}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+            <Ionicons name="close-circle" size={16} color={tc.textFaint} />
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {shown.length === 0 ? (
+          <Text style={s.noMatch}>No languages match "{query.trim()}"</Text>
+        ) : null}
+        {shown.map((l) => {
           const on = l.code === selected;
           return (
             <Pressable
@@ -68,6 +91,22 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: tc.background },
+    // Same search-box recipe as PickFirstFilmStep — keep the two in step.
+    searchBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 18,
+      marginTop: 14,
+      paddingHorizontal: 12,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: tc.paper,
+      borderWidth: 1,
+      borderColor: tc.border,
+    },
+    searchInput: { flex: 1, fontSize: 15, color: tc.text, paddingVertical: 0 },
+    noMatch: { textAlign: 'center', color: tc.textFaint, fontSize: 14, marginTop: 24 },
     list: { flex: 1 },
     listContent: { padding: 18, paddingTop: 20, gap: 10 },
     row: {

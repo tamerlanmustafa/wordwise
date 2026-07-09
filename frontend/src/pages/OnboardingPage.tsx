@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useThemeColors, SERIF, MONO, CEFR } from '../theme/tokens';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useReelStore } from '../stores/reelStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { CEFR_LEVELS, type CefrLevel } from '@wordwise/types';
@@ -66,6 +67,7 @@ export default function OnboardingPage() {
   const t = useThemeColors();
   const navigate = useNavigate();
   const { targetLanguage, setTargetLanguage, availableLanguages } = useLanguage();
+  const { updateUser } = useAuth();
   const addToReel = useReelStore((s) => s.add);
   const complete = useOnboardingStore((s) => s.complete);
 
@@ -99,6 +101,11 @@ export default function OnboardingPage() {
     setActiveStep(0);
     setStep('analyzing');
     setTargetLanguage(language);
+    // Sync the placement-derived level to the user profile so HomePage's CEFR
+    // filter (which reads user.proficiency_level) matches the quiz result
+    // (issue #83 — same bug the mobile app had). Best-effort; updateUser
+    // also refreshes the local user so the filter picks it up immediately.
+    updateUser({ proficiency_level: level }).catch(() => {});
     addToReel({ tmdb_id: film.tmdb_id, title: film.title, poster_path: film.poster_path, year: film.year })
       .catch(() => { /* best-effort */ })
       .finally(() => { addResolved.current = true; });

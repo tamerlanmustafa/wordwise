@@ -23,11 +23,17 @@ export interface PlacementAnswer {
 
 export const PLACEMENT_WORDS: ReadonlyArray<PlacementWord> = [
   { word: 'house', pos: 'noun', level: 'A1' },
+  { word: 'water', pos: 'noun', level: 'A1' },
   { word: 'borrow', pos: 'verb', level: 'A2' },
+  { word: 'luggage', pos: 'noun', level: 'A2' },
   { word: 'reliable', pos: 'adjective', level: 'B1' },
+  { word: 'persuade', pos: 'verb', level: 'B1' },
   { word: 'overwhelm', pos: 'verb', level: 'B2' },
+  { word: 'deteriorate', pos: 'verb', level: 'B2' },
   { word: 'ephemeral', pos: 'adjective', level: 'C1' },
+  { word: 'meticulous', pos: 'adjective', level: 'C1' },
   { word: 'ostensible', pos: 'adjective', level: 'C2' },
+  { word: 'perfunctory', pos: 'adjective', level: 'C2' },
 ];
 
 const RATING_POINTS: Record<PlacementRating, number> = {

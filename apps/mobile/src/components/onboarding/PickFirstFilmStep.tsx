@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -108,6 +108,11 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+      {/* iOS never resizes for the keyboard; padding-behavior KAV keeps the
+          search box, grid and the Start-learning CTA reachable (#82). On
+          Android the keyboard is dismissed on film-select instead — KAV
+          would double-shift with adjustResize on older devices. */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.kav}>
       <StepHeader step={4} total={5} eyebrow="Step 4 of 5" title="Pick your first film" onBack={onBack} />
       <Text style={s.sub}>We'll build a word list from its script — start with one you'd love to understand.</Text>
 
@@ -142,7 +147,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={m.title}
-                  onPress={() => onSelect(m)}
+                  onPress={() => { Keyboard.dismiss(); onSelect(m); }}
                   style={[s.card, { borderColor: on ? tc.gold : tc.border }]}
                 >
                   <TmdbPoster tmdbId={m.tmdb_id} style={s.poster} />
@@ -163,6 +168,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
       </ScrollView>
 
       <OnboardingCTA label="Start learning →" onPress={onContinue} disabled={!selected} />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -170,6 +176,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: tc.background },
+    kav: { flex: 1 },
     sub: { paddingHorizontal: 18, paddingTop: 6, fontSize: 13.5, color: tc.textSecondary },
     searchBox: {
       flexDirection: 'row',

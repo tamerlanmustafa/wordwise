@@ -75,3 +75,23 @@ export const PROFICIENCY_LEVELS: ReadonlyArray<ProficiencyLevel> = [
   { code: 'C1', name: 'C1 - Advanced' },
   { code: 'C2', name: 'C2 - Proficient' },
 ];
+
+
+/**
+ * Case-insensitive language filter for pickers with a search box (issue #80).
+ * Matches against English name, native name, and ISO code so "esp", "Espa"
+ * and "es" all find Spanish. Empty/whitespace query returns the full list.
+ */
+export function filterLanguages(
+  languages: ReadonlyArray<LanguageOption>,
+  query: string,
+): ReadonlyArray<LanguageOption> {
+  const q = query.trim().toLowerCase();
+  if (!q) return languages;
+  return languages.filter(
+    (l) =>
+      l.name.toLowerCase().includes(q) ||
+      (l.nativeName ?? '').toLowerCase().includes(q) ||
+      l.code.toLowerCase().includes(q),
+  );
+}
