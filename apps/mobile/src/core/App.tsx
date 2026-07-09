@@ -9,7 +9,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useThemeColors } from '../theme/tokens';
-import { GOOGLE_CLIENT_ID_IOS } from '../config/env';
+import { GOOGLE_CLIENT_ID_IOS, GOOGLE_CLIENT_ID_WEB } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
@@ -61,6 +61,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 GoogleSignin.configure({
   iosClientId: GOOGLE_CLIENT_ID_IOS,
+  // Required on Android to receive an idToken (audience = web client, which
+  // the backend verifies as GOOGLE_CLIENT_ID). iOS keeps using iosClientId.
+  webClientId: GOOGLE_CLIENT_ID_WEB,
   scopes: ['profile', 'email'],
 });
 

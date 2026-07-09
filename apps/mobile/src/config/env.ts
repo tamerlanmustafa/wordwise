@@ -2,6 +2,11 @@ type Environment = 'development' | 'production';
 
 export const GOOGLE_CLIENT_ID_IOS = '400446242104-a9laa57dook0og2k93g9amjgieqo2mj7.apps.googleusercontent.com';
 
+// Web client ID — required on Android for GoogleSignin to mint an ID token
+// (the token's audience = this ID; the backend trusts it as GOOGLE_CLIENT_ID).
+// Without it, Android gets a null idToken and login 401s with "Invalid Google token".
+export const GOOGLE_CLIENT_ID_WEB = '400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com';
+
 // TMDB key — single source of truth (was hard-coded in 4 separate files; UX
 // audit F-037). NOTE: as a client key it's still shipped in the bundle. Fully
 // securing it needs a backend proxy for TMDB calls (ops follow-up) + key
