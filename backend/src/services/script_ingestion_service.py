@@ -26,9 +26,20 @@ class ScriptIngestionService:
         self.db = db
         self.pdf_extractor = PDFExtractor()
         self.subtitle_parser = SubtitleParser()
-        self.stands4_client = STANDS4Client()
+        # Lazy — STANDS4Client() raises when STANDS4_USER_ID/TOKEN are absent,
+        # and constructing it here made *every* request 500 (even DB-cached
+        # scripts). Deferring to first use lets the cache + subtitle sources
+        # work without creds; the per-source try/except in get_or_fetch_script
+        # then treats "no creds" as an unavailable source instead of an outage.
+        self._stands4_client: Optional[STANDS4Client] = None
         self.subtitle_api_client = SubtitleAPIClient()
         logger.info("[ScriptIngestion] Service initialized")
+
+    @property
+    def stands4_client(self) -> STANDS4Client:
+        if self._stands4_client is None:
+            self._stands4_client = STANDS4Client()
+        return self._stands4_client
 
     async def get_or_fetch_script(
         self,
