@@ -52,6 +52,7 @@ model User {
   updatedAt               DateTime?                @updatedAt @map("updated_at") @db.Timestamptz(6)
   oauthProvider           oauthprovider            @map("oauth_provider")
   googleId                String?                  @unique(map: "ix_users_google_id") @map("google_id") @db.VarChar
+  appleId                 String?                  @unique(map: "ix_users_apple_id") @map("apple_id") @db.VarChar
   profilePictureUrl       String?                  @map("profile_picture_url") @db.VarChar
   wordLists               UserWordList[]
   translationHistory      UserTranslationHistory[]

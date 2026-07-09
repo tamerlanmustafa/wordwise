@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useThemeStore } from '../../stores/themeStore';
+import { formatAppleFullName } from '../../utils/appleName';
 
 interface Props {
   onLogin: (user: any, token: string, refreshToken: string) => void;
@@ -25,7 +29,19 @@ export const LoginScreen = ({ onLogin }: Props) => {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  // Apple's own availability check (iOS 13+, real device/simulator support).
+  // Guideline 4.8: this button must be offered wherever Google Sign-In is.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  const resolvedTheme = useThemeStore((s) => s.resolved);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
 
   const handleGoogleSignIn = async () => {
     setError('');
@@ -99,6 +115,69 @@ export const LoginScreen = ({ onLogin }: Props) => {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setError('');
+    setAppleLoading(true);
+
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('No identity token received from Apple');
+      }
+
+      // Apple provides the name exactly once (first authorization); forward
+      // it so the backend can derive a username. Repeat logins send null.
+      const fullName = formatAppleFullName(
+        credential.fullName?.givenName,
+        credential.fullName?.familyName,
+      );
+
+      const { config } = await import('../../config/env');
+
+      const backendResponse = await fetch(`${config.API_URL}/auth/apple/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identity_token: credential.identityToken,
+          full_name: fullName,
+        }),
+      });
+
+      const data = await backendResponse.json();
+
+      if (!backendResponse.ok) {
+        throw new Error(data.detail || 'Apple sign-in failed');
+      }
+
+      const user = {
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        profile_picture_url: data.user.profile_picture_url || null,
+        native_language: data.user.native_language || 'en',
+        learning_language: data.user.learning_language || 'es',
+        proficiency_level: data.user.proficiency_level || 'B1',
+        default_tab: (data.user.default_tab || 'movies') as 'movies' | 'books',
+        is_admin: data.user.is_admin || false,
+      };
+
+      onLogin(user, data.access_token, data.refresh_token);
+    } catch (err: any) {
+      // User dismissed the Apple sheet — not an error.
+      if (err?.code !== 'ERR_REQUEST_CANCELED') {
+        setError(err?.message || 'Apple sign-in failed');
+      }
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
   const handleAuth = async () => {
     if (!email || !password || (!isLoginMode && !username)) {
       setError('Please fill in all fields');
@@ -147,7 +226,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
     }
   };
 
-  const isLoading = loading || googleLoading;
+  const isLoading = loading || googleLoading || appleLoading;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -170,6 +249,22 @@ export const LoginScreen = ({ onLogin }: Props) => {
               </>
             )}
           </TouchableOpacity>
+
+          {/* Sign in with Apple — iOS only; required by Guideline 4.8 because
+              Google Sign-In is offered. Apple mandates its own button UI. */}
+          {appleAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={
+                resolvedTheme === 'dark'
+                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+              }
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={isLoading ? () => {} : handleAppleSignIn}
+            />
+          )}
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -259,6 +354,9 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   googleIcon: { fontSize: 18, fontWeight: '700', color: '#4285F4' }, // Google brand blue
   googleButtonText: { fontSize: 16, fontWeight: '500', color: tc.text },
+  // Native Apple button draws its own chrome — we only size/space it to
+  // line up with the Google button above.
+  appleButton: { height: 48, marginTop: 10 },
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
   dividerLine: { flex: 1, height: 1, backgroundColor: tc.border },
   dividerText: { paddingHorizontal: 16, color: tc.textSecondary, fontSize: 14 },

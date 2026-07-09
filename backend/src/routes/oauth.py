@@ -1,5 +1,5 @@
 """
-Google OAuth 2.0 authentication routes using Prisma.
+OAuth authentication routes (Google + Apple) using Prisma.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -7,10 +7,12 @@ from datetime import timedelta
 from prisma import Prisma
 from ..database import get_db
 from ..schemas.oauth import (
+    AppleLoginRequest,
     GoogleLoginRequest,
     GoogleLoginResponse,
     UserInfo,
 )
+from ..utils.apple_auth import verify_apple_token, AppleAuthError
 from ..utils.google_auth import verify_google_token, generate_username_from_email
 from ..utils.auth import create_access_token, create_refresh_token
 from ..config import get_settings
@@ -20,10 +22,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/google", tags=["oauth"])
+# Separate router because the Google one's prefix bakes in "google".
+# Registered alongside it in main.py.
+apple_router = APIRouter(prefix="/auth/apple", tags=["oauth"])
 settings = get_settings()
 
 # Same brute-force/abuse ceiling as the password login path.
 _google_login_throttle = rate_limit(10, 60.0, scope="auth-google")
+_apple_login_throttle = rate_limit(10, 60.0, scope="auth-apple")
 
 
 def _verify_and_get_google_user_info(id_token: str) -> dict:
@@ -222,4 +228,152 @@ async def google_login(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during authentication."
+        )
+
+
+# ── Sign in with Apple ──────────────────────────────────────────────────────
+# Required by App Store Guideline 4.8: an app offering Google Sign-In must
+# offer an equivalent privacy-focused option. Mirrors the Google flow above:
+# verify token → find-or-create/link user → issue the same JWT pair.
+
+async def _create_or_update_apple_user(
+    apple_user_info: dict,
+    db: Prisma,
+    full_name: str | None = None,
+    native_language: str | None = None,
+    learning_language: str | None = None,
+):
+    """Find-or-create a user from verified Apple info (mirror of the Google
+    helper). Linking rule: match by appleId first; else by verified email
+    (existing account adds Apple as a login method); else create."""
+    apple_id = apple_user_info["apple_id"]
+    # A trusted email is one Apple attests: an unverified address must neither
+    # link to an existing account (takeover) nor mint a fresh one under an
+    # address the sender may not own.
+    email = (
+        apple_user_info.get("email")
+        if apple_user_info.get("email_verified")
+        else None
+    )
+    is_new_user = False
+
+    user = await db.user.find_first(where={"appleId": apple_id})
+
+    if not user and email:
+        user = await db.user.find_unique(where={"email": email})
+        if user:
+            update_data = {"appleId": apple_id, "oauthProvider": "apple"}
+            if native_language and not user.nativeLanguage:
+                update_data["nativeLanguage"] = native_language
+            if learning_language and not user.learningLanguage:
+                update_data["learningLanguage"] = learning_language
+            user = await db.user.update(where={"id": user.id}, data=update_data)
+
+    if not user:
+        if not email:
+            # No trusted email: either a repeat login for an Apple ID we've
+            # never stored (e.g. the row was deleted), or an unverified
+            # address. Without a trusted email we can't create an account.
+            # The client fix is Settings → Apple ID → Sign in with Apple →
+            # revoke WordWise, then sign in again (Apple resends the email).
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Apple did not share an email for this Apple ID and no "
+                    "existing account matches it. Revoke WordWise in your "
+                    "Apple ID settings and try again."
+                ),
+            )
+
+        # Username: prefer the client-forwarded name (first auth only),
+        # fall back to the email local part; both deduped with a counter.
+        base_username = (
+            "_".join(full_name.split()).lower()
+            if full_name
+            else generate_username_from_email(email)
+        )
+        username = base_username
+        counter = 1
+        while await db.user.find_unique(where={"username": username}):
+            username = f"{base_username}{counter}"
+            counter += 1
+
+        user_data = {
+            "email": email,
+            "username": username,
+            "appleId": apple_id,
+            "oauthProvider": "apple",
+            "isActive": True,
+        }
+        if native_language:
+            user_data["nativeLanguage"] = native_language
+        if learning_language:
+            user_data["learningLanguage"] = learning_language
+
+        user = await db.user.create(data=user_data)
+        is_new_user = True
+    else:
+        update_data = {}
+        if native_language and not user.nativeLanguage:
+            update_data["nativeLanguage"] = native_language
+        if learning_language and not user.learningLanguage:
+            update_data["learningLanguage"] = learning_language
+        if update_data:
+            user = await db.user.update(where={"id": user.id}, data=update_data)
+
+    return user, is_new_user
+
+
+@apple_router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
+async def apple_login(
+    request: AppleLoginRequest,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_apple_login_throttle),
+):
+    """Authenticate a user with Sign in with Apple."""
+    try:
+        try:
+            apple_user_info = verify_apple_token(
+                request.identity_token, settings.apple_bundle_id
+            )
+        except AppleAuthError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Apple token",
+            )
+
+        user, _is_new = await _create_or_update_apple_user(
+            apple_user_info,
+            db,
+            full_name=request.full_name,
+            native_language=request.native_language,
+            learning_language=request.learning_language,
+        )
+
+        token_payload = {"sub": str(user.id), "email": user.email}
+        access_token = create_access_token(
+            data=token_payload,
+            expires_delta=timedelta(hours=settings.jwt_expiration_hours),
+        )
+        refresh_token = create_refresh_token(
+            data=token_payload,
+            expires_delta=timedelta(days=settings.jwt_refresh_expiration_days),
+        )
+
+        return GoogleLoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            user=_create_user_response(user),
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
+        # Same fail-closed logging posture as the Google route: real cause
+        # server-side only, generic message to the client.
+        logger.exception("Apple authentication failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during authentication.",
         )

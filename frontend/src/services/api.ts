@@ -379,6 +379,17 @@ export async function deleteReport(reportId: number): Promise<{ success: boolean
 }
 
 // ============================================================================
+// ACCOUNT
+// ============================================================================
+
+/** Permanently delete the signed-in user's account + all server data
+ *  (App Store 5.1.1(v) / Google Play data-deletion policy). Throws on
+ *  failure so callers keep the session intact. */
+export async function deleteAccount(): Promise<void> {
+  await apiClient.delete('/auth/me');
+}
+
+// ============================================================================
 // FILE UPLOAD API
 // ============================================================================
 

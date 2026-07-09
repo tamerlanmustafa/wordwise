@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Sign in with Apple: identity tokens are verified against Apple's JWKS
+    # with our bundle id as the required audience (utils/apple_auth.py).
+    apple_bundle_id: str = "com.wordwise.mobile"
+
     # Google OAuth
     google_client_id: str
     google_client_id_prod: str = ""

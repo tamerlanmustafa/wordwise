@@ -14,6 +14,9 @@ interface AuthState {
   setStatus: (status: AuthStatus) => void;
   login: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Server-side account deletion, then local sign-out. Throws (leaving the
+   *  session intact) if the server call fails. App Store 5.1.1(v). */
+  deleteAccount: () => Promise<void>;
   initialize: () => Promise<void>;
 }
 
@@ -40,6 +43,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    await tokenStorage.clearTokens();
+    await AsyncStorage.removeItem('user');
+    set({ user: null, status: 'unauthenticated' });
+  },
+
+  deleteAccount: async () => {
+    // Inline require, not a native import(): Jest can't execute import() in
+    // this repo (see initialize() note below), and require keeps the api
+    // module lazily loaded the same way.
+    const { authApi } = require('../services/api') as typeof import('../services/api');
+    await authApi.deleteAccount();
     await tokenStorage.clearTokens();
     await AsyncStorage.removeItem('user');
     set({ user: null, status: 'unauthenticated' });

@@ -12,7 +12,9 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThemeStore, type ThemePreference } from '../stores/themeStore';
+import { useAuthStore } from '../stores/authStore';
 import {
+  Alert,
   Animated,
   Image,
   StyleSheet,
@@ -191,6 +193,43 @@ export function UserMenuSheet({
           </View>
           <Text style={[styles.rowLabel, { color: tc.error }]}>Logout</Text>
         </TouchableOpacity>
+
+        {/* App Store 5.1.1(v): account deletion must be reachable in-app.
+            Double-confirm, then the store deletes server-side and signs out
+            (auth status flips → app returns to the login screen). */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            onClose();
+            setTimeout(() => {
+              Alert.alert(
+                'Delete account?',
+                'This permanently deletes your account and all of your data (saved words, progress, streaks). This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                      useAuthStore.getState().deleteAccount().catch(() => {
+                        Alert.alert(
+                          'Deletion failed',
+                          'Your account was not deleted. Check your connection and try again, or email privacy@getwordwise.us.',
+                        );
+                      });
+                    },
+                  },
+                ],
+              );
+            }, 200);
+          }}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.iconChip, styles.iconChipDanger]}>
+            <MenuIcon name="trash" size={18} color={tc.error} />
+          </View>
+          <Text style={[styles.rowLabel, { color: tc.error }]}>Delete account</Text>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -207,6 +246,7 @@ type MenuIconName =
   | 'settings'
   | 'admin'
   | 'logout'
+  | 'trash'
   | 'sun'
   | 'moon'
   | 'phone'
@@ -281,6 +321,15 @@ function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; siz
         <Svg {...p}>
           <Path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
           <Path d="M16 17l5-5-5-5M21 12H9" />
+        </Svg>
+      );
+    case 'trash':
+      return (
+        <Svg {...p}>
+          <Path d="M4 7h16" />
+          <Path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          <Path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+          <Path d="M10 11v6M14 11v6" />
         </Svg>
       );
     case 'sun':

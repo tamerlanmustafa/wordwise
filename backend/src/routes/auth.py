@@ -255,3 +255,33 @@ async def update_user_profile(
     return updated_user
 
 
+# Deleting an account is destructive but idempotent; throttle it anyway so a
+# leaked token can't be used to hammer the endpoint (parity with the other
+# credential endpoints above).
+_delete_account_throttle = rate_limit(5, 60.0, scope="auth-delete-account")
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    current_user = Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_delete_account_throttle),
+):
+    """Permanently delete the current user's account and all owned data.
+
+    Required by App Store Guideline 5.1.1(v) and Google Play's data-deletion
+    policy: any app with account creation must offer in-app account deletion,
+    and it must destroy data, not merely deactivate.
+
+    Every user-owned relation in schema.prisma cascades on user delete except
+    UserWordList (onDelete: NoAction), which we remove explicitly first —
+    both statements run in one transaction so a failure leaves the account
+    fully intact rather than half-deleted.
+    """
+    async with db.tx() as tx:
+        await tx.userwordlist.delete_many(where={"userId": current_user.id})
+        await tx.user.delete(where={"id": current_user.id})
+
+    logger.info(f"Account deleted: user id={current_user.id}")
+
+

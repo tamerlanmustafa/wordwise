@@ -15,11 +15,12 @@ jest.mock('../../services/auth/tokenStorage', () => ({
 // the module only to keep the real api (and its native deps) from loading, and
 // we assert the *synchronous* cached-auth contract rather than the refresh.
 jest.mock('../../services/api', () => ({
-  authApi: { me: jest.fn() },
+  authApi: { me: jest.fn(), deleteAccount: jest.fn() },
 }));
 
 import { useAuthStore } from '../authStore';
 import { tokenStorage } from '../../services/auth/tokenStorage';
+import { authApi } from '../../services/api';
 import type { User } from '../../types';
 
 const flush = () => new Promise<void>((r) => setImmediate(r));
@@ -71,6 +72,36 @@ describe('authStore', () => {
       expect(useAuthStore.getState().user).toBeNull();
       expect(useAuthStore.getState().status).toBe('unauthenticated');
       expect(await AsyncStorage.getItem('user')).toBeNull();
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('deletes server-side first, then clears tokens + user (App Store 5.1.1(v))', async () => {
+      (authApi.deleteAccount as jest.Mock).mockResolvedValue(undefined);
+      await AsyncStorage.setItem('user', JSON.stringify(user()));
+      useAuthStore.setState({ user: user(), status: 'authenticated' });
+
+      await useAuthStore.getState().deleteAccount();
+
+      expect(authApi.deleteAccount).toHaveBeenCalled();
+      expect(mockClearTokens).toHaveBeenCalled();
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(useAuthStore.getState().status).toBe('unauthenticated');
+      expect(await AsyncStorage.getItem('user')).toBeNull();
+    });
+
+    it('keeps the session fully intact when the server call fails', async () => {
+      (authApi.deleteAccount as jest.Mock).mockRejectedValue(new Error('500'));
+      const u = user();
+      await AsyncStorage.setItem('user', JSON.stringify(u));
+      useAuthStore.setState({ user: u, status: 'authenticated' });
+
+      await expect(useAuthStore.getState().deleteAccount()).rejects.toThrow('500');
+
+      expect(mockClearTokens).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().status).toBe('authenticated');
+      expect(useAuthStore.getState().user).toEqual(u);
+      expect(await AsyncStorage.getItem('user')).not.toBeNull();
     });
   });
 

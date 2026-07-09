@@ -96,3 +96,25 @@ class GoogleSignupResponse(BaseModel):
                 "is_new_user": True
             }
         }
+
+class AppleLoginRequest(BaseModel):
+    """Request body for Sign in with Apple.
+
+    `full_name` exists because Apple sends the user's name to the *client*
+    exactly once (first authorization) and never puts it in the token — the
+    client forwards it so we can store a sensible username.
+    """
+    identity_token: str = Field(..., description="Apple identity token (JWT) from AuthenticationServices")
+    full_name: Optional[str] = Field(None, description="User's name — only present on first Apple authorization")
+    native_language: Optional[str] = Field(None, description="User's native language code")
+    learning_language: Optional[str] = Field(None, description="Language user is learning")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "identity_token": "eyJraWQiOiJXNldjT0tCIiwiYWxnIjoiUlMyNTYifQ...",
+                "full_name": "Jane Appleseed",
+                "native_language": "es",
+                "learning_language": "en"
+            }
+        }

@@ -1014,6 +1014,14 @@ export const authApi = {
     if (!res.ok) throw new Error(`Failed to update profile (${res.status})`);
     return res.json();
   },
+
+  // Permanently delete the account + all server data (App Store 5.1.1(v) /
+  // Play data-deletion policy). 204 on success; throws on failure so the
+  // caller keeps the session intact and can surface the error.
+  deleteAccount: async (): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/auth/me`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`Failed to delete account (${res.status})`);
+  },
 };
 
 export const adminApi = {

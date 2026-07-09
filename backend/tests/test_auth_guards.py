@@ -191,3 +191,20 @@ class TestRouteGuards:
             router, "/api/books/gutenberg/{gutenberg_id}/epub", "GET"
         )
         assert _has_rate_limit(calls)
+
+    def test_account_deletion_requires_auth_and_throttle(self):
+        """DELETE /auth/me must never ship unauthenticated (App Store
+        5.1.1(v) requires the feature; auth requires it be self-only)."""
+        from src.routes.auth import router
+
+        calls = _dependency_calls(router, "/auth/me", "DELETE")
+        assert get_current_user in calls
+        assert _has_rate_limit(calls)
+
+    def test_apple_login_throttled(self):
+        """Sign in with Apple must carry the same brute-force ceiling as the
+        Google and password login paths."""
+        from src.routes.oauth import apple_router
+
+        calls = _dependency_calls(apple_router, "/auth/apple/login", "POST")
+        assert _has_rate_limit(calls)

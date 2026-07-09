@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { googleLogout } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import axios from 'axios';
+import { deleteAccount as apiDeleteAccount } from '../services/api';
 
 interface User {
   id: number;
@@ -34,6 +35,8 @@ interface AuthContextType {
   loading: boolean;
   handleGoogleLogin: (credentialResponse: CredentialResponse, languagePrefs?: LanguagePreferences) => Promise<void>;
   logout: () => void;
+  /** Server-side account deletion, then local sign-out. Throws on failure. */
+  deleteAccount: () => Promise<void>;
   updateUser: (data: UserUpdateData) => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -114,6 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = import.meta.env.BASE_URL || '/';
   };
 
+  const deleteAccount = async () => {
+    // Server first — if this throws, the session stays intact and the
+    // Settings page surfaces the error.
+    await apiDeleteAccount();
+    logout();
+  };
+
   const refreshUser = async () => {
     const token = localStorage.getItem('wordwise_token');
     if (!token) return;
@@ -153,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         handleGoogleLogin,
         logout,
+        deleteAccount,
         updateUser,
         refreshUser,
         isAuthenticated: !!user,

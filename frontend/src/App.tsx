@@ -16,6 +16,7 @@ import BookReaderPage from './pages/BookReaderPage';
 import PricingPage from './pages/PricingPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
+import DeleteAccountPage from './pages/DeleteAccountPage';
 import MyMoviesPage from './pages/MyMoviesPage';
 import OnboardingPage from './pages/OnboardingPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -60,6 +61,10 @@ function App() {
                     <Route path="/pricing" element={<PricingPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/terms" element={<TermsPage />} />
+                    {/* Public data-deletion instructions — the URL Google
+                        Play's Data safety form points at. Must not require
+                        login. */}
+                    <Route path="/delete-account" element={<DeleteAccountPage />} />
                     {/* Catch-all — no unknown URL should render an empty shell (F-032/F-035) */}
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>

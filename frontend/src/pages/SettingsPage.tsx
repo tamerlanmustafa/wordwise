@@ -19,7 +19,7 @@ import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS } from '@wordwise/types';
 export default function SettingsPage() {
   const t = useThemeColors();
   const navigate = useNavigate();
-  const { user, isAuthenticated, updateUser, refreshUser } = useAuth();
+  const { user, isAuthenticated, updateUser, refreshUser, deleteAccount } = useAuth();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -32,6 +32,25 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Permanently delete your account and all of your data (saved words, progress, streaks)? This cannot be undone.'
+    );
+    if (!confirmed) return;
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await deleteAccount(); // signs out + redirects on success
+    } catch {
+      setDeleting(false);
+      setDeleteError(
+        'Deletion failed — your account was not deleted. Try again, or email privacy@getwordwise.us.'
+      );
+    }
+  };
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -301,6 +320,39 @@ export default function SettingsPage() {
             )}
           </button>
         </form>
+
+        {/* Danger zone — account deletion must be reachable in-product
+            (App Store 5.1.1(v); Google Play data-deletion policy). */}
+        <Card t={t} style={{ marginTop: 24 }}>
+          <SectionLabel t={t} icon={<TrashIcon />}>Danger zone</SectionLabel>
+          <p style={{ margin: '4px 0 14px', fontSize: 13, lineHeight: 1.5, color: t.text2 }}>
+            Permanently delete your account and all of your data — saved words,
+            progress, streaks. This cannot be undone.
+          </p>
+          {deleteError && (
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: t.error }}>{deleteError}</p>
+          )}
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={handleDeleteAccount}
+            style={{
+              ...buttonReset,
+              padding: '12px 18px',
+              borderRadius: 12,
+              border: `1px solid ${t.errorBorder}`,
+              background: 'transparent',
+              color: t.error,
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: 0.3,
+              cursor: deleting ? 'default' : 'pointer',
+              opacity: deleting ? 0.65 : 1,
+            }}
+          >
+            {deleting ? 'Deleting…' : 'Delete account'}
+          </button>
+        </Card>
       </div>
     </div>
   );
@@ -687,6 +739,17 @@ function SaveIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+      <path d="M10 11v6M14 11v6" />
     </svg>
   );
 }
