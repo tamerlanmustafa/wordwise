@@ -26,6 +26,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { RefreshControlProps } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { colors } from '../../theme/palette';
 import { TmdbPoster } from '../movies/TmdbPoster';
@@ -60,6 +61,17 @@ interface Props {
   loadingMore?: boolean;
   /** False once the server reports no further pages. */
   hasMore?: boolean;
+  /** Live vertical scroll offset of the feed, so the parent can collapse the
+   *  Word-of-the-Hour card away as the user browses movies. */
+  onScrollOffset?: (offsetY: number) => void;
+  /** When true the list fills its parent (flex:1) and is the page's sole
+   *  scroller, instead of the fixed-height panel used in embedded contexts. */
+  fillHeight?: boolean;
+  /** Passed straight to the underlying list — lets the parent own pull-to-
+   *  refresh now that this list, not an outer ScrollView, is the scroller. */
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  /** Fires when the user starts dragging (e.g. to dismiss the keyboard). */
+  onScrollBeginDrag?: () => void;
 }
 
 // ── Add-to-reel chip ────────────────────────────────────────────────────────
@@ -291,7 +303,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore }: Props) => {
+export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag }: Props) => {
   const [zoomed, setZoomed] = useState<{ uri: string; title: string } | null>(null);
 
   // Hydrate the reel store once so the chip can read membership state
@@ -304,17 +316,20 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
 
   if (!data.length) {
     return (
-      <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
-        No classified movies found for this level yet.
-      </Text>
+      <View style={fillHeight ? s.fill : undefined}>
+        <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
+          No classified movies found for this level yet.
+        </Text>
+      </View>
     );
   }
 
   return (
-    <View>
-      {/* Fixed-height panel: bounds FlashList's viewport so it can virtualize
-          and scroll independently of the parent page ScrollView. */}
-      <View style={s.container}>
+    <View style={fillHeight ? s.fill : undefined}>
+      {/* Bounds FlashList's viewport. In fillHeight mode it takes the rest of
+          the screen and is the page's sole scroller; otherwise it's the older
+          fixed-height panel that scrolls inside a parent ScrollView. */}
+      <View style={fillHeight ? s.fill : s.container}>
         <FlashList
           data={data}
           keyExtractor={(item) => String(item.id || item.movie_id)}
@@ -327,6 +342,11 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
           )}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={onScrollBeginDrag}
+          refreshControl={refreshControl}
+          onScroll={onScrollOffset ? (e) => onScrollOffset(e.nativeEvent.contentOffset.y) : undefined}
+          scrollEventThrottle={16}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.6}
           ListFooterComponent={
@@ -355,7 +375,12 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
 const POSTER_H = 84;
 
 const s = StyleSheet.create({
-  // Bounds the virtualized list's viewport.
+  // Fills the parent so the list becomes the page's sole, full-height scroller.
+  fill: {
+    flex: 1,
+  },
+
+  // Bounds the virtualized list's viewport (fixed-height embedded panel).
   container: {
     height: CONTAINER_H,
   },

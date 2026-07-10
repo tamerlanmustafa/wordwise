@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Keyboard,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,7 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TMDB_API_KEY } from '../../config/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import {
   tmdbApi,
@@ -28,6 +28,12 @@ import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
+import { nextCollapsed } from '../../utils/collapseOnScroll';
+
+// Full laid-out height of the Word-of-the-Hour block: the card's own
+// marginTop (4) + CARD_HEIGHT (152) + marginBottom (16). Collapsing this to 0
+// lets the feed below slide up to fill the reclaimed space.
+const WORD_BLOCK_H = 172;
 
 interface Props {
   onMoviePress: (movie: MovieData) => void;
@@ -79,6 +85,36 @@ export const HomeScreen = ({
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Word-of-the-Hour collapse: as the user scrolls the ranked movie feed, the
+  // card snaps up out of view (0 → 1) and springs back when they return to the
+  // top of the feed. Driven off the feed's scroll offset via a hysteresis gate
+  // (nextCollapsed) so tiny jitters at the boundary don't flicker it.
+  const wordCollapse = useRef(new Animated.Value(0)).current;
+  const wordCollapsedRef = useRef(false);
+  const handleFeedScroll = useCallback(
+    (offsetY: number) => {
+      const next = nextCollapsed(wordCollapsedRef.current, offsetY);
+      if (next === wordCollapsedRef.current) return;
+      wordCollapsedRef.current = next;
+      Animated.timing(wordCollapse, {
+        toValue: next ? 1 : 0,
+        duration: next ? 240 : 300,
+        easing: Easing.out(Easing.cubic),
+        // height/opacity animation isn't supported by the native driver.
+        useNativeDriver: false,
+      }).start();
+    },
+    [wordCollapse],
+  );
+
+  // A new level/sort re-queries the feed and snaps it back to the top, but the
+  // list may not emit an onScroll(0) for that reset — so bring the card back
+  // explicitly to avoid it getting stuck collapsed.
+  useEffect(() => {
+    wordCollapsedRef.current = false;
+    wordCollapse.setValue(0);
+  }, [selectedLevel, levelSort, levelSortAsc, wordCollapse]);
 
   useEffect(() => {
     (async () => {
@@ -248,20 +284,11 @@ export const HomeScreen = ({
         onNotificationsPress={onNavigateToProfile}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={tc.gold}
-            colors={[tc.gold]}
-          />
-        }
-      >
+      {/* The header stack (search + ad + collapsible word card + filters) is
+          pinned; the movie feed below is the page's sole scroller. Scrolling
+          the feed collapses the Word-of-the-Hour card away and springs it back
+          at the top — so the whole view becomes search + filters + movies. */}
+      <View style={s.headerStack}>
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the
             dropdown above the ad slot / controls below it. */}
         <View style={s.searchLayer}>
@@ -296,20 +323,49 @@ export const HomeScreen = ({
         ) : null}
 
         {/* Word of the Hour — between the ad slot and the level controls.
-            Rotates hourly via the srsApi.todaysWord timer in this screen. */}
-        {todaysWord ? (
-          // key by the word so the hourly rotation remounts the card. Its
-          // translation/flip state is seeded from the `word` prop on mount
-          // only; without a fresh mount the front face shows the new word
-          // while the back face keeps the previous hour's translation.
-          <TodayWordCard
-            key={todaysWord.word}
-            word={todaysWord}
-            targetLanguage={targetLanguage}
-          />
-        ) : (
-          <TodayWordCardSkeleton />
-        )}
+            Rotates hourly via the srsApi.todaysWord timer in this screen.
+            Collapses up out of view (height → 0 + fade + slide) as the movie
+            feed is scrolled, and springs back at the top of the feed. */}
+        <Animated.View
+          style={{
+            overflow: 'hidden',
+            height: wordCollapse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [WORD_BLOCK_H, 0],
+            }),
+            opacity: wordCollapse.interpolate({
+              inputRange: [0, 0.7, 1],
+              outputRange: [1, 0, 0],
+            }),
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  translateY: wordCollapse.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -48],
+                  }),
+                },
+              ],
+            }}
+          >
+            {todaysWord ? (
+              // key by the word so the hourly rotation remounts the card. Its
+              // translation/flip state is seeded from the `word` prop on mount
+              // only; without a fresh mount the front face shows the new word
+              // while the back face keeps the previous hour's translation.
+              <TodayWordCard
+                key={todaysWord.word}
+                word={todaysWord}
+                targetLanguage={targetLanguage}
+              />
+            ) : (
+              <TodayWordCardSkeleton />
+            )}
+          </Animated.View>
+        </Animated.View>
 
         <LevelSortControls
           level={selectedLevel}
@@ -318,30 +374,42 @@ export const HomeScreen = ({
           sortAsc={levelSortAsc}
           onSortPress={handleSortPress}
         />
+      </View>
 
-        {/* Ranked feed — RankedMovieList is rendered exactly as before. The
-            cards themselves are untouched; we only widen them by trimming the
-            container's horizontal padding. */}
-        <View style={s.feedSection}>
-          {(homeTab === 'level' ? levelLoading : loading) ? (
-            <FeedSkeleton />
-          ) : homeTab === 'level' ? (
-            <RankedMovieList
-              movies={levelMovies}
-              onMoviePress={handleMoviePress}
-              userLevel={selectedLevel}
-              onEndReached={loadMoreLevel}
-              loadingMore={levelLoadingMore}
-              hasMore={levelHasMore}
-            />
-          ) : (
-            <SnapPager
-              movies={trendingMovies}
-              onMoviePress={handleMoviePress}
-            />
-          )}
-        </View>
-      </ScrollView>
+      {/* Ranked feed — the sole full-height scroller. It owns pull-to-refresh
+          and keyboard-dismiss now that the outer ScrollView is gone, and its
+          scroll offset drives the Word-of-the-Hour collapse above. The cards
+          themselves are untouched; the container just trims side padding. */}
+      <View style={s.feedSection}>
+        {(homeTab === 'level' ? levelLoading : loading) ? (
+          <FeedSkeleton />
+        ) : homeTab === 'level' ? (
+          <RankedMovieList
+            movies={levelMovies}
+            onMoviePress={handleMoviePress}
+            userLevel={selectedLevel}
+            onEndReached={loadMoreLevel}
+            loadingMore={levelLoadingMore}
+            hasMore={levelHasMore}
+            onScrollOffset={handleFeedScroll}
+            fillHeight
+            onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={tc.gold}
+                colors={[tc.gold]}
+              />
+            }
+          />
+        ) : (
+          <SnapPager
+            movies={trendingMovies}
+            onMoviePress={handleMoviePress}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -358,6 +426,11 @@ const makeStyles = (tc: ThemeColors) =>
       left: 0,
       right: 0,
       height: 240,
+    },
+    headerStack: {
+      // Pinned above the feed. The raised zIndex lets the search autocomplete
+      // dropdown (which overflows this block) paint over the movie list below.
+      zIndex: 10,
     },
     searchLayer: {
       // Above the ad slot + controls so the autocomplete dropdown overlays them.
@@ -384,6 +457,9 @@ const makeStyles = (tc: ThemeColors) =>
       textTransform: 'uppercase',
     },
     feedSection: {
+      // Takes the rest of the screen below the pinned header so the movie list
+      // is the page's sole, full-height scroller.
+      flex: 1,
       // Narrower side padding than the old `styles.section` (16) so the
       // ranked cards render a touch wider. The card geometry itself is
       // unchanged — only this container's gutters shrink.
