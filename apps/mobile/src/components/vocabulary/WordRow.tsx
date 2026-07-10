@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { colors, cefrColors } from '../../theme/palette';
+import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi, premiumApi, authFetch, API_BASE_URL, type WordInfo, type CrossMovieSentence } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
@@ -81,6 +82,7 @@ const _WordRow = ({
   isRead,
   onHide,
 }: Props) => {
+  const tc = useThemeColors();
   const [expanded, setExpanded] = useState(false);
   const [contentLoaded, setContentLoaded] = useState(false);
 
@@ -171,7 +173,9 @@ const _WordRow = ({
   const isUntranslatable = translation && translation.toLowerCase() === word.word.toLowerCase();
 
   // Treatments C + F: level wash → read tint → bookmark highlight (priority order)
-  const rowBg = bookmarkHighlight ? '#FFF4D6' : isRead ? '#FAFAF8' : `${groupColor}10`;
+  // Theme-aware: gold tint for bookmark, flat background tint when read,
+  // translucent CEFR wash otherwise — all legible in light and dark mode.
+  const rowBg = bookmarkHighlight ? `${tc.gold}2E` : isRead ? tc.chipBg : `${groupColor}10`;
   // 85% alpha (0xD9) normally, 45% (0x73) when read
   const fillAlpha = isRead ? '73' : 'D9';
   const freqLabel = freqFill == null ? null : freqFill > 0.66 ? 'RARE' : freqFill > 0.33 ? 'UNCOMMON' : 'COMMON';
@@ -198,7 +202,7 @@ const _WordRow = ({
   return (
     <View style={styles.wordRowWrapper}>
       <TouchableOpacity
-        style={[styles.wordRow, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked, { backgroundColor: rowBg }]}
+        style={[styles.wordRow, { borderColor: tc.divider }, expanded && styles.wordRowExpanded, bookmarkHighlight && styles.wordRowBookmarked, { backgroundColor: rowBg }]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
@@ -207,8 +211,8 @@ const _WordRow = ({
           <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.warning, borderTopLeftRadius: 8, borderBottomLeftRadius: expanded ? 0 : 8 }} />
         )}
         <View style={styles.wordRowMain}>
-          <Text style={[styles.rowNumber, isRead && { opacity: 0.5 }]}>{rowNumber}.</Text>
-          <Text style={[styles.wordText, isRead && { color: colors.textSecondary }]}>{word.word}</Text>
+          <Text style={[styles.rowNumber, { color: tc.textSecondary }, isRead && { opacity: 0.5 }]}>{rowNumber}.</Text>
+          <Text style={[styles.wordText, { color: isRead ? tc.textSecondary : tc.text }]}>{word.word}</Text>
           {displayLevel && (
             <View style={[styles.inlineLevelBadge, { backgroundColor: cefrColors[displayLevel] || colors.primary }]}>
               <Text style={styles.inlineLevelBadgeText}>{displayLevel}</Text>

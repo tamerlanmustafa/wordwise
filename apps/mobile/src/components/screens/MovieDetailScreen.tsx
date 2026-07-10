@@ -864,15 +864,15 @@ export const MovieDetailScreen = ({
             </View>
           </View>
           {movie.overview ? (
-            <View style={styles.overviewBox}>
+            <View style={[styles.overviewBox, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
               <Text
-                style={styles.overviewText}
+                style={[styles.overviewText, { color: tc.textSecondary }]}
                 numberOfLines={overviewExpanded ? undefined : 2}
               >
                 {movie.overview}
               </Text>
               <Pressable onPress={() => setOverviewExpanded((v) => !v)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Text style={styles.overviewToggle}>
+                <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
                   {overviewExpanded ? 'Show less' : 'Read more'}
                 </Text>
               </Pressable>
@@ -911,7 +911,8 @@ export const MovieDetailScreen = ({
                         >
                           <Text style={[
                             styles.unifiedTabLabel,
-                            foryouActive && [styles.unifiedTabLabelActive, { color: colors.primary }],
+                            { color: tc.textSecondary },
+                            foryouActive && [styles.unifiedTabLabelActive, { color: tc.primaryOnSurface }],
                           ]}>
                             ★ For You
                           </Text>
@@ -953,6 +954,7 @@ export const MovieDetailScreen = ({
                         >
                           <Text style={[
                             styles.unifiedTabLabel,
+                            { color: tc.textSecondary },
                             active && [styles.unifiedTabLabelActive, { color: c }],
                           ]}>
                             {lvl.level}
@@ -962,7 +964,7 @@ export const MovieDetailScreen = ({
                     })}
                   </ScrollView>
                   <LinearGradient
-                    colors={['rgba(228,220,240,0)', '#E4DCF0']}
+                    colors={[`${tc.background}00`, tc.background]}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     style={styles.unifiedTabsRightFade}
@@ -971,15 +973,15 @@ export const MovieDetailScreen = ({
                 </View>
                 {wordsView === 'foryou' ? (
                   suggestedWords.length === 0 ? (
-                    <Text style={styles.forYouEmpty}>No new words at your level</Text>
+                    <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
                   ) : null
                 ) : (
                   <TouchableOpacity
-                    style={styles.countSortRow}
+                    style={[styles.countSortRow, { backgroundColor: tc.background, borderBottomColor: tc.divider }]}
                     onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
                     activeOpacity={0.6}
                   >
-                    <Text style={styles.countSortText}>
+                    <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
                       <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
                         {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
                       </Text>
@@ -995,14 +997,14 @@ export const MovieDetailScreen = ({
           <View>
           {loading ? (
             <View style={[styles.container, styles.centered]}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Analyzing vocabulary...</Text>
-              <Text style={styles.loadingSubtext}>Searching script</Text>
-              <Text style={styles.loadingSubtext}>Classifying words by CEFR level</Text>
+              <ActivityIndicator size="large" color={tc.primaryOnSurface} />
+              <Text style={[styles.loadingText, { color: tc.text }]}>Analyzing vocabulary...</Text>
+              <Text style={[styles.loadingSubtext, { color: tc.textSecondary }]}>Searching script</Text>
+              <Text style={[styles.loadingSubtext, { color: tc.textSecondary }]}>Classifying words by CEFR level</Text>
             </View>
           ) : error ? (
-            <View style={styles.scriptErrorBox}>
-              <Text style={styles.scriptErrorText}>{error}</Text>
+            <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
+              <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
               <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
@@ -1279,9 +1281,87 @@ export const MovieDetailScreen = ({
         </View>
       ) : null}
 
+      {/* Loading illusion — while the vocabulary is being fetched/classified,
+          the movie's own backdrop + poster cover the whole view (a cinematic
+          splash), then lift to reveal the loaded screen. Sits above everything
+          including the back button; onBack stays reachable via the chip. */}
+      {loading ? (
+        <View style={splashStyles.wrap} pointerEvents="auto">
+          {movie.backdrop_path ? (
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+              blurRadius={2}
+            />
+          ) : null}
+          <View style={splashStyles.scrim} />
+          <Pressable onPress={onBack} style={[backBtnStyles.backBtn, splashStyles.backBtn]} hitSlop={8}>
+            <Ionicons name="chevron-back" size={18} color="#fff" />
+          </Pressable>
+          {movie.poster_path ? (
+            <Image
+              source={{ uri: `https://image.tmdb.org/t/p/w342${movie.poster_path}` }}
+              style={splashStyles.poster}
+              resizeMode="cover"
+            />
+          ) : null}
+          <Text style={splashStyles.title} numberOfLines={2}>{movie.title}</Text>
+          <ActivityIndicator size="small" color="#FFD166" style={splashStyles.spinner} />
+          <Text style={splashStyles.caption}>Analyzing vocabulary…</Text>
+        </View>
+      ) : null}
+
     </View>
   );
 };
+
+const splashStyles = StyleSheet.create({
+  wrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    backgroundColor: '#0F0819',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,6,18,0.72)',
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    top: 56,
+  },
+  poster: {
+    width: 168,
+    height: 248,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  title: {
+    marginTop: 18,
+    maxWidth: '78%',
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  spinner: { marginTop: 18 },
+  caption: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
 
 const backBtnStyles = StyleSheet.create({
   wrap: {

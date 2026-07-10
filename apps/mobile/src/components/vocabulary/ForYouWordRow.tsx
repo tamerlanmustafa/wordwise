@@ -1,6 +1,7 @@
 import React, { memo, useEffect, useState } from 'react';
 import { LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, cefrColors } from '../../theme/palette';
+import { useThemeColors } from '../../theme/tokens';
 
 // Serif gives the For You row a calmer, book-page feel — Georgia is
 // preinstalled on iOS; Android falls back to its default serif (Noto Serif
@@ -52,6 +53,7 @@ const _ForYouWordRow = ({
   onExpand,
   preloadedSentence,
 }: Props) => {
+  const tc = useThemeColors();
   const [translation, setTranslation] = useState<string | null>(null);
   const [translationVisible, setTranslationVisible] = useState(false);
 
@@ -88,7 +90,8 @@ const _ForYouWordRow = ({
     }
   };
 
-  const rowBg = bookmarkHighlight ? '#FFF4D6' : isRead ? '#FAFAF8' : colors.paper;
+  // Theme-aware (dark mode): gold tint for bookmark, chip tint when read.
+  const rowBg = bookmarkHighlight ? `${tc.gold}2E` : isRead ? tc.chipBg : tc.paper;
   const numberStr = String(rowNumber).padStart(2, '0');
 
   let sentenceContent: React.ReactNode = null;
@@ -99,7 +102,7 @@ const _ForYouWordRow = ({
     const regex = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
     const parts = sentence.sentence.split(regex);
     sentenceContent = (
-      <Text style={styles.sentence}>
+      <Text style={[styles.sentence, { color: tc.text }]}>
         {parts.map((part, i) =>
           forms.has(part.toLowerCase()) ? (
             <Text key={i} style={[styles.sentenceHi, { color: levelColor }]}>{part}</Text>
@@ -120,7 +123,7 @@ const _ForYouWordRow = ({
 
   return (
     <TouchableOpacity
-      style={[styles.row, { backgroundColor: rowBg }]}
+      style={[styles.row, { backgroundColor: rowBg, borderBottomColor: tc.divider }]}
       onPress={handlePress}
       activeOpacity={0.7}
     >
@@ -135,7 +138,7 @@ const _ForYouWordRow = ({
           {translationVisible && translation && (
             <>
               <Text style={styles.dot}> · </Text>
-              <Text style={styles.translation}>{translation.toLowerCase()}</Text>
+              <Text style={[styles.translation, { color: tc.textSecondary }]}>{translation.toLowerCase()}</Text>
             </>
           )}
         </View>
