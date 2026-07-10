@@ -345,7 +345,10 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
               />
             );
             return (
-              <View style={s.cardSlot}>
+              // key by movie id so a recycled FlashList cell remounts the
+              // SwipeableRow fresh (translateX back to 0) instead of keeping a
+              // swiped-off row's backdrop showing under the next movie.
+              <View style={s.cardSlot} key={String(item.id ?? item.movie_id)}>
                 {onSwipeAction ? (
                   <SwipeableRow height={CARD_H} onSwipe={(action) => onSwipeAction(action, item)}>
                     {card}
