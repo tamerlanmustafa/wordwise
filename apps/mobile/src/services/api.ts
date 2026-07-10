@@ -388,7 +388,10 @@ export const wordwiseApi = {
     if (opts?.offset != null) query += `&offset=${opts.offset}`;
     if (opts?.sort) query += `&sort=${opts.sort}`;
     if (opts?.order) query += `&order=${opts.order}`;
-    const res = await fetch(`${API_BASE_URL}/movies/by-cefr?${query}`);
+    // authFetch (not plain fetch): /movies/by-cefr personalizes when a token
+    // is present — it excludes the user's watched / not-interested movies, so
+    // swiped-away cards don't reappear when a filter/sort refetches the feed.
+    const res = await authFetch(`${API_BASE_URL}/movies/by-cefr?${query}`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /movies/by-cefr → ${res.status} ${body.slice(0, 120)}`);
