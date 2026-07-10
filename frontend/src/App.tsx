@@ -10,6 +10,7 @@ import SignUpPage from './pages/SignUpPage';
 import LoginPage from './pages/LoginPage';
 import SavedWordsPage from './pages/SavedWordsPage';
 import AllListsPage from './pages/AllListsPage';
+import WatchedPage from './pages/WatchedPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminReportsPage from './pages/AdminReportsPage';
 import BookReaderPage from './pages/BookReaderPage';
@@ -56,6 +57,7 @@ function App() {
                     <Route path="/analyze" element={<MovieSearchPage />} />
                     <Route path="/lists" element={<AllListsPage />} />
                     <Route path="/lists/:listName" element={<SavedWordsPage />} />
+                    <Route path="/watched" element={<WatchedPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/admin/reports" element={<AdminReportsPage />} />
                     <Route path="/pricing" element={<PricingPage />} />

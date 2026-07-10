@@ -65,6 +65,8 @@ model User {
   quizStats               UserQuizStats?
   unitProgress            UnitProgress[]
   reelMovies              UserReelMovie[]
+  watchedMovies           UserWatchedMovie[]
+  hiddenMovies            UserHiddenMovie[]
   movieProgress           UserMovieProgress[]
   streakFreezes           UserStreakFreeze[]
   featureFlags            UserFeatureFlag[]
@@ -771,6 +773,41 @@ model UserReelMovie {
   @@unique([userId, position], map: "ux_user_reel_movies_user_position")
   @@index([userId, addedAt], map: "ix_user_reel_movies_user_added_at")
   @@map("user_reel_movies")
+}
+
+// Per-user "Watched" list — movies the user marked as already seen (swipe
+// right on the home feed). Distinct from the reel (a study queue): these are
+// excluded from the CEFR feed so already-seen films don't resurface. Title/
+// poster/year are denormalized so the Watched screen renders without per-row
+// TMDB roundtrips (same as UserReelMovie).
+model UserWatchedMovie {
+  userId     Int      @map("user_id")
+  tmdbId     Int      @map("tmdb_id")
+  title      String   @db.VarChar
+  posterPath String?  @map("poster_path") @db.VarChar
+  year       Int?
+  watchedAt  DateTime @default(now()) @map("watched_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tmdbId])
+  @@index([userId, watchedAt], map: "ix_user_watched_movies_user_watched_at")
+  @@map("user_watched_movies")
+}
+
+// Per-user "Not interested" set — movies the user dismissed from the home
+// feed (swipe left). No denormalized metadata: these are only ever used as an
+// exclusion filter on the CEFR feed, never listed back to the user.
+model UserHiddenMovie {
+  userId   Int      @map("user_id")
+  tmdbId   Int      @map("tmdb_id")
+  hiddenAt DateTime @default(now()) @map("hidden_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tmdbId])
+  @@index([userId, hiddenAt], map: "ix_user_hidden_movies_user_hidden_at")
+  @@map("user_hidden_movies")
 }
 
 // Per-(user, movie) progress cache used by the reel UI (status badges,

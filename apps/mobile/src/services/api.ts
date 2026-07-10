@@ -1680,6 +1680,61 @@ export const reelApi = {
   },
 };
 
+// ─── Watched list + Not-interested (home-feed swipe actions) ─────────────
+// Swipe right on a home-feed card → Watched list; swipe left → hidden. Both
+// are excluded server-side from /movies/by-cefr so they never resurface.
+export interface WatchedMovie {
+  tmdb_id: number;
+  title: string;
+  poster_path: string | null;
+  year: number | null;
+}
+
+interface WatchedListResponse {
+  movies: WatchedMovie[];
+}
+
+export const watchedApi = {
+  list: async (): Promise<WatchedMovie[]> => {
+    const res = await authFetch(`${API_BASE_URL}/movies/watched`);
+    if (!res.ok) throw new Error('Failed to load watched list');
+    const data: WatchedListResponse = await res.json();
+    return data.movies;
+  },
+
+  markWatched: async (input: {
+    tmdb_id: number;
+    title: string;
+    poster_path: string | null;
+    year: number | null;
+  }): Promise<WatchedMovie> => {
+    const res = await authFetch(`${API_BASE_URL}/movies/watched`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error('Failed to mark watched');
+    return res.json();
+  },
+
+  unmarkWatched: async (tmdbId: number): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/movies/watched/${tmdbId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to remove from watched');
+  },
+
+  hide: async (tmdbId: number): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/movies/hidden`, {
+      method: 'POST',
+      body: JSON.stringify({ tmdb_id: tmdbId }),
+    });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to hide movie');
+  },
+
+  unhide: async (tmdbId: number): Promise<void> => {
+    const res = await authFetch(`${API_BASE_URL}/movies/hidden/${tmdbId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to unhide movie');
+  },
+};
+
 // ─── Ready-to-Watch (v0.6 discovery surface) ─────────────────────────────
 export interface ReadyToWatchMovie {
   movie_id: number;

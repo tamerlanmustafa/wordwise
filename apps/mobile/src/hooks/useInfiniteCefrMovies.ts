@@ -25,6 +25,12 @@ export function useInfiniteCefrMovies(
   order: SortOrder,
 ) {
   const [movies, setMovies] = useState<any[]>([]);
+  // Mirror of `movies` for synchronous reads (removeMovie needs the current
+  // index before the async state update commits).
+  const moviesRef = useRef<any[]>([]);
+  useEffect(() => {
+    moviesRef.current = movies;
+  }, [movies]);
   const [loading, setLoading] = useState(true);       // initial / filter-reset load
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -96,5 +102,35 @@ export function useInfiniteCefrMovies(
     fetchPage(false);
   }, [fetchPage]);
 
-  return { movies, loading, loadingMore, hasMore, error, loadMore, reload: () => fetchPage(true) };
+  // Optimistic removal for the home-feed swipe actions (watched / not
+  // interested). Returns the removed item's index so the caller can restore it
+  // in the same spot if the user taps Undo, or -1 if it wasn't in the feed.
+  // Reads from moviesRef (kept in sync below) so the index is available
+  // synchronously — the setMovies updater does not run inline.
+  const removeMovie = useCallback((tmdbId: number): number => {
+    const idx = moviesRef.current.findIndex((m) => (m.tmdb_id ?? m.id) === tmdbId);
+    if (idx === -1) return -1;
+    setMovies((prev) => prev.filter((m) => (m.tmdb_id ?? m.id) !== tmdbId));
+    return idx;
+  }, []);
+
+  const insertMovie = useCallback((movie: any, index: number) => {
+    setMovies((prev) => {
+      const next = prev.slice();
+      next.splice(Math.max(0, Math.min(index, next.length)), 0, movie);
+      return next;
+    });
+  }, []);
+
+  return {
+    movies,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    loadMore,
+    reload: () => fetchPage(true),
+    removeMovie,
+    insertMovie,
+  };
 }

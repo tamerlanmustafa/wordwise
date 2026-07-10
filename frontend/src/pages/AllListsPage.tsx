@@ -2,15 +2,19 @@ import { Container, Box, Typography, List, ListItemButton, ListItemIcon, ListIte
 import { Link } from 'react-router-dom';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import MovieIcon from '@mui/icons-material/Movie';
 import { useState, useEffect } from 'react';
 import apiClient from '../services/api';
+import { watchedApi } from '../services/watchedApi';
 
 export default function AllListsPage() {
   const [savedCount, setSavedCount] = useState(0);
   const [learnedCount, setLearnedCount] = useState(0);
+  const [watchedCount, setWatchedCount] = useState(0);
 
   useEffect(() => {
     fetchCounts();
+    watchedApi.listWatched().then((m) => setWatchedCount(m.length)).catch(() => {});
   }, []);
 
   const fetchCounts = async () => {
@@ -39,6 +43,13 @@ export default function AllListsPage() {
       icon: <CheckCircleIcon sx={{ color: 'success.main' }} />,
       count: learnedCount,
       description: 'Words you have marked as learned'
+    },
+    {
+      name: 'Watched Films',
+      path: '/watched',
+      icon: <MovieIcon sx={{ color: 'info.main' }} />,
+      count: watchedCount,
+      description: 'Movies you have marked as seen'
     }
   ];
 

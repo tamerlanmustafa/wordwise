@@ -3,10 +3,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
-from ..middleware.auth import get_current_active_user
+from ..middleware.auth import get_current_active_user, get_current_user_optional
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,23 @@ CEFR_SORT_COLUMNS = {
 }
 
 
+def _exclude_seen_sql(p: str) -> str:
+    """SQL fragment for /by-cefr that removes the caller's watched / hidden
+    movies. `p` is the positional placeholder holding the user id (e.g. "$6").
+    When that value is NULL (anonymous caller) the clause is a no-op, so the
+    same query text serves both signed-in and anonymous requests. `m` is the
+    `movies` alias in the surrounding query.
+    """
+    return f"""
+              AND ({p}::int IS NULL OR (
+                        NOT EXISTS (SELECT 1 FROM user_watched_movies uwm
+                                    WHERE uwm.user_id = {p} AND uwm.tmdb_id = m.tmdb_id)
+                    AND NOT EXISTS (SELECT 1 FROM user_hidden_movies uhm
+                                    WHERE uhm.user_id = {p} AND uhm.tmdb_id = m.tmdb_id)
+              ))
+    """
+
+
 @router.get("/by-cefr")
 async def list_movies_by_cefr(
     level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
@@ -130,11 +148,17 @@ async def list_movies_by_cefr(
     sort: str = Query("rating", description="Sort key: rating | popularity | level"),
     order: str = Query("desc", description="Sort direction: asc | desc"),
     db: Prisma = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
 ):
     """List movies whose difficulty score falls within a CEFR level range, optionally filtered by genre.
 
     Paginated for infinite scroll: pass `offset` to fetch the next page. The
     response includes `has_more` so the client knows whether to keep loading.
+
+    Optional auth: when a valid token is supplied, movies the user has marked
+    "watched" or "not interested" (swipe actions on the home feed) are excluded
+    server-side so they never resurface and pagination stays consistent.
+    Anonymous callers get the unfiltered feed.
     """
     key = level.upper()
     if key not in CEFR_SCORE_RANGES:
@@ -152,6 +176,11 @@ async def list_movies_by_cefr(
     fetch_limit = limit + 1
 
     lo, hi = CEFR_SCORE_RANGES[key]
+
+    # Personalized exclusion: drop the caller's watched / not-interested
+    # movies. `user_id` is None for anonymous callers, and the clause is a
+    # no-op in that case ($p::int IS NULL), so the same SQL serves both.
+    user_id = current_user.id if current_user else None
 
     if genre:
         rows = await db.query_raw(
@@ -189,6 +218,7 @@ async def list_movies_by_cefr(
               AND m.genre ILIKE '%' || $3 || '%'
               AND COALESCE(m.tmdb_vote_count, 0) >= 50
             """
+            + _exclude_seen_sql("$6")
             + order_by
             + """
             LIMIT $4 OFFSET $5
@@ -198,6 +228,7 @@ async def list_movies_by_cefr(
             genre,
             fetch_limit,
             offset,
+            user_id,
         )
     else:
         rows = await db.query_raw(
@@ -233,6 +264,7 @@ async def list_movies_by_cefr(
               AND m.difficulty_score <= $2
               AND COALESCE(m.tmdb_vote_count, 0) >= 50
             """
+            + _exclude_seen_sql("$5")
             + order_by
             + """
             LIMIT $3 OFFSET $4
@@ -241,6 +273,7 @@ async def list_movies_by_cefr(
             hi,
             fetch_limit,
             offset,
+            user_id,
         )
 
     has_more = len(rows) > limit
@@ -338,6 +371,153 @@ async def ready_to_watch(
         "floor_pct": floor_pct,
         "total": len(rows),
     }
+
+
+# ─── Home-feed swipe actions: Watched list + Not-interested ───────────────
+# Swipe right on a home-feed card = "I've seen it" → the Watched list.
+# Swipe left = "not interested" → hidden. Both are excluded from /by-cefr so
+# they never resurface. Declared BEFORE `/{movie_id}` so "watched"/"hidden"
+# aren't parsed as an int movie id (same reason as /ready-to-watch above).
+class WatchedMovieRequest(BaseModel):
+    tmdb_id: int
+    title: str
+    poster_path: Optional[str] = None
+    year: Optional[int] = None
+
+
+class WatchedMovie(BaseModel):
+    tmdb_id: int
+    title: str
+    poster_path: Optional[str] = None
+    year: Optional[int] = None
+
+
+class WatchedListResponse(BaseModel):
+    movies: List[WatchedMovie]
+
+
+class HideMovieRequest(BaseModel):
+    tmdb_id: int
+
+
+class HiddenIdsResponse(BaseModel):
+    tmdb_ids: List[int]
+
+
+@router.get("/watched", response_model=WatchedListResponse)
+async def list_watched(
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """The user's Watched list, most-recently-marked first. Title/poster/year
+    are denormalized on the row so this renders without TMDB roundtrips."""
+    rows = await db.userwatchedmovie.find_many(
+        where={"userId": user.id},
+        order={"watchedAt": "desc"},
+    )
+    return WatchedListResponse(
+        movies=[
+            WatchedMovie(
+                tmdb_id=r.tmdbId,
+                title=r.title,
+                poster_path=r.posterPath,
+                year=r.year,
+            )
+            for r in rows
+        ]
+    )
+
+
+@router.post("/watched", response_model=WatchedMovie)
+async def mark_watched(
+    body: WatchedMovieRequest,
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """Mark a movie as watched (swipe right). Idempotent upsert; also clears
+    any prior "not interested" row so a movie is never in both sets."""
+    await db.userhiddenmovie.delete_many(
+        where={"userId": user.id, "tmdbId": body.tmdb_id}
+    )
+    row = await db.userwatchedmovie.upsert(
+        where={"userId_tmdbId": {"userId": user.id, "tmdbId": body.tmdb_id}},
+        data={
+            "create": {
+                "userId": user.id,
+                "tmdbId": body.tmdb_id,
+                "title": body.title,
+                "posterPath": body.poster_path,
+                "year": body.year,
+            },
+            "update": {
+                "title": body.title,
+                "posterPath": body.poster_path,
+                "year": body.year,
+            },
+        },
+    )
+    return WatchedMovie(
+        tmdb_id=row.tmdbId,
+        title=row.title,
+        poster_path=row.posterPath,
+        year=row.year,
+    )
+
+
+@router.delete("/watched/{tmdb_id}", status_code=204)
+async def unmark_watched(
+    tmdb_id: int,
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """Remove a movie from the Watched list (undo). Idempotent — a repeated
+    undo is a no-op rather than a 404."""
+    await db.userwatchedmovie.delete_many(
+        where={"userId": user.id, "tmdbId": tmdb_id}
+    )
+    return None
+
+
+@router.post("/hidden", status_code=204)
+async def hide_movie(
+    body: HideMovieRequest,
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """Mark a movie "not interested" (swipe left). Idempotent."""
+    existing = await db.userhiddenmovie.find_unique(
+        where={"userId_tmdbId": {"userId": user.id, "tmdbId": body.tmdb_id}}
+    )
+    if existing is None:
+        await db.userhiddenmovie.create(
+            data={"userId": user.id, "tmdbId": body.tmdb_id}
+        )
+    return None
+
+
+@router.get("/hidden", response_model=HiddenIdsResponse)
+async def list_hidden(
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """The user's hidden ("not interested") tmdb ids. The web home feed
+    (TMDB top-rated, not the CEFR query) filters these client-side, so it
+    needs the raw id set; the mobile CEFR feed excludes them in SQL instead."""
+    rows = await db.userhiddenmovie.find_many(where={"userId": user.id})
+    return HiddenIdsResponse(tmdb_ids=[r.tmdbId for r in rows])
+
+
+@router.delete("/hidden/{tmdb_id}", status_code=204)
+async def unhide_movie(
+    tmdb_id: int,
+    db: Prisma = Depends(get_db),
+    user=Depends(get_current_active_user),
+):
+    """Un-hide a movie (undo the not-interested swipe). Idempotent."""
+    await db.userhiddenmovie.delete_many(
+        where={"userId": user.id, "tmdbId": tmdb_id}
+    )
+    return None
 
 
 @router.get("/{movie_id}", response_model=MovieResponse)

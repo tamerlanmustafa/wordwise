@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { wordwiseApi } from '../../services/api';
+import { wordwiseApi, watchedApi } from '../../services/api';
 import { styles } from '../../core/styles';
 import { useThemeColors } from '../../theme/tokens';
 import type { ListFilter } from '../../core/types';
@@ -10,12 +10,14 @@ import type { ListFilter } from '../../core/types';
 interface Props {
   onBack: () => void;
   onOpenList: (filter: ListFilter) => void;
+  onOpenWatched: () => void;
 }
 
-export const ListsScreen = ({ onBack, onOpenList }: Props) => {
+export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
   const tc = useThemeColors();
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [learnedCount, setLearnedCount] = useState<number | null>(null);
+  const [watchedCount, setWatchedCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
         setLoading(false);
       }
     })();
+    watchedApi.list().then((m) => setWatchedCount(m.length)).catch(() => setWatchedCount(0));
   }, []);
 
   const lists: Array<{
@@ -91,6 +94,29 @@ export const ListsScreen = ({ onBack, onOpenList }: Props) => {
             </View>
           </TouchableOpacity>
         ))}
+
+        {/* Watched Films — a movie list (not a word list), so it navigates on
+            its own path rather than through onOpenList(ListFilter). */}
+        <TouchableOpacity
+          style={[styles.listsCard, { backgroundColor: tc.paper, borderColor: tc.border }]}
+          onPress={onOpenWatched}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.listsCardIcon, { backgroundColor: '#6C8EBF22' }]}>
+            <Ionicons name="film-outline" size={22} color="#6C8EBF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.listsCardName, { color: tc.text }]}>Watched Films</Text>
+            <Text style={[styles.listsCardDesc, { color: tc.textSecondary }]}>
+              Movies you have marked as seen
+            </Text>
+          </View>
+          <View style={[styles.listsCardBadge, { backgroundColor: '#6C8EBF' }]}>
+            <Text style={styles.listsCardBadgeText}>
+              {watchedCount === null ? '…' : watchedCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

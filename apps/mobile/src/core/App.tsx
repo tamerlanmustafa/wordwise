@@ -51,6 +51,7 @@ import { VocabularyScreen } from '../components/screens/VocabularyScreen';
 import { LearnedWordsScreen } from '../components/screens/LearnedWordsScreen';
 import { SettingsScreen } from '../components/screens/SettingsScreen';
 import { ListsScreen } from '../components/screens/ListsScreen';
+import { WatchedScreen } from '../components/screens/WatchedScreen';
 import { HomeScreen } from '../components/screens/HomeScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
 
@@ -239,6 +240,10 @@ export default function App() {
 
   const navigateToLists = () => {
     setCurrentScreen('lists');
+  };
+
+  const navigateToWatched = () => {
+    setCurrentScreen('watched');
   };
 
   const navigateToAchievements = () => {
@@ -697,7 +702,9 @@ export default function App() {
         ) : currentScreen === 'notebook' ? (
           <NotebookScreen onBack={navigateToLists} filter={listFilter} />
         ) : currentScreen === 'lists' ? (
-          <ListsScreen onBack={backToProfile} onOpenList={navigateToNotebook} />
+          <ListsScreen onBack={backToProfile} onOpenList={navigateToNotebook} onOpenWatched={navigateToWatched} />
+        ) : currentScreen === 'watched' ? (
+          <WatchedScreen onBack={navigateToLists} onMoviePress={navigateToMovie} />
         ) : currentScreen === 'achievements' ? (
           <AchievementsScreen onBack={backToProfile} />
         ) : currentScreen === 'leaderboard' ? (

@@ -6,6 +6,9 @@ from ..database import get_db
 from ..utils.auth import verify_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+# auto_error=False: no token → the dependency receives None instead of a 401,
+# so optional-auth routes can decide to serve an anonymous response.
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 
 async def get_current_user(
@@ -51,6 +54,36 @@ async def get_current_user(
         logger.error(f"[AUTH] User not found with id: {user_id}")
         raise credentials_exception
 
+    return user
+
+
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Prisma = Depends(get_db),
+):
+    """Like get_current_user but returns None instead of raising when no valid
+    credential is present. For endpoints that personalize for a signed-in user
+    yet must still work anonymously — e.g. the CEFR feed, which excludes a
+    user's watched/hidden movies only when a token is supplied.
+    """
+    if not token:
+        return None
+    payload = verify_token(token)
+    # Same guards as get_current_user, but every failure degrades to
+    # "anonymous" rather than 401 so a stale/malformed token never breaks
+    # the public feed.
+    if payload is None or payload.get("type") == "refresh":
+        return None
+    user_id_str = payload.get("sub")
+    if user_id_str is None:
+        return None
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        return None
+    user = await db.user.find_unique(where={"id": user_id})
+    if user is None or not user.isActive:
+        return None
     return user
 
 

@@ -16,6 +16,7 @@
  * lights them up automatically if a CEFR feed is wired in later.
  */
 
+import { useState } from 'react';
 import { MONO, SERIF, useThemeColors, type ThemeTokens } from '../theme/tokens';
 import { useReelStore } from '../stores/reelStore';
 
@@ -50,11 +51,16 @@ interface Props {
   movie: RankedFeedMovie;
   rank: number;
   onOpen: () => void;
+  /** Web parity with the mobile swipe: "Seen it" → Watched list. */
+  onWatched?: (movie: RankedFeedMovie) => void;
+  /** Web parity with the mobile swipe: "Not interested" → hidden. */
+  onNotInterested?: (movie: RankedFeedMovie) => void;
 }
 
-export function RankedFeedRow({ movie, rank, onOpen }: Props) {
+export function RankedFeedRow({ movie, rank, onOpen, onWatched, onNotInterested }: Props) {
   const t = useThemeColors();
   const s = makeRowStyle(t);
+  const [hovered, setHovered] = useState(false);
 
   const tmdbId = movie.tmdb_id ?? (typeof movie.id === 'number' ? movie.id : undefined);
   const added = useReelStore((st) => (tmdbId != null ? st.has(tmdbId) : false));
@@ -87,8 +93,27 @@ export function RankedFeedRow({ movie, rank, onOpen }: Props) {
     }
   };
 
+  const handleWatched = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (tmdbId == null) return;
+    onWatched?.(movie);
+  };
+  const handleNotInterested = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (tmdbId == null) return;
+    onNotInterested?.(movie);
+  };
+
+  const showActions = hovered && (onWatched || onNotInterested);
+
   return (
-    <button type="button" onClick={onOpen} style={s.row}>
+    <button
+      type="button"
+      onClick={onOpen}
+      style={s.row}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div style={s.scrim} />
       <div style={s.content}>
         <div style={s.rank}>{rank}</div>
@@ -102,6 +127,38 @@ export function RankedFeedRow({ movie, rank, onOpen }: Props) {
           {subtext ? <div style={s.sub}>{subtext}</div> : null}
           {wordCount ? <div style={s.words}>{wordCount}</div> : null}
         </div>
+        {showActions ? (
+          <div style={s.actions}>
+            {onWatched ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleWatched}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleWatched(e); }
+                }}
+                title="Seen it — add to Watched"
+                style={{ ...s.actionChip, background: 'rgba(76,175,154,0.95)', borderColor: 'rgba(76,175,154,1)', color: '#03251d' }}
+              >
+                ✓ Seen it
+              </div>
+            ) : null}
+            {onNotInterested ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleNotInterested}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotInterested(e); }
+                }}
+                title="Not interested — hide from feed"
+                style={{ ...s.actionChip, background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.28)', color: '#fff' }}
+              >
+                ✕ Not interested
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div
           role="button"
           tabIndex={0}
@@ -241,6 +298,24 @@ function makeRowStyle(t: ThemeTokens): Record<string, React.CSSProperties> {
       borderRadius: 999,
       border: '1px solid',
       flexShrink: 0,
+      fontSize: 12,
+      fontWeight: 800,
+      letterSpacing: 0.3,
+      whiteSpace: 'nowrap',
+      cursor: 'pointer',
+    },
+    actions: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 0,
+    },
+    actionChip: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '8px 12px',
+      borderRadius: 999,
+      border: '1px solid',
       fontSize: 12,
       fontWeight: 800,
       letterSpacing: 0.3,

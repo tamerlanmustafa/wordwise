@@ -34,6 +34,8 @@ import { scoreToCefr } from '../../utils/formatting';
 import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
+import { SwipeableRow } from './SwipeableRow';
+import type { SwipeAction } from '../../utils/swipeDecision';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 const CARD_H        = 116;
@@ -72,6 +74,9 @@ interface Props {
   refreshControl?: React.ReactElement<RefreshControlProps>;
   /** Fires when the user starts dragging (e.g. to dismiss the keyboard). */
   onScrollBeginDrag?: () => void;
+  /** Home-feed swipe: right → "Seen it" (Watched), left → "Not interested".
+   *  When omitted, cards aren't swipeable. */
+  onSwipeAction?: (action: SwipeAction, movie: any) => void;
 }
 
 // ── Add-to-reel chip ────────────────────────────────────────────────────────
@@ -212,14 +217,13 @@ const MovieCard = React.memo(({
   const posterRef = useRef<View | null>(null);
 
   return (
-    <View style={s.cardSlot}>
-      <TouchableOpacity
-        style={s.card}
-        onPress={onPress}
-        onPressIn={() => prefetchMovieImages(movie)}
-        activeOpacity={0.9}
-      >
-        {backdropUri ? (
+    <TouchableOpacity
+      style={s.card}
+      onPress={onPress}
+      onPressIn={() => prefetchMovieImages(movie)}
+      activeOpacity={0.9}
+    >
+      {backdropUri ? (
           <ImageBackground
             source={{ uri: backdropUri }}
             style={s.backdrop}
@@ -279,7 +283,6 @@ const MovieCard = React.memo(({
           </View>
         )}
       </TouchableOpacity>
-    </View>
   );
 });
 
@@ -303,7 +306,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag }: Props) => {
+export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction }: Props) => {
   const [zoomed, setZoomed] = useState<{ uri: string; title: string } | null>(null);
 
   // Hydrate the reel store once so the chip can read membership state
@@ -333,13 +336,26 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
         <FlashList
           data={data}
           keyExtractor={(item) => String(item.id || item.movie_id)}
-          renderItem={({ item }) => (
-            <MovieCard
-              movie={item}
-              onPress={() => onMoviePress(item)}
-              onZoom={(uri, title) => setZoomed({ uri, title })}
-            />
-          )}
+          renderItem={({ item }) => {
+            const card = (
+              <MovieCard
+                movie={item}
+                onPress={() => onMoviePress(item)}
+                onZoom={(uri, title) => setZoomed({ uri, title })}
+              />
+            );
+            return (
+              <View style={s.cardSlot}>
+                {onSwipeAction ? (
+                  <SwipeableRow height={CARD_H} onSwipe={(action) => onSwipeAction(action, item)}>
+                    {card}
+                  </SwipeableRow>
+                ) : (
+                  card
+                )}
+              </View>
+            );
+          }}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"

@@ -31,6 +31,7 @@ import { useReelStore } from '../stores/reelStore';
 import { srsApi, type TodaysWord } from '../services/srsApi';
 import apiClient from '../services/api';
 import { fetchTopRatedMovies, type TMDBMovie } from '../services/tmdbService';
+import { watchedApi } from '../services/watchedApi';
 
 type SortKey = 'rating' | 'popularity' | 'level';
 
@@ -59,12 +60,22 @@ export default function HomePage() {
     if (!reelHydrated) void hydrateReel();
   }, [reelHydrated, hydrateReel]);
 
-  // Existing web feed query — TMDB top-rated. Unchanged from before.
+  // Web feed query — TMDB top-rated. The web feed doesn't use the CEFR
+  // endpoint (which filters server-side), so we exclude the user's watched /
+  // "not interested" movies client-side here.
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetchTopRatedMovies(1);
-        setMovies(res.results.slice(0, 20));
+        const [res, watched, hiddenIds] = await Promise.all([
+          fetchTopRatedMovies(1),
+          watchedApi.listWatched().catch(() => []),
+          watchedApi.listHiddenIds().catch(() => []),
+        ]);
+        const excluded = new Set<number>([
+          ...watched.map((w) => w.tmdb_id),
+          ...hiddenIds,
+        ]);
+        setMovies(res.results.filter((m) => !excluded.has(m.id)).slice(0, 20));
       } catch (err) {
         console.error('Failed to load homepage feed:', err);
       } finally {
@@ -72,6 +83,34 @@ export default function HomePage() {
       }
     })();
   }, []);
+
+  // "Seen it" → Watched list; "Not interested" → hidden. Both drop the row
+  // from the feed immediately and persist server-side (mirrors the mobile
+  // swipe). Web has no toast/undo yet, so these are deliberate hover clicks.
+  const handleWatched = async (m: RankedFeedMovie) => {
+    const tmdbId = m.tmdb_id ?? m.id;
+    setMovies((prev) => prev.filter((x) => x.id !== tmdbId));
+    try {
+      await watchedApi.markWatched({
+        tmdb_id: tmdbId,
+        title: m.title,
+        poster_path: m.poster_path,
+        year: m.release_date ? parseInt(m.release_date.slice(0, 4), 10) : null,
+      });
+    } catch {
+      /* best-effort; the row is already gone locally */
+    }
+  };
+
+  const handleNotInterested = async (m: RankedFeedMovie) => {
+    const tmdbId = m.tmdb_id ?? m.id;
+    setMovies((prev) => prev.filter((x) => x.id !== tmdbId));
+    try {
+      await watchedApi.hide(tmdbId);
+    } catch {
+      /* best-effort */
+    }
+  };
 
   // Word of the hour — same endpoint the mobile Home uses.
   useEffect(() => {
@@ -193,6 +232,8 @@ export default function HomePage() {
                   movie={m as RankedFeedMovie}
                   rank={i + 1}
                   onOpen={() => navigate(`/movie/${m.id}`)}
+                  onWatched={handleWatched}
+                  onNotInterested={handleNotInterested}
                 />
               ))}
             </div>

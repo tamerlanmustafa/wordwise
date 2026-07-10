@@ -11,6 +11,7 @@ export type Screen =
   | 'stats'
   | 'notebook'
   | 'lists'
+  | 'watched'
   | 'achievements'
   | 'leaderboard'
   | 'familyPlan'

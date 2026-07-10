@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -59,6 +59,18 @@ export function ToastHost() {
         <Text style={s.text} numberOfLines={2}>
           {toast.message}
         </Text>
+        {toast.actionLabel && toast.onAction ? (
+          <Pressable
+            hitSlop={10}
+            onPress={() => {
+              toast.onAction?.();
+              dismiss(toast.id);
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={[s.action, { color: accent }]}>{toast.actionLabel}</Text>
+          </Pressable>
+        ) : null}
       </Animated.View>
     </SafeAreaView>
   );
@@ -85,4 +97,5 @@ const makeStyles = (tc: ThemeColors) =>
       elevation: 8,
     },
     text: { flex: 1, fontSize: 14, fontWeight: '600', color: tc.text },
+    action: { fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
   });

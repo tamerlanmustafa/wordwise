@@ -17,12 +17,18 @@ export interface Toast {
   tone: ToastTone;
   /** ms before auto-dismiss. */
   duration: number;
+  /** Optional inline action (e.g. "Undo"). Tapping it runs onAction then
+   *  dismisses the toast. */
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 export interface ToastInput {
   message: string;
   tone?: ToastTone;
   duration?: number;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface ToastState {
@@ -45,9 +51,9 @@ function nextId(): string {
 export const useToastStore = create<ToastState>((set) => ({
   queue: [],
 
-  show: ({ message, tone = 'default', duration = DEFAULT_TOAST_DURATION }) => {
+  show: ({ message, tone = 'default', duration = DEFAULT_TOAST_DURATION, actionLabel, onAction }) => {
     const id = nextId();
-    set((s) => ({ queue: [...s.queue, { id, message, tone, duration }] }));
+    set((s) => ({ queue: [...s.queue, { id, message, tone, duration, actionLabel, onAction }] }));
     return id;
   },
 

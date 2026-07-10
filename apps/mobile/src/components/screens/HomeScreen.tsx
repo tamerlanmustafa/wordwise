@@ -17,8 +17,11 @@ import type { MovieData } from '../../core/types';
 import {
   tmdbApi,
   srsApi,
+  watchedApi,
   type TodaysWord,
 } from '../../services/api';
+import { showToast } from '../../stores/toastStore';
+import type { SwipeAction } from '../../utils/swipeDecision';
 import { useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
@@ -79,6 +82,8 @@ export const HomeScreen = ({
     loadingMore: levelLoadingMore,
     hasMore: levelHasMore,
     loadMore: loadMoreLevel,
+    removeMovie: removeLevelMovie,
+    insertMovie: insertLevelMovie,
   } = useInfiniteCefrMovies(selectedLevel, levelSort, levelSortAsc ? 'asc' : 'desc');
   const [loading, setLoading] = useState(true);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
@@ -256,6 +261,55 @@ export const HomeScreen = ({
     clearSearch();
   };
 
+  // Home-feed swipe: right → "Seen it" (Watched list), left → "Not
+  // interested" (hidden). Optimistically remove the card, fire the API, and
+  // offer Undo — which reverses the API call and drops the card back where it
+  // was. Both actions are excluded from the server feed so they won't return.
+  const handleSwipeAction = useCallback(
+    (action: SwipeAction, movie: any) => {
+      const tmdbId = movie?.tmdb_id ?? (typeof movie?.id === 'number' ? movie.id : undefined);
+      if (!tmdbId) return;
+
+      const index = removeLevelMovie(tmdbId);
+      if (index === -1) return;
+
+      const year = movie.release_date
+        ? parseInt(String(movie.release_date).slice(0, 4), 10)
+        : movie.year ?? null;
+
+      if (action === 'watched') {
+        watchedApi
+          .markWatched({
+            tmdb_id: tmdbId,
+            title: movie.title,
+            poster_path: movie.poster_path ?? null,
+            year,
+          })
+          .catch(() => {});
+        showToast({
+          message: `Added “${movie.title}” to Watched`,
+          tone: 'success',
+          actionLabel: 'Undo',
+          onAction: () => {
+            watchedApi.unmarkWatched(tmdbId).catch(() => {});
+            insertLevelMovie(movie, index);
+          },
+        });
+      } else {
+        watchedApi.hide(tmdbId).catch(() => {});
+        showToast({
+          message: `Hidden “${movie.title}”`,
+          actionLabel: 'Undo',
+          onAction: () => {
+            watchedApi.unhide(tmdbId).catch(() => {});
+            insertLevelMovie(movie, index);
+          },
+        });
+      }
+    },
+    [removeLevelMovie, insertLevelMovie],
+  );
+
   const handleSortPress = (key: LevelSort) => {
     if (levelSort === key) {
       setLevelSortAsc((v) => !v);
@@ -392,6 +446,7 @@ export const HomeScreen = ({
             loadingMore={levelLoadingMore}
             hasMore={levelHasMore}
             onScrollOffset={handleFeedScroll}
+            onSwipeAction={handleSwipeAction}
             fillHeight
             onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
             refreshControl={
