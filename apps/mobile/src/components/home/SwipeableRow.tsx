@@ -44,6 +44,14 @@ export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_e, g) => !disabled && shouldClaimHorizontal(g.dx, g.dy),
+        // Capture the horizontal swipe *before* the FlashList's scroll can grab
+        // it — this is what stops left/right slides from being stolen by an
+        // up/down scroll. Vertical drags fail shouldClaimHorizontal and fall
+        // through to the list.
+        onMoveShouldSetPanResponderCapture: (_e, g) => !disabled && shouldClaimHorizontal(g.dx, g.dy),
+        // Once we're swiping, don't let the scroll view reclaim the gesture on
+        // a bit of vertical jitter — keeps the slide smooth to release.
+        onPanResponderTerminationRequest: () => false,
         onPanResponderMove: (_e, g) => translateX.setValue(g.dx),
         onPanResponderRelease: (_e, g) => {
           const action = swipeActionOnRelease(g.dx, g.vx);

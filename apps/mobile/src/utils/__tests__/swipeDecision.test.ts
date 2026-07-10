@@ -12,8 +12,15 @@ describe('shouldClaimHorizontal', () => {
     expect(shouldClaimHorizontal(-(SWIPE_CLAIM_DX + 5), 3)).toBe(true);
   });
 
-  it('yields to a vertical drag (list scroll)', () => {
+  it('yields to a clearly vertical drag (list scroll)', () => {
     expect(shouldClaimHorizontal(20, 40)).toBe(false);
+    expect(shouldClaimHorizontal(10, 40)).toBe(false);
+  });
+
+  it('still claims a mostly-horizontal drag that has some vertical drift', () => {
+    // 20px across, 26px down — before the bias this scrolled; now it swipes,
+    // so a real thumb swipe (never perfectly horizontal) isn't stolen.
+    expect(shouldClaimHorizontal(20, 26)).toBe(true);
   });
 
   it('ignores tiny jitters below the claim threshold', () => {

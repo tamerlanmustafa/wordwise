@@ -14,17 +14,24 @@ export const SWIPE_COMMIT_DX = 110;
 /** …or a flick faster than this (px per ms — PanResponder's vx unit) commits
  *  even on a shorter drag, so a quick flick still registers. */
 export const SWIPE_COMMIT_VELOCITY = 0.5;
-/** Minimum horizontal dominance before a drag is treated as a swipe rather
- *  than a vertical list scroll. Below this the FlashList keeps the gesture. */
-export const SWIPE_CLAIM_DX = 12;
+/** Minimum horizontal travel (px) before a drag is treated as a swipe rather
+ *  than a vertical list scroll. Kept small so a horizontal intent is caught
+ *  early, before the FlashList's scroll takes over. */
+export const SWIPE_CLAIM_DX = 8;
+/** How much the horizontal component must beat the vertical one to count as a
+ *  swipe. <1 biases toward horizontal (forgives the vertical drift in a real
+ *  thumb swipe), so left/right isn't stolen by the scroll. At 0.65 a drag up
+ *  to ~57° off horizontal still swipes; steeper drags scroll. */
+export const SWIPE_H_BIAS = 0.65;
 
 /**
- * Whether the row should claim the gesture from the vertical list. True only
- * when the drag is clearly horizontal, so vertical scrolls still reach the
- * FlashList underneath.
+ * Whether the row should claim the gesture from the vertical list. True once
+ * the drag has moved horizontally past SWIPE_CLAIM_DX and is more horizontal
+ * than vertical (allowing for drift via SWIPE_H_BIAS). Clearly-vertical drags
+ * fall through so the FlashList still scrolls.
  */
 export function shouldClaimHorizontal(dx: number, dy: number): boolean {
-  return Math.abs(dx) > SWIPE_CLAIM_DX && Math.abs(dx) > Math.abs(dy);
+  return Math.abs(dx) > SWIPE_CLAIM_DX && Math.abs(dx) > Math.abs(dy) * SWIPE_H_BIAS;
 }
 
 /**
