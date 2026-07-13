@@ -1,272 +1,173 @@
-# WordWise — Deployment Plan (Mobile App + Backend)
+# WordWise — Mobile App Launch Plan
 
-> **Scope:** Shipping the **mobile app** (Expo / React Native) to the App Store + Google Play, and hosting the **backend it depends on** so the app actually works. The web frontend (`frontend/`) is intentionally **out of scope for now**.
+> **Scope:** everything that stands between today and the **mobile app** (Expo /
+> React Native) being live on the **App Store + Google Play**. The backend it
+> depends on is **already deployed and live** (Railway + Cloudflare). The web
+> frontend (`frontend/`) is **out of scope** — it is not deployed and is not
+> required to ship mobile.
 >
-> **Profile used for these recommendations** (from project owner):
-> - **Stage:** Pre-launch / MVP (low traffic)
-> - **Budget/ops:** Balanced — reasonable cost, low DevOps effort, prefer managed platforms
-> - **Audience:** Global / worldwide
-> - **Infra control:** Minimize DevOps
+> Consolidated 2026-07-12 from the old `DEPLOYMENT.md` (pre-launch infra plan)
+> and `DEPLOYMENT_ROADMAP.md` (post-deploy roadmap). The infra-provisioning
+> steps those described — pick a PaaS, write the Dockerfile, migrate the DB,
+> wire DNS — are **done**; the full pre-deploy history lives in git.
 >
-> _Researched June 2026. Prices change — treat the numbers as planning estimates, not quotes._
+> Items marked **[Claude]** are in-repo code changes I can make; **[You]** are
+> dashboard/account actions only you can do.
 
 ---
 
-## 0. The one critical thing about "mobile-only" deployment
+## ✅ Where we are (verified live, 2026-07-07)
 
-A mobile app is **not self-contained**. The Expo app talks to your FastAPI API (`apps/mobile/src/config/env.ts` already hard-codes the production base URL `https://api.wordwise.app`). So "deploy the mobile app online" really means **two** deliverables:
+| Piece | Status |
+|---|---|
+| **Backend API** | Live at `https://api.getwordwise.us` (Railway + Cloudflare proxy, Full SSL, 133 routes, ~150ms) |
+| **PostgreSQL** | Railway-managed; Prisma migration baseline applied via pre-deploy command; **all local data imported & verified** (50k sentence bank, 89k lemma links, 5k classifications); sequences fixed |
+| **Worker** | Deployed (`bash scripts/start-workers.sh`), seeding catalog, `schema.sql` applied |
+| **Domain** | `getwordwise.us` on Cloudflare (free), `api.` CNAME proxied, TLS Full — no redirect loops, verified |
+| **Mobile config** | `apps/mobile/eas.json` (dev/preview/production profiles + submit), `runtimeVersion: {policy: appVersion}`, prod URL `api.getwordwise.us` in `src/config/env.ts`; EAS CLI installed, logged in as `tamerleinn` |
+| **Store accounts** | Apple Developer **active**; Google Play created (developer name: GetWordWise) |
+| **CI** | Green (backend, frontend, mobile, schema jobs on every push) |
 
-1. **Host the backend** (FastAPI API + background worker + PostgreSQL) at a public HTTPS domain — *this is where the cloud env / services / cost / region decisions live.*
-2. **Build & distribute the mobile binaries** via Expo EAS to the two app stores, plus OTA updates.
-
-You cannot skip #1. The rest of this doc covers both.
-
----
-
-## 1. TL;DR — Recommended route
-
-| Layer | Recommendation | Why | Est. cost (MVP) |
-|---|---|---|---|
-| **Backend API + Worker** | **Railway** (Pro plan, usage-based) | Lowest-DevOps path for a multi-service Docker app (API + worker + DB in one project, one bill, deploy from Git). | ~$20–40/mo |
-| **PostgreSQL** | **Railway-managed Postgres** (start here) → migrate to **Neon** if DB cost grows | One bill + zero setup for MVP; Neon's scale-to-zero saves money later. | included / ~$0–19/mo |
-| **Redis** | **Skip for MVP** (the job queue uses Postgres, not Redis) → **Upstash** free tier if/when needed | `REDIS_URL` is optional in this codebase; don't pay for what you don't use. | $0 |
-| **Edge / global latency** | **Cloudflare** in front of `api.wordwise.app` (free plan) | Global audience: TLS, DDoS protection, and **caching of the static-ish movie-vocabulary GETs** at the edge — biggest single latency win for a worldwide user base on a single-region backend. | $0 |
-| **Mobile build & ship** | **Expo EAS** (Free tier → Starter $19/mo when you outgrow it) | Cloud iOS/Android builds + store submission + OTA updates, no Mac/CI to manage. | $0–19/mo |
-| **App store accounts** | Apple Developer + Google Play | Mandatory to publish. | $99/yr + $25 once |
-| **Translation API** | **Google Cloud Translation** (default), keep DeepL optional | 500K chars/mo free, then ~$20/M; broadest language coverage for a global audience. | $0 → usage |
-| **LLM (example sentences)** | **Anthropic**, already hard-capped | `LLM_COST_CAP_USD=50` ledger gate is already in the code. | ≤ $50/mo (capped) |
-
-**Realistic all-in MVP run-rate: ~$30–60/month** + **$99/year** (Apple) + **$25 one-time** (Google), before external-API usage. Detailed breakdown in §8.
-
-**If you'd rather have a flat, predictable bill than usage-based:** use **Render** instead of Railway (see §4) — simpler mental model, ~$50–75/mo.
+So the backend is done. **What remains is entirely mobile-app + launch work**, in the five phases below.
 
 ---
 
-## 2. What we're actually deploying (from the codebase)
+## Phase 1 — Finish the build pipeline (this week)
 
-| Component | Tech | Deploy shape |
-|---|---|---|
-| **API** | FastAPI + Uvicorn (`backend/src/main.py`), Prisma (Python) → Postgres | Long-running container, public HTTPS |
-| **Background worker** | `python -m src.workers.worker` + `controller` (`backend/src/workers/Procfile`); raw-SQL job queue over `asyncpg` + token-bucket rate limiter | Long-running container (no public port) |
-| **Database** | PostgreSQL 15, schema via Prisma (`backend/prisma/schema.prisma`) | Managed Postgres |
-| **Cache/queue** | Redis — **optional** (`REDIS_URL` optional; queue lives in Postgres) | Skip for MVP |
-| **Heavy ML** | spaCy `en_core_web_sm`, `sentence-transformers` (`all-MiniLM-L6-v2` → pulls torch), scikit-learn, NLTK, wordfreq | Bundled in the backend image; **see §3** |
-| **Mobile app** | Expo SDK 54 / RN 0.81, native modules (Google Sign-In), `ios/` + `android/` present | EAS Build → App Store / Play Store |
+Goal: an installable build on a real phone, talking to prod.
 
-### Important nuance: the ML is *lazy-loaded*
-Every heavy import (`import spacy`, `from sentence_transformers import …`, `sklearn`) is **inside a function**, not at module top level. `main.py`'s startup only does `connect_db()`. Consequences:
-
-- The **API process boots light** and only pulls torch/spaCy/MiniLM into RAM **when a classification endpoint is actually hit**. Once loaded, expect the process to sit around **~1–1.5 GB** resident.
-- The **bulk of the heavy work** (TMDB seeding, script ingestion, CEFR classification, embeddings) happens in the **worker**, which auto-seeds popular films on startup. The worker is the memory-hungry one: size it at **~2 GB**.
-- The mobile app mostly **reads already-classified vocabulary** out of Postgres — relatively cheap, cache-friendly requests.
-
-This is *why* a managed container PaaS fits and serverless does not (next section).
+- [ ] **[You]** Android preview build: `cd apps/mobile && eas build --platform android --profile preview`. Say **Yes** to "Generate a new Android Keystore". Install the APK on a phone and smoke-test movies/vocab against prod.
+- [ ] **[You]** Register the release keystore's SHA-1 for Google Sign-In: `eas credentials` (Android → production → Keystore) → copy **SHA-1** → Google Cloud Console → the Android OAuth client for `com.wordwise.mobile` → add fingerprint. *Until this is done, Google login fails on EAS builds.*
+- [ ] **[You]** iOS build (Apple account active): `eas build --platform ios --profile preview`. Let EAS manage certificates. Test via TestFlight internal.
+- [ ] **[You]** Recruit **~12 friends/testers now** for Google Play closed testing. New personal Play accounts must run a closed test (12 testers for 14 consecutive days) **before Google grants production access**. This is the **longest pole in the whole launch** — start the clock ASAP. Apple has no equivalent gate.
 
 ---
 
-## 3. Why not "serverless" (Lambda / Cloud Run scale-to-zero / Vercel functions)
+## Phase 2 — Store-rejection blockers (fix BEFORE submitting)
 
-Tempting for an MVP, but a poor fit here:
+Each is a known, common rejection reason. Verified against the codebase 2026-07-07 — none exist yet.
 
-- **Image size & cold starts.** torch + sentence-transformers + spaCy model + NLTK data is a multi-GB image. Serverless cold starts that load these models are slow (multi-second), and several function platforms cap build/runtime memory (e.g. Vercel build OOMs on `sentence-transformers`).
-- **A persistent background worker** that loops forever and seeds a catalog does not map onto request-scoped functions.
-- **Stateful model loading.** You want the model resident in a warm process, not reloaded per invocation.
+### 2.1 Account deletion — **Apple hard requirement** (Guideline 5.1.1(v))
+Apps with account creation **must** let users delete the account in-app. Google Play additionally requires a **public web link** to request deletion (goes in the Data Safety form — see 2.5).
+- [ ] **[Claude]** Backend: `DELETE /auth/me` — deletes the user row (cascades already exist on user-owned tables) after re-auth/confirmation.
+- [ ] **[Claude]** Mobile: "Delete account" action in the profile sheet (`UserMenuSheet`), with confirm dialog.
 
-**Conclusion:** use an **always-on container PaaS** (Railway / Render / Fly), with the API and worker as two services sharing one image. GPUs are **not** needed — MiniLM embeddings and spaCy run fine on CPU.
+### 2.2 Sign in with Apple — **Apple requirement when Google Sign-In is present** (Guideline 4.8)
+The app offers Google Sign-In, so Apple requires an equivalent privacy-focused option. Email/password does **not** satisfy 4.8.
+- [ ] **[Claude]** Add `expo-apple-authentication` (iOS-only button), backend verification of Apple identity tokens (mirror `google_auth.py`), `apple_id` column via Prisma migration.
+- [ ] Estimate ~half a day. Skipping it risks a 4.8 rejection on first review.
 
----
+### 2.3 In-app purchases — decide now: ship v1 FREE or finish billing
+The paywall/billing surface exists (`billing.py`: apple/google verify, restore, webhooks) but the June security scan flagged **receipt validation & webhook signatures as stubbed**, and consumables as fail-open. A live paywall taking money without server-verified receipts = revenue loss + store trouble.
+- [ ] **Decision:** launch v1 with premium **feature-flagged OFF** (fastest, recommended — the `feature_flags` table exists for exactly this), **or**
+- [ ] implement real StoreKit2 / Play Billing receipt validation + webhook signature verification (Apple `signedPayload` JWS, Google Pub/Sub) before launch. *If the paywall is visible in the binary, reviewers will test it.*
 
-## 4. Backend hosting — platform comparison (2026)
+### 2.4 Review-pass essentials
+- [ ] **[Claude]** `ITSAppUsesNonExemptEncryption: false` in `app.json` `ios.infoPlist` (app only uses HTTPS — skips the export-compliance interrogation on every upload).
+- [ ] **[You]** **Demo account** for reviewers: create a prod account (e.g. `review@getwordwise.us` / strong password), pre-populate with a movie + saved words, put credentials in App Review notes on **both** stores. Login-gated apps without demo creds get rejected same-day.
+- [ ] **[Claude]** **TMDB attribution:** TMDB's API terms require "This product uses the TMDB API but is not endorsed or certified by TMDB" + logo, on the app's settings/about screen. Poster-heavy apps get flagged for this.
+- [ ] **[You]** Copyright prep: the app shows movie scripts/subtitles. Have a ready answer for review ("educational fair-use excerpts, vocabulary learning context"); expect Apple may push back. Worst case, sentence-length *excerpts* are far safer than full scripts.
+- [ ] **[You]** Data Safety form (Play) + Privacy Nutrition Labels (Apple): declare email, name, Google ID, usage data; no ads SDK; data deletable via 2.1.
+- [ ] **[You]** Age-rating questionnaires (both stores). Movie content → likely 12+/Teen; answer honestly, mismatches cause rejection.
 
-All three support custom Docker images and long-running services. Differences that matter here: pricing model, memory ceiling, and global reach.
-
-| | **Railway** ⭐ recommended | **Render** (predictable alt) | **Fly.io** (global alt) |
-|---|---|---|---|
-| **Pricing model** | Usage-based, billed by the second; plan = monthly minimum | Flat plan + compute add-ons | Usage-based; multiple meters compound |
-| **Entry plans** | Hobby $5/mo, **Pro $20/mo** (min) | Hobby $0 + compute, **Pro $25/mo** + compute | ~$5/mo minimum |
-| **Service sizing for this app** | Pick RAM/CPU per service; pay for what's used | Web **Standard $25 (2 GB)**, Worker $25 (2 GB); Starter $7 = 512 MB is **too small** for the ML lazy-load | Choose VM size per Machine |
-| **Multi-service project (API+worker+DB)** | First-class, one project, one bill | Supported (separate services) | Supported (separate apps/processes) |
-| **Managed Postgres** | Yes, in-project | Render Postgres (Basic ~$6 → Standard ~$19) | Fly Postgres (you run it) |
-| **Managed Redis** | Yes, in-project | Key-Value **from $10/mo (25 MB)** | Upstash add-on |
-| **Global regions** | US-West, US-East, EU-West, SE-Asia (pick one) | Oregon, Ohio, Virginia, Frankfurt, Singapore (pick one) | **30+ edge regions, easiest true multi-region** |
-| **DevOps effort** | **Lowest** | Low | Medium (more knobs, "surprise bill" reports) |
-| **Best when** | Variable/low MVP traffic, want one simple bill | You want a **flat, predictable** monthly number | You need multi-region close-to-user latency *now* |
-
-### Recommendation: **Railway** for the MVP
-- One project holds **API service + worker service + Postgres**, deployed straight from the Git repo (Dockerfile or Nixpacks), one dashboard, one bill.
-- Usage-based billing suits pre-launch traffic that's mostly idle — you're not paying for a 2 GB box 24/7 if it's barely used.
-- Set the **worker** to ~2 GB and the **API** to ~1 GB; scale later.
-
-**Choose Render instead if** a fixed invoice matters more than squeezing cost — but note Render's small plans (512 MB) won't hold the ML libs, so you're effectively on Standard ($25) services, and it adds up faster than Railway for an idle MVP.
-
-**Revisit Fly.io when** you have real global traffic and single-region latency becomes the complaint — Fly makes multi-region the simplest. Until then it's more ops than your "minimize DevOps" goal wants.
+### 2.5 Public privacy-policy, terms & deletion URLs (store forms require them)
+Both stores require **public URLs** for privacy policy and terms; Play also needs the account-deletion request URL from 2.1. These do **not** require deploying the web app — you only need **three static pages** reachable at a public URL.
+- [ ] **[You]** Set up email at your domain: Cloudflare → Email Routing (free) → forward `support@getwordwise.us` + `privacy@getwordwise.us` → your Gmail. ~5 min. (The existing policy pages list dead `@wordwise.app` addresses.)
+- [ ] **[You]** Host `privacy`, `terms`, and a `delete-account` request page at a public URL — simplest is a **Cloudflare Pages** project on the existing domain (you're already on Cloudflare), or any static host. No backend needed.
+- [ ] **[Claude]** Update the mobile Terms/Privacy screens + the static pages to the new `@getwordwise.us` addresses, and link them from the app.
+- [ ] Result: `https://<host>/privacy`, `/terms`, `/delete-account` become the URLs you paste into both store forms.
 
 ---
 
-## 5. Database & cache
+## Phase 3 — Security hardening (before public traffic)
 
-### PostgreSQL
-- **Start:** the **platform's managed Postgres** (Railway/Render) — zero extra setup, same dashboard, same bill. Best for "minimize DevOps."
-- **Grow into Neon** if DB cost/scaling becomes a factor: Neon free tier = 100 CU-hours + 0.5 GB with **scale-to-zero** (you pay only when active); storage dropped to ~$0.30/GB-mo in 2026. Caveats with Neon + Prisma + a long-running worker:
-  - Use Neon's **pooled connection string** (PgBouncer) for the API; the worker holds its own `asyncpg` pool.
-  - Scale-to-zero adds a **cold-start delay on the first query** after idle — fine for an MVP, but the always-on worker will mostly keep it warm anyway.
-- **Supabase** is overkill here — you already have your own auth (JWT + Google OAuth) and don't need its auth/storage/realtime bundle; its free project also **pauses after 7 days idle**.
+From the June security scan + what deployment exposed, ordered by risk.
 
-**Migrations:** the repo currently leans on `prisma db push` (dev). For production, adopt a migration history and run **`prisma migrate deploy`** on release (the root `package.json` already exposes `db:migrate`). Never hand-edit `backend/prisma/migrations/` (per `CLAUDE.md`).
-
-### Redis — skip for MVP
-The job queue is **Postgres-backed** (`asyncpg`, `backend/src/workers/queue.py`), and `REDIS_URL` is **optional** in config. There's a new untracked `backend/src/utils/rate_limit.py` — confirm whether it requires Redis before launch. If it does and you want distributed rate-limiting, add **Upstash Redis** (free: 256 MB / 500K commands/mo; then $0.20 per 100K commands) rather than a $10/mo Render Key-Value instance.
+- [ ] **[You]** Confirm Railway env: `DEBUG=False`, fresh `JWT_SECRET_KEY` (not the example value), `ALLOWED_ORIGINS` set (mobile native requests send no `Origin`, so this mainly guards any browser callers — set it to the static-pages host if those call the API).
+- [ ] **[Claude]** Gate `/docs` + `/openapi.json` behind `DEBUG` — the full 133-route API surface is currently publicly enumerable.
+- [ ] **[Claude]** Bump `requests==2.32.0` (yanked) → `2.32.3+` in both requirements files.
+- [ ] **[Claude]** Proxy TMDB through the backend (`/api/tmdb/*` passthrough with caching). The rotated key still ships inside every app bundle — extractable by anyone. Backend proxy = key becomes truly server-side; also unlocks Cloudflare caching of poster/search responses.
+- [ ] **[Claude]** Refresh-token revocation (jti denylist or per-user generation counter): today a stolen refresh token works for 60 days and logout can't kill it. Required before real users; fine to do week 1 post-launch if timeline is tight.
+- [ ] Deferred (fine for single-instance MVP): in-memory rate limiter → Upstash Redis when you scale past one API instance.
 
 ---
 
-## 6. Global audience strategy (single-region backend + edge)
+## Phase 4 — Ops gaps (Cloudflare + Railway + Postgres)
 
-A worldwide audience on a single-region PaaS means users far from that region eat round-trip latency. Pragmatic MVP approach:
+None block submission; the first two protect you from disaster.
 
-1. **Pick one central region** for the API + worker + DB:
-   - Balanced global default: **US-East (Virginia)**.
-   - If early users skew European: **Frankfurt (EU)**.
-   - Keep API, worker, and DB in the **same region** (DB round-trips dominate).
-2. **Put Cloudflare in front of `api.wordwise.app`** (free plan):
-   - Global TLS, DDoS protection, HTTP/3.
-   - **Edge-cache the cacheable GETs.** Movie/vocabulary/CEFR responses are effectively static per movie — caching them at Cloudflare's edge serves most of the world from a nearby PoP and slashes load on your single origin. Add `Cache-Control` headers on those endpoints; keep auth/user-specific endpoints `private, no-store`.
-3. **Defer multi-region** until traffic + analytics justify it. When it does, Fly.io (read replicas near users) or a second Railway/Render region is the move.
+### 4.1 Database backups — **the only irreplaceable thing you have**
+Your ~400 MB of enriched data is the product. Railway Postgres has backups on paid plans, but verify — don't assume.
+- [ ] **[You]** Railway → Postgres service → Backups tab: confirm daily backups are ON and note retention.
+- [ ] **[Claude]** Belt-and-suspenders: GitHub Actions weekly cron that `pg_dump`s prod (secret: `DATABASE_PUBLIC_URL`) and uploads to workflow artifacts / a private bucket. Restore drill documented in-repo.
 
-> Mobile-specific bonus: app **binaries and OTA updates** are already globally distributed by the App Store / Play Store CDNs and EAS's edge (100 GiB egress on the free tier) — so the only thing you're responsible for globally is the **API**, which Cloudflare handles.
+### 4.2 Monitoring — right now, users find your outages before you do
+- [ ] **[You]** Uptime: UptimeRobot / BetterStack free tier → monitor `https://api.getwordwise.us/health` every 1–5 min, alert on failure.
+- [ ] **[Claude]** Error tracking: Sentry free tier — `sentry-sdk[fastapi]` in the backend, `@sentry/react-native` in mobile (catches crashes you'd otherwise never hear about). One DSN per platform, ~1h.
+- [ ] **[You]** Railway usage alerts (Settings → Usage) so a runaway worker doesn't surprise the bill.
+
+### 4.3 Edge caching — the reason Cloudflare is in the stack (global users)
+- [ ] **[Claude]** Add `Cache-Control: public, max-age=…` to the static-ish GETs (`/movies/*`, vocabulary previews, CEFR data — same response for every user) and `private, no-store` on auth/user endpoints.
+- [ ] **[You]** Cloudflare Cache Rule: cache `api.getwordwise.us/movies/*` respecting origin headers. Result: a user in Jakarta gets posters/vocab from a nearby PoP instead of a US round-trip — the single biggest latency win available.
+
+### 4.4 Deploy pipeline polish
+- [ ] **[Claude]** CI job that builds `docker/Dockerfile.backend` on amd64 (path-filtered to `backend/**`, `docker/**`) — catches image breakage in PR instead of on Railway (hit twice: libatomic, Railpack).
+- [ ] **[Claude]** Persist worker seed cursor to DB (currently `.seed_cursor.json` on container FS — resets every deploy, re-walks TMDB discover; wasteful, not harmful).
+- [ ] Later: staging environment (Railway PR environments) and `eas update` OTA channel discipline (prod hotfixes JS-only between store releases).
 
 ---
 
-## 7. Mobile distribution (Expo EAS → App Store + Play Store)
+## Phase 5 — Store listing & submission (after Phases 1–2)
 
-The app uses **native modules** (`@react-native-google-signin/google-signin`) and has committed `ios/` + `android/` dirs, so **Expo Go won't run it** — you need EAS Build (or a local dev client).
+- [ ] **[You]** Assets: app icon (done — in repo), feature graphic 1024×500 (Play), screenshots per device class (6.7" + 5.5" iPhone; phone + 7"/10" tablet for Play — generate from the simulator), short + full descriptions.
+- [ ] **[You]** Listing name: use **GetWordWise** or "WordWise — Movie Vocabulary" carefully — the bare "WordWise" name is owned by someone else; a trademark complaint post-launch can pull the listing. Brand as **GetWordWise**.
+- [ ] **[You]** Production builds: `eas build --platform all --profile production` → `eas submit --platform ios` (TestFlight → App Review) and `eas submit --platform android` (closed testing track first — see Phase 1 gate).
+- [ ] **[You]** Play: run the 14-day closed test → apply for production → staged rollout (20% → 100%).
+- [ ] **[You]** Apple: expect 24–48h review; first submissions of login+content apps often get one rejection — the Phase 2 list is exactly the usual reasons, so clearing it first is the fast path.
 
-### 7.1 Expo EAS plans (2026)
+---
+
+## Suggested order of attack
+
+1. **Today:** Phase 1 (Android preview build + SHA-1) — momentum, and it validates everything end-to-end.
+2. **This week:** Phase 2.1–2.2 (account deletion, Apple sign-in — I can start both now), 2.5 (email + static privacy/terms/deletion pages), Phase 3 quick wins (`/docs` gate, `requests` bump, `ALLOWED_ORIGINS`), 4.1–4.2 (backups + uptime monitor — ~30 min total).
+3. **Next:** Phase 2.3 decision (premium off vs. billing build-out), TMDB proxy, cache headers.
+4. **Then:** Phase 5 submission, with the **Play closed-test clock already running** from step 1.
+
+---
+
+## Reference — mobile build & run-rate
+
+### Expo EAS plans (2026)
 | Plan | Price | Includes |
 |---|---|---|
-| **Free** | $0 | 15 iOS + 15 Android builds/mo, OTA to **1,000 MAU**, 100 GiB edge bandwidth |
-| **Starter** | $19/mo | $45 priority-build credit |
-| **Production** | $199/mo | $225 build credit, 50,000 MAU OTA, 1 TiB bandwidth |
+| **Free** ⭐ start here | $0 | 15 iOS + 15 Android builds/mo, OTA to 1,000 MAU, 100 GiB edge bandwidth |
+| **Starter** | $19/mo | $45 priority-build credit — move here only when you want priority builds or hit limits |
+| **Production** | $199/mo | $225 build credit, 50,000 MAU OTA, 1 TiB — a scale concern, not an MVP one |
 
-➡️ **Start on Free.** 15 builds/platform/month is plenty for pre-launch, and 1,000 MAU of OTA covers an MVP. Move to **Starter ($19)** only when you want priority builds or hit build limits. Production ($199) is a scale concern, not an MVP one.
+The app uses native modules (`@react-native-google-signin/google-signin`) with committed `ios/` + `android/`, so **Expo Go won't run it** — EAS Build (or a local dev client) is required.
 
-### 7.2 Mandatory store accounts (paid to Apple/Google, **not** Expo)
-- **Apple Developer Program — $99/year.** Required to ship to TestFlight and the App Store.
-- **Google Play Developer — $25 one-time.** Required to publish on Play.
-- EAS **Submit** uploads your builds to both; it does not charge the platform fees.
+**Per-release flow:** `eas build --platform all --profile production` → `eas submit --platform all` → submit for review (Apple ~1–2 days; Google hours–days) → ship JS-only fixes between store releases with `eas update`, respecting `runtimeVersion`.
 
-### 7.3 What to set up in the repo before first build
-- **Create `apps/mobile/eas.json`** — it's currently empty/missing. Define `development`, `preview`, and `production` build profiles + the `submit` config. Example skeleton:
-  ```jsonc
-  {
-    "cli": { "version": ">= 12.0.0" },
-    "build": {
-      "development": { "developmentClient": true, "distribution": "internal" },
-      "preview":     { "distribution": "internal" },
-      "production":  { "autoIncrement": true }
-    },
-    "submit": { "production": {} }
-  }
-  ```
-- **Set `runtimeVersion`** in `app.json` (e.g. `{"policy": "appVersion"}`) so EAS Update only ships OTA JS to compatible binaries.
-- **App store identity is already configured:** `ios.bundleIdentifier = com.wordwise.mobile`, `android.package = com.wordwise.mobile`, EAS `projectId` present, owner `tamerleinn`. Good — reuse these.
-- **Point production at the real API.** `apps/mobile/src/config/env.ts` already targets `https://api.wordwise.app` for prod — make sure DNS + Cloudflare + the backend actually serve that hostname before submitting.
-- **Google Sign-In:** the iOS URL scheme/client ID is embedded in `app.json`. Verify the **production** OAuth client (and `GOOGLE_CLIENT_ID` on the backend) matches the released bundle ID, and add the SHA-1 for the Android release keystore in Google Cloud Console.
+### Mandatory store fees (paid to Apple/Google, not Expo)
+- **Apple Developer Program — $99/year** (TestFlight + App Store).
+- **Google Play Developer — $25 one-time.**
+- EAS **Submit** uploads builds to both; it does not charge the platform fees.
 
-### 7.4 Release flow (per release)
-1. `eas build --platform all --profile production` (cloud builds iOS + Android).
-2. `eas submit --platform all` (uploads to App Store Connect + Play Console).
-3. Submit for review (Apple ~1–2 days; Google a few hours–days).
-4. Ship JS-only fixes between store releases with **`eas update`** (OTA), respecting `runtimeVersion`.
-
----
-
-## 8. Cost estimation (MVP, monthly)
-
-### Recommended path — Railway + EAS Free + Cloudflare
-| Item | Estimate |
+### Live stack & monthly run-rate
+| Item | Cost |
 |---|---|
-| Railway Pro (API ~1 GB + Worker ~2 GB, low traffic, usage-based) | **$20–40/mo** |
-| Railway-managed Postgres (small) | included in usage / ~$5–10 |
-| Redis | $0 (skipped) |
+| Railway (API ~1 GB + Worker ~2 GB + managed Postgres, usage-based) | ~$25–50/mo |
 | Cloudflare (free plan) | $0 |
 | Expo EAS (Free tier) | $0 |
-| Google Cloud Translation (≤ 500K chars/mo free) | $0 → usage |
-| Anthropic example sentences (capped) | ≤ $50 (hard cap, typically far less) |
+| Google Cloud Translation (≤ 500K chars/mo free, then ~$20/M) | $0 → usage |
+| Anthropic example sentences | ≤ $50/mo (hard-capped via `LLM_COST_CAP_USD=50`) |
 | **Recurring subtotal** | **≈ $30–60/mo** |
-| Apple Developer | **$99/year** (~$8/mo amortized) |
-| Google Play | **$25 one-time** |
+| Apple Developer | $99/year |
+| Google Play | $25 one-time |
 
-### Predictable alternative — Render
-| Item | Estimate |
-|---|---|
-| Render Web (Standard, 2 GB) | $25 |
-| Render Background Worker (2 GB) | $25 |
-| Render Postgres (Basic→Standard) | $6–19 |
-| Cloudflare / EAS Free | $0 |
-| **Recurring subtotal** | **≈ $55–75/mo** |
-
-> **External-API usage is the variable you watch as you grow**, not the hosting. Google Translate is ~$20 per million characters after the free 500K; the README estimates enrichment at **~$0.15/movie/language**; Anthropic is already ledger-capped at `LLM_COST_CAP_USD=50`. TMDB is free; STANDS4 has a free tier. Because translations are **cached** (`TranslationCache` table) and classification is precomputed by the worker, per-user marginal cost stays low.
+> **External-API usage is the variable to watch as you grow**, not hosting. Translations are cached (`TranslationCache`) and classification is precomputed by the worker, so per-user marginal cost stays low. Redis stays **skipped** for MVP — the job queue is Postgres-backed and `REDIS_URL` is optional.
 
 ---
 
-## 9. Prerequisites & gaps to close before you can deploy
-
-These are real blockers found in the repo:
-
-1. ~~**Missing backend Dockerfile.**~~ ✅ **Done (2026-07-03):** `docker/Dockerfile.backend` exists — one image for both services (API via default CMD on `$PORT`, worker via `scripts/start-workers.sh` which runs the queue worker + AIMD controller together). It installs CPU-only torch (avoids the ~2 GB CUDA build), bakes in spaCy `en_core_web_sm`, NLTK data (`wordnet`, `omw-1.4`, `punkt`, `stopwords`), the `all-MiniLM-L6-v2` sentence-transformer, the Prisma engines, and copies the git-tracked `backend/data/cefr` datasets the classifier loads at runtime. Build from the repo root: `docker build -f docker/Dockerfile.backend .`
-2. ~~**`eas.json` is empty/missing**~~ ✅ **Done (2026-07-03):** `apps/mobile/eas.json` has `development` / `preview` / `production` build profiles (+ submit config, remote app-version source, update channels).
-3. ~~**`runtimeVersion`** not set in `app.json`~~ ✅ **Done (2026-07-03):** `runtimeVersion: {"policy": "appVersion"}` + `updates.url` set in `app.json`.
-4. **Secrets:** set `DATABASE_URL`, `JWT_SECRET_KEY` (rotate the example value), `GOOGLE_CLIENT_ID/SECRET`, `ANTHROPIC_API_KEY`, translation creds, `STANDS4_*`, `ALLOWED_ORIGINS` as **platform environment variables** — never commit `.env` (per `CLAUDE.md`). The TMDB key was rotated 2026-07-03; the web deploy workflow now reads `VITE_TMDB_API_KEY` from GitHub Actions secrets (must be configured in repo settings).
-5. **`DEBUG=False`** in production; restrict `ALLOWED_ORIGINS` (mobile native requests send no `Origin`, so this mainly guards any browser callers).
-6. ~~**DB migrations:** switch from `prisma db push` to a committed migration history~~ ✅ **Done (2026-07-03):** baseline migration `backend/prisma/migrations/20260703000000_init/` generated from `schema.prisma` (Prisma 0.11.0 CLI, `migrate diff --from-empty`). Fresh databases: just run `prisma migrate deploy`. **Existing databases** (local dev, any previously-pushed env): mark the baseline as already applied once with `prisma migrate resolve --applied 20260703000000_init`. Note the baseline is schema-only — the **achievement definition rows** still come from the idempotent seed in `prisma/migrations_manual/2026_07_03_scaffold_tables.sql` (run its `INSERT` once per environment, or `psql -f` the whole file — it's `IF NOT EXISTS`-safe).
-7. **Health check:** `/health` already exists — wire it to the platform's health-check + Cloudflare uptime.
-8. **Worker scaling for MVP:** the worker auto-seeds the TMDB catalog on start. Decide whether to run it **always-on** (continuously grows catalog) or **burst it** to build an initial catalog, then scale to a single small instance to save money.
-9. **Known security gaps** flagged in prior review (access-control/IDOR on some endpoints, fail-open discount/consumables) should be triaged **before** a public launch — see the project security-scan notes.
-
----
-
-## 10. Recommended rollout sequence
-
-1. **Write the production backend Dockerfile** (bake in spaCy/NLTK/MiniLM assets) and verify it boots locally with `DEBUG=False`.
-2. **Provision Railway project:** Postgres + API service + worker service from the repo; set env vars; run `prisma migrate deploy`.
-3. **Buy the API domain + add Cloudflare**, point `api.wordwise.app` at the Railway service, enable TLS + caching rules for the static GET endpoints.
-4. **Smoke-test the API** end-to-end (auth, Google OAuth, movie vocabulary, translation) from a device against the prod URL.
-5. **Register Apple Developer ($99/yr) + Google Play ($25)**; create app records (bundle/package already set).
-6. **Add `eas.json` + `runtimeVersion`;** `eas build --profile production --platform all`.
-7. **`eas submit`** to TestFlight + Play internal testing; QA on real devices.
-8. **Submit for review;** launch. Use `eas update` for JS hotfixes between store releases.
-9. **Watch:** Railway usage, Google Translate character count, Anthropic ledger, Cloudflare cache-hit ratio. Scale the worker / add a second region only when the data says so.
-
----
-
-## Sources
-
-**Backend PaaS (Railway / Render / Fly.io):**
-- [Railway vs Render — Northflank (2026)](https://northflank.com/blog/railway-vs-render)
-- [Railway vs Render vs Fly.io — TECHSY (2026)](https://techsy.io/en/blog/railway-vs-render-vs-fly-io)
-- [Railway vs Render vs Fly.io for Solo Developers (2026)](https://devtoolpicks.com/blog/railway-vs-render-vs-fly-io-solo-developers-2026)
-- [Render vs Railway — Encore (2026)](https://encore.dev/articles/render-vs-railway)
-- [Platforms with a real free tier — Render (2026)](https://render.com/articles/platforms-with-a-real-free-tier-for-developers-in-2026)
-
-**Deploying ML-heavy FastAPI:**
-- [Deploying Sentence Transformers as a service — Zilliz](https://zilliz.com/ai-faq/how-do-you-deploy-a-sentence-transformer-model-as-a-service-or-api-for-example-using-flask-fastapi-or-torchserve)
-- [Out of memory building FastAPI with sentence-transformers — Vercel Community](https://community.vercel.com/t/out-of-memory-when-building-fastapi-app-with-sentence-transformers/25610)
-- [How to Deploy ML Solutions with FastAPI, Docker, and GCP — Towards Data Science](https://towardsdatascience.com/how-to-deploy-ml-solutions-with-fastapi-docker-and-gcp-de1bb8bfc59a/)
-
-**Managed Postgres (Neon / Supabase):**
-- [Neon vs Supabase 2026 — closefuture.io](https://www.closefuture.io/blogs/neon-vs-supabase)
-- [Neon Serverless Postgres Pricing 2026 — simplyblock](https://vela.simplyblock.io/articles/neon-serverless-postgres-pricing-2026/)
-- [Database Pricing Comparison (2026) — buildmvpfast](https://www.buildmvpfast.com/api-costs/database)
-
-**Managed Redis (Upstash):**
-- [Upstash Redis Pricing](https://upstash.com/pricing/redis)
-- [Upstash Pricing & Limits — docs](https://upstash.com/docs/redis/overall/pricing)
-
-**Expo EAS + store fees:**
-- [Expo Application Services Pricing](https://expo.dev/pricing)
-- [Expo Subscriptions, plans, and add-ons — docs](https://docs.expo.dev/billing/plans/)
-- [Expo EAS Pricing Explained (2026) — RNPush](https://rnpush.com/blog/expo-eas-pricing-explained)
-
-**Translation APIs:**
-- [Translation API Pricing Comparison (2026) — buildmvpfast](https://www.buildmvpfast.com/api-costs/translation)
-- [DeepL vs Google Cloud vs Azure Translator (2026) — ChatsControl](https://chatscontrol.com/blog/deepl-api-vs-google-cloud-vs-azure-translator-comparison)
+*Previous pre-deploy plans (Railway/Render/Fly comparison, serverless rationale, DNS + data-migration steps) are archived in git history: `git log -- DEPLOYMENT.md DEPLOYMENT_ROADMAP.md`.*
