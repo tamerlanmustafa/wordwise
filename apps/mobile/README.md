@@ -7,8 +7,46 @@ React Native mobile app for WordWise - learn vocabulary from movies and books.
 ### Prerequisites
 - Node.js 20+
 - npm or yarn
-- Expo Go app on your phone (from Play Store / App Store)
+- Expo Go app on your phone (from Play Store / App Store) — quick start, but **cannot load native modules** (Apple sign-in, Google sign-in, etc.)
 - Python 3.10+ (for backend)
+
+### Development Build (hot reload + native modules) — recommended
+
+Expo Go is fine for JS-only work, but it can't run our native modules (e.g. Apple
+sign-in). A **development build** is a custom client (via `expo-dev-client`) that
+includes those native modules **and** still gives you Fast Refresh / hot reload —
+edits appear in seconds, exactly like Expo Go.
+
+You only rebuild the client when native code or native deps change; day-to-day JS
+work just needs the Metro dev server.
+
+#### 1. Build the dev client once (cloud build, needs an Expo account)
+
+```bash
+# Android (installable APK)
+npm run build:dev:android      # → eas build --profile development --platform android
+
+# iOS (simulator or a registered device)
+npm run build:dev:ios          # → eas build --profile development --platform ios
+```
+
+When the build finishes, EAS gives you a QR code / link — install the resulting
+APK (Android) or `.app`/dev build (iOS) on your device or simulator. Rebuild only
+when you add/upgrade a native module or change native config.
+
+#### 2. Start Metro against the dev client (every session)
+
+```bash
+npm run start:dev-client                # expo start --dev-client
+# or with the backend running alongside it:
+npm run start:dev-full
+```
+
+Open the installed **WordWise (dev)** app and it connects to the dev server — now
+you get hot reload with full native-module support.
+
+> The `development` profile lives in [`eas.json`](./eas.json)
+> (`developmentClient: true`, internal distribution).
 
 ### Development Setup (WSL2 + Physical Device)
 
@@ -141,6 +179,13 @@ npx expo start
 
 # Start with tunnel (for WSL2/remote testing)
 npx expo start --tunnel
+
+# Start Metro against a development build (hot reload + native modules)
+npm run start:dev-client
+
+# Build a development client via EAS (one-time / on native changes)
+npm run build:dev:android
+npm run build:dev:ios
 
 # Run on Android (requires Android SDK)
 npm run android
