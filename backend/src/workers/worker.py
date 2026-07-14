@@ -26,6 +26,7 @@ import uuid
 
 import httpx
 
+from ..logging_config import configure_logging, request_id_ctx
 from . import queue as q
 from .db import close_pool, get_pool
 from .processor import PermanentError, TransientError, process_job
@@ -89,43 +90,50 @@ async def run_worker() -> None:
                     pass
                 continue
 
-            logger.info(
-                "[worker] claimed job_id=%s tmdb_id=%s title=%r priority=%s attempts=%s",
-                job.id,
-                job.tmdb_id,
-                job.title,
-                job.priority,
-                job.attempts,
-            )
-
+            # Tag every log line emitted while this job runs (here and deep in
+            # process_job) with a correlation id, mirroring the API's per-request
+            # id so a single job is traceable end to end.
+            token = request_id_ctx.set(f"job-{job.id}")
             try:
-                result = await process_job(pool, job, client)
-                await q.mark_done(
-                    pool,
+                logger.info(
+                    "[worker] claimed job_id=%s tmdb_id=%s title=%r priority=%s attempts=%s",
                     job.id,
-                    movie_id=result.movie_id,
-                    vocab_count=result.vocab_count,
+                    job.tmdb_id,
+                    job.title,
+                    job.priority,
+                    job.attempts,
                 )
-                logger.info("[worker] done job_id=%s", job.id)
-            except PermanentError as exc:
-                logger.warning("[worker] permanent failure job_id=%s: %s", job.id, exc)
-                # Skip straight to dead by maxing attempts.
-                await q.mark_failed(pool, job.id, attempts_so_far=99, error=str(exc))
-            except TransientError as exc:
-                logger.warning("[worker] transient failure job_id=%s: %s", job.id, exc)
-                await q.mark_failed(pool, job.id, attempts_so_far=job.attempts, error=str(exc))
-            except Exception as exc:
-                logger.exception("[worker] unexpected error job_id=%s: %s", job.id, exc)
-                await q.mark_failed(pool, job.id, attempts_so_far=job.attempts, error=str(exc))
+
+                try:
+                    result = await process_job(pool, job, client)
+                    await q.mark_done(
+                        pool,
+                        job.id,
+                        movie_id=result.movie_id,
+                        vocab_count=result.vocab_count,
+                    )
+                    logger.info("[worker] done job_id=%s", job.id)
+                except PermanentError as exc:
+                    logger.warning("[worker] permanent failure job_id=%s: %s", job.id, exc)
+                    # Skip straight to dead by maxing attempts.
+                    await q.mark_failed(pool, job.id, attempts_so_far=99, error=str(exc))
+                except TransientError as exc:
+                    logger.warning("[worker] transient failure job_id=%s: %s", job.id, exc)
+                    await q.mark_failed(pool, job.id, attempts_so_far=job.attempts, error=str(exc))
+                except Exception as exc:
+                    logger.exception("[worker] unexpected error job_id=%s: %s", job.id, exc)
+                    await q.mark_failed(pool, job.id, attempts_so_far=job.attempts, error=str(exc))
+            finally:
+                request_id_ctx.reset(token)
 
     await close_pool()
     logger.info("[worker] stopped id=%s", worker_id)
 
 
 def main() -> None:
-    logging.basicConfig(
+    configure_logging(
         level=os.environ.get("WORKER_LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        service="worker",
     )
     try:
         asyncio.run(run_worker())
