@@ -31,6 +31,23 @@ SENTENCE_SOURCE_PRIORITY = {
     "subtitle": 3,
 }
 
+
+def _sentence_link_sort_key(link):
+    """Ranking used by every SentenceLemmaLink read path.
+
+    Priority: source (LLM-authored beats subtitle extraction) → movie-tied
+    beats a global row within the same source (honors legacy per-movie LLM
+    rows) → higher score breaks ties. Both `/sentences/{word}` and
+    `/sentences/batch` sort with this so the collapsed preview and the
+    expanded sentence always resolve to the same row.
+    """
+    return (
+        SENTENCE_SOURCE_PRIORITY.get(link.sentence.source, 99),
+        0 if link.sentence.movieId is not None else 1,
+        -(link.score or 0.0),
+    )
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/enrichment", tags=["Enrichment"])
@@ -681,22 +698,46 @@ async def get_word_sentences(
                 "total": len(raw_sentences),
             }
 
-        doc = nlp(word.lower().strip())
-        lemma_text = doc[0].lemma_ if doc else word.lower()
+        surface = word.lower().strip()
+        # Resolve the lemma exactly like /sentences/batch: prefer the lemma the
+        # classifier recorded (it saw the word in full sentence context, so it's
+        # accurate — bare-word spaCy mangles many forms) and fall back to a
+        # single spaCy parse. Keeping this identical to the batch read path is
+        # what makes the collapsed preview and the expanded sentence resolve to
+        # the same SentenceBank row.
+        classification = await db.wordclassification.find_first(
+            where={
+                "script": {"is": {"movieId": movie_id}},
+                "word": {"equals": surface, "mode": "insensitive"},
+            }
+        )
+        if classification and classification.lemma:
+            lemma_text = classification.lemma.lower()
+        else:
+            doc = nlp(surface)
+            lemma_text = doc[0].lemma_ if doc else surface
 
         # Fast path: check SentenceBank via lemma link
         lemma_record = await db.lemma.find_first(where={"lemma": lemma_text})
 
         if lemma_record:
+            # Include global LLM rows (movieId NULL, shared across movies) as
+            # well as this movie's rows, then rank with the shared read-path
+            # key so an AI-authored sentence wins over a subtitle extraction —
+            # identical to /sentences/batch, so expanding a row never swaps the
+            # AI sentence for the raw in-movie one.
             links = await db.sentencelemmalink.find_many(
                 where={
                     "lemmaId": lemma_record.id,
-                    "sentence": {"movieId": movie_id},
+                    "OR": [
+                        {"sentence": {"is": {"movieId": None}}},
+                        {"sentence": {"is": {"movieId": movie_id}}},
+                    ],
                 },
                 include={"sentence": True},
-                order={"score": "desc"},
-                take=max_examples,
             )
+            links.sort(key=_sentence_link_sort_key)
+            links = links[:max_examples]
 
             if links:
                 for link in links:
@@ -890,13 +931,7 @@ async def get_word_sentences_batch(
     for link in links:
         by_lemma_id.setdefault(link.lemmaId, []).append(link)
     for lemma_id, bucket in by_lemma_id.items():
-        bucket.sort(
-            key=lambda link: (
-                SENTENCE_SOURCE_PRIORITY.get(link.sentence.source, 99),
-                0 if link.sentence.movieId is not None else 1,
-                -(link.score or 0.0),
-            )
-        )
+        bucket.sort(key=_sentence_link_sort_key)
         by_lemma_id[lemma_id] = bucket[: request.max_examples]
 
     results: Dict[str, list] = {}
