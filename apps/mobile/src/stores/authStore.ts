@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { User } from '../types';
+import type { CefrLevel, User } from '../types';
 import { tokenStorage } from '../services/auth/tokenStorage';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'offline_authenticated';
@@ -12,6 +12,12 @@ interface AuthState {
   // Actions
   setUser: (user: User) => void;
   setStatus: (status: AuthStatus) => void;
+  /** Reconcile a placement/onboarding CEFR level onto the profile the rest of
+   *  the app reads. Home seeds its CEFR filter from user.proficiency_level, so
+   *  a server-only PATCH left it stale (issue #83: quiz said C2, Home filtered
+   *  B2). Sets the level locally first so it holds even offline, then PATCHes
+   *  the server and reconciles with the response. */
+  syncProficiencyLevel: (level: CefrLevel) => Promise<void>;
   login: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Server-side account deletion, then local sign-out. Throws (leaving the
@@ -20,7 +26,7 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   status: 'loading',
   user: null,
 
@@ -35,6 +41,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setStatus: (status) => set({ status }),
+
+  syncProficiencyLevel: async (level) => {
+    const { user, setUser } = get();
+    if (!user) return;
+    // Optimistic local write first: surfaces that seed from proficiency_level
+    // (Home's CEFR filter) reflect the level immediately, even offline (#83).
+    setUser({ ...user, proficiency_level: level });
+    try {
+      // Inline require, not a native import(): Jest can't execute import() in
+      // this repo — same reason as deleteAccount below.
+      const { authApi } = require('../services/api') as typeof import('../services/api');
+      const fresh = await authApi.updateProfile({ proficiency_level: level });
+      setUser(fresh); // reconcile with server truth
+    } catch {
+      // Local already reflects the level (#83); server reconciles next session.
+    }
+  },
 
   login: async (user, accessToken, refreshToken) => {
     await tokenStorage.saveTokens(accessToken, refreshToken);

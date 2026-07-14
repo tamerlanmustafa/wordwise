@@ -16,7 +16,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useReelStore } from '../../stores/reelStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
-import { authApi } from '../../services/api';
 import type { CefrLevel } from '../../types';
 import { derivePlacementLevel, PLACEMENT_WORDS, type PlacementAnswer, type PlacementRating } from './placement';
 import { ScriptAnalyzing } from '../movies/ScriptAnalyzing';
@@ -98,17 +97,10 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
     AsyncStorage.setItem('targetLanguage', language).catch(() => {});
     // Reconcile the placement-derived level with the server profile the rest
     // of the app reads (feed, Settings) so the two levels never disagree (F-003).
-    // The LOCAL user must update too — Home seeds its CEFR filter from
-    // authStore.user.proficiency_level, and a server-only PATCH left it stale
-    // (issue #83: quiz said C2, Home filtered B2). Optimistic local set first
-    // so the fix holds even offline; the server response reconciles after.
-    {
-      const { user, setUser } = useAuthStore.getState();
-      if (user) setUser({ ...user, proficiency_level: level });
-    }
-    authApi.updateProfile({ proficiency_level: level })
-      .then((fresh) => useAuthStore.getState().setUser(fresh))
-      .catch(() => { /* local already reflects the quiz; server reconciles next session */ });
+    // Home seeds its CEFR filter from authStore.user.proficiency_level, so this
+    // sets the level locally first (holds even offline) then PATCHes the server
+    // (issue #83: quiz said C2, Home filtered a stale B2).
+    void useAuthStore.getState().syncProficiencyLevel(level);
     addToReel({ tmdb_id: film.tmdb_id, title: film.title, poster_path: film.poster_path, year: film.year })
       .catch(() => {
         /* optimistic + best-effort — never block finishing on a network error */

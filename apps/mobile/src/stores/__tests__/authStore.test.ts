@@ -15,7 +15,7 @@ jest.mock('../../services/auth/tokenStorage', () => ({
 // the module only to keep the real api (and its native deps) from loading, and
 // we assert the *synchronous* cached-auth contract rather than the refresh.
 jest.mock('../../services/api', () => ({
-  authApi: { me: jest.fn(), deleteAccount: jest.fn() },
+  authApi: { me: jest.fn(), deleteAccount: jest.fn(), updateProfile: jest.fn() },
 }));
 
 import { useAuthStore } from '../authStore';
@@ -119,6 +119,44 @@ describe('authStore', () => {
     it('sets the auth status field', () => {
       useAuthStore.getState().setStatus('offline_authenticated');
       expect(useAuthStore.getState().status).toBe('offline_authenticated');
+    });
+  });
+
+  describe('syncProficiencyLevel', () => {
+    const mockUpdate = authApi.updateProfile as jest.Mock;
+
+    it('sets the level locally before the server responds (optimistic), then reconciles', async () => {
+      // Issue #83: onboarding quiz derived C2 but the profile was a stale B2, so
+      // Home's CEFR filter (which seeds from user.proficiency_level) showed B2.
+      useAuthStore.setState({ user: user({ proficiency_level: 'B2' }), status: 'authenticated' });
+      // Server echoes the new level (plus another field, to prove setUser(fresh) ran).
+      mockUpdate.mockResolvedValue(user({ proficiency_level: 'C2', username: 'server-echo' }));
+
+      const pending = useAuthStore.getState().syncProficiencyLevel('C2');
+      // Optimistic: Home would read C2 immediately, without waiting on the network.
+      expect(useAuthStore.getState().user?.proficiency_level).toBe('C2');
+
+      await pending;
+      expect(mockUpdate).toHaveBeenCalledWith({ proficiency_level: 'C2' });
+      expect(useAuthStore.getState().user).toMatchObject({ proficiency_level: 'C2', username: 'server-echo' });
+    });
+
+    it('keeps the quiz level when the server PATCH fails (offline)', async () => {
+      useAuthStore.setState({ user: user({ proficiency_level: 'B2' }), status: 'authenticated' });
+      mockUpdate.mockRejectedValue(new Error('offline'));
+
+      await useAuthStore.getState().syncProficiencyLevel('C2');
+
+      expect(useAuthStore.getState().user?.proficiency_level).toBe('C2');
+      await flush(); // setUser persists asynchronously
+      expect(JSON.parse((await AsyncStorage.getItem('user'))!)).toMatchObject({ proficiency_level: 'C2' });
+    });
+
+    it('is a no-op when unauthenticated', async () => {
+      useAuthStore.setState({ user: null, status: 'unauthenticated' });
+      await useAuthStore.getState().syncProficiencyLevel('C2');
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().user).toBeNull();
     });
   });
 
