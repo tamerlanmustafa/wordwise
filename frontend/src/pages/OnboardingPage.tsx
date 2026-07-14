@@ -18,7 +18,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useReelStore } from '../stores/reelStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
-import { CEFR_LEVELS, type CefrLevel } from '@wordwise/types';
+import { CEFR_LEVELS, filterLanguages, type CefrLevel } from '@wordwise/types';
 import {
   derivePlacementLevel,
   PLACEMENT_WORDS,
@@ -73,6 +73,7 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>('welcome');
   const [language, setLanguage] = useState<string>(targetLanguage || 'ES');
+  const [langQuery, setLangQuery] = useState('');
   const [answers, setAnswers] = useState<PlacementAnswer[]>([]);
   const [wordIdx, setWordIdx] = useState(0);
   const [level, setLevel] = useState<CefrLevel>('A1');
@@ -186,11 +187,27 @@ export default function OnboardingPage() {
 
   // ── Language ────────────────────────────────────────────────────────
   if (step === 'language') {
+    const shownLangs = filterLanguages(availableLanguages, langQuery);
     return shell(
       <>
         <StepHeader step={1} eyebrow="Step 1 of 5" title="What are you learning?" onBack={() => setStep('welcome')} />
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {availableLanguages.map((l) => {
+        {/* Search/filter (issue #80) — web parity with the mobile LanguageStep;
+            same input recipe as the film-picker step below. */}
+        <div style={{ padding: '14px 18px 0' }}>
+          <input
+            value={langQuery}
+            onChange={(e) => setLangQuery(e.target.value)}
+            placeholder="Search languages"
+            autoCorrect="off"
+            autoCapitalize="none"
+            style={{ width: '100%', height: 42, padding: '0 12px', borderRadius: 12, background: t.paper, border: `1px solid ${t.border}`, color: t.text, fontSize: 15, boxSizing: 'border-box' }}
+          />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {shownLangs.length === 0 && (
+            <div style={{ textAlign: 'center', color: t.text3, fontSize: 14, marginTop: 24 }}>No languages match "{langQuery.trim()}"</div>
+          )}
+          {shownLangs.map((l) => {
             const on = l.code === language;
             return (
               <button key={l.code} onClick={() => setLanguage(l.code)} style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px', borderRadius: 14, background: on ? t.primaryT : t.paper, border: `2px solid ${on ? t.primary : t.border}`, color: t.text, cursor: 'pointer' }}>
