@@ -823,9 +823,9 @@ export const styles = StyleSheet.create({
   },
   heroBackdrop: {
     position: 'relative',
-    height: 240,
+    height: 216,
     overflow: 'hidden',
-    backgroundColor: '#0a0612',
+    backgroundColor: '#0A0810',
   },
   heroBackdropImage: {
     ...StyleSheet.absoluteFillObject,
@@ -837,93 +837,103 @@ export const styles = StyleSheet.create({
     right: 0,
     height: 80,
   },
-  heroBackButtonOverlay: {
-    position: 'absolute',
-    left: 6,
-    zIndex: 2,
-  },
-  heroBackButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
   heroBottomGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  heroFloating: {
+  // Title block sits inside the backdrop, right of where the poster tail
+  // overlaps (16 + 92 poster + 14 gap = 122).
+  heroTitleBlock: {
     position: 'absolute',
-    left: 14,
-    right: 14,
+    left: 122,
+    right: 16,
     bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-  },
-  heroPoster: {
-    width: 76,
-    height: 114,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#0a0612',
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  heroPosterImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroMetaCol: {
-    flex: 1,
-    minWidth: 0,
   },
   heroTitle: {
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: -0.4,
-    lineHeight: 24,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 12,
   },
-  heroMetaRow: {
+  heroMetaLine: {
+    marginTop: 5,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 4,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.72)',
   },
-  heroMetaYear: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '600',
+  heroMetaStar: {
+    color: '#FFD166',
+    fontWeight: '700',
   },
   heroMetaRating: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.95)',
+    color: 'rgba(255,255,255,0.92)',
     fontWeight: '700',
-  },
-  heroMetaGenres: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
   },
   heroMetaSep: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.45)',
   },
-  heroDifficultyChip: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
+  // Bridge row — the poster tail hangs out of the backdrop; stats fill the strip.
+  bridgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 38,
+  },
+  bridgePoster: {
+    width: 92,
+    height: 138,
+    marginTop: -100,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: '#0A0810',
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  bridgePosterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  statsStrip: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 14,
+  },
+  cefrChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: 8,
-    marginTop: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexShrink: 0,
   },
-  heroDifficultyChipText: {
+  cefrChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  cefrChipText: {
     fontSize: 11,
-    color: '#fff',
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+  corpusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 1,
   },
   posterZoomBackdrop: {
     flex: 1,
@@ -1002,23 +1012,19 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  overviewBox: {
+  // Overview — quiet text on the app background, no paper box or border.
+  overviewBlock: {
+    paddingTop: 10,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   overviewText: {
     fontSize: 13,
-    color: colors.textSecondary,
     lineHeight: 19,
   },
   overviewToggle: {
     fontSize: 12,
-    color: colors.primary,
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 5,
   },
   scriptErrorBox: {
     margin: 16,
@@ -1126,15 +1132,23 @@ export const styles = StyleSheet.create({
   unifiedTabLabelActive: {
     opacity: 1,
   },
+  // Count + sort — split ends: count on the left, sort toggle on the right.
   countSortRow: {
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 9,
+    paddingBottom: 6,
   },
   countSortText: {
-    fontSize: 13,
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.textSecondary,
+  },
+  countSortSort: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   levelDescription: {
     flexDirection: 'row',

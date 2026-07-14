@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Text, View } from 'react-native';
+import { useThemeColors, useColorScheme } from '../../theme/tokens';
 
 interface Props {
   wordKey: string;
@@ -25,6 +26,8 @@ const _BookmarkRowWrapper = ({
   isCurrentBookmark,
   children,
 }: Props) => {
+  const tc = useThemeColors();
+  const dark = useColorScheme() === 'dark';
   const translateX = useRef(new Animated.Value(0)).current;
   const [dragging, setDragging] = useState(false);
   const [direction, setDirection] = useState<'right' | 'left' | null>(null);
@@ -91,6 +94,10 @@ const _BookmarkRowWrapper = ({
 
   const showRightReveal = dragging || direction === 'right';
   const showLeftReveal = (dragging || direction === 'left') && !!onMarkLearned;
+  // While the row slides, back it with an opaque paper fill + soft edge shadow
+  // so the reveal never bleeds through the row content.
+  const revealing = showRightReveal || showLeftReveal;
+  const rightLabelColor = dark ? tc.goldDeep : '#FFFFFF';
 
   return (
     <View
@@ -106,14 +113,14 @@ const _BookmarkRowWrapper = ({
             top: 0,
             bottom: 0,
             width: 160,
-            backgroundColor: isCurrentBookmark ? '#E53935' : '#7C5CBF',
+            backgroundColor: isCurrentBookmark ? tc.error : tc.gold,
             justifyContent: 'center',
             paddingLeft: 16,
             opacity: rightRevealOpacity,
           }}
         >
-          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
-            {isCurrentBookmark ? '✕  Remove bookmark' : '🔖  Leave off here'}
+          <Text style={{ color: isCurrentBookmark ? '#FFFFFF' : rightLabelColor, fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
+            {isCurrentBookmark ? '✕  Remove bookmark' : 'Leave off here'}
           </Text>
         </Animated.View>
       )}
@@ -126,20 +133,32 @@ const _BookmarkRowWrapper = ({
             top: 0,
             bottom: 0,
             width: 160,
-            backgroundColor: '#2E7D32',
+            backgroundColor: tc.success,
             justifyContent: 'center',
             alignItems: 'flex-end',
             paddingRight: 16,
             opacity: leftRevealOpacity,
           }}
         >
-          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
             ✓  I know this
           </Text>
         </Animated.View>
       )}
       <Animated.View
-        style={{ transform: [{ translateX }] }}
+        style={{
+          transform: [{ translateX }],
+          backgroundColor: revealing ? tc.paper : undefined,
+          ...(revealing
+            ? {
+                shadowColor: '#000',
+                shadowOpacity: 0.14,
+                shadowRadius: 9,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 6,
+              }
+            : null),
+        }}
         {...panResponder.panHandlers}
       >
         {children}

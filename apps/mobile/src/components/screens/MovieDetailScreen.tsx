@@ -22,7 +22,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, cefrColors, cefrLabels } from '../../theme/palette';
-import { useThemeColors } from '../../theme/tokens';
+import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
@@ -81,6 +81,7 @@ export const MovieDetailScreen = ({
   onStartQuiz,
 }: Props) => {
   const tc = useThemeColors();
+  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
@@ -123,6 +124,11 @@ export const MovieDetailScreen = ({
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
+  // Detect whether the overview actually spills past 2 lines so we can hide the
+  // More/Less toggle when it doesn't. Measured unclamped on first layout, then
+  // clamped — see the overview block below.
+  const [overviewLineCount, setOverviewLineCount] = useState<number | null>(null);
+  const overviewTruncated = overviewLineCount != null && overviewLineCount > 2;
   const prevLevelRef = useRef<string>(activeLevel);
 
   // Scroll-driven headroom for the sticky tabs header: 0 at rest (tabs sit
@@ -486,6 +492,12 @@ export const MovieDetailScreen = ({
 
   const idioms = vocabulary?.idioms || [];
 
+  // Hero stats-strip corpus size: total classified vocab across levels + idioms.
+  const totalWordCount = vocabulary
+    ? Object.values(vocabulary.level_distribution).reduce((a, b) => a + (b || 0), 0)
+    : 0;
+  const idiomCount = idioms.length;
+
   // Idioms have their own CEFR level, so we group them the same way words are
   // grouped — by exact CEFR match. They render inline with the level's words.
   const idiomsByLevel = useMemo(() => {
@@ -578,6 +590,10 @@ export const MovieDetailScreen = ({
 
   const activeScrollKey: string | null = wordsView === 'all' ? activeLevel : null;
   const activeIndicatorColor = `${cefrColors[activeLevel] || colors.primary}20`;
+  // Tabs pill surface — replaces the light-only #E4DCF0. Solid tokens (not
+  // alpha tints) so the fixed ★ For You section occludes the level tabs
+  // scrolling beneath it, and so the right-edge fade can hex-suffix `00`.
+  const tabsPillBg = scheme === 'dark' ? tc.paper : tc.chipBg;
 
   useEffect(() => {
     if (!activeScrollKey) {
@@ -805,79 +821,107 @@ export const MovieDetailScreen = ({
               Its height is where the sticky header pins, which drives the
               status-bar spacer inside the header below. */}
           <View onLayout={(e) => setStickyHeaderY(e.nativeEvent.layout.height)}>
-            <View style={[styles.heroBackdrop, { height: 240 + insets.top }]}>
-            {movie.backdrop_path ? (
-              <Image
-                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-                style={styles.heroBackdropImage}
-                resizeMode="cover"
+            <View style={[styles.heroBackdrop, { height: 216 + insets.top }]}>
+              {movie.backdrop_path ? (
+                <Image
+                  source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+                  style={styles.heroBackdropImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <LinearGradient
+                pointerEvents="none"
+                colors={['rgba(0,0,0,0.5)', 'transparent']}
+                style={[styles.heroTopFade, { height: 80 + insets.top }]}
               />
-            ) : null}
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(0,0,0,0.55)', 'transparent']}
-              style={[styles.heroTopFade, { height: 80 + insets.top }]}
-            />
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)']}
-              locations={[0, 0.3, 0.7, 1]}
-              style={styles.heroBottomGradient}
-            />
-            <View style={styles.heroFloating}>
-              <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.heroPoster}>
+              <LinearGradient
+                pointerEvents="none"
+                colors={['rgba(8,6,12,0)', 'rgba(8,6,12,0.45)', 'rgba(8,6,12,0.90)']}
+                locations={[0.34, 0.64, 1]}
+                style={styles.heroBottomGradient}
+              />
+              {/* Title block — sits right of the poster tail, above the backdrop base */}
+              <View style={styles.heroTitleBlock}>
+                <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
+                <Text style={styles.heroMetaLine} numberOfLines={1}>
+                  {movie.release_date ? movie.release_date.slice(0, 4) : null}
+                  {movie.release_date && movie.vote_average != null ? (
+                    <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
+                  ) : null}
+                  {movie.vote_average != null ? (
+                    <Text>
+                      <Text style={styles.heroMetaStar}>★</Text>
+                      <Text style={styles.heroMetaRating}> {movie.vote_average.toFixed(1)}</Text>
+                    </Text>
+                  ) : null}
+                  {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
+                    <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
+                  ) : null}
+                  {movie.genre_ids && movie.genre_ids.length > 0
+                    ? movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')
+                    : null}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bridge — the poster tail hangs 38pt below the backdrop; the stats
+                strip (CEFR match chip + corpus size) fills the space beside it. */}
+            <View style={styles.bridgeRow}>
+              <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.bridgePoster}>
                 <Image
                   source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-                  style={styles.heroPosterImage}
+                  style={styles.bridgePosterImage}
                   resizeMode="cover"
                 />
               </Pressable>
-              <View style={styles.heroMetaCol}>
-                <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
-                <Text style={styles.heroMetaRow} numberOfLines={1}>
-                  {movie.release_date ? (
-                    <Text style={styles.heroMetaYear}>{movie.release_date.slice(0, 4)}</Text>
-                  ) : null}
-                  {movie.release_date && movie.vote_average != null ? (
-                    <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
-                  ) : null}
-                  {movie.vote_average != null ? (
-                    <Text style={styles.heroMetaRating}>★ {movie.vote_average.toFixed(1)}</Text>
-                  ) : null}
-                  {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
-                    <Text style={styles.heroMetaSep}>{'  ·  '}</Text>
-                  ) : null}
-                  {movie.genre_ids && movie.genre_ids.length > 0 ? (
-                    <Text style={styles.heroMetaGenres}>
-                      {movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')}
-                    </Text>
-                  ) : null}
-                </Text>
-                {difficulty && (
-                  <View style={[styles.heroDifficultyChip, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]}>
-                    <Text style={styles.heroDifficultyChipText}>
+              <View style={styles.statsStrip}>
+                {difficulty ? (
+                  <View
+                    style={[
+                      styles.cefrChip,
+                      {
+                        backgroundColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '26' : '1C'}`,
+                        borderColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '55' : '40'}`,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.cefrChipDot, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]} />
+                    <Text style={[styles.cefrChipText, { color: tc.text }]}>
                       {difficulty.level} · {difficulty.score}% match
                     </Text>
                   </View>
-                )}
+                ) : null}
+                {totalWordCount > 0 ? (
+                  <Text style={[styles.corpusText, { color: tc.textSecondary }]} numberOfLines={1}>
+                    {totalWordCount} words{idiomCount > 0 ? ` · ${idiomCount} idioms` : ''}
+                  </Text>
+                ) : null}
               </View>
             </View>
-          </View>
-          {movie.overview ? (
-            <View style={[styles.overviewBox, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
-              <Text
-                style={[styles.overviewText, { color: tc.textSecondary }]}
-                numberOfLines={overviewExpanded ? undefined : 2}
+
+            {/* Overview — quiet text on the app background, no box */}
+            {movie.overview ? (
+              <Pressable
+                onPress={() => setOverviewExpanded((v) => !v)}
+                style={styles.overviewBlock}
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                {movie.overview}
-              </Text>
-              <Pressable onPress={() => setOverviewExpanded((v) => !v)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
-                  {overviewExpanded ? 'Show less' : 'Read more'}
+                <Text
+                  style={[styles.overviewText, { color: tc.textSecondary }]}
+                  numberOfLines={overviewExpanded ? undefined : overviewLineCount == null ? undefined : 2}
+                  onTextLayout={(e) => {
+                    if (overviewLineCount == null) setOverviewLineCount(e.nativeEvent.lines.length);
+                  }}
+                >
+                  {movie.overview}
                 </Text>
+                {overviewTruncated ? (
+                  <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
+                    {overviewExpanded ? 'Less ▴' : 'More ▾'}
+                  </Text>
+                ) : null}
               </Pressable>
-            </View>
-          ) : null}
+            ) : null}
           </View>
 
           {/* 1: Sticky tabs — sit below the hero, stick to the top of the
@@ -891,9 +935,9 @@ export const MovieDetailScreen = ({
             <Animated.View style={{ height: stickySpacerHeight }} />
             {vocabulary ? (
               <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-                <View style={styles.unifiedTabsRowWrapper}>
+                <View style={[styles.unifiedTabsRowWrapper, { backgroundColor: tabsPillBg }]}>
                   <View
-                    style={styles.unifiedTabsLeftFixed}
+                    style={[styles.unifiedTabsLeftFixed, { backgroundColor: tabsPillBg }]}
                     onLayout={(e) => setTabsLeftWidth(Math.round(e.nativeEvent.layout.width))}
                   >
                     {(() => {
@@ -964,7 +1008,7 @@ export const MovieDetailScreen = ({
                     })}
                   </ScrollView>
                   <LinearGradient
-                    colors={[`${tc.background}00`, tc.background]}
+                    colors={[`${tabsPillBg}00`, tabsPillBg]}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}
                     style={styles.unifiedTabsRightFade}
@@ -976,18 +1020,23 @@ export const MovieDetailScreen = ({
                     <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
                   ) : null
                 ) : (
-                  <TouchableOpacity
-                    style={[styles.countSortRow, { backgroundColor: tc.background, borderBottomColor: tc.divider }]}
-                    onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
-                    activeOpacity={0.6}
-                  >
+                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
                     <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
                       <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
                         {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
                       </Text>
-                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'} · {wordSortOrder === 'rare' ? 'Least common' : 'Most common'} ↓
+                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
                     </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
+                        {wordSortOrder === 'rare' ? 'Rarest first ⇅' : 'Common first ⇅'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ) : null}
@@ -1015,7 +1064,7 @@ export const MovieDetailScreen = ({
           <View
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
-            <View style={[styles.wordList, { backgroundColor: tc.background }]}>
+            <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
               {isSwitching ? (
                 Array.from({ length: INITIAL_ROWS }).map((_, i) => (
                   <View key={`skel-${i}`} style={styles.wordSkeletonRow}>
@@ -1100,12 +1149,12 @@ export const MovieDetailScreen = ({
                     <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={() => startTransition(() => setWordsView('all'))}
-                      style={styles.foryouMoreLink}
+                      style={[styles.foryouMoreLink, { backgroundColor: tc.paper, borderColor: tc.border }]}
                     >
-                      <Text style={styles.foryouMoreLinkText}>
+                      <Text style={[styles.foryouMoreLinkText, { color: tc.text }]}>
                         + {suggestedHidden} more words across all levels
                       </Text>
-                      <Text style={styles.foryouMoreLinkArrow}>→</Text>
+                      <Text style={[styles.foryouMoreLinkArrow, { color: tc.primaryOnSurface }]}>→</Text>
                     </TouchableOpacity>
                   )}
                 </>
@@ -1178,6 +1227,7 @@ export const MovieDetailScreen = ({
                           freqFill={freqFillMap.get(key)}
                           isRead={readWords?.has(key)}
                           onHide={authUser?.is_admin ? handleHideWord : undefined}
+                          preloadedSentence={sentencePreviews[key]}
                         />
                       </BookmarkRowWrapper>
                       {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
@@ -1370,12 +1420,12 @@ const backBtnStyles = StyleSheet.create({
     zIndex: 20,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(10,8,12,0.38)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },

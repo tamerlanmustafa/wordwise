@@ -1,180 +1,218 @@
-import { StyleSheet } from 'react-native';
-import { colors } from '../../theme/palette';
+import { Platform, StyleSheet } from 'react-native';
+import type { ThemeColors } from '../../theme/tokens';
 
-// Shared row styles used by both WordRow and IdiomRow (vocabulary tab).
-export const rowStyles = StyleSheet.create({
-  wordRowWrapper: {
-    marginBottom: -1,
-  },
-  wordRow: {
-    backgroundColor: '#F0E8FA',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#DDD0EE',
-  },
-  wordRowExpanded: {
-    borderColor: colors.primary,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  wordRowBookmarked: {
-    borderColor: '#F4A261',
-    backgroundColor: '#FFF7E6',
-  },
-  wordRowMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 28,
-  },
-  rowNumber: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    minWidth: 28,
-  },
-  wordText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
-  },
-  inlineLevelBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  inlineLevelBadgeText: {
-    fontSize: 10,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  pronounceBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  pronounceIcon: {
-    fontSize: 16,
-  },
-  pronounceIconActive: {
-    opacity: 0.5,
-  },
-  inlineSpinner: {
-    marginHorizontal: 8,
-  },
-  bookmarkButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  bookmarkIcon: {
-    fontSize: 20,
-    color: colors.border,
-  },
-  bookmarkIconActive: {
-    color: '#F4A261',
-  },
-  dropdownPanel: {
-    backgroundColor: '#2E1F4A',
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  expandSkeletonGroup: {
-    paddingVertical: 4,
-    gap: 8,
-  },
-  expandSkeletonBar: {
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  expandSkeletonBarShort: { width: '55%' },
-  expandSkeletonBarLong: { width: '92%' },
-  expandSkeletonBarMid: { width: '75%' },
-  translationBox: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  translationDash: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.55)',
-    marginRight: 6,
-  },
-  translationText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    flex: 1,
-  },
-  translationUntranslatable: {
-    fontStyle: 'italic',
-    color: 'rgba(255,255,255,0.55)',
-  },
-  noTranslation: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.55)',
-    fontStyle: 'italic',
-  },
-  exampleCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  exampleSentence: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.92)',
-    lineHeight: 18,
-  },
-  exampleTranslation: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  highlightedWord: {
-    fontWeight: '700',
-    color: '#C4B0F0',
-  },
-  noExamples: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.55)',
-    fontStyle: 'italic',
-  },
-  crossMovieSection: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.10)',
-  },
-  crossMovieLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  crossMovieItem: {
-    marginBottom: 4,
-  },
-  crossMovieMovie: {
-    fontSize: 12,
-    color: '#C4B0F0',
-    fontWeight: '600',
-  },
-  crossMovieSentence: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.92)',
-    fontStyle: 'italic',
-  },
-  reportInlineBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  reportInlineBtnText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-  },
-});
+// Serif gives the vocabulary rows a calmer, book-page feel — Georgia is
+// preinstalled on iOS; Android falls back to its default serif. Body text is
+// upright; only the highlighted target word (in the sentence and, when open,
+// the word-line translation) is italic.
+export const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' });
+
+// Themed row styles shared by the unified VocabRow (words + idioms, both the
+// For You tab and the level tabs). Built per-render with useMemo(makeRowStyles,
+// [tc]) — every colour comes from `tc.*` so the row is correct in light AND
+// dark. Per-row accents that depend on the CEFR level colour (highlight,
+// expansion rule, level washes) are applied inline by the component.
+export const makeRowStyles = (tc: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      position: 'relative',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingVertical: 13,
+      paddingHorizontal: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: tc.divider,
+    },
+    leftBar: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      backgroundColor: tc.gold,
+    },
+    rowNum: {
+      width: 22,
+      textAlign: 'right',
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: 0.4,
+      color: tc.textFaint,
+      fontVariant: ['tabular-nums'],
+      paddingTop: 5,
+      marginRight: 12,
+    },
+    body: {
+      flex: 1,
+      minWidth: 0,
+    },
+    wordLine: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+    },
+    wordText: {
+      fontFamily: SERIF,
+      fontSize: 16,
+      fontWeight: '700',
+      letterSpacing: -0.2,
+      color: tc.text,
+    },
+    wordTextRead: {
+      color: tc.textSecondary,
+    },
+    translationDot: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      fontWeight: '500',
+      fontStyle: 'normal',
+      color: tc.textFaint,
+    },
+    translationText: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      fontWeight: '600',
+      fontStyle: 'italic',
+      color: tc.primaryOnSurface,
+    },
+    translationSkeleton: {
+      width: 68,
+      height: 11,
+      borderRadius: 4,
+      backgroundColor: tc.skeleton,
+      alignSelf: 'center',
+    },
+    sentence: {
+      fontFamily: SERIF,
+      fontSize: 13.5,
+      lineHeight: 20,
+      color: tc.textSecondary,
+      marginTop: 5,
+    },
+    sentenceHi: {
+      fontFamily: SERIF,
+      fontWeight: '700',
+      fontStyle: 'italic',
+    },
+    // Always-visible sentence skeleton (word rows still loading their preview).
+    sentenceSkeletonWrap: {
+      marginTop: 5,
+    },
+    skelBar: {
+      height: 12,
+      borderRadius: 4,
+      backgroundColor: tc.skeleton,
+    },
+    expansion: {
+      marginTop: 9,
+      borderLeftWidth: 2,
+      paddingLeft: 11,
+    },
+    expandSkeletonGroup: {
+      gap: 7,
+      paddingVertical: 2,
+    },
+    sentenceTranslation: {
+      fontFamily: SERIF,
+      fontSize: 13,
+      lineHeight: 19,
+      fontStyle: 'italic',
+      color: tc.textSecondary,
+    },
+    idiomSentence: {
+      fontFamily: SERIF,
+      fontSize: 13.5,
+      lineHeight: 20,
+      color: tc.textSecondary,
+      marginBottom: 6,
+    },
+    noExamples: {
+      fontFamily: SERIF,
+      fontSize: 13,
+      fontStyle: 'italic',
+      color: tc.textFaint,
+    },
+    actionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 16,
+      marginTop: 7,
+    },
+    actionText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: tc.textFaint,
+    },
+    actionHide: {
+      color: tc.error,
+    },
+    pronounceIcon: {
+      fontSize: 14,
+    },
+    pronounceIconActive: {
+      opacity: 0.5,
+    },
+    starBtn: {
+      flexShrink: 0,
+      width: 34,
+      height: 34,
+      marginTop: -7,
+      marginRight: -6,
+      marginBottom: -7,
+      marginLeft: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    star: {
+      fontSize: 20,
+      lineHeight: 22,
+      color: tc.textFaint,
+      opacity: 0.5,
+    },
+    starActive: {
+      color: tc.gold,
+      opacity: 1,
+    },
+    idiomBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      alignSelf: 'center',
+    },
+    idiomBadgeText: {
+      fontSize: 9,
+      fontWeight: '700',
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+    // Premium cross-movie block — restyled to the same quiet ledger look.
+    crossMovieSection: {
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: tc.divider,
+    },
+    crossMovieLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: tc.textFaint,
+      marginBottom: 4,
+    },
+    crossMovieItem: {
+      marginBottom: 4,
+    },
+    crossMovieMovie: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: tc.primaryOnSurface,
+    },
+    crossMovieSentence: {
+      fontFamily: SERIF,
+      fontSize: 12,
+      fontStyle: 'italic',
+      color: tc.textSecondary,
+    },
+  });
+
+export type RowStyles = ReturnType<typeof makeRowStyles>;
