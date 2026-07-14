@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
@@ -42,6 +42,7 @@ function yearOf(releaseDate: string | undefined): number | null {
 
 export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, onContinue }: PickFirstFilmStepProps) {
   const tc = useThemeColors();
+  const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   const [query, setQuery] = useState('');
@@ -108,11 +109,18 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      {/* iOS never resizes for the keyboard; padding-behavior KAV keeps the
-          search box, grid and the Start-learning CTA reachable (#82). On
-          Android the keyboard is dismissed on film-select instead — KAV
-          would double-shift with adjustResize on older devices. */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.kav}>
+      {/* iOS never resizes for the keyboard; a padding-behavior KAV lifts the
+          search box, grid and the Start-learning CTA above it (#82). The KAV
+          measures its frame relative to the SafeAreaView content box (below the
+          top inset), so keyboardVerticalOffset MUST be insets.top — without it
+          the padding is short by that inset and the keyboard clips the CTA.
+          Android relies on adjustResize (windowSoftInputMode) instead; a KAV
+          there would double-shift, so behavior is left undefined. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={insets.top}
+        style={s.kav}
+      >
       <StepHeader step={4} total={5} eyebrow="Step 4 of 5" title="Pick your first film" onBack={onBack} />
       <Text style={s.sub}>We'll build a word list from its script — start with one you'd love to understand.</Text>
 
@@ -134,7 +142,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
         ) : null}
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         {loading && grid.length === 0 ? (
           <ActivityIndicator color={tc.gold} style={{ marginTop: 32 }} />
         ) : (
