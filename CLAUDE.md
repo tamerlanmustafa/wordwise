@@ -10,9 +10,11 @@
 ## Clarification
 - Never guess or invent solutions when uncertain. Ask before proceeding.
 
-## WEB app versus Mobile app
-- Make sure our web app is up to date with the changes/features we add to our mobile app. 
-- Make sure they share the same code whenever/wherever possible to avoid writing the same code separately for each of them
+## Mobile is the product; web is frozen
+- **`apps/mobile` is the shipping app.** New features go there. Do **not** mirror them into `frontend/`, and do not maintain web/mobile feature parity — the two apps share only `packages/types`, so parity means writing every feature twice.
+- **`frontend/` is frozen** except for the public pages the app stores require: privacy policy, terms, account-deletion request, and the landing/pricing pages. Those must stay accurate and deployable.
+- The ~17 web pages that duplicate mobile features (reader, search, saved words, watched, lists, …) are **not maintained**. Leave them alone; don't fix, extend, or refactor them unless asked.
+- If a task seems to need a web change, say so and ask first rather than assuming parity is wanted.
 
 ## Before making changes
 - For multi-file changes or unfamiliar code, present a short plan before editing. For one-sentence changes (typo, log line, rename), just do it.
@@ -23,7 +25,7 @@
 - When you add or change a feature, add or extend a test that covers it in the same change. New behavior shouldn't land untested.
 - Put tests next to the code in a `__tests__/` folder and follow the nearest existing test's structure before inventing a new one. Jest/pytest auto-discover them.
 - Mobile (`apps/mobile`): **logic + integration only — do NOT add a component-render library** (`@testing-library/react-native`). Cover features via stores, services, hooks, pure helpers, and cross-store user-story flows. Use `src/test-utils/renderHook` for hooks, and `jest.setup.js` for the shared AsyncStorage/SecureStore mocks. Watch the known gotchas: native `import()` can't run under jest, flush microtasks (not `setImmediate`) when fake timers are on, and drive dates with `jest.setSystemTime`.
-- Backend: pytest under `backend/tests`. Web (`frontend/`): gated by typecheck + build, not a unit runner — keep web/mobile parity per the WEB-vs-Mobile section.
+- Backend: pytest under `backend/tests`. Web (`frontend/`): frozen, so no new tests — it's gated by typecheck + build only.
 - The mobile jest suite + typechecks run automatically on **pre-push** (`.husky/pre-push`) and in **CI** (`.github/workflows/ci.yml`), so any test you add is exercised on every push/PR — no extra wiring needed.
 
 ## Verify your work (run before considering a task done)
@@ -39,5 +41,5 @@
 - Treat `frontend/dist/` and other generated/build output as read-only.
 
 ## Gotchas
-- Shared types live in `packages/types` (`@wordwise/types`). Change types there once and consume from both web and mobile — don't redefine them per-app.
-- `web/` at the repo root is legacy `.jsx` (movies/practice/quiz/shell); the live web app is `frontend/`. Don't edit `web/` for current features unless asked.
+- Shared types live in `packages/types` (`@wordwise/types`). Change types there once — don't redefine them per-app.
+- Two dead web trees, neither of them the product: `web/` at the repo root is legacy `.jsx` (movies/practice/quiz/shell), and `frontend/` is the frozen React app (see "Mobile is the product"). Don't edit either for current features unless asked.

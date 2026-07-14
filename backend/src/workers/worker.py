@@ -36,11 +36,18 @@ logger = logging.getLogger("wordwise.worker")
 
 EMPTY_QUEUE_SLEEP = float(os.environ.get("WORKER_IDLE_SLEEP", "5"))
 
-# How many fresh popular English films to auto-seed on every worker start.
-# Walks TMDB /discover sorted by vote_count.desc from a persistent page
-# cursor (.seed_cursor.json) so each restart grows the catalog without
-# re-fetching pages we've already drained. Set to 0 to disable.
-WORKER_SEED_ON_START = int(os.environ.get("WORKER_SEED_ON_START", "500"))
+# How many fresh popular English films to auto-seed on worker start. Walks
+# TMDB /discover sorted by vote_count.desc from a persistent page cursor
+# (.seed_cursor.json) so each burst grows the catalog without re-fetching
+# pages we've already drained.
+#
+# Defaults to 0 because the MVP runs "burst → tiny always-on" (see
+# DEPLOYMENT.md → "Worker scaling mode"): the steady worker is a small
+# instance that must NOT balloon to ~2 GB by seeding + classifying films on
+# every restart/deploy. To grow the catalog, run a *burst*: set
+# WORKER_SEED_ON_START=<N> (and give the instance ~2 GB) for one run, let the
+# queue drain, then scale back down and clear the env var.
+WORKER_SEED_ON_START = int(os.environ.get("WORKER_SEED_ON_START", "0"))
 
 
 async def run_worker() -> None:

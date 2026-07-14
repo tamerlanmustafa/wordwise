@@ -186,6 +186,76 @@ async def reap_stuck_jobs(pool: asyncpg.Pool, stale_after_seconds: int = 1800) -
             return 0
 
 
+async def requeue_dead(
+    pool: asyncpg.Pool,
+    *,
+    limit: Optional[int] = None,
+    like: Optional[str] = None,
+    dry_run: bool = False,
+) -> int:
+    """
+    Reset 'dead' jobs back to 'pending' so the worker retries them from a clean
+    slate (attempts=0, run_after=now). Returns how many rows were revived (or,
+    when dry_run, how many *would* be).
+
+    Use this during a burst after fixing whatever parked them — e.g. the
+    2026-07 incident, where 571 transiently-failed jobs were misclassified as
+    permanent 'dead'; ~200 already have a cached script and resolve instantly.
+
+    Idempotent and safe to re-run: it only touches rows still in 'dead'.
+    `like` restricts to jobs whose last_error ILIKE the pattern (e.g.
+    '%sources%'); `limit` caps how many are revived per call so a big backlog
+    can be paced across several bursts.
+    """
+    where = "status = 'dead' AND ($1::text IS NULL OR last_error ILIKE $1)"
+
+    if dry_run:
+        async with pool.acquire() as conn:
+            n = await conn.fetchval(
+                f"""
+                SELECT COUNT(*)::int FROM (
+                    SELECT id FROM movie_jobs
+                     WHERE {where}
+                     ORDER BY id
+                     LIMIT $2
+                ) picked
+                """,
+                like,
+                limit,
+            )
+            return n or 0
+
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"""
+            WITH picked AS (
+                SELECT id FROM movie_jobs
+                 WHERE {where}
+                 ORDER BY id
+                 LIMIT $2
+                 FOR UPDATE SKIP LOCKED
+            )
+            UPDATE movie_jobs j
+               SET status = 'pending',
+                   attempts = 0,
+                   run_after = now(),
+                   claimed_by = NULL,
+                   claimed_at = NULL,
+                   finished_at = NULL,
+                   last_error = NULL,
+                   updated_at = now()
+              FROM picked
+             WHERE j.id = picked.id
+            """,
+            like,
+            limit,
+        )
+        try:
+            return int(result.split()[-1])
+        except Exception:
+            return 0
+
+
 async def queue_stats(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
         rows = await conn.fetch(

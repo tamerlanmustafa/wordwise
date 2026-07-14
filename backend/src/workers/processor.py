@@ -212,7 +212,10 @@ async def process_job(
     await rate.acquire_token(pool)
     from prisma import Prisma
 
-    from src.services.script_ingestion_service import ScriptIngestionService
+    from src.services.script_ingestion_service import (
+        ScriptIngestionService,
+        ScriptNotFoundError,
+    )
 
     fetch_db = Prisma()
     try:
@@ -227,13 +230,13 @@ async def process_job(
             )
         finally:
             await service.close()
+    except ScriptNotFoundError as exc:
+        # The movie genuinely isn't in any source — park the job as dead, don't
+        # retry on backoff. A transient outage raises a plain Exception instead
+        # and falls through to the retryable branch below (mirrors the route's
+        # 404-vs-500 split, now keyed on exception type not error strings).
+        raise PermanentError(f"script not found: {exc}") from exc
     except Exception as exc:
-        # Mirror the route's error split: "not found anywhere" is permanent
-        # (park the job, don't retry); anything else is transient.
-        err_lower = str(exc).lower()
-        not_found_signals = ("not found", "no results", "all sources failed")
-        if any(sig in err_lower for sig in not_found_signals):
-            raise PermanentError(f"script fetch failed: {exc}") from exc
         raise TransientError(f"script fetch failed: {exc}") from exc
     finally:
         if fetch_db.is_connected():

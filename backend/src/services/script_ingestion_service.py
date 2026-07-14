@@ -21,6 +21,17 @@ from ..database import get_db
 logger = logging.getLogger(__name__)
 
 
+class ScriptNotFoundError(Exception):
+    """Every source was reachable and none had this movie's script.
+
+    A *permanent* miss: the worker should park the job as dead and the API
+    should return 404. This is deliberately distinct from a transient outage
+    (one or more sources raised), which keeps a plain Exception so the worker
+    retries on backoff. Conflating the two is what parked 571 retrievable
+    films as 'dead' in the 2026-07 incident.
+    """
+
+
 class ScriptIngestionService:
     def __init__(self, db: Prisma):
         self.db = db
@@ -75,6 +86,12 @@ class ScriptIngestionService:
                     "from_cache": True
                 }
 
+        # Track whether any source *raised* (vs. cleanly returning "no match").
+        # If a source errored we treat the overall failure as transient and let
+        # the worker retry; only a clean miss from every source is a permanent
+        # ScriptNotFoundError. (See the 2026-07 dead-jobs incident.)
+        last_error: Optional[Exception] = None
+
         # Priority 2: Try subtitles (most movies, actual dialogue)
         if not force_refresh:
             logger.info(f"[ScriptIngestion] → Trying SUBTITLE_SRT for '{search_key}'")
@@ -96,6 +113,7 @@ class ScriptIngestionService:
                         "from_cache": False
                     }
             except Exception as e:
+                last_error = e
                 logger.warning(f"[ScriptIngestion] ✗ SUBTITLE_SRT failed: {str(e)}")
 
         # Priority 3 & 4: Try STANDS4 sources
@@ -105,8 +123,6 @@ class ScriptIngestionService:
             ("STANDS4_PDF", self._fetch_from_stands4_pdf),
             ("STANDS4_API", self._fetch_from_stands4_api)
         ]
-
-        last_error = None
 
         for source_name, fetch_func in sources:
             try:
@@ -141,12 +157,22 @@ class ScriptIngestionService:
                 logger.warning(f"[ScriptIngestion] ✗ {source_name} failed for '{movie_title}': {str(e)}")
                 continue
 
-        error_msg = f"All sources failed for '{movie_title}'"
-        if last_error:
-            error_msg += f": {str(last_error)}"
+        # Every source has now been tried. Distinguish two outcomes that used
+        # to be conflated as one permanent "all sources failed":
+        #   • a source *raised* (network/timeout/5xx/no-creds) → transient; the
+        #     script may well be retrievable later, so let the worker retry on
+        #     backoff (plain Exception).
+        #   • no source raised, every one cleanly reported no match → the movie
+        #     genuinely isn't in any source → permanent ScriptNotFoundError
+        #     (park the job / return 404).
+        if last_error is not None:
+            msg = f"All script sources errored for '{movie_title}': {last_error}"
+            logger.error(f"[ScriptIngestion] {msg}")
+            raise Exception(msg) from last_error
 
-        logger.error(f"[ScriptIngestion] {error_msg}")
-        raise Exception(error_msg)
+        msg = f"No script found for '{movie_title}' in any source"
+        logger.error(f"[ScriptIngestion] {msg}")
+        raise ScriptNotFoundError(msg)
 
     async def _get_from_database(
         self,

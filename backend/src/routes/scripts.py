@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from ..database import get_db
 from ..middleware.auth import get_admin_user, get_current_active_user
-from ..services.script_ingestion_service import ScriptIngestionService
+from ..services.script_ingestion_service import ScriptIngestionService, ScriptNotFoundError
 from ..schemas.script import (
     ScriptResponse,
     ScriptFetchRequest,
@@ -95,25 +95,23 @@ async def fetch_script(
 
         return ScriptResponse(**result)
 
+    except ScriptNotFoundError as e:
+        # We reached every source and none had this movie — a permanent miss,
+        # so 404 (the worker parks the job as dead on the same signal). A
+        # transient outage raises a plain Exception instead → 500 below, which
+        # the worker retries on backoff. Keyed on exception type, not error
+        # strings, so a source's own "not found" text can't be misclassified.
+        logger.info(f"[API] Script not found for '{request.movie_title}': {e}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Script not found for movie '{request.movie_title}': {e}"
+        )
     except Exception as e:
         logger.error(f"[API] Script fetch failed for '{request.movie_title}': {str(e)}", exc_info=True)
-
-        # "Not found" signals: we searched every source and nothing had this
-        # movie. This is permanent — the worker should park the job as dead,
-        # not retry on backoff. Anything else (parse error, timeout, etc.)
-        # is treated as a transient server error and will be retried.
-        err_lower = str(e).lower()
-        not_found_signals = ("not found", "no results", "all sources failed")
-        if any(sig in err_lower for sig in not_found_signals):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Script not found for movie '{request.movie_title}': {str(e)}"
-            )
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to fetch script: {str(e)}"
-            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch script: {str(e)}"
+        )
 
 
 
