@@ -31,7 +31,7 @@ import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
-import { nextCollapsed } from '../../utils/collapseOnScroll';
+import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
 
 // Full laid-out height of the Word-of-the-Hour block: the card's own
 // marginTop (4) + CARD_HEIGHT (152) + marginBottom (16). Collapsing this to 0
@@ -91,20 +91,21 @@ export const HomeScreen = ({
   const [searchFocused, setSearchFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Word-of-the-Hour collapse: as the user scrolls the ranked movie feed, the
-  // card snaps up out of view (0 → 1) and springs back when they return to the
-  // top of the feed. Driven off the feed's scroll offset via a hysteresis gate
-  // (nextCollapsed) so tiny jitters at the boundary don't flicker it.
+  // Word-of-the-Hour collapse: as the user scrolls the ranked movie feed down,
+  // the card snaps up out of view (0 → 1); scrolling back up ~one row springs
+  // it back (reduceCollapse) — no need to return to the very top. Direction runs
+  // absorb momentum jitter so it doesn't flicker.
   const wordCollapse = useRef(new Animated.Value(0)).current;
-  const wordCollapsedRef = useRef(false);
+  const collapseStateRef = useRef<CollapseState>(initialCollapseState);
   const handleFeedScroll = useCallback(
     (offsetY: number) => {
-      const next = nextCollapsed(wordCollapsedRef.current, offsetY);
-      if (next === wordCollapsedRef.current) return;
-      wordCollapsedRef.current = next;
+      const prev = collapseStateRef.current;
+      const next = reduceCollapse(prev, offsetY);
+      collapseStateRef.current = next;
+      if (next.collapsed === prev.collapsed) return;
       Animated.timing(wordCollapse, {
-        toValue: next ? 1 : 0,
-        duration: next ? 240 : 300,
+        toValue: next.collapsed ? 1 : 0,
+        duration: next.collapsed ? 240 : 300,
         easing: Easing.out(Easing.cubic),
         // height/opacity animation isn't supported by the native driver.
         useNativeDriver: false,
@@ -117,7 +118,7 @@ export const HomeScreen = ({
   // list may not emit an onScroll(0) for that reset — so bring the card back
   // explicitly to avoid it getting stuck collapsed.
   useEffect(() => {
-    wordCollapsedRef.current = false;
+    collapseStateRef.current = initialCollapseState;
     wordCollapse.setValue(0);
   }, [selectedLevel, levelSort, levelSortAsc, wordCollapse]);
 
