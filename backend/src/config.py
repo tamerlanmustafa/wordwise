@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Rate limiting (issue #74): an app-wide abuse ceiling applied by
+    # GlobalRateLimitMiddleware, keyed by authenticated user id (falls back to
+    # client IP). Per-endpoint throttles in routes/ stack on top for
+    # cost-incurring paths (translation, LLM enrichment). Set enabled=False or
+    # per_minute=0 to disable the global limiter (e.g. for load tests).
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 600
+
     # Sign in with Apple: identity tokens are verified against Apple's JWKS
     # with our bundle id as the required audience (utils/apple_auth.py).
     apple_bundle_id: str = "com.wordwise.mobile"

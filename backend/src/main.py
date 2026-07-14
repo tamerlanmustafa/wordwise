@@ -13,6 +13,7 @@ from .config import get_settings
 from .database import connect_db, disconnect_db
 from .logging_config import configure_logging
 from .middleware import RequestIDMiddleware
+from .utils.rate_limit import GlobalRateLimitMiddleware
 from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router
 from .services import fetch_movie_script
 import logging
@@ -51,6 +52,18 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan
 )
+
+# App-wide rate limit (issue #74). Added first so it sits innermost — inside
+# CORS, so 429 responses still carry CORS headers for browser clients, and
+# inside RequestIDMiddleware, so every throttled request is still logged with a
+# correlation id. Per-endpoint throttles in routes/ stack on top for
+# cost-incurring paths (translation, LLM enrichment).
+if settings.rate_limit_enabled and settings.rate_limit_per_minute > 0:
+    app.add_middleware(
+        GlobalRateLimitMiddleware,
+        limit=settings.rate_limit_per_minute,
+        window_seconds=60.0,
+    )
 
 # CORS
 app.add_middleware(

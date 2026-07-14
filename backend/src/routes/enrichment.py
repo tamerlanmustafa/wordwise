@@ -11,6 +11,7 @@ import logging
 
 from src.database import get_db
 from src.middleware.auth import get_current_active_user, get_admin_user
+from src.utils.rate_limit import rate_limit
 from prisma import Prisma
 from src.config import get_settings
 from src.services.sentence_example_service import SentenceExampleService
@@ -51,6 +52,14 @@ def _sentence_link_sort_key(link):
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/enrichment", tags=["Enrichment"])
+
+# These read paths incur real per-call external cost on a miss: the single
+# endpoint translates sentences on-demand via DeepL/Google, and the batch
+# endpoint's slow path authors example sentences with Claude (capped
+# cumulatively by LLM_COST_CAP_USD). Throttle per caller so one client can't
+# burn budget/latency by fanning out misses, on top of the global limiter.
+_sentences_throttle = rate_limit(120, 60.0, scope="enrichment-sentences")
+_sentences_batch_throttle = rate_limit(30, 60.0, scope="enrichment-sentences-batch")
 
 
 # === Request/Response Models ===
@@ -641,6 +650,7 @@ async def get_word_sentences(
     max_examples: int = 1,
     db: Prisma = Depends(get_db),
     current_user = Depends(get_current_active_user),
+    _: None = Depends(_sentences_throttle),
 ):
     """
     Get sentences containing a word from a movie, with optional cached translation.
@@ -839,6 +849,7 @@ async def get_word_sentences_batch(
     request: BatchSentencesRequest,
     db: Prisma = Depends(get_db),
     current_user = Depends(get_current_active_user),
+    _: None = Depends(_sentences_batch_throttle),
 ):
     """
     Look up cached sentences for many words in a single round trip.
