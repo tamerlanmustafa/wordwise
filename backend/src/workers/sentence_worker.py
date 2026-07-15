@@ -53,7 +53,12 @@ ERROR_SLEEP = 30.0
 
 # Failed lemmas are only skipped in memory; once the set grows past this we
 # drop it and give everything another chance rather than growing unbounded.
-MAX_SKIP_IDS = 5000
+# Must exceed the lemma table (~158k) so it never trips mid-run: the fetch
+# is priority-ordered, so clearing would immediately re-attempt the *most*
+# failure-prone words (top of the backlog is the proper-noun residue the
+# backfill already declined — first prod cycle skipped 121 of 150). A
+# restart is the intended retry point.
+MAX_SKIP_IDS = 250_000
 
 
 def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
