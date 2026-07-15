@@ -9,7 +9,7 @@ _load_dotenv(_Path(__file__).parent.parent / '.env')
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .config import get_settings
+from .config import docs_kwargs, get_settings
 from .database import connect_db, disconnect_db
 from .logging_config import configure_logging
 from .middleware import RequestIDMiddleware
@@ -50,7 +50,8 @@ app = FastAPI(
     title=settings.app_name,
     version="2.0.0",  # Updated version with Prisma
     debug=settings.debug,
-    lifespan=lifespan
+    lifespan=lifespan,
+    **docs_kwargs(settings.debug),
 )
 
 # App-wide rate limit (issue #74). Added first so it sits innermost — inside

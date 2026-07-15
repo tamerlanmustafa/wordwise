@@ -83,8 +83,12 @@ Both stores require **public URLs** for privacy policy and terms; Play also need
 
 From the June security scan + what deployment exposed, ordered by risk.
 
-- [ ] **[You]** Confirm Railway env: `DEBUG=False`, fresh `JWT_SECRET_KEY` (not the example value), `ALLOWED_ORIGINS` set (mobile native requests send no `Origin`, so this mainly guards any browser callers — set it to the static-pages host if those call the API).
-- [ ] **[Claude]** Gate `/docs` + `/openapi.json` behind `DEBUG` — the full 133-route API surface is currently publicly enumerable.
+- [x] **[You]** Confirm Railway env: `DEBUG=False`, fresh `JWT_SECRET_KEY` (not the example value), `ALLOWED_ORIGINS` set (mobile native requests send no `Origin`, so this mainly guards any browser callers — set it to the static-pages host if those call the API). **Verified 2026-07-14** via `railway variables --service wordwise`:
+  - `ALLOWED_ORIGINS=https://tamerlanmustafa.github.io` — explicit allowlist, no wildcard. Matches the live probe (preflight from an untrusted origin → 400, no `access-control-allow-origin`). **Update this if the static pages move to Cloudflare/a custom domain.**
+  - `DEBUG=False` — set explicitly 2026-07-14. It was previously unset and relying on the `debug: bool = False` default in `src/config.py`; pinning it means a change to that default can't silently turn on tracebacks in prod.
+  - `JWT_SECRET_KEY` — set, 64 chars over a 16-symbol alphabet (i.e. `openssl rand -hex 32`, 256-bit) and not the example placeholder.
+  - Absent but optional, all falling back to safe defaults: `GOOGLE_CLIENT_SECRET` (unused — auth verifies ID tokens), `OXFORD_*`, `GOOGLE_TRANSLATE_API_KEY`, `REDIS_URL` (Redis isn't used yet), `LLM_COST_CAP_USD` (code default $50 cap still enforced).
+- [x] **[Claude]** Gate `/docs` + `/openapi.json` behind `DEBUG` — the full 133-route API surface is currently publicly enumerable. Done via `docs_kwargs()` in `src/config.py` (also gates `/redoc`); takes effect on next deploy.
 - [ ] **[Claude]** Bump `requests==2.32.0` (yanked) → `2.32.3+` in both requirements files.
 - [ ] **[Claude]** Proxy TMDB through the backend (`/api/tmdb/*` passthrough with caching). The rotated key still ships inside every app bundle — extractable by anyone. Backend proxy = key becomes truly server-side; also unlocks Cloudflare caching of poster/search responses.
 - [ ] **[Claude]** Refresh-token revocation (jti denylist or per-user generation counter): today a stolen refresh token works for 60 days and logout can't kill it. Required before real users; fine to do week 1 post-launch if timeline is tight.

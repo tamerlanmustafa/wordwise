@@ -84,6 +84,18 @@ class Settings(BaseSettings):
         extra = "forbid"  # or "ignore" if you want to ignore unexpected keys
 
 
+def docs_kwargs(debug: bool) -> dict[str, str | None]:
+    """FastAPI kwargs that expose the interactive docs only when debug is on.
+
+    Production serves the docs as None so the full route surface isn't
+    publicly enumerable (DEPLOYMENT.md §9.4); locally they stay at their
+    FastAPI defaults.
+    """
+    if not debug:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
