@@ -1,2 +1,3 @@
 controller: python -m src.workers.controller
 worker:     python -m src.workers.worker
+sentences:  python -m src.workers.sentence_worker

@@ -71,7 +71,11 @@ class Settings(BaseSettings):
 
     # Anthropic (LLM example sentence generation)
     anthropic_api_key: str = ""
-    anthropic_sentence_model: str = "claude-sonnet-4-6"
+    # Haiku: ~3× cheaper than Sonnet and indistinguishable on this task
+    # (short constrained example sentences) — see issue #86. Every model
+    # named here must have a row in llm_sentence_service._PRICING or cost
+    # tracking silently records $0.
+    anthropic_sentence_model: str = "claude-haiku-4-5-20251001"
     # Hard ceiling on cumulative Anthropic spend (USD) recorded in
     # llm_usage_ledger. Before each LLM call we sum the ledger and refuse
     # to fire if we're already at or above this number. Set to 0 to disable.

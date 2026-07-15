@@ -47,6 +47,7 @@ honcho -f backend/src/workers/Procfile start -c worker=4,controller=1
 | `worker.py`      | Long-running process. Run N copies.                                 |
 | `controller.py`  | Single process. Adjusts target QPS every few seconds.               |
 | `seed.py`        | One-shot script that pulls TMDB top_rated → priority 0 jobs.        |
+| `sentence_worker.py` | Long-running process. Pre-generates global LLM example sentences. |
 | `Procfile`       | For `honcho start` / `foreman start` local fan-out.                 |
 
 ## Why Postgres for the queue?
@@ -115,6 +116,24 @@ honcho -f backend/src/workers/Procfile start -c worker=4,controller=1
 The hard floors and ceilings live in `rate_state` (`min_qps`, `max_qps`)
 so an env-var fat-finger can't ask the controller to push 100 QPS into
 TMDB. Edit the row directly to change them.
+
+## Sentence pre-generation worker
+
+`sentence_worker.py` (issue #86) continuously authors example sentences for
+lemmas that appear in movie vocabularies but have no global LLM sentence yet,
+so the enrichment batch endpoint's on-request LLM slow path rarely fires.
+It reuses `LLMSentenceService` — global `sentence_bank` rows (movie_id NULL,
+source 'llm'), cumulative spend capped by `LLM_COST_CAP_USD`. It needs
+`ANTHROPIC_API_KEY` and `DATABASE_URL` (Prisma), but not the FastAPI server.
+
+| Var                           | Default | What it does                             |
+| ----------------------------- | ------- | ---------------------------------------- |
+| `SENTENCE_WORKER_ENABLED`     | 1       | Set 0 to not start it (start-workers.sh) |
+| `SENTENCE_WORKER_BATCH_SIZE`  | 15      | Words per LLM call                       |
+| `SENTENCE_WORKER_PAGE_SIZE`   | 150     | Lemmas fetched per DB query              |
+| `SENTENCE_WORKER_BATCH_SLEEP` | 2       | Seconds between LLM calls                |
+| `SENTENCE_WORKER_IDLE_SLEEP`  | 900     | Sleep when the backlog is empty          |
+| `SENTENCE_WORKER_CAP_SLEEP`   | 3600    | Sleep after the cost cap is hit          |
 
 ## Watching it run
 
