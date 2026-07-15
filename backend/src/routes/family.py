@@ -170,6 +170,17 @@ async def remove_member(
     if not plan:
         raise HTTPException(404, detail="You don't have a family plan.")
 
+    # The DELETE below is correctly scoped to this plan, but the downgrade
+    # after it was not: it ran for any `user_id`, so a plan owner could drop
+    # an arbitrary account — including a paying subscriber — to free. Confirm
+    # the target is actually in *your* plan before touching their tier.
+    member = await db.query_raw(
+        "SELECT id FROM family_members WHERE plan_id = $1 AND user_id = $2",
+        plan[0]["id"], user_id,
+    )
+    if not member:
+        raise HTTPException(404, detail="That user isn't in your family plan.")
+
     await db.execute_raw(
         "DELETE FROM family_members WHERE plan_id = $1 AND user_id = $2",
         plan[0]["id"], user_id,
