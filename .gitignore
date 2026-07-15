@@ -34,13 +34,14 @@ out/
 build/
 
 # Environment variables
+# Ignore every .env variant, then re-allow the committed examples. The
+# previous list only covered `.env.production.local`, so a real
+# `.env.production` stayed trackable.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-backend/.env
-frontend/.env.local
+.env.*
+!*.env.example
+# Versioned by React Native, holds no secrets — see the file's own comment.
+!apps/mobile/ios/.xcode.env
 
 # IDEs
 .vscode/
