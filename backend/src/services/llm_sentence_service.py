@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from anthropic import AsyncAnthropic
 from prisma import Prisma
 
 from src.config import get_settings
@@ -102,6 +101,11 @@ class LLMSentenceService:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set; LLM sentence generation disabled."
             )
+        # Lazy import: CI installs requirements-dev.txt, which omits the
+        # anthropic SDK, but consumers (worker, tests) still import this
+        # module for WordRequest / CostCapExceeded.
+        from anthropic import AsyncAnthropic
+
         self._client = AsyncAnthropic(api_key=key)
         self._model = model or settings.anthropic_sentence_model
         self._cap_usd: float = settings.llm_cost_cap_usd

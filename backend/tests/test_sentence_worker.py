@@ -8,6 +8,10 @@ Postgres or an Anthropic key.
 """
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 from src.services.llm_sentence_service import CostCapExceeded
 from src.workers import sentence_worker as sw
 
@@ -49,6 +53,29 @@ class _FakeLLM:
             for w in words
             if w.word not in self.fail_words
         }
+
+
+# ─── import safety ──────────────────────────────────────────────────────────
+
+def test_worker_importable_without_anthropic_sdk():
+    """
+    CI installs requirements-dev.txt, which omits the anthropic SDK, yet the
+    worker (and this file) import WordRequest/CostCapExceeded from the LLM
+    service. Guard that those imports never require the SDK — only
+    instantiating LLMSentenceService may. Subprocess so the block on
+    `anthropic` can't leak into other tests.
+    """
+    code = (
+        "import sys; sys.modules['anthropic'] = None; "
+        "import src.workers.sentence_worker"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert proc.returncode == 0, proc.stderr
 
 
 # ─── backlog SQL ────────────────────────────────────────────────────────────

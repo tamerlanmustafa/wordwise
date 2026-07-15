@@ -40,6 +40,8 @@ import sys
 from dataclasses import dataclass
 from typing import Iterable, List, Set
 
+from src.services.llm_sentence_service import CostCapExceeded, WordRequest
+
 logger = logging.getLogger("wordwise.sentence_worker")
 
 BATCH_SIZE = int(os.environ.get("SENTENCE_WORKER_BATCH_SIZE", "15"))
@@ -113,10 +115,6 @@ async def run_cycle(
     Returns "cap" as soon as the cost cap interrupts a chunk (partial work
     is kept — generate_and_store persists per sentence).
     """
-    # Local import so unit tests (and environments without the anthropic
-    # SDK's transitive needs) can exercise the loop with a fake llm.
-    from src.services.llm_sentence_service import CostCapExceeded, WordRequest
-
     rows = await fetch_backlog(db, skip_ids, page_size)
     if not rows:
         return CycleResult(outcome="idle")
