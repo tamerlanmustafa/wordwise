@@ -48,6 +48,20 @@ import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
 import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
+import { WordCardDeck } from '../vocabulary/WordCardDeck';
+import {
+  parseViewMode,
+  DEFAULT_VIEW_MODE,
+  VIEW_MODE_KEY,
+  type VocabViewMode,
+} from '../vocabulary/deckLogic';
+import { track } from '../../services/analytics';
+import { MONO_FAMILY } from '../../theme/fonts';
+
+// The card-deck view (mockup 2a) is the shipping design. The rows list below
+// is kept intact but DISABLED so we can come back to it: flip this to true to
+// restore the rows/cards segmented toggle with rows as the persisted default.
+const ROWS_MODE_ENABLED: boolean = false;
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -91,6 +105,23 @@ export const MovieDetailScreen = ({
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
   const [wordsView, setWordsView] = useState<'foryou' | 'all'>('foryou');
   const [movieId, setMovieId] = useState<number | null>(null);
+
+  // Card-deck view mode (mockup 2a). While ROWS_MODE_ENABLED is false the
+  // screen is locked to 'cards'; the persisted toggle only runs when the rows
+  // list is re-enabled.
+  const [viewMode, setViewMode] = useState<VocabViewMode>(
+    ROWS_MODE_ENABLED ? DEFAULT_VIEW_MODE : 'cards',
+  );
+  const [deckStartWord, setDeckStartWord] = useState<string | null>(null);
+  const [deckCardNumber, setDeckCardNumber] = useState(0);
+  useEffect(() => {
+    if (!ROWS_MODE_ENABLED) return;
+    AsyncStorage.getItem(VIEW_MODE_KEY)
+      .then((v) => {
+        if (v != null) setViewMode(parseViewMode(v));
+      })
+      .catch(() => {});
+  }, []);
 
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -185,6 +216,7 @@ export const MovieDetailScreen = ({
       const restored = { word: bookmark.word, level: resolvedLevel, explicit: !!bookmark.explicit };
       pendingBookmarkRef.current = restored;
       setCurrentBookmarkWord(bookmark.word);
+      setDeckStartWord(bookmark.word);
       setActiveLevel(resolvedLevel);
       setRestoreTrigger((n) => n + 1);
     } else {
@@ -443,6 +475,9 @@ export const MovieDetailScreen = ({
   }, [bookmarkKey, activeLevel]);
 
   useEffect(() => {
+    // Scroll-to-bookmark is a rows-mode behavior; the deck restores its own
+    // cursor from the same bookmark (initialWord).
+    if (viewMode !== 'rows') return;
     if (!vocabulary || !pendingBookmarkRef.current || bookmarkAppliedRef.current) return;
     const bm = pendingBookmarkRef.current;
     let attempts = 0;
@@ -476,7 +511,7 @@ export const MovieDetailScreen = ({
     };
     timers.push(setTimeout(tryScroll, 400));
     return () => { timers.forEach(clearTimeout); };
-  }, [vocabulary, activeLevel, restoreTrigger]);
+  }, [vocabulary, activeLevel, restoreTrigger, viewMode]);
 
   const wordLevels = useMemo(() => {
     if (!vocabulary) return [];
@@ -795,6 +830,49 @@ export const MovieDetailScreen = ({
     return () => clearTimeout(id);
   }, [renderLimit, activeListLength]);
 
+  // ── Card-deck view mode (mockup 2a) ──────────────────────────────────────
+  // The deck is fed the SAME list the rows render: the active tab's items
+  // after the level filter, sort, learned removal, and the sentence-preview
+  // availability filter the rows apply inline.
+  const deckItems = useMemo(() => {
+    const source: RowItem[] =
+      deferredWordsView === 'foryou' ? deferredSuggestedVisible : deferredActiveItems;
+    return source.filter((item) => {
+      if (isIdiom(item)) return true;
+      const entry = sentencePreviews[item.word];
+      if (!entry) return true; // still loading → keep
+      if (!entry.sentence) return false; // confirmed miss → hide
+      if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
+      return true;
+    });
+  }, [deferredWordsView, deferredSuggestedVisible, deferredActiveItems, sentencePreviews]);
+  const deckTotal = deckItems.length;
+  const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
+
+  const levelColorFor = useCallback(
+    (level: string) => cefrColors[level] || colors.primary,
+    [],
+  );
+
+  // Every deck advance moves the resume cursor — the same movie_bookmark_{id}
+  // the rows use, written implicitly (explicit: false) so the explicit
+  // "Leave off here" toggle semantics stay untouched.
+  const recordAdvanceBookmark = useCallback((word: string) => {
+    AsyncStorage.setItem(
+      bookmarkKey,
+      JSON.stringify({ word, level: activeLevel, explicit: false }),
+    ).catch(() => {});
+  }, [bookmarkKey, activeLevel]);
+
+  const handleDeckCursorChange = useCallback((n: number) => setDeckCardNumber(n), []);
+
+  const handleViewModeChange = (mode: VocabViewMode) => {
+    if (mode === viewMode) return;
+    setViewMode(mode);
+    AsyncStorage.setItem(VIEW_MODE_KEY, mode).catch(() => {});
+    track('vocab_view_toggle', { mode });
+  };
+
   return (
     // Plain View, no bottom safe-area edge: the GlobalBottomBar rendered
     // below this screen already pads for the home indicator, so a bottom
@@ -1018,26 +1096,78 @@ export const MovieDetailScreen = ({
                 {wordsView === 'foryou' ? (
                   suggestedWords.length === 0 ? (
                     <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
+                  ) : viewMode === 'cards' ? (
+                    <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
+                      <Text style={[deckHeaderStyles.cardCount, { color: tc.textSecondary }]}>
+                        CARD {deckCardClamped} / {deckTotal}
+                      </Text>
+                    </View>
                   ) : null
                 ) : (
                   <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
-                    <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
-                      <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                        {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                    {viewMode === 'cards' ? (
+                      <Text style={[deckHeaderStyles.cardCount, { color: tc.textSecondary }]}>
+                        CARD {deckCardClamped} / {deckTotal}
                       </Text>
-                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
-                      activeOpacity={0.6}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
-                        {wordSortOrder === 'rare' ? 'Rarest first ⇅' : 'Common first ⇅'}
+                    ) : (
+                      <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
+                        <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                          {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                        </Text>
+                        {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
                       </Text>
-                    </TouchableOpacity>
+                    )}
+                    <View style={deckHeaderStyles.sortCluster}>
+                      <TouchableOpacity
+                        onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                        activeOpacity={0.6}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
+                          {wordSortOrder === 'rare' ? 'Rarest first ⇅' : 'Common first ⇅'}
+                        </Text>
+                      </TouchableOpacity>
+                      {ROWS_MODE_ENABLED ? (
+                        <View style={[deckHeaderStyles.togglePill, { backgroundColor: tc.chipBg }]}>
+                          {(['rows', 'cards'] as const).map((m) => (
+                            <TouchableOpacity
+                              key={m}
+                              onPress={() => handleViewModeChange(m)}
+                              style={[
+                                deckHeaderStyles.toggleSeg,
+                                viewMode === m && [
+                                  deckHeaderStyles.toggleSegActive,
+                                  { backgroundColor: tc.paper },
+                                ],
+                              ]}
+                              accessibilityRole="button"
+                              accessibilityLabel={m === 'rows' ? 'Rows view' : 'Cards view'}
+                            >
+                              <Ionicons
+                                name={m === 'rows' ? 'list' : 'albums-outline'}
+                                size={14}
+                                color={viewMode === m ? tc.text : tc.textFaint}
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                 )}
+                {viewMode === 'cards' && deckTotal > 0 ? (
+                  <View style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}>
+                    <View
+                      style={[
+                        deckHeaderStyles.progressFill,
+                        {
+                          backgroundColor: tc.gold,
+                          width: `${Math.round((deckCardClamped / deckTotal) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -1064,6 +1194,30 @@ export const MovieDetailScreen = ({
           <View
             onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
           >
+            {viewMode === 'cards' && !isSwitching ? (
+              // Card-deck view (mockup 2a). Remounts per tab/sort so each list
+              // starts from its own bookmark restore, exactly like the rows'
+              // scroll restore. Translations stay tap-on-demand inside the deck.
+              <WordCardDeck
+                key={`deck-${wordsView}-${activeLevel}-${wordSortOrder}`}
+                items={deckItems}
+                activeLevel={activeLevel}
+                levelColorFor={levelColorFor}
+                movieId={movieId}
+                movieTitle={movie.title}
+                targetLang={targetLang}
+                isAuthenticated={isAuthenticated}
+                savedWords={savedWords}
+                onSave={handleSaveWord}
+                onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                onBookmark={recordBookmark}
+                onAdvanceBookmark={recordAdvanceBookmark}
+                currentBookmarkWord={currentBookmarkWord}
+                initialWord={deckStartWord}
+                sentencePreviews={sentencePreviews}
+                onCursorChange={handleDeckCursorChange}
+              />
+            ) : (
             <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
               {isSwitching ? (
                 Array.from({ length: INITIAL_ROWS }).map((_, i) => (
@@ -1236,6 +1390,7 @@ export const MovieDetailScreen = ({
                 })
               )}
             </View>
+            )}
           </View>
           ) : null}
           </View>
@@ -1428,6 +1583,53 @@ const backBtnStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+});
+
+// Cards-mode header pieces: the CARD n / total mono label, the 3px gold
+// progress bar under the count row, and the (currently disabled) rows/cards
+// segmented toggle. Colors are applied inline from tc.*.
+const deckHeaderStyles = StyleSheet.create({
+  cardCount: {
+    fontFamily: MONO_FAMILY,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  sortCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  togglePill: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    padding: 2,
+  },
+  toggleSeg: {
+    width: 28,
+    height: 22,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleSegActive: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  progressTrack: {
+    height: 3,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 3,
+    borderRadius: 2,
   },
 });
 

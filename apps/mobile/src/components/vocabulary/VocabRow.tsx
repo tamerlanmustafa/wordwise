@@ -61,8 +61,8 @@ export interface VocabRowProps {
 
 // Highlights every inflected form of the target inside the sentence with the
 // level colour, serif-italic, no underline. Shared by the always-visible
-// sentence and the idiom example.
-function renderHighlighted(
+// sentence, the idiom example, and the card deck (WordCardDeck).
+export function renderHighlighted(
   sentence: string,
   target: string,
   matchedForm: string | undefined,
