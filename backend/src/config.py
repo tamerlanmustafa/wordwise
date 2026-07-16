@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
     google_translate_enabled: str = "false"
 
+    # Transactional email (Resend). Empty key ⇒ every send is a logged no-op,
+    # so local dev/tests never touch the network and prod stays safe until the
+    # key is set in Railway. The FROM domain must be verified in Resend.
+    resend_api_key: str = ""
+    email_from: str = "WordWise <no-reply@getwordwise.us>"
+    # Public base URL of this API — used to build the email-verification link.
+    api_public_url: str = "https://api.getwordwise.us"
+
     # Anthropic (LLM example sentence generation)
     anthropic_api_key: str = ""
     # Haiku: ~3× cheaper than Sonnet and indistinguishable on this task

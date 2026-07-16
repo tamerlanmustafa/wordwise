@@ -40,8 +40,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a long-lived JWT refresh token. Used solely to obtain a fresh
     access token via POST /auth/refresh — never accepted as a bearer token
-    on protected routes (those check `get_current_user`, which doesn't
-    distinguish type, so we instead gate the refresh endpoint on type)."""
+    on protected routes (`get_current_user` rejects any explicit type other
+    than "access")."""
     to_encode = data.copy()
 
     if expires_delta:
@@ -50,6 +50,18 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
         expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_expiration_days)
 
     to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def create_email_verification_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create the single-purpose token embedded in the verify-email link.
+
+    `type: "email_verify"` keeps it useless as an access or refresh token
+    (both consumers check `type`), and /auth/verify-email only accepts this
+    type — so a leaked verification link can never authenticate anyone."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(hours=48))
+    to_encode.update({"exp": expire, "type": "email_verify"})
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

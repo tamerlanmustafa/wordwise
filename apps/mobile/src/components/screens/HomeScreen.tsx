@@ -21,6 +21,7 @@ import {
   type TodaysWord,
 } from '../../services/api';
 import { showToast } from '../../stores/toastStore';
+import { useNotificationsStore, selectHasUnread } from '../../stores/notificationsStore';
 import type { SwipeAction } from '../../utils/swipeDecision';
 import { useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
@@ -43,7 +44,8 @@ interface Props {
   onSearch: (query: string) => void;
   user: any;
   targetLanguage: string;
-  onNavigateToProfile?: () => void;
+  /** Opens the NotificationsSheet (App.tsx owns it, like UserMenuSheet). */
+  onOpenNotifications?: () => void;
 }
 
 // Deep-screen navigation (Stats, Lists, Settings, Leaderboard, …) now lives in
@@ -55,9 +57,15 @@ export const HomeScreen = ({
   onSearch,
   user,
   targetLanguage,
-  onNavigateToProfile,
+  onOpenNotifications,
 }: Props) => {
   const tc = useThemeColors();
+  // Real unread state for the bell dot; refresh once on mount so the dot is
+  // meaningful before the sheet is ever opened.
+  const notifUnread = useNotificationsStore(selectHasUnread);
+  useEffect(() => {
+    void useNotificationsStore.getState().refresh();
+  }, []);
   const s = useMemo(() => makeStyles(tc), [tc]);
   const showAdsEntitlement = useShowAds();
   const [isFirstSession, setIsFirstSession] = useState(true);
@@ -335,8 +343,8 @@ export const HomeScreen = ({
 
       <HomeHeader
         level={selectedLevel}
-        hasUnread
-        onNotificationsPress={onNavigateToProfile}
+        hasUnread={notifUnread}
+        onNotificationsPress={onOpenNotifications}
       />
 
       {/* The header stack (search + ad + collapsible word card + filters) is

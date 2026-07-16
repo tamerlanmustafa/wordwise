@@ -2,10 +2,11 @@
 OAuth authentication routes (Google + Apple) using Prisma.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Depends
 from datetime import timedelta
 from prisma import Prisma
 from ..database import get_db
+from ..services import email_service
 from ..schemas.oauth import (
     AppleLoginRequest,
     GoogleLoginRequest,
@@ -135,7 +136,10 @@ async def _create_or_update_user(
                 "googleId": google_id,
                 "oauthProvider": "google",
                 "profilePictureUrl": google_user_info.get('picture'),
-                "isActive": True
+                "isActive": True,
+                # Google verified the address before issuing the ID token, so
+                # no verification email is needed for OAuth signups.
+                "emailVerified": True,
             }
             # Add language preferences if provided
             if native_language:
@@ -184,6 +188,7 @@ def _create_user_response(user) -> UserInfo:
 @router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
 async def google_login(
     request: GoogleLoginRequest,
+    background_tasks: BackgroundTasks,
     db: Prisma = Depends(get_db),
     _: None = Depends(_google_login_throttle),
 ):
@@ -193,13 +198,18 @@ async def google_login(
         google_user_info = _verify_and_get_google_user_info(request.id_token)
 
         # Create or update user (allows new users), with language preferences
-        user, _ = await _create_or_update_user(
+        user, is_new_user = await _create_or_update_user(
             google_user_info,
             db,
             allow_new=True,
             native_language=request.native_language,
             learning_language=request.learning_language
         )
+
+        # OAuth addresses are pre-verified, so new users get only the
+        # welcome email — no verification link.
+        if is_new_user:
+            background_tasks.add_task(email_service.send_welcome_email, user.email, user.username)
 
         # Generate JWT token pair
         token_payload = {"sub": str(user.id), "email": user.email}
@@ -304,6 +314,8 @@ async def _create_or_update_apple_user(
             "appleId": apple_id,
             "oauthProvider": "apple",
             "isActive": True,
+            # Apple verified (or relays) the address itself — treat as verified.
+            "emailVerified": True,
         }
         if native_language:
             user_data["nativeLanguage"] = native_language
@@ -327,6 +339,7 @@ async def _create_or_update_apple_user(
 @apple_router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
 async def apple_login(
     request: AppleLoginRequest,
+    background_tasks: BackgroundTasks,
     db: Prisma = Depends(get_db),
     _: None = Depends(_apple_login_throttle),
 ):
@@ -342,13 +355,17 @@ async def apple_login(
                 detail="Invalid Apple token",
             )
 
-        user, _is_new = await _create_or_update_apple_user(
+        user, is_new_user = await _create_or_update_apple_user(
             apple_user_info,
             db,
             full_name=request.full_name,
             native_language=request.native_language,
             learning_language=request.learning_language,
         )
+
+        # Same as the Google flow: welcome email only, address pre-verified.
+        if is_new_user:
+            background_tasks.add_task(email_service.send_welcome_email, user.email, user.username)
 
         token_payload = {"sub": str(user.id), "email": user.email}
         access_token = create_access_token(

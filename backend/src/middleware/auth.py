@@ -30,12 +30,14 @@ async def get_current_user(
         logger.error("[AUTH] Token verification failed")
         raise credentials_exception
 
-    # Refresh tokens are only valid at POST /auth/refresh. Without this
-    # check a leaked 60-day refresh token doubles as a bearer credential
-    # on every protected route. Legacy access tokens minted before the
-    # `type` claim existed have no type at all — those stay accepted.
-    if payload.get("type") == "refresh":
-        logger.error("[AUTH] Refresh token presented as access token")
+    # Only access tokens may authenticate protected routes. Refresh tokens
+    # belong solely to POST /auth/refresh (a leaked 60-day refresh token must
+    # not double as a bearer credential) and single-purpose tokens like
+    # `email_verify` belong to their own endpoint. Legacy access tokens minted
+    # before the `type` claim existed have no type at all — those stay accepted.
+    token_type = payload.get("type")
+    if token_type is not None and token_type != "access":
+        logger.error("[AUTH] Non-access token (type=%s) presented as access token", token_type)
         raise credentials_exception
 
     user_id_str = payload.get("sub")
@@ -72,7 +74,7 @@ async def get_current_user_optional(
     # Same guards as get_current_user, but every failure degrades to
     # "anonymous" rather than 401 so a stale/malformed token never breaks
     # the public feed.
-    if payload is None or payload.get("type") == "refresh":
+    if payload is None or payload.get("type") not in (None, "access"):
         return None
     user_id_str = payload.get("sub")
     if user_id_str is None:

@@ -1,7 +1,8 @@
 import logging
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi.responses import HTMLResponse
 from prisma import Prisma
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from ..database import get_db
 from ..schemas.user import (
     UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate,
@@ -9,11 +10,12 @@ from ..schemas.user import (
 )
 from ..utils.auth import (
     verify_password, get_password_hash, create_access_token,
-    create_refresh_token, verify_token,
+    create_refresh_token, create_email_verification_token, verify_token,
 )
 from ..config import get_settings
 from ..middleware.auth import get_current_user
 from ..utils.rate_limit import rate_limit
+from ..services import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +44,25 @@ def _issue_tokens(user) -> tuple[str, str]:
     return access_token, refresh_token
 
 
+def build_verify_email_url(user) -> str:
+    """Signed single-purpose link the user opens from their inbox."""
+    token = create_email_verification_token({"sub": str(user.id), "email": user.email})
+    return f"{settings.api_public_url}/auth/verify-email?token={token}"
+
+
+async def send_signup_emails(user) -> None:
+    """Welcome + verification, fired from a BackgroundTask after /register.
+    email_service never raises, so a provider outage can't fail a signup."""
+    await email_service.send_welcome_email(user.email, user.username)
+    await email_service.send_verification_email(
+        user.email, user.username, build_verify_email_url(user)
+    )
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
+    background_tasks: BackgroundTasks,
     db: Prisma = Depends(get_db),
     _: None = Depends(_register_throttle),
 ):
@@ -84,6 +102,10 @@ async def register(
 
     # Create token pair (sub must be a string for JWT compliance)
     access_token, refresh_token = _issue_tokens(new_user)
+
+    # Email after the response is sent — signup latency and success never
+    # depend on the email provider.
+    background_tasks.add_task(send_signup_emails, new_user)
 
     return {
         "user": new_user,
@@ -253,6 +275,93 @@ async def update_user_profile(
     )
 
     return updated_user
+
+
+# ── Email verification (soft) ───────────────────────────────────────────────
+# Verification never gates login: OAuth users are verified at creation and
+# email/password users just get a nudge. The link lands on a plain HTML page
+# because it's opened from a mail client, not the app.
+
+_verify_email_throttle = rate_limit(10, 60.0, scope="auth-verify-email")
+_resend_verification_throttle = rate_limit(3, 600.0, scope="auth-resend-verification")
+
+
+def _verify_email_page(title: str, message: str) -> str:
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} — WordWise</title></head>
+<body style="margin:0;padding:48px 16px;background:#f4efe7;font-family:Georgia,serif;text-align:center;">
+  <div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #e5dcc9;border-radius:12px;padding:32px;">
+    <div style="color:#d4af37;font-size:20px;font-weight:bold;letter-spacing:1px;margin-bottom:16px;">WordWise</div>
+    <h1 style="font-size:20px;color:#2b2620;margin:0 0 10px;">{title}</h1>
+    <p style="color:#6b6355;font-size:15px;line-height:1.5;margin:0;">{message}</p>
+  </div>
+</body></html>"""
+
+
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email(
+    token: str,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_verify_email_throttle),
+):
+    """Landing page for the link in the verification email. Idempotent —
+    re-opening an already-used link shows the same success page."""
+    failure = HTMLResponse(
+        _verify_email_page(
+            "Link expired or invalid",
+            "This verification link is no longer valid. Open the WordWise app "
+            "and request a new one from Settings.",
+        ),
+        status_code=status.HTTP_400_BAD_REQUEST,
+    )
+
+    payload = verify_token(token)
+    if payload is None or payload.get("type") != "email_verify":
+        return failure
+
+    try:
+        user_id = int(payload.get("sub"))
+    except (ValueError, TypeError):
+        return failure
+
+    user = await db.user.find_unique(where={"id": user_id})
+    # The email claim pins the link to the address it was sent to, so a link
+    # that pre-dates an email change can't verify the new address.
+    if user is None or user.email != payload.get("email"):
+        return failure
+
+    if not user.emailVerified:
+        await db.user.update(
+            where={"id": user_id},
+            data={"emailVerified": True, "emailVerifiedAt": datetime.now(timezone.utc)},
+        )
+        logger.info("Email verified for user id=%s", user_id)
+
+    return HTMLResponse(
+        _verify_email_page(
+            "Email verified",
+            "Your email address is confirmed. You can close this tab and head back to the app.",
+        )
+    )
+
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+async def resend_verification(
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user),
+    _: None = Depends(_resend_verification_throttle),
+):
+    """Re-send the verification email to the signed-in user's address."""
+    if current_user.emailVerified:
+        return {"status": "already_verified"}
+    background_tasks.add_task(
+        email_service.send_verification_email,
+        current_user.email,
+        current_user.username,
+        build_verify_email_url(current_user),
+    )
+    return {"status": "sent"}
 
 
 # Deleting an account is destructive but idempotent; throttle it anyway so a

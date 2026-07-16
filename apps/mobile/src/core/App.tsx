@@ -33,12 +33,15 @@ import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen'
 import type { ReelTile } from '../services/api';
 import type { NodeLevel } from '../components/journey/JourneyNode';
 import { UserMenuSheet } from '../components/UserMenuSheet';
+import { NotificationsSheet } from '../components/NotificationsSheet';
+import { useNotificationsStore, type NotificationTarget } from '../stores/notificationsStore';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
 import { KeepAlive } from '../components/KeepAlive';
 import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
 import { AddFilmFlow } from '../components/movies/AddFilmFlow';
 import { ToastHost } from '../components/common/Toast';
+import { showToast } from '../stores/toastStore';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
@@ -183,6 +186,10 @@ export default function App() {
     setSearchQueryNav('');
     setResolvedMovieId(null);
     setCurrentScreen('home');
+    // Home stays mounted under KeepAlive, so its mount-time refresh won't
+    // re-run — recompute here so the bell dot reflects e.g. a just-finished
+    // review session.
+    void useNotificationsStore.getState().refresh();
   };
 
   const navigateToSearch = (query: string) => {
@@ -312,11 +319,20 @@ export default function App() {
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
   const [showUserSheet, setShowUserSheet] = useState(false);
+  const [showNotifSheet, setShowNotifSheet] = useState(false);
   const [barHeight, setBarHeight] = useState(0);
+
+  // Bell-tap targets: notifications deep-link into the practice loop.
+  const handleNotificationNavigate = (target: NotificationTarget) => {
+    if (target === 'review') navigateToReview();
+    else navigateToPractice();
+  };
 
   const handleTabPress = (t: BottomTab) => {
     // Switching to any other tab collapses the profile sheet if it's open.
     if (t !== 'profile') setShowUserSheet(false);
+    // Any tab tap dismisses the notifications sheet.
+    setShowNotifSheet(false);
     if (t === 'home') navigateToHome();
     else if (t === 'movies') navigateToMyMovies();
     else if (t === 'practice') navigateToPractice();
@@ -328,6 +344,10 @@ export default function App() {
   useEffect(() => {
     const authed = status === 'authenticated' || status === 'offline_authenticated';
     const onHardwareBack = () => {
+      if (showNotifSheet) {
+        setShowNotifSheet(false);
+        return true;
+      }
       if (showUserSheet) {
         setShowUserSheet(false);
         return true;
@@ -341,7 +361,7 @@ export default function App() {
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
     return () => sub.remove();
-  }, [currentScreen, showUserSheet, status]);
+  }, [currentScreen, showUserSheet, showNotifSheet, status]);
 
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
@@ -424,7 +444,8 @@ export default function App() {
       });
       setCurrentScreen('setIntro');
     } catch (err: any) {
-      Alert.alert('Could not start quiz', err?.message ?? 'Please try again.');
+      // Transient async failure — toast (Motion §E5), not a blocking alert.
+      showToast({ tone: 'error', message: err?.message ?? 'Could not start the quiz. Please try again.' });
     } finally {
       setHubQuizStarting(false);
     }
@@ -438,7 +459,7 @@ export default function App() {
     try {
       await useReelStore.getState().remove(tmdbId);
     } catch (err: any) {
-      Alert.alert('Could not remove', err?.message ?? 'Please try again.');
+      showToast({ tone: 'error', message: err?.message ?? 'Could not remove the movie. Please try again.' });
     }
   };
 
@@ -469,7 +490,7 @@ export default function App() {
       });
       setCurrentScreen('setIntro');
     } catch (err: any) {
-      Alert.alert('Could not start quiz', err?.message ?? 'Please try again.');
+      showToast({ tone: 'error', message: err?.message ?? 'Could not start the quiz. Please try again.' });
     }
   };
 
@@ -668,7 +689,7 @@ export default function App() {
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
         <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} onNavigateToProfile={() => setShowUserSheet(true)} />
+          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} onOpenNotifications={() => setShowNotifSheet(true)} />
         </KeepAlive>
         <KeepAlive visible={currentScreen === 'movies' || currentScreen === 'journey'}>
           <MyMoviesScreen
@@ -819,6 +840,12 @@ export default function App() {
           onNavigateToLeaderboard={() => { setShowUserSheet(false); navigateToLeaderboard(); }}
           onLogout={() => { setShowUserSheet(false); logout(); }}
           isAdmin={!!user?.is_admin}
+          bottomOffset={barHeight}
+        />
+        <NotificationsSheet
+          visible={showNotifSheet}
+          onClose={() => setShowNotifSheet(false)}
+          onNavigate={handleNotificationNavigate}
           bottomOffset={barHeight}
         />
         <GlobalBottomBar active={activeTab} onTabPress={handleTabPress} onLayout={(h) => setBarHeight(h)} />
