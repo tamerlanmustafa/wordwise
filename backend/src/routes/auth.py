@@ -1,16 +1,17 @@
 import logging
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
 from prisma import Prisma
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from ..database import get_db
 from ..schemas.user import (
     UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate,
-    RefreshRequest, RefreshResponse, SUPPORTED_LANGUAGES,
+    RefreshRequest, RefreshResponse, ForgotPasswordRequest, SUPPORTED_LANGUAGES,
 )
 from ..utils.auth import (
     verify_password, get_password_hash, create_access_token,
-    create_refresh_token, create_email_verification_token, verify_token,
+    create_refresh_token, create_password_reset_token,
+    password_hash_fingerprint, verify_token,
 )
 from ..config import get_settings
 from ..middleware.auth import get_current_user
@@ -42,21 +43,6 @@ def _issue_tokens(user) -> tuple[str, str]:
         expires_delta=timedelta(days=settings.jwt_refresh_expiration_days),
     )
     return access_token, refresh_token
-
-
-def build_verify_email_url(user) -> str:
-    """Signed single-purpose link the user opens from their inbox."""
-    token = create_email_verification_token({"sub": str(user.id), "email": user.email})
-    return f"{settings.api_public_url}/auth/verify-email?token={token}"
-
-
-async def send_signup_emails(user) -> None:
-    """Welcome + verification, fired from a BackgroundTask after /register.
-    email_service never raises, so a provider outage can't fail a signup."""
-    await email_service.send_welcome_email(user.email, user.username)
-    await email_service.send_verification_email(
-        user.email, user.username, build_verify_email_url(user)
-    )
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -104,8 +90,10 @@ async def register(
     access_token, refresh_token = _issue_tokens(new_user)
 
     # Email after the response is sent — signup latency and success never
-    # depend on the email provider.
-    background_tasks.add_task(send_signup_emails, new_user)
+    # depend on the email provider (email_service never raises).
+    background_tasks.add_task(
+        email_service.send_welcome_email, new_user.email, new_user.username
+    )
 
     return {
         "user": new_user,
@@ -277,16 +265,23 @@ async def update_user_profile(
     return updated_user
 
 
-# ── Email verification (soft) ───────────────────────────────────────────────
-# Verification never gates login: OAuth users are verified at creation and
-# email/password users just get a nudge. The link lands on a plain HTML page
-# because it's opened from a mail client, not the app.
+# ── Password reset ───────────────────────────────────────────────────────────
+# Fully backend-served: the emailed link opens an HTML form here (a mail
+# client can't deep-link into the app), the form posts back, and the app is
+# only involved again at the next login. The token embeds a fingerprint of
+# the CURRENT password hash, so issued links die as soon as the password
+# changes — single-use without any server-side token store.
 
-_verify_email_throttle = rate_limit(10, 60.0, scope="auth-verify-email")
-_resend_verification_throttle = rate_limit(3, 600.0, scope="auth-resend-verification")
+_forgot_password_throttle = rate_limit(3, 600.0, scope="auth-forgot-password")
+_reset_password_throttle = rate_limit(10, 60.0, scope="auth-reset-password")
+
+# Mirrors UserCreate's validator: bcrypt silently truncates beyond 72 bytes.
+_PASSWORD_MIN_CHARS = 8
+_PASSWORD_MAX_BYTES = 72
 
 
-def _verify_email_page(title: str, message: str) -> str:
+def _auth_page(title: str, message: str, extra_html: str = "") -> str:
+    """Small branded page for auth flows opened from a mail client."""
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} — WordWise</title></head>
@@ -295,73 +290,147 @@ def _verify_email_page(title: str, message: str) -> str:
     <div style="color:#d4af37;font-size:20px;font-weight:bold;letter-spacing:1px;margin-bottom:16px;">WordWise</div>
     <h1 style="font-size:20px;color:#2b2620;margin:0 0 10px;">{title}</h1>
     <p style="color:#6b6355;font-size:15px;line-height:1.5;margin:0;">{message}</p>
+    {extra_html}
   </div>
 </body></html>"""
 
 
-@router.get("/verify-email", response_class=HTMLResponse)
-async def verify_email(
-    token: str,
-    db: Prisma = Depends(get_db),
-    _: None = Depends(_verify_email_throttle),
-):
-    """Landing page for the link in the verification email. Idempotent —
-    re-opening an already-used link shows the same success page."""
-    failure = HTMLResponse(
-        _verify_email_page(
-            "Link expired or invalid",
-            "This verification link is no longer valid. Open the WordWise app "
-            "and request a new one from Settings.",
-        ),
-        status_code=status.HTTP_400_BAD_REQUEST,
-    )
+_RESET_LINK_DEAD = (
+    "This reset link is no longer valid. Links last 30 minutes and die once "
+    "the password changes — request a fresh one from the app's login screen."
+)
 
+
+async def _user_for_reset_token(token: str, db: Prisma):
+    """Resolve a reset token to its user, or None if anything is off:
+    wrong type, expired, unknown user, changed email, or already-used
+    (password-hash fingerprint no longer matches)."""
     payload = verify_token(token)
-    if payload is None or payload.get("type") != "email_verify":
-        return failure
-
+    if payload is None or payload.get("type") != "password_reset":
+        return None
     try:
         user_id = int(payload.get("sub"))
     except (ValueError, TypeError):
-        return failure
-
+        return None
     user = await db.user.find_unique(where={"id": user_id})
-    # The email claim pins the link to the address it was sent to, so a link
-    # that pre-dates an email change can't verify the new address.
-    if user is None or user.email != payload.get("email"):
-        return failure
+    if user is None or not user.isActive or user.email != payload.get("email"):
+        return None
+    if not user.passwordHash or password_hash_fingerprint(user.passwordHash) != payload.get("pwh"):
+        return None
+    return user
 
-    if not user.emailVerified:
-        await db.user.update(
-            where={"id": user_id},
-            data={"emailVerified": True, "emailVerifiedAt": datetime.now(timezone.utc)},
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_forgot_password_throttle),
+):
+    """Email a single-use reset link. Always answers 202 with the same body
+    so the endpoint can't be used to enumerate accounts. OAuth-only accounts
+    (no password to reset) are skipped silently for the same reason."""
+    user = await db.user.find_unique(where={"email": body.email})
+    if user and user.isActive and user.passwordHash:
+        token = create_password_reset_token(user.id, user.email, user.passwordHash)
+        reset_url = f"{settings.api_public_url}/auth/reset-password?token={token}"
+        background_tasks.add_task(
+            email_service.send_password_reset_email, user.email, user.username, reset_url
         )
-        logger.info("Email verified for user id=%s", user_id)
+        logger.info("Password reset requested for user id=%s", user.id)
+    return {"status": "sent"}
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_form(
+    token: str,
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_reset_password_throttle),
+):
+    """The form the emailed link opens. Token is validated up front so a
+    stale link fails here instead of after the user typed a new password."""
+    user = await _user_for_reset_token(token, db)
+    if user is None:
+        return HTMLResponse(
+            _auth_page("Link expired or invalid", _RESET_LINK_DEAD),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # `token` round-tripped through verify_token, so it is a well-formed JWT
+    # (base64url charset) — safe to embed in the form.
+    form = f"""
+    <form method="post" action="/auth/reset-password" style="margin-top:20px;text-align:left;"
+          onsubmit="if(this.new_password.value!==this.confirm.value){{alert('Passwords do not match');return false}}">
+      <input type="hidden" name="token" value="{token}">
+      <label style="display:block;color:#6b6355;font-size:13px;margin-bottom:4px;">New password (min {_PASSWORD_MIN_CHARS} characters)</label>
+      <input type="password" name="new_password" minlength="{_PASSWORD_MIN_CHARS}" required autocomplete="new-password"
+             style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #e5dcc9;border-radius:8px;font-size:15px;margin-bottom:12px;">
+      <label style="display:block;color:#6b6355;font-size:13px;margin-bottom:4px;">Confirm password</label>
+      <input type="password" name="confirm" minlength="{_PASSWORD_MIN_CHARS}" required autocomplete="new-password"
+             style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #e5dcc9;border-radius:8px;font-size:15px;margin-bottom:18px;">
+      <button type="submit"
+              style="width:100%;background:#d4af37;color:#1c1a17;font-weight:bold;font-size:15px;padding:12px;border:none;border-radius:8px;cursor:pointer;">
+        Set new password
+      </button>
+    </form>"""
+    return HTMLResponse(
+        _auth_page("Choose a new password", f"Resetting the password for {user.email}.", form)
+    )
+
+
+@router.post("/reset-password", response_class=HTMLResponse)
+async def reset_password_submit(
+    token: str = Form(...),
+    new_password: str = Form(...),
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_reset_password_throttle),
+):
+    """Handle the form post: re-validate the token, apply the same password
+    rules as signup, store the new hash. Success kills every outstanding
+    reset link for the account (the pwh fingerprint no longer matches)."""
+    user = await _user_for_reset_token(token, db)
+    if user is None:
+        return HTMLResponse(
+            _auth_page("Link expired or invalid", _RESET_LINK_DEAD),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if len(new_password) < _PASSWORD_MIN_CHARS or len(new_password.encode("utf-8")) > _PASSWORD_MAX_BYTES:
+        return HTMLResponse(
+            _auth_page(
+                "Password not accepted",
+                f"Passwords must be at least {_PASSWORD_MIN_CHARS} characters "
+                f"(and at most {_PASSWORD_MAX_BYTES} bytes). Go back and try again.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    await db.user.update(
+        where={"id": user.id},
+        data={"passwordHash": get_password_hash(new_password)},
+    )
+    logger.info("Password reset completed for user id=%s", user.id)
 
     return HTMLResponse(
-        _verify_email_page(
-            "Email verified",
-            "Your email address is confirmed. You can close this tab and head back to the app.",
+        _auth_page(
+            "Password updated",
+            "Your new password is set. Head back to the WordWise app and log in with it.",
         )
     )
 
 
-@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
-async def resend_verification(
-    background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_user),
-    _: None = Depends(_resend_verification_throttle),
-):
-    """Re-send the verification email to the signed-in user's address."""
-    if current_user.emailVerified:
-        return {"status": "already_verified"}
-    background_tasks.add_task(
-        email_service.send_verification_email,
-        current_user.email,
-        current_user.username,
-        build_verify_email_url(current_user),
+# Legacy stub: verification emails went out briefly before soft verification
+# was removed (2026-07-16). Keep their links landing somewhere friendly
+# instead of a 404. Safe to delete after a few weeks.
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_legacy(_: None = Depends(_reset_password_throttle)):
+    return HTMLResponse(
+        _auth_page(
+            "You're all set",
+            "Email verification is no longer required — your account works without it. "
+            "You can close this tab and head back to the app.",
+        )
     )
-    return {"status": "sent"}
 
 
 # Deleting an account is destructive but idempotent; throttle it anyway so a

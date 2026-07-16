@@ -137,9 +137,6 @@ async def _create_or_update_user(
                 "oauthProvider": "google",
                 "profilePictureUrl": google_user_info.get('picture'),
                 "isActive": True,
-                # Google verified the address before issuing the ID token, so
-                # no verification email is needed for OAuth signups.
-                "emailVerified": True,
             }
             # Add language preferences if provided
             if native_language:
@@ -314,8 +311,6 @@ async def _create_or_update_apple_user(
             "appleId": apple_id,
             "oauthProvider": "apple",
             "isActive": True,
-            # Apple verified (or relays) the address itself — treat as verified.
-            "emailVerified": True,
         }
         if native_language:
             user_data["nativeLanguage"] = native_language

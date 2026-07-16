@@ -73,27 +73,27 @@ def build_welcome_email(username: str) -> tuple[str, str, str]:
     return subject, _LAYOUT.format(body=body), text
 
 
-def build_verification_email(username: str, verify_url: str) -> tuple[str, str, str]:
-    """(subject, html, text) for the email-address verification email."""
-    subject = "Verify your WordWise email"
+def build_password_reset_email(username: str, reset_url: str) -> tuple[str, str, str]:
+    """(subject, html, text) for the forgot-password email."""
+    subject = "Reset your WordWise password"
     body = (
         f"<p style=\"margin:0 0 14px;\">Hi {username},</p>"
-        "<p style=\"margin:0 0 18px;\">Tap the button below to confirm this email address. "
-        "The link is valid for 48 hours.</p>"
-        f"<p style=\"margin:0 0 18px;\"><a href=\"{verify_url}\" "
+        "<p style=\"margin:0 0 18px;\">Tap the button below to choose a new password. "
+        "The link is valid for 30 minutes and can be used once.</p>"
+        f"<p style=\"margin:0 0 18px;\"><a href=\"{reset_url}\" "
         "style=\"display:inline-block;background:#d4af37;color:#1c1a17;text-decoration:none;"
-        "font-weight:bold;padding:12px 22px;border-radius:8px;\">Verify email</a></p>"
+        "font-weight:bold;padding:12px 22px;border-radius:8px;\">Reset password</a></p>"
         "<p style=\"margin:0 0 14px;color:#8a8272;font-size:13px;\">Or paste this link into your browser:<br/>"
-        f"<a href=\"{verify_url}\" style=\"color:#8a8272;word-break:break-all;\">{verify_url}</a></p>"
-        "<p style=\"margin:0;color:#8a8272;font-size:13px;\">Didn't create a WordWise account? "
-        "You can safely ignore this email.</p>"
+        f"<a href=\"{reset_url}\" style=\"color:#8a8272;word-break:break-all;\">{reset_url}</a></p>"
+        "<p style=\"margin:0;color:#8a8272;font-size:13px;\">Didn't request this? "
+        "You can safely ignore this email — your password stays unchanged.</p>"
     )
     text = (
         f"Hi {username},\n\n"
-        "Confirm this email address for your WordWise account by opening the link below "
-        "(valid for 48 hours):\n\n"
-        f"{verify_url}\n\n"
-        "Didn't create a WordWise account? You can safely ignore this email.\n"
+        "Choose a new WordWise password by opening the link below "
+        "(valid for 30 minutes, single use):\n\n"
+        f"{reset_url}\n\n"
+        "Didn't request this? You can safely ignore this email — your password stays unchanged.\n"
     )
     return subject, _LAYOUT.format(body=body), text
 
@@ -139,6 +139,6 @@ async def send_welcome_email(to: str, username: str) -> bool:
     return await send_email(to, subject, html, text)
 
 
-async def send_verification_email(to: str, username: str, verify_url: str) -> bool:
-    subject, html, text = build_verification_email(username, verify_url)
+async def send_password_reset_email(to: str, username: str, reset_url: str) -> bool:
+    subject, html, text = build_password_reset_email(username, reset_url)
     return await send_email(to, subject, html, text)

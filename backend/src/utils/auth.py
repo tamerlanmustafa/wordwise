@@ -53,15 +53,31 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_email_verification_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create the single-purpose token embedded in the verify-email link.
+def password_hash_fingerprint(password_hash: str) -> str:
+    """Short stable digest of a bcrypt hash, embedded in reset tokens as the
+    `pwh` claim. Changing the password changes the fingerprint, which
+    invalidates every previously-issued reset link — single-use semantics
+    without any server-side token store."""
+    import hashlib
 
-    `type: "email_verify"` keeps it useless as an access or refresh token
-    (both consumers check `type`), and /auth/verify-email only accepts this
-    type — so a leaked verification link can never authenticate anyone."""
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(hours=48))
-    to_encode.update({"exp": expire, "type": "email_verify"})
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def create_password_reset_token(user_id: int, email: str, password_hash: str,
+                                expires_delta: Optional[timedelta] = None) -> str:
+    """Create the single-purpose token embedded in the reset-password link.
+
+    `type: "password_reset"` keeps it useless as an access or refresh token
+    (get_current_user rejects any explicit type other than "access", and the
+    refresh endpoint requires "refresh"), and the reset endpoint only accepts
+    this type — so a leaked reset link can never authenticate anyone."""
+    to_encode = {
+        "sub": str(user_id),
+        "email": email,
+        "pwh": password_hash_fingerprint(password_hash),
+        "exp": datetime.utcnow() + (expires_delta or timedelta(minutes=30)),
+        "type": "password_reset",
+    }
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

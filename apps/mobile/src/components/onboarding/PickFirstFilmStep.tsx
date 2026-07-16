@@ -121,7 +121,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
         keyboardVerticalOffset={insets.top}
         style={s.kav}
       >
-      <StepHeader step={4} total={5} eyebrow="Step 4 of 5" title="Pick your first film" onBack={onBack} />
+      <StepHeader step={5} total={6} eyebrow="Step 5 of 6" title="Pick your first film" onBack={onBack} />
       <Text style={s.sub}>We'll build a word list from its script — start with one you'd love to understand.</Text>
 
       <View style={s.searchBox}>

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from src.services import email_service
 from src.services.email_service import (
-    build_verification_email,
+    build_password_reset_email,
     build_welcome_email,
     send_email,
 )
@@ -25,10 +25,10 @@ def test_welcome_email_mentions_user_and_brand():
     assert "cinephile42" in text
 
 
-def test_verification_email_carries_the_link_in_both_bodies():
-    url = "https://api.getwordwise.us/auth/verify-email?token=abc123"
-    subject, html, text = build_verification_email("cinephile42", url)
-    assert "erify" in subject  # "Verify …"
+def test_password_reset_email_carries_the_link_in_both_bodies():
+    url = "https://api.getwordwise.us/auth/reset-password?token=abc123"
+    subject, html, text = build_password_reset_email("cinephile42", url)
+    assert "eset" in subject  # "Reset …"
     assert url in html
     assert url in text
 

@@ -28,7 +28,7 @@ export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: Go
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <StepHeader step={5} total={5} eyebrow="Step 5 of 5" title="Set your daily goal" onBack={onBack} />
+      <StepHeader step={6} total={6} eyebrow="Step 6 of 6" title="Set your daily goal" onBack={onBack} />
       <Text style={s.sub}>You can change this any time. Consistency beats intensity.</Text>
       <View style={s.list}>
         {DAILY_GOAL_OPTIONS.map((g) => {

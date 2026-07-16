@@ -25,10 +25,6 @@ export interface User {
   proficiency_level: string | null;
   default_tab: 'movies' | 'books';
   is_admin: boolean;
-  /** Soft email verification (informational — login is never gated on it).
-   *  OAuth accounts are verified at creation; email signups verify via the
-   *  emailed link. Optional: older cached payloads predate the field. */
-  email_verified?: boolean | null;
   entitlements?: Entitlements | null;
 }
 

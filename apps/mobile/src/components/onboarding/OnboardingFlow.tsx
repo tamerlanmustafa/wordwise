@@ -22,13 +22,14 @@ import { ScriptAnalyzing } from '../movies/ScriptAnalyzing';
 import { ReelReady } from '../movies/ReelReady';
 import { ANALYZE_STEPS } from '../movies/analyzeSteps';
 import { WelcomeScreen } from './WelcomeScreen';
+import { UsernameStep } from './UsernameStep';
 import { LanguageStep } from './LanguageStep';
 import { PlacementStep } from './PlacementStep';
 import { LevelResultStep } from './LevelResultStep';
 import { PickFirstFilmStep, type FirstFilm } from './PickFirstFilmStep';
 import { GoalStep } from './GoalStep';
 
-type Step = 'welcome' | 'language' | 'placement' | 'level' | 'film' | 'goal' | 'analyzing' | 'ready';
+type Step = 'welcome' | 'username' | 'language' | 'placement' | 'level' | 'film' | 'goal' | 'analyzing' | 'ready';
 
 export interface OnboardingFlowProps {
   /** Current target language, used to pre-select the language step. */
@@ -137,13 +138,20 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
 
   switch (step) {
     case 'welcome':
-      return <WelcomeScreen onGetStarted={() => setStep('language')} />;
+      return <WelcomeScreen onGetStarted={() => setStep('username')} />;
+    case 'username':
+      return (
+        <UsernameStep
+          onBack={() => setStep('welcome')}
+          onContinue={() => setStep('language')}
+        />
+      );
     case 'language':
       return (
         <LanguageStep
           selected={language}
           onSelect={setLanguage}
-          onBack={() => setStep('welcome')}
+          onBack={() => setStep('username')}
           onContinue={() => {
             setWordIdx(0);
             setAnswers([]);

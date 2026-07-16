@@ -35,8 +35,8 @@ export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: Pl
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <StepHeader
-        step={2}
-        total={5}
+        step={3}
+        total={6}
         eyebrow={`Quick placement · word ${index + 1} of ${total}`}
         title="How well do you know…"
         onBack={onBack}

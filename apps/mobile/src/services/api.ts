@@ -1014,7 +1014,12 @@ export const authApi = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
-    if (!res.ok) throw new Error(`Failed to update profile (${res.status})`);
+    if (!res.ok) {
+      // Surface the backend's reason ("Username already taken", …) so forms
+      // can show it verbatim instead of a generic status code.
+      const detail = await res.json().then((d) => d?.detail).catch(() => null);
+      throw new Error(detail || `Failed to update profile (${res.status})`);
+    }
     return res.json();
   },
 

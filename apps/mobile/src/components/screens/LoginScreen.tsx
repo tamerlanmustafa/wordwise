@@ -14,6 +14,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore } from '../../stores/themeStore';
+import { showToast } from '../../stores/toastStore';
 import { formatAppleFullName } from '../../utils/appleName';
 
 interface Props {
@@ -30,6 +31,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   // Apple's own availability check (iOS 13+, real device/simulator support).
   // Guideline 4.8: this button must be offered wherever Google Sign-In is.
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -234,7 +236,37 @@ export const LoginScreen = ({ onLogin }: Props) => {
     }
   };
 
-  const isLoading = loading || googleLoading || appleLoading;
+  // Forgot password: reuses the email field above — the backend always
+  // answers 202 (no account enumeration), so the confirmation copy is
+  // deliberately "if an account exists".
+  const handleForgotPassword = async () => {
+    const target = email.trim();
+    if (!target) {
+      setError('Enter your email above first, then tap "Forgot password?"');
+      return;
+    }
+    setError('');
+    setForgotLoading(true);
+    try {
+      const { config } = await import('../../config/env');
+      const res = await fetch(`${config.API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: target }),
+      });
+      if (!res.ok) throw new Error('Could not send the reset email. Please try again.');
+      showToast({
+        tone: 'success',
+        message: `If an account exists for ${target}, a reset link is on its way.`,
+      });
+    } catch (err: any) {
+      showToast({ tone: 'error', message: err?.message ?? 'Could not send the reset email.' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const isLoading = loading || googleLoading || appleLoading || forgotLoading;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -307,6 +339,19 @@ export const LoginScreen = ({ onLogin }: Props) => {
             onChangeText={setPassword}
             secureTextEntry
           />
+
+          {isLoginMode && (
+            <TouchableOpacity
+              style={styles.forgotButton}
+              onPress={handleForgotPassword}
+              disabled={isLoading}
+              accessibilityRole="button"
+            >
+              <Text style={styles.forgotButtonText}>
+                {forgotLoading ? 'Sending reset link…' : 'Forgot password?'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {error ? <Text style={styles.loginError}>{error}</Text> : null}
 
@@ -381,6 +426,8 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   primaryButton: { backgroundColor: tc.primary, paddingVertical: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: tc.textInverse, fontSize: 16, fontWeight: '600' },
+  forgotButton: { alignSelf: 'flex-end', paddingVertical: 2, paddingHorizontal: 4 },
+  forgotButtonText: { color: tc.textSecondary, fontSize: 13.5, fontWeight: '600' },
   switchButton: { alignItems: 'center', paddingVertical: 12 },
   switchButtonText: { color: tc.primaryOnSurface, fontSize: 14 },
   loginError: { color: tc.error, fontSize: 14, textAlign: 'center' },

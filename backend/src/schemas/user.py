@@ -54,8 +54,6 @@ class UserResponse(BaseModel):
     default_tab: Optional[str] = "movies"
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None
-    # Soft verification: informational only — login is never gated on it.
-    email_verified: Optional[bool] = None
     created_at: Optional[datetime] = None
     profile_picture_url: Optional[str] = None
     oauth_provider: Optional[str] = None
@@ -82,7 +80,6 @@ class UserResponse(BaseModel):
                 'default_tab': getattr(obj, 'defaultTab', 'movies'),
                 'is_active': obj.isActive,
                 'is_admin': getattr(obj, 'isAdmin', None),
-                'email_verified': getattr(obj, 'emailVerified', None),
                 'created_at': obj.createdAt,
                 'profile_picture_url': obj.profilePictureUrl,
                 'oauth_provider': obj.oauthProvider,
@@ -124,6 +121,10 @@ class RefreshResponse(BaseModel):
     token: str
     refresh_token: str
     user: UserResponse
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 
 # Supported languages with their names

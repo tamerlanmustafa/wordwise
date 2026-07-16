@@ -48,9 +48,9 @@ model User {
   unlockedCosmetics       Json?                    @default("[]") @map("unlocked_cosmetics")
   srsTotalReviews         Int?                     @default(0) @map("srs_total_reviews")
   srsTotalCorrect         Int?                     @default(0) @map("srs_total_correct")
-  // Email verification is soft: OAuth users are verified at creation
-  // (Apple/Google verify addresses themselves); email/password users get a
-  // verify link but login is never gated on it. See /auth/verify-email.
+  // Dormant (2026-07-16): email verification was removed in favor of
+  // password reset — nothing reads or writes these anymore. The columns stay
+  // because dropping them is a destructive prod migration for zero gain.
   emailVerified           Boolean?                 @default(false) @map("email_verified")
   emailVerifiedAt         DateTime?                @map("email_verified_at") @db.Timestamptz(6)
   createdAt               DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)

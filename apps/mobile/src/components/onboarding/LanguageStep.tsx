@@ -31,7 +31,7 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <StepHeader step={1} total={5} eyebrow="Step 1 of 5" title="What are you learning?" onBack={onBack} />
+      <StepHeader step={2} total={6} eyebrow="Step 2 of 6" title="What are you learning?" onBack={onBack} />
       {/* Search/filter (issue #80) — same box style as the film-picker step. */}
       <View style={s.searchBox}>
         <Ionicons name="search" size={16} color={tc.textFaint} />
