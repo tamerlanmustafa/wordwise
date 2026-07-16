@@ -36,7 +36,7 @@ function App() {
         <LanguageProvider>
           <AuthProvider>
             <TopBarVisibilityProvider>
-              <Router>
+              <Router basename={import.meta.env.BASE_URL}>
                 <Routes>
                   {/* Full-bleed auth pages — no sidebar */}
                   <Route path="/login" element={<LoginPage />} />

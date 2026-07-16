@@ -1,13 +1,16 @@
 /**
  * Placement quiz logic + data (Launch §A, step 3–4).
  *
- * A 6-word CEFR self-rating quiz: the user rates one word per band from "never
- * seen it" → "know it well", and `derivePlacementLevel` maps the ratings to a
- * starting CEFR level. Pure + deterministic so it can be unit-tested at the
- * band boundaries (see __tests__/placement.test.ts).
+ * A CEFR self-rating quiz: the user rates two words per band from "never seen
+ * it" → "know it well", and `derivePlacementLevel` maps the ratings to a
+ * starting CEFR level via frontier scoring (see below). `isPlacementDecided`
+ * lets the flow end the quiz early once no remaining answer can change the
+ * result. Pure + deterministic so it can be unit-tested at the band
+ * boundaries (see __tests__/placement.test.ts).
  *
- * Web keeps an identical copy at frontend/src/utils/placement.ts (Metro can't
- * import across packages at runtime). Keep the two in sync.
+ * frontend/src/utils/placement.ts is a stale web copy of the pre-#81
+ * algorithm; the web app is frozen (see CLAUDE.md), so it is intentionally
+ * not kept in sync.
  */
 
 import { CEFR_LEVELS, type CefrLevel } from '../../types';
@@ -57,27 +60,70 @@ const RATING_POINTS: Record<PlacementRating, number> = {
 };
 
 /**
- * Maps placement answers to a starting CEFR level.
+ * Points (of 4 per two-word band) needed to count a band as demonstrated:
+ * a "know" plus at least a "familiar". Two half-hearted "familiar"s alone
+ * don't pass — self-rating inflates, so each band demands one confident word.
+ */
+const BAND_PASS_POINTS = 3;
+
+/** Per-band points, indexed like CEFR_LEVELS. Unanswered words score 0. */
+const bandScores = (answers: ReadonlyArray<PlacementAnswer>): number[] =>
+  CEFR_LEVELS.map((level) =>
+    answers.reduce((sum, a) => (a.level === level ? sum + RATING_POINTS[a.rating] : sum), 0),
+  );
+
+/**
+ * Maps placement answers to a starting CEFR level via frontier scoring
+ * (issue #81). The old flat sum ignored *where* knowledge sat on the
+ * difficulty ramp: knowing everything up to B1 (and nothing above) placed
+ * B2, and rating every word "familiar" — without defining a single one —
+ * also placed B2.
  *
- * Each answer scores 0–2 (unknown/familiar/know); the total (0…2·N) is bucketed
- * evenly across the six bands. With the canonical 12 words (2 per band) the
- * buckets are:
- *   0–3 → A1 · 4–7 → A2 · 8–11 → B1 · 12–15 → B2 · 16–19 → C1 · 20–24 → C2
- * No answers (the "Skip — I'm a beginner" escape hatch) → A1.
+ * Instead, each band is either demonstrated (≥ BAND_PASS_POINTS) or not, and
+ * the level is the top of the unbroken run of demonstrated bands from A1.
+ * One failed band may be bridged when the band above it still passes (two
+ * fixed words per band means one unlucky pair shouldn't cap the result), but
+ * two consecutive failed bands end the climb — claiming only hard words
+ * can't place high. No answers (the "Skip — I'm a beginner" escape hatch)
+ * or nothing demonstrated → A1.
  */
 export function derivePlacementLevel(answers: ReadonlyArray<PlacementAnswer>): CefrLevel {
-  if (answers.length === 0) return 'A1';
+  const passed = bandScores(answers).map((s) => s >= BAND_PASS_POINTS);
 
-  const score = answers.reduce((sum, a) => sum + RATING_POINTS[a.rating], 0);
-  const maxScore = answers.length * RATING_POINTS.know;
-  // Map score → band index. Floor so each band owns an equal-width bucket and
-  // only a perfect score reaches the top band.
-  const ratio = maxScore === 0 ? 0 : score / maxScore;
-  const idx = Math.min(
-    CEFR_LEVELS.length - 1,
-    Math.floor(ratio * CEFR_LEVELS.length),
-  );
-  return CEFR_LEVELS[idx];
+  let levelIdx = 0;
+  let bridged = false;
+  for (let i = 0; i < CEFR_LEVELS.length; i++) {
+    if (passed[i]) {
+      levelIdx = i;
+    } else if (!bridged && passed[i + 1]) {
+      bridged = true; // skip one unlucky band; the next pass keeps the climb alive
+    } else {
+      break;
+    }
+  }
+  return CEFR_LEVELS[levelIdx];
+}
+
+/**
+ * True once the remaining (unanswered) words can no longer change the derived
+ * level, so the flow can end the quiz early — a beginner shouldn't have to
+ * rate "perfunctory" after hard-failing two bands in a row. Answers map
+ * positionally onto `words`; the check completes the rest once all-"know"
+ * and once all-"unknown" (scoring is monotonic per answer, so those bracket
+ * every possible completion) and is decided when both agree.
+ */
+export function isPlacementDecided(
+  answers: ReadonlyArray<PlacementAnswer>,
+  words: ReadonlyArray<PlacementWord> = PLACEMENT_WORDS,
+): boolean {
+  if (answers.length >= words.length) return true;
+
+  const completedWith = (rating: PlacementRating): CefrLevel =>
+    derivePlacementLevel([
+      ...answers,
+      ...words.slice(answers.length).map((w) => ({ level: w.level, rating })),
+    ]);
+  return completedWith('know') === completedWith('unknown');
 }
 
 export interface DailyGoalOption {

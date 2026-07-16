@@ -17,7 +17,7 @@ import { useReelStore } from '../../stores/reelStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { CefrLevel } from '../../types';
-import { derivePlacementLevel, PLACEMENT_WORDS, type PlacementAnswer, type PlacementRating } from './placement';
+import { derivePlacementLevel, isPlacementDecided, PLACEMENT_WORDS, type PlacementAnswer, type PlacementRating } from './placement';
 import { ScriptAnalyzing } from '../movies/ScriptAnalyzing';
 import { ReelReady } from '../movies/ReelReady';
 import { ANALYZE_STEPS } from '../movies/analyzeSteps';
@@ -59,14 +59,15 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
   // ── Placement helpers ──────────────────────────────────────────────
   const recordRating = (rating: PlacementRating) => {
     const next = [...answers, { level: PLACEMENT_WORDS[wordIdx].level, rating }];
-    if (wordIdx + 1 < PLACEMENT_WORDS.length) {
-      setAnswers(next);
-      setWordIdx(wordIdx + 1);
-    } else {
-      // Last word answered → derive level and advance to the result.
-      setAnswers(next);
+    setAnswers(next);
+    // End as soon as the outcome is settled (issue #81) — a beginner
+    // shouldn't have to rate the C-band words once no answer can change
+    // the level — or when the list runs out.
+    if (isPlacementDecided(next)) {
       setLevel(derivePlacementLevel(next));
       setStep('level');
+    } else {
+      setWordIdx(wordIdx + 1);
     }
   };
 

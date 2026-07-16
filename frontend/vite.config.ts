@@ -5,7 +5,8 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  // GitHub Pages serves the project site under /wordwise/ (issue #85)
+  base: '/wordwise/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
