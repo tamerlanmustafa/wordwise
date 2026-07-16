@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
+import { showConfirm } from '../stores/confirmStore';
 import {
   Alert,
   Animated,
@@ -185,7 +186,18 @@ export function UserMenuSheet({
 
         <TouchableOpacity
           style={styles.row}
-          onPress={() => { onClose(); setTimeout(onLogout, 200); }}
+          onPress={() => {
+            // Confirm first — an accidental tap shouldn't drop the session.
+            // Themed dialog (not native Alert) so it matches the in-app theme.
+            onClose();
+            showConfirm({
+              title: 'Log out?',
+              message: "You'll need to sign in again to get back to your words and progress.",
+              confirmLabel: 'Log out',
+              tone: 'destructive',
+              onConfirm: onLogout,
+            });
+          }}
           activeOpacity={0.6}
         >
           <View style={[styles.iconChip, styles.iconChipDanger]}>
@@ -201,27 +213,23 @@ export function UserMenuSheet({
           style={styles.row}
           onPress={() => {
             onClose();
-            setTimeout(() => {
-              Alert.alert(
-                'Delete account?',
+            showConfirm({
+              title: 'Delete account?',
+              message:
                 'This permanently deletes your account and all of your data (saved words, progress, streaks). This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                      useAuthStore.getState().deleteAccount().catch(() => {
-                        Alert.alert(
-                          'Deletion failed',
-                          'Your account was not deleted. Check your connection and try again, or email privacy@getwordwise.us.',
-                        );
-                      });
-                    },
-                  },
-                ],
-              );
-            }, 200);
+              confirmLabel: 'Delete',
+              tone: 'destructive',
+              onConfirm: () => {
+                useAuthStore.getState().deleteAccount().catch(() => {
+                  // Rare error path — native Alert so it stays until the user
+                  // acknowledges (it carries a support email to copy).
+                  Alert.alert(
+                    'Deletion failed',
+                    'Your account was not deleted. Check your connection and try again, or email privacy@getwordwise.us.',
+                  );
+                });
+              },
+            });
           }}
           activeOpacity={0.6}
         >

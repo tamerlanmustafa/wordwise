@@ -41,6 +41,7 @@ import { KeepAlive } from '../components/KeepAlive';
 import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
 import { AddFilmFlow } from '../components/movies/AddFilmFlow';
 import { ToastHost } from '../components/common/Toast';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { showToast } from '../stores/toastStore';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
@@ -161,6 +162,20 @@ export default function App() {
 
   const handleLogin = async (user: any, token: string, refreshToken: string) => {
     await login(user, token, refreshToken);
+  };
+
+  // Explicit logout also clears the native Google session. Without this the
+  // Google SDK keeps the last account signed in, so the next "Sign in with
+  // Google" silently reuses it instead of showing the account chooser. Guarded
+  // because non-Google users (Apple/email) have no Google session to clear.
+  const handleLogout = async () => {
+    setShowUserSheet(false);
+    try {
+      await GoogleSignin.signOut();
+    } catch {
+      // No active Google session (Apple/email login) — nothing to clear.
+    }
+    await logout();
   };
 
   const navigateToMovie = (movie: MovieData) => {
@@ -838,7 +853,7 @@ export default function App() {
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
           onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
           onNavigateToLeaderboard={() => { setShowUserSheet(false); navigateToLeaderboard(); }}
-          onLogout={() => { setShowUserSheet(false); logout(); }}
+          onLogout={handleLogout}
           isAdmin={!!user?.is_admin}
           bottomOffset={barHeight}
         />
@@ -863,6 +878,10 @@ export default function App() {
 
       {/* Transient confirmation toasts (Motion §E5) */}
       <ToastHost />
+
+      {/* Themed confirm dialogs (logout, delete account, …) — honors the
+          in-app light/dark theme, unlike a native Alert. */}
+      <ConfirmDialog />
 
       {/* First-launch splash — absolute over everything, auto-dismisses */}
       <SplashIntro />

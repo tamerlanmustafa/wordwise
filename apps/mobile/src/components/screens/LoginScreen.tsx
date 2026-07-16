@@ -48,6 +48,14 @@ export const LoginScreen = ({ onLogin }: Props) => {
     setGoogleLoading(true);
 
     try {
+      // Clear any cached Google session first so signIn() always shows the
+      // account chooser. Without this the SDK silently reuses the last
+      // account, so a user with multiple Google accounts can't switch. No-op
+      // (and harmless) when there's no prior session.
+      try {
+        await GoogleSignin.signOut();
+      } catch {}
+
       const signInResult: any = await GoogleSignin.signIn();
 
       const userData = signInResult.data?.user || signInResult.user || signInResult.data;
