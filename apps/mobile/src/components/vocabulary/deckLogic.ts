@@ -85,6 +85,15 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
 }
 
 /**
+ * Position of the card sitting behind the focused one — the advance target.
+ * -1 when the deck has nothing behind (empty or a single card).
+ */
+export function peekNextIndex(state: DeckState): number {
+  if (state.index < 0 || state.keys.length <= 1) return -1;
+  return (state.index + 1) % state.keys.length;
+}
+
+/**
  * The card that gets focus after `removedKey` is marked learned — used to
  * write the implicit resume bookmark before the parent's item list catches up.
  */

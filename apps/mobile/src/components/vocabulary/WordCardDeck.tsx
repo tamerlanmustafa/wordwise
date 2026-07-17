@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  LayoutAnimation,
   PanResponder,
   StyleSheet,
   Text,
@@ -30,8 +31,24 @@ import {
   deckReducer,
   restoreDeck,
   swipeDecision,
+  peekNextIndex,
   promotedKeyAfterRemoval,
 } from './deckLogic';
+
+// Same easing/duration family as VocabRow's expansion so the card growing on
+// tap feels like the rows did.
+const EXPAND_ANIM = {
+  duration: 220,
+  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+  update: { type: 'easeInEaseOut' as const },
+  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+};
+const REVEAL_ANIM = {
+  duration: 180,
+  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+  update: { type: 'easeInEaseOut' as const },
+  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
+};
 
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
@@ -58,12 +75,9 @@ export interface WordCardDeckProps {
   onSave: (term: string) => void;
   /** Same handler as the rows' swipe-left; keeps the 5s undo snackbar. */
   onMarkLearned?: (term: string) => void;
-  /** Explicit "Leave off here" — the rows' recordBookmark (toggle semantics). */
-  onBookmark: (term: string) => void;
-  /** Implicit cursor write on every advance (explicit: false). */
+  /** Cursor write on every advance (explicit: false). The top card IS the
+   *  bookmark — leaving the screen resumes from whatever was in focus. */
   onAdvanceBookmark: (term: string) => void;
-  /** Rows' explicit bookmark word, so the pill can reflect the active state. */
-  currentBookmarkWord?: string | null;
   /** Bookmarked word at screen load — the deck resumes from it. */
   initialWord?: string | null;
   /** Batch preview sentences (words only) — the same source the rows use. */
@@ -97,9 +111,7 @@ export const WordCardDeck = ({
   savedWords,
   onSave,
   onMarkLearned,
-  onBookmark,
   onAdvanceBookmark,
-  currentBookmarkWord,
   initialWord,
   sentencePreviews,
   onCursorChange,
@@ -230,12 +242,6 @@ export const WordCardDeck = ({
     });
   };
 
-  const doBookmark = () => {
-    if (currentKey == null) return;
-    track('deck_bookmark');
-    onBookmark(currentKey);
-  };
-
   // Refs so the PanResponder (captured once) always sees fresh handlers —
   // same pattern as BookmarkRowWrapper.
   const doAdvanceRef = useRef(doAdvance);
@@ -276,6 +282,8 @@ export const WordCardDeck = ({
   const handleCardPress = () => {
     if (currentKey == null || currentItem == null) return;
     const term = currentKey;
+    // Grow/shrink the card smoothly rather than snapping to the new height.
+    if (!reduceMotionRef.current) LayoutAnimation.configureNext(EXPAND_ANIM);
     if (expandedKey === term) {
       setExpandedKey(null);
       return;
@@ -315,6 +323,7 @@ export const WordCardDeck = ({
       );
     }
     Promise.all(promises).then(() => {
+      if (!reduceMotionRef.current) LayoutAnimation.configureNext(REVEAL_ANIM);
       setContent((prev) => ({ ...prev, [term]: { translation, enrichment, loaded: true } }));
     });
   };
@@ -375,7 +384,53 @@ export const WordCardDeck = ({
   const sentenceTranslation = expanded && cardContent?.loaded ? enrichment?.translation || null : null;
 
   const isSaved = savedWords.has(currentKey);
-  const isBookmarked = currentBookmarkWord === currentKey;
+
+  // The card behind the focused one shows its REAL content (collapsed
+  // anatomy), so a slow drag reveals what's coming instead of a blank sheet.
+  const behindIndex = peekNextIndex(displayDeck);
+  const behindItem =
+    behindIndex >= 0 ? itemByKey.get(displayDeck.keys[behindIndex]) : undefined;
+
+  const renderStaticBody = (item: DeckItem, rankNumber: number) => {
+    const staticIdiom = isIdiomItem(item);
+    const term = keyOf(item);
+    const lvl = ((item as { cefr_level?: string }).cefr_level || activeLevel).toUpperCase();
+    const lvlColor = levelColorFor(lvl);
+    const staticPreview = !staticIdiom ? sentencePreviews[term] : undefined;
+    const staticSentence = staticPreview && staticPreview.sentence ? staticPreview : null;
+    return (
+      <>
+        <View style={s.topRow}>
+          <Text style={s.rank}>{rankNumber}</Text>
+          <View style={[s.levelChip, { backgroundColor: `${lvlColor}22` }]}>
+            <Text style={[s.levelChipText, { color: lvlColor }]}>{lvl}</Text>
+          </View>
+          <View style={s.flexSpacer} />
+          <Text style={[s.star, savedWords.has(term) && s.starActive]}>
+            {savedWords.has(term) ? '★' : '☆'}
+          </Text>
+        </View>
+        <View style={s.wordLine}>
+          <Text style={s.word}>{term}</Text>
+        </View>
+        {staticSentence ? (
+          renderHighlighted(
+            staticSentence.sentence,
+            term,
+            staticSentence.matched_form,
+            lvlColor,
+            s.sentence,
+            s.sentenceHi,
+          )
+        ) : !staticIdiom ? (
+          <View style={s.sentenceSkeletonWrap}>
+            <View style={[s.skelBar, { width: '92%' }]} />
+            <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
+          </View>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <View style={s.wrap}>
@@ -386,18 +441,25 @@ export const WordCardDeck = ({
       ) : null}
 
       <View style={s.deckWrap}>
-        {/* Stacked edges — pure styling, not real cards. */}
+        {/* Second edge stays pure styling; the first is the next card's
+            real content, clipped to the focused card's footprint. */}
         {total > 2 ? (
           <View
             style={[s.stackEdge, { opacity: 0.45, transform: [{ translateY: -16 }, { scale: 0.92 }] }]}
             pointerEvents="none"
           />
         ) : null}
-        {total > 1 ? (
+        {behindItem != null ? (
           <View
-            style={[s.stackEdge, { opacity: 0.7, transform: [{ translateY: -8 }, { scale: 0.96 }] }]}
+            style={[
+              s.stackEdge,
+              s.behindCard,
+              { opacity: 0.7, transform: [{ translateY: -8 }, { scale: 0.96 }] },
+            ]}
             pointerEvents="none"
-          />
+          >
+            {renderStaticBody(behindItem, behindIndex + 1)}
+          </View>
         ) : null}
 
         <Animated.View
@@ -523,43 +585,36 @@ export const WordCardDeck = ({
       {/* actions under the deck — buttons fully cover the gesture actions */}
       <View style={s.actionsRow}>
         {onMarkLearned ? (
-          <PressableScale
-            style={s.learnCircle}
-            onPress={() => doLearn('button')}
-            accessibilityRole="button"
-            accessibilityLabel="I know this"
-          >
-            <Ionicons name="checkmark" size={26} color={tc.success} />
-          </PressableScale>
+          <View style={s.actionColumn}>
+            <PressableScale
+              style={s.learnCircle}
+              onPress={() => doLearn('button')}
+              accessibilityRole="button"
+              accessibilityLabel="I know this"
+            >
+              <Ionicons name="checkmark" size={26} color={tc.success} />
+            </PressableScale>
+            <Text style={s.actionCaption}>I know this</Text>
+          </View>
         ) : null}
 
-        <PressableScale
-          style={[s.bookmarkPill, isBookmarked && s.bookmarkPillActive]}
-          onPress={doBookmark}
-          accessibilityRole="button"
-          accessibilityLabel={isBookmarked ? 'Remove bookmark' : 'Leave off here'}
-        >
-          <Text style={[s.bookmarkPillText, isBookmarked && s.bookmarkPillTextActive]}>
-            {isBookmarked ? '⚑ Bookmarked here' : '⚑ Leave off here'}
-          </Text>
-        </PressableScale>
+        <View style={s.spacerColumn} />
 
-        <PressableScale
-          style={s.nextButton}
-          onPress={() => doAdvance('button')}
-          accessibilityRole="button"
-          accessibilityLabel="Next card"
-        >
-          <View style={s.nextEdge} />
-          <View style={s.nextFace}>
-            <Ionicons name="arrow-forward" size={24} color={tc.goldDeep} />
-          </View>
-        </PressableScale>
+        <View style={s.actionColumn}>
+          <PressableScale
+            style={s.nextButton}
+            onPress={() => doAdvance('button')}
+            accessibilityRole="button"
+            accessibilityLabel="Next card"
+          >
+            <View style={s.nextEdge} />
+            <View style={s.nextFace}>
+              <Ionicons name="arrow-forward" size={24} color={tc.goldDeep} />
+            </View>
+          </PressableScale>
+          <Text style={s.actionCaption}>Next</Text>
+        </View>
       </View>
-
-      <Text style={s.gestureHint}>
-        swipe left = I know this · swipe right = next
-      </Text>
 
       <ReportDialog
         visible={reportOpen}
@@ -604,6 +659,11 @@ const makeDeckStyles = (tc: ThemeColors) =>
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.border,
+    },
+    behindCard: {
+      overflow: 'hidden',
+      paddingHorizontal: 20,
+      paddingTop: 20,
     },
     card: {
       backgroundColor: tc.paper,
@@ -768,11 +828,22 @@ const makeDeckStyles = (tc: ThemeColors) =>
     },
     actionsRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 16,
-      marginTop: 26,
+      alignItems: 'flex-start',
+      justifyContent: 'space-around',
+      marginTop: 28,
       marginHorizontal: 18,
+    },
+    actionColumn: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    spacerColumn: {
+      flex: 1,
+    },
+    actionCaption: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: tc.textSecondary,
     },
     learnCircle: {
       width: ACTION_SIZE,

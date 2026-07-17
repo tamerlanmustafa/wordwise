@@ -63,6 +63,11 @@ import { MONO_FAMILY } from '../../theme/fonts';
 // restore the rows/cards segmented toggle with rows as the persisted default.
 const ROWS_MODE_ENABLED: boolean = false;
 
+// Hide the hero poster/backdrop + overview for now; show only title + vocab stats.
+const SHOW_HERO_SECTION: boolean = false;
+// Hide the floating "Quiz me" pill.
+const SHOW_QUIZ_PILL: boolean = false;
+
 const LEARNED_ROW_ANIM = {
   duration: 260,
   create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
@@ -895,110 +900,115 @@ export const MovieDetailScreen = ({
           }}
           stickyHeaderIndices={[1]}
         >
-          {/* 0: Hero — extends to the very top, including the dynamic island.
-              Its height is where the sticky header pins, which drives the
-              status-bar spacer inside the header below. */}
+          {/* 0: Hero — backdrop, poster, overview. Hidden when SHOW_HERO_SECTION
+              is false (cards-focused design). The onLayout is always called to
+              set the sticky header position, but the visual content conditionally
+              renders. */}
           <View onLayout={(e) => setStickyHeaderY(e.nativeEvent.layout.height)}>
-            <View style={[styles.heroBackdrop, { height: 216 + insets.top }]}>
-              {movie.backdrop_path ? (
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-                  style={styles.heroBackdropImage}
-                  resizeMode="cover"
-                />
-              ) : null}
-              <LinearGradient
-                pointerEvents="none"
-                colors={['rgba(0,0,0,0.5)', 'transparent']}
-                style={[styles.heroTopFade, { height: 80 + insets.top }]}
-              />
-              <LinearGradient
-                pointerEvents="none"
-                colors={['rgba(8,6,12,0)', 'rgba(8,6,12,0.45)', 'rgba(8,6,12,0.90)']}
-                locations={[0.34, 0.64, 1]}
-                style={styles.heroBottomGradient}
-              />
-              {/* Title block — sits right of the poster tail, above the backdrop base */}
-              <View style={styles.heroTitleBlock}>
-                <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
-                <Text style={styles.heroMetaLine} numberOfLines={1}>
-                  {movie.release_date ? movie.release_date.slice(0, 4) : null}
-                  {movie.release_date && movie.vote_average != null ? (
-                    <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
+            {SHOW_HERO_SECTION ? (
+              <>
+                <View style={[styles.heroBackdrop, { height: 216 + insets.top }]}>
+                  {movie.backdrop_path ? (
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
+                      style={styles.heroBackdropImage}
+                      resizeMode="cover"
+                    />
                   ) : null}
-                  {movie.vote_average != null ? (
-                    <Text>
-                      <Text style={styles.heroMetaStar}>★</Text>
-                      <Text style={styles.heroMetaRating}> {movie.vote_average.toFixed(1)}</Text>
-                    </Text>
-                  ) : null}
-                  {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
-                    <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
-                  ) : null}
-                  {movie.genre_ids && movie.genre_ids.length > 0
-                    ? movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')
-                    : null}
-                </Text>
-              </View>
-            </View>
-
-            {/* Bridge — the poster tail hangs 38pt below the backdrop; the stats
-                strip (CEFR match chip + corpus size) fills the space beside it. */}
-            <View style={styles.bridgeRow}>
-              <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.bridgePoster}>
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-                  style={styles.bridgePosterImage}
-                  resizeMode="cover"
-                />
-              </Pressable>
-              <View style={styles.statsStrip}>
-                {difficulty ? (
-                  <View
-                    style={[
-                      styles.cefrChip,
-                      {
-                        backgroundColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '26' : '1C'}`,
-                        borderColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '55' : '40'}`,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.cefrChipDot, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]} />
-                    <Text style={[styles.cefrChipText, { color: tc.text }]}>
-                      {difficulty.level} · {difficulty.score}% match
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={['rgba(0,0,0,0.5)', 'transparent']}
+                    style={[styles.heroTopFade, { height: 80 + insets.top }]}
+                  />
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={['rgba(8,6,12,0)', 'rgba(8,6,12,0.45)', 'rgba(8,6,12,0.90)']}
+                    locations={[0.34, 0.64, 1]}
+                    style={styles.heroBottomGradient}
+                  />
+                  {/* Title block — sits right of the poster tail, above the backdrop base */}
+                  <View style={styles.heroTitleBlock}>
+                    <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
+                    <Text style={styles.heroMetaLine} numberOfLines={1}>
+                      {movie.release_date ? movie.release_date.slice(0, 4) : null}
+                      {movie.release_date && movie.vote_average != null ? (
+                        <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
+                      ) : null}
+                      {movie.vote_average != null ? (
+                        <Text>
+                          <Text style={styles.heroMetaStar}>★</Text>
+                          <Text style={styles.heroMetaRating}> {movie.vote_average.toFixed(1)}</Text>
+                        </Text>
+                      ) : null}
+                      {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
+                        <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
+                      ) : null}
+                      {movie.genre_ids && movie.genre_ids.length > 0
+                        ? movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')
+                        : null}
                     </Text>
                   </View>
-                ) : null}
-                {totalWordCount > 0 ? (
-                  <Text style={[styles.corpusText, { color: tc.textSecondary }]} numberOfLines={1}>
-                    {totalWordCount} words{idiomCount > 0 ? ` · ${idiomCount} idioms` : ''}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
+                </View>
 
-            {/* Overview — quiet text on the app background, no box */}
-            {movie.overview ? (
-              <Pressable
-                onPress={() => setOverviewExpanded((v) => !v)}
-                style={styles.overviewBlock}
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              >
-                <Text
-                  style={[styles.overviewText, { color: tc.textSecondary }]}
-                  numberOfLines={overviewExpanded ? undefined : overviewLineCount == null ? undefined : 2}
-                  onTextLayout={(e) => {
-                    if (overviewLineCount == null) setOverviewLineCount(e.nativeEvent.lines.length);
-                  }}
-                >
-                  {movie.overview}
-                </Text>
-                {overviewTruncated ? (
-                  <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
-                    {overviewExpanded ? 'Less ▴' : 'More ▾'}
-                  </Text>
+                {/* Bridge — the poster tail hangs 38pt below the backdrop; the stats
+                    strip (CEFR match chip + corpus size) fills the space beside it. */}
+                <View style={styles.bridgeRow}>
+                  <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.bridgePoster}>
+                    <Image
+                      source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
+                      style={styles.bridgePosterImage}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                  <View style={styles.statsStrip}>
+                    {difficulty ? (
+                      <View
+                        style={[
+                          styles.cefrChip,
+                          {
+                            backgroundColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '26' : '1C'}`,
+                            borderColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '55' : '40'}`,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.cefrChipDot, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]} />
+                        <Text style={[styles.cefrChipText, { color: tc.text }]}>
+                          {difficulty.level} · {difficulty.score}% match
+                        </Text>
+                      </View>
+                    ) : null}
+                    {totalWordCount > 0 ? (
+                      <Text style={[styles.corpusText, { color: tc.textSecondary }]} numberOfLines={1}>
+                        {totalWordCount} words{idiomCount > 0 ? ` · ${idiomCount} idioms` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Overview — quiet text on the app background, no box */}
+                {movie.overview ? (
+                  <Pressable
+                    onPress={() => setOverviewExpanded((v) => !v)}
+                    style={styles.overviewBlock}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Text
+                      style={[styles.overviewText, { color: tc.textSecondary }]}
+                      numberOfLines={overviewExpanded ? undefined : overviewLineCount == null ? undefined : 2}
+                      onTextLayout={(e) => {
+                        if (overviewLineCount == null) setOverviewLineCount(e.nativeEvent.lines.length);
+                      }}
+                    >
+                      {movie.overview}
+                    </Text>
+                    {overviewTruncated ? (
+                      <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
+                        {overviewExpanded ? 'Less ▴' : 'More ▾'}
+                      </Text>
+                    ) : null}
+                  </Pressable>
                 ) : null}
-              </Pressable>
+              </>
             ) : null}
           </View>
 
@@ -1210,9 +1220,7 @@ export const MovieDetailScreen = ({
                 savedWords={savedWords}
                 onSave={handleSaveWord}
                 onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                onBookmark={recordBookmark}
                 onAdvanceBookmark={recordAdvanceBookmark}
-                currentBookmarkWord={currentBookmarkWord}
                 initialWord={deckStartWord}
                 sentencePreviews={sentencePreviews}
                 onCursorChange={handleDeckCursorChange}
@@ -1468,10 +1476,8 @@ export const MovieDetailScreen = ({
       </Animated.View>
 
       {/* Sticky "Quiz me" pill — fixed at the bottom-left corner, just
-          above the global bottom bar. Always available once vocab has
-          loaded, so the user can jump from browsing into a 5-card quiz
-          at any point. */}
-      {!loading && vocabulary && onStartQuiz ? (
+          above the global bottom bar. Only shown when SHOW_QUIZ_PILL is true. */}
+      {SHOW_QUIZ_PILL && !loading && vocabulary && onStartQuiz ? (
         <View style={quizPillStyles.pillWrap} pointerEvents="box-none">
           <TouchableOpacity
             style={quizPillStyles.pill}
