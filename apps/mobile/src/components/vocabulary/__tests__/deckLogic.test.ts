@@ -3,8 +3,10 @@ import {
   restoreDeck,
   promotedKeyAfterRemoval,
   swipeDecision,
+  shouldClaimHorizontalDrag,
   parseViewMode,
   SWIPE_THRESHOLD,
+  CLAIM_DISTANCE,
   VIEW_MODE_KEY,
   type DeckState,
   type VocabViewMode,
@@ -119,6 +121,28 @@ describe('swipeDecision', () => {
 
   it('matches BookmarkRowWrapper: 90pt', () => {
     expect(SWIPE_THRESHOLD).toBe(90);
+  });
+});
+
+describe('shouldClaimHorizontalDrag (deck vs. vertical scroll)', () => {
+  it('claims a decisively horizontal drag', () => {
+    expect(shouldClaimHorizontalDrag(20, 2)).toBe(true);
+    expect(shouldClaimHorizontalDrag(-20, 2)).toBe(true);
+  });
+
+  it('leaves vertical scrolls to the ScrollView', () => {
+    expect(shouldClaimHorizontalDrag(4, 30)).toBe(false);
+    expect(shouldClaimHorizontalDrag(0, -12)).toBe(false);
+  });
+
+  it('leaves ambiguous diagonals to the ScrollView', () => {
+    // 15 is not > 12 * 1.5, so the scroll keeps the gesture.
+    expect(shouldClaimHorizontalDrag(15, 12)).toBe(false);
+  });
+
+  it('ignores sub-threshold horizontal jitter', () => {
+    expect(shouldClaimHorizontalDrag(CLAIM_DISTANCE, 0)).toBe(false);
+    expect(shouldClaimHorizontalDrag(CLAIM_DISTANCE + 1, 0)).toBe(true);
   });
 });
 

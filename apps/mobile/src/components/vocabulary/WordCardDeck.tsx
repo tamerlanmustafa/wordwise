@@ -31,6 +31,7 @@ import {
   deckReducer,
   restoreDeck,
   swipeDecision,
+  shouldClaimHorizontalDrag,
   peekNextIndex,
   promotedKeyAfterRemoval,
 } from './deckLogic';
@@ -84,6 +85,9 @@ export interface WordCardDeckProps {
   sentencePreviews: Record<string, SentenceExample | undefined>;
   /** Reports the 1-based focused card number for the header progress row. */
   onCursorChange?: (cardNumber: number) => void;
+  /** Fires when a card drag starts/ends so the parent can freeze its
+   *  vertical scroll — otherwise the ScrollView pans under the slide. */
+  onDragStateChange?: (dragging: boolean) => void;
 }
 
 const FLY_DURATION = 300;
@@ -115,6 +119,7 @@ export const WordCardDeck = ({
   initialWord,
   sentencePreviews,
   onCursorChange,
+  onDragStateChange,
 }: WordCardDeckProps) => {
   const tc = useThemeColors();
   const s = useMemo(() => makeDeckStyles(tc), [tc]);
@@ -174,35 +179,52 @@ export const WordCardDeck = ({
   const reduceMotionRef = useRef(reduceMotion);
   reduceMotionRef.current = reduceMotion;
 
-  const translateX = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(1)).current;
+  // Fresh Animated.Values per focused card. Sharing one pair across cards
+  // strands the incoming card off-screen: the drag's setValue()s plus the
+  // native-driver fly-out leave the shared native node desynced, and the
+  // remounted card binds to it before the reset lands. A brand-new pair per
+  // key has no native history, so there is nothing to race.
+  const animRef = useRef<{
+    key: string;
+    translateX: Animated.Value;
+    cardOpacity: Animated.Value;
+  } | null>(null);
+  const focusedKey = displayDeck.index >= 0 ? displayDeck.keys[displayDeck.index] : '';
+  if (animRef.current == null || animRef.current.key !== focusedKey) {
+    animRef.current = {
+      key: focusedKey,
+      translateX: new Animated.Value(0),
+      cardOpacity: new Animated.Value(1),
+    };
+  }
+  const { translateX, cardOpacity } = animRef.current;
   const animatingRef = useRef(false);
 
   const flyOut = (dir: 1 | -1, done: () => void) => {
-    if (reduceMotionRef.current) {
-      translateX.setValue(0);
+    const anim = animRef.current;
+    if (reduceMotionRef.current || anim == null) {
+      anim?.translateX.setValue(0);
       done();
       return;
     }
     animatingRef.current = true;
     Animated.parallel([
-      Animated.timing(translateX, {
+      Animated.timing(anim.translateX, {
         toValue: dir * FLY_DISTANCE,
         duration: FLY_DURATION,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(cardOpacity, {
+      Animated.timing(anim.cardOpacity, {
         toValue: 0,
         duration: FLY_DURATION - 40,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // Reset BEFORE the state updates in done(): the incoming card remounts
-      // (key={currentKey}) and must bind its native node to the rest values,
-      // not the flown-out ones.
-      translateX.setValue(0);
-      cardOpacity.setValue(1);
+      // Reset before done() for the no-remount case (a single-card deck
+      // advances back onto the same key, keeping these values alive).
+      anim.translateX.setValue(0);
+      anim.cardOpacity.setValue(1);
       done();
       animatingRef.current = false;
     });
@@ -250,15 +272,27 @@ export const WordCardDeck = ({
   doLearnRef.current = doLearn;
   const canLearnRef = useRef(!!onMarkLearned);
   canLearnRef.current = !!onMarkLearned;
+  const onDragStateChangeRef = useRef(onDragStateChange);
+  onDragStateChangeRef.current = onDragStateChange;
+  // If the deck unmounts mid-drag (tab/sort remount), release the parent's
+  // scroll lock so the screen doesn't stay frozen.
+  useEffect(() => () => onDragStateChangeRef.current?.(false), []);
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
-        !animatingRef.current && Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && Math.abs(g.dx) > 10,
+        !animatingRef.current && shouldClaimHorizontalDrag(g.dx, g.dy),
+      // Once the card owns the drag, keep it — don't let the enclosing
+      // ScrollView steal the responder mid-slide.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        onDragStateChangeRef.current?.(true);
+      },
       onPanResponderMove: (_, g) => {
-        translateX.setValue(Math.max(-DRAG_CLAMP, Math.min(g.dx, DRAG_CLAMP)));
+        animRef.current?.translateX.setValue(Math.max(-DRAG_CLAMP, Math.min(g.dx, DRAG_CLAMP)));
       },
       onPanResponderRelease: (_, g) => {
+        onDragStateChangeRef.current?.(false);
         const action = swipeDecision(g.dx);
         if (action === 'next') {
           doAdvanceRef.current('swipe');
@@ -268,10 +302,22 @@ export const WordCardDeck = ({
           doLearnRef.current('swipe');
           return;
         }
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        if (animRef.current) {
+          Animated.spring(animRef.current.translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
       },
       onPanResponderTerminate: () => {
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        onDragStateChangeRef.current?.(false);
+        if (animRef.current) {
+          Animated.spring(animRef.current.translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
       },
     }),
   ).current;
@@ -463,9 +509,8 @@ export const WordCardDeck = ({
         ) : null}
 
         <Animated.View
-          // Remount per word: a fresh native Animated node starts from the
-          // (reset) JS-side values, so a completed fly-out can never leave the
-          // next card stuck off-screen.
+          // Remount per word, paired with the per-key Animated.Values above:
+          // each card gets a fresh native view bound to fresh nodes.
           key={currentKey}
           style={[s.card, { transform: [{ translateX }], opacity: cardOpacity }]}
           {...panResponder.panHandlers}

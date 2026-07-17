@@ -41,6 +41,20 @@ export function swipeDecision(dx: number, threshold: number = SWIPE_THRESHOLD): 
   return null;
 }
 
+/** The drag must be this many times more horizontal than vertical to claim. */
+export const HORIZONTAL_BIAS = 1.5;
+/** Minimum horizontal travel before the deck claims the gesture. */
+export const CLAIM_DISTANCE = 10;
+
+/**
+ * Should a move claim the pan for the card (vs. leaving it to the parent's
+ * vertical scroll)? Decisively horizontal drags belong to the deck; vertical
+ * and ambiguous diagonal ones stay with the ScrollView.
+ */
+export function shouldClaimHorizontalDrag(dx: number, dy: number): boolean {
+  return Math.abs(dx) > Math.abs(dy) * HORIZONTAL_BIAS && Math.abs(dx) > CLAIM_DISTANCE;
+}
+
 // ── Deck cursor reducer ───────────────────────────────────────────────────
 
 export interface DeckState {

@@ -871,6 +871,15 @@ export const MovieDetailScreen = ({
 
   const handleDeckCursorChange = useCallback((n: number) => setDeckCardNumber(n), []);
 
+  // While a card is being dragged the outer ScrollView must not pan
+  // vertically, or the slide and the scroll fight over the same finger.
+  // Imperative on purpose: a setState here commits a re-render between the
+  // deck's fly-out animation and its card remount, which strands the next
+  // card off-screen (the native Animated values race the commit).
+  const handleDeckDragStateChange = useCallback((dragging: boolean) => {
+    scrollViewRef.current?.setNativeProps({ scrollEnabled: !dragging });
+  }, []);
+
   const handleViewModeChange = (mode: VocabViewMode) => {
     if (mode === viewMode) return;
     setViewMode(mode);
@@ -883,7 +892,11 @@ export const MovieDetailScreen = ({
     // below this screen already pads for the home indicator, so a bottom
     // inset here would double up as dead space above the bar.
     <View style={[styles.container, { backgroundColor: tc.background }]}>
-      <StatusBar barStyle="light-content" />
+      {/* With the hero hidden there is no dark backdrop behind the status
+          bar, so the icon style has to follow the theme instead. */}
+      <StatusBar
+        barStyle={SHOW_HERO_SECTION || scheme === 'dark' ? 'light-content' : 'dark-content'}
+      />
 
       <View style={{ flex: 1 }}>
         <ScrollView
@@ -1009,7 +1022,22 @@ export const MovieDetailScreen = ({
                   </Pressable>
                 ) : null}
               </>
-            ) : null}
+            ) : (
+              /* Compact header (hero hidden): safe-area padding so nothing
+                 renders under the dynamic island / status bar, plus the movie
+                 title centered clear of the floating back button. Because this
+                 gives the hero slot real height, stickySpacerRange keeps the
+                 tabs clear of the island when they pin, exactly as with the
+                 full hero. */
+              <View style={[deckHeaderStyles.compactHeader, { paddingTop: insets.top + 8 }]}>
+                <Text
+                  style={[deckHeaderStyles.compactHeaderTitle, { color: tc.text }]}
+                  numberOfLines={1}
+                >
+                  {movie.title}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* 1: Sticky tabs — sit below the hero, stick to the top of the
@@ -1224,6 +1252,7 @@ export const MovieDetailScreen = ({
                 initialWord={deckStartWord}
                 sentencePreviews={sentencePreviews}
                 onCursorChange={handleDeckCursorChange}
+                onDragStateChange={handleDeckDragStateChange}
               />
             ) : (
             <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
@@ -1596,6 +1625,20 @@ const backBtnStyles = StyleSheet.create({
 // progress bar under the count row, and the (currently disabled) rows/cards
 // segmented toggle. Colors are applied inline from tc.*.
 const deckHeaderStyles = StyleSheet.create({
+  // Hero-hidden top bar. Side padding clears the floating back button
+  // (left 16 + 32 wide + 8 gap); the 32pt line height matches its height
+  // so the title and the chevron sit on the same axis.
+  compactHeader: {
+    paddingHorizontal: 56,
+    paddingBottom: 10,
+  },
+  compactHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    lineHeight: 32,
+    textAlign: 'center',
+  },
   cardCount: {
     fontFamily: MONO_FAMILY,
     fontSize: 11,
