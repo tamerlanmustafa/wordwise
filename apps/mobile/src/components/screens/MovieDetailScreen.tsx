@@ -1,6 +1,5 @@
 import React, { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -184,6 +183,40 @@ export const MovieDetailScreen = ({
     ? scrollY.interpolate({ ...spacerRange, outputRange: [1, 0], extrapolate: 'clamp' })
     : 1;
   const [headerDocked, setHeaderDocked] = useState(false);
+
+  // Splash poster fade — the loading indicator. The poster fades in, then
+  // gently breathes until the vocabulary arrives (no spinner, no caption).
+  const splashPosterOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!loading) return;
+    splashPosterOpacity.setValue(0);
+    const anim = Animated.sequence([
+      Animated.timing(splashPosterOpacity, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(splashPosterOpacity, {
+            toValue: 0.55,
+            duration: 1100,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(splashPosterOpacity, {
+            toValue: 1,
+            duration: 1100,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [loading, splashPosterOpacity]);
 
   useEffect(() => {
     if (prevLevelRef.current !== activeLevel) {
@@ -1210,16 +1243,10 @@ export const MovieDetailScreen = ({
             ) : null}
           </View>
 
-          {/* 2: Body (loading / error / word list) */}
+          {/* 2: Body (error / word list) — while loading, the poster splash
+              overlay is the loading view, so the body renders nothing. */}
           <View>
-          {loading ? (
-            <View style={[styles.container, styles.centered]}>
-              <ActivityIndicator size="large" color={tc.primaryOnSurface} />
-              <Text style={[styles.loadingText, { color: tc.text }]}>Analyzing vocabulary...</Text>
-              <Text style={[styles.loadingSubtext, { color: tc.textSecondary }]}>Searching script</Text>
-              <Text style={[styles.loadingSubtext, { color: tc.textSecondary }]}>Classifying words by CEFR level</Text>
-            </View>
-          ) : error ? (
+          {loading ? null : error ? (
             <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
               <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
               <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
@@ -1540,15 +1567,18 @@ export const MovieDetailScreen = ({
             <Ionicons name="chevron-back" size={18} color="#fff" />
           </Pressable>
           {movie.poster_path ? (
-            <Image
+            <Animated.Image
               source={{ uri: `https://image.tmdb.org/t/p/w342${movie.poster_path}` }}
-              style={splashStyles.poster}
+              style={[splashStyles.poster, { opacity: splashPosterOpacity }]}
               resizeMode="cover"
             />
           ) : null}
-          <Text style={splashStyles.title} numberOfLines={2}>{movie.title}</Text>
-          <ActivityIndicator size="small" color="#FFD166" style={splashStyles.spinner} />
-          <Text style={splashStyles.caption}>Analyzing vocabulary…</Text>
+          <Animated.Text
+            style={[splashStyles.title, { opacity: splashPosterOpacity }]}
+            numberOfLines={2}
+          >
+            {movie.title}
+          </Animated.Text>
         </View>
       ) : null}
 
@@ -1593,13 +1623,6 @@ const splashStyles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.3,
-  },
-  spinner: { marginTop: 18 },
-  caption: {
-    marginTop: 8,
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
 
