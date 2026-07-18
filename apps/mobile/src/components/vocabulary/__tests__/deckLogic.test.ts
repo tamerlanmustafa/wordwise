@@ -7,6 +7,7 @@ import {
   parseViewMode,
   SWIPE_THRESHOLD,
   CLAIM_DISTANCE,
+  STACK_SLOTS,
   VIEW_MODE_KEY,
   type DeckState,
   type VocabViewMode,
@@ -143,6 +144,20 @@ describe('shouldClaimHorizontalDrag (deck vs. vertical scroll)', () => {
   it('ignores sub-threshold horizontal jitter', () => {
     expect(shouldClaimHorizontalDrag(CLAIM_DISTANCE, 0)).toBe(false);
     expect(shouldClaimHorizontalDrag(CLAIM_DISTANCE + 1, 0)).toBe(true);
+  });
+});
+
+describe('STACK_SLOTS (promote animation geometry)', () => {
+  it('puts the focused slot at identity so a promoted card lands exactly on it', () => {
+    expect(STACK_SLOTS[0]).toEqual({ translateY: 0, scale: 1, opacity: 1 });
+  });
+
+  it('recedes monotonically — each layer higher, smaller, and fainter', () => {
+    for (let i = 1; i < STACK_SLOTS.length; i++) {
+      expect(STACK_SLOTS[i].translateY).toBeLessThan(STACK_SLOTS[i - 1].translateY);
+      expect(STACK_SLOTS[i].scale).toBeLessThan(STACK_SLOTS[i - 1].scale);
+      expect(STACK_SLOTS[i].opacity).toBeLessThan(STACK_SLOTS[i - 1].opacity);
+    }
   });
 });
 

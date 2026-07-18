@@ -34,6 +34,8 @@ import {
   shouldClaimHorizontalDrag,
   peekNextIndex,
   promotedKeyAfterRemoval,
+  STACK_SLOTS,
+  type StackSlot,
 } from './deckLogic';
 
 // Same easing/duration family as VocabRow's expansion so the card growing on
@@ -50,6 +52,31 @@ const REVEAL_ANIM = {
   update: { type: 'easeInEaseOut' as const },
   delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
 };
+// Eases the wrapper-height change between consecutive cards at the swap
+// instead of snapping. Update-only on purpose: the incoming card's opacity
+// and transform are Animated-bound, so create/delete fades would fight the
+// native nodes.
+const SWAP_ANIM = {
+  duration: 200,
+  update: { type: 'easeInEaseOut' as const },
+};
+
+/**
+ * Interpolated style that slides a stack layer from its resting slot to the
+ * one in front as `promote` runs 0 → 1 during the focused card's fly-out.
+ */
+const liftStyle = (promote: Animated.Value, from: StackSlot, to: StackSlot) => ({
+  opacity: promote.interpolate({ inputRange: [0, 1], outputRange: [from.opacity, to.opacity] }),
+  transform: [
+    {
+      translateY: promote.interpolate({
+        inputRange: [0, 1],
+        outputRange: [from.translateY, to.translateY],
+      }),
+    },
+    { scale: promote.interpolate({ inputRange: [0, 1], outputRange: [from.scale, to.scale] }) },
+  ],
+});
 
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
@@ -188,16 +215,26 @@ export const WordCardDeck = ({
     key: string;
     translateX: Animated.Value;
     cardOpacity: Animated.Value;
+    promote: Animated.Value;
+    behindLift: ReturnType<typeof liftStyle>;
+    edgeLift: ReturnType<typeof liftStyle>;
   } | null>(null);
   const focusedKey = displayDeck.index >= 0 ? displayDeck.keys[displayDeck.index] : '';
   if (animRef.current == null || animRef.current.key !== focusedKey) {
+    // `promote` slides the layers behind the focused card one slot forward
+    // while it flies out; the interpolations are built once per key so
+    // re-renders mid-animation rebind the same nodes.
+    const promote = new Animated.Value(0);
     animRef.current = {
       key: focusedKey,
       translateX: new Animated.Value(0),
       cardOpacity: new Animated.Value(1),
+      promote,
+      behindLift: liftStyle(promote, STACK_SLOTS[1], STACK_SLOTS[0]),
+      edgeLift: liftStyle(promote, STACK_SLOTS[2], STACK_SLOTS[1]),
     };
   }
-  const { translateX, cardOpacity } = animRef.current;
+  const { translateX, cardOpacity, behindLift, edgeLift } = animRef.current;
   const animatingRef = useRef(false);
 
   const flyOut = (dir: 1 | -1, done: () => void) => {
@@ -220,11 +257,20 @@ export const WordCardDeck = ({
         duration: FLY_DURATION - 40,
         useNativeDriver: true,
       }),
+      // The stack steps forward in the same beat, so the behind card is
+      // already sitting in the focused slot when the real card swaps in.
+      Animated.timing(anim.promote, {
+        toValue: 1,
+        duration: FLY_DURATION,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
     ]).start(() => {
       // Reset before done() for the no-remount case (a single-card deck
       // advances back onto the same key, keeping these values alive).
       anim.translateX.setValue(0);
       anim.cardOpacity.setValue(1);
+      anim.promote.setValue(0);
       done();
       animatingRef.current = false;
     });
@@ -242,6 +288,7 @@ export const WordCardDeck = ({
     track('deck_advance', { method });
     const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
     flyOut(1, () => {
+      if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
       setResumedAt(null);
       setExpandedKey(null);
       dispatch({ type: 'advance' });
@@ -257,6 +304,7 @@ export const WordCardDeck = ({
     const promoted = promotedKeyAfterRemoval(displayDeck, currentKey);
     const term = currentKey;
     flyOut(-1, () => {
+      if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
       setResumedAt(null);
       setExpandedKey(null);
       onMarkLearned(term);
@@ -442,6 +490,11 @@ export const WordCardDeck = ({
     const term = keyOf(item);
     const lvl = ((item as { cefr_level?: string }).cefr_level || activeLevel).toUpperCase();
     const lvlColor = levelColorFor(lvl);
+    const staticBadge = staticIdiom
+      ? (item as IdiomInfo).type === 'phrasal_verb'
+        ? 'phrasal verb'
+        : 'idiom'
+      : null;
     const staticPreview = !staticIdiom ? sentencePreviews[term] : undefined;
     const staticSentence = staticPreview && staticPreview.sentence ? staticPreview : null;
     return (
@@ -451,6 +504,11 @@ export const WordCardDeck = ({
           <View style={[s.levelChip, { backgroundColor: `${lvlColor}22` }]}>
             <Text style={[s.levelChipText, { color: lvlColor }]}>{lvl}</Text>
           </View>
+          {staticBadge ? (
+            <View style={[s.levelChip, { backgroundColor: `${lvlColor}14` }]}>
+              <Text style={[s.levelChipText, { color: lvlColor }]}>{staticBadge}</Text>
+            </View>
+          ) : null}
           <View style={s.flexSpacer} />
           <Text style={[s.star, savedWords.has(term) && s.starActive]}>
             {savedWords.has(term) ? '★' : '☆'}
@@ -474,6 +532,16 @@ export const WordCardDeck = ({
             <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
           </View>
         ) : null}
+        {/* Mirror the collapsed focused card's footer exactly: the promoted
+            card hands off to the real one at the swap, and any element
+            missing here would pop in at that instant. */}
+        <View style={s.footerRow}>
+          {isAuthenticated ? <Text style={s.actionText}>⚐ Report an issue</Text> : null}
+          {isPremium && !staticIdiom ? (
+            <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
+          ) : null}
+          <Text style={s.tapHint}>tap for translation</Text>
+        </View>
       </>
     );
   };
@@ -488,24 +556,25 @@ export const WordCardDeck = ({
 
       <View style={s.deckWrap}>
         {/* Second edge stays pure styling; the first is the next card's
-            real content, clipped to the focused card's footprint. */}
+            real content, clipped to the focused card's footprint. Both are
+            keyed per focused card and lift one slot forward (via `promote`)
+            while it flies out, so the promotion reads as one motion instead
+            of a snap at the swap. */}
         {total > 2 ? (
-          <View
-            style={[s.stackEdge, { opacity: 0.45, transform: [{ translateY: -16 }, { scale: 0.92 }] }]}
+          <Animated.View
+            key={`edge-${currentKey}`}
+            style={[s.stackEdge, edgeLift]}
             pointerEvents="none"
           />
         ) : null}
         {behindItem != null ? (
-          <View
-            style={[
-              s.stackEdge,
-              s.behindCard,
-              { opacity: 0.7, transform: [{ translateY: -8 }, { scale: 0.96 }] },
-            ]}
+          <Animated.View
+            key={`behind-${displayDeck.keys[behindIndex]}`}
+            style={[s.stackEdge, s.behindCard, behindLift]}
             pointerEvents="none"
           >
             {renderStaticBody(behindItem, behindIndex + 1)}
-          </View>
+          </Animated.View>
         ) : null}
 
         <Animated.View

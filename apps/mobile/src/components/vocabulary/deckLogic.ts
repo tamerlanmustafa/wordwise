@@ -55,6 +55,22 @@ export function shouldClaimHorizontalDrag(dx: number, dy: number): boolean {
   return Math.abs(dx) > Math.abs(dy) * HORIZONTAL_BIAS && Math.abs(dx) > CLAIM_DISTANCE;
 }
 
+// ── Stack geometry ────────────────────────────────────────────────────────
+
+/**
+ * Resting transform for each stack slot, front (0) to back. While the
+ * focused card flies out, every layer behind it animates one slot forward,
+ * so slot N's promoted position must land exactly on slot N-1's rest for
+ * the handoff to the real card to be seamless.
+ */
+export const STACK_SLOTS = [
+  { translateY: 0, scale: 1, opacity: 1 },
+  { translateY: -8, scale: 0.96, opacity: 0.7 },
+  { translateY: -16, scale: 0.92, opacity: 0.45 },
+] as const;
+
+export type StackSlot = (typeof STACK_SLOTS)[number];
+
 // ── Deck cursor reducer ───────────────────────────────────────────────────
 
 export interface DeckState {
