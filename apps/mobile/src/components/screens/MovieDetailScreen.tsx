@@ -184,39 +184,35 @@ export const MovieDetailScreen = ({
     : 1;
   const [headerDocked, setHeaderDocked] = useState(false);
 
-  // Splash poster fade — the loading indicator. The poster fades in, then
-  // gently breathes until the vocabulary arrives (no spinner, no caption).
-  const splashPosterOpacity = useRef(new Animated.Value(0)).current;
+  // Splash "WW" pulse — the loading indicator: the wordmark breathes
+  // (scales up and down) until the vocabulary arrives.
+  const splashPulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!loading) return;
-    splashPosterOpacity.setValue(0);
-    const anim = Animated.sequence([
-      Animated.timing(splashPosterOpacity, {
-        toValue: 1,
-        duration: 900,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(splashPosterOpacity, {
-            toValue: 0.55,
-            duration: 1100,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(splashPosterOpacity, {
-            toValue: 1,
-            duration: 1100,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]),
-      ),
-    ]);
+    splashPulse.setValue(0);
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(splashPulse, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(splashPulse, {
+          toValue: 0,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
     anim.start();
     return () => anim.stop();
-  }, [loading, splashPosterOpacity]);
+  }, [loading, splashPulse]);
+  const splashScale = splashPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.88, 1.1],
+  });
 
   useEffect(() => {
     if (prevLevelRef.current !== activeLevel) {
@@ -1548,37 +1544,34 @@ export const MovieDetailScreen = ({
         </View>
       ) : null}
 
-      {/* Loading illusion — while the vocabulary is being fetched/classified,
-          the movie's own backdrop + poster cover the whole view (a cinematic
-          splash), then lift to reveal the loaded screen. Sits above everything
-          including the back button; onBack stays reachable via the chip. */}
+      {/* Loading splash — a pulsing extruded "WW" wordmark centered on the
+          default app background. Stacked offset text layers fake the 3D
+          extrusion; a perspective/rotateX tilt sells the depth. Sits above
+          everything; onBack stays reachable via the chip. */}
       {loading ? (
-        <View style={splashStyles.wrap} pointerEvents="auto">
-          {movie.backdrop_path ? (
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="cover"
-              blurRadius={2}
-            />
-          ) : null}
-          <View style={splashStyles.scrim} />
+        <View style={[splashStyles.wrap, { backgroundColor: tc.background }]} pointerEvents="auto">
           <Pressable onPress={onBack} style={[backBtnStyles.backBtn, splashStyles.backBtn]} hitSlop={8}>
             <Ionicons name="chevron-back" size={18} color="#fff" />
           </Pressable>
-          {movie.poster_path ? (
-            <Animated.Image
-              source={{ uri: `https://image.tmdb.org/t/p/w342${movie.poster_path}` }}
-              style={[splashStyles.poster, { opacity: splashPosterOpacity }]}
-              resizeMode="cover"
-            />
-          ) : null}
-          <Animated.Text
-            style={[splashStyles.title, { opacity: splashPosterOpacity }]}
-            numberOfLines={2}
+          <Animated.View
+            style={{
+              transform: [{ perspective: 600 }, { rotateX: '16deg' }, { scale: splashScale }],
+            }}
           >
-            {movie.title}
-          </Animated.Text>
+            {WW_EXTRUDE_DEPTHS.map((depth) => (
+              <Text
+                key={depth}
+                style={[
+                  splashStyles.mark,
+                  splashStyles.markLayer,
+                  { color: tc.goldDeep, top: depth, left: depth },
+                ]}
+              >
+                WW
+              </Text>
+            ))}
+            <Text style={[splashStyles.mark, { color: tc.gold }]}>WW</Text>
+          </Animated.View>
         </View>
       ) : null}
 
@@ -1586,43 +1579,29 @@ export const MovieDetailScreen = ({
   );
 };
 
+// Extrusion depths (px) for the 3D "WW" splash mark, painted deepest-first
+// so the face (offset 0) lands on top.
+const WW_EXTRUDE_DEPTHS = [7, 6, 5, 4, 3, 2, 1];
+
 const splashStyles = StyleSheet.create({
   wrap: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
-    backgroundColor: '#0F0819',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,6,18,0.72)',
   },
   backBtn: {
     position: 'absolute',
     left: 16,
     top: 56,
   },
-  poster: {
-    width: 168,
-    height: 248,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+  mark: {
+    fontSize: 76,
+    fontWeight: '900',
+    letterSpacing: -2,
   },
-  title: {
-    marginTop: 18,
-    maxWidth: '78%',
-    textAlign: 'center',
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+  markLayer: {
+    position: 'absolute',
   },
 });
 
