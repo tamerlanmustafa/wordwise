@@ -237,10 +237,17 @@ export const WordCardDeck = ({
   const { translateX, cardOpacity, behindLift, edgeLift } = animRef.current;
   const animatingRef = useRef(false);
 
-  const flyOut = (dir: 1 | -1, done: () => void) => {
+  /**
+   * `resetAfter` must be true ONLY when the same card stays mounted after
+   * done() (a single-card deck wrapping onto itself). When the swap remounts
+   * the card, resetting here is worse than useless: the setValue()s reach
+   * the native views before the commit does, flashing the flown-out card
+   * back into the front slot for a frame.
+   */
+  const flyOut = (dir: 1 | -1, resetAfter: boolean, done: () => void) => {
     const anim = animRef.current;
     if (reduceMotionRef.current || anim == null) {
-      anim?.translateX.setValue(0);
+      if (resetAfter) anim?.translateX.setValue(0);
       done();
       return;
     }
@@ -266,11 +273,11 @@ export const WordCardDeck = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // Reset before done() for the no-remount case (a single-card deck
-      // advances back onto the same key, keeping these values alive).
-      anim.translateX.setValue(0);
-      anim.cardOpacity.setValue(1);
-      anim.promote.setValue(0);
+      if (resetAfter) {
+        anim.translateX.setValue(0);
+        anim.cardOpacity.setValue(1);
+        anim.promote.setValue(0);
+      }
       done();
       animatingRef.current = false;
     });
@@ -287,7 +294,9 @@ export const WordCardDeck = ({
     if (animatingRef.current || displayDeck.index < 0 || total === 0) return;
     track('deck_advance', { method });
     const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
-    flyOut(1, () => {
+    // nextKey === currentKey only on a single-card deck wrapping onto itself
+    // — the one case where no remount will discard the animated values.
+    flyOut(1, nextKey === currentKey, () => {
       if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
       setResumedAt(null);
       setExpandedKey(null);
@@ -303,7 +312,8 @@ export const WordCardDeck = ({
     track('deck_mark_learned', { method });
     const promoted = promotedKeyAfterRemoval(displayDeck, currentKey);
     const term = currentKey;
-    flyOut(-1, () => {
+    // Learning always removes the focused card, so a remount always follows.
+    flyOut(-1, false, () => {
       if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
       setResumedAt(null);
       setExpandedKey(null);
