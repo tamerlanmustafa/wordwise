@@ -171,6 +171,19 @@ const DRAG_CLAMP = 160;
 const ACTION_SIZE = 54;
 const ACTION_EDGE = 4;
 
+// Fixed vertical zones so every card has identical dimensions no matter how
+// long its word, sentence, or translation runs: text is clamped (ellipsized
+// or shrunk) to its zone instead of the zone growing to fit the text. The
+// collapsed card is one constant height; expanding adds the translation zone,
+// a second constant, so all cards grow by the same amount on tap.
+const WORD_LINE_HEIGHT = 42;
+const SENTENCE_LINES = 3;
+const SENTENCE_LINE_HEIGHT = 26;
+const SENTENCE_ZONE_HEIGHT = SENTENCE_LINES * SENTENCE_LINE_HEIGHT;
+const TRANSLATION_LINES = 2;
+const TRANSLATION_LINE_HEIGHT = 22;
+const TRANSLATION_ZONE_HEIGHT = TRANSLATION_LINES * TRANSLATION_LINE_HEIGHT;
+
 /**
  * Card-deck view mode for the movie vocabulary screen (mockup 2a): one
  * focused card, two stacked edges behind it (pure styling), actions and
@@ -592,7 +605,7 @@ export const WordCardDeck = ({
   // enrichment sentence once it has loaded. Idioms only get the enrichment.
   const preview = !idiom ? sentencePreviews[currentKey] : undefined;
   const collapsedSentence = preview && preview.sentence ? preview : null;
-  const visibleSentence = !idiom && cardContent?.loaded && enrichment ? enrichment : collapsedSentence;
+  const visibleSentence = cardContent?.loaded && enrichment ? enrichment : collapsedSentence;
   const previewLoading = !idiom && preview === undefined;
   const sentenceTranslation = expanded && cardContent?.loaded ? enrichment?.translation || null : null;
 
@@ -634,23 +647,28 @@ export const WordCardDeck = ({
           </Text>
         </View>
         <View style={s.wordLine}>
-          <Text style={s.word}>{term}</Text>
+          <Text style={s.word} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {term}
+          </Text>
         </View>
-        {staticSentence ? (
-          renderHighlighted(
-            staticSentence.sentence,
-            term,
-            staticSentence.matched_form,
-            lvlColor,
-            s.sentence,
-            s.sentenceHi,
-          )
-        ) : !staticIdiom ? (
-          <View style={s.sentenceSkeletonWrap}>
-            <View style={[s.skelBar, { width: '92%' }]} />
-            <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
-          </View>
-        ) : null}
+        <View style={s.sentenceZone}>
+          {staticSentence ? (
+            renderHighlighted(
+              staticSentence.sentence,
+              term,
+              staticSentence.matched_form,
+              lvlColor,
+              s.sentence,
+              s.sentenceHi,
+              SENTENCE_LINES,
+            )
+          ) : !staticIdiom ? (
+            <View style={s.skeletonPad}>
+              <View style={[s.skelBar, { width: '92%' }]} />
+              <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
+            </View>
+          ) : null}
+        </View>
         {/* Mirror the collapsed focused card's footer exactly: the promoted
             card hands off to the real one at the swap, and any element
             missing here would pop in at that instant. */}
@@ -736,14 +754,18 @@ export const WordCardDeck = ({
               ) : null}
             </View>
 
-            {/* word line — translation lands inline after a tap */}
+            {/* word line — translation lands inline after a tap; one fixed-
+                height line, long idiom phrases shrink to fit instead of
+                wrapping */}
             <View style={s.wordLine}>
-              <Text style={s.word}>{currentKey}</Text>
+              <Text style={s.word} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {currentKey}
+              </Text>
               {expanded ? (
                 cardContent?.loaded ? (
                   translation && !isUntranslatable ? (
                     <>
-                      <Text style={s.translation}>
+                      <Text style={s.translation} numberOfLines={1}>
                         <Text style={s.translationDot}>· </Text>
                         {translation.toLowerCase()}
                       </Text>
@@ -758,33 +780,46 @@ export const WordCardDeck = ({
               ) : null}
             </View>
 
-            {/* sentence-in-context with the highlighted target word */}
-            {visibleSentence ? (
-              renderHighlighted(
-                visibleSentence.sentence,
-                currentKey,
-                visibleSentence.matched_form,
-                levelColor,
-                s.sentence,
-                s.sentenceHi,
-              )
-            ) : previewLoading || (idiom && expansionLoading) ? (
-              <View style={s.sentenceSkeletonWrap}>
-                <View style={[s.skelBar, { width: '92%' }]} />
-                <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
-              </View>
-            ) : idiom && expanded && cardContent?.loaded && !enrichment ? (
-              <Text style={s.noExamples}>No sentence examples available</Text>
-            ) : null}
+            {/* sentence-in-context with the highlighted target word — a
+                fixed-height zone: short sentences leave whitespace, long
+                ones ellipsize, and idioms keep the empty zone, so sentence
+                length never changes the card height */}
+            <View style={s.sentenceZone}>
+              {visibleSentence ? (
+                renderHighlighted(
+                  visibleSentence.sentence,
+                  currentKey,
+                  visibleSentence.matched_form,
+                  levelColor,
+                  s.sentence,
+                  s.sentenceHi,
+                  SENTENCE_LINES,
+                )
+              ) : previewLoading || (idiom && expansionLoading) ? (
+                <View style={s.skeletonPad}>
+                  <View style={[s.skelBar, { width: '92%' }]} />
+                  <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
+                </View>
+              ) : idiom && expanded && cardContent?.loaded && !enrichment ? (
+                <Text style={s.noExamples}>No sentence examples available</Text>
+              ) : null}
+            </View>
 
-            {/* sentence translation under a gold left bar — on-demand only */}
-            {sentenceTranslation ? (
-              <View style={s.sentenceTranslationBlock}>
-                <Text style={s.sentenceTranslation}>{sentenceTranslation}</Text>
-              </View>
-            ) : expanded && expansionLoading && !idiom ? (
-              <View style={s.sentenceSkeletonWrap}>
-                <View style={[s.skelBar, { width: '78%', height: 11 }]} />
+            {/* sentence translation under a gold left bar — fixed zone shown
+                only while expanded, so every card grows by the same amount */}
+            {expanded ? (
+              <View style={s.sentenceTranslationZone}>
+                {sentenceTranslation ? (
+                  <View style={s.sentenceTranslationBlock}>
+                    <Text style={s.sentenceTranslation} numberOfLines={TRANSLATION_LINES}>
+                      {sentenceTranslation}
+                    </Text>
+                  </View>
+                ) : expansionLoading ? (
+                  <View style={s.skeletonPad}>
+                    <View style={[s.skelBar, { width: '78%', height: 11 }]} />
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -968,6 +1003,7 @@ const makeDeckStyles = (tc: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      minHeight: 24,
     },
     rank: {
       fontFamily: MONO_FAMILY,
@@ -1002,15 +1038,17 @@ const makeDeckStyles = (tc: ThemeColors) =>
     wordLine: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      flexWrap: 'wrap',
       marginTop: 14,
+      height: WORD_LINE_HEIGHT,
     },
     word: {
       fontFamily: SERIF_FAMILY,
       fontSize: 34,
+      lineHeight: 40,
       fontWeight: '700',
       letterSpacing: -0.5,
       color: tc.text,
+      flexShrink: 1,
     },
     translation: {
       fontFamily: SERIF_FAMILY,
@@ -1019,6 +1057,7 @@ const makeDeckStyles = (tc: ThemeColors) =>
       fontStyle: 'italic',
       color: tc.primaryOnSurface,
       marginLeft: 8,
+      flexShrink: 1,
     },
     translationDot: {
       fontFamily: SERIF_FAMILY,
@@ -1048,28 +1087,38 @@ const makeDeckStyles = (tc: ThemeColors) =>
       letterSpacing: 0.5,
       color: tc.textSecondary,
     },
+    sentenceZone: {
+      marginTop: 14,
+      height: SENTENCE_ZONE_HEIGHT,
+      overflow: 'hidden',
+    },
     sentence: {
       fontFamily: SERIF_FAMILY,
       fontSize: 17,
-      lineHeight: 26,
+      lineHeight: SENTENCE_LINE_HEIGHT,
       color: tc.textSecondary,
-      marginTop: 14,
     },
     sentenceHi: {
       fontFamily: SERIF_FAMILY,
       fontWeight: '700',
       fontStyle: 'italic',
     },
-    sentenceSkeletonWrap: {
-      marginTop: 14,
+    // Vertically settles the skeleton bars on the first text line of the
+    // zone they stand in for.
+    skeletonPad: {
+      paddingTop: 6,
     },
     skelBar: {
       height: 13,
       borderRadius: 4,
       backgroundColor: tc.skeleton,
     },
-    sentenceTranslationBlock: {
+    sentenceTranslationZone: {
       marginTop: 12,
+      height: TRANSLATION_ZONE_HEIGHT,
+      overflow: 'hidden',
+    },
+    sentenceTranslationBlock: {
       borderLeftWidth: 2,
       borderLeftColor: tc.gold,
       paddingLeft: 10,
@@ -1077,7 +1126,7 @@ const makeDeckStyles = (tc: ThemeColors) =>
     sentenceTranslation: {
       fontFamily: SERIF_FAMILY,
       fontSize: 15,
-      lineHeight: 22,
+      lineHeight: TRANSLATION_LINE_HEIGHT,
       fontStyle: 'italic',
       color: tc.textSecondary,
     },
@@ -1086,13 +1135,13 @@ const makeDeckStyles = (tc: ThemeColors) =>
       fontSize: 14,
       fontStyle: 'italic',
       color: tc.textFaint,
-      marginTop: 14,
     },
     footerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 18,
       marginTop: 18,
+      minHeight: 16,
     },
     actionText: {
       fontSize: 11,

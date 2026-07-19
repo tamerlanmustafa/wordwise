@@ -69,6 +69,7 @@ export function renderHighlighted(
   color: string,
   baseStyle: any,
   hiStyle: any,
+  numberOfLines?: number,
 ) {
   const forms = new Set([target.toLowerCase()]);
   if (matchedForm) forms.add(matchedForm.toLowerCase());
@@ -76,7 +77,7 @@ export function renderHighlighted(
   const regex = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
   const parts = sentence.split(regex);
   return (
-    <Text style={baseStyle}>
+    <Text style={baseStyle} numberOfLines={numberOfLines}>
       {parts.map((part, i) =>
         forms.has(part.toLowerCase()) ? (
           <Text key={i} style={[hiStyle, { color }]}>{part}</Text>
