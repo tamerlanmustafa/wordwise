@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -9,6 +9,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../../theme/tokens';
@@ -78,6 +80,50 @@ const liftStyle = (promote: Animated.Value, from: StackSlot, to: StackSlot) => (
   ],
 });
 
+interface OutgoingCardProps {
+  id: number;
+  dir: 1 | -1;
+  /** Drag offset at release — the overlay picks up exactly where the finger let go. */
+  startX: number;
+  onDone: (id: number) => void;
+  style: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}
+
+/**
+ * A card detached from the deck at the moment of a swipe commit: it finishes
+ * the fly-out on its own fresh Animated values and removes itself. Keeping
+ * the flight off the interactive card is what lets the next slide start
+ * immediately — and there is no shared native state left to race.
+ */
+const OutgoingCard = ({ id, dir, startX, onDone, style, children }: OutgoingCardProps) => {
+  const translateX = useRef(new Animated.Value(startX)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: dir * FLY_DISTANCE,
+        duration: FLY_DURATION,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: FLY_DURATION - 40,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onDoneRef.current(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View pointerEvents="none" style={[style, { transform: [{ translateX }], opacity }]}>
+      {children}
+    </Animated.View>
+  );
+};
+
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
 const keyOf = (item: DeckItem) => (isIdiomItem(item) ? item.phrase : item.word);
@@ -119,6 +165,8 @@ export interface WordCardDeckProps {
 
 const FLY_DURATION = 300;
 const FLY_DISTANCE = 440;
+/** The stack stepping one slot forward after a commit. */
+const ARRIVE_DURATION = 220;
 const DRAG_CLAMP = 160;
 const ACTION_SIZE = 54;
 const ACTION_EDGE = 4;
@@ -206,82 +254,99 @@ export const WordCardDeck = ({
   const reduceMotionRef = useRef(reduceMotion);
   reduceMotionRef.current = reduceMotion;
 
-  // Fresh Animated.Values per focused card. Sharing one pair across cards
-  // strands the incoming card off-screen: the drag's setValue()s plus the
-  // native-driver fly-out leave the shared native node desynced, and the
-  // remounted card binds to it before the reset lands. A brand-new pair per
-  // key has no native history, so there is nothing to race.
+  // Advances commit IMMEDIATELY on release — the outgoing card keeps flying
+  // as a detached overlay (OutgoingCard, fresh values per overlay) while the
+  // new focused card is interactive at once, so rapid consecutive slides
+  // never wait on an animation. Per-key values here avoid the shared-native-
+  // node races that used to strand or flash cards at the swap.
+  //
+  // `arrive` (0 → 1 on mount) plays the enter choreography for the commit
+  // that created this key: 'step' slides the whole stack one slot forward,
+  // 'return' flies an undone card back in from the right.
+  const nextMountAnimRef = useRef<'step' | 'return' | null>(null);
   const animRef = useRef<{
     key: string;
     translateX: Animated.Value;
-    cardOpacity: Animated.Value;
-    promote: Animated.Value;
-    behindLift: ReturnType<typeof liftStyle>;
-    edgeLift: ReturnType<typeof liftStyle>;
+    focusOpacity: Animated.Value;
+    arrive: Animated.Value;
+    mode: 'step' | 'return' | null;
+    // transform mixes translateX/translateY/scale interpolations depending
+    // on the mode, which RN's WithAnimatedObject unions can't express.
+    focusedArrive: { opacity: Animated.AnimatedInterpolation<number>; transform: any[] };
+    focusedOpacity: Animated.AnimatedMultiplication<number>;
+    behindArrive: ReturnType<typeof liftStyle> | null;
   } | null>(null);
   const focusedKey = displayDeck.index >= 0 ? displayDeck.keys[displayDeck.index] : '';
   if (animRef.current == null || animRef.current.key !== focusedKey) {
-    // `promote` slides the layers behind the focused card one slot forward
-    // while it flies out; the interpolations are built once per key so
-    // re-renders mid-animation rebind the same nodes.
-    const promote = new Animated.Value(0);
+    const mode = reduceMotionRef.current ? null : nextMountAnimRef.current;
+    nextMountAnimRef.current = null;
+    const arrive = new Animated.Value(mode == null ? 1 : 0);
+    const focusOpacity = new Animated.Value(1);
+    const focusedArrive =
+      mode === 'return'
+        ? {
+            opacity: arrive.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
+            transform: [
+              {
+                translateX: arrive.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [FLY_DISTANCE, 0],
+                }),
+              },
+            ],
+          }
+        : liftStyle(arrive, STACK_SLOTS[mode === 'step' ? 1 : 0], STACK_SLOTS[0]);
     animRef.current = {
       key: focusedKey,
       translateX: new Animated.Value(0),
-      cardOpacity: new Animated.Value(1),
-      promote,
-      behindLift: liftStyle(promote, STACK_SLOTS[1], STACK_SLOTS[0]),
-      edgeLift: liftStyle(promote, STACK_SLOTS[2], STACK_SLOTS[1]),
+      focusOpacity,
+      arrive,
+      mode,
+      focusedArrive,
+      // The imperative learn-hide multiplies in, on a node built once per
+      // key so mid-animation re-renders rebind the same graph.
+      focusedOpacity: Animated.multiply(
+        focusOpacity,
+        focusedArrive.opacity as Animated.AnimatedInterpolation<number>,
+      ),
+      behindArrive: mode === 'step' ? liftStyle(arrive, STACK_SLOTS[2], STACK_SLOTS[1]) : null,
     };
   }
-  const { translateX, cardOpacity, behindLift, edgeLift } = animRef.current;
-  const animatingRef = useRef(false);
+  const { translateX, focusOpacity, focusedArrive, focusedOpacity, behindArrive } =
+    animRef.current;
 
-  /**
-   * `resetAfter` must be true ONLY when the same card stays mounted after
-   * done() (a single-card deck wrapping onto itself). When the swap remounts
-   * the card, resetting here is worse than useless: the setValue()s reach
-   * the native views before the commit does, flashing the flown-out card
-   * back into the front slot for a frame.
-   */
-  const flyOut = (dir: 1 | -1, resetAfter: boolean, done: () => void) => {
+  // Play the enter choreography once per mounted key.
+  useEffect(() => {
     const anim = animRef.current;
-    if (reduceMotionRef.current || anim == null) {
-      if (resetAfter) anim?.translateX.setValue(0);
-      done();
+    if (anim == null || anim.mode == null) return;
+    if (reduceMotionRef.current) {
+      anim.arrive.setValue(1);
       return;
     }
-    animatingRef.current = true;
-    Animated.parallel([
-      Animated.timing(anim.translateX, {
-        toValue: dir * FLY_DISTANCE,
-        duration: FLY_DURATION,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(anim.cardOpacity, {
-        toValue: 0,
-        duration: FLY_DURATION - 40,
-        useNativeDriver: true,
-      }),
-      // The stack steps forward in the same beat, so the behind card is
-      // already sitting in the focused slot when the real card swaps in.
-      Animated.timing(anim.promote, {
-        toValue: 1,
-        duration: FLY_DURATION,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (resetAfter) {
-        anim.translateX.setValue(0);
-        anim.cardOpacity.setValue(1);
-        anim.promote.setValue(0);
-      }
-      done();
-      animatingRef.current = false;
-    });
-  };
+    Animated.timing(anim.arrive, {
+      toValue: 1,
+      duration: anim.mode === 'return' ? FLY_DURATION : ARRIVE_DURATION,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [focusedKey]);
+
+  // Cards mid-flight after a swipe: each overlay owns its own values and
+  // removes itself when the fly-out finishes.
+  const [outgoing, setOutgoing] = useState<
+    { id: number; dir: 1 | -1; startX: number; item: DeckItem; rank: number }[]
+  >([]);
+  const outgoingIdRef = useRef(0);
+  const handleOutgoingDone = useCallback((id: number) => {
+    setOutgoing((prev) => prev.filter((o) => o.id !== id));
+  }, []);
+  // Last clamped drag offset — where the overlay picks up when the finger
+  // lets go mid-drag (button advances fly from center).
+  const lastDragXRef = useRef(0);
+
+  // Keys swiped past with "next", most recent last — the undo button walks
+  // this back. Learned words keep their own undo (the parent's toast).
+  const undoStackRef = useRef<string[]>([]);
 
   // Expansion state — which card revealed its translations, plus a per-word
   // cache so rotating back to a card never refetches.
@@ -290,37 +355,80 @@ export const WordCardDeck = ({
   const [reportOpen, setReportOpen] = useState(false);
   const [playingAudio, setPlayingAudio] = useState(false);
 
+  /** Detach the focused card into a fly-away overlay (skipped under Reduce
+   *  Motion, where the swap is instant). */
+  const pushOutgoing = (dir: 1 | -1, startX: number) => {
+    if (reduceMotionRef.current || currentItem == null) return;
+    setOutgoing((prev) => [
+      ...prev,
+      {
+        id: outgoingIdRef.current++,
+        dir,
+        startX,
+        item: currentItem,
+        rank: displayDeck.index + 1,
+      },
+    ]);
+  };
+
   const doAdvance = (method: 'swipe' | 'button') => {
-    if (animatingRef.current || displayDeck.index < 0 || total === 0) return;
+    if (displayDeck.index < 0 || total === 0 || currentKey == null) return;
+    if (total === 1) {
+      // Only card in rotation: nothing to advance to — settle back.
+      Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      return;
+    }
     track('deck_advance', { method });
     const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
-    // nextKey === currentKey only on a single-card deck wrapping onto itself
-    // — the one case where no remount will discard the animated values.
-    flyOut(1, nextKey === currentKey, () => {
-      if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
-      setResumedAt(null);
-      setExpandedKey(null);
-      dispatch({ type: 'advance' });
-      onAdvanceBookmark(nextKey);
-    });
+    pushOutgoing(1, method === 'swipe' ? lastDragXRef.current : 0);
+    undoStackRef.current.push(currentKey);
+    if (undoStackRef.current.length > 50) undoStackRef.current.shift();
+    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
+    nextMountAnimRef.current = 'step';
+    setResumedAt(null);
+    setExpandedKey(null);
+    dispatch({ type: 'advance' });
+    onAdvanceBookmark(nextKey);
   };
 
   const doLearn = (method: 'swipe' | 'button') => {
-    if (animatingRef.current || displayDeck.index < 0 || !onMarkLearned || currentKey == null) {
-      return;
-    }
+    if (displayDeck.index < 0 || !onMarkLearned || currentKey == null) return;
     track('deck_mark_learned', { method });
     const promoted = promotedKeyAfterRemoval(displayDeck, currentKey);
     const term = currentKey;
-    // Learning always removes the focused card, so a remount always follows.
-    flyOut(-1, false, () => {
-      if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
-      setResumedAt(null);
-      setExpandedKey(null);
-      onMarkLearned(term);
-      if (promoted) onAdvanceBookmark(promoted);
-    });
+    pushOutgoing(-1, method === 'swipe' ? lastDragXRef.current : 0);
+    // The item list shrinks via the parent, so the remount lags this commit
+    // by a beat — hide the focused card NOW so it never doubles the overlay.
+    focusOpacity.setValue(0);
+    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
+    nextMountAnimRef.current = 'step';
+    setResumedAt(null);
+    setExpandedKey(null);
+    onMarkLearned(term);
+    if (promoted) onAdvanceBookmark(promoted);
   };
+
+  /** Undo button: bring back the last "next"-swiped card that is still in
+   *  the deck; it flies back in from the right. */
+  const doUndo = () => {
+    const stack = undoStackRef.current;
+    let key: string | undefined;
+    while ((key = stack.pop()) != null) {
+      if (key !== currentKey && displayDeck.keys.includes(key)) break;
+    }
+    if (key == null) return;
+    track('deck_undo', {});
+    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
+    nextMountAnimRef.current = 'return';
+    setResumedAt(null);
+    setExpandedKey(null);
+    dispatch({ type: 'focus', key });
+    onAdvanceBookmark(key);
+  };
+
+  const canUndo = undoStackRef.current.some(
+    (k) => k !== currentKey && displayDeck.keys.includes(k),
+  );
 
   // Refs so the PanResponder (captured once) always sees fresh handlers —
   // same pattern as BookmarkRowWrapper.
@@ -338,8 +446,7 @@ export const WordCardDeck = ({
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        !animatingRef.current && shouldClaimHorizontalDrag(g.dx, g.dy),
+      onMoveShouldSetPanResponder: (_, g) => shouldClaimHorizontalDrag(g.dx, g.dy),
       // Once the card owns the drag, keep it — don't let the enclosing
       // ScrollView steal the responder mid-slide.
       onPanResponderTerminationRequest: () => false,
@@ -347,7 +454,9 @@ export const WordCardDeck = ({
         onDragStateChangeRef.current?.(true);
       },
       onPanResponderMove: (_, g) => {
-        animRef.current?.translateX.setValue(Math.max(-DRAG_CLAMP, Math.min(g.dx, DRAG_CLAMP)));
+        const x = Math.max(-DRAG_CLAMP, Math.min(g.dx, DRAG_CLAMP));
+        lastDragXRef.current = x;
+        animRef.current?.translateX.setValue(x);
       },
       onPanResponderRelease: (_, g) => {
         onDragStateChangeRef.current?.(false);
@@ -566,21 +675,15 @@ export const WordCardDeck = ({
 
       <View style={s.deckWrap}>
         {/* Second edge stays pure styling; the first is the next card's
-            real content, clipped to the focused card's footprint. Both are
-            keyed per focused card and lift one slot forward (via `promote`)
-            while it flies out, so the promotion reads as one motion instead
-            of a snap at the swap. */}
-        {total > 2 ? (
-          <Animated.View
-            key={`edge-${currentKey}`}
-            style={[s.stackEdge, edgeLift]}
-            pointerEvents="none"
-          />
-        ) : null}
+            real content, clipped to the focused card's footprint. On a
+            'step' commit the behind card arrives from the edge slot while
+            the focused card arrives from the behind slot — the stack reads
+            as one forward motion. */}
+        {total > 2 ? <View style={[s.stackEdge, s.edgeRest]} pointerEvents="none" /> : null}
         {behindItem != null ? (
           <Animated.View
             key={`behind-${displayDeck.keys[behindIndex]}`}
-            style={[s.stackEdge, s.behindCard, behindLift]}
+            style={[s.stackEdge, s.behindCard, behindArrive ?? s.behindRest]}
             pointerEvents="none"
           >
             {renderStaticBody(behindItem, behindIndex + 1)}
@@ -591,7 +694,13 @@ export const WordCardDeck = ({
           // Remount per word, paired with the per-key Animated.Values above:
           // each card gets a fresh native view bound to fresh nodes.
           key={currentKey}
-          style={[s.card, { transform: [{ translateX }], opacity: cardOpacity }]}
+          style={[
+            s.card,
+            {
+              transform: [{ translateX }, ...focusedArrive.transform],
+              opacity: focusedOpacity,
+            },
+          ]}
           {...panResponder.panHandlers}
         >
           <TouchableOpacity
@@ -704,6 +813,21 @@ export const WordCardDeck = ({
             </View>
           </TouchableOpacity>
         </Animated.View>
+
+        {/* Cards mid-flight after a swipe fly above the (already
+            interactive) new focused card. */}
+        {outgoing.map((o) => (
+          <OutgoingCard
+            key={o.id}
+            id={o.id}
+            dir={o.dir}
+            startX={o.startX}
+            onDone={handleOutgoingDone}
+            style={s.outgoingCard}
+          >
+            {renderStaticBody(o.item, o.rank)}
+          </OutgoingCard>
+        ))}
       </View>
 
       {/* actions under the deck — buttons fully cover the gesture actions */}
@@ -721,6 +845,18 @@ export const WordCardDeck = ({
             <Text style={s.actionCaption}>I know this</Text>
           </View>
         ) : null}
+
+        <View style={s.spacerColumn} />
+
+        <PressableScale
+          style={[s.undoCircle, !canUndo && s.undoDisabled]}
+          onPress={doUndo}
+          disabled={!canUndo}
+          accessibilityRole="button"
+          accessibilityLabel="Bring back the previous card"
+        >
+          <Ionicons name="arrow-undo" size={20} color={tc.textSecondary} />
+        </PressableScale>
 
         <View style={s.spacerColumn} />
 
@@ -788,6 +924,33 @@ const makeDeckStyles = (tc: ThemeColors) =>
       overflow: 'hidden',
       paddingHorizontal: 20,
       paddingTop: 20,
+    },
+    // Resting looks for the stack slots (animated variants interpolate
+    // between the same STACK_SLOTS values).
+    behindRest: {
+      opacity: STACK_SLOTS[1].opacity,
+      transform: [{ translateY: STACK_SLOTS[1].translateY }, { scale: STACK_SLOTS[1].scale }],
+    },
+    edgeRest: {
+      opacity: STACK_SLOTS[2].opacity,
+      transform: [{ translateY: STACK_SLOTS[2].translateY }, { scale: STACK_SLOTS[2].scale }],
+    },
+    // A swiped card mid-flight: same face as the focused card, clipped to
+    // the deck footprint, floating above the new focused card.
+    outgoingCard: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: tc.paper,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: tc.border,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 5,
     },
     card: {
       backgroundColor: tc.paper,
@@ -978,6 +1141,22 @@ const makeDeckStyles = (tc: ThemeColors) =>
       backgroundColor: tc.paper,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    // Icon-only undo between the two main actions; margin centers it on
+    // the same axis as the 54pt circles.
+    undoCircle: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      borderWidth: 1.5,
+      borderColor: tc.border,
+      backgroundColor: tc.paper,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: (ACTION_SIZE - 46) / 2,
+    },
+    undoDisabled: {
+      opacity: 0.35,
     },
     bookmarkPill: {
       paddingVertical: 14,

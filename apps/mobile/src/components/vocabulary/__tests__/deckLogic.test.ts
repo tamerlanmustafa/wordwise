@@ -81,6 +81,26 @@ describe('deckReducer sync (items changed under the deck)', () => {
   });
 });
 
+describe('deckReducer focus (undo a swipe)', () => {
+  it('moves focus back to the given key', () => {
+    const state: DeckState = { keys: KEYS, index: 2 };
+    expect(deckReducer(state, { type: 'focus', key: 'brittle' })).toEqual({
+      keys: KEYS,
+      index: 1,
+    });
+  });
+
+  it('no-ops when the key has left the deck (learned meanwhile)', () => {
+    const state: DeckState = { keys: KEYS, index: 2 };
+    expect(deckReducer(state, { type: 'focus', key: 'gone' })).toBe(state);
+  });
+
+  it('no-ops when the key is already focused', () => {
+    const state: DeckState = { keys: KEYS, index: 1 };
+    expect(deckReducer(state, { type: 'focus', key: 'brittle' })).toBe(state);
+  });
+});
+
 describe('deckReducer restore', () => {
   it('re-runs the bookmark restore against a new key set', () => {
     const state: DeckState = { keys: [], index: -1 };

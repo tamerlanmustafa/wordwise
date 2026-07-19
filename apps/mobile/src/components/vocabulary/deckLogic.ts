@@ -82,6 +82,7 @@ export interface DeckState {
 
 export type DeckAction =
   | { type: 'advance' }
+  | { type: 'focus'; key: string }
   | { type: 'sync'; keys: string[] }
   | { type: 'restore'; keys: string[]; bookmarkWord: string | null };
 
@@ -97,6 +98,12 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     case 'advance': {
       if (state.keys.length === 0) return state;
       return { ...state, index: (state.index + 1) % state.keys.length };
+    }
+    case 'focus': {
+      // Undo: bring a previously swiped card back into focus. No-op when the
+      // key has since left the deck (e.g. it was marked learned).
+      const i = state.keys.indexOf(action.key);
+      return i >= 0 && i !== state.index ? { ...state, index: i } : state;
     }
     case 'sync': {
       const { keys } = action;
