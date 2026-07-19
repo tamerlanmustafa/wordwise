@@ -12,6 +12,8 @@
 
 ## Mobile is the product; web is frozen
 - **`apps/mobile` is the shipping app.** New features go there. Do **not** mirror them into `frontend/`, and do not maintain web/mobile feature parity — the two apps share only `packages/types`, so parity means writing every feature twice.
+- **Design and test UI for both iOS and Android.** It ships on both, so account for platform differences (safe areas/notches, back gesture, status bar, fonts, shadows/elevation, haptics) and don't assume one platform's look/behavior holds on the other.
+- **Account for free vs premium UI.** Features can differ by tier (gates, paywalls, upsells, limits), so check how a change looks and behaves for both free and premium users — don't build or test only one tier.
 - **`frontend/` is frozen** except for the public pages the app stores require: privacy policy, terms, account-deletion request, and the landing/pricing pages. Those must stay accurate and deployable.
 - The ~17 web pages that duplicate mobile features (reader, search, saved words, watched, lists, …) are **not maintained**. Leave them alone; don't fix, extend, or refactor them unless asked.
 - If a task seems to need a web change, say so and ask first rather than assuming parity is wanted.
