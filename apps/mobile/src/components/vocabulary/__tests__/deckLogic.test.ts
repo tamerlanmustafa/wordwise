@@ -5,6 +5,8 @@ import {
   swipeDecision,
   shouldClaimHorizontalDrag,
   parseViewMode,
+  pickDefaultLevel,
+  resolveBookmarkLevel,
   SWIPE_THRESHOLD,
   CLAIM_DISTANCE,
   STACK_SLOTS,
@@ -199,5 +201,33 @@ describe('view-mode persistence', () => {
 
   it('uses the AsyncStorage key from the spec', () => {
     expect(VIEW_MODE_KEY).toBe('vocab_view_mode');
+  });
+});
+
+describe('pickDefaultLevel (no-bookmark screen load)', () => {
+  it('opens the level with the most words', () => {
+    expect(pickDefaultLevel({ A1: 4, B1: 31, B2: 12 })).toBe('B1');
+  });
+
+  it('returns null for an empty distribution so the caller keeps its default', () => {
+    expect(pickDefaultLevel({})).toBeNull();
+  });
+});
+
+describe('resolveBookmarkLevel (bookmarked screen load)', () => {
+  const idioms = [{ phrase: 'run out of', cefr_level: 'b2' }];
+
+  it('uses the stored CEFR level for a plain bookmark', () => {
+    expect(resolveBookmarkLevel({ word: 'hollow', level: 'C1' }, idioms)).toBe('C1');
+  });
+
+  it('migrates a legacy idioms-mode bookmark to the phrase’s own CEFR level', () => {
+    const legacy = { word: 'run out of', level: 'intermediate', mode: 'idioms' };
+    expect(resolveBookmarkLevel(legacy, idioms)).toBe('B2');
+  });
+
+  it('keeps the stored level when the legacy phrase is no longer in the vocab', () => {
+    const legacy = { word: 'long gone', level: 'advanced', mode: 'idioms' };
+    expect(resolveBookmarkLevel(legacy, idioms)).toBe('advanced');
   });
 });

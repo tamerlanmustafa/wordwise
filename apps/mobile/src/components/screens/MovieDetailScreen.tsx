@@ -50,8 +50,11 @@ import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
 import {
   parseViewMode,
+  pickDefaultLevel,
+  resolveBookmarkLevel,
   DEFAULT_VIEW_MODE,
   VIEW_MODE_KEY,
+  type StoredMovieBookmark,
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
 import { track } from '../../services/analytics';
@@ -165,6 +168,11 @@ export const MovieDetailScreen = ({
   const [overviewLineCount, setOverviewLineCount] = useState<number | null>(null);
   const overviewTruncated = overviewLineCount != null && overviewLineCount > 2;
   const prevLevelRef = useRef<string>(activeLevel);
+  // True = the next [wordsView, activeLevel, wordSortOrder] change is not a
+  // user tab switch, so the switch-skeleton must not run. Starts true to
+  // cover the effect's mount run; applyVocabulary re-arms it for the
+  // load-time level restore.
+  const skipSwitchSkeletonRef = useRef(true);
 
   // Scroll-driven headroom for the sticky tabs header: 0 at rest (tabs sit
   // flush under the overview), growing to insets.top just as the header pins
@@ -233,33 +241,32 @@ export const MovieDetailScreen = ({
     resolvedMovieId: number,
     diff?: { level: string; score: number } | null,
   ) => {
+    // Read the bookmark BEFORE any setState so vocab, level, and deck start
+    // word all land in one commit. Setting vocabulary first mounted the deck
+    // on the default level, then remounted it (keyed on activeLevel) when the
+    // bookmark level arrived a commit later — a visible pop at splash lift.
+    const bookmark = await readBookmark();
+    const nextLevel = bookmark
+      ? resolveBookmarkLevel(bookmark, vocab.idioms || [])
+      : pickDefaultLevel(vocab.level_distribution);
+
+    // A load-time level restore is not a user tab switch — don't let the
+    // switch-skeleton flash rows-style bars right as the splash lifts.
+    if (nextLevel && nextLevel !== prevLevelRef.current) {
+      skipSwitchSkeletonRef.current = true;
+    }
+
     setMovieId(resolvedMovieId);
     setVocabulary(vocab);
     if (diff) setDifficulty(diff);
 
-    const bookmark = await readBookmark();
-    if (bookmark) {
-      let resolvedLevel = bookmark.level;
-      // Migrate legacy idioms-mode bookmarks: their level was a difficulty
-      // bucket ("elementary"/"intermediate"/"advanced") rather than a CEFR
-      // code, so look up the bookmarked phrase to find its real CEFR level.
-      if ((bookmark as any).mode === 'idioms' && bookmark.word) {
-        const found = (vocab.idioms || []).find((i) => i.phrase === bookmark.word);
-        if (found?.cefr_level) resolvedLevel = found.cefr_level.toUpperCase();
-      }
-      const restored = { word: bookmark.word, level: resolvedLevel, explicit: !!bookmark.explicit };
-      pendingBookmarkRef.current = restored;
+    if (bookmark && nextLevel) {
+      pendingBookmarkRef.current = { word: bookmark.word, level: nextLevel, explicit: !!bookmark.explicit };
       setCurrentBookmarkWord(bookmark.word);
       setDeckStartWord(bookmark.word);
-      setActiveLevel(resolvedLevel);
       setRestoreTrigger((n) => n + 1);
-    } else {
-      const levels = Object.entries(vocab.level_distribution);
-      if (levels.length > 0) {
-        const maxLevel = levels.reduce((a, b) => (a[1] > b[1] ? a : b));
-        setActiveLevel(maxLevel[0]);
-      }
     }
+    if (nextLevel) setActiveLevel(nextLevel);
   };
 
   const fetchFromNetwork = async (
@@ -320,8 +327,11 @@ export const MovieDetailScreen = ({
 
     const cached = await offlineCache.getPayload(cacheKey);
     if (cached?.vocabulary) {
-      setLoading(false);
+      // Apply BEFORE dropping the splash: clearing `loading` first unmounted
+      // the splash while vocabulary was still null, flashing a blank screen
+      // until the bookmark read finished.
       await applyVocabulary(cached.vocabulary, cached.movieId, cached.difficulty || null);
+      setLoading(false);
 
       (async () => {
         try {
@@ -477,13 +487,7 @@ export const MovieDetailScreen = ({
   // No deps that change — adminApi is stable, setVocabulary is stable.
   }, []);
 
-  type Bookmark = {
-    word: string | null;
-    level: string;
-    explicit: boolean;
-  };
-
-  async function readBookmark(): Promise<Bookmark | null> {
+  async function readBookmark(): Promise<StoredMovieBookmark | null> {
     try {
       const raw = await AsyncStorage.getItem(bookmarkKey);
       if (!raw) return null;
@@ -499,7 +503,7 @@ export const MovieDetailScreen = ({
       AsyncStorage.removeItem(bookmarkKey).catch(() => {});
       return;
     }
-    const bm: Bookmark = {
+    const bm: StoredMovieBookmark = {
       word,
       level: activeLevel,
       explicit: true,
@@ -848,9 +852,16 @@ export const MovieDetailScreen = ({
   const activeListLength = deferredWordsView === 'foryou'
     ? deferredSuggestedVisible.length
     : deferredActiveItems.length;
-  // Reset whenever the user changes the active filter set.
+  // Reset whenever the user changes the active filter set. The skeleton is
+  // skipped for non-user changes (mount, load-time level restore) — those
+  // fire while/just as the loading splash lifts, and the 140ms rows-skeleton
+  // flash right before the deck mounts read as a glitch.
   useEffect(() => {
     setRenderLimit(INITIAL_ROWS);
+    if (skipSwitchSkeletonRef.current) {
+      skipSwitchSkeletonRef.current = false;
+      return;
+    }
     setIsSwitching(true);
     const id = setTimeout(() => setIsSwitching(false), SKELETON_DURATION);
     return () => clearTimeout(id);
@@ -867,10 +878,12 @@ export const MovieDetailScreen = ({
   // ── Card-deck view mode (mockup 2a) ──────────────────────────────────────
   // The deck is fed the SAME list the rows render: the active tab's items
   // after the level filter, sort, learned removal, and the sentence-preview
-  // availability filter the rows apply inline.
+  // availability filter the rows apply inline. Unlike the rows (~100 mounts,
+  // hence the deferred inputs) the deck renders 3 cards, so it reads the
+  // urgent values — with the deferred ones, the frame that lifts the loading
+  // splash showed an empty deck until the low-priority render caught up.
   const deckItems = useMemo(() => {
-    const source: RowItem[] =
-      deferredWordsView === 'foryou' ? deferredSuggestedVisible : deferredActiveItems;
+    const source: RowItem[] = wordsView === 'foryou' ? suggestedVisible : activeItems;
     return source.filter((item) => {
       if (isIdiom(item)) return true;
       const entry = sentencePreviews[item.word];
@@ -879,7 +892,9 @@ export const MovieDetailScreen = ({
       if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
       return true;
     });
-  }, [deferredWordsView, deferredSuggestedVisible, deferredActiveItems, sentencePreviews]);
+  // suggestedVisible is an unmemoized slice; depend on its memoized source.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wordsView, suggestedWords, activeItems, sentencePreviews]);
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 

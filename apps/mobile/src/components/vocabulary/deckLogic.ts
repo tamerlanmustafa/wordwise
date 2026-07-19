@@ -140,3 +140,37 @@ export function promotedKeyAfterRemoval(state: DeckState, removedKey: string): s
   const index = state.index > 0 ? state.index % rest.length : 0;
   return rest[index];
 }
+
+// ── Initial view resolution (screen load) ─────────────────────────────────
+
+/** The movie_bookmark_{id} payload as persisted across app versions. */
+export interface StoredMovieBookmark {
+  word: string | null;
+  level: string;
+  explicit?: boolean;
+  /** Legacy idioms-mode bookmarks stored a difficulty bucket, not CEFR. */
+  mode?: string;
+}
+
+/** Level tab to open when there is no bookmark: the one with the most words. */
+export function pickDefaultLevel(distribution: Record<string, number>): string | null {
+  const entries = Object.entries(distribution);
+  if (entries.length === 0) return null;
+  return entries.reduce((a, b) => (a[1] > b[1] ? a : b))[0];
+}
+
+/**
+ * Level tab a stored bookmark resolves to. Legacy idioms-mode bookmarks kept
+ * a difficulty bucket ("elementary"/…) rather than a CEFR code, so the
+ * bookmarked phrase is looked up to find its real CEFR level.
+ */
+export function resolveBookmarkLevel(
+  bookmark: StoredMovieBookmark,
+  idioms: { phrase: string; cefr_level?: string | null }[],
+): string {
+  if (bookmark.mode === 'idioms' && bookmark.word) {
+    const found = idioms.find((i) => i.phrase === bookmark.word);
+    if (found?.cefr_level) return found.cefr_level.toUpperCase();
+  }
+  return bookmark.level;
+}
