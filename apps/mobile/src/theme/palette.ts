@@ -31,6 +31,19 @@ export const cefrColors: Record<string, string> = {
   C2: '#9C27B0',
 };
 
+/**
+ * Darkened CEFR variants — selected-chip / on-light-surface text where the
+ * raw level colour lacks contrast (the Ledger filter bar + explainer band).
+ */
+export const cefrColorsDark: Record<string, string> = {
+  A1: '#2F7D33',
+  A2: '#5E8A1F',
+  B1: '#8B6D00',
+  B2: '#A85E00',
+  C1: '#B93327',
+  C2: '#7B1FA2',
+};
+
 export const cefrLabels: Record<string, string> = {
   A1: 'Beginner',
   A2: 'Elementary',
@@ -39,4 +52,14 @@ export const cefrLabels: Record<string, string> = {
   C1: 'Advanced',
   C2: 'Mastery',
   IDIOMS: 'Idioms & Phrases',
+};
+
+/** Unabbreviated level names — the explainer band's eyebrow line. */
+export const cefrLabelsFull: Record<string, string> = {
+  A1: 'Beginner',
+  A2: 'Elementary',
+  B1: 'Intermediate',
+  B2: 'Upper Intermediate',
+  C1: 'Advanced',
+  C2: 'Mastery',
 };

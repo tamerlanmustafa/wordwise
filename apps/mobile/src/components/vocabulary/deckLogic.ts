@@ -58,15 +58,15 @@ export function shouldClaimHorizontalDrag(dx: number, dy: number): boolean {
 // ── Stack geometry ────────────────────────────────────────────────────────
 
 /**
- * Resting transform for each stack slot, front (0) to back. While the
- * focused card flies out, every layer behind it animates one slot forward,
- * so slot N's promoted position must land exactly on slot N-1's rest for
- * the handoff to the real card to be seamless.
+ * Resting transform for each stack slot, front (0) to back. On a commit the
+ * incoming card animates from slot 1 (the near-ghost position, Ledger
+ * mockup: translateY -9 / scale 0.955) to slot 0, so the arrival reads as
+ * the deck stepping one card forward.
  */
 export const STACK_SLOTS = [
   { translateY: 0, scale: 1, opacity: 1 },
-  { translateY: -8, scale: 0.96, opacity: 0.7 },
-  { translateY: -16, scale: 0.92, opacity: 0.45 },
+  { translateY: -9, scale: 0.955, opacity: 0.75 },
+  { translateY: -16, scale: 0.92, opacity: 0.55 },
 ] as const;
 
 export type StackSlot = (typeof STACK_SLOTS)[number];

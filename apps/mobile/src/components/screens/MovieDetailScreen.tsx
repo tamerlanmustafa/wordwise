@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, cefrColors, cefrLabels } from '../../theme/palette';
+import { colors, cefrColors, cefrColorsDark, cefrLabels } from '../../theme/palette';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../../core/styles';
@@ -48,6 +48,8 @@ import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
 import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
+import { DeckExplainerBand } from '../vocabulary/DeckExplainerBand';
+import { FilmEdgeBackdrop } from '../ui/FilmEdgeBackdrop';
 import {
   parseViewMode,
   pickDefaultLevel,
@@ -58,7 +60,7 @@ import {
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
 import { track } from '../../services/analytics';
-import { MONO_FAMILY } from '../../theme/fonts';
+import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -650,70 +652,6 @@ export const MovieDetailScreen = ({
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
-  // Sliding tab indicator for the scrollable level row. The For You tab
-  // lives in a separate fixed container so it isn't part of the slide.
-  // The fixed section's measured width becomes the scroll row's left
-  // padding, so the A1 tab starts exactly where the fixed section ends.
-  const [tabsLeftWidth, setTabsLeftWidth] = useState(120);
-  const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
-  const indicatorX = useRef(new Animated.Value(0)).current;
-  const indicatorWidth = useRef(new Animated.Value(0)).current;
-  const indicatorOpacity = useRef(new Animated.Value(0)).current;
-  const indicatorPositioned = useRef(false);
-
-  const activeScrollKey: string | null = wordsView === 'all' ? activeLevel : null;
-  const activeIndicatorColor = `${cefrColors[activeLevel] || colors.primary}20`;
-  // Tabs pill surface — replaces the light-only #E4DCF0. Solid tokens (not
-  // alpha tints) so the fixed ★ For You section occludes the level tabs
-  // scrolling beneath it, and so the right-edge fade can hex-suffix `00`.
-  const tabsPillBg = scheme === 'dark' ? tc.paper : tc.chipBg;
-
-  useEffect(() => {
-    if (!activeScrollKey) {
-      Animated.timing(indicatorOpacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: false,
-      }).start();
-      return;
-    }
-    const layout = tabLayouts.current[activeScrollKey];
-    if (!layout) return;
-    Animated.parallel([
-      Animated.timing(indicatorX, {
-        toValue: layout.x,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(indicatorWidth, {
-        toValue: layout.width,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }),
-      Animated.timing(indicatorOpacity, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [activeScrollKey, indicatorX, indicatorWidth, indicatorOpacity]);
-
-  const handleScrollTabLayout = (key: string) => (e: { nativeEvent: { layout: { x: number; width: number } } }) => {
-    const { x, width } = e.nativeEvent.layout;
-    tabLayouts.current[key] = { x, width };
-    // Snap the indicator whenever the active tab's layout lands or shifts
-    // (e.g. the measured left-section width replaces the initial guess).
-    // Tab-change animations aren't affected: they don't relayout the tabs.
-    if (key === activeScrollKey) {
-      indicatorX.setValue(x);
-      indicatorWidth.setValue(width);
-      indicatorOpacity.setValue(1);
-      indicatorPositioned.current = true;
-    }
-  };
-
   // Defer the heavy list inputs so tab taps update the header immediately
   // while the row re-render runs at lower priority on the next tick.
   const deferredWordsView = useDeferredValue(wordsView);
@@ -743,8 +681,8 @@ export const MovieDetailScreen = ({
   }, [sceneStrips]);
 
   // Pre-fetch sentence examples for the visible list in a single batch call.
-  // Used by both the For You tab and the level tabs (A1–C2) to filter out
-  // rows whose example sentence is missing or too long.
+  // Used by the For You tab, the level tabs (A1–C2), and the card deck; the
+  // rows additionally hide entries whose example sentence is missing.
   //
   // Race condition we're handling: classify-script schedules a background
   // task that populates SentenceBank in ~2-5s. The first batch request
@@ -753,7 +691,6 @@ export const MovieDetailScreen = ({
   // refetch them. A second empty response promotes them to 'miss-confirmed'
   // (the word genuinely has no indexed sentence — extract_word_sentences
   // does literal matching and skips inflected forms).
-  const MAX_SENTENCE_CHARS = 75;
   type SentenceEntry = { sentence: string; word_position: number; matched_form: string };
   type FetchStatus = 'in-flight' | 'in-flight-retry' | 'hit' | 'miss-recent' | 'miss-confirmed';
   const [sentencePreviews, setSentencePreviews] = useState<Record<string, SentenceEntry>>({});
@@ -875,28 +812,35 @@ export const MovieDetailScreen = ({
     return () => clearTimeout(id);
   }, [renderLimit, activeListLength]);
 
-  // ── Card-deck view mode (mockup 2a) ──────────────────────────────────────
-  // The deck is fed the SAME list the rows render: the active tab's items
-  // after the level filter, sort, learned removal, and the sentence-preview
-  // availability filter the rows apply inline. Unlike the rows (~100 mounts,
-  // hence the deferred inputs) the deck renders 3 cards, so it reads the
-  // urgent values — with the deferred ones, the frame that lifts the loading
-  // splash showed an empty deck until the low-priority render caught up.
-  const deckItems = useMemo(() => {
-    const source: RowItem[] = wordsView === 'foryou' ? suggestedVisible : activeItems;
-    return source.filter((item) => {
-      if (isIdiom(item)) return true;
-      const entry = sentencePreviews[item.word];
-      if (!entry) return true; // still loading → keep
-      if (!entry.sentence) return false; // confirmed miss → hide
-      if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
-      return true;
-    });
-  // suggestedVisible is an unmemoized slice; depend on its memoized source.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wordsView, suggestedWords, activeItems, sentencePreviews]);
+  // ── Card-deck view mode (Ledger Reveal, mockup 1a) ───────────────────────
+  // The deck is fed the active tab's items after the level filter, sort, and
+  // learned removal — and NOTHING else: the fixed-slot card steps long
+  // content down a type tier instead of filtering it out, and words whose
+  // example sentence is missing show an in-card placeholder. Unlike the rows
+  // (~100 mounts, hence the deferred inputs) the deck renders a couple of
+  // cards, so it reads the urgent values — with the deferred ones, the frame
+  // that lifts the loading splash showed an empty deck until the
+  // low-priority render caught up.
+  const deckItems = useMemo<RowItem[]>(
+    () => (wordsView === 'foryou' ? suggestedVisible : activeItems),
+    // suggestedVisible is an unmemoized slice; depend on its memoized source.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [wordsView, suggestedWords, activeItems],
+  );
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
+
+  // Explainer-band inputs. Mix label = the user's level ±1, matching how the
+  // For You pool is built. Coverage: the backend's wordlist_coverage is a
+  // 0–1 fraction and 0.0 on the cached paths — treat 0 as "unavailable" and
+  // hide the meter row rather than show a made-up number.
+  const proficiencyIdx = LEVEL_ORDER.indexOf(userProficiency);
+  const forYouMixLabel =
+    proficiencyIdx >= 0 && proficiencyIdx + 1 < LEVEL_ORDER.length
+      ? `${userProficiency}+${LEVEL_ORDER[proficiencyIdx + 1]} MIX`
+      : `${userProficiency} MIX`;
+  const subtitleCoveragePct =
+    vocabulary && vocabulary.wordlist_coverage > 0 ? vocabulary.wordlist_coverage * 100 : null;
 
   const levelColorFor = useCallback(
     (level: string) => cefrColors[level] || colors.primary,
@@ -941,6 +885,9 @@ export const MovieDetailScreen = ({
       <StatusBar
         barStyle={SHOW_HERO_SECTION || scheme === 'dark' ? 'light-content' : 'dark-content'}
       />
+
+      {/* Film-edge decoration: warm top glow + sprocket-dot strips. */}
+      <FilmEdgeBackdrop topOffset={insets.top + 52} />
 
       <View style={{ flex: 1 }}>
         <ScrollView
@@ -1074,12 +1021,37 @@ export const MovieDetailScreen = ({
                  tabs clear of the island when they pin, exactly as with the
                  full hero. */
               <View style={[deckHeaderStyles.compactHeader, { paddingTop: insets.top + 8 }]}>
+                {/* The floating back button renders over this slot. */}
+                <View style={deckHeaderStyles.compactHeaderSide} />
                 <Text
                   style={[deckHeaderStyles.compactHeaderTitle, { color: tc.text }]}
                   numberOfLines={1}
                 >
                   {movie.title}
                 </Text>
+                {difficulty ? (
+                  <View
+                    style={[
+                      deckHeaderStyles.matchPill,
+                      {
+                        backgroundColor: `${cefrColors[difficulty.level] || colors.primary}1F`,
+                        borderColor: `${cefrColors[difficulty.level] || colors.primary}59`,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        deckHeaderStyles.matchPillDot,
+                        { backgroundColor: cefrColors[difficulty.level] || colors.primary },
+                      ]}
+                    />
+                    <Text style={[deckHeaderStyles.matchPillText, { color: tc.text }]}>
+                      {difficulty.level} · {Math.round(difficulty.score)}%
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={deckHeaderStyles.compactHeaderSide} />
+                )}
               </View>
             )}
           </View>
@@ -1095,110 +1067,117 @@ export const MovieDetailScreen = ({
             <Animated.View style={{ height: stickySpacerHeight }} />
             {vocabulary ? (
               <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-                <View style={[styles.unifiedTabsRowWrapper, { backgroundColor: tabsPillBg }]}>
-                  <View
-                    style={[styles.unifiedTabsLeftFixed, { backgroundColor: tabsPillBg }]}
-                    onLayout={(e) => setTabsLeftWidth(Math.round(e.nativeEvent.layout.width))}
-                  >
-                    {(() => {
-                      const foryouActive = wordsView === 'foryou';
-                      return (
-                        <TouchableOpacity
+                {/* Ledger filter bar: ✦ For You, a divider, then the six CEFR
+                    chips sharing the remaining width equally — no horizontal
+                    scroll, selection tinted per CEFR colour. */}
+                <View style={[ledgerStyles.filterBar, { backgroundColor: tc.chipBg }]}>
+                  {(() => {
+                    const foryouActive = wordsView === 'foryou';
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          ledgerStyles.forYouChip,
+                          foryouActive && {
+                            backgroundColor: `${tc.gold}29`,
+                            borderColor: `${tc.gold}73`,
+                          },
+                        ]}
+                        onPress={() => {
+                          startTransition(() => setWordsView('foryou'));
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: foryouActive }}
+                      >
+                        <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
+                        <Text
                           style={[
-                            styles.unifiedTab,
-                            foryouActive && { backgroundColor: `${colors.primary}20` },
+                            ledgerStyles.forYouLabel,
+                            {
+                              color: foryouActive
+                                ? scheme === 'dark'
+                                  ? tc.goldOnSurface
+                                  : '#6B4A00'
+                                : tc.textFaint,
+                            },
                           ]}
-                          onPress={() => {
-                            startTransition(() => setWordsView('foryou'));
-                          }}
-                          activeOpacity={0.7}
                         >
-                          <Text style={[
-                            styles.unifiedTabLabel,
-                            { color: tc.textSecondary },
-                            foryouActive && [styles.unifiedTabLabelActive, { color: tc.primaryOnSurface }],
-                          ]}>
-                            ★ For You
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })()}
-                    <View style={styles.unifiedTabDivider} />
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[styles.unifiedTabsRow, { paddingLeft: tabsLeftWidth }]}
-                  >
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.unifiedTabIndicator,
-                        {
-                          left: indicatorX,
-                          width: indicatorWidth,
-                          opacity: indicatorOpacity,
-                          backgroundColor: activeIndicatorColor,
-                        },
-                      ]}
-                    />
-                    {wordLevels.map((lvl) => {
-                      const active = wordsView === 'all' && activeLevel === lvl.level;
-                      const c = cefrColors[lvl.level] || colors.primary;
-                      return (
-                        <TouchableOpacity
-                          key={lvl.level}
-                          style={[styles.unifiedTab, styles.unifiedTabLevel]}
-                          onLayout={handleScrollTabLayout(lvl.level)}
-                          onPress={() => {
-                            startTransition(() => setWordsView('all'));
-                            setActiveLevel(lvl.level);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[
-                            styles.unifiedTabLabel,
-                            { color: tc.textSecondary },
-                            active && [styles.unifiedTabLabelActive, { color: c }],
-                          ]}>
-                            {lvl.level}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                  <LinearGradient
-                    colors={[`${tabsPillBg}00`, tabsPillBg]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={styles.unifiedTabsRightFade}
-                    pointerEvents="none"
-                  />
-                </View>
-                {wordsView === 'foryou' ? (
-                  suggestedWords.length === 0 ? (
-                    <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
-                  ) : viewMode === 'cards' ? (
-                    <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
-                      <Text style={[deckHeaderStyles.cardCount, { color: tc.textSecondary }]}>
-                        CARD {deckCardClamped} / {deckTotal}
-                      </Text>
-                    </View>
-                  ) : null
-                ) : (
-                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
-                    {viewMode === 'cards' ? (
-                      <Text style={[deckHeaderStyles.cardCount, { color: tc.textSecondary }]}>
-                        CARD {deckCardClamped} / {deckTotal}
-                      </Text>
-                    ) : (
-                      <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
-                        <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                          {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                          For You
                         </Text>
-                        {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
+                      </TouchableOpacity>
+                    );
+                  })()}
+                  <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
+                  {wordLevels.map((lvl) => {
+                    const active = wordsView === 'all' && activeLevel === lvl.level;
+                    const c = cefrColors[lvl.level] || colors.primary;
+                    const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
+                    return (
+                      <TouchableOpacity
+                        key={lvl.level}
+                        style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
+                        onPress={() => {
+                          startTransition(() => setWordsView('all'));
+                          setActiveLevel(lvl.level);
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Text
+                          style={[
+                            ledgerStyles.levelChipText,
+                            { color: active ? selectedColor : tc.textFaint },
+                            active && ledgerStyles.levelChipTextActive,
+                          ]}
+                        >
+                          {lvl.level}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {/* Explainer band — fixed height, variant swaps with the
+                    selected filter so the deck below never moves. */}
+                <View style={ledgerStyles.bandWrap}>
+                  {wordsView === 'foryou' ? (
+                    <DeckExplainerBand
+                      variant="foryou"
+                      deckSize={deckTotal}
+                      mixLabel={forYouMixLabel}
+                      coveragePct={subtitleCoveragePct}
+                    />
+                  ) : (
+                    <DeckExplainerBand
+                      variant="level"
+                      level={activeLevel}
+                      count={(activeData?.count ?? 0) + allActiveIdioms.length}
+                      sortOrder={wordSortOrder}
+                      onSortChange={setWordSortOrder}
+                    />
+                  )}
+                </View>
+                {wordsView === 'foryou' && suggestedWords.length === 0 ? (
+                  <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
+                ) : viewMode === 'cards' ? (
+                  /* Deck header row: CARD n / total on the left, the deck's
+                     identity tag on the right (sorting lives in the band). */
+                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
+                    <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
+                      CARD {deckCardClamped} / {deckTotal}
+                    </Text>
+                    <Text style={[deckHeaderStyles.deckTag, { color: tc.textFaint }]}>
+                      {wordsView === 'foryou' ? 'FOR YOU' : activeLevel} DECK
+                    </Text>
+                  </View>
+                ) : wordsView === 'all' ? (
+                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
+                    <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
+                      <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                        {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
                       </Text>
-                    )}
+                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
+                    </Text>
                     <View style={deckHeaderStyles.sortCluster}>
                       <TouchableOpacity
                         onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
@@ -1236,7 +1215,7 @@ export const MovieDetailScreen = ({
                       ) : null}
                     </View>
                   </View>
-                )}
+                ) : null}
                 {viewMode === 'cards' && deckTotal > 0 ? (
                   <View style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}>
                     <View
@@ -1309,9 +1288,7 @@ export const MovieDetailScreen = ({
                       if (isIdiom(item)) return true;
                       const entry = sentencePreviews[item.word];
                       if (!entry) return true; // still loading → keep skeleton
-                      if (!entry.sentence) return false; // confirmed miss → hide
-                      if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
-                      return true;
+                      return !!entry.sentence; // confirmed miss → hide
                     })
                     .map((item, index) => {
                     if (isIdiom(item)) {
@@ -1394,9 +1371,7 @@ export const MovieDetailScreen = ({
                     if (isIdiom(item)) return true;
                     const entry = sentencePreviews[item.word];
                     if (!entry) return true; // still loading → keep skeleton
-                    if (!entry.sentence) return false; // confirmed miss → hide
-                    if (entry.sentence.length > MAX_SENTENCE_CHARS) return false;
-                    return true;
+                    return !!entry.sentence; // confirmed miss → hide
                   })
                   .map((item, index) => {
                   if (isIdiom(item)) {
@@ -1535,10 +1510,13 @@ export const MovieDetailScreen = ({
           accessibilityRole="button"
           accessibilityLabel="Back"
           onPress={onBack}
-          style={({ pressed }) => [backBtnStyles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [
+            backBtnStyles.backBtn,
+            { backgroundColor: tc.chipBg, borderColor: tc.border, opacity: pressed ? 0.7 : 1 },
+          ]}
           hitSlop={8}
         >
-          <Ionicons name="chevron-back" size={18} color="#fff" />
+          <Ionicons name="chevron-back" size={19} color={tc.textSecondary} />
         </Pressable>
       </Animated.View>
 
@@ -1565,8 +1543,16 @@ export const MovieDetailScreen = ({
           everything; onBack stays reachable via the chip. */}
       {loading ? (
         <View style={[splashStyles.wrap, { backgroundColor: tc.background }]} pointerEvents="auto">
-          <Pressable onPress={onBack} style={[backBtnStyles.backBtn, splashStyles.backBtn]} hitSlop={8}>
-            <Ionicons name="chevron-back" size={18} color="#fff" />
+          <Pressable
+            onPress={onBack}
+            style={[
+              backBtnStyles.backBtn,
+              splashStyles.backBtn,
+              { backgroundColor: tc.chipBg, borderColor: tc.border },
+            ]}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={19} color={tc.textSecondary} />
           </Pressable>
           <Animated.View
             style={{
@@ -1626,13 +1612,13 @@ const backBtnStyles = StyleSheet.create({
     left: 16,
     zIndex: 20,
   },
+  // Cream circle per the Ledger header; bg/border colours come inline from
+  // tc.* so the chip follows the theme.
   backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(10,8,12,0.38)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1642,25 +1628,55 @@ const backBtnStyles = StyleSheet.create({
 // progress bar under the count row, and the (currently disabled) rows/cards
 // segmented toggle. Colors are applied inline from tc.*.
 const deckHeaderStyles = StyleSheet.create({
-  // Hero-hidden top bar. Side padding clears the floating back button
-  // (left 16 + 32 wide + 8 gap); the 32pt line height matches its height
-  // so the title and the chevron sit on the same axis.
+  // Hero-hidden top bar (Ledger header): back-button slot · serif title ·
+  // level-match pill. The floating back button renders over the left slot.
   compactHeader: {
-    paddingHorizontal: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
+  compactHeaderSide: {
+    width: 36,
+  },
   compactHeaderTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    flex: 1,
+    fontFamily: SERIF_FAMILY,
+    fontSize: 20,
+    fontWeight: '700',
     lineHeight: 32,
     textAlign: 'center',
   },
+  matchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  matchPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  matchPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   cardCount: {
     fontFamily: MONO_FAMILY,
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    letterSpacing: 1.2,
+    letterSpacing: 1.05,
+  },
+  deckTag: {
+    fontFamily: MONO_FAMILY,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.7,
   },
   sortCluster: {
     flexDirection: 'row',
@@ -1696,6 +1712,61 @@ const deckHeaderStyles = StyleSheet.create({
   progressFill: {
     height: 3,
     borderRadius: 2,
+  },
+});
+
+// Ledger filter bar + explainer band chrome (mockup 1a). Backgrounds and
+// text colours are applied inline from tc.* / the CEFR maps.
+const ledgerStyles = StyleSheet.create({
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 10,
+    borderRadius: 16,
+    padding: 4,
+    gap: 2,
+  },
+  forYouChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  forYouGlyph: {
+    fontSize: 12,
+  },
+  forYouLabel: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    marginHorizontal: 3,
+  },
+  levelChip: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  levelChipTextActive: {
+    fontWeight: '800',
+  },
+  bandWrap: {
+    marginHorizontal: 16,
+    marginBottom: 2,
   },
 });
 

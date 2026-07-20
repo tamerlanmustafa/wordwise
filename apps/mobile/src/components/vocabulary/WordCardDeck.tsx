@@ -3,8 +3,8 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  LayoutAnimation,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,7 +13,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../../theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import type { ThemeColors } from '../../theme/tokens';
 import {
@@ -26,7 +27,6 @@ import {
 } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
-import { PressableScale } from '../ui/PressableScale';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import {
@@ -34,38 +34,41 @@ import {
   restoreDeck,
   swipeDecision,
   shouldClaimHorizontalDrag,
-  peekNextIndex,
   promotedKeyAfterRemoval,
   STACK_SLOTS,
   type StackSlot,
 } from './deckLogic';
-
-// Same easing/duration family as VocabRow's expansion so the card growing on
-// tap feels like the rows did.
-const EXPAND_ANIM = {
-  duration: 220,
-  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-  update: { type: 'easeInEaseOut' as const },
-  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-};
-const REVEAL_ANIM = {
-  duration: 180,
-  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-  update: { type: 'easeInEaseOut' as const },
-  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-};
-// Eases the wrapper-height change between consecutive cards at the swap
-// instead of snapping. Update-only on purpose: the incoming card's opacity
-// and transform are Animated-bound, so create/delete fades would fight the
-// native nodes.
-const SWAP_ANIM = {
-  duration: 200,
-  update: { type: 'easeInEaseOut' as const },
-};
+import {
+  CARD_HEIGHT,
+  DECK_ZONE_HEIGHT,
+  STACK_HEADROOM,
+  GHOSTS,
+  META_ROW_HEIGHT,
+  WORD_SLOT_TOP,
+  WORD_SLOT_HEIGHT,
+  WORD_TR_SLOT_TOP,
+  WORD_TR_SLOT_HEIGHT,
+  DIVIDER_TOP,
+  DIVIDER_HEIGHT,
+  SENTENCE_SLOT_TOP,
+  SENTENCE_SLOT_HEIGHT,
+  SENTENCE_TR_SLOT_TOP,
+  SENTENCE_TR_SLOT_HEIGHT,
+  FOOTER_TOP,
+  FOOTER_HEIGHT,
+  REVEAL_IN_MS,
+  REVEAL_OUT_MS,
+  REVEAL_RISE_PX,
+  B1_HIGHLIGHT,
+  wordTier,
+  wordTranslationTier,
+  sentenceTier,
+  sentenceTranslationTier,
+} from './cardLayout';
 
 /**
- * Interpolated style that slides a stack layer from its resting slot to the
- * one in front as `promote` runs 0 → 1 during the focused card's fly-out.
+ * Interpolated style that slides the incoming focused card from the near-
+ * ghost slot to the front as `promote` runs 0 → 1 after a commit.
  */
 const liftStyle = (promote: Animated.Value, from: StackSlot, to: StackSlot) => ({
   opacity: promote.interpolate({ inputRange: [0, 1], outputRange: [from.opacity, to.opacity] }),
@@ -92,21 +95,22 @@ interface OutgoingCardProps {
 
 /**
  * A card detached from the deck at the moment of a swipe commit: it finishes
- * the fly-out on its own fresh Animated values and removes itself. Keeping
- * the flight off the interactive card is what lets the next slide start
- * immediately — and there is no shared native state left to race.
+ * the fly-out (drifting down 8px and tilting ±7° as it goes) on its own
+ * fresh Animated values and removes itself. Keeping the flight off the
+ * interactive card is what lets the next slide start immediately — and there
+ * is no shared native state left to race.
  */
 const OutgoingCard = ({ id, dir, startX, onDone, style, children }: OutgoingCardProps) => {
-  const translateX = useRef(new Animated.Value(startX)).current;
+  const progress = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: dir * FLY_DISTANCE,
+      Animated.timing(progress, {
+        toValue: 1,
         duration: FLY_DURATION,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.bezier(0.35, 0.1, 0.25, 1),
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
@@ -117,12 +121,74 @@ const OutgoingCard = ({ id, dir, startX, onDone, style, children }: OutgoingCard
     ]).start(() => onDoneRef.current(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const transform = [
+    {
+      translateX: progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [startX, dir * FLY_DISTANCE],
+      }),
+    },
+    { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, FLY_DROP] }) },
+    {
+      rotate: progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', `${dir * FLY_ROTATE_DEG}deg`],
+      }),
+    },
+  ];
   return (
-    <Animated.View pointerEvents="none" style={[style, { transform: [{ translateX }], opacity }]}>
+    <Animated.View pointerEvents="none" style={[style, { transform, opacity }]}>
       {children}
     </Animated.View>
   );
 };
+
+/**
+ * Dashed horizontal rule that renders real dashes on iOS too: single-side
+ * dashed borders draw solid there, so we clip an oversized dashed-border box
+ * down to its top edge.
+ */
+const DashedRule = ({
+  color,
+  thickness = 1.5,
+  style,
+}: {
+  color: string;
+  thickness?: number;
+  style?: StyleProp<ViewStyle>;
+}) => (
+  <View style={[{ height: thickness, overflow: 'hidden' }, style]}>
+    <View
+      style={{
+        height: thickness * 4,
+        borderWidth: thickness,
+        borderColor: color,
+        borderStyle: 'dashed',
+      }}
+    />
+  </View>
+);
+
+/** Same clip trick for the sentence-translation slot's dashed left border. */
+const DashedLeftBorder = ({ color, width = 2 }: { color: string; width?: number }) => (
+  <View
+    pointerEvents="none"
+    style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width, overflow: 'hidden' }}
+  >
+    <View
+      style={{
+        position: 'absolute',
+        top: -width,
+        bottom: -width,
+        left: 0,
+        width: width * 4,
+        borderWidth: width,
+        borderColor: color,
+        borderStyle: 'dashed',
+      }}
+    />
+  </View>
+);
 
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
@@ -164,33 +230,31 @@ export interface WordCardDeckProps {
 }
 
 const FLY_DURATION = 300;
-const FLY_DISTANCE = 440;
-/** The stack stepping one slot forward after a commit. */
-const ARRIVE_DURATION = 220;
+const FLY_DISTANCE = 430;
+const FLY_DROP = 8;
+const FLY_ROTATE_DEG = 7;
+/** Incoming card settling from the ghost slot to the front. */
+const ARRIVE_DURATION = 250;
 const DRAG_CLAMP = 160;
-const ACTION_SIZE = 54;
-const ACTION_EDGE = 4;
+const UNDO_STACK_MAX = 20;
 
-// Fixed vertical zones so every card has identical dimensions no matter how
-// long its word, sentence, or translation runs: text is clamped (ellipsized
-// or shrunk) to its zone instead of the zone growing to fit the text. The
-// collapsed card is one constant height; expanding adds the translation zone,
-// a second constant, so all cards grow by the same amount on tap.
-const WORD_LINE_HEIGHT = 42;
-const SENTENCE_LINES = 3;
-const SENTENCE_LINE_HEIGHT = 26;
-const SENTENCE_ZONE_HEIGHT = SENTENCE_LINES * SENTENCE_LINE_HEIGHT;
-const TRANSLATION_LINES = 2;
-const TRANSLATION_LINE_HEIGHT = 22;
-const TRANSLATION_ZONE_HEIGHT = TRANSLATION_LINES * TRANSLATION_LINE_HEIGHT;
+// Tactile action buttons (Ledger mockup): a hard-edged "3D" shadow drawn as
+// an offset edge layer; pressing translates the face down onto it.
+const PILL_WIDTH = 136;
+const PILL_HEIGHT = 52;
+const PILL_EDGE = 4;
+const PILL_EDGE_PRESSED_DROP = 3;
+const UNDO_SIZE = 46;
+const UNDO_EDGE = 3;
 
 /**
- * Card-deck view mode for the movie vocabulary screen (mockup 2a): one
- * focused card, two stacked edges behind it (pure styling), actions and
- * gestures mirroring the rows' swipes. Translations — word and sentence —
- * are fetched only when the user taps the card (the exact translate() +
- * enrichment path VocabRow's expansion uses) and cached per word, so
- * browsing the deck costs no translation calls.
+ * Card-deck view mode for the movie vocabulary screen — the "Ledger Reveal"
+ * design (mockup 1a): one fixed-height focused card over two ghost cards,
+ * translation zones permanently reserved as dashed placeholder rules that a
+ * tap fills in place (both word + sentence translations together, cross-fade,
+ * zero layout shift). Translations are fetched only on the first reveal (the
+ * exact translate() + enrichment path VocabRow's expansion used) and cached
+ * per word, so browsing the deck costs no translation calls.
  */
 export const WordCardDeck = ({
   items,
@@ -210,7 +274,11 @@ export const WordCardDeck = ({
   onDragStateChange,
 }: WordCardDeckProps) => {
   const tc = useThemeColors();
-  const s = useMemo(() => makeDeckStyles(tc), [tc]);
+  const scheme = useColorScheme();
+  const s = useMemo(() => makeDeckStyles(tc, scheme), [tc, scheme]);
+  // Placeholder-rule dash colours (Ledger mockup); no light token matches.
+  const dashColor = scheme === 'light' ? '#DCD2B8' : 'rgba(255,255,255,0.14)';
+  const dashColorSoft = scheme === 'light' ? '#E3D9BE' : 'rgba(255,255,255,0.12)';
   const isPremium = useIsPremium();
 
   const keys = useMemo(() => items.map(keyOf), [items]);
@@ -253,7 +321,7 @@ export const WordCardDeck = ({
     onCursorChange?.(displayDeck.index >= 0 ? displayDeck.index + 1 : 0);
   }, [displayDeck.index, onCursorChange]);
 
-  // Reduce Motion: no fly animation, instant card swap.
+  // Reduce Motion: no fly animation, instant card swap and reveal.
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
     let mounted = true;
@@ -274,20 +342,23 @@ export const WordCardDeck = ({
   // node races that used to strand or flash cards at the swap.
   //
   // `arrive` (0 → 1 on mount) plays the enter choreography for the commit
-  // that created this key: 'step' slides the whole stack one slot forward,
-  // 'return' flies an undone card back in from the right.
+  // that created this key: 'step' lifts the card from the near-ghost slot,
+  // 'return' flies an undone card back in from the right. `reveal` drives
+  // the translation cross-fade — per key, so it always starts hidden.
   const nextMountAnimRef = useRef<'step' | 'return' | null>(null);
   const animRef = useRef<{
     key: string;
     translateX: Animated.Value;
     focusOpacity: Animated.Value;
     arrive: Animated.Value;
+    reveal: Animated.Value;
+    revealHiddenOpacity: Animated.AnimatedInterpolation<number>;
+    revealRise: Animated.AnimatedInterpolation<number>;
     mode: 'step' | 'return' | null;
     // transform mixes translateX/translateY/scale interpolations depending
     // on the mode, which RN's WithAnimatedObject unions can't express.
     focusedArrive: { opacity: Animated.AnimatedInterpolation<number>; transform: any[] };
     focusedOpacity: Animated.AnimatedMultiplication<number>;
-    behindArrive: ReturnType<typeof liftStyle> | null;
   } | null>(null);
   const focusedKey = displayDeck.index >= 0 ? displayDeck.keys[displayDeck.index] : '';
   if (animRef.current == null || animRef.current.key !== focusedKey) {
@@ -295,6 +366,7 @@ export const WordCardDeck = ({
     nextMountAnimRef.current = null;
     const arrive = new Animated.Value(mode == null ? 1 : 0);
     const focusOpacity = new Animated.Value(1);
+    const reveal = new Animated.Value(0);
     const focusedArrive =
       mode === 'return'
         ? {
@@ -306,6 +378,18 @@ export const WordCardDeck = ({
                   outputRange: [FLY_DISTANCE, 0],
                 }),
               },
+              {
+                translateY: arrive.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [FLY_DROP, 0],
+                }),
+              },
+              {
+                rotate: arrive.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [`${FLY_ROTATE_DEG}deg`, '0deg'],
+                }),
+              },
             ],
           }
         : liftStyle(arrive, STACK_SLOTS[mode === 'step' ? 1 : 0], STACK_SLOTS[0]);
@@ -314,6 +398,9 @@ export const WordCardDeck = ({
       translateX: new Animated.Value(0),
       focusOpacity,
       arrive,
+      reveal,
+      revealHiddenOpacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+      revealRise: reveal.interpolate({ inputRange: [0, 1], outputRange: [REVEAL_RISE_PX, 0] }),
       mode,
       focusedArrive,
       // The imperative learn-hide multiplies in, on a node built once per
@@ -322,10 +409,9 @@ export const WordCardDeck = ({
         focusOpacity,
         focusedArrive.opacity as Animated.AnimatedInterpolation<number>,
       ),
-      behindArrive: mode === 'step' ? liftStyle(arrive, STACK_SLOTS[2], STACK_SLOTS[1]) : null,
     };
   }
-  const { translateX, focusOpacity, focusedArrive, focusedOpacity, behindArrive } =
+  const { translateX, focusOpacity, focusedArrive, focusedOpacity, revealHiddenOpacity, revealRise } =
     animRef.current;
 
   // Play the enter choreography once per mounted key.
@@ -361,8 +447,8 @@ export const WordCardDeck = ({
   // this back. Learned words keep their own undo (the parent's toast).
   const undoStackRef = useRef<string[]>([]);
 
-  // Expansion state — which card revealed its translations, plus a per-word
-  // cache so rotating back to a card never refetches.
+  // Reveal state — which card shows its translations, plus a per-word cache
+  // so rotating back to a card never refetches.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [content, setContent] = useState<Record<string, CardContent>>({});
   const [reportOpen, setReportOpen] = useState(false);
@@ -395,8 +481,7 @@ export const WordCardDeck = ({
     const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
     pushOutgoing(1, method === 'swipe' ? lastDragXRef.current : 0);
     undoStackRef.current.push(currentKey);
-    if (undoStackRef.current.length > 50) undoStackRef.current.shift();
-    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
+    if (undoStackRef.current.length > UNDO_STACK_MAX) undoStackRef.current.shift();
     nextMountAnimRef.current = 'step';
     setResumedAt(null);
     setExpandedKey(null);
@@ -413,7 +498,6 @@ export const WordCardDeck = ({
     // The item list shrinks via the parent, so the remount lags this commit
     // by a beat — hide the focused card NOW so it never doubles the overlay.
     focusOpacity.setValue(0);
-    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
     nextMountAnimRef.current = 'step';
     setResumedAt(null);
     setExpandedKey(null);
@@ -431,7 +515,6 @@ export const WordCardDeck = ({
     }
     if (key == null) return;
     track('deck_undo', {});
-    if (!reduceMotionRef.current) LayoutAnimation.configureNext(SWAP_ANIM);
     nextMountAnimRef.current = 'return';
     setResumedAt(null);
     setExpandedKey(null);
@@ -502,14 +585,13 @@ export const WordCardDeck = ({
     }),
   ).current;
 
-  // Tap → reveal translations. Exact VocabRow expansion path: translate() for
-  // the word + the enrichment sentences endpoint for the sentence translation,
-  // gated behind the per-word cache. Never prefetches the rest of the deck.
+  // Tap → reveal BOTH translations together, in place. Data comes from the
+  // exact VocabRow expansion path: translate() for the word + the enrichment
+  // sentences endpoint for the sentence translation, gated behind the
+  // per-word cache. Never prefetches the rest of the deck.
   const handleCardPress = () => {
     if (currentKey == null || currentItem == null) return;
     const term = currentKey;
-    // Grow/shrink the card smoothly rather than snapping to the new height.
-    if (!reduceMotionRef.current) LayoutAnimation.configureNext(EXPAND_ANIM);
     if (expandedKey === term) {
       setExpandedKey(null);
       return;
@@ -549,10 +631,31 @@ export const WordCardDeck = ({
       );
     }
     Promise.all(promises).then(() => {
-      if (!reduceMotionRef.current) LayoutAnimation.configureNext(REVEAL_ANIM);
       setContent((prev) => ({ ...prev, [term]: { translation, enrichment, loaded: true } }));
     });
   };
+
+  const cardContent = currentKey != null ? content[currentKey] : undefined;
+  const expanded = currentKey != null && expandedKey === currentKey;
+  const contentLoaded = !!cardContent?.loaded;
+
+  // The cross-fade waits for the fetch: dashed placeholders hold the slots
+  // until both translations are ready, then fill together in one motion.
+  const revealOn = expanded && contentLoaded;
+  useEffect(() => {
+    const anim = animRef.current;
+    if (anim == null) return;
+    if (reduceMotionRef.current) {
+      anim.reveal.setValue(revealOn ? 1 : 0);
+      return;
+    }
+    Animated.timing(anim.reveal, {
+      toValue: revealOn ? 1 : 0,
+      duration: revealOn ? REVEAL_IN_MS : REVEAL_OUT_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [revealOn, focusedKey]);
 
   const handlePronounce = async () => {
     if (playingAudio || currentKey == null) return;
@@ -583,40 +686,36 @@ export const WordCardDeck = ({
   }
 
   const idiom = isIdiomItem(currentItem);
-  const badge = idiom
-    ? (currentItem as IdiomInfo).type === 'phrasal_verb'
-      ? 'phrasal verb'
-      : 'idiom'
-    : null;
   const level = (
     (currentItem as { cefr_level?: string }).cefr_level || activeLevel
   ).toUpperCase();
   const levelColor = levelColorFor(level);
 
-  const cardContent = content[currentKey];
-  const expanded = expandedKey === currentKey;
-  const expansionLoading = expanded && !cardContent?.loaded;
+  const expansionLoading = expanded && !contentLoaded;
   const translation = cardContent?.translation ?? null;
-  const isUntranslatable =
-    !!translation && translation.toLowerCase() === currentKey.toLowerCase();
   const enrichment = cardContent?.enrichment ?? null;
+  const lang = (targetLang || 'ES').toUpperCase();
 
-  // Same source-of-truth swap as VocabRow: batch preview while collapsed,
+  // Same source-of-truth swap as VocabRow: batch preview while hidden,
   // enrichment sentence once it has loaded. Idioms only get the enrichment.
   const preview = !idiom ? sentencePreviews[currentKey] : undefined;
   const collapsedSentence = preview && preview.sentence ? preview : null;
-  const visibleSentence = cardContent?.loaded && enrichment ? enrichment : collapsedSentence;
+  const visibleSentence = contentLoaded && enrichment ? enrichment : collapsedSentence;
   const previewLoading = !idiom && preview === undefined;
-  const sentenceTranslation = expanded && cardContent?.loaded ? enrichment?.translation || null : null;
+  const sentenceTranslation = contentLoaded ? enrichment?.translation || null : null;
 
   const isSaved = savedWords.has(currentKey);
 
-  // The card behind the focused one shows its REAL content (collapsed
-  // anatomy), so a slow drag reveals what's coming instead of a blank sheet.
-  const behindIndex = peekNextIndex(displayDeck);
-  const behindItem =
-    behindIndex >= 0 ? itemByKey.get(displayDeck.keys[behindIndex]) : undefined;
+  // Sentence highlight: the target word is bold italic in the CEFR colour,
+  // except B1's yellow which is too light on the white card.
+  const highlightColorFor = (lvl: string, color: string) =>
+    scheme === 'light' && lvl === 'B1' ? B1_HIGHLIGHT : color;
 
+  /**
+   * The full card anatomy in its hidden (dashed placeholders) state — the
+   * face the outgoing fly-away overlay shows. Slot heights mirror the
+   * focused card exactly so the detach is invisible.
+   */
   const renderStaticBody = (item: DeckItem, rankNumber: number) => {
     const staticIdiom = isIdiomItem(item);
     const term = keyOf(item);
@@ -629,59 +728,96 @@ export const WordCardDeck = ({
       : null;
     const staticPreview = !staticIdiom ? sentencePreviews[term] : undefined;
     const staticSentence = staticPreview && staticPreview.sentence ? staticPreview : null;
+    const wTier = wordTier(term);
+    const sTier = staticSentence ? sentenceTier(staticSentence.sentence) : null;
     return (
       <>
-        <View style={s.topRow}>
+        <View style={s.metaRow}>
           <Text style={s.rank}>{rankNumber}</Text>
           <View style={[s.levelChip, { backgroundColor: `${lvlColor}22` }]}>
             <Text style={[s.levelChipText, { color: lvlColor }]}>{lvl}</Text>
           </View>
           {staticBadge ? (
-            <View style={[s.levelChip, { backgroundColor: `${lvlColor}14` }]}>
-              <Text style={[s.levelChipText, { color: lvlColor }]}>{staticBadge}</Text>
+            <View style={s.idiomBadge}>
+              <Text style={s.idiomBadgeText}>{staticBadge}</Text>
             </View>
           ) : null}
           <View style={s.flexSpacer} />
-          <Text style={[s.star, savedWords.has(term) && s.starActive]}>
-            {savedWords.has(term) ? '★' : '☆'}
-          </Text>
+          {isAuthenticated ? (
+            <Text style={[s.star, savedWords.has(term) && s.starActive]}>
+              {savedWords.has(term) ? '★' : '☆'}
+            </Text>
+          ) : null}
         </View>
-        <View style={s.wordLine}>
-          <Text style={s.word} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+        <View style={s.wordSlot}>
+          <Text
+            style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
+            numberOfLines={wTier.lines}
+          >
             {term}
           </Text>
         </View>
-        <View style={s.sentenceZone}>
-          {staticSentence ? (
+        <View style={s.wordTrSlot}>
+          <View style={[s.slotLayer, s.wordTrRow]}>
+            <View style={s.langTagDashed}>
+              <Text style={s.langTagDashedText}>{lang}</Text>
+            </View>
+            <DashedRule color={dashColor} style={s.flexSpacer} />
+          </View>
+        </View>
+        <View style={s.cardDivider} />
+        <View style={s.sentenceSlot}>
+          {staticSentence && sTier ? (
             renderHighlighted(
               staticSentence.sentence,
               term,
               staticSentence.matched_form,
-              lvlColor,
-              s.sentence,
+              highlightColorFor(lvl, lvlColor),
+              [s.sentence, { fontSize: sTier.fontSize, lineHeight: sTier.lineHeight }],
               s.sentenceHi,
-              SENTENCE_LINES,
+              sTier.lines,
             )
-          ) : !staticIdiom ? (
+          ) : !staticIdiom && staticPreview === undefined ? (
             <View style={s.skeletonPad}>
               <View style={[s.skelBar, { width: '92%' }]} />
               <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
             </View>
-          ) : null}
+          ) : (
+            <Text style={s.noExamples}>No example in this script</Text>
+          )}
         </View>
-        {/* Mirror the collapsed focused card's footer exactly: the promoted
-            card hands off to the real one at the swap, and any element
-            missing here would pop in at that instant. */}
+        <View style={s.sentenceTrSlot}>
+          <View style={[s.slotLayer, s.sentenceTrHidden]}>
+            <DashedLeftBorder color={`${tc.gold}59`} />
+            <View style={s.sentenceTrHiddenRules}>
+              <DashedRule color={dashColorSoft} style={{ width: '88%' }} />
+              <DashedRule color={dashColorSoft} style={{ width: '62%' }} />
+            </View>
+          </View>
+        </View>
+        {/* Mirror the focused card's footer exactly: any element missing
+            here would pop at the instant the overlay detaches. */}
         <View style={s.footerRow}>
           {isAuthenticated ? <Text style={s.actionText}>⚐ Report an issue</Text> : null}
           {isPremium && !staticIdiom ? (
             <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
           ) : null}
-          <Text style={s.tapHint}>tap for translation</Text>
+          <Text style={s.tapHint}>TAP TO REVEAL</Text>
         </View>
       </>
     );
   };
+
+  const wTier = wordTier(currentKey);
+  const wtText =
+    translation != null && translation.length > 0 ? translation.toLowerCase() : '—';
+  const wtTier = wordTranslationTier(wtText);
+  const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
+  const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
+
+  const gestureHint = onMarkLearned
+    ? 'swipe left = know it · swipe right = next · tap card = translation'
+    : 'swipe right = next · tap card = translation';
 
   return (
     <View style={s.wrap}>
@@ -692,20 +828,26 @@ export const WordCardDeck = ({
       ) : null}
 
       <View style={s.deckWrap}>
-        {/* Second edge stays pure styling; the first is the next card's
-            real content, clipped to the focused card's footprint. On a
-            'step' commit the behind card arrives from the edge slot while
-            the focused card arrives from the behind slot — the stack reads
-            as one forward motion. */}
-        {total > 2 ? <View style={[s.stackEdge, s.edgeRest]} pointerEvents="none" /> : null}
-        {behindItem != null ? (
-          <Animated.View
-            key={`behind-${displayDeck.keys[behindIndex]}`}
-            style={[s.stackEdge, s.behindCard, behindArrive ?? s.behindRest]}
+        {/* Ghost cards — pure styling; the incoming card's arrive animation
+            starts from the near ghost's slot so the deck reads as stepping
+            one card forward. */}
+        {total > 2 ? (
+          <View
             pointerEvents="none"
-          >
-            {renderStaticBody(behindItem, behindIndex + 1)}
-          </Animated.View>
+            style={[
+              s.ghost,
+              { top: GHOSTS[1].top, left: GHOSTS[1].inset, right: GHOSTS[1].inset, opacity: GHOSTS[1].opacity },
+            ]}
+          />
+        ) : null}
+        {total > 1 ? (
+          <View
+            pointerEvents="none"
+            style={[
+              s.ghost,
+              { top: GHOSTS[0].top, left: GHOSTS[0].inset, right: GHOSTS[0].inset, opacity: GHOSTS[0].opacity },
+            ]}
+          />
         ) : null}
 
         <Animated.View
@@ -721,21 +863,23 @@ export const WordCardDeck = ({
           ]}
           {...panResponder.panHandlers}
         >
-          <TouchableOpacity
-            activeOpacity={0.9}
+          <Pressable
+            style={s.cardPress}
             onPress={handleCardPress}
             accessibilityRole="button"
-            accessibilityHint="Shows the translation"
+            accessibilityLabel={expanded ? 'Hide translation' : 'Show translation'}
           >
-            {/* top row: rank · level chip · spacer · save star */}
-            <View style={s.topRow}>
+            {/* 1 · meta row: rank · level chip · idiom badge · save star */}
+            <View style={s.metaRow}>
               <Text style={s.rank}>{displayDeck.index + 1}</Text>
               <View style={[s.levelChip, { backgroundColor: `${levelColor}22` }]}>
                 <Text style={[s.levelChipText, { color: levelColor }]}>{level}</Text>
               </View>
-              {badge ? (
-                <View style={[s.levelChip, { backgroundColor: `${levelColor}14` }]}>
-                  <Text style={[s.levelChipText, { color: levelColor }]}>{badge}</Text>
+              {idiom ? (
+                <View style={s.idiomBadge}>
+                  <Text style={s.idiomBadgeText}>
+                    {(currentItem as IdiomInfo).type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
+                  </Text>
                 </View>
               ) : null}
               <View style={s.flexSpacer} />
@@ -754,76 +898,113 @@ export const WordCardDeck = ({
               ) : null}
             </View>
 
-            {/* word line — translation lands inline after a tap; one fixed-
-                height line, long idiom phrases shrink to fit instead of
-                wrapping */}
-            <View style={s.wordLine}>
-              <Text style={s.word} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {/* 2 · word slot — bottom-aligned; long words step down a tier
+                and wrap to two lines instead of shrinking */}
+            <View style={s.wordSlot}>
+              <Text
+                style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
+                numberOfLines={wTier.lines}
+              >
                 {currentKey}
               </Text>
-              {expanded ? (
-                cardContent?.loaded ? (
-                  translation && !isUntranslatable ? (
-                    <>
-                      <Text style={s.translation} numberOfLines={1}>
-                        <Text style={s.translationDot}>· </Text>
-                        {translation.toLowerCase()}
-                      </Text>
-                      <View style={s.langChip}>
-                        <Text style={s.langChipText}>{(targetLang || 'ES').toUpperCase()}</Text>
-                      </View>
-                    </>
-                  ) : null
-                ) : (
-                  <View style={s.translationSkeleton} />
-                )
-              ) : null}
             </View>
 
-            {/* sentence-in-context with the highlighted target word — a
-                fixed-height zone: short sentences leave whitespace, long
-                ones ellipsize, and idioms keep the empty zone, so sentence
-                length never changes the card height */}
-            <View style={s.sentenceZone}>
-              {visibleSentence ? (
+            {/* 3 · word-translation slot: two stacked layers cross-fade in
+                place — dashed rule while hidden, translation when revealed */}
+            <View style={s.wordTrSlot}>
+              <Animated.View
+                style={[s.slotLayer, s.wordTrRow, { opacity: revealHiddenOpacity }]}
+              >
+                <View style={s.langTagDashed}>
+                  <Text style={s.langTagDashedText}>{lang}</Text>
+                </View>
+                {expansionLoading ? (
+                  <View style={[s.skelBar, s.flexSpacer, { height: 10 }]} />
+                ) : (
+                  <DashedRule color={dashColor} style={s.flexSpacer} />
+                )}
+              </Animated.View>
+              <Animated.View
+                style={[
+                  s.slotLayer,
+                  s.wordTrRow,
+                  { opacity: animRef.current.reveal, transform: [{ translateY: revealRise }] },
+                ]}
+              >
+                <Text
+                  style={[s.wordTranslation, { fontSize: wtTier.fontSize }]}
+                  numberOfLines={1}
+                >
+                  {wtText}
+                </Text>
+                <View style={s.langTagSolid}>
+                  <Text style={s.langTagSolidText}>{lang}</Text>
+                </View>
+              </Animated.View>
+            </View>
+
+            {/* 4 · divider */}
+            <View style={s.cardDivider} />
+
+            {/* 5 · sentence slot — highlighted target word; long sentences
+                step down a tier and gain a 4th line */}
+            <View style={s.sentenceSlot}>
+              {visibleSentence && sTier ? (
                 renderHighlighted(
                   visibleSentence.sentence,
                   currentKey,
                   visibleSentence.matched_form,
-                  levelColor,
-                  s.sentence,
+                  highlightColorFor(level, levelColor),
+                  [s.sentence, { fontSize: sTier.fontSize, lineHeight: sTier.lineHeight }],
                   s.sentenceHi,
-                  SENTENCE_LINES,
+                  sTier.lines,
                 )
               ) : previewLoading || (idiom && expansionLoading) ? (
                 <View style={s.skeletonPad}>
                   <View style={[s.skelBar, { width: '92%' }]} />
                   <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
                 </View>
-              ) : idiom && expanded && cardContent?.loaded && !enrichment ? (
-                <Text style={s.noExamples}>No sentence examples available</Text>
-              ) : null}
+              ) : (
+                <Text style={s.noExamples}>No example in this script</Text>
+              )}
             </View>
 
-            {/* sentence translation under a gold left bar — fixed zone shown
-                only while expanded, so every card grows by the same amount */}
-            {expanded ? (
-              <View style={s.sentenceTranslationZone}>
-                {sentenceTranslation ? (
-                  <View style={s.sentenceTranslationBlock}>
-                    <Text style={s.sentenceTranslation} numberOfLines={TRANSLATION_LINES}>
-                      {sentenceTranslation}
-                    </Text>
-                  </View>
-                ) : expansionLoading ? (
-                  <View style={s.skeletonPad}>
-                    <View style={[s.skelBar, { width: '78%', height: 11 }]} />
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
+            {/* 6 · sentence-translation slot — same in-place cross-fade;
+                dashed gold bar + placeholder rules turn solid + filled */}
+            <View style={s.sentenceTrSlot}>
+              <Animated.View
+                style={[s.slotLayer, s.sentenceTrHidden, { opacity: revealHiddenOpacity }]}
+              >
+                <DashedLeftBorder color={`${tc.gold}59`} />
+                <View style={s.sentenceTrHiddenRules}>
+                  <DashedRule color={dashColorSoft} style={{ width: '88%' }} />
+                  <DashedRule color={dashColorSoft} style={{ width: '62%' }} />
+                </View>
+              </Animated.View>
+              <Animated.View
+                style={[
+                  s.slotLayer,
+                  s.sentenceTrRevealed,
+                  { opacity: animRef.current.reveal, transform: [{ translateY: revealRise }] },
+                ]}
+              >
+                {sentenceTranslation && stTier ? (
+                  <Text
+                    style={[
+                      s.sentenceTranslation,
+                      { fontSize: stTier.fontSize, lineHeight: stTier.lineHeight },
+                    ]}
+                    numberOfLines={stTier.lines}
+                  >
+                    {sentenceTranslation}
+                  </Text>
+                ) : (
+                  <Text style={s.noExamples}>No translation available</Text>
+                )}
+              </Animated.View>
+            </View>
 
-            {/* footer: report + pronounce, same handlers as the expanded row */}
+            {/* 7 · footer: report + pronounce + reveal-state hint */}
             <View style={s.footerRow}>
               {isAuthenticated ? (
                 <Text
@@ -844,9 +1025,9 @@ export const WordCardDeck = ({
                   {playingAudio ? '…' : '🔊'}
                 </Text>
               ) : null}
-              {!expanded ? <Text style={s.tapHint}>tap for translation</Text> : null}
+              <Text style={s.tapHint}>{expanded ? 'TAP TO HIDE' : 'TAP TO REVEAL'}</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </Animated.View>
 
         {/* Cards mid-flight after a swipe fly above the (already
@@ -865,51 +1046,68 @@ export const WordCardDeck = ({
         ))}
       </View>
 
-      {/* actions under the deck — buttons fully cover the gesture actions */}
+      {/* actions under the deck — labeled tactile buttons with press-down
+          physics (edge layer + face drop); they fully cover the gestures */}
       <View style={s.actionsRow}>
         {onMarkLearned ? (
-          <View style={s.actionColumn}>
-            <PressableScale
-              style={s.learnCircle}
-              onPress={() => doLearn('button')}
-              accessibilityRole="button"
-              accessibilityLabel="I know this"
-            >
-              <Ionicons name="checkmark" size={26} color={tc.success} />
-            </PressableScale>
-            <Text style={s.actionCaption}>I know this</Text>
-          </View>
-        ) : null}
+          <Pressable
+            onPress={() => doLearn('button')}
+            accessibilityRole="button"
+            accessibilityLabel="I know this word"
+          >
+            {({ pressed }) => (
+              <View style={s.pillWrap}>
+                <View style={[s.pillEdge, s.knowEdge]} />
+                <View
+                  style={[s.pillFace, s.knowFace, pressed && s.pillFacePressed]}
+                >
+                  <Text style={s.knowCheck}>✓</Text>
+                  <Text style={s.knowLabel}>Know it</Text>
+                </View>
+              </View>
+            )}
+          </Pressable>
+        ) : (
+          <View style={s.pillWrap} />
+        )}
 
-        <View style={s.spacerColumn} />
-
-        <PressableScale
-          style={[s.undoCircle, !canUndo && s.undoDisabled]}
+        <Pressable
           onPress={doUndo}
           disabled={!canUndo}
           accessibilityRole="button"
           accessibilityLabel="Bring back the previous card"
         >
-          <Ionicons name="arrow-undo" size={20} color={tc.textSecondary} />
-        </PressableScale>
-
-        <View style={s.spacerColumn} />
-
-        <View style={s.actionColumn}>
-          <PressableScale
-            style={s.nextButton}
-            onPress={() => doAdvance('button')}
-            accessibilityRole="button"
-            accessibilityLabel="Next card"
-          >
-            <View style={s.nextEdge} />
-            <View style={s.nextFace}>
-              <Ionicons name="arrow-forward" size={24} color={tc.goldDeep} />
+          {({ pressed }) => (
+            <View style={[s.undoWrap, !canUndo && s.undoDisabled]}>
+              <View style={s.undoEdge} />
+              <View style={[s.undoFace, pressed && canUndo && s.undoFacePressed]}>
+                <Ionicons name="arrow-undo" size={18} color={tc.textSecondary} />
+              </View>
             </View>
-          </PressableScale>
-          <Text style={s.actionCaption}>Next</Text>
-        </View>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => doAdvance('button')}
+          accessibilityRole="button"
+          accessibilityLabel="Next card"
+        >
+          {({ pressed }) => (
+            <View style={s.pillWrap}>
+              <View style={[s.pillEdge, s.nextEdge]} />
+              <LinearGradient
+                colors={scheme === 'dark' ? ['#FFD166', '#E4B44A'] : ['#D89B22', '#C58B1B']}
+                style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}
+              >
+                <Text style={s.nextLabel}>Next</Text>
+                <Text style={s.nextArrow}>→</Text>
+              </LinearGradient>
+            </View>
+          )}
+        </Pressable>
       </View>
+
+      <Text style={s.gestureHint}>{gestureHint}</Text>
 
       <ReportDialog
         visible={reportOpen}
@@ -922,10 +1120,11 @@ export const WordCardDeck = ({
   );
 };
 
-const makeDeckStyles = (tc: ThemeColors) =>
-  StyleSheet.create({
+const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
+  const light = scheme === 'light';
+  return StyleSheet.create({
     wrap: {
-      paddingTop: 10,
+      paddingTop: 4,
       paddingBottom: 110,
     },
     resumeChip: {
@@ -936,7 +1135,7 @@ const makeDeckStyles = (tc: ThemeColors) =>
       borderRadius: 999,
       paddingVertical: 6,
       paddingHorizontal: 14,
-      marginBottom: 14,
+      marginBottom: 10,
     },
     resumeChipText: {
       fontSize: 11,
@@ -946,64 +1145,62 @@ const makeDeckStyles = (tc: ThemeColors) =>
     },
     deckWrap: {
       marginHorizontal: 18,
-      marginTop: 18,
+      marginTop: 0,
+      height: DECK_ZONE_HEIGHT,
     },
-    stackEdge: {
-      ...StyleSheet.absoluteFillObject,
+    ghost: {
+      position: 'absolute',
+      height: CARD_HEIGHT,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.border,
     },
-    behindCard: {
-      overflow: 'hidden',
-      paddingHorizontal: 20,
-      paddingTop: 20,
-    },
-    // Resting looks for the stack slots (animated variants interpolate
-    // between the same STACK_SLOTS values).
-    behindRest: {
-      opacity: STACK_SLOTS[1].opacity,
-      transform: [{ translateY: STACK_SLOTS[1].translateY }, { scale: STACK_SLOTS[1].scale }],
-    },
-    edgeRest: {
-      opacity: STACK_SLOTS[2].opacity,
-      transform: [{ translateY: STACK_SLOTS[2].translateY }, { scale: STACK_SLOTS[2].scale }],
-    },
-    // A swiped card mid-flight: same face as the focused card, clipped to
-    // the deck footprint, floating above the new focused card.
+    // A swiped card mid-flight: same face as the focused card, floating
+    // above the new focused card.
     outgoingCard: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: tc.paper,
-      borderRadius: 22,
-      borderWidth: 1,
-      borderColor: tc.border,
-      paddingHorizontal: 20,
-      paddingTop: 20,
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 5,
-    },
-    card: {
+      position: 'absolute',
+      top: STACK_HEADROOM,
+      left: 0,
+      right: 0,
+      height: CARD_HEIGHT,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.border,
       padding: 20,
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
+      overflow: 'hidden',
+      shadowColor: light ? '#2D2418' : '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 10 },
       elevation: 5,
     },
-    topRow: {
+    card: {
+      position: 'absolute',
+      top: STACK_HEADROOM,
+      left: 0,
+      right: 0,
+      height: CARD_HEIGHT,
+      backgroundColor: tc.paper,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: tc.border,
+      shadowColor: light ? '#2D2418' : '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    cardPress: {
+      flex: 1,
+      padding: 20,
+    },
+    metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      minHeight: 24,
+      height: META_ROW_HEIGHT,
     },
     rank: {
       fontFamily: MONO_FAMILY,
@@ -1022,81 +1219,101 @@ const makeDeckStyles = (tc: ThemeColors) =>
       letterSpacing: 0.4,
       textTransform: 'uppercase',
     },
+    idiomBadge: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 5,
+      backgroundColor: `${tc.gold}1A`,
+    },
+    idiomBadgeText: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      color: tc.goldOnSurface,
+    },
     flexSpacer: {
       flex: 1,
     },
     star: {
       fontSize: 22,
       lineHeight: 24,
-      color: tc.textFaint,
-      opacity: 0.5,
+      color: light ? '#C9BB9C' : tc.textFaint,
     },
     starActive: {
       color: tc.gold,
-      opacity: 1,
     },
-    wordLine: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      marginTop: 14,
-      height: WORD_LINE_HEIGHT,
+    wordSlot: {
+      marginTop: WORD_SLOT_TOP,
+      height: WORD_SLOT_HEIGHT,
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
     },
     word: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 34,
-      lineHeight: 40,
       fontWeight: '700',
-      letterSpacing: -0.5,
+      letterSpacing: -0.3,
       color: tc.text,
-      flexShrink: 1,
     },
-    translation: {
+    wordTrSlot: {
+      marginTop: WORD_TR_SLOT_TOP,
+      height: WORD_TR_SLOT_HEIGHT,
+    },
+    slotLayer: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    wordTrRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    wordTranslation: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 19,
-      fontWeight: '600',
       fontStyle: 'italic',
+      fontWeight: '600',
       color: tc.primaryOnSurface,
-      marginLeft: 8,
       flexShrink: 1,
     },
-    translationDot: {
-      fontFamily: SERIF_FAMILY,
-      fontStyle: 'normal',
-      color: tc.textFaint,
-    },
-    translationSkeleton: {
-      width: 88,
-      height: 14,
+    langTagDashed: {
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: light ? '#D9CFB4' : 'rgba(255,255,255,0.18)',
       borderRadius: 4,
-      backgroundColor: tc.skeleton,
-      marginLeft: 8,
-      alignSelf: 'center',
-    },
-    langChip: {
-      backgroundColor: tc.chipBg,
       paddingHorizontal: 5,
       paddingVertical: 2,
-      borderRadius: 4,
-      marginLeft: 8,
-      alignSelf: 'center',
     },
-    langChipText: {
+    langTagDashedText: {
       fontFamily: MONO_FAMILY,
       fontSize: 9,
       fontWeight: '700',
-      letterSpacing: 0.5,
+      letterSpacing: 0.7,
+      color: tc.textFaint,
+    },
+    langTagSolid: {
+      backgroundColor: tc.divider,
+      borderRadius: 4,
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+    },
+    langTagSolidText: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 9,
+      fontWeight: '700',
+      letterSpacing: 0.7,
       color: tc.textSecondary,
     },
-    sentenceZone: {
-      marginTop: 14,
-      height: SENTENCE_ZONE_HEIGHT,
+    cardDivider: {
+      marginTop: DIVIDER_TOP,
+      height: DIVIDER_HEIGHT,
+      backgroundColor: tc.divider,
+    },
+    sentenceSlot: {
+      marginTop: SENTENCE_SLOT_TOP,
+      height: SENTENCE_SLOT_HEIGHT,
       overflow: 'hidden',
     },
     sentence: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 17,
-      lineHeight: SENTENCE_LINE_HEIGHT,
-      color: tc.textSecondary,
+      color: light ? '#54462F' : tc.textSecondary,
     },
     sentenceHi: {
       fontFamily: SERIF_FAMILY,
@@ -1113,22 +1330,28 @@ const makeDeckStyles = (tc: ThemeColors) =>
       borderRadius: 4,
       backgroundColor: tc.skeleton,
     },
-    sentenceTranslationZone: {
-      marginTop: 12,
-      height: TRANSLATION_ZONE_HEIGHT,
-      overflow: 'hidden',
+    sentenceTrSlot: {
+      marginTop: SENTENCE_TR_SLOT_TOP,
+      height: SENTENCE_TR_SLOT_HEIGHT,
     },
-    sentenceTranslationBlock: {
+    sentenceTrHidden: {
+      justifyContent: 'center',
+    },
+    sentenceTrHiddenRules: {
+      paddingLeft: 12,
+      gap: 12,
+    },
+    sentenceTrRevealed: {
       borderLeftWidth: 2,
       borderLeftColor: tc.gold,
-      paddingLeft: 10,
+      paddingLeft: 12,
+      overflow: 'hidden',
+      justifyContent: 'center',
     },
     sentenceTranslation: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 15,
-      lineHeight: TRANSLATION_LINE_HEIGHT,
       fontStyle: 'italic',
-      color: tc.textSecondary,
+      color: light ? '#5C4F38' : tc.textSecondary,
     },
     noExamples: {
       fontFamily: SERIF_FAMILY,
@@ -1139,9 +1362,9 @@ const makeDeckStyles = (tc: ThemeColors) =>
     footerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 18,
-      marginTop: 18,
-      minHeight: 16,
+      gap: 16,
+      marginTop: FOOTER_TOP,
+      height: FOOTER_HEIGHT,
     },
     actionText: {
       fontSize: 11,
@@ -1149,112 +1372,120 @@ const makeDeckStyles = (tc: ThemeColors) =>
       color: tc.textFaint,
     },
     pronounceIcon: {
-      fontSize: 14,
+      fontSize: 13,
     },
     pronounceActive: {
       opacity: 0.5,
     },
     tapHint: {
       marginLeft: 'auto',
-      fontSize: 10,
-      fontWeight: '600',
-      letterSpacing: 0.3,
-      color: tc.textFaint,
-      opacity: 0.8,
+      fontFamily: MONO_FAMILY,
+      fontSize: 9,
+      fontWeight: '700',
+      letterSpacing: 0.9,
+      color: light ? '#C0A66B' : 'rgba(255,209,102,0.55)',
     },
     actionsRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-around',
-      marginTop: 28,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 14,
       marginHorizontal: 18,
     },
-    actionColumn: {
+    // Edge + face "3D" button: the face translates down onto its edge while
+    // pressed — same pattern as the practice tiles.
+    pillWrap: {
+      width: PILL_WIDTH,
+      height: PILL_HEIGHT + PILL_EDGE,
+    },
+    pillEdge: {
+      position: 'absolute',
+      top: PILL_EDGE,
+      left: 0,
+      right: 0,
+      height: PILL_HEIGHT,
+      borderRadius: PILL_HEIGHT / 2,
+    },
+    pillFace: {
+      flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+      width: PILL_WIDTH,
+      height: PILL_HEIGHT,
+      borderRadius: PILL_HEIGHT / 2,
+    },
+    pillFacePressed: {
+      transform: [{ translateY: PILL_EDGE_PRESSED_DROP }],
+    },
+    knowEdge: {
+      backgroundColor: 'rgba(63,139,123,0.28)',
+    },
+    knowFace: {
+      backgroundColor: tc.paper,
+      borderWidth: 1.5,
+      borderColor: tc.success,
+    },
+    knowCheck: {
+      color: tc.success,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    knowLabel: {
+      color: tc.success,
+      fontSize: 13.5,
+      fontWeight: '800',
+    },
+    nextEdge: {
+      backgroundColor: tc.nodeGoldEdge,
+    },
+    nextFace: {
       gap: 8,
     },
-    spacerColumn: {
-      flex: 1,
+    nextLabel: {
+      color: tc.goldDeep,
+      fontSize: 13.5,
+      fontWeight: '900',
     },
-    actionCaption: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: tc.textSecondary,
+    nextArrow: {
+      color: tc.goldDeep,
+      fontSize: 15,
+      fontWeight: '800',
     },
-    learnCircle: {
-      width: ACTION_SIZE,
-      height: ACTION_SIZE,
-      borderRadius: ACTION_SIZE / 2,
-      borderWidth: 2,
-      borderColor: tc.success,
+    undoWrap: {
+      width: UNDO_SIZE,
+      height: UNDO_SIZE + UNDO_EDGE,
+    },
+    undoEdge: {
+      position: 'absolute',
+      top: UNDO_EDGE,
+      left: 0,
+      width: UNDO_SIZE,
+      height: UNDO_SIZE,
+      borderRadius: UNDO_SIZE / 2,
+      backgroundColor: light ? 'rgba(45,36,24,0.08)' : 'rgba(0,0,0,0.4)',
+    },
+    undoFace: {
+      width: UNDO_SIZE,
+      height: UNDO_SIZE,
+      borderRadius: UNDO_SIZE / 2,
       backgroundColor: tc.paper,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    // Icon-only undo between the two main actions; margin centers it on
-    // the same axis as the 54pt circles.
-    undoCircle: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
       borderWidth: 1.5,
       borderColor: tc.border,
-      backgroundColor: tc.paper,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: (ACTION_SIZE - 46) / 2,
+    },
+    undoFacePressed: {
+      transform: [{ translateY: UNDO_EDGE - 1 }],
     },
     undoDisabled: {
       opacity: 0.35,
     },
-    bookmarkPill: {
-      paddingVertical: 14,
-      paddingHorizontal: 18,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: tc.border,
-      backgroundColor: tc.paper,
-    },
-    bookmarkPillActive: {
-      borderColor: `${tc.gold}88`,
-      backgroundColor: `${tc.gold}1F`,
-    },
-    bookmarkPillText: {
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0.2,
-      color: tc.text,
-    },
-    bookmarkPillTextActive: {
-      color: tc.goldOnSurface,
-    },
-    // Gold next button with the PracticeTile face/edge 3D pattern.
-    nextButton: {
-      width: ACTION_SIZE,
-      height: ACTION_SIZE + ACTION_EDGE,
-    },
-    nextEdge: {
-      position: 'absolute',
-      top: ACTION_EDGE,
-      left: 0,
-      width: ACTION_SIZE,
-      height: ACTION_SIZE,
-      borderRadius: ACTION_SIZE / 2,
-      backgroundColor: tc.nodeGoldEdge,
-    },
-    nextFace: {
-      width: ACTION_SIZE,
-      height: ACTION_SIZE,
-      borderRadius: ACTION_SIZE / 2,
-      backgroundColor: tc.gold,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     gestureHint: {
-      marginTop: 14,
+      marginTop: 10,
       textAlign: 'center',
-      fontSize: 11,
-      color: tc.textFaint,
+      fontSize: 10.5,
+      color: light ? '#A79878' : tc.textFaint,
     },
     emptyWrap: {
       marginHorizontal: 18,
@@ -1273,3 +1504,4 @@ const makeDeckStyles = (tc: ThemeColors) =>
       color: tc.textFaint,
     },
   });
+};
