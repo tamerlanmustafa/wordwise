@@ -96,3 +96,25 @@ async def test_blank_context_still_uses_cache():
 
     assert cache.reads == 1  # cache was consulted, i.e. not in context mode
     assert deepl.calls[0]["context"] == "   "
+
+
+async def test_noop_passthrough_is_not_cached():
+    # translated == source (provider passthrough / failure) must never be
+    # written — those poison the cache with wrong data. A real translation is.
+    upserts = []
+
+    class _Cache:
+        async def upsert(self, **kwargs):
+            upserts.append(kwargs)
+
+    service = TranslationService(
+        db=SimpleNamespace(translationcache=_Cache()),
+        deepl_client=object(),
+        google_client=object(),
+    )
+
+    await service._save_to_cache(source_text="taxi", target_lang="TR", translated="  Taxi ")
+    assert upserts == []  # identical (case/space-insensitive) → skipped
+
+    await service._save_to_cache(source_text="run", target_lang="TR", translated="koşmak")
+    assert len(upserts) == 1  # a real translation is cached

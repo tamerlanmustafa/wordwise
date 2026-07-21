@@ -95,6 +95,13 @@ class TranslationService:
         source_lang: Optional[str] = None
     ) -> None:
         """Save translation to cache"""
+        # A translation identical to its source is almost always a provider
+        # passthrough / failure (e.g. English text returned unchanged as
+        # "Turkish"). Don't persist those — they'd serve wrong data forever
+        # and inflate the cache. The rare truly-identical word just re-resolves
+        # next time at negligible cost.
+        if translated.strip().lower() == source_text.strip().lower():
+            return
         try:
             await self.db.translationcache.upsert(
                 where={
