@@ -17,6 +17,11 @@ export interface SentenceExample {
   word_position: number;
   matched_form?: string;
   translation?: string;
+  /** The target word's translation aligned to THIS sentence's translation
+   *  (LLM-resolved server-side), so the card's word gloss matches the
+   *  sentence. Absent when alignment is unavailable — fall back to a plain
+   *  word translation. */
+  word_translation?: string;
 }
 
 const EXPAND_ANIM = {

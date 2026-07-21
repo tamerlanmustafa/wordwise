@@ -585,10 +585,13 @@ export const WordCardDeck = ({
     }),
   ).current;
 
-  // Tap → reveal BOTH translations together, in place. Data comes from the
-  // exact VocabRow expansion path: translate() for the word + the enrichment
-  // sentences endpoint for the sentence translation, gated behind the
-  // per-word cache. Never prefetches the rest of the deck.
+  // Tap → reveal BOTH translations together, in place. The sentence endpoint
+  // returns the sentence, its translation, AND the word gloss aligned to that
+  // translation (word_translation) — so the gloss matches the sentence and,
+  // once cached server-side, the reveal costs nothing to repeat. We only fall
+  // back to a standalone translate() call when no aligned gloss is available
+  // (idioms, words with no example, or alignment unavailable). Gated behind
+  // the per-word cache; never prefetches the rest of the deck.
   const handleCardPress = () => {
     if (currentKey == null || currentItem == null) return;
     const term = currentKey;
@@ -602,43 +605,48 @@ export const WordCardDeck = ({
     }
     if (content[term]) return;
 
-    let translation: string | null = null;
-    let enrichment: SentenceExample | null = null;
-    const promises: Promise<void>[] = [];
-    // Bias the word's translation to the sense used in its example sentence
-    // (the same sentence shown on the card), so the word gloss and the
-    // sentence translation agree. Idioms carry no single-word preview.
-    const contextSentence = !isIdiomItem(currentItem)
+    const isIdiom = isIdiomItem(currentItem);
+    // Context for the fallback translate(): the example sentence shown on the
+    // card, so even the fallback biases toward the in-sentence sense.
+    const contextSentence = !isIdiom
       ? sentencePreviews[term]?.sentence || undefined
       : undefined;
-    promises.push(
-      wordwiseApi
-        .translate(term, targetLang || 'ES', undefined, movieId, contextSentence)
-        .then((result) => {
+
+    (async () => {
+      let enrichment: SentenceExample | null = null;
+      if (movieId) {
+        const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
+        try {
+          const res = await authFetch(
+            `${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(term)}?max_examples=1${langParam}`,
+          );
+          const data = await res.json();
+          if (data.sentences && Array.isArray(data.sentences) && data.sentences.length > 0) {
+            enrichment = data.sentences[0];
+          }
+        } catch {}
+      }
+
+      // Prefer the aligned gloss; only pay for a standalone translation when
+      // the server couldn't provide one.
+      let translation: string | null = enrichment?.word_translation ?? null;
+      if (!translation) {
+        try {
+          const result = await wordwiseApi.translate(
+            term,
+            targetLang || 'ES',
+            undefined,
+            movieId,
+            contextSentence,
+          );
           translation = result.translated;
-        })
-        .catch(() => {
+        } catch {
           translation = 'Translation failed';
-        }),
-    );
-    if (movieId) {
-      const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
-      promises.push(
-        authFetch(
-          `${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(term)}?max_examples=1${langParam}`,
-        )
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.sentences && Array.isArray(data.sentences) && data.sentences.length > 0) {
-              enrichment = data.sentences[0];
-            }
-          })
-          .catch(() => {}),
-      );
-    }
-    Promise.all(promises).then(() => {
+        }
+      }
+
       setContent((prev) => ({ ...prev, [term]: { translation, enrichment, loaded: true } }));
-    });
+    })();
   };
 
   const cardContent = currentKey != null ? content[currentKey] : undefined;

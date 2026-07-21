@@ -374,6 +374,11 @@ model WordSentenceExample {
   cefrLevel    proficiencylevel @map("cefr_level")
   sentence     String           @db.Text
   translation  String           @db.Text
+  // The target word's translation as it appears IN this sentence's
+  // translation — LLM-aligned so the card's word gloss matches the
+  // sentence (e.g. gallant → "Cesur", not the isolated-word sense).
+  // Nullable: older rows and cost-capped/failed alignments have none.
+  wordTranslation String?        @map("word_translation") @db.Text
   targetLang   String           @map("target_lang") @db.VarChar(10)
   wordPosition Int              @map("word_position")
   createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)

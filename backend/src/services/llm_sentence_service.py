@@ -79,6 +79,19 @@ Return ONLY valid JSON in this exact shape, no prose:
 Include one object per input word, in the same order. If you cannot produce a sentence that satisfies every rule for a given word, return {"word": "<input word>", "sentence": null} for that entry."""
 
 
+ALIGN_SYSTEM_PROMPT = """You align a single word's translation to how it is used in a sentence, for a language-learning vocabulary card.
+
+You are given: a target_lang code, an English `word`, an English `sentence` containing it, and `sentence_translation` (that sentence already translated into target_lang).
+
+Return the target_lang translation of `word` AS USED IN THIS SENTENCE — the same sense/meaning the sentence_translation conveys, so the card's word gloss agrees with the sentence. Rules:
+- Give the dictionary / base (citation) form in target_lang, not the exact inflected surface form (e.g. base adjective, verb infinitive), but it MUST be the sense used here.
+- One or a few words only — never a whole phrase or explanation.
+- Lowercase unless the language requires otherwise. No quotes, no punctuation, no parentheticals, no romanization.
+
+Return ONLY valid JSON, no prose: {"translation": "<target_lang word>"}
+If you cannot determine it, return {"translation": null}."""
+
+
 class CostCapExceeded(RuntimeError):
     """Raised when cumulative ledger spend has reached the configured cap."""
 
@@ -219,6 +232,74 @@ class LLMSentenceService:
             }
         return results
 
+    async def align_word_translation(
+        self,
+        db: Prisma,
+        word: str,
+        sentence: str,
+        sentence_translation: str,
+        target_lang: str,
+        context: str = "gloss_align",
+    ) -> Optional[str]:
+        """
+        Return the target-language translation of `word` AS USED IN
+        `sentence`, consistent with `sentence_translation`, so a vocab card's
+        word gloss matches the sentence it sits next to. Base/citation form.
+
+        Returns None (caller falls back to a plain word translation) when the
+        cost cap is hit, the API errors, or the model can't align. Raises
+        CostCapExceeded — callers treat it as "skip, use the fallback".
+        """
+        if not word.strip() or not sentence.strip() or not sentence_translation.strip():
+            return None
+
+        await self._check_cap(db)
+
+        user_payload = json.dumps(
+            {
+                "target_lang": target_lang.upper(),
+                "word": word,
+                "sentence": sentence,
+                "sentence_translation": sentence_translation,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            raw_text, usage = await self._call_model(
+                user_payload, system=ALIGN_SYSTEM_PROMPT, max_tokens=120
+            )
+        except Exception as e:
+            logger.warning(f"[llm-align] model call failed word='{word}': {e}")
+            return None
+
+        # We paid for the call regardless of whether parsing succeeds.
+        await self._record_usage(db, usage, context=context)
+
+        return self._parse_gloss(raw_text)
+
+    @staticmethod
+    def _parse_gloss(raw: str) -> Optional[str]:
+        """Extract {"translation": "..."} from the align model's reply."""
+        if not raw:
+            return None
+        text = raw.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text)
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning(f"[llm-align] failed to parse JSON: {raw[:120]}")
+            return None
+        val = obj.get("translation") if isinstance(obj, dict) else None
+        if not isinstance(val, str):
+            return None
+        val = val.strip().strip('"').strip("'")
+        # Guard against the model echoing an explanation instead of a gloss.
+        if not val or "\n" in val or len(val) > 60:
+            return None
+        return val
+
     # ─── Cost cap & ledger ──────────────────────────────────────────────────
 
     async def _check_cap(self, db: Prisma) -> None:
@@ -312,18 +393,25 @@ class LLMSentenceService:
             })
         return json.dumps({"words": items}, ensure_ascii=False)
 
-    async def _call_model(self, user_payload: str) -> Tuple[str, dict]:
+    async def _call_model(
+        self,
+        user_payload: str,
+        system: str = SYSTEM_PROMPT,
+        max_tokens: int = 1500,
+    ) -> Tuple[str, dict]:
         """
         Returns (response_text, usage_dict). The system prompt is cached so
         successive batches only pay for the small per-word user message.
+        Defaults drive sentence generation; the align path passes its own
+        system prompt and a small token budget.
         """
         resp = await self._client.messages.create(
             model=self._model,
-            max_tokens=1500,
+            max_tokens=max_tokens,
             system=[
                 {
                     "type": "text",
-                    "text": SYSTEM_PROMPT,
+                    "text": system,
                     "cache_control": {"type": "ephemeral"},
                 },
             ],

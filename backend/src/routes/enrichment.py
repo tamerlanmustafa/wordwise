@@ -62,6 +62,52 @@ _sentences_throttle = rate_limit(120, 60.0, scope="enrichment-sentences")
 _sentences_batch_throttle = rate_limit(30, 60.0, scope="enrichment-sentences-batch")
 
 
+# Lazy singleton for the word-gloss aligner so we build the Anthropic client
+# once, not per request. `_align_service_off` latches when there's no API key
+# (or the SDK is unavailable) so we don't retry construction every reveal.
+_align_service = None
+_align_service_off = False
+
+
+def _get_align_service():
+    global _align_service, _align_service_off
+    if _align_service_off:
+        return None
+    if _align_service is None:
+        try:
+            from src.services.llm_sentence_service import LLMSentenceService
+            _align_service = LLMSentenceService()
+        except Exception as e:  # no ANTHROPIC_API_KEY, SDK missing, etc.
+            logger.info(f"[align] gloss aligner disabled: {e}")
+            _align_service_off = True
+            return None
+    return _align_service
+
+
+async def _aligned_word_gloss(
+    db, word: str, sentence: Optional[str], sentence_translation: Optional[str], target_lang: str
+) -> Optional[str]:
+    """Best-effort: the word's translation aligned to the sentence translation
+    (so the card gloss matches the sentence). Never raises — returns None on
+    cost-cap, missing key, or any model/parse error, and the caller falls back
+    to a plain word translation."""
+    if not sentence or not sentence_translation:
+        return None
+    svc = _get_align_service()
+    if svc is None:
+        return None
+    try:
+        from src.services.llm_sentence_service import CostCapExceeded
+        return await svc.align_word_translation(
+            db, word, sentence, sentence_translation, target_lang
+        )
+    except CostCapExceeded:
+        return None
+    except Exception as e:
+        logger.warning(f"[align] gloss failed word='{word}': {e}")
+        return None
+
+
 # === Request/Response Models ===
 
 class EnrichExamplesRequest(BaseModel):
@@ -810,17 +856,76 @@ async def get_word_sentences(
                     "matched_form": form,
                 })
 
-        # Look up or create translations if target_lang provided
+        # Look up or create translations if target_lang provided. The reveal
+        # (sentence translation + word gloss aligned to it) is cached per
+        # (movie, word, sentence, lang) in word_sentence_examples so repeat
+        # reveals — by anyone — cost no DeepL/LLM calls.
         if target_lang and raw_sentences:
             from src.services.translation_service import TranslationService
             ts = TranslationService(db)
+            tgt = target_lang.upper()
+            cefr_val = classification.cefrLevel if (classification and classification.cefrLevel) else "B1"
             for item in raw_sentences:
+                cached_ex = None
                 try:
-                    result = await ts.get_translation(item["sentence"], target_lang.upper(), "en")
-                    if result and result.get("translated"):
-                        item["translation"] = result["translated"]
-                except Exception as tx_err:
-                    logger.warning(f"Sentence translation failed: {tx_err}")
+                    cached_ex = await db.wordsentenceexample.find_first(
+                        where={
+                            "movieId": movie_id,
+                            "word": surface,
+                            "sentence": item["sentence"],
+                            "targetLang": tgt,
+                        }
+                    )
+                except Exception:
+                    cached_ex = None
+                if cached_ex and cached_ex.wordTranslation:
+                    # Fully cached: sentence translation + aligned gloss.
+                    item["translation"] = cached_ex.translation
+                    item["word_translation"] = cached_ex.wordTranslation
+                    continue
+
+                # Sentence translation: reuse the cached row, else translate.
+                if cached_ex and cached_ex.translation:
+                    item["translation"] = cached_ex.translation
+                else:
+                    try:
+                        result = await ts.get_translation(item["sentence"], tgt, "en")
+                        if result and result.get("translated"):
+                            item["translation"] = result["translated"]
+                    except Exception as tx_err:
+                        logger.warning(f"Sentence translation failed: {tx_err}")
+
+                # Align the word gloss to the sentence translation (best-effort).
+                gloss = await _aligned_word_gloss(
+                    db, surface, item.get("sentence"), item.get("translation"), tgt
+                )
+                if gloss:
+                    item["word_translation"] = gloss
+
+                # Persist for next time (best-effort; unique-race tolerant).
+                if item.get("translation"):
+                    try:
+                        if cached_ex:
+                            await db.wordsentenceexample.update(
+                                where={"id": cached_ex.id},
+                                data={"translation": item["translation"], "wordTranslation": gloss},
+                            )
+                        else:
+                            await db.wordsentenceexample.create(
+                                data={
+                                    "movieId": movie_id,
+                                    "word": surface,
+                                    "lemma": lemma_text,
+                                    "cefrLevel": cefr_val,
+                                    "sentence": item["sentence"],
+                                    "translation": item["translation"],
+                                    "wordTranslation": gloss,
+                                    "targetLang": tgt,
+                                    "wordPosition": item.get("word_position") or 0,
+                                }
+                            )
+                    except Exception as up_err:
+                        logger.debug(f"word_sentence_example persist skipped: {up_err}")
 
         return {
             "movie_id": movie_id,
