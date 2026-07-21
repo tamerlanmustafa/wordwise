@@ -605,9 +605,15 @@ export const WordCardDeck = ({
     let translation: string | null = null;
     let enrichment: SentenceExample | null = null;
     const promises: Promise<void>[] = [];
+    // Bias the word's translation to the sense used in its example sentence
+    // (the same sentence shown on the card), so the word gloss and the
+    // sentence translation agree. Idioms carry no single-word preview.
+    const contextSentence = !isIdiomItem(currentItem)
+      ? sentencePreviews[term]?.sentence || undefined
+      : undefined;
     promises.push(
       wordwiseApi
-        .translate(term, targetLang || 'ES', undefined, movieId)
+        .translate(term, targetLang || 'ES', undefined, movieId, contextSentence)
         .then((result) => {
           translation = result.translated;
         })

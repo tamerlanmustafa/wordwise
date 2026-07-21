@@ -183,6 +183,26 @@ describe('API endpoint wrappers', () => {
       fetchMock.mockResolvedValue(ok('upstream exploded', 502));
       await expect(wordwiseApi.getMoviesByCefr('B1')).rejects.toThrow(/by-cefr → 502/);
     });
+
+    it('translate sends the context sentence so the word resolves in-context', async () => {
+      fetchMock.mockResolvedValue(ok({ source: 'run', translated: 'dirigir', target_lang: 'ES', cached: false }));
+      await wordwiseApi.translate('run', 'ES', undefined, 42, 'They run a small business.');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/translate`);
+      expect(bodyOf(fetchMock)).toMatchObject({
+        text: 'run',
+        target_lang: 'ES',
+        movie_id: 42,
+        sentence: 'They run a small business.',
+      });
+    });
+
+    it('translate omits sentence/movie_id when not given', async () => {
+      fetchMock.mockResolvedValue(ok({ source: 'run', translated: 'correr', target_lang: 'ES', cached: false }));
+      await wordwiseApi.translate('run', 'ES');
+      const body = bodyOf(fetchMock);
+      expect(body).not.toHaveProperty('sentence');
+      expect(body).not.toHaveProperty('movie_id');
+    });
   });
 
   describe('reportsApi.create', () => {

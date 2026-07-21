@@ -61,7 +61,8 @@ class DeepLClient:
         self,
         text: str,
         target_lang: str,
-        source_lang: str = "auto"
+        source_lang: str = "auto",
+        context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Translate text using DeepL API
@@ -70,6 +71,9 @@ class DeepLClient:
             text: Text to translate (max 5000 chars for free tier)
             target_lang: Target language code (e.g., 'DE', 'FR', 'ES')
             source_lang: Source language code or 'auto' for detection
+            context: Optional surrounding text that biases sense selection
+                without being translated or billed. Used so a single-word
+                lookup ("run") resolves to the sense used in its sentence.
 
         Returns:
             Dict with:
@@ -106,6 +110,11 @@ class DeepLClient:
             "text": [text],  # DeepL JSON API requires text as array
             "target_lang": target_lang,
         }
+
+        # `context` is a DeepL API hint: it disambiguates the sense of `text`
+        # (not translated, not counted toward the character quota).
+        if context and context.strip():
+            data["context"] = context.strip()
 
         headers = {
             "Authorization": f"DeepL-Auth-Key {self.api_key}",

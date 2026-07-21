@@ -410,12 +410,17 @@ export const wordwiseApi = {
     return res.json();
   },
 
-  // Translate text
+  // Translate text.
+  // `sentence` is an optional context hint: when a single word is looked up
+  // from an example sentence, passing that sentence lets the backend bias the
+  // word's translation to the sense it carries in context (DeepL `context`),
+  // so the word gloss matches the sentence translation shown next to it.
   translate: async (
     text: string,
     targetLang: string,
     userId?: number,
-    movieId?: number | null
+    movieId?: number | null,
+    sentence?: string | null
   ): Promise<TranslationResponse> => {
     const body: Record<string, unknown> = {
       text,
@@ -424,6 +429,7 @@ export const wordwiseApi = {
       user_id: userId,
     };
     if (movieId) body.movie_id = movieId;
+    if (sentence) body.sentence = sentence;
 
     // authFetch attaches the bearer token (endpoint now requires login).
     const res = await authFetch(`${API_BASE_URL}/translate`, {

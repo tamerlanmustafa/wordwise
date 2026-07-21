@@ -148,7 +148,8 @@ class TranslationService:
         target_lang: str,
         source_lang: str = "auto",
         use_cache: bool = True,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get translation with automatic caching and hybrid provider fallback
@@ -169,6 +170,11 @@ class TranslationService:
             source_lang: Source language code or 'auto' for detection
             use_cache: Whether to use cache (default: True)
             user_id: User ID for tracking translation attempts (optional)
+            context: Surrounding sentence used only to disambiguate the sense
+                of `text` (DeepL `context` hint). When set, the shared
+                word-level cache is bypassed on both read and write — the
+                result is context-specific and keyed only by `text`, so
+                caching it would poison plain-word lookups.
 
         Returns:
             Dict with translation result and metadata
@@ -178,8 +184,12 @@ class TranslationService:
         normalized_text = self._normalize_text(text)
         target_lang_upper = target_lang.upper()
 
+        # A context-biased translation is specific to its sentence; the cache
+        # is keyed by word alone, so it must not read or write it.
+        cache_ok = use_cache and not (context and context.strip())
+
         # Check cache first
-        if use_cache:
+        if cache_ok:
             cached = await self._get_from_cache(normalized_text, target_lang_upper)
             if cached:
                 # Track user translation even if cached
@@ -209,19 +219,21 @@ class TranslationService:
                 result = await self.deepl_client.translate(
                     text=original_text,
                     target_lang=target_lang_upper,
-                    source_lang=source_lang
+                    source_lang=source_lang,
+                    context=context
                 )
 
                 translated = result["translated"]
                 detected_lang = result.get("detected_source_lang")
 
-                # Save to cache
-                await self._save_to_cache(
-                    source_text=normalized_text,
-                    target_lang=target_lang_upper,
-                    translated=translated,
-                    source_lang=detected_lang
-                )
+                # Save to cache (skipped for context-biased results)
+                if cache_ok:
+                    await self._save_to_cache(
+                        source_text=normalized_text,
+                        target_lang=target_lang_upper,
+                        translated=translated,
+                        source_lang=detected_lang
+                    )
 
                 # Track user translation
                 if user_id:
@@ -272,13 +284,14 @@ class TranslationService:
             translated = result["translated"]
             detected_lang = result.get("detected_source_lang")
 
-            # Save to cache
-            await self._save_to_cache(
-                source_text=normalized_text,
-                target_lang=target_lang_upper,
-                translated=translated,
-                source_lang=detected_lang
-            )
+            # Save to cache (skipped in context mode — see cache_ok above)
+            if cache_ok:
+                await self._save_to_cache(
+                    source_text=normalized_text,
+                    target_lang=target_lang_upper,
+                    translated=translated,
+                    source_lang=detected_lang
+                )
 
             # Track user translation
             if user_id:

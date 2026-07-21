@@ -191,13 +191,18 @@ async def translate_text(
             except Exception as e:
                 logger.debug(f"V2 translation lookup failed (non-fatal): {e}")
 
-        # V1 fallback: standard translation flow
+        # V1 fallback: standard translation flow. Pass the clicked sentence as
+        # a DeepL `context` hint so an ambiguous word ("run") resolves to the
+        # sense it carries in that sentence, matching the sentence translation
+        # shown alongside it. (V2 sense-aware memory is dormant in prod, so
+        # this fallback is the path nearly every word takes.)
         service = TranslationService(db)
         result = await service.get_translation(
             text=request.text,
             target_lang=request.target_lang,
             source_lang=request.source_lang,
-            user_id=request.user_id
+            user_id=request.user_id,
+            context=request.sentence
         )
 
         return TranslationResponse(**result)
