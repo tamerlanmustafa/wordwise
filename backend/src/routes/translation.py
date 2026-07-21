@@ -96,11 +96,6 @@ class TranslationResponse(BaseModel):
     cached: bool = Field(..., description="Whether result came from cache")
     provider: Optional[str] = Field(None, description="Translation provider used (deepl, google, cache)")
     created_at: Optional[str] = Field(None, description="Cache entry timestamp (ISO format)")
-    # V2 fields (optional, present when sense-aware translation is used)
-    lemma: Optional[str] = Field(None, description="Lemma form of the word")
-    sense_id: Optional[int] = Field(None, description="WordSense ID used for translation")
-    sense_label: Optional[str] = Field(None, description="Human-readable sense label")
-    translated_sentence: Optional[str] = Field(None, description="Translation of the representative sentence")
 
 
 class BatchTranslationResponse(BaseModel):
@@ -164,38 +159,11 @@ async def translate_text(
     # body — otherwise a caller could write attempts to any user's history.
     request.user_id = current_user.id
     try:
-        # V2: Try TranslationMemory first (sense-aware, zero API cost)
-        if request.sentence or request.movie_id:
-            try:
-                from ..services.translation_memory_service import TranslationMemoryService
-                tm_service = TranslationMemoryService(db)
-                v2_result = await tm_service.translate_on_demand(
-                    word=request.text,
-                    clicked_sentence=request.sentence,
-                    target_lang=request.target_lang,
-                    movie_id=request.movie_id,
-                )
-                if v2_result:
-                    return TranslationResponse(
-                        source=request.text,
-                        translated=v2_result["translated_word"],
-                        target_lang=v2_result["target_lang"],
-                        source_lang="EN",
-                        cached=True,
-                        provider=v2_result["provider"],
-                        lemma=v2_result["lemma"],
-                        sense_id=v2_result["sense_id"],
-                        sense_label=v2_result.get("sense_label"),
-                        translated_sentence=v2_result.get("translated_sentence"),
-                    )
-            except Exception as e:
-                logger.debug(f"V2 translation lookup failed (non-fatal): {e}")
-
-        # V1 fallback: standard translation flow. Pass the clicked sentence as
-        # a DeepL `context` hint so an ambiguous word ("run") resolves to the
-        # sense it carries in that sentence, matching the sentence translation
-        # shown alongside it. (V2 sense-aware memory is dormant in prod, so
-        # this fallback is the path nearly every word takes.)
+        # Pass the clicked sentence as a DeepL `context` hint so an ambiguous
+        # word ("run") resolves to the sense it carries in that sentence,
+        # matching the sentence translation shown alongside it. (The card's
+        # primary gloss is now the LLM-aligned word_translation from the
+        # enrichment endpoint; this endpoint is the fallback path.)
         service = TranslationService(db)
         result = await service.get_translation(
             text=request.text,

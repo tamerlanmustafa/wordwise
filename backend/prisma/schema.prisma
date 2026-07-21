@@ -367,22 +367,22 @@ model UserWordInteraction {
 }
 
 model WordSentenceExample {
-  id           Int              @id @default(autoincrement())
-  movieId      Int              @map("movie_id")
-  word         String           @db.VarChar
-  lemma        String           @db.VarChar
-  cefrLevel    proficiencylevel @map("cefr_level")
-  sentence     String           @db.Text
-  translation  String           @db.Text
+  id              Int              @id @default(autoincrement())
+  movieId         Int              @map("movie_id")
+  word            String           @db.VarChar
+  lemma           String           @db.VarChar
+  cefrLevel       proficiencylevel @map("cefr_level")
+  sentence        String           @db.Text
+  translation     String           @db.Text
   // The target word's translation as it appears IN this sentence's
   // translation — LLM-aligned so the card's word gloss matches the
   // sentence (e.g. gallant → "Cesur", not the isolated-word sense).
   // Nullable: older rows and cost-capped/failed alignments have none.
-  wordTranslation String?        @map("word_translation") @db.Text
-  targetLang   String           @map("target_lang") @db.VarChar(10)
-  wordPosition Int              @map("word_position")
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  wordTranslation String?          @map("word_translation") @db.Text
+  targetLang      String           @map("target_lang") @db.VarChar(10)
+  wordPosition    Int              @map("word_position")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([movieId, word, sentence, targetLang], map: "unique_word_sentence_example")
   @@index([movieId], map: "ix_word_sentence_examples_movie_id")
@@ -521,8 +521,6 @@ model Lemma {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  senses        WordSense[]
-  translations  TranslationMemory[]
   movieMappings MovieLemmaMapping[]
   sentenceLinks SentenceLemmaLink[]
 
@@ -532,64 +530,15 @@ model Lemma {
   @@map("lemmas")
 }
 
-model WordSense {
-  id                     Int      @id @default(autoincrement())
-  lemmaId                Int      @map("lemma_id")
-  senseIndex             Int      @map("sense_index")
-  pos                    String?  @db.VarChar(10)
-  label                  String?  @db.VarChar(200)
-  representativeSentence String?  @map("representative_sentence") @db.Text
-  keywords               Json?
-  clusterCentroid        Json?    @map("cluster_centroid")
-  sentenceCount          Int      @default(0) @map("sentence_count")
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  lemma            Lemma               @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  translations     TranslationMemory[]
-  sentenceLinks    SentenceLemmaLink[]
-  dominantInMovies MovieLemmaMapping[]
-
-  @@unique([lemmaId, senseIndex], map: "unique_lemma_sense")
-  @@index([lemmaId], map: "ix_word_senses_lemma_id")
-  @@index([lemmaId, pos], map: "ix_word_senses_lemma_pos")
-  @@map("word_senses")
-}
-
-model TranslationMemory {
-  id                 Int      @id @default(autoincrement())
-  lemmaId            Int      @map("lemma_id")
-  senseId            Int      @map("sense_id")
-  targetLang         String   @map("target_lang") @db.VarChar(10)
-  translatedWord     String   @map("translated_word") @db.VarChar
-  translatedSentence String?  @map("translated_sentence") @db.Text
-  wordProvider       String   @map("word_provider") @db.VarChar(20)
-  sentenceProvider   String?  @map("sentence_provider") @db.VarChar(20)
-  usageCount         Int      @default(0) @map("usage_count")
-  reportCount        Int      @default(0) @map("report_count")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  lemma Lemma     @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  sense WordSense @relation(fields: [senseId], references: [id], onDelete: Cascade)
-
-  @@unique([lemmaId, senseId, targetLang], map: "unique_translation_memory")
-  @@index([lemmaId, targetLang], map: "ix_translation_memory_lemma_lang")
-  @@index([targetLang], map: "ix_translation_memory_target_lang")
-  @@map("translation_memory")
-}
-
 model MovieLemmaMapping {
   id               Int      @id @default(autoincrement())
   movieId          Int      @map("movie_id")
   lemmaId          Int      @map("lemma_id")
   frequencyInMovie Int      @default(1) @map("frequency_in_movie")
-  dominantSenseId  Int?     @map("dominant_sense_id")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  movie         Movie      @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  lemma         Lemma      @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  dominantSense WordSense? @relation(fields: [dominantSenseId], references: [id], onDelete: SetNull)
+  movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  lemma Lemma @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
 
   @@unique([movieId, lemmaId], map: "unique_movie_lemma")
   @@index([movieId], map: "ix_movie_lemma_mapping_movie_id")
@@ -639,7 +588,6 @@ model SentenceLemmaLink {
   id               Int     @id @default(autoincrement())
   sentenceId       Int     @map("sentence_id")
   lemmaId          Int     @map("lemma_id")
-  senseId          Int?    @map("sense_id")
   wordPosition     Int?    @map("word_position")
   matchedForm      String? @map("matched_form") @db.VarChar
   score            Float   @default(0)
@@ -647,10 +595,9 @@ model SentenceLemmaLink {
 
   sentence SentenceBank @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
   lemma    Lemma        @relation(fields: [lemmaId], references: [id], onDelete: Cascade)
-  sense    WordSense?   @relation(fields: [senseId], references: [id], onDelete: SetNull)
 
   @@unique([sentenceId, lemmaId], map: "unique_sentence_lemma")
-  @@index([lemmaId, senseId], map: "ix_sentence_lemma_link_lemma_sense")
+  @@index([lemmaId], map: "ix_sentence_lemma_link_lemma_id")
   @@map("sentence_lemma_links")
 }
 
