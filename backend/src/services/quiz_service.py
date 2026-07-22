@@ -26,11 +26,10 @@ XP_TWO_STAR_BONUS = 20
 class CardSpec:
     """What the client renders. For 'mcq' cards the client shows `word` and
     a 2x2 grid of translation choices; `translation` is the canonical
-    correct answer echoed for callout copy. 'synonym_mcq' works the same
-    with English synonyms as choices. The client scores the tap locally
-    and sets is_correct when submitting."""
+    correct answer echoed for callout copy. The client scores the tap
+    locally and sets is_correct when submitting."""
     word: str
-    card_type: str  # "mcq" | "synonym_mcq" | "self_rate"
+    card_type: str  # "mcq" | "self_rate"
     translation: Optional[str]
     choices: Optional[List[dict]] = None  # [{"word": str, "is_correct": bool}]
 
@@ -142,11 +141,11 @@ def srs_outcome_for_card(
       • "skip"      — don't touch the SRS state (kinda / no signal)
 
     Self-rate cards: `know` → correct, `dont` → incorrect, `kinda` → skip.
-    MCQ cards (translation or synonym): `is_correct` is the signal;
-    missing → skip. Unknown card types skip rather than mis-attribute.
+    MCQ cards: `is_correct` is the signal; missing → skip. Unknown card
+    types skip rather than mis-attribute.
     """
-    # "type" is the legacy typed-translation card — historical rows still
-    # carry it, scored the same as the MCQ taps that replaced it.
+    # "type" (typed-translation) and "synonym_mcq" are retired formats —
+    # historical rows still carry them, scored the same as today's MCQs.
     if card_type in ("type", "mcq", "synonym_mcq"):
         if is_correct is True:
             return "correct"

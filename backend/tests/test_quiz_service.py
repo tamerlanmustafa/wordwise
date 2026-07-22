@@ -150,7 +150,9 @@ class TestSrsOutcomeForCard:
         assert srs_outcome_for_card("mcq", is_correct=True, self_rating=None) == "correct"
         assert srs_outcome_for_card("mcq", is_correct=False, self_rating=None) == "incorrect"
 
-    def test_synonym_mcq_scored_like_type(self):
+    def test_legacy_synonym_mcq_still_scored(self):
+        # The synonym MCQ format is retired, but historical card rows and
+        # in-flight sessions still submit it — keep scoring them.
         assert srs_outcome_for_card("synonym_mcq", is_correct=True, self_rating=None) == "correct"
         assert srs_outcome_for_card("synonym_mcq", is_correct=False, self_rating=None) == "incorrect"
         assert srs_outcome_for_card("synonym_mcq", is_correct=None, self_rating=None) == "skip"

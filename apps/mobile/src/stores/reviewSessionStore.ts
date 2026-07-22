@@ -10,7 +10,7 @@
  * started instead of getting a fresh draw on every reopen.
  *
  * The cache is keyed by Practice tile (`kind` + optional `movieId`) so
- * quitting a Quick Recall and opening Synonym Round next won't try to
+ * quitting a Quick Recall and opening Tough Words next won't try to
  * resume the wrong session. Sessions older than `STALE_MS` (24 h) are
  * silently discarded — beyond a day the SRS schedule has moved on and
  * the cached deck is no longer relevant.

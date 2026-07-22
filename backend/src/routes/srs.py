@@ -37,6 +37,7 @@ from ..services.session_kinds import (
     compose_for_kind,
 )
 from ..services.quiz_service import build_translation_choices
+from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
     MAX_BOX,
@@ -45,7 +46,6 @@ from ..services.srs_engine import (
     can_free_user_start_session_today,
     next_due_after,
 )
-from ..services.synonym_service import build_synonym_mcq
 from ..services.translation_service import TranslationService
 from ..utils.subscription import is_premium
 
@@ -69,7 +69,7 @@ def _lemmatize_one(word: str) -> tuple[str, Optional[str]]:
     spaCy load never breaks card composition.
 
     The lemma is lowercased so display + downstream lookups
-    (translation, synonym MCQ) all key on a canonical form."""
+    (translation MCQ) all key on a canonical form."""
     w = (word or "").strip()
     if not w:
         return word, None
@@ -100,18 +100,7 @@ SESSION_SIZE = int(os.environ.get("SRS_SESSION_SIZE", "10"))
 # can start before the paywall fires. Variant B from the A/B test in §3.
 FREE_PREVIEW_SESSIONS = int(os.environ.get("SRS_FREE_PREVIEW_SESSIONS", "3"))
 
-# v0.7.3 — probability that any individual review card attempts the
-# synonym MCQ format. The old behavior (`SRS_SYNONYM_MIN_BOX=3`) gated
-# MCQ to high-box cards only, which left users with a fresh-feeling
-# deck never seeing MCQs at all. The new gate is purely probabilistic
-# per card: 60% try the synonym format first (falls back to translation
-# MCQ if WordNet has no synonyms or distractors don't exist at the
-# target CEFR), 40% go straight to translation MCQ. Tune the rate via
-# env without redeploying.
-SYNONYM_MCQ_RATE = float(os.environ.get("SRS_SYNONYM_MCQ_RATE", "0.6"))
-
-
-class SynonymChoice(BaseModel):
+class MCQChoice(BaseModel):
     word: str
     is_correct: bool
 
@@ -126,16 +115,13 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
-    # Card variant. Each card rolls against SYNONYM_MCQ_RATE; on a hit
-    # we try 'synonym_mcq' (requires WordNet + CEFR data + enough
-    # distractors) and fall back to 'mcq' — a translation MCQ whose
-    # distractors are the other deck words' translations. Cards with
-    # neither path (no synonyms AND no translation) are skipped. The
-    # legacy typed-translation 'type' card was removed with v0.8.
+    # Card variant: 'mcq' — a translation MCQ whose distractors are the
+    # other deck words' translations. Cards without one (no translation)
+    # are skipped. The legacy typed-translation 'type' card was removed
+    # with v0.8; the 'synonym_mcq' variant was retired with v0.9.
     card_type: str = "mcq"
-    # Present for both MCQ variants: 4 entries, exactly one is_correct.
-    # Synonym cards carry English synonyms, 'mcq' cards translations.
-    choices: Optional[list[SynonymChoice]] = None
+    # Present for 'mcq': 4 translation entries, exactly one is_correct.
+    choices: Optional[list[MCQChoice]] = None
     pos: Optional[str] = None
     # Canonical translation — the correct 'mcq' choice, echoed for
     # callout copy.
@@ -380,8 +366,8 @@ async def _pad_with_fresh_reel_lemmas(
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
     kind: str = Query("quick_recall", description="Practice tile (v0.7.2). One of "
-                                                 "quick_recall / synonym_round / "
-                                                 "tough_words / movie_deep_dive."),
+                                                 "quick_recall / tough_words / "
+                                                 "movie_deep_dive."),
     movie_id: Optional[int] = Query(None, description="Required when kind=movie_deep_dive."),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
@@ -499,7 +485,7 @@ async def start_session(
     movie_ids = list({r.movieId for r in session_rows if r.movieId})
 
     # v0.7 §7 — lemmatize every surface form once up front. Downstream
-    # translation/synonym/CEFR lookups all key on the lemma so 'hated'
+    # translation/CEFR lookups all key on the lemma so 'hated'
     # is studied as 'hate'. user_word_id keeps pointing at the original
     # row, so /srs/review still maps the correct DB record on submit.
     lemma_pos_map: dict[str, tuple[str, Optional[str]]] = {
@@ -525,45 +511,22 @@ async def start_session(
             if d.word not in pos_map and getattr(d, "part_of_speech", None):
                 pos_map[d.word] = d.part_of_speech
 
-    # v0.7 §7 — example sentences for the IN CONTEXT callout. The
-    # canonical store is `sentence_bank` joined via `sentence_lemma_links`
-    # on the `lemmas` table: one global pedagogical sentence per lemma,
-    # plus optional movie-tied rows when `movie_id IS NOT NULL`. We
-    # prefer the representative + highest-scoring link, and prefer
-    # movie-tied rows over global when both are available for the
-    # session's movies. One raw SQL query covers the join.
+    # v0.7 §7 — example sentences for the IN CONTEXT callout. Global
+    # LLM-authored (Haiku) sentences only — subtitle extracts read like
+    # dialogue fragments and are deliberately excluded, so a lemma the
+    # sentence worker hasn't reached yet shows no example rather than a
+    # raw movie line.
     example_by_lemma: dict[str, str] = {}
     if unique_lemmas:
         try:
-            rows = await db.query_raw(
-                """
-                SELECT DISTINCT ON (l.lemma)
-                       l.lemma,
-                       sb.sentence,
-                       sb.movie_id
-                FROM lemmas l
-                JOIN sentence_lemma_links sll ON sll.lemma_id = l.id
-                JOIN sentence_bank sb ON sb.id = sll.sentence_id
-                WHERE l.lemma = ANY($1::text[])
-                ORDER BY
-                  l.lemma,
-                  CASE WHEN sb.movie_id = ANY($2::int[]) THEN 0 ELSE 1 END,
-                  sll.is_representative DESC,
-                  sll.score DESC NULLS LAST,
-                  sb.id ASC
-                """,
-                unique_lemmas,
-                [r.movieId for r in session_rows if r.movieId] or [0],
-            )
-            for row in rows:
-                example_by_lemma[row["lemma"]] = row["sentence"]
+            example_by_lemma = await get_llm_examples_for_lemmas(db, unique_lemmas)
             logger.info(
-                "[srs.start] sentence_bank hits: %d / %d lemmas (%s)",
+                "[srs.start] llm sentence hits: %d / %d lemmas (%s)",
                 len(example_by_lemma), len(unique_lemmas),
                 ",".join(sorted(example_by_lemma.keys())[:8]),
             )
         except Exception as e:
-            logger.warning(f"[srs.start] sentence_bank lookup failed: {e}")
+            logger.warning(f"[srs.start] sentence lookup failed: {e}")
 
     movie_map: dict[int, str] = {}
     if movie_ids:
@@ -589,7 +552,8 @@ async def start_session(
     # v0.7 §7 — batch-translate the LEMMAS (not surface forms) so the
     # translation MCQ matches the canonical word the user is studying.
     # English natives get an empty map (translating en→en is gibberish),
-    # which means their sessions are synonym-only.
+    # so their words drop out below — the app's onboarding only offers
+    # non-English native languages, making that a legacy-account edge.
     target_lang = (getattr(current_user, "nativeLanguage", None) or "en").upper()
     translation_map: dict[str, str] = {}
     if unique_lemmas and target_lang != "EN":
@@ -617,8 +581,7 @@ async def start_session(
     # hydration lemma (lemma_pos_map) is recomputed here, so we re-check
     # against the form actually shown to be safe against any drift.
     carded_lemmas: set[str] = set()
-    # Fresh per-request RNG. Pass it down into build_synonym_mcq so the
-    # whole card-type roll + choice ordering shares the same source.
+    # Fresh per-request RNG so choice ordering varies per session.
     rng = random.Random()
     for r in session_rows:
         lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
@@ -630,9 +593,10 @@ async def start_session(
         cefr = cefr_map.get(lemma) or cefr_map.get(r.word)
         def_entry = def_map.get(lemma) or def_map.get(r.word)
         pos_label = spacy_pos or pos_map.get(lemma) or pos_map.get(r.word)
-        # Example sentence: sentence_bank (lemma-keyed) → legacy
-        # Word.example_sentence (sparsest). Lemma resolves irregular
-        # forms ("ran" → "run") to the canonical entry.
+        # Example sentence: global LLM sentence_bank rows only (lemma-
+        # keyed; subtitle extracts excluded) → legacy Word.example_sentence
+        # (words table is empty in prod, so effectively inert). Lemma
+        # resolves irregular forms ("ran" → "run") to the canonical entry.
         example_sentence: Optional[str] = example_by_lemma.get(lemma)
         if not example_sentence and def_entry:
             example_sentence = def_entry[1]
@@ -647,33 +611,6 @@ async def start_session(
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
-        # v0.7.3 — probabilistic card-type pick. Each card rolls once
-        # against SYNONYM_MCQ_RATE; on a hit we attempt the synonym
-        # format, otherwise we go straight to a translation MCQ. The
-        # synonym build still falls back to translation MCQ on the
-        # small slice of words where WordNet has no synonyms or
-        # distractors can't be built at the target CEFR — so the
-        # achieved synonym rate sits a notch below the configured one
-        # in practice, which is fine. Words with no translation (e.g.
-        # English natives) skip the roll: synonym is their only format,
-        # so always attempt it rather than dropping the word 40% of
-        # the time.
-        if cefr and (not translation_map.get(lemma) or rng.random() < SYNONYM_MCQ_RATE):
-            mcq = await build_synonym_mcq(
-                db, target_word=lemma, target_cefr=cefr,
-                target_pos=pos_label, rng=rng,
-            )
-            if mcq:
-                cards.append(ReviewCard(
-                    **base,
-                    card_type="synonym_mcq",
-                    pos=pos_label,
-                    choices=[SynonymChoice(**c) for c in mcq["choices"]],
-                ))
-                continue
-            # Synonym couldn't build — fall through to translation MCQ
-            # so the word still shows up rather than being skipped.
-
         choices = build_translation_choices(lemma, translation_map, rng=rng)
         if choices:
             cards.append(ReviewCard(
@@ -681,19 +618,19 @@ async def start_session(
                 card_type="mcq",
                 pos=pos_label,
                 translation=translation_map.get(lemma),
-                choices=[SynonymChoice(**c) for c in choices],
+                choices=[MCQChoice(**c) for c in choices],
             ))
             continue
 
-        # No synonym path, and no translation MCQ (missing translation
-        # or too few distinct deck translations for distractors) — drop
-        # the word from the session. It stays in the SRS queue and gets
-        # retried next time when data may have caught up.
+        # No translation MCQ (missing translation or too few distinct
+        # deck translations for distractors) — drop the word from the
+        # session. It stays in the SRS queue and gets retried next time
+        # when data may have caught up.
         skipped.append(lemma)
 
     if skipped:
         logger.info(
-            "[srs.start] dropped %d card(s) with neither synonym nor translation MCQ: %s",
+            "[srs.start] dropped %d card(s) without a translation MCQ: %s",
             len(skipped), skipped[:10],
         )
 

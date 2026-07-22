@@ -10,12 +10,9 @@
  *   index % 3 === 1  → tough_words
  *   index % 3 === 2  → movie_deep_dive
  *
- * Note: there's no separate `synonym_round` tile anymore. Synonym MCQs
- * and translation-typing prompts are intermixed *within every session*
- * — the server picks the card type per-card from each row's `srsBox`
- * (box ≥ 3 → MCQ, otherwise type). So a quick_recall session already
- * delivers both formats; carving them into separate tiles was creating
- * artificial monotony per session.
+ * Note: there's no separate `synonym_round` tile anymore — the kind
+ * (and the synonym MCQ format itself) was retired; every session now
+ * serves translation MCQs.
  *
  * Persisted to AsyncStorage so a relaunch lands the user on the same
  * active tile. There is no day-rollover here — the path is a counter,
@@ -35,9 +32,7 @@ import type { SessionKind } from '../services/api';
 const KEY = 'practice.path.cursor.v1';
 const ADVANCE_DEBOUNCE_MS = 800;
 
-/** The 3-step cycle. Keep in sync with `kindAtIndex` below.
- *  `synonym_round` is intentionally absent — synonym MCQs are blended
- *  into every session at the card-type layer (see `routes/srs.py`). */
+/** The 3-step cycle. Keep in sync with `kindAtIndex` below. */
 export const PRACTICE_KIND_CYCLE: SessionKind[] = [
   'quick_recall',
   'tough_words',

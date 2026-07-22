@@ -114,7 +114,6 @@ describe('label / threshold maps', () => {
   it('KIND_UNLOCK_THRESHOLDS exposes every session kind at the post-v0.7.3 zero gate', () => {
     expect(KIND_UNLOCK_THRESHOLDS).toEqual({
       quick_recall: 0,
-      synonym_round: 0,
       tough_words: 0,
       movie_deep_dive: 0,
     });

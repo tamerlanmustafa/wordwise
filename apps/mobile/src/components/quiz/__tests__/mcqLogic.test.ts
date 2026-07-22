@@ -1,7 +1,7 @@
 /**
- * mcqLogic — choice-state matrix + variant copy for the MCQ card.
+ * mcqLogic — choice-state matrix + copy for the translation MCQ card.
  * Pure logic, no React: covers the tile states (picked/reveal/dim)
- * that MCQCard renders for both the synonym and translation variants.
+ * that MCQCard renders.
  */
 import {
   MCQ_COPY,
@@ -76,10 +76,9 @@ describe('choiceIsDimmed', () => {
 });
 
 describe('MCQ_COPY', () => {
-  it('gives each variant its own eyebrow, idle CTA, and callout suffix', () => {
-    expect(MCQ_COPY.synonym.eyebrow).toBe('PICK THE SYNONYM');
-    expect(MCQ_COPY.translation.eyebrow).toBe('PICK THE TRANSLATION');
-    expect(MCQ_COPY.synonym.idleCta).not.toBe(MCQ_COPY.translation.idleCta);
-    expect(MCQ_COPY.synonym.notQuiteSuffix).not.toBe(MCQ_COPY.translation.notQuiteSuffix);
+  it('carries the translation-card eyebrow, idle CTA, and callout suffix', () => {
+    expect(MCQ_COPY.eyebrow).toBe('PICK THE TRANSLATION');
+    expect(MCQ_COPY.idleCta).toBe('Pick the translation');
+    expect(MCQ_COPY.notQuiteSuffix).toBe(' is the translation.');
   });
 });

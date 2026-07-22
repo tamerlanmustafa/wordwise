@@ -15,7 +15,6 @@ so it's unit-testable without a DB. This file is orchestration only.
 from __future__ import annotations
 
 import logging
-import os
 import random
 from typing import Any, Dict, List, Optional
 
@@ -35,8 +34,8 @@ from ..services.quiz_service import (
     pick_card_types,
     srs_outcome_for_card,
 )
-from ..services.synonym_service import build_synonym_mcq
 from ..services.movie_progress_service import recompute_for_user_movie
+from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
     advance_user_rollup_after_review,
     advance_word_after_review,
@@ -47,13 +46,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
 LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
-
-# Probability that an MCQ slot tries the synonym format instead of the
-# translation format — variety, not a 50/50 coin flip, because synonym
-# cards test a different (harder) skill. Falls back to translation MCQ
-# when WordNet can't build one. Tune via env without redeploying.
-QUIZ_SYNONYM_MCQ_RATE = float(os.environ.get("QUIZ_SYNONYM_MCQ_RATE", "0.35"))
-
 
 # --- Request / response schemas -------------------------------------------
 
@@ -88,11 +80,14 @@ class QuizChoice(BaseModel):
 
 class CardPayload(BaseModel):
     word: str
-    card_type: str  # "mcq" | "synonym_mcq" | "self_rate"
+    card_type: str  # "mcq" | "self_rate"
     translation: Optional[str] = None
-    # Present iff card_type is "mcq" (translations) or "synonym_mcq"
-    # (English synonyms): 4 entries, exactly one is_correct.
+    # Present iff card_type is "mcq": 4 translation choices, exactly one
+    # is_correct.
     choices: Optional[List[QuizChoice]] = None
+    # Global LLM-authored (Haiku) example sentence — never a subtitle
+    # extract. None when the sentence worker hasn't covered the word yet.
+    example_sentence: Optional[str] = None
 
 
 class StartSessionResponse(BaseModel):
@@ -102,7 +97,7 @@ class StartSessionResponse(BaseModel):
 
 class CardResultPayload(BaseModel):
     word: str
-    card_type: str  # "mcq" | "synonym_mcq" | "self_rate" (legacy: "type")
+    card_type: str  # "mcq" | "self_rate" (legacy: "type", "synonym_mcq")
     is_correct: Optional[bool] = None
     self_rating: Optional[str] = Field(None, pattern=r"^(know|kinda|dont)$")
     answer_ms: int
@@ -201,19 +196,16 @@ async def _translate_words(
         return {}
 
 
-async def _build_cards(
-    db: Prisma,
+def _build_cards(
     answers: List[str],
     translations: Dict[str, str],
     *,
-    level: str,
     rng: Optional[random.Random] = None,
 ) -> List[CardSpec]:
-    """Compose the card deck. Scored slots become tap-to-answer MCQs:
-    each rolls against QUIZ_SYNONYM_MCQ_RATE for the synonym format
-    (WordNet, works for English natives too), otherwise a translation
-    MCQ whose distractors come from the other deck words' translations.
-    A slot with neither path falls back to self_rate so the session
+    """Compose the card deck. Scored slots become tap-to-answer
+    translation MCQs whose distractors come from the other deck words'
+    translations. A slot without one (no translation, or too few
+    distinct distractors) falls back to self_rate so the session
     length stays fixed."""
     r = rng or random.Random()
     types = pick_card_types(total=len(answers), rng=r)
@@ -221,19 +213,6 @@ async def _build_cards(
     for word, card_type in zip(answers, types):
         translation = translations.get(word)
         if card_type == "mcq":
-            # No translation (e.g. English natives) → synonym is the only
-            # scored format, so always attempt it instead of rolling.
-            if not translation or r.random() < QUIZ_SYNONYM_MCQ_RATE:
-                mcq = await build_synonym_mcq(
-                    db, target_word=word, target_cefr=level, rng=r,
-                )
-                if mcq:
-                    cards.append(CardSpec(
-                        word=word, card_type="synonym_mcq",
-                        translation=translation, choices=mcq["choices"],
-                    ))
-                    continue
-                # Synonym couldn't build — fall through to translation MCQ.
             choices = build_translation_choices(word, translations, rng=r)
             if choices:
                 cards.append(CardSpec(
@@ -247,6 +226,27 @@ async def _build_cards(
             word=word, card_type="self_rate", translation=translation,
         ))
     return cards
+
+
+async def _cards_response(
+    db: Prisma, session_id: int, cards: List[CardSpec]
+) -> StartSessionResponse:
+    """Serialize the deck, attaching each word's global LLM-authored
+    (Haiku) example sentence — subtitle extracts are never used. Lookup
+    misses (sentence-worker backlog) and failures degrade to a
+    sentence-less card rather than blocking the session."""
+    examples: Dict[str, str] = {}
+    try:
+        examples = await get_llm_examples_for_lemmas(db, [c.word for c in cards])
+    except Exception as e:
+        logger.warning(f"[quiz.cards] llm example lookup failed: {e}")
+    return StartSessionResponse(
+        session_id=session_id,
+        cards=[
+            CardPayload(**c.__dict__, example_sentence=examples.get(c.word))
+            for c in cards
+        ],
+    )
 
 
 # --- Endpoints -------------------------------------------------------------
@@ -271,7 +271,7 @@ async def start_session(
     target_lang = (current_user.nativeLanguage or current_user.learningLanguage or "es").lower()
     translations = await _translate_words(db, answers, target_lang, current_user.id)
 
-    cards = await _build_cards(db, answers, translations, level=body.level, rng=rng)
+    cards = _build_cards(answers, translations, rng=rng)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
@@ -280,10 +280,7 @@ async def start_session(
         "kind": body.kind,
     })
 
-    return StartSessionResponse(
-        session_id=session.id,
-        cards=[CardPayload(**c.__dict__) for c in cards],
-    )
+    return await _cards_response(db, session.id, cards)
 
 
 @router.post("/sessions/{session_id}/cards")
@@ -332,7 +329,8 @@ async def complete_session(
         )
 
     cards = await db.quizcardresult.find_many(where={"sessionId": session_id})
-    # Scored = both MCQ formats, plus "type" from historical typed-card rows.
+    # Scored = translation MCQs, plus "type" / "synonym_mcq" from
+    # historical rows (typed cards and the retired synonym format).
     scored_cards = [c for c in cards if c.cardType in ("type", "mcq", "synonym_mcq")]
     correct = sum(1 for c in scored_cards if c.isCorrect)
     total_scored = len(scored_cards)
@@ -640,7 +638,7 @@ async def start_batch_session(
     answers = rng.sample(pool, min(CARDS_PER_SESSION, len(pool)))
     target_lang = (current_user.nativeLanguage or current_user.learningLanguage or "es").lower()
     translations = await _translate_words(db, answers, target_lang, current_user.id)
-    cards = await _build_cards(db, answers, translations, level=body.level, rng=rng)
+    cards = _build_cards(answers, translations, rng=rng)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
@@ -649,10 +647,7 @@ async def start_batch_session(
         "kind": "batch",
     })
 
-    return StartSessionResponse(
-        session_id=session.id,
-        cards=[CardPayload(**c.__dict__) for c in cards],
-    )
+    return await _cards_response(db, session.id, cards)
 
 
 @router.post("/pre-movie/{movie_id}", response_model=StartSessionResponse)
@@ -991,7 +986,7 @@ async def start_journey_session(
         or "es"
     ).lower()
     translations = await _translate_words(db, words, target_lang, current_user.id)
-    cards = await _build_cards(db, words, translations, level=body.level)
+    cards = _build_cards(words, translations)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
@@ -1000,7 +995,4 @@ async def start_journey_session(
         "kind": "journey",
     })
 
-    return StartSessionResponse(
-        session_id=session.id,
-        cards=[CardPayload(**c.__dict__) for c in cards],
-    )
+    return await _cards_response(db, session.id, cards)

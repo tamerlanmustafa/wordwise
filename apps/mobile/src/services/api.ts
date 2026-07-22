@@ -709,7 +709,7 @@ export const reportsApi = {
 };
 
 // SRS review types — mirrors backend/src/routes/srs.py.
-interface SynonymChoice {
+interface MCQChoicePayload {
   word: string;
   is_correct: boolean;
 }
@@ -724,13 +724,13 @@ export interface SrsReviewCard {
   definition: string | null;
   example_sentence: string | null;
   cefr_level: string | null;
-  /** 'synonym_mcq' (4-choice synonym pick) or 'mcq' (4-choice
-   *  translation pick — replaced the retired typed-translation card).
-   *  Client scores the tap locally and posts the boolean to
-   *  /srs/review. Cards with unknown types get skipped on the client. */
-  card_type?: 'synonym_mcq' | 'mcq';
-  /** Present for both MCQ variants: 4 entries, exactly one is_correct. */
-  choices?: SynonymChoice[];
+  /** 'mcq' — a 4-choice translation pick (replaced the retired
+   *  typed-translation and synonym cards). Client scores the tap
+   *  locally and posts the boolean to /srs/review. Cards with unknown
+   *  types get skipped on the client. */
+  card_type?: 'mcq';
+  /** Present for 'mcq': 4 entries, exactly one is_correct. */
+  choices?: MCQChoicePayload[];
   pos?: string | null;
   /** Canonical translation — the correct 'mcq' choice, echoed for
    *  callout copy. */
@@ -743,7 +743,6 @@ export interface SrsReviewCard {
  *  `services/session_kinds.py`. */
 export type SessionKind =
   | 'quick_recall'
-  | 'synonym_round'
   | 'tough_words'
   | 'movie_deep_dive';
 
@@ -753,7 +752,6 @@ export type SessionKind =
  *  remove when the next backend version drops the column entirely. */
 export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
   quick_recall:    0,
-  synonym_round:   0,
   tough_words:     0,
   movie_deep_dive: 0,
 };
@@ -1447,7 +1445,7 @@ export const studentApi = {
 // Quiz / Gamification
 // =====================================================================
 
-export type QuizCardType = 'mcq' | 'self_rate' | 'synonym_mcq';
+export type QuizCardType = 'mcq' | 'self_rate';
 export type QuizSelfRating = 'know' | 'kinda' | 'dont';
 export type QuizSessionKind = 'unit' | 'pre_movie' | 'batch';
 export type QuizLeaderboardMetric = 'stars' | 'xp' | 'retention';
@@ -1460,8 +1458,7 @@ export interface QuizCard {
   translation: string | null;
   pos?: string | null;
   example_sentence?: string | null;
-  /** MCQ choices: translations for 'mcq', English synonyms for
-   *  'synonym_mcq'. 4 entries, exactly one is_correct. */
+  /** MCQ choices: 4 translation entries, exactly one is_correct. */
   choices?: { word: string; is_correct: boolean }[] | null;
   cefr_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | null;
 }

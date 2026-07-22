@@ -1,8 +1,7 @@
 /**
- * MCQCard — full-card UI for a tap-to-answer MCQ quiz card. Two
- * variants sharing one behavior: 'synonym' (choices are English
- * synonyms) and 'translation' (choices are translations in the user's
- * native language; replaced the retired typed-translation card).
+ * MCQCard — full-card UI for a tap-to-answer translation MCQ quiz card
+ * (choices are translations in the user's native language; replaced
+ * the retired typed-translation card).
  *
  * Self-contained: renders eyebrow, WordCard, a 2x2 grid of MCQChoice
  * tiles (two top, two bottom), post-answer NOT QUITE callout (when
@@ -21,9 +20,8 @@
  *   • On a wrong tap the CTA flips to "Got it · Continue →" and
  *     stays there until the user taps it — we don't auto-advance on
  *     misses so they can read the NOT QUITE callout.
- *   • Idle CTA is a ghost pill ("Pick a synonym" / "Pick the
- *     translation") — never "Check", because the tap on a tile IS the
- *     answer (no Check step).
+ *   • Idle CTA is a ghost pill ("Pick the translation") — never
+ *     "Check", because the tap on a tile IS the answer (no Check step).
  *
  * The card relies on `card.choices` where each choice has
  * `{ word, is_correct }`. The first `is_correct: true` entry is the
@@ -42,7 +40,6 @@ import {
   choiceStateFor,
   type MCQAnswerState,
   type MCQPhase,
-  type MCQVariant,
 } from './mcqLogic';
 
 interface MCQChoicePayload {
@@ -51,7 +48,6 @@ interface MCQChoicePayload {
 }
 
 export interface MCQCardProps {
-  variant: MCQVariant;
   word: string;
   pos?: string | null;
   example?: string | null;
@@ -61,7 +57,6 @@ export interface MCQCardProps {
 }
 
 export function MCQCard({
-  variant,
   word,
   pos,
   example,
@@ -70,7 +65,7 @@ export function MCQCard({
 }: MCQCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const copy = MCQ_COPY[variant];
+  const copy = MCQ_COPY;
 
   const [phase, setPhase] = useState<MCQPhase>('idle');
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);

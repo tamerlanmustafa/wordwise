@@ -33,7 +33,6 @@ import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 const TILE_LABELS: Record<SessionKind, string> = {
   quick_recall:    'Quick Recall',
-  synonym_round:   'Synonym Round',
   tough_words:     'Tough Words',
   movie_deep_dive: 'Movie Deep-Dive',
 };

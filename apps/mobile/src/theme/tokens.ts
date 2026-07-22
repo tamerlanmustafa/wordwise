@@ -88,7 +88,7 @@ export interface ThemeColors {
   nodeLockedEdge:     string;  // 3D bottom edge under locked tiles
   nodeRepairEdge:     string;  // 3D bottom edge under the repair (rescue-streak) tile
 
-  // v0.7 §7 Quiz screens (synonym MCQ + translation typing)
+  // v0.7 §7 Quiz screens (translation MCQ)
   wordBoxBg:          string;  // inner word card on quiz screens (off-paper by 1 step)
   successTint:        string;  // correct-flash bg on choices + input
   successBorder:      string;  // correct-flash border

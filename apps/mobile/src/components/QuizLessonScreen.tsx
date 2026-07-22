@@ -129,14 +129,13 @@ export function QuizLessonScreen({
     }
   };
 
-  // Both MCQ variants score the same way: the MCQCard fires
-  // `onAnswer(correct)` exactly once per card; we record the result
-  // under its own card_type so the server attributes it correctly.
-  const handleMcqAnswer = (cardType: 'mcq' | 'synonym_mcq') => (correct: boolean) => {
+  // The MCQCard fires `onAnswer(correct)` exactly once per card; we
+  // record the result under the 'mcq' card_type for the server.
+  const handleMcqAnswer = (correct: boolean) => {
     const answerMs = Date.now() - startedAtRef.current;
     recordAndAdvance({
       word: card.word,
-      card_type: cardType,
+      card_type: 'mcq',
       is_correct: correct,
       self_rating: null,
       answer_ms: answerMs,
@@ -188,26 +187,15 @@ export function QuizLessonScreen({
       />
 
       <View style={{ flex: 1 }}>
-        {card.card_type === 'synonym_mcq' && card.choices ? (
+        {card.card_type === 'mcq' && card.choices ? (
           <MCQCard
-            variant="synonym"
             // Reset internal state when the card index advances.
-            key={`smcq-${idx}-${card.word}`}
-            word={card.word}
-            pos={card.pos}
-            example={card.example_sentence}
-            choices={card.choices}
-            onAnswer={handleMcqAnswer('synonym_mcq')}
-          />
-        ) : card.card_type === 'mcq' && card.choices ? (
-          <MCQCard
-            variant="translation"
             key={`tmcq-${idx}-${card.word}`}
             word={card.word}
             pos={card.pos}
             example={card.example_sentence}
             choices={card.choices}
-            onAnswer={handleMcqAnswer('mcq')}
+            onAnswer={handleMcqAnswer}
           />
         ) : (
           <View style={s.body}>

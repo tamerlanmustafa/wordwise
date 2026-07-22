@@ -10,12 +10,13 @@ the right "done today" state.
 Available kinds (`SessionKind`):
   • quick_recall    — current default mix. Due-today cards + 1–2 fresh
                       from next unstudied reel movie. Always available.
-  • synonym_round   — 10 cards filtered to `srsBox >= 3`. Pulls from the
-                      user's "I know this" deck. Unlocks at streak 3.
   • tough_words     — Weighted toward `srsBox == 1` + recent misses. The
                       "bring back what failed" mode. Unlocks at streak 5.
   • movie_deep_dive — 10 cards from a specific reel movie (caller passes
                       `movie_id`). Unlocks at streak 7.
+
+(`synonym_round` was retired with the synonym MCQ format; stale clients
+requesting it get a 400 from the route layer.)
 
 Each composer returns a list of UserWord rows. The route layer (srs.py)
 hydrates them into ReviewCard objects identically across kinds — only
@@ -31,14 +32,12 @@ from prisma import Prisma
 
 SessionKind = Literal[
     "quick_recall",
-    "synonym_round",
     "tough_words",
     "movie_deep_dive",
 ]
 
 VALID_KINDS: set[str] = {
     "quick_recall",
-    "synonym_round",
     "tough_words",
     "movie_deep_dive",
 }
@@ -47,7 +46,6 @@ VALID_KINDS: set[str] = {
 # baseline (0); the rest space out across the critical first 2 weeks.
 KIND_UNLOCK_THRESHOLDS: dict[str, int] = {
     "quick_recall":    0,
-    "synonym_round":   3,
     "tough_words":     5,
     "movie_deep_dive": 7,
 }
@@ -130,24 +128,6 @@ async def compose_quick_recall(
     )
 
 
-async def compose_synonym_round(
-    db: Prisma,
-    *,
-    user_id: int,
-) -> list:
-    """Box-3-and-up cards only. The synonym MCQ flow (built in P5 W4)
-    is the higher-confidence card type, so we restrict the pool to
-    words the user has demonstrably retained at least twice.
-
-    Sort: most-overdue first, then by box descending so the user's most
-    advanced words get reinforced more often than their borderline ones."""
-    return await db.userword.find_many(
-        where={"userId": user_id, "srsBox": {"gte": 3}},
-        order=[{"srsDueAt": "asc"}, {"srsBox": "desc"}, {"id": "asc"}],
-        take=KIND_SESSION_SIZE,
-    )
-
-
 async def compose_tough_words(
     db: Prisma,
     *,
@@ -226,8 +206,6 @@ async def compose_for_kind(
     translate those into 400/422 responses."""
     if kind == "quick_recall":
         return await compose_quick_recall(db, user_id=user_id, now=now)
-    if kind == "synonym_round":
-        return await compose_synonym_round(db, user_id=user_id)
     if kind == "tough_words":
         return await compose_tough_words(db, user_id=user_id, now=now)
     if kind == "movie_deep_dive":

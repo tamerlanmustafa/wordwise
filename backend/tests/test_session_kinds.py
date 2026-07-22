@@ -26,10 +26,10 @@ class TestKindThresholds:
         assert is_kind_unlocked("quick_recall", current_streak=0)
         assert is_kind_unlocked("quick_recall", current_streak=999)
 
-    def test_synonym_round_unlocks_at_three(self):
-        assert not is_kind_unlocked("synonym_round", 2)
-        assert is_kind_unlocked("synonym_round", 3)
-        assert is_kind_unlocked("synonym_round", 100)
+    def test_retired_synonym_round_is_locked(self):
+        # Removed with the synonym MCQ format — a stale client asking for
+        # it must not auto-unlock.
+        assert not is_kind_unlocked("synonym_round", 999)
 
     def test_tough_words_unlocks_at_five(self):
         assert not is_kind_unlocked("tough_words", 4)
@@ -55,11 +55,11 @@ class TestKindThresholds:
 class TestValidKindsSet:
     def test_set_contains_expected_keys(self):
         assert VALID_KINDS == {
-            "quick_recall", "synonym_round", "tough_words", "movie_deep_dive",
+            "quick_recall", "tough_words", "movie_deep_dive",
         }
 
     @pytest.mark.parametrize("kind", [
-        "quick_recall", "synonym_round", "tough_words", "movie_deep_dive",
+        "quick_recall", "tough_words", "movie_deep_dive",
     ])
     def test_each_kind_has_threshold(self, kind):
         assert kind in KIND_UNLOCK_THRESHOLDS

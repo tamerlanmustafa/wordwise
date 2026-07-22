@@ -16,7 +16,7 @@ import {
 } from '../PracticeTilePath';
 import { kindAtIndex } from '../../../stores/practicePathStore';
 
-describe('kindAtIndex (3-step cycle, synonyms blended into other kinds)', () => {
+describe('kindAtIndex (3-step cycle)', () => {
   it('cycles through the three kinds in order', () => {
     expect(kindAtIndex(0)).toBe('quick_recall');
     expect(kindAtIndex(1)).toBe('tough_words');

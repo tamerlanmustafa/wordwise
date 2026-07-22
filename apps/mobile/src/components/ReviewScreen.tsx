@@ -63,10 +63,10 @@ export interface ReviewScreenProps {
   onPaywall: (previews_used: number, previews_limit: number) => void;
 }
 
-// v0.7 §7 — `recall` is gone. The server only ships `synonym_mcq` /
-// `type` cards now, both of which own their own internal interaction
-// state, so the screen-level phase machine only tracks the high-level
-// session lifecycle.
+// v0.7 §7 — `recall` is gone. The server only ships translation `mcq`
+// cards now, which own their own internal interaction state, so the
+// screen-level phase machine only tracks the high-level session
+// lifecycle.
 type Phase = 'loading' | 'card' | 'done' | 'empty' | 'error';
 
 export function ReviewScreen({
@@ -194,9 +194,7 @@ export function ReviewScreen({
   // per card index.
   useEffect(() => {
     if (phase !== 'card' || !currentCard) return;
-    const renderable =
-      (currentCard.card_type === 'synonym_mcq' || currentCard.card_type === 'mcq') &&
-      currentCard.choices;
+    const renderable = currentCard.card_type === 'mcq' && currentCard.choices;
     if (renderable) return;
     console.warn('[ReviewScreen] skipping unrenderable card:', currentCard.card_type, currentCard.word);
     advance(true);
@@ -406,10 +404,10 @@ export function ReviewScreen({
     );
   }
 
-  // v0.7 §7 — every card is either synonym_mcq or type. The server
-  // skips any word that can't build either, so we should never see a
-  // recall here. If we do (old server build), drop the card on the
-  // floor and advance silently so the queue doesn't black-screen.
+  // v0.7 §7 — every card is a translation mcq. The server skips any
+  // word that can't build one, so we should never see anything else
+  // here. If we do (old server build), drop the card on the floor and
+  // advance silently so the queue doesn't black-screen.
   if (!currentCard) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -449,16 +447,12 @@ export function ReviewScreen({
     />
   );
 
-  if (
-    (currentCard.card_type === 'synonym_mcq' || currentCard.card_type === 'mcq') &&
-    currentCard.choices
-  ) {
+  if (currentCard.card_type === 'mcq' && currentCard.choices) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {sharedHeader}
         <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
           <MCQCard
-            variant={currentCard.card_type === 'synonym_mcq' ? 'synonym' : 'translation'}
             // Key by card identity so internal state (picked choice,
             // answered phase) resets cleanly between cards.
             key={`mcq-${currentCard.user_word_id}-${index}`}

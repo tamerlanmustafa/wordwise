@@ -254,17 +254,6 @@ function TileGlyph({
       </Svg>
     );
   }
-  if (kind === 'synonym_round') {
-    // 4-grid (multiple choice)
-    return (
-      <Svg {...p}>
-        <Rect x={4} y={4} width={7} height={7} rx={1.5} />
-        <Rect x={13} y={4} width={7} height={7} rx={1.5} />
-        <Rect x={4} y={13} width={7} height={7} rx={1.5} />
-        <Rect x={13} y={13} width={7} height={7} rx={1.5} />
-      </Svg>
-    );
-  }
   if (kind === 'tough_words') {
     // Flame (tough / brought back)
     return (

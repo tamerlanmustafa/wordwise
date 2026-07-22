@@ -449,3 +449,39 @@ async def populate_movie_sentence_bank(
         "sentences_reused": sentences_reused,
         "links_created": links_created,
     }
+
+
+async def get_llm_examples_for_lemmas(
+    db: Prisma, lemmas: List[str]
+) -> Dict[str, str]:
+    """Best global LLM-authored example sentence per lemma.
+
+    Only rows with movie_id IS NULL AND source = 'llm' qualify — the
+    Haiku-generated pedagogical sentences (same filter Today's Word uses).
+    Subtitle-extracted rows are never returned: raw dialogue lines make
+    poor study examples (fragments, character names, missing context).
+    Within a lemma we prefer the representative link, then the highest
+    score, then the oldest row for stability.
+    """
+    if not lemmas:
+        return {}
+    rows = await db.query_raw(
+        """
+        SELECT DISTINCT ON (l.lemma)
+               l.lemma,
+               sb.sentence
+        FROM lemmas l
+        JOIN sentence_lemma_links sll ON sll.lemma_id = l.id
+        JOIN sentence_bank sb ON sb.id = sll.sentence_id
+        WHERE l.lemma = ANY($1::text[])
+          AND sb.movie_id IS NULL
+          AND sb.source = 'llm'
+        ORDER BY
+          l.lemma,
+          sll.is_representative DESC,
+          sll.score DESC NULLS LAST,
+          sb.id ASC
+        """,
+        lemmas,
+    )
+    return {r["lemma"]: r["sentence"] for r in rows}
