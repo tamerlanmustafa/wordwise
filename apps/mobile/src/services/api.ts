@@ -724,21 +724,17 @@ export interface SrsReviewCard {
   definition: string | null;
   example_sentence: string | null;
   cefr_level: string | null;
-  /** v0.7 §7 — 'synonym_mcq' (4-choice synonym pick) or 'type'
-   *  (free-text translation typing). Client scores locally and posts
-   *  the boolean to /srs/review. Legacy 'recall' is no longer emitted
-   *  by the server; old server builds get skipped on the client. */
-  card_type?: 'synonym_mcq' | 'type';
-  /** Present iff card_type === 'synonym_mcq'. */
+  /** 'synonym_mcq' (4-choice synonym pick) or 'mcq' (4-choice
+   *  translation pick — replaced the retired typed-translation card).
+   *  Client scores the tap locally and posts the boolean to
+   *  /srs/review. Cards with unknown types get skipped on the client. */
+  card_type?: 'synonym_mcq' | 'mcq';
+  /** Present for both MCQ variants: 4 entries, exactly one is_correct. */
   choices?: SynonymChoice[];
-  /** Present iff card_type === 'type' — canonical translation + hints.
-   *  Optional everywhere else; the type-card surface degrades cleanly
-   *  when any hint field is missing. */
   pos?: string | null;
+  /** Canonical translation — the correct 'mcq' choice, echoed for
+   *  callout copy. */
   translation?: string | null;
-  translation_aliases?: string[] | null;
-  syllables?: number | null;
-  first_letter?: string | null;
 }
 
 /** v0.7.2 — Practice-tab "session kind". The user picks one tile per
@@ -1451,7 +1447,7 @@ export const studentApi = {
 // Quiz / Gamification
 // =====================================================================
 
-export type QuizCardType = 'type' | 'self_rate' | 'synonym_mcq';
+export type QuizCardType = 'mcq' | 'self_rate' | 'synonym_mcq';
 export type QuizSelfRating = 'know' | 'kinda' | 'dont';
 export type QuizSessionKind = 'unit' | 'pre_movie' | 'batch';
 export type QuizLeaderboardMetric = 'stars' | 'xp' | 'retention';
@@ -1459,18 +1455,13 @@ export type QuizLeaderboardMetric = 'stars' | 'xp' | 'retention';
 export interface QuizCard {
   word: string;
   card_type: QuizCardType;
+  /** Canonical translation — the correct 'mcq' choice, echoed for
+   *  callout copy. */
   translation: string | null;
-  /** v0.7 §7.2 hint chips. All optional — the backend ships them when
-   *  it can compute them, otherwise the hint row degrades to whatever
-   *  fields ARE present (chip row may be empty). */
   pos?: string | null;
-  syllables?: number | null;
-  first_letter?: string | null;
   example_sentence?: string | null;
-  /** Accepted alternate spellings for the typed-translation check.
-   *  Server-supplied morphology / diacritic variants. */
-  translation_aliases?: string[] | null;
-  /** v0.7 §7 — synonym MCQ choices, when card_type === 'synonym_mcq'. */
+  /** MCQ choices: translations for 'mcq', English synonyms for
+   *  'synonym_mcq'. 4 entries, exactly one is_correct. */
   choices?: { word: string; is_correct: boolean }[] | null;
   cefr_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | null;
 }

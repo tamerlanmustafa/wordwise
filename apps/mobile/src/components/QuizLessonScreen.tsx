@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,8 +19,7 @@ import {
 import { track } from '../services/analytics';
 import { QuizHeader } from './quiz/QuizHeader';
 import { SessionFinishing } from './quiz/SessionFinishing';
-import { SynonymMCQCard } from './quiz/SynonymMCQCard';
-import { TranslationTypeCard } from './quiz/TranslationTypeCard';
+import { MCQCard } from './quiz/MCQCard';
 
 // Minimum time the celebratory finish beat stays on screen, so the reward
 // always lands even when the network resolves instantly. The submit + score
@@ -42,31 +39,6 @@ export interface QuizLessonScreenProps {
     level: string,
     cardResults: QuizCardResultInput[],
   ) => void;
-}
-
-const COMBINING_DIACRITICS = /[̀-ͯ]/g;
-const PUNCT = /[.,!?¿¡;:'"()[\]{}]/g;
-
-function normalize(s: string): string {
-  return s
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(COMBINING_DIACRITICS, '')
-    .replace(PUNCT, '')
-    .replace(/\s+/g, ' ');
-}
-
-function splitAlternates(s: string): string[] {
-  return s.split(/[\/,]/).map((t) => t.trim()).filter(Boolean);
-}
-
-function isTypedCorrect(userInput: string, expected: string): boolean {
-  const a = normalize(userInput);
-  if (!a) return false;
-  const alts = splitAlternates(expected).map(normalize);
-  if (alts.includes(a)) return true;
-  return a === normalize(expected);
 }
 
 export function QuizLessonScreen({
@@ -157,29 +129,14 @@ export function QuizLessonScreen({
     }
   };
 
-  // v0.7 §7.2 — the TranslationTypeCard owns its own input state +
-  // alias matching. `onAnswer(correct)` fires once per card with the
-  // final result; we just record it.
-  const handleTypeAnswer = (correct: boolean) => {
+  // Both MCQ variants score the same way: the MCQCard fires
+  // `onAnswer(correct)` exactly once per card; we record the result
+  // under its own card_type so the server attributes it correctly.
+  const handleMcqAnswer = (cardType: 'mcq' | 'synonym_mcq') => (correct: boolean) => {
     const answerMs = Date.now() - startedAtRef.current;
     recordAndAdvance({
       word: card.word,
-      card_type: 'type',
-      is_correct: correct,
-      self_rating: null,
-      answer_ms: answerMs,
-    });
-  };
-
-  // v0.7 §7.1 — synonym MCQ entry point for journey/movie quizzes.
-  // The backend can start surfacing `synonym_mcq` card_type from
-  // /quiz/start when it has the synonym data; the screen already
-  // handles it now.
-  const handleSynonymMcqAnswer = (correct: boolean) => {
-    const answerMs = Date.now() - startedAtRef.current;
-    recordAndAdvance({
-      word: card.word,
-      card_type: 'synonym_mcq',
+      card_type: cardType,
       is_correct: correct,
       self_rating: null,
       answer_ms: answerMs,
@@ -230,34 +187,27 @@ export function QuizLessonScreen({
         onBack={onExit}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <View style={{ flex: 1 }}>
         {card.card_type === 'synonym_mcq' && card.choices ? (
-          <SynonymMCQCard
+          <MCQCard
+            variant="synonym"
             // Reset internal state when the card index advances.
-            key={`mcq-${idx}-${card.word}`}
+            key={`smcq-${idx}-${card.word}`}
             word={card.word}
             pos={card.pos}
             example={card.example_sentence}
             choices={card.choices}
-            onAnswer={handleSynonymMcqAnswer}
+            onAnswer={handleMcqAnswer('synonym_mcq')}
           />
-        ) : card.card_type === 'type' ? (
-          <TranslationTypeCard
-            // Reset internal state when the card index advances —
-            // otherwise the previous typed answer persists into the
-            // next card and the phase stays in 'correct'.
-            key={`type-${idx}-${card.word}`}
+        ) : card.card_type === 'mcq' && card.choices ? (
+          <MCQCard
+            variant="translation"
+            key={`tmcq-${idx}-${card.word}`}
             word={card.word}
-            translation={card.translation ?? ''}
-            translationAliases={card.translation_aliases ?? undefined}
             pos={card.pos}
             example={card.example_sentence}
-            syllables={card.syllables}
-            firstLetter={card.first_letter ?? deriveFirstLetter(card.translation)}
-            onAnswer={handleTypeAnswer}
+            choices={card.choices}
+            onAnswer={handleMcqAnswer('mcq')}
           />
         ) : (
           <View style={s.body}>
@@ -291,17 +241,9 @@ export function QuizLessonScreen({
             </View>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
-}
-
-/** Best-effort first-letter hint when the backend hasn't supplied one.
- *  Strips obvious quoting / whitespace so we don't show `starts with "'"`. */
-function deriveFirstLetter(translation: string | null): string | null {
-  if (!translation) return null;
-  const cleaned = translation.trim().replace(/^["'«»“”]+/, '');
-  return cleaned.length > 0 ? cleaned[0] : null;
 }
 
 const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.create({
@@ -335,35 +277,6 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
     alignItems: 'center',
   },
   wordText: { fontSize: 32, fontWeight: '800', color: tc.text },
-  translationSmall: { fontSize: 14, color: tc.textSecondary, marginTop: 6 },
-  input: {
-    borderWidth: 2,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 18,
-    color: tc.text,
-    backgroundColor: tc.paper,
-  },
-  inputCorrect: {
-    borderColor: tc.success,
-    backgroundColor: tc.paper,
-  },
-  inputWrong: {
-    borderColor: tc.error,
-    backgroundColor: tc.errorTint,
-  },
-  feedback: {
-    marginTop: 16,
-    paddingVertical: 14, paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  feedbackCorrect: { backgroundColor: tc.paper, borderWidth: 1, borderColor: tc.success },
-  feedbackWrong: { backgroundColor: tc.errorTint },
-  feedbackTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  feedbackTitleOk: { color: tc.success },
-  feedbackTitleWrong: { color: tc.error },
-  feedbackText: { fontSize: 14, color: tc.text },
   selfRateCol: { gap: 12, marginTop: 8 },
   rateBtn: {
     paddingVertical: 18, borderRadius: 14,

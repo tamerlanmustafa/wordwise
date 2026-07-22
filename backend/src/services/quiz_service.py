@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 CARDS_PER_SESSION = 10
-TYPE_RATIO = 0.7  # ~70% typed-translation cards, ~30% self-rate
+MCQ_RATIO = 0.7  # ~70% scored MCQ cards, ~30% self-rate
 
 # XP economy — round numbers, tune later.
 XP_PER_CORRECT = 10
@@ -24,38 +24,83 @@ XP_TWO_STAR_BONUS = 20
 
 @dataclass(frozen=True)
 class CardSpec:
-    """What the client renders. For 'type' cards the client shows `word` and
-    the user types its translation in their native language — the client
-    scores the typed answer against `translation` and sets is_correct when
-    submitting."""
+    """What the client renders. For 'mcq' cards the client shows `word` and
+    a 2x2 grid of translation choices; `translation` is the canonical
+    correct answer echoed for callout copy. 'synonym_mcq' works the same
+    with English synonyms as choices. The client scores the tap locally
+    and sets is_correct when submitting."""
     word: str
-    card_type: str  # "type" | "self_rate"
+    card_type: str  # "mcq" | "synonym_mcq" | "self_rate"
     translation: Optional[str]
+    choices: Optional[List[dict]] = None  # [{"word": str, "is_correct": bool}]
 
 
 def pick_card_types(total: int = CARDS_PER_SESSION, *, rng: Optional[random.Random] = None) -> List[str]:
     """
     Produce the interleaved card-type sequence for a session. Deterministic
-    via injected rng for tests. Typed cards are ~70% of the deck, self-rate
+    via injected rng for tests. MCQ cards are ~70% of the deck, self-rate
     ~30%, shuffled. Guarantees at least one of each type when total >= 3 so
     the user sees the variety.
     """
     r = rng or random.Random()
-    n_type = round(total * TYPE_RATIO)
-    n_self = total - n_type
+    n_mcq = round(total * MCQ_RATIO)
+    n_self = total - n_mcq
     if total >= 3:
-        n_type = max(1, min(total - 1, n_type))
-        n_self = total - n_type
-    deck = ["type"] * n_type + ["self_rate"] * n_self
+        n_mcq = max(1, min(total - 1, n_mcq))
+        n_self = total - n_mcq
+    deck = ["mcq"] * n_mcq + ["self_rate"] * n_self
     r.shuffle(deck)
     return deck
 
 
+def build_translation_choices(
+    word: str,
+    translations: dict[str, str],
+    *,
+    rng: Optional[random.Random] = None,
+    n_choices: int = 4,
+) -> Optional[List[dict]]:
+    """
+    Compose the choice grid for a translation MCQ: the word's own
+    translation plus distractors drawn from the OTHER words' translations
+    in the same deck — zero extra translation cost, and distractors are
+    automatically level-appropriate (they come from the same CEFR pool).
+
+    Distractors are deduped case-insensitively against the correct answer
+    and each other, so two deck words sharing a translation can't produce
+    a grid with two "right" tiles. Returns None when the word has no
+    translation or fewer than `n_choices - 1` distinct distractors exist —
+    the caller falls back to self_rate.
+    """
+    correct = translations.get(word)
+    if not correct:
+        return None
+    r = rng or random.Random()
+    seen = {correct.strip().lower()}
+    pool: List[str] = []
+    for other, t in translations.items():
+        if other == word:
+            continue
+        key = t.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        pool.append(t)
+    if len(pool) < n_choices - 1:
+        return None
+    distractors = r.sample(pool, n_choices - 1)
+    choices = [{"word": correct, "is_correct": True}] + [
+        {"word": d, "is_correct": False} for d in distractors
+    ]
+    r.shuffle(choices)
+    return choices
+
+
 def compute_stars(correct_count: int, total_scored: int) -> int:
     """
-    Stars are derived only from typed cards (total_scored). Self-rate cards
+    Stars are derived only from MCQ cards (total_scored). Self-rate cards
     are excluded from the denominator because they have no "correct"
-    answer. A session with zero typed cards scores 1 star for completion —
+    answer. A session with zero MCQ cards scores 1 star for completion —
     prevents zero-star frustration on an honest self-rate-only session.
     """
     if total_scored == 0:
@@ -73,7 +118,7 @@ def compute_stars(correct_count: int, total_scored: int) -> int:
 def compute_xp(correct_count: int, self_rate_count: int, stars: int) -> int:
     """
     XP for a single session. Round numbers, easy to tune. Self-rating earns
-    half the points of a correct typed card — rewards honest engagement
+    half the points of a correct MCQ card — rewards honest engagement
     without letting users farm XP by tapping "know" on everything.
     """
     xp = correct_count * XP_PER_CORRECT + self_rate_count * XP_PER_SELF_RATE
@@ -97,11 +142,12 @@ def srs_outcome_for_card(
       • "skip"      — don't touch the SRS state (kinda / no signal)
 
     Self-rate cards: `know` → correct, `dont` → incorrect, `kinda` → skip.
-    Typed cards: `is_correct` is the signal; missing → skip.
-    Unknown card types skip rather than mis-attribute.
+    MCQ cards (translation or synonym): `is_correct` is the signal;
+    missing → skip. Unknown card types skip rather than mis-attribute.
     """
-    # Accept the legacy "mcq" alias scored the same as "type".
-    if card_type in ("type", "mcq"):
+    # "type" is the legacy typed-translation card — historical rows still
+    # carry it, scored the same as the MCQ taps that replaced it.
+    if card_type in ("type", "mcq", "synonym_mcq"):
         if is_correct is True:
             return "correct"
         if is_correct is False:

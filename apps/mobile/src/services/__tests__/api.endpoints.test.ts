@@ -153,7 +153,7 @@ describe('API endpoint wrappers', () => {
     it('submitCards POSTs the per-card results array', async () => {
       fetchMock.mockResolvedValue(ok({ stored: 2 }));
       const results = [
-        { word: 'a', card_type: 'type' as const, is_correct: true, self_rating: null, answer_ms: 800 },
+        { word: 'a', card_type: 'mcq' as const, is_correct: true, self_rating: null, answer_ms: 800 },
       ];
       await quizApi.submitCards(99, results);
       expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/quiz/sessions/99/cards`);

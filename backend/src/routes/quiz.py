@@ -15,6 +15,7 @@ so it's unit-testable without a DB. This file is orchestration only.
 from __future__ import annotations
 
 import logging
+import os
 import random
 from typing import Any, Dict, List, Optional
 
@@ -27,12 +28,14 @@ from ..middleware.auth import get_current_active_user
 from ..services.quiz_service import (
     CARDS_PER_SESSION,
     CardSpec,
+    build_translation_choices,
     compute_stars,
     compute_xp,
     is_unit_unlocked,
     pick_card_types,
     srs_outcome_for_card,
 )
+from ..services.synonym_service import build_synonym_mcq
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.srs_engine import (
     advance_user_rollup_after_review,
@@ -44,6 +47,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
 LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
+
+# Probability that an MCQ slot tries the synonym format instead of the
+# translation format — variety, not a 50/50 coin flip, because synonym
+# cards test a different (harder) skill. Falls back to translation MCQ
+# when WordNet can't build one. Tune via env without redeploying.
+QUIZ_SYNONYM_MCQ_RATE = float(os.environ.get("QUIZ_SYNONYM_MCQ_RATE", "0.35"))
 
 
 # --- Request / response schemas -------------------------------------------
@@ -72,10 +81,18 @@ class StartJourneySessionRequest(BaseModel):
     tmdb_id: Optional[int] = None
 
 
+class QuizChoice(BaseModel):
+    word: str
+    is_correct: bool
+
+
 class CardPayload(BaseModel):
     word: str
-    card_type: str  # "type" | "self_rate"
+    card_type: str  # "mcq" | "synonym_mcq" | "self_rate"
     translation: Optional[str] = None
+    # Present iff card_type is "mcq" (translations) or "synonym_mcq"
+    # (English synonyms): 4 entries, exactly one is_correct.
+    choices: Optional[List[QuizChoice]] = None
 
 
 class StartSessionResponse(BaseModel):
@@ -85,7 +102,7 @@ class StartSessionResponse(BaseModel):
 
 class CardResultPayload(BaseModel):
     word: str
-    card_type: str  # "type" | "self_rate"
+    card_type: str  # "mcq" | "synonym_mcq" | "self_rate" (legacy: "type")
     is_correct: Optional[bool] = None
     self_rating: Optional[str] = Field(None, pattern=r"^(know|kinda|dont)$")
     answer_ms: int
@@ -184,29 +201,48 @@ async def _translate_words(
         return {}
 
 
-def _build_cards(
+async def _build_cards(
+    db: Prisma,
     answers: List[str],
-    pool: List[str],
     translations: Dict[str, str],
     *,
+    level: str,
     rng: Optional[random.Random] = None,
 ) -> List[CardSpec]:
-    """Compose the card deck. Typed cards require a translation (the user
-    types it back). If we don't have one, the slot falls back to self_rate
-    so the session length stays fixed."""
-    del pool  # no longer needed (distractors removed with MCQ)
+    """Compose the card deck. Scored slots become tap-to-answer MCQs:
+    each rolls against QUIZ_SYNONYM_MCQ_RATE for the synonym format
+    (WordNet, works for English natives too), otherwise a translation
+    MCQ whose distractors come from the other deck words' translations.
+    A slot with neither path falls back to self_rate so the session
+    length stays fixed."""
     r = rng or random.Random()
     types = pick_card_types(total=len(answers), rng=r)
     cards: List[CardSpec] = []
     for word, card_type in zip(answers, types):
         translation = translations.get(word)
-        if card_type == "type" and translation:
-            cards.append(CardSpec(
-                word=word, card_type="type", translation=translation,
-            ))
-            continue
-        # Self-rate path: either by design, or because no translation is
-        # available to score a typed answer against.
+        if card_type == "mcq":
+            # No translation (e.g. English natives) → synonym is the only
+            # scored format, so always attempt it instead of rolling.
+            if not translation or r.random() < QUIZ_SYNONYM_MCQ_RATE:
+                mcq = await build_synonym_mcq(
+                    db, target_word=word, target_cefr=level, rng=r,
+                )
+                if mcq:
+                    cards.append(CardSpec(
+                        word=word, card_type="synonym_mcq",
+                        translation=translation, choices=mcq["choices"],
+                    ))
+                    continue
+                # Synonym couldn't build — fall through to translation MCQ.
+            choices = build_translation_choices(word, translations, rng=r)
+            if choices:
+                cards.append(CardSpec(
+                    word=word, card_type="mcq",
+                    translation=translation, choices=choices,
+                ))
+                continue
+        # Self-rate path: either by design, or because neither MCQ format
+        # could be built for this word.
         cards.append(CardSpec(
             word=word, card_type="self_rate", translation=translation,
         ))
@@ -230,12 +266,12 @@ async def start_session(
 
     rng = random.Random()
     answers = rng.sample(pool, min(CARDS_PER_SESSION, len(pool)))
-    # The user types the translation, so we fetch their native language
-    # (falls back to learning language, then "es" if neither is set).
+    # Translation MCQs are in the user's native language (falls back to
+    # learning language, then "es" if neither is set).
     target_lang = (current_user.nativeLanguage or current_user.learningLanguage or "es").lower()
     translations = await _translate_words(db, answers, target_lang, current_user.id)
 
-    cards = _build_cards(answers, pool, translations, rng=rng)
+    cards = await _build_cards(db, answers, translations, level=body.level, rng=rng)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
@@ -296,8 +332,8 @@ async def complete_session(
         )
 
     cards = await db.quizcardresult.find_many(where={"sessionId": session_id})
-    # Historical rows may say "mcq" — count both, they're scored the same way.
-    scored_cards = [c for c in cards if c.cardType in ("type", "mcq")]
+    # Scored = both MCQ formats, plus "type" from historical typed-card rows.
+    scored_cards = [c for c in cards if c.cardType in ("type", "mcq", "synonym_mcq")]
     correct = sum(1 for c in scored_cards if c.isCorrect)
     total_scored = len(scored_cards)
     self_rate_count = sum(1 for c in cards if c.cardType == "self_rate")
@@ -604,7 +640,7 @@ async def start_batch_session(
     answers = rng.sample(pool, min(CARDS_PER_SESSION, len(pool)))
     target_lang = (current_user.nativeLanguage or current_user.learningLanguage or "es").lower()
     translations = await _translate_words(db, answers, target_lang, current_user.id)
-    cards = _build_cards(answers, pool, translations, rng=rng)
+    cards = await _build_cards(db, answers, translations, level=body.level, rng=rng)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,
@@ -955,7 +991,7 @@ async def start_journey_session(
         or "es"
     ).lower()
     translations = await _translate_words(db, words, target_lang, current_user.id)
-    cards = _build_cards(words, [], translations)
+    cards = await _build_cards(db, words, translations, level=body.level)
 
     session = await db.quizsession.create(data={
         "userId": current_user.id,

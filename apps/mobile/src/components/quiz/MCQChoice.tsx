@@ -1,36 +1,35 @@
 /**
- * MCQChoice — single row in the 4-stacked synonym MCQ.
+ * MCQChoice — single rectangular tile in the 2x2 MCQ answer grid
+ * (two tiles top, two bottom; the parent MCQCard owns the grid layout).
  *
- * State matrix (cf. tabs2/quiz.jsx §7.1):
- *   idle           — default chip, full shadow, tappable
- *   selected (idle) — same visual; the tap registers as 'correct' or
- *                     'wrong' on the next tick. We don't render a
- *                     "selected but unscored" intermediate.
+ * State matrix (see mcqLogic.choiceStateFor):
+ *   idle           — default tile, full shadow, tappable
  *   correct        — success border + tint + green check glyph (the
  *                    user tapped the right one)
  *   wrong          — error border + tint + red × glyph
  *   reveal-correct — same as correct (used to highlight the *actual*
  *                    answer after the user picked wrong)
  *
- * Disabled (post-answer, untapped wrong-eligible choices) get
- * opacity 0.4. The component takes a single `state` plus optional
- * `disabled` flag; the parent SynonymMCQCard composes the matrix.
+ * Disabled (post-answer, untapped wrong-eligible tiles) get opacity 0.4.
+ * The component takes a single `state` plus optional `disabled` flag;
+ * the parent MCQCard composes the matrix.
  */
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import type { MCQChoiceState } from './mcqLogic';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
-export type MCQChoiceState = 'idle' | 'correct' | 'wrong' | 'reveal-correct';
+export type { MCQChoiceState };
 
 export interface MCQChoiceProps {
   label: string;
   state: MCQChoiceState;
   /** Visually dimmed (opacity 0.4) — used for the untapped wrong-eligible
-   *  rows after the user has answered. Doesn't disable the press
+   *  tiles after the user has answered. Doesn't disable the press
    *  handler at React-Native level; the parent is responsible for
    *  ignoring late taps. */
   disabled?: boolean;
@@ -53,7 +52,7 @@ export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
     <Pressable
       onPress={disabled || !isIdle ? undefined : onPress}
       style={({ pressed }) => [
-        s.row,
+        s.tile,
         {
           borderColor: border,
           backgroundColor: bg,
@@ -65,17 +64,21 @@ export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
         pressed && isIdle && { opacity: 0.85 },
       ]}
     >
-      <Text style={[s.label, { color: fg }]} numberOfLines={2}>
+      <Text style={[s.label, { color: fg }]} numberOfLines={3}>
         {label}
       </Text>
-      {isCorrect ? (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={tc.success} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M5 12l4 4 10-10" />
-        </Svg>
-      ) : isWrong ? (
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={tc.error} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M6 6l12 12M18 6L6 18" />
-        </Svg>
+      {isCorrect || isWrong ? (
+        <View style={s.glyph}>
+          {isCorrect ? (
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={tc.success} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M5 12l4 4 10-10" />
+            </Svg>
+          ) : (
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={tc.error} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M6 6l12 12M18 6L6 18" />
+            </Svg>
+          )}
+        </View>
       ) : null}
     </Pressable>
   );
@@ -83,15 +86,15 @@ export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
 
 const makeStyles = (_tc: ThemeColors) =>
   StyleSheet.create({
-    row: {
-      paddingHorizontal: 14,
-      paddingVertical: 18,
+    tile: {
+      flex: 1,
+      minHeight: 92,
+      paddingHorizontal: 12,
+      paddingVertical: 14,
       borderRadius: 14,
       borderWidth: 2,
-      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
+      justifyContent: 'center',
     },
     idleShadow: {
       shadowColor: '#000',
@@ -100,11 +103,18 @@ const makeStyles = (_tc: ThemeColors) =>
       shadowOffset: { width: 0, height: 6 },
       elevation: 2,
     },
+    // Result glyph pinned to the corner so the centered label doesn't
+    // shift when it appears.
+    glyph: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+    },
     label: {
-      flex: 1,
       fontFamily: SERIF_FAMILY,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: '600',
       letterSpacing: -0.2,
+      textAlign: 'center',
     },
   });

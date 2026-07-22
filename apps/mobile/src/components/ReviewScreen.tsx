@@ -24,8 +24,7 @@ import { ChestReveal } from './journey/ChestReveal';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
-import { SynonymMCQCard } from './quiz/SynonymMCQCard';
-import { TranslationTypeCard } from './quiz/TranslationTypeCard';
+import { MCQCard } from './quiz/MCQCard';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
@@ -196,8 +195,8 @@ export function ReviewScreen({
   useEffect(() => {
     if (phase !== 'card' || !currentCard) return;
     const renderable =
-      (currentCard.card_type === 'synonym_mcq' && currentCard.choices) ||
-      (currentCard.card_type === 'type' && currentCard.translation);
+      (currentCard.card_type === 'synonym_mcq' || currentCard.card_type === 'mcq') &&
+      currentCard.choices;
     if (renderable) return;
     console.warn('[ReviewScreen] skipping unrenderable card:', currentCard.card_type, currentCard.word);
     advance(true);
@@ -450,12 +449,16 @@ export function ReviewScreen({
     />
   );
 
-  if (currentCard.card_type === 'synonym_mcq' && currentCard.choices) {
+  if (
+    (currentCard.card_type === 'synonym_mcq' || currentCard.card_type === 'mcq') &&
+    currentCard.choices
+  ) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {sharedHeader}
         <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
-          <SynonymMCQCard
+          <MCQCard
+            variant={currentCard.card_type === 'synonym_mcq' ? 'synonym' : 'translation'}
             // Key by card identity so internal state (picked choice,
             // answered phase) resets cleanly between cards.
             key={`mcq-${currentCard.user_word_id}-${index}`}
@@ -463,31 +466,6 @@ export function ReviewScreen({
             pos={currentCard.pos ?? undefined}
             example={currentCard.example_sentence}
             choices={currentCard.choices}
-            onAnswer={(correct) => advance(correct)}
-          />
-        </Animated.View>
-        {sharedTip}
-      </SafeAreaView>
-    );
-  }
-
-  if (currentCard.card_type === 'type' && currentCard.translation) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {sharedHeader}
-        <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
-          <TranslationTypeCard
-            // Key by card identity so the input value + phase reset
-            // cleanly between cards (otherwise the previous answer
-            // text persists into the next typing prompt).
-            key={`type-${currentCard.user_word_id}-${index}`}
-            word={currentCard.word}
-            translation={currentCard.translation}
-            translationAliases={currentCard.translation_aliases ?? undefined}
-            pos={currentCard.pos ?? undefined}
-            example={currentCard.example_sentence}
-            syllables={currentCard.syllables ?? undefined}
-            firstLetter={currentCard.first_letter ?? undefined}
             onAnswer={(correct) => advance(correct)}
           />
         </Animated.View>

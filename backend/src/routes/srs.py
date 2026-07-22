@@ -36,6 +36,7 @@ from ..services.session_kinds import (
     VALID_KINDS,
     compose_for_kind,
 )
+from ..services.quiz_service import build_translation_choices
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
     MAX_BOX,
@@ -88,34 +89,6 @@ def _lemmatize_one(word: str) -> tuple[str, Optional[str]]:
         return w.lower(), None
 
 
-def _count_syllables_en(word: str) -> int:
-    """Cheap English-syllable heuristic for the typing-card hint chip.
-    Counts vowel groups, drops a silent trailing 'e', floors at 1. Good
-    enough for one-word vocabulary cards — we're not parsing Beowulf."""
-    w = (word or "").strip().lower()
-    if not w:
-        return 0
-    count = 0
-    prev_vowel = False
-    for ch in w:
-        is_vowel = ch in "aeiouy"
-        if is_vowel and not prev_vowel:
-            count += 1
-        prev_vowel = is_vowel
-    if w.endswith("e") and count > 1:
-        count -= 1
-    return max(1, count)
-
-
-def _first_letter(translation: str) -> Optional[str]:
-    """First non-punctuation character of the translation — used as the
-    `starts with "X"` hint. Strips wrapping quotes that some providers
-    return so we don't show `starts with '"'`."""
-    if not translation:
-        return None
-    cleaned = translation.strip().lstrip('"\'«»“”')
-    return cleaned[0] if cleaned else None
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/srs", tags=["srs"])
 
@@ -131,9 +104,10 @@ FREE_PREVIEW_SESSIONS = int(os.environ.get("SRS_FREE_PREVIEW_SESSIONS", "3"))
 # synonym MCQ format. The old behavior (`SRS_SYNONYM_MIN_BOX=3`) gated
 # MCQ to high-box cards only, which left users with a fresh-feeling
 # deck never seeing MCQs at all. The new gate is purely probabilistic
-# per card: 60% try MCQ first (falls back to typing if WordNet has no
-# synonyms or distractors don't exist at the target CEFR), 40% go
-# straight to typing. Tune the rate via env without redeploying.
+# per card: 60% try the synonym format first (falls back to translation
+# MCQ if WordNet has no synonyms or distractors don't exist at the
+# target CEFR), 40% go straight to translation MCQ. Tune the rate via
+# env without redeploying.
 SYNONYM_MCQ_RATE = float(os.environ.get("SRS_SYNONYM_MCQ_RATE", "0.6"))
 
 
@@ -152,24 +126,20 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
-    # v0.7.3 — card variant. We never ship 'recall' anymore: each card
-    # rolls against SYNONYM_MCQ_RATE; on a hit we try 'synonym_mcq'
-    # (requires WordNet + CEFR data + enough distractors) and fall back
-    # to 'type' if the MCQ can't be built. Cards with neither path
-    # (no synonyms AND no translation) are skipped. 'recall' remains
-    # in the union only for forward-compat with old client builds that
-    # may still check for it.
-    card_type: str = "type"
-    # Present iff card_type == 'synonym_mcq'.
+    # Card variant. Each card rolls against SYNONYM_MCQ_RATE; on a hit
+    # we try 'synonym_mcq' (requires WordNet + CEFR data + enough
+    # distractors) and fall back to 'mcq' — a translation MCQ whose
+    # distractors are the other deck words' translations. Cards with
+    # neither path (no synonyms AND no translation) are skipped. The
+    # legacy typed-translation 'type' card was removed with v0.8.
+    card_type: str = "mcq"
+    # Present for both MCQ variants: 4 entries, exactly one is_correct.
+    # Synonym cards carry English synonyms, 'mcq' cards translations.
     choices: Optional[list[SynonymChoice]] = None
-    # Present iff card_type == 'type'. The translation is what the user
-    # types; aliases are accepted variants; pos / syllables / first_letter
-    # power the hint chips on the typing card.
     pos: Optional[str] = None
+    # Canonical translation — the correct 'mcq' choice, echoed for
+    # callout copy.
     translation: Optional[str] = None
-    translation_aliases: Optional[list[str]] = None
-    syllables: Optional[int] = None
-    first_letter: Optional[str] = None
 
 
 class SessionStartResponse(BaseModel):
@@ -617,7 +587,7 @@ async def start_session(
             cefr_map[r["word"]] = r["cefr_level"]
 
     # v0.7 §7 — batch-translate the LEMMAS (not surface forms) so the
-    # type-card hint matches the canonical word the user is studying.
+    # translation MCQ matches the canonical word the user is studying.
     # English natives get an empty map (translating en→en is gibberish),
     # which means their sessions are synonym-only.
     target_lang = (getattr(current_user, "nativeLanguage", None) or "en").upper()
@@ -678,13 +648,17 @@ async def start_session(
             cefr_level=cefr,
         )
         # v0.7.3 — probabilistic card-type pick. Each card rolls once
-        # against SYNONYM_MCQ_RATE; on a hit we attempt MCQ, otherwise
-        # we go straight to typing. The MCQ build still falls back to
-        # typing on the small slice of words where WordNet has no
-        # synonyms or distractors can't be built at the target CEFR —
-        # so the achieved MCQ rate sits a notch below the configured
-        # one in practice, which is fine.
-        if cefr and rng.random() < SYNONYM_MCQ_RATE:
+        # against SYNONYM_MCQ_RATE; on a hit we attempt the synonym
+        # format, otherwise we go straight to a translation MCQ. The
+        # synonym build still falls back to translation MCQ on the
+        # small slice of words where WordNet has no synonyms or
+        # distractors can't be built at the target CEFR — so the
+        # achieved synonym rate sits a notch below the configured one
+        # in practice, which is fine. Words with no translation (e.g.
+        # English natives) skip the roll: synonym is their only format,
+        # so always attempt it rather than dropping the word 40% of
+        # the time.
+        if cefr and (not translation_map.get(lemma) or rng.random() < SYNONYM_MCQ_RATE):
             mcq = await build_synonym_mcq(
                 db, target_word=lemma, target_cefr=cefr,
                 target_pos=pos_label, rng=rng,
@@ -697,30 +671,29 @@ async def start_session(
                     choices=[SynonymChoice(**c) for c in mcq["choices"]],
                 ))
                 continue
-            # MCQ couldn't build — fall through to typing so the word
-            # still shows up rather than being skipped.
+            # Synonym couldn't build — fall through to translation MCQ
+            # so the word still shows up rather than being skipped.
 
-        translation = translation_map.get(lemma)
-        if translation:
+        choices = build_translation_choices(lemma, translation_map, rng=rng)
+        if choices:
             cards.append(ReviewCard(
                 **base,
-                card_type="type",
+                card_type="mcq",
                 pos=pos_label,
-                translation=translation,
-                translation_aliases=None,
-                syllables=_count_syllables_en(lemma),
-                first_letter=_first_letter(translation),
+                translation=translation_map.get(lemma),
+                choices=[SynonymChoice(**c) for c in choices],
             ))
             continue
 
-        # No synonym path, no translation — drop the word from the
-        # session. It stays in the SRS queue and gets retried next time
-        # when data may have caught up.
+        # No synonym path, and no translation MCQ (missing translation
+        # or too few distinct deck translations for distractors) — drop
+        # the word from the session. It stays in the SRS queue and gets
+        # retried next time when data may have caught up.
         skipped.append(lemma)
 
     if skipped:
         logger.info(
-            "[srs.start] dropped %d card(s) with neither synonym nor translation: %s",
+            "[srs.start] dropped %d card(s) with neither synonym nor translation MCQ: %s",
             len(skipped), skipped[:10],
         )
 
