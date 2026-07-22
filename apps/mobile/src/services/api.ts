@@ -605,7 +605,17 @@ export interface VocabCoverageMetric {
   value: number | null;
   unit: string;
   status: VocabCoverageStatus;
+  /** Human-readable band, e.g. "warn <90%, fail <80%". */
   threshold: string;
+  /** Same bands, structured, so the UI can draw meter markers without
+   *  re-declaring (and drifting from) the server's numbers. */
+  warn_at: number | null;
+  fail_at: number | null;
+  /** "min" = higher is better, "max" = higher is worse. */
+  direction: 'min' | 'max';
+  /** Present = bounded scale, render as a meter. Null = unbounded count, render
+   *  as a stat tile. */
+  max_value: number | null;
   detail?: string;
   previous?: number;
   delta?: number;

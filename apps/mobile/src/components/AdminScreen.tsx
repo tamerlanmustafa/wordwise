@@ -22,9 +22,7 @@ import {
   type ProcessedMovie,
   type ReportStats,
   type ReportStatus,
-  type VocabCoverageMetric,
   type VocabCoverageReport,
-  type VocabCoverageStatus,
   type WordReport,
 } from '../services/api';
 import {
@@ -32,6 +30,8 @@ import {
   type AdminViewMode,
 } from '../stores/entitlementsStore';
 import type { Entitlements } from '../types';
+import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
+import { VocabCoverageView } from './admin/VocabCoverageView';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -40,21 +40,6 @@ import type { Entitlements } from '../types';
 //   1. Stats grid: movies processed, total users, queue progress
 //   2. Filter chips for report status (All, Pending, Reviewed, ...)
 //   3. Scrollable list of reports with quick actions and a details modal
-
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  success: '#4CAF9A',
-  warning: '#F4A261',
-  error: '#D66A6A',
-  info: '#4A90E2',
-  overlay: 'rgba(0, 0, 0, 0.45)',
-};
 
 const STATUS_COLOR: Record<ReportStatus, string> = {
   PENDING: COLORS.warning,
@@ -105,35 +90,6 @@ export interface AdminScreenProps {
 }
 
 type AdminView = 'main' | 'dead' | 'processed' | 'coverage';
-
-const COVERAGE_STATUS_COLOR: Record<VocabCoverageStatus, string> = {
-  ok: COLORS.success,
-  warn: COLORS.warning,
-  fail: COLORS.error,
-};
-
-const COVERAGE_STATUS_LABEL: Record<VocabCoverageStatus, string> = {
-  ok: 'OK',
-  warn: 'Warn',
-  fail: 'Fail',
-};
-
-function formatMetricValue(m: VocabCoverageMetric): string {
-  if (m.value == null) return '—';
-  const rounded =
-    Number.isInteger(m.value) ? m.value.toLocaleString() : m.value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (m.unit === '%') return `${rounded}%`;
-  if (m.unit === '$') return `$${rounded}`;
-  return `${rounded} ${m.unit}`;
-}
-
-function formatDelta(m: VocabCoverageMetric): string | null {
-  if (m.delta == null || m.delta === 0) return null;
-  const sign = m.delta > 0 ? '▲' : '▼';
-  const mag = Math.abs(m.delta);
-  const magStr = Number.isInteger(mag) ? mag.toLocaleString() : mag.toFixed(2);
-  return `${sign} ${magStr} vs last snapshot`;
-}
 
 export function AdminScreen({ onBack }: AdminScreenProps) {
   const [view, setView] = useState<AdminView>('main');
@@ -523,10 +479,6 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   }
 
   if (view === 'coverage') {
-    const generatedAt = coverage ? new Date(coverage.generated_at).toLocaleString() : null;
-    const prevAt = coverage?.previous_snapshot_at
-      ? new Date(coverage.previous_snapshot_at).toLocaleString()
-      : null;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -561,51 +513,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
             <Text style={styles.emptyText}>No data</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.coverageSummary}>
-              <View
-                style={[
-                  styles.coverageOverallChip,
-                  { backgroundColor: COVERAGE_STATUS_COLOR[coverage.overall_status] },
-                ]}
-              >
-                <Text style={styles.coverageOverallText}>
-                  {COVERAGE_STATUS_LABEL[coverage.overall_status]}
-                </Text>
-              </View>
-              <Text style={styles.coverageSummaryMeta}>
-                Words → sentences → senses → translations
-                {generatedAt ? `\nChecked ${generatedAt}` : ''}
-                {prevAt ? `\nTrend vs snapshot ${prevAt}` : '\nNo prior snapshot yet — trends appear after the first daily snapshot'}
-              </Text>
-            </View>
-
-            {coverage.metrics.map((m) => {
-              const delta = formatDelta(m);
-              return (
-                <View
-                  key={m.key}
-                  style={[styles.coverageCard, { borderLeftColor: COVERAGE_STATUS_COLOR[m.status] }]}
-                >
-                  <View style={styles.coverageCardTop}>
-                    <Text style={styles.coverageCardLabel}>{m.label}</Text>
-                    <View
-                      style={[
-                        styles.coverageStatusChip,
-                        { backgroundColor: COVERAGE_STATUS_COLOR[m.status] },
-                      ]}
-                    >
-                      <Text style={styles.coverageStatusText}>{COVERAGE_STATUS_LABEL[m.status]}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.coverageValue}>{formatMetricValue(m)}</Text>
-                  {delta ? <Text style={styles.coverageDelta}>{delta}</Text> : null}
-                  {m.detail ? <Text style={styles.coverageDetail}>{m.detail}</Text> : null}
-                  <Text style={styles.coverageThreshold}>{m.threshold}</Text>
-                </View>
-              );
-            })}
-          </ScrollView>
+          <VocabCoverageView report={coverage} />
         )}
       </SafeAreaView>
     );
@@ -661,7 +569,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
             label="Vocab coverage"
             value={coverage ? COVERAGE_STATUS_LABEL[coverage.overall_status] : 'View →'}
             sublabel={coverage ? undefined : 'words → sentences → translations'}
-            color={coverage ? COVERAGE_STATUS_COLOR[coverage.overall_status] : COLORS.primary}
+            color={coverage ? STATUS_TOKENS[coverage.overall_status].mark : COLORS.primary}
             onPress={openCoverage}
           />
         </View>
@@ -1197,86 +1105,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textTertiary,
     marginTop: 2,
-  },
-  coverageSummary: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 4,
-  },
-  coverageOverallChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  coverageOverallText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  coverageSummaryMeta: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 17,
-  },
-  coverageCard: {
-    backgroundColor: COLORS.paper,
-    padding: 14,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  coverageCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  coverageCardLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    paddingRight: 8,
-  },
-  coverageStatusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  coverageStatusText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  coverageValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginTop: 6,
-  },
-  coverageDelta: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  coverageDetail: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  coverageThreshold: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    marginTop: 6,
-    fontStyle: 'italic',
   },
   reportsHeader: {
     flexDirection: 'row',

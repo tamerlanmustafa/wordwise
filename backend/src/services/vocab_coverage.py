@@ -106,7 +106,17 @@ def _metric(
     *,
     prev=None,
     detail: Optional[str] = None,
+    warn_at: Optional[float] = None,
+    fail_at: Optional[float] = None,
+    direction: Optional[str] = None,
+    max_value: Optional[float] = None,
 ) -> dict:
+    """`threshold` is the human-readable band; warn_at/fail_at/direction/max_value
+    are the same bands in structured form so the admin UI can draw a meter with
+    threshold markers without re-declaring (and drifting from) these numbers.
+    max_value present = the metric has a natural scale (a %, or spend vs cap) and
+    renders as a meter; absent = an unbounded count, which renders as a stat tile.
+    direction is "min" when higher is better, "max" when higher is worse."""
     m: dict[str, Any] = {
         "key": key,
         "label": label,
@@ -114,6 +124,10 @@ def _metric(
         "unit": unit,
         "status": status,
         "threshold": threshold,
+        "warn_at": warn_at,
+        "fail_at": fail_at,
+        "direction": direction,
+        "max_value": max_value,
     }
     if detail is not None:
         m["detail"] = detail
@@ -152,6 +166,7 @@ def build_report(
         "warn <90%, fail <80%",
         prev=prev.get("usage_weighted_sentence_coverage"),
         detail=f"{covered:,} / {total:,} movie–lemma mappings covered",
+        warn_at=90.0, fail_at=80.0, direction="min", max_value=100.0,
     ))
 
     # 2. Uncovered visible lemmas — movie-mapped, not hidden, no sentence link.
@@ -165,6 +180,7 @@ def build_report(
         "trend — should fall; warn if rising",
         prev=prev.get("uncovered_visible_lemmas"),
         detail="movie-mapped, not hidden, no sentence link",
+        direction="max",
     ))
 
     # 3. A2 registry share — lemmas at A2 / total. Skew flag (issue #91). 81.8%.
@@ -179,6 +195,7 @@ def build_report(
         "warn >50% (registry skew, issue #91)",
         prev=prev.get("a2_registry_share"),
         detail=f"{a2:,} / {lemmas_total:,} lemmas classified A2",
+        warn_at=50.0, direction="max", max_value=100.0,
     ))
 
     # 4. Translation cache growth — rows created in the last 7d. >0 = MT caching
@@ -192,6 +209,7 @@ def build_report(
         "warn if 0 (caching stalled)",
         prev=prev.get("translation_cache_growth"),
         detail="translation_cache rows created in the last 7 days",
+        warn_at=1.0, direction="min",
     ))
 
     # 5. Reveal cache rows — word_sentence_examples. Should climb from ~0 as
@@ -205,6 +223,7 @@ def build_report(
         "informational — should climb; warn if it shrinks",
         prev=prev.get("word_sentence_examples_rows"),
         detail="word_sentence_examples cached reveal rows",
+        direction="min",
     ))
 
     # 5b. Aligned-gloss share of the reveal cache. n/a until rows exist; once
@@ -233,6 +252,7 @@ def build_report(
         f"warn <50%, fail <20% (once ≥{_GLOSS_MIN_SAMPLE} rows)",
         prev=prev.get("word_sentence_gloss_share"),
         detail=gloss_detail,
+        warn_at=50.0, fail_at=20.0, direction="min", max_value=100.0,
     ))
 
     # 6. No-op translations — MT returned the source unchanged for a non-EN
@@ -246,6 +266,7 @@ def build_report(
         "should be 0; warn if any, fail on increase",
         prev=prev.get("noop_translations"),
         detail="translation_cache rows where source == translated, target != EN",
+        warn_at=0.0, direction="max",
     ))
 
     # 7. Orphan sentences — sentence_bank rows with no lemma link. Was 825→0.
@@ -258,6 +279,7 @@ def build_report(
         "should be 0; warn if any, fail on increase",
         prev=prev.get("orphan_sentences"),
         detail="sentence_bank rows with no sentence_lemma_link",
+        warn_at=0.0, direction="max",
     ))
 
     # 8. Dead-end movies — no script OR no lemma mapping. Trend, was ~170.
@@ -270,6 +292,7 @@ def build_report(
         "informational — warn if rising",
         prev=prev.get("dead_end_movies"),
         detail="movies with no script or no lemma mapping",
+        direction="max",
     ))
 
     # 9. LLM spend in the last 24h vs the cost cap. Reveals now spend on gloss
@@ -284,6 +307,7 @@ def build_report(
         f"warn >${warn_at:g}, fail >${cap_usd:g} (cap)",
         prev=prev.get("llm_cost_last_24h"),
         detail="SUM(estimated_cost_usd) from llm_usage_ledger, last 24h",
+        warn_at=warn_at, fail_at=cap_usd, direction="max", max_value=cap_usd,
     ))
 
     return metrics

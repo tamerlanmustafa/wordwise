@@ -165,8 +165,44 @@ def test_every_metric_has_value_threshold_status():
     )
     assert metrics, "build_report returned no metrics"
     for m in metrics:
-        assert set(m) >= {"key", "label", "value", "unit", "status", "threshold"}
+        assert set(m) >= {
+            "key", "label", "value", "unit", "status", "threshold",
+            "warn_at", "fail_at", "direction", "max_value",
+        }
         assert m["status"] in (vc.OK, vc.WARN, vc.FAIL)
+        assert m["direction"] in ("min", "max")
+
+
+def test_structured_bands_match_human_thresholds():
+    """The admin UI draws meters off warn_at/fail_at/max_value, so they must agree
+    with the bands the classifiers actually apply."""
+    by_key = _report({}, cap_usd=50.0)
+
+    cov = by_key["usage_weighted_sentence_coverage"]
+    assert (cov["warn_at"], cov["fail_at"], cov["direction"], cov["max_value"]) == (90.0, 80.0, "min", 100.0)
+
+    a2 = by_key["a2_registry_share"]
+    assert (a2["warn_at"], a2["fail_at"], a2["direction"], a2["max_value"]) == (50.0, None, "max", 100.0)
+
+    gloss = by_key["word_sentence_gloss_share"]
+    assert (gloss["warn_at"], gloss["fail_at"], gloss["direction"], gloss["max_value"]) == (50.0, 20.0, "min", 100.0)
+
+    # Cost scales against the configured cap, not a fixed 100.
+    cost = by_key["llm_cost_last_24h"]
+    assert (cost["warn_at"], cost["fail_at"], cost["max_value"]) == (40.0, 50.0, 50.0)
+
+
+def test_meter_vs_tile_split_is_stable():
+    """max_value present = meter (bounded scale); absent = stat tile (unbounded
+    count). The UI keys its whole layout off this, so pin the split."""
+    by_key = _report({})
+    meters = {k for k, m in by_key.items() if m["max_value"] is not None}
+    assert meters == {
+        "usage_weighted_sentence_coverage",
+        "a2_registry_share",
+        "word_sentence_gloss_share",
+        "llm_cost_last_24h",
+    }
 
 
 # ── overall status rollup ────────────────────────────────────────────────────
