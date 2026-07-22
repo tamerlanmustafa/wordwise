@@ -597,6 +597,28 @@ export interface AdminStats {
   };
 }
 
+export type VocabCoverageStatus = 'ok' | 'warn' | 'fail';
+
+export interface VocabCoverageMetric {
+  key: string;
+  label: string;
+  value: number | null;
+  unit: string;
+  status: VocabCoverageStatus;
+  threshold: string;
+  detail?: string;
+  previous?: number;
+  delta?: number;
+}
+
+export interface VocabCoverageReport {
+  generated_at: string;
+  overall_status: VocabCoverageStatus;
+  previous_snapshot_at: string | null;
+  llm_cost_cap_usd: number;
+  metrics: VocabCoverageMetric[];
+}
+
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   WRONG_TRANSLATION: 'Wrong translation',
   WRONG_CONTEXT: "Doesn't match context",
@@ -1121,6 +1143,18 @@ export const adminApi = {
     }
     const data = await res.json();
     return data.jobs || [];
+  },
+
+  // Health/coverage of the vocab pipeline (words → sentences → senses →
+  // translations). Each metric carries an ok/warn/fail status; trend metrics
+  // are diffed against the sentence worker's most recent daily snapshot.
+  vocabCoverage: async (): Promise<VocabCoverageReport> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/health/vocab-coverage`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/health/vocab-coverage → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
   },
 
   // Hide a misspelled/bad word from every movie+book vocabulary list.

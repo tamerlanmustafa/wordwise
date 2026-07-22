@@ -201,6 +201,17 @@ async def run_forever() -> None:
     skip_ids: Set[int] = set()
     try:
         while not stop.is_set():
+            # Once-daily vocab-coverage snapshot. Runs before the LLM check so
+            # it still fires when the LLM is unavailable; short-circuits on a
+            # single indexed lookup when a recent snapshot already exists.
+            # Isolated so a snapshot failure never disturbs sentence generation.
+            try:
+                from src.services.vocab_coverage import maybe_write_daily_snapshot
+
+                await maybe_write_daily_snapshot(db)
+            except Exception as exc:
+                logger.warning("[sentence-worker] coverage snapshot skipped: %s", exc)
+
             if llm is None:
                 try:
                     from src.services.llm_sentence_service import LLMSentenceService

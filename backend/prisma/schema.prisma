@@ -584,6 +584,20 @@ model LlmUsageLedger {
   @@map("llm_usage_ledger")
 }
 
+// Daily health snapshot of the vocab pipeline (words → sentences → senses →
+// translations). Written once/day by the sentence worker; read by
+// GET /admin/health/vocab-coverage to compute trend deltas. `metrics` holds the
+// full computed report as JSON so metrics can change without a schema change.
+// See prisma/manual/2026_07_21_add_vocab_coverage_snapshots.sql.
+model VocabCoverageSnapshot {
+  id         Int      @id @default(autoincrement())
+  capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  metrics    Json
+
+  @@index([capturedAt], map: "ix_vocab_coverage_snapshots_captured_at")
+  @@map("vocab_coverage_snapshots")
+}
+
 model SentenceLemmaLink {
   id               Int     @id @default(autoincrement())
   sentenceId       Int     @map("sentence_id")

@@ -7,12 +7,18 @@ from src.database import get_db
 from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.difficulty_scorer import compute_difficulty
+from src.services.vocab_coverage import compute_vocab_coverage
+from src.utils.rate_limit import rate_limit
 from src.utils.subscription import entitlements_payload
 from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# Admin health reads are cheap but run several COUNT/EXISTS queries; throttle so
+# a stuck dashboard poll can't hammer them.
+_vocab_health_throttle = rate_limit(30, 60.0, scope="admin-vocab-health")
 
 
 @router.get("/stats")
@@ -67,6 +73,20 @@ async def get_admin_stats(
             "dead": queue_dead,
         },
     }
+
+
+@router.get("/health/vocab-coverage")
+async def vocab_coverage_health(
+    admin_user=Depends(get_admin_user),
+    _: None = Depends(_vocab_health_throttle),
+    db: Prisma = Depends(get_db),
+):
+    """Health/coverage of the vocabulary data pipeline (words → sentences →
+    senses → translations). Each metric carries a value, threshold and
+    ok/warn/fail status; trend/regression metrics are diffed against the most
+    recent daily snapshot written by the sentence worker. See
+    src/services/vocab_coverage.py for the metric definitions and thresholds."""
+    return await compute_vocab_coverage(db)
 
 
 @router.get("/movies/processed")
