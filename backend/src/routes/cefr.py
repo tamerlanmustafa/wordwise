@@ -27,6 +27,7 @@ from src.services.lemmatization_service import (
 from src.database import get_db
 from src.middleware.auth import get_admin_user, get_current_active_user
 from src.services.lemma_guard import display_form
+from src.services.profanity_filter import is_profane_entry
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,8 @@ EXCLUDED_A1_WORDS = {
 
 def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
     """
-    Filter out ultra-common A1 words that all learners already know.
+    Filter out ultra-common A1 words that all learners already know, and
+    strong profanity/slurs at any level.
 
     Args:
         word: The word token
@@ -90,6 +92,12 @@ def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
     Returns:
         True if word should be shown to user, False if it should be filtered out
     """
+    # Swear words and slurs are never taught. Checked here (not only via the
+    # upstream lemma guard) because classifications cached before the guard
+    # existed are served straight from the DB on the fast path.
+    if is_profane_entry(word, lemma):
+        return False
+
     # If it's not A1 → always keep
     if cefr_level != "A1":
         return True

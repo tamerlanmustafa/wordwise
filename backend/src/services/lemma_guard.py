@@ -22,10 +22,16 @@ Rejection categories (GuardDecision.reason):
                          (Spanish/French/German/Portuguese/Italian/Russian)
   - "not_in_dict_low_freq"  nonzero but negligible English frequency and
                          not in any dictionary
+  - "profanity"          strong profanity or a slur (src/services/
+                         profanity_filter.py) — real English, but not
+                         vocabulary we teach
 
 A wordlist hit (CEFR wordlists, curated slang/kids vocab, MWE dicts — passed
 in by the caller) always wins: it rescues legitimate entries that fail the
-orthographic checks ("hmm", "tv", "ok") and skips the frequency gate.
+orthographic checks ("hmm", "tv", "ok") and skips the frequency gate. The one
+exception is profanity, which is checked BEFORE the wordlist because our
+wordlists contain swear words (INFORMAL_SIMPLE_VOCAB has "bitch"/"bastard",
+comprehensive_cefr.json has "whore") and would otherwise rescue them.
 
 Dependency policy: wordfreq and the NLTK words corpus are both optional
 (CI installs neither wordfreq nor the corpus). With neither available the
@@ -40,6 +46,8 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Callable, Optional
+
+from .profanity_filter import is_profane
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +178,11 @@ def evaluate_lemma(
               A hit short-circuits every other check.
     """
     lem = (lemma or "").strip().lower()
+
+    # Profanity is checked first: it must outrank the wordlist short-circuit,
+    # since our curated lists contain swear words that would otherwise pass.
+    if is_profane(lem) or (word and is_profane(word)):
+        return GuardDecision(False, "profanity")
 
     if is_wordlist_known is not None:
         if lem and is_wordlist_known(lem):
