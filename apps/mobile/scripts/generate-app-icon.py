@@ -6,12 +6,15 @@ Black with stacked offset copies behind it faking a 3D extrusion. Colours
 come from src/theme/tokens.ts (dark palette) so the icon, the splash and
 the in-app loading mark stay one identity.
 
+This is a bare project — ios/ and android/ are committed, so EAS never runs
+`expo prebuild` and the `icon`/`adaptiveIcon` keys in app.json do NOT reach a
+build. The launcher icons that actually ship are the native ones written
+below; the assets/ copies exist for app.json and for a future prebuild.
+
 Run (needs Pillow, which is not an app dependency — use a throwaway venv):
 
     python3 -m venv /tmp/iconvenv && /tmp/iconvenv/bin/pip install Pillow
     /tmp/iconvenv/bin/python apps/mobile/scripts/generate-app-icon.py
-
-Writes assets/icon.png, assets/adaptive-icon.png and assets/splash-icon.png.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ INK = "#0e0d10"        # tc.background (dark) — icon field
 
 # --- geometry --------------------------------------------------------------
 SIZE = 1024
-SS = 4  # supersample factor; everything is drawn at SIZE*SS then downsampled
+SS = 4  # supersample factor; everything is drawn at size*SS then downsampled
 
 # Ratios lifted from splashStyles.mark: fontSize 76, letterSpacing -2, and
 # extrusion depths running 1..7px behind the face.
@@ -35,18 +38,31 @@ TRACKING_RATIO = -2 / 76
 EXTRUDE_RATIO = 7 / 76
 EXTRUDE_STEPS = 96  # smooth walls (the on-screen mark uses 7 whole pixels)
 
-# How wide the face sits inside each canvas. iOS shows the full square, so the
-# mark can run wider; Android masks the adaptive foreground down to a circle,
-# so its mark has to stay inside the ~66% safe zone.
-ICON_WIDTH_RATIO = 0.62
-ADAPTIVE_WIDTH_RATIO = 0.46
+# How wide the face sits inside each canvas. A full square shows the mark at
+# its largest; anything a launcher may mask to a circle has to pull in far
+# enough that the mark's corners survive the crop.
+SQUARE_WIDTH_RATIO = 0.62
+CIRCLE_WIDTH_RATIO = 0.52  # Android adaptive foreground + round legacy icon
 SPLASH_WIDTH_RATIO = 0.60
 
 FONT_PATH = "/System/Library/Fonts/SFNS.ttf"
 FONT_VARIATION = "Black"  # what RN's fontWeight: '900' picks on iOS
 TEXT = "WW"
 
-ASSETS = Path(__file__).resolve().parent.parent / "assets"
+MOBILE = Path(__file__).resolve().parent.parent
+ASSETS = MOBILE / "assets"
+IOS_APPICON = MOBILE / "ios/WordWise/Images.xcassets/AppIcon.appiconset/App-Icon-1024x1024@1x.png"
+ANDROID_RES = MOBILE / "android/app/src/main/res"
+
+# px per density for (legacy ic_launcher, adaptive ic_launcher_foreground).
+# Matches the sizes Expo's template shipped, so nothing else has to change.
+DENSITIES = {
+    "mdpi": (48, 108),
+    "hdpi": (72, 162),
+    "xhdpi": (96, 216),
+    "xxhdpi": (144, 324),
+    "xxxhdpi": (192, 432),
+}
 
 
 def _font(px: float) -> ImageFont.FreeTypeFont:
@@ -93,9 +109,20 @@ def _draw_mark(canvas: Image.Image, font_px: float, center: tuple[float, float])
     stamp(0, 0, GOLD)
 
 
-def render(width_ratio: float, background: str | None) -> Image.Image:
-    big = SIZE * SS
+def render(
+    width_ratio: float,
+    background: str | None,
+    size: int = SIZE,
+    circle: bool = False,
+) -> Image.Image:
+    """One square icon. `circle` clips the field to a disc (Android round icon)."""
+    big = size * SS
     canvas = Image.new("RGBA", (big, big), background or (0, 0, 0, 0))
+
+    if circle and background is not None:
+        mask = Image.new("L", (big, big), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, big - 1, big - 1), fill=255)
+        canvas.putalpha(mask)
 
     # Solve the font size that makes the face exactly `width_ratio` wide.
     probe_px = 100
@@ -104,22 +131,40 @@ def render(width_ratio: float, background: str | None) -> Image.Image:
     font_px = probe_px * (big * width_ratio) / probe_advance
 
     _draw_mark(canvas, font_px, (big / 2, big / 2))
-    return canvas.resize((SIZE, SIZE), Image.LANCZOS)
+    return canvas.resize((size, size), Image.LANCZOS)
+
+
+def save(image: Image.Image, path: Path, opaque: bool = False) -> None:
+    # iOS rejects app icons carrying an alpha channel.
+    if opaque:
+        image = image.convert("RGB")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path, lossless=True) if path.suffix == ".webp" else image.save(path)
+    print(f"wrote {path.relative_to(MOBILE)}")
 
 
 def main() -> None:
-    outputs = [
-        ("icon.png", ICON_WIDTH_RATIO, INK),           # iOS/Android launcher icon
-        ("adaptive-icon.png", ADAPTIVE_WIDTH_RATIO, None),  # Android foreground layer
-        ("splash-icon.png", SPLASH_WIDTH_RATIO, None),      # launch screen mark
-    ]
-    for name, ratio, background in outputs:
-        image = render(ratio, background)
-        # iOS rejects icons with an alpha channel; the transparent layers keep theirs.
-        if background is not None:
-            image = image.convert("RGB")
-        image.save(ASSETS / name)
-        print(f"wrote {ASSETS / name}")
+    # 1. Bundled assets — app.json's icon/splash keys, and what a prebuild uses.
+    save(render(SQUARE_WIDTH_RATIO, INK), ASSETS / "icon.png", opaque=True)
+    save(render(CIRCLE_WIDTH_RATIO, None), ASSETS / "adaptive-icon.png")
+    save(render(SPLASH_WIDTH_RATIO, None), ASSETS / "splash-icon.png")
+
+    # 2. iOS — the icon that actually ships, straight into the asset catalog.
+    save(render(SQUARE_WIDTH_RATIO, INK), IOS_APPICON, opaque=True)
+
+    # 3. Android — legacy square + round icons and the adaptive foreground.
+    #    The adaptive background is @color/iconBackground in values/colors.xml.
+    for density, (legacy_px, foreground_px) in DENSITIES.items():
+        out = ANDROID_RES / f"mipmap-{density}"
+        save(render(SQUARE_WIDTH_RATIO, INK, legacy_px), out / "ic_launcher.webp")
+        save(
+            render(CIRCLE_WIDTH_RATIO, INK, legacy_px, circle=True),
+            out / "ic_launcher_round.webp",
+        )
+        save(
+            render(CIRCLE_WIDTH_RATIO, None, foreground_px),
+            out / "ic_launcher_foreground.webp",
+        )
 
 
 if __name__ == "__main__":
