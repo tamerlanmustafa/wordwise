@@ -68,6 +68,14 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
     worth spend) and `skip_ids` (failed in this process). Highest
     priority_score first so the words users hit most get covered first.
 
+    The "no LLM sentence yet" exclusion must stay an uncorrelated
+    `l.id NOT IN (SELECT …)` — Postgres hashes that subplan once (like the
+    hidden_words one), keeping the query ~60ms. As a correlated NOT EXISTS
+    the planner picked a nested-loop anti-join that degraded past the
+    30s client timeout once coverage grew, deadlocking the worker in a
+    timeout/retry loop (2026-07-22 outage). NULL-safe because
+    sentence_lemma_links.lemma_id is NOT NULL.
+
     skip_ids/limit are server-side integers, safe to inline — and inlining
     keeps the query compatible with prisma's query_raw (no array params).
     """
@@ -79,12 +87,10 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
         WHERE EXISTS (
             SELECT 1 FROM movie_lemma_mappings mlm WHERE mlm.lemma_id = l.id
         )
-        AND NOT EXISTS (
-            SELECT 1
+        AND l.id NOT IN (SELECT sll.lemma_id
             FROM sentence_lemma_links sll
             JOIN sentence_bank sb ON sb.id = sll.sentence_id
-            WHERE sll.lemma_id = l.id
-              AND sb.movie_id IS NULL AND sb.source = 'llm'
+            WHERE sb.movie_id IS NULL AND sb.source = 'llm'
         )
         AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
         {skip_clause}
@@ -193,9 +199,16 @@ async def run_forever() -> None:
         except asyncio.TimeoutError:
             pass
 
+    from src.services.admin_alerts import ConsecutiveFailureAlerter
+
     db = Prisma()
     await db.connect()
     logger.info("[sentence-worker] starting (page=%d batch=%d)", PAGE_SIZE, BATCH_SIZE)
+
+    # Email admins if cycles fail back-to-back (~3+ min stuck at the default
+    # threshold of 5 × ERROR_SLEEP) — a silent retry loop here is a prod
+    # outage nobody sees otherwise (2026-07-22).
+    alerter = ConsecutiveFailureAlerter("sentence-worker", fetch_rows=db.query_raw)
 
     llm = None
     skip_ids: Set[int] = set()
@@ -233,8 +246,13 @@ async def run_forever() -> None:
                 result = await run_cycle(db, llm, skip_ids)
             except Exception as exc:
                 logger.exception("[sentence-worker] cycle failed: %s", exc)
+                await alerter.record_failure(exc)
                 await _sleep(ERROR_SLEEP)
                 continue
+
+            # Any completed cycle (generated/cap/idle) means the loop is
+            # healthy — cap and idle are expected states, not failures.
+            await alerter.record_success()
 
             if result.outcome == "generated":
                 logger.info(

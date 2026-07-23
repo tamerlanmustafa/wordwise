@@ -33,6 +33,16 @@ def test_password_reset_email_carries_the_link_in_both_bodies():
     assert url in text
 
 
+def test_worker_alert_email_is_actionable_from_the_subject_alone():
+    subject, html, text = email_service.build_worker_alert_email(
+        "sentence-worker", "stuck", "5 consecutive failures; last error: ReadTimeout"
+    )
+    assert "sentence-worker" in subject and "stuck" in subject
+    for body in (html, text):
+        assert "sentence-worker" in body
+        assert "ReadTimeout" in body
+
+
 # ── send_email: disabled (no key) ───────────────────────────────────────────
 
 async def test_send_is_noop_without_api_key(monkeypatch):

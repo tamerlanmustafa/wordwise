@@ -93,6 +93,19 @@ def test_backlog_sql_targets_uncovered_movie_lemmas():
     assert "NOT IN (" not in sql.replace("NOT IN (SELECT", "")  # no skip clause
 
 
+def test_backlog_sql_keeps_coverage_exclusion_uncorrelated():
+    """
+    The 'already covered' exclusion must be an uncorrelated NOT IN subplan
+    (hashed once by Postgres), not a correlated NOT EXISTS: the anti-join
+    plan the latter produced degraded past the client timeout as coverage
+    grew, wedging the worker in a retry loop (2026-07-22 outage).
+    """
+    sql = sw.build_backlog_sql(skip_ids=[], limit=100)
+    assert "NOT EXISTS" not in sql
+    assert "l.id NOT IN (" in sql
+    assert "SELECT sll.lemma_id" in sql
+
+
 def test_backlog_sql_excludes_skip_ids():
     sql = sw.build_backlog_sql(skip_ids=[7, 3, 3], limit=10)
     assert "l.id NOT IN (3, 7)" in sql

@@ -98,6 +98,31 @@ def build_password_reset_email(username: str, reset_url: str) -> tuple[str, str,
     return subject, _LAYOUT.format(body=body), text
 
 
+def build_worker_alert_email(worker: str, event: str, detail: str) -> tuple[str, str, str]:
+    """(subject, html, text) for an admin-only worker health alert.
+
+    `event` is a short state ("stuck", "recovered"); `detail` is the
+    plain-text explanation (failure counts, last error). Both bodies carry
+    the worker name and detail so the email is actionable from a phone
+    notification alone.
+    """
+    subject = f"[WordWise ops] {worker} {event}"
+    body = (
+        f"<p style=\"margin:0 0 14px;\"><strong>{worker}</strong> — {event}.</p>"
+        f"<p style=\"margin:0 0 14px;white-space:pre-wrap;\">{detail}</p>"
+        "<p style=\"margin:0;color:#8a8272;font-size:13px;\">Automated alert "
+        "from the WordWise background workers. Check the Railway worker logs "
+        "for the full traceback.</p>"
+    )
+    text = (
+        f"{worker} — {event}.\n\n"
+        f"{detail}\n\n"
+        "Automated alert from the WordWise background workers. "
+        "Check the Railway worker logs for the full traceback.\n"
+    )
+    return subject, _LAYOUT.format(body=body), text
+
+
 async def send_email(to: str, subject: str, html: str, text: str) -> bool:
     """POST one email to Resend. Returns True only on a 2xx response.
 

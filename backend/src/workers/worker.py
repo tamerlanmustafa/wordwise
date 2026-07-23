@@ -27,6 +27,7 @@ import uuid
 import httpx
 
 from ..logging_config import configure_logging, request_id_ctx
+from ..services.admin_alerts import ConsecutiveFailureAlerter
 from . import queue as q
 from .db import close_pool, get_pool
 from .processor import PermanentError, TransientError, process_job
@@ -79,14 +80,22 @@ async def run_worker() -> None:
             # Windows
             signal.signal(sig, _handle_signal)
 
+    # Email admins when claims fail back-to-back (~1 min stuck at threshold
+    # 12 × EMPTY_QUEUE_SLEEP): a claim-loop failure means no jobs are being
+    # processed at all, which the queue stats alone don't reveal.
+    alerter = ConsecutiveFailureAlerter("movie-job-worker", fetch_rows=pool.fetch, threshold=12)
+
     async with httpx.AsyncClient() as client:
         while not stop.is_set():
             try:
                 job = await q.claim_one(pool, worker_id)
             except Exception as exc:
                 logger.exception("[worker] claim failed: %s", exc)
+                await alerter.record_failure(exc)
                 await asyncio.sleep(EMPTY_QUEUE_SLEEP)
                 continue
+
+            await alerter.record_success()
 
             if job is None:
                 # Race the stop event against the idle sleep so SIGTERM
