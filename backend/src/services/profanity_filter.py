@@ -34,7 +34,8 @@ dialogue, and a learner card can't disambiguate.
 from __future__ import annotations
 
 import re
-from typing import Iterable, Set
+
+from .word_forms import build_forms, inflect, pluralize
 
 # ---------------------------------------------------------------------------
 # Base terms. Inflections (-s/-es/-ed/-ing) are generated below; irregular or
@@ -113,59 +114,17 @@ KEPT_MILD = frozenset({
 })
 
 
-def _pluralize(base: str) -> Set[str]:
-    """Noun forms only: the base and its regular plural."""
-    forms = {base}
-    if base.endswith(("s", "x", "z", "ch", "sh")):
-        forms.add(base + "es")
-    elif base.endswith("y") and len(base) > 1 and base[-2] not in "aeiou":
-        forms.add(base[:-1] + "ies")
-    else:
-        forms.add(base + "s")
-    return forms
-
-
-def _inflect(base: str) -> Set[str]:
-    """Regular -s/-es/-ed/-ing forms of one base (verb-capable terms)."""
-    forms = _pluralize(base)
-
-    if base.endswith("e"):
-        forms.add(base + "d")
-        forms.add(base[:-1] + "ing")
-    else:
-        forms.add(base + "ed")
-        forms.add(base + "ing")
-        # Doubled final consonant: shit -> shitted/shitting, wank -> wanked.
-        if (
-            len(base) >= 3
-            and base[-1] not in "aeiouwxy"
-            and base[-2] in "aeiou"
-            and base[-3] not in "aeiou"
-        ):
-            forms.add(base + base[-1] + "ed")
-            forms.add(base + base[-1] + "ing")
-    return forms
-
-
-def _build(bases: Iterable[str], expand, extra: Iterable[str] = ()) -> Set[str]:
-    out: Set[str] = set()
-    for base in bases:
-        out |= expand(base)
-    out |= set(extra)
-    return out
-
-
 # Slurs are pluralized only, never given verb endings: they are nouns, and
 # -ed/-ing expansion invents real English words that must stay teachable
 # (spic -> "spiced", jap -> "japed", poof -> "poofed", dyke -> "dyking").
 BLOCKED_WORDS: frozenset = frozenset(
-    _build(_STRONG_BASES, _inflect, _STRONG_EXTRA)
-    | _build(_SLUR_BASES, _pluralize, _SLUR_EXTRA)
+    build_forms(_STRONG_BASES, inflect, _STRONG_EXTRA)
+    | build_forms(_SLUR_BASES, pluralize, _SLUR_EXTRA)
 ) - KEPT_MILD
 
 # Forms that may appear inside an idiom without making it profane.
 _AMBIGUOUS_FORMS: frozenset = frozenset(
-    _build(_AMBIGUOUS_BASES, _inflect) & BLOCKED_WORDS
+    build_forms(_AMBIGUOUS_BASES, inflect) & BLOCKED_WORDS
 )
 # Terms with no innocent reading: a single one condemns any phrase it's in.
 _UNAMBIGUOUS_FORMS: frozenset = frozenset(BLOCKED_WORDS - _AMBIGUOUS_FORMS)

@@ -26,6 +26,7 @@ from src.services.lemmatization_service import (
 )
 from src.database import get_db
 from src.middleware.auth import get_admin_user, get_current_active_user
+from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
 from src.services.profanity_filter import is_profane_entry
 from prisma import Prisma
@@ -81,8 +82,9 @@ EXCLUDED_A1_WORDS = {
 
 def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
     """
-    Filter out ultra-common A1 words that all learners already know, and
-    strong profanity/slurs at any level.
+    Filter out ultra-common A1 words that all learners already know,
+    internationalisms they recognise regardless of level, and strong
+    profanity/slurs at any level.
 
     Args:
         word: The word token
@@ -96,6 +98,12 @@ def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
     # upstream lemma guard) because classifications cached before the guard
     # existed are served straight from the DB on the fast path.
     if is_profane_entry(word, lemma):
+        return False
+
+    # Internationalisms are dropped at every level, not just A1: the CEFR
+    # classifier rates plenty of them B1+ ("kilowatt", "saxophone") even
+    # though a learner reads them at sight (issue #89).
+    if is_internationalism_entry(word, lemma):
         return False
 
     # If it's not A1 → always keep

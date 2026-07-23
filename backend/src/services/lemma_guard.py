@@ -25,13 +25,17 @@ Rejection categories (GuardDecision.reason):
   - "profanity"          strong profanity or a slur (src/services/
                          profanity_filter.py) — real English, but not
                          vocabulary we teach
+  - "internationalism"   a word learners of any background already recognise
+                         (src/services/internationalism_filter.py): units,
+                         global brands, international sports/foods (issue #89)
 
 A wordlist hit (CEFR wordlists, curated slang/kids vocab, MWE dicts — passed
 in by the caller) always wins: it rescues legitimate entries that fail the
-orthographic checks ("hmm", "tv", "ok") and skips the frequency gate. The one
-exception is profanity, which is checked BEFORE the wordlist because our
-wordlists contain swear words (INFORMAL_SIMPLE_VOCAB has "bitch"/"bastard",
-comprehensive_cefr.json has "whore") and would otherwise rescue them.
+orthographic checks ("hmm", "tv", "ok") and skips the frequency gate. The two
+exceptions are profanity and internationalisms, both checked BEFORE the
+wordlist because the CEFR wordlists list many of them (swear words like
+"bitch"; units and loanwords like "kilometer"/"pizza" at A1/A2) and would
+otherwise rescue exactly what we mean to drop.
 
 Dependency policy: wordfreq and the NLTK words corpus are both optional
 (CI installs neither wordfreq nor the corpus). With neither available the
@@ -47,6 +51,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Callable, Optional
 
+from .internationalism_filter import is_internationalism
 from .profanity_filter import is_profane
 
 logger = logging.getLogger(__name__)
@@ -183,6 +188,12 @@ def evaluate_lemma(
     # since our curated lists contain swear words that would otherwise pass.
     if is_profane(lem) or (word and is_profane(word)):
         return GuardDecision(False, "profanity")
+
+    # Internationalisms too must outrank the wordlist: the CEFR lists rate
+    # many of them A1/A2 ("kilometer", "pizza", "football"), so a wordlist
+    # hit would otherwise rescue exactly what issue #89 asks us to drop.
+    if is_internationalism(lem) or (word and is_internationalism(word)):
+        return GuardDecision(False, "internationalism")
 
     if is_wordlist_known is not None:
         if lem and is_wordlist_known(lem):

@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
 from ..middleware.auth import get_current_active_user, get_current_user_optional
+from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
 from ..services.profanity_filter import is_profane_entry
 
@@ -644,6 +645,8 @@ async def get_vocabulary_preview(
         if word.word.lower() in hidden or (word.lemma or "").lower() in hidden:
             continue
         if is_profane_entry(word.word, word.lemma):
+            continue
+        if is_internationalism_entry(word.word, word.lemma):
             continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
         level_distribution[level] = level_distribution.get(level, 0) + 1
