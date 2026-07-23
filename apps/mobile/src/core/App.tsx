@@ -59,6 +59,7 @@ import { WatchedScreen } from '../components/screens/WatchedScreen';
 import { HomeScreen } from '../components/screens/HomeScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
 import { initI18n, hydrateAppLanguage } from '../i18n';
+import { syncRtlLayout, reloadForRtl } from '../i18n/rtl';
 
 // Bring up i18next before the first render so no screen ever paints raw
 // translation keys. The real language is resolved a moment later by
@@ -175,7 +176,14 @@ export default function App() {
   // than the 'ES' initial state.
   useEffect(() => {
     if (!targetLanguageLoaded) return;
-    void hydrateAppLanguage(targetLanguage);
+    void hydrateAppLanguage(targetLanguage).then((resolved) => {
+      // Layout direction is native state fixed when the bridge boots, so a
+      // language that disagrees with it only takes effect after a reload. Doing
+      // it here, silently, is safe: this runs during startup, before there is
+      // any user work on screen to lose. A direction change made later from
+      // Settings is prompted for instead.
+      if (syncRtlLayout(resolved)) void reloadForRtl();
+    });
   }, [targetLanguage, targetLanguageLoaded]);
 
   const handleLogin = async (user: any, token: string, refreshToken: string) => {

@@ -9,7 +9,8 @@
     "done": "Done",
     "gotIt": "Got it",
     "retry": "Try again",
-    "save": "Save"
+    "save": "Save",
+    "later": "Later"
   },
   "state": {
     "loading": "Loading…",

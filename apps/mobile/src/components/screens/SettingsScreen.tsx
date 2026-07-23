@@ -29,6 +29,7 @@ import {
   type WordReminderMode,
 } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
+import { FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
 import {
   UI_LANGUAGES,
   clearExplicitAppLanguage,
@@ -97,17 +98,50 @@ export const SettingsScreen = ({
     hasExplicitAppLanguage().then(setAppLanguagePinned);
   }, []);
 
+  /**
+   * Finish a language change that also flips the layout direction.
+   *
+   * Text switches instantly, but mirroring is native state that only applies on
+   * the next bundle load — so unlike every other setting on this screen, this
+   * one has to interrupt. We ask rather than reload outright because the user is
+   * mid-session here, and offer a manual-restart fallback for the builds where
+   * expo-updates can't reload us (Expo Go).
+   */
+  const confirmRtlRestart = (code: string) => {
+    if (!syncRtlLayout(code)) return;
+    Alert.alert(
+      t('settings:appLanguage.restartTitle'),
+      t('settings:appLanguage.restartBody', {
+        language: getUiLanguage(code)?.nativeName ?? code,
+      }),
+      [
+        { text: t('common:action.later'), style: 'cancel' },
+        {
+          text: t('settings:appLanguage.restartNow'),
+          onPress: () => {
+            void reloadForRtl().then((ok) => {
+              if (!ok) Alert.alert(t('settings:appLanguage.restartManual'));
+            });
+          },
+        },
+      ],
+    );
+  };
+
   const handleSelectAppLanguage = async (code: string) => {
     await setAppLanguage(code);
     setAppLanguageState(code);
     setAppLanguagePinned(true);
+    confirmRtlRestart(code);
   };
 
   // Drop the pin so the UI follows the translation language again.
   const handleResetAppLanguage = async () => {
     await clearExplicitAppLanguage(targetLanguage);
-    setAppLanguageState(getAppLanguage());
+    const resolved = getAppLanguage();
+    setAppLanguageState(resolved);
     setAppLanguagePinned(false);
+    confirmRtlRestart(resolved);
   };
 
   const toggleAccordionMode = async () => {
@@ -523,7 +557,7 @@ export const SettingsScreen = ({
         <Text style={settingsStyles.sectionTitle}>{t('settings:subscription')}</Text>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToFamilyPlan}>
           <Text style={settingsStyles.settingsLinkText}>{t('settings:familyPlan')}</Text>
-          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={async () => {
           const { restorePurchases } = require('../../services/billing');
@@ -531,17 +565,17 @@ export const SettingsScreen = ({
           Alert.alert(result.restored ? t('billing:paywall.restoredTitle') : t('billing:paywall.notFoundTitle'), result.message);
         }}>
           <Text style={settingsStyles.settingsLinkText}>{t('settings:restorePurchases')}</Text>
-          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
 
         <Text style={settingsStyles.sectionTitle}>{t('settings:legal')}</Text>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToPrivacy}>
           <Text style={settingsStyles.settingsLinkText}>{t('settings:privacyPolicy')}</Text>
-          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToTerms}>
           <Text style={settingsStyles.settingsLinkText}>{t('settings:termsOfService')}</Text>
-          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
       </ScrollView>
 

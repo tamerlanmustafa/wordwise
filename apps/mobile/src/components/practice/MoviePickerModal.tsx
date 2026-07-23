@@ -156,8 +156,8 @@ const makeStyles = (tc: ThemeColors) =>
     },
     sheet: {
       backgroundColor: tc.background,
-      borderTopLeftRadius: 18,
-      borderTopRightRadius: 18,
+      borderTopStartRadius: 18,
+      borderTopEndRadius: 18,
       paddingHorizontal: 20,
       paddingTop: 18,
       paddingBottom: 24,

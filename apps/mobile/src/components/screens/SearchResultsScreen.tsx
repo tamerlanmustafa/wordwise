@@ -251,7 +251,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
                 ) : null}
               </View>
               {mode === 'addToReel' ? (
-                <Text style={{ fontSize: 22, color: isInReel(item.id) ? colors.primary : '#C5C5D0', marginLeft: 8 }}>
+                <Text style={{ fontSize: 22, color: isInReel(item.id) ? colors.primary : '#C5C5D0', marginStart: 8 }}>
                   {isInReel(item.id) ? '✓' : '+'}
                 </Text>
               ) : null}

@@ -260,20 +260,20 @@ export const VocabRow = ({
           <View style={styles.wordLine}>
             <Text style={[styles.wordText, isRead && styles.wordTextRead]}>{term}</Text>
             {badge ? (
-              <View style={[styles.idiomBadge, { backgroundColor: `${levelColor}22`, marginLeft: 8 }]}>
+              <View style={[styles.idiomBadge, { backgroundColor: `${levelColor}22`, marginStart: 8 }]}>
                 <Text style={[styles.idiomBadgeText, { color: levelColor }]}>{badge}</Text>
               </View>
             ) : null}
             {expanded && (
               contentLoaded ? (
                 translation && !isUntranslatable ? (
-                  <Text style={[styles.translationText, { marginLeft: 8 }]}>
+                  <Text style={[styles.translationText, { marginStart: 8 }]}>
                     <Text style={styles.translationDot}>· </Text>
                     {translation.toLowerCase()}
                   </Text>
                 ) : null
               ) : (
-                <View style={[styles.translationSkeleton, { marginLeft: 8 }]} />
+                <View style={[styles.translationSkeleton, { marginStart: 8 }]} />
               )
             )}
           </View>
@@ -300,7 +300,7 @@ export const VocabRow = ({
 
           {/* expansion — sentence translation (words) / example (idioms) + actions */}
           {expanded && (
-            <View style={[styles.expansion, { borderLeftColor: `${levelColor}66` }]}>
+            <View style={[styles.expansion, { borderStartColor: `${levelColor}66` }]}>
               {!contentLoaded ? (
                 <View style={styles.expandSkeletonGroup}>
                   <View style={[styles.skelBar, { width: '88%', height: 11 }]} />

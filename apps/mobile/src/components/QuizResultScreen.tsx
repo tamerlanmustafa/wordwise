@@ -36,6 +36,7 @@ import { PressableScale } from './ui/PressableScale';
 import { FadeInUp } from './ui/FadeInUp';
 import { Confetti } from './ui/Confetti';
 import { SessionComplete } from './common/SessionComplete';
+import { FORWARD_ARROW } from '../i18n/rtl';
 
 export interface JourneyResultMeta {
   completedTileIdx: number;
@@ -206,7 +207,7 @@ export function QuizResultScreen({
             <Text style={s.compEyebrow}>{t('quiz:result.comprehension')}</Text>
             <View style={s.compRow}>
               <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
-              <Text style={s.compArrow}>→</Text>
+              <Text style={s.compArrow}>{FORWARD_ARROW}</Text>
               <Text style={s.compAfter}>{Math.round(compAfter!)}%</Text>
               {compDelta !== 0 ? (
                 <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
@@ -307,7 +308,7 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   pipEmpty: { backgroundColor: tc.border },
   pipsLabel: {
     fontSize: 12, fontWeight: '700',
-    color: tc.textSecondary, marginLeft: 6,
+    color: tc.textSecondary, marginStart: 6,
   },
 
   recapCard: {
@@ -391,7 +392,7 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
     letterSpacing: -0.6,
   },
   compDelta: {
-    marginLeft: 6,
+    marginStart: 6,
     fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.2,

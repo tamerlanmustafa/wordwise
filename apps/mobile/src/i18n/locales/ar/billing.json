@@ -1,0 +1,33 @@
+{
+  "paywall": {
+    "title": "WordWise Plus",
+    "alreadyPlus": "أنت مشترك في WordWise Plus — كل شيء متاح لك. شكرًا لك!",
+    "restore": "استعادة المشتريات",
+    "startTrial": "ابدأ تجربة مجانية لمدة ٧ أيام",
+    "starting": "جارٍ البدء…",
+    "welcomeTitle": "أهلًا بك في Plus!",
+    "welcomeBody": "اشتراكك مفعّل الآن.",
+    "restoredTitle": "تمت الاستعادة!",
+    "notFoundTitle": "غير موجود"
+  },
+  "family": {
+    "title": "الخطة العائلية",
+    "yourPlan": "خطتك العائلية",
+    "create": "إنشاء خطة عائلية",
+    "requiresPlus": "تتطلب اشتراكًا فعّالًا في WordWise Plus.",
+    "invite": "دعوة عضو",
+    "emailPlaceholder": "عنوان البريد الإلكتروني",
+    "removeMember": "إزالة عضو",
+    "leave": "مغادرة الخطة العائلية",
+    "leaveTitle": "مغادرة الخطة العائلية",
+    "leaveBody": "ستفقد الوصول المميّز. هل تريد المتابعة؟",
+    "createFailed": "تعذّر إنشاء الخطة العائلية",
+    "inviteFailed": "تعذّرت دعوة العضو",
+    "removeMemberBody": "هل تريد إزالة {{email}} من خطتك العائلية؟",
+    "ownersPlan": "خطة {{email}}",
+    "errorTitle": "خطأ",
+    "members": "الأعضاء",
+    "owner": "المالك",
+    "remove": "إزالة"
+  }
+}

@@ -36,6 +36,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
+import { directionalIcon } from '../i18n/rtl';
 
 export interface SetIntroWord {
   /** Target word shown verbatim — never blurred or redacted. */
@@ -226,7 +227,7 @@ export function SetIntroScreen({
         ]}
         hitSlop={8}
       >
-        <Ionicons name="chevron-back" size={18} color="#fff" />
+        <Ionicons name={directionalIcon('chevron-back')} size={18} color="#fff" />
       </Pressable>
       <View style={[s.setPill, { top: STATUS_PAD }]}>
         <Text style={s.setPillText}>

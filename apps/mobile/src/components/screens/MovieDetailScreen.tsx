@@ -62,6 +62,7 @@ import {
 } from '../vocabulary/deckLogic';
 import { track } from '../../services/analytics';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
+import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -1362,7 +1363,7 @@ export const MovieDetailScreen = ({
                       <Text style={[styles.foryouMoreLinkText, { color: tc.text }]}>
                         + {suggestedHidden} more words across all levels
                       </Text>
-                      <Text style={[styles.foryouMoreLinkArrow, { color: tc.primaryOnSurface }]}>→</Text>
+                      <Text style={[styles.foryouMoreLinkArrow, { color: tc.primaryOnSurface }]}>{FORWARD_ARROW}</Text>
                     </TouchableOpacity>
                   )}
                 </>
@@ -1518,7 +1519,7 @@ export const MovieDetailScreen = ({
           ]}
           hitSlop={8}
         >
-          <Ionicons name="chevron-back" size={19} color={tc.textSecondary} />
+          <Ionicons name={directionalIcon('chevron-back')} size={19} color={tc.textSecondary} />
         </Pressable>
       </Animated.View>
 
@@ -1554,7 +1555,7 @@ export const MovieDetailScreen = ({
             ]}
             hitSlop={8}
           >
-            <Ionicons name="chevron-back" size={19} color={tc.textSecondary} />
+            <Ionicons name={directionalIcon('chevron-back')} size={19} color={tc.textSecondary} />
           </Pressable>
           <Animated.View
             style={{

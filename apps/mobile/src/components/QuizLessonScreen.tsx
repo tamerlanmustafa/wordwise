@@ -21,6 +21,7 @@ import { track } from '../services/analytics';
 import { QuizHeader } from './quiz/QuizHeader';
 import { SessionFinishing } from './quiz/SessionFinishing';
 import { MCQCard } from './quiz/MCQCard';
+import { alignEnd } from '../i18n/rtl';
 
 // Minimum time the celebratory finish beat stays on screen, so the reward
 // always lands even when the network resolves instantly. The submit + score
@@ -252,7 +253,7 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   progressFill: { height: '100%', borderRadius: 5 },
   progressLabel: {
     fontSize: 12, fontWeight: '700', color: tc.textSecondary,
-    width: 40, textAlign: 'right',
+    width: 40, textAlign: alignEnd,
   },
   body: { flex: 1, padding: 20 },
   prompt: {

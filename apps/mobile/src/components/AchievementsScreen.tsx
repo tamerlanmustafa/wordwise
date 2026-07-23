@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
   },
   achievementUnlocked: { borderColor: COLORS.gold, borderWidth: 1.5 },
-  achievementIcon: { fontSize: 28, marginRight: 14 },
+  achievementIcon: { fontSize: 28, marginEnd: 14 },
   achievementIconLocked: { opacity: 0.4 },
   achievementInfo: { flex: 1 },
   achievementTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },

@@ -165,12 +165,19 @@ describe('plural completeness', () => {
   });
 });
 
-describe('no right-to-left locale ships before RTL layout exists', () => {
-  // The app has zero I18nManager usage; every style uses marginLeft/paddingRight
-  // rather than the *Start/*End equivalents. Shipping an RTL locale would mirror
-  // text without mirroring layout. Flip this test when that work lands.
-  it('UI_LANGUAGES contains no rtl entry', () => {
-    expect(UI_LANGUAGES.filter((l) => l.rtl)).toEqual([]);
+describe('right-to-left locales', () => {
+  // This used to assert the *opposite* — that no RTL locale existed — because
+  // the layout could not mirror. Now that it can (see `i18n/rtl.ts`), the
+  // guard's job is the reverse: keep RTL a supported configuration rather than
+  // something that silently rots the next time a style is written by hand.
+  it('ships at least one, so the mirroring path stays exercised', () => {
+    expect(UI_LANGUAGES.some((l) => l.rtl)).toBe(true);
+  });
+
+  it('marks Arabic as RTL and nothing latin-scripted', () => {
+    const rtl = UI_LANGUAGES.filter((l) => l.rtl).map((l) => l.code);
+    expect(rtl).toContain('ar');
+    expect(rtl).not.toContain('en');
   });
 });
 

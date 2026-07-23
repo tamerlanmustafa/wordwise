@@ -15,6 +15,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import type { ReelTile } from '../../services/api';
+import { alignEnd } from '../../i18n/rtl';
 
 export interface MovieRowProps {
   tile: ReelTile;
@@ -166,7 +167,7 @@ const makeStyles = (tc: ThemeColors) =>
     cefrBadge: {
       position: 'absolute',
       top: 4,
-      left: 4,
+      start: 4,
       paddingHorizontal: 5,
       paddingVertical: 1,
       borderRadius: 3,
@@ -180,7 +181,7 @@ const makeStyles = (tc: ThemeColors) =>
     finalCutStamp: {
       position: 'absolute',
       top: 4,
-      right: 4,
+      end: 4,
       paddingHorizontal: 4,
       paddingVertical: 2,
       backgroundColor: tc.gold,
@@ -237,7 +238,7 @@ const makeStyles = (tc: ThemeColors) =>
       fontWeight: '800',
       color: tc.textSecondary,
       minWidth: 64,
-      textAlign: 'right',
+      textAlign: alignEnd,
     },
     chevron: {
       fontSize: 18,

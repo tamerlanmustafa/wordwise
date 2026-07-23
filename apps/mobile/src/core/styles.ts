@@ -38,7 +38,7 @@ export const styles = StyleSheet.create({
   reviewCtaTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   reviewCtaSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   reviewCtaWrapper: { marginHorizontal: 16, marginTop: 20 },
-  reviewCtaArrow: { fontSize: 22, color: '#FFFFFF', fontWeight: '700', marginLeft: 8 },
+  reviewCtaArrow: { fontSize: 22, color: '#FFFFFF', fontWeight: '700', marginStart: 8 },
   homeNavToggleWrapper: {
     flexDirection: 'row',
     alignSelf: 'center',
@@ -313,7 +313,7 @@ export const styles = StyleSheet.create({
   dropdownMenu: {
     position: 'absolute',
     top: 60,
-    right: 16,
+    end: 16,
     backgroundColor: colors.paper,
     borderRadius: 12,
     shadowColor: '#000',
@@ -328,7 +328,7 @@ export const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   userDropdownMenu: {
-    right: 16,
+    end: 16,
   },
   dropdownScroll: {
     maxHeight: 280,
@@ -425,7 +425,7 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary,
     letterSpacing: 0.5,
-    marginRight: 2,
+    marginEnd: 2,
   },
   searchButton: {
     backgroundColor: colors.primary,
@@ -482,7 +482,7 @@ export const styles = StyleSheet.create({
   },
   searchClear: {
     position: 'absolute',
-    right: 12,
+    end: 12,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
@@ -510,7 +510,7 @@ export const styles = StyleSheet.create({
   },
   searchResultInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginStart: 12,
   },
   searchResultTitle: {
     fontSize: 15,
@@ -597,7 +597,7 @@ export const styles = StyleSheet.create({
   continueBarArrow: {
     fontSize: 12,
     color: colors.primary,
-    marginLeft: 4,
+    marginStart: 4,
   },
   browseAllText: {
     fontSize: 15,
@@ -661,7 +661,7 @@ export const styles = StyleSheet.create({
   },
   levelPickerIcon: {
     fontSize: 14,
-    marginRight: 10,
+    marginEnd: 10,
   },
   levelPickerText: {
     fontSize: 14,
@@ -730,8 +730,8 @@ export const styles = StyleSheet.create({
     height: 90,
     borderRadius: 6,
     backgroundColor: colors.border,
-    marginRight: 14,
-    marginLeft: 48,
+    marginEnd: 14,
+    marginStart: 48,
   },
   skeletonInfo: {
     flex: 1,
@@ -742,7 +742,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   carousel: {
-    paddingRight: 16,
+    paddingEnd: 16,
   },
   featureGrid: {
     flexDirection: 'row',
@@ -796,7 +796,7 @@ export const styles = StyleSheet.create({
   },
   backButton: {
     paddingVertical: 8,
-    paddingRight: 12,
+    paddingEnd: 12,
   },
   backButtonText: {
     fontSize: 16,
@@ -844,8 +844,8 @@ export const styles = StyleSheet.create({
   // overlaps (16 + 92 poster + 14 gap = 122).
   heroTitleBlock: {
     position: 'absolute',
-    left: 122,
-    right: 16,
+    start: 122,
+    end: 16,
     bottom: 12,
   },
   heroTitle: {
@@ -908,7 +908,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingLeft: 14,
+    paddingStart: 14,
   },
   cefrChip: {
     flexDirection: 'row',
@@ -990,7 +990,7 @@ export const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     flexShrink: 1,
-    marginRight: 16,
+    marginEnd: 16,
   },
   undoToastAction: {
     color: '#4FC3F7',
@@ -1078,13 +1078,13 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: 0,
+    start: 0,
     flexDirection: 'row',
     alignItems: 'stretch',
     // Matches unifiedTabsRow's horizontal padding so the ★ For You tab sits
     // flush at the pill's left edge. The floating back button fades out as
     // the bar docks (see MovieDetailScreen), so no clearance inset is needed.
-    paddingLeft: 6,
+    paddingStart: 6,
     paddingVertical: 6,
     backgroundColor: '#E4DCF0',
     zIndex: 2,
@@ -1093,7 +1093,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    right: 0,
+    end: 0,
     width: 28,
     zIndex: 1,
   },
@@ -1163,7 +1163,7 @@ export const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginRight: 8,
+    marginEnd: 8,
   },
   levelDescText: {
     fontSize: 14,
@@ -1173,7 +1173,7 @@ export const styles = StyleSheet.create({
   levelWordCount: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginLeft: 8,
+    marginStart: 8,
   },
   // Word List - Polished design
   wordList: {
@@ -1258,19 +1258,19 @@ export const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: colors.primary,
-    marginLeft: 12,
+    marginStart: 12,
   },
   expandIcon: {
     fontSize: 10,
     color: colors.textSecondary,
     opacity: 0.5,
-    marginLeft: 8,
+    marginStart: 8,
   },
   expandIconRotated: {
     transform: [{ rotate: '180deg' }],
   },
   flagButton: {
-    marginLeft: 4,
+    marginStart: 4,
     padding: 4,
   },
   flagIcon: {
@@ -1283,7 +1283,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    marginLeft: 8,
+    marginStart: 8,
   },
   phrasalVerbBadge: {
     backgroundColor: '#2196F3', // Blue for phrasal verbs
@@ -1300,7 +1300,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    marginLeft: 4,
+    marginStart: 4,
   },
   cefrBadgeText: {
     fontSize: 10,
@@ -1362,7 +1362,7 @@ export const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginEnd: 14,
   },
   listsCardName: {
     fontSize: 16,
@@ -1381,7 +1381,7 @@ export const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
   listsCardBadgeText: {
     color: '#FFFFFF',

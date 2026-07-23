@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     width: 22, height: 22, borderRadius: 4,
     borderWidth: 1.5, borderColor: colors.border,
     alignItems: 'center', justifyContent: 'center',
-    marginRight: 12,
+    marginEnd: 12,
     backgroundColor: colors.paper,
   },
   checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },

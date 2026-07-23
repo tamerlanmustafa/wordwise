@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
+import { directionalIcon } from '../../i18n/rtl';
 
 export interface StepHeaderProps {
   /** 1-based index of the current step — segments `< step` render gold. */
@@ -37,7 +38,7 @@ export function StepHeader({ step, total, title, eyebrow, onBack }: StepHeaderPr
             hitSlop={8}
             style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
           >
-            <Ionicons name="chevron-back" size={16} color={tc.textSecondary} />
+            <Ionicons name={directionalIcon('chevron-back')} size={16} color={tc.textSecondary} />
           </Pressable>
         ) : null}
         <View style={s.bar}>

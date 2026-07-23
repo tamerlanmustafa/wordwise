@@ -24,6 +24,7 @@ import {
   MONTHLY_PRICE_LABEL,
   ANNUAL_PRICE_LABEL,
 } from './paywallPricing';
+import { directionalIcon } from '../i18n/rtl';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -67,7 +68,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel={t('action.back')}>
-          <Ionicons name="chevron-back" size={22} color={tc.text} />
+          <Ionicons name={directionalIcon('chevron-back')} size={22} color={tc.text} />
         </PressableScale>
         <Text style={s.headerTitle}>{t('billing:paywall.title')}</Text>
         <View style={{ width: 22 }} />

@@ -76,7 +76,7 @@ const makeStyles = (tc: ThemeColors) =>
     unreadDot: {
       position: 'absolute',
       top: 7,
-      right: 9,
+      end: 9,
       width: 7,
       height: 7,
       borderRadius: 4,

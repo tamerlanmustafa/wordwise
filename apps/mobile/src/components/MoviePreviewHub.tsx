@@ -34,6 +34,7 @@ import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 import type { ReelTile } from '../services/api';
+import { directionalIcon } from '../i18n/rtl';
 
 export interface MoviePreviewHubProps {
   tile: ReelTile;
@@ -174,7 +175,7 @@ export function MoviePreviewHub({
         ]}
         hitSlop={8}
       >
-        <Ionicons name="chevron-back" size={18} color="#fff" />
+        <Ionicons name={directionalIcon('chevron-back')} size={18} color="#fff" />
       </Pressable>
 
       {/* ── Middle: value strap + actions list ─────────────────────── */}
@@ -327,7 +328,7 @@ function ActionRow({
         </Text>
       </View>
       <Ionicons
-        name="chevron-forward"
+        name={directionalIcon('chevron-forward')}
         size={16}
         color={tc.textFaint}
       />
@@ -365,7 +366,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   // Top chrome
   backBtn: {
     position: 'absolute',
-    left: 16,
+    start: 16,
     width: 38,
     height: 38,
     borderRadius: 19,

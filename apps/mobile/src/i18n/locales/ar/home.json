@@ -1,0 +1,26 @@
+{
+  "advertisement": "إعلان",
+  "notifications": "الإشعارات",
+  "search": {
+    "placeholder": "ابحث عن أفلام أو كلمات أو ممثلين…",
+    "recentlyViewed": "شوهد مؤخرًا"
+  },
+  "levelSort": {
+    "showingAtYourLevel": "المعروض عند مستواك"
+  },
+  "rankedList": {
+    "endOfLevel": "هذا كل ما لدينا في هذا المستوى",
+    "empty": "لا توجد أفلام مصنّفة لهذا المستوى بعد.",
+    "tapToClose": "اضغط للإغلاق"
+  },
+  "swipe": {
+    "seenIt": "شاهدته",
+    "notInterested": "غير مهتم"
+  },
+  "todayWord": {
+    "eyebrow": "كلمة الساعة",
+    "doubleTapToFlip": "اضغط مرتين للقلب",
+    "saved": "حُفظت في كلماتك",
+    "save": "احفظ هذه الكلمة"
+  }
+}

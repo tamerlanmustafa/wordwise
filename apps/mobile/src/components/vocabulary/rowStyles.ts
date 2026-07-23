@@ -1,5 +1,6 @@
 import { Platform, StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../theme/tokens';
+import { alignEnd } from '../../i18n/rtl';
 
 // Serif gives the vocabulary rows a calmer, book-page feel — Georgia is
 // preinstalled on iOS; Android falls back to its default serif. Body text is
@@ -25,7 +26,7 @@ export const makeRowStyles = (tc: ThemeColors) =>
     },
     leftBar: {
       position: 'absolute',
-      left: 0,
+      start: 0,
       top: 0,
       bottom: 0,
       width: 3,
@@ -33,14 +34,14 @@ export const makeRowStyles = (tc: ThemeColors) =>
     },
     rowNum: {
       width: 22,
-      textAlign: 'right',
+      textAlign: alignEnd,
       fontSize: 11,
       fontWeight: '600',
       letterSpacing: 0.4,
       color: tc.textFaint,
       fontVariant: ['tabular-nums'],
       paddingTop: 5,
-      marginRight: 12,
+      marginEnd: 12,
     },
     body: {
       flex: 1,
@@ -105,8 +106,8 @@ export const makeRowStyles = (tc: ThemeColors) =>
     },
     expansion: {
       marginTop: 9,
-      borderLeftWidth: 2,
-      paddingLeft: 11,
+      borderStartWidth: 2,
+      paddingStart: 11,
     },
     expandSkeletonGroup: {
       gap: 7,
@@ -158,9 +159,9 @@ export const makeRowStyles = (tc: ThemeColors) =>
       width: 34,
       height: 34,
       marginTop: -7,
-      marginRight: -6,
+      marginEnd: -6,
       marginBottom: -7,
-      marginLeft: 4,
+      marginStart: 4,
       alignItems: 'center',
       justifyContent: 'center',
     },

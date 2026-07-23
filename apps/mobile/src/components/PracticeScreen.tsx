@@ -309,7 +309,7 @@ const makeStyles = (tc: ThemeColors) =>
       shadowOffset: { width: 0, height: 4 },
       elevation: 2,
     },
-    streakIcon: { marginRight: 3 },
+    streakIcon: { marginEnd: 3 },
     streakNumber: {
       fontFamily: MONO_FAMILY,
       fontSize: 14,

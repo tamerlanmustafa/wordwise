@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     fontSize: 20,
     color: COLORS.warning,
-    marginRight: 8,
+    marginEnd: 8,
   },
   headerTitle: {
     flex: 1,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 2,
     borderColor: COLORS.border,
-    marginRight: 10,
+    marginEnd: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },

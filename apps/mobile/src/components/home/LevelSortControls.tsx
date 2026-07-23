@@ -96,7 +96,7 @@ export function LevelSortControls({
                   {opt.label}
                 </Text>
                 {active ? (
-                  <View style={{ marginLeft: 'auto' }}>
+                  <View style={{ marginStart: 'auto' }}>
                     <HomeIcon name="check" size={15} color={tc.goldOnSurface} sw={2.6} />
                   </View>
                 ) : null}
@@ -167,7 +167,7 @@ const makeStyles = (tc: ThemeColors) =>
     dropdown: {
       position: 'absolute',
       top: 38,
-      right: 18,
+      end: 18,
       zIndex: 200,
       minWidth: 200,
       backgroundColor: tc.paper,

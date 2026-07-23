@@ -28,7 +28,7 @@ export const SnapPager = ({ movies, onMoviePress }: Props) => {
         snapToInterval={SNAP_INTERVAL}
         decelerationRate="fast"
         snapToAlignment="start"
-        contentContainerStyle={{ paddingRight: 16 }}
+        contentContainerStyle={{ paddingEnd: 16 }}
         onMomentumScrollEnd={(e) => {
           const idx = Math.round(e.nativeEvent.contentOffset.x / SNAP_INTERVAL);
           setActiveIndex(idx);
@@ -66,7 +66,7 @@ export const SnapPager = ({ movies, onMoviePress }: Props) => {
 const snapStyles = StyleSheet.create({
   card: {
     width: SNAP_CARD_WIDTH,
-    marginRight: SNAP_CARD_GAP,
+    marginEnd: SNAP_CARD_GAP,
   },
   poster: {
     width: SNAP_CARD_WIDTH,

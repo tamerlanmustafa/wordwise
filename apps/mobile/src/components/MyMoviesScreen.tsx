@@ -495,7 +495,7 @@ const makeStyles = (tc: ThemeColors) =>
     },
     fab: {
       position: 'absolute',
-      right: 22,
+      end: 22,
       bottom: 96,
       width: 56,
       height: 56,

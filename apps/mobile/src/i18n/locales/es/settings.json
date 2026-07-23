@@ -6,7 +6,11 @@
     "followTranslationHint": "Sigue tu idioma de traducción ({{language}})",
     "label": "Idioma de la aplicación",
     "pickerTitle": "Idioma de la aplicación",
-    "sectionTitle": "Idioma de la aplicación"
+    "sectionTitle": "Idioma de la aplicación",
+    "restartTitle": "Reinicia para terminar",
+    "restartBody": "{{language}} se escribe de derecha a izquierda, así que WordWise necesita reiniciarse para invertir el diseño.",
+    "restartNow": "Reiniciar ahora",
+    "restartManual": "Cierra y vuelve a abrir WordWise para terminar el cambio."
   },
   "appearance": "Aspecto",
   "autoCollapse": "Ocultar automáticamente las filas de palabras",

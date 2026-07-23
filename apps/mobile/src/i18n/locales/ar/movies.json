@@ -1,0 +1,93 @@
+{
+  "detail": {
+    "forYou": "لك",
+    "noNewWords": "لا توجد كلمات جديدة عند مستواك",
+    "saveToPhotos": "حفظ في الصور",
+    "undo": "تراجع",
+    "quizMe": "اختبرني · {{count}} كلمة",
+    "hideWordTitle": "إخفاء الكلمة عالميًا؟",
+    "hideWordFailed": "تعذّر إخفاء الكلمة",
+    "hide": "إخفاء",
+    "saved": "تم الحفظ",
+    "permissionDenied": "تم رفض الإذن",
+    "downloadFailed": "فشل التنزيل",
+    "scriptTooShort": "النص قصير جدًا أو غير موجود",
+    "less": "أقل ▴",
+    "more": "المزيد ▾",
+    "sortRarest": "الأندر أولًا ⇅",
+    "sortCommon": "الأشيع أولًا ⇅",
+    "rowsView": "عرض الصفوف",
+    "cardsView": "عرض البطاقات",
+    "hideWordBody": "ستُزال \"{{word}}\" من قوائم مفردات كل الأفلام والكتب لجميع المستخدمين. يمكنك التراجع عن ذلك من لوحة الإدارة.",
+    "hideWordUnknownError": "خطأ غير معروف",
+    "posterSavedBody": "حُفظ الملصق في صورك.",
+    "permissionDeniedBody": "اسمح بالوصول إلى الصور لحفظ الملصق.",
+    "downloadFailedBody": "تعذّر حفظ الملصق."
+  },
+  "preview": {
+    "inYourReel": "في قائمتك",
+    "whatsNext": "ما التالي",
+    "prepForFilm": "استعد لهذا الفيلم",
+    "study": "ادرس ←",
+    "quizMe": "اختبرني · {{count}} كلمة ←",
+    "studyAllWords": "ادرس كل الكلمات",
+    "studyWords": "ادرس الكلمات",
+    "quizMeOn": "اختبرني في {{count}} كلمة",
+    "removeFromReel": "إزالة من القائمة",
+    "removeFromReelTitle": "إزالة من القائمة؟",
+    "removeFromReelBody": "ستُزال \"{{title}}\" من قائمتك. يمكنك إضافتها مجددًا من تبويب الرئيسية.",
+    "remove": "إزالة",
+    "removing": "جارٍ الإزالة…",
+    "studyAllWordsSub": "تصفّح قائمة المفردات كاملة وعلّم ما تعلّمته",
+    "removeSubtitle": "أخرج هذا الفيلم من قائمة انتظارك"
+  },
+  "myMovies": {
+    "eyebrow": "قائمتك",
+    "title": "أفلامي",
+    "noMatch": "لا توجد أفلام مطابقة",
+    "showAll": "عرض كل الأفلام",
+    "empty": "قائمتك فارغة",
+    "emptyBody": "أضف فيلمك الأول وسنسحب كلماته المهمة إلى تدريبك اليومي.",
+    "addFirstFilm": "أضف فيلمك الأول",
+    "sortBy": "ترتيب حسب",
+    "sortSummary_zero": "{{count}} فيلم · مرتّبة حسب",
+    "sortSummary_one": "{{count}} فيلم · مرتّب حسب",
+    "sortSummary_two": "{{count}} فيلم · مرتّبة حسب",
+    "sortSummary_few": "{{count}} أفلام · مرتّبة حسب",
+    "sortSummary_many": "{{count}} فيلمًا · مرتّبة حسب",
+    "sortSummary_other": "{{count}} فيلم · مرتّبة حسب"
+  },
+  "analyzing": {
+    "title": "جارٍ تحليل النص…",
+    "buildingFor": "نبني قائمة كلماتك لـ <0>{{title}}</0>",
+    "reelReady": "القائمة جاهزة"
+  },
+  "search": {
+    "placeholder": "ابحث في TMDB عن فيلم…",
+    "loadMore": "تحميل المزيد"
+  },
+  "watched": {
+    "title": "الأفلام المشاهَدة",
+    "empty": "لا توجد أفلام مشاهَدة بعد",
+    "emptyBody": "اسحب فيلمًا في الرئيسية لتعليمه كمشاهَد."
+  },
+  "journey": {
+    "readyToWatch": "جاهز للمشاهدة",
+    "dailyChest": "الصندوق اليومي",
+    "chestAdded": "أُضيف إلى مجموعتك.",
+    "collect": "استلام",
+    "newUnlock": "فتح جديد",
+    "takeABow": "انحنِ للجمهور",
+    "milestone": {
+      "dayMilestone": "إنجاز {{days}} يومًا",
+      "opening_weekend_name": "عطلة الافتتاح",
+      "opening_weekend_flavor": "أسبوع كامل، كل يوم. أصعب مرحلة صارت خلفك.",
+      "box_office_name": "شبّاك التذاكر",
+      "box_office_flavor": "ثلاثون يومًا متتاليًا. أنت الآن من الدائمين رسميًا.",
+      "cult_classic_name": "كلاسيكية عبادية",
+      "cult_classic_flavor": "مئة يوم. صار هذا جزءًا من هويتك.",
+      "criterion_collection_name": "مجموعة كرايتيريون",
+      "criterion_collection_flavor": "سنة كاملة بلا انقطاع. مثبّتة في السجل الخالد."
+    }
+  }
+}

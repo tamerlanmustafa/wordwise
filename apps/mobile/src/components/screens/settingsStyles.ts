@@ -67,7 +67,7 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     color: tc.textInverse,
   },
   profileInfo: {
-    marginLeft: 16,
+    marginStart: 16,
   },
   profileTitle: {
     fontSize: 22,
@@ -195,8 +195,8 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   modalContent: {
     backgroundColor: tc.paper,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopStartRadius: 16,
+    borderTopEndRadius: 16,
     maxHeight: '60%',
   },
   modalHeader: {
@@ -262,7 +262,7 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: tc.chipBg,
-    marginLeft: 12,
+    marginStart: 12,
   },
   notifToggleOn: { backgroundColor: tc.primary },
   notifToggleText: { fontSize: 12, fontWeight: '700', color: tc.textInverse },

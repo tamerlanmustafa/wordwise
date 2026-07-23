@@ -467,7 +467,7 @@ const s = StyleSheet.create({
   addChipSlot: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    end: 8,
   },
 
   footer: {

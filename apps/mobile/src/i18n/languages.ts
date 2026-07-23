@@ -8,10 +8,15 @@
  *       (Keep the filenames and every key identical — the parity test in
  *        `__tests__/locales.test.ts` enforces this and fails on pre-push.)
  *    2. Add the resource import + entry in `resources.ts`.
- *    3. Add one row to UI_LANGUAGES below.
+ *    3. Add one row to UI_LANGUAGES below. Set `rtl: true` for a right-to-left
+ *       script — `rtl.ts` handles the mirroring off that flag alone.
  *
  *  No component, picker, or store needs touching: Settings and onboarding
  *  both render straight from this list.
+ *
+ *  One thing translators own rather than the code: directional arrows baked
+ *  into copy (`"Continue →"`). An RTL locale writes `←` in its own strings.
+ *  Arrows rendered from code go through `FORWARD_ARROW` in `rtl.ts` instead.
  * ─────────────────────────────────────────────────────────────────────────
  *
  * NOT to be confused with the two lists in `types/constants.ts`:
@@ -29,8 +34,8 @@ export interface UiLanguage {
   name: string;
   /** Endonym, shown as the primary label in pickers. */
   nativeName: string;
-  /** Right-to-left script. Nothing in the app handles RTL layout yet, so no
-   *  RTL locale may ship until that work is done — see I18N_PLAN.md §3. */
+  /** Right-to-left script. Read by `rtl.ts` to decide the native layout
+   *  direction, which is why it is data here rather than a hardcoded list. */
   rtl?: boolean;
 }
 
@@ -40,6 +45,7 @@ export const UI_LANGUAGES: ReadonlyArray<UiLanguage> = [
   { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
   { code: 'tr', name: 'Turkish',    nativeName: 'Türkçe' },
   { code: 'ru', name: 'Russian',    nativeName: 'Русский' },
+  { code: 'ar', name: 'Arabic',     nativeName: 'العربية', rtl: true },
 ];
 
 /** The locale every other one falls back to, key-by-key. */

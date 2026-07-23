@@ -78,6 +78,19 @@ import ruPractice from './locales/ru/practice.json';
 import ruQuiz from './locales/ru/quiz.json';
 import ruStats from './locales/ru/stats.json';
 
+import arAuth from './locales/ar/auth.json';
+import arBilling from './locales/ar/billing.json';
+import arCommon from './locales/ar/common.json';
+import arOnboarding from './locales/ar/onboarding.json';
+import arSettings from './locales/ar/settings.json';
+import arHome from './locales/ar/home.json';
+import arMovies from './locales/ar/movies.json';
+import arVocabulary from './locales/ar/vocabulary.json';
+import arNotifications from './locales/ar/notifications.json';
+import arPractice from './locales/ar/practice.json';
+import arQuiz from './locales/ar/quiz.json';
+import arStats from './locales/ar/stats.json';
+
 /**
  * Namespaces, in the order they were carved up in I18N_PLAN.md §2.
  * `common` is the default: `t('action.save')` with no prefix resolves there.
@@ -170,5 +183,19 @@ export const resources: Resource = {
     quiz: ruQuiz,
     stats: ruStats,
     vocabulary: ruVocabulary,
+  },
+  ar: {
+    common: arCommon,
+    auth: arAuth,
+    billing: arBilling,
+    home: arHome,
+    movies: arMovies,
+    onboarding: arOnboarding,
+    settings: arSettings,
+    notifications: arNotifications,
+    practice: arPractice,
+    quiz: arQuiz,
+    stats: arStats,
+    vocabulary: arVocabulary,
   },
 };

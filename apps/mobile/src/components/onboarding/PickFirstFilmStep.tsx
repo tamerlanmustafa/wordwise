@@ -226,7 +226,7 @@ const makeStyles = (tc: ThemeColors) =>
     badge: {
       position: 'absolute',
       top: -22,
-      right: 10,
+      end: 10,
       width: 24,
       height: 24,
       borderRadius: 12,

@@ -6,7 +6,11 @@
     "followTranslationHint": "Çeviri dilinizi takip eder ({{language}})",
     "label": "Uygulama dili",
     "pickerTitle": "Uygulama Dili",
-    "sectionTitle": "Uygulama Dili"
+    "sectionTitle": "Uygulama Dili",
+    "restartTitle": "Tamamlamak için yeniden başlat",
+    "restartBody": "{{language}} sağdan sola yazılır, bu yüzden WordWise düzeni yansıtmak için yeniden başlamalı.",
+    "restartNow": "Şimdi yeniden başlat",
+    "restartManual": "Değişikliği tamamlamak için WordWise’ı kapatıp yeniden açın."
   },
   "appearance": "Görünüm",
   "autoCollapse": "Kelime satırlarını otomatik olarak daralt",

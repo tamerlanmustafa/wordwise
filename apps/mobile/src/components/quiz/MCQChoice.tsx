@@ -108,7 +108,7 @@ const makeStyles = (_tc: ThemeColors) =>
     glyph: {
       position: 'absolute',
       top: 8,
-      right: 8,
+      end: 8,
     },
     label: {
       fontFamily: SERIF_FAMILY,

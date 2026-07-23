@@ -122,9 +122,16 @@ literally two lines: the import and the list entry.
   JSX text from landing untranslated.
 
 ### Things that break and need explicit handling
-- **RTL** — no `I18nManager` usage exists anywhere today. If Arabic or Hebrew ships,
-  every `marginLeft`/`paddingRight`/`flexDirection: 'row'` needs auditing. Strong
-  recommendation: **exclude RTL languages from v1** and treat RTL as its own project.
+- **RTL** — ~~no `I18nManager` usage exists anywhere today~~ **done (issue #97).**
+  Handled in `i18n/rtl.ts`: `syncRtlLayout()` sets the native direction and the
+  caller reloads the bundle (native layout direction is fixed at bridge start, so
+  it cannot change in-session). Every physical edge was converted to its logical
+  equivalent — `marginStart`/`paddingEnd`/`borderStartWidth`/`start`/`end` — and
+  `__tests__/rtl.test.ts` scans source to keep it that way. `flexDirection: 'row'`
+  needed no audit: Yoga mirrors it automatically. What Yoga does *not* mirror, and
+  so has helpers: `textAlign` (`alignStart`/`alignEnd`), directional icons
+  (`directionalIcon()`), arrow glyphs (`FORWARD_ARROW`), and `PanResponder`
+  dx/`translateX` (`directionSign`). Arabic ships as the first RTL locale.
 - **Dates/numbers** — 12 call sites use `toLocaleString()` / `toLocaleDateString()`
   with no locale argument, so they follow the *device*, not the app language. They
   need to take the active locale.

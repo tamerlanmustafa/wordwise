@@ -1,0 +1,69 @@
+{
+  "screenTitle": "المفردات",
+  "learnedWords": "الكلمات المتعلَّمة",
+  "savedWords": "الكلمات المحفوظة",
+  "deckExplainer": {
+    "eyebrowForYou": "مختارة لمستواك",
+    "eyebrowLevel": "المستوى — {{level}} · {{label}}",
+    "bodyForYou": "<0>{{count}} كلمة هي الأهم</0> في هذا الفيلم — مطابقة لمستواك، ومرتّبة بحسب مقدار الحوار الذي تفتحه لك.",
+    "bodyLevel": "كل <0>{{count}} كلمة من مستوى {{level}}</0> وردت في هذا النص — القائمة كاملة، بلا ترتيب ذكي.",
+    "coverage": "≈{{percent}}% تغطية الترجمة",
+    "sortRarest": "الأندر أولًا ⇅",
+    "sortCommon": "الأكثر شيوعًا"
+  },
+  "row": {
+    "noExamples": "لا تتوفر جمل توضيحية",
+    "alsoAppearsIn": "تظهر أيضًا في:",
+    "showsTranslation": "يعرض الترجمة",
+    "pronounce": "انطق الكلمة",
+    "removeFromSaved": "إزالة من المحفوظات",
+    "saveWord": "احفظ الكلمة"
+  },
+  "deck": {
+    "empty": "لا توجد كلمات في هذه المجموعة بعد.",
+    "noExampleInScript": "لا يوجد مثال في هذا النص",
+    "noTranslation": "لا تتوفر ترجمة",
+    "tapToReveal": "اضغط للكشف",
+    "tapToHide": "اضغط للإخفاء",
+    "knowIt": "أعرفها",
+    "next": "التالي",
+    "iKnowThisWord": "أعرف هذه الكلمة",
+    "previousCard": "أعد البطاقة السابقة",
+    "nextCard": "البطاقة التالية",
+    "hideTranslation": "إخفاء الترجمة",
+    "showTranslation": "إظهار الترجمة"
+  },
+  "learned": {
+    "empty": "لا توجد كلمات متعلَّمة بعد. اسحب كلمة في أي فيلم لتعليمها كمعروفة.",
+    "emptyShort": "لا توجد كلمات متعلَّمة بعد",
+    "restore": "استعادة",
+    "restoreTitle": "استعادة الكلمة؟",
+    "hiddenCount_zero": "{{count}} كلمة مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenCount_one": "{{count}} كلمة مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenCount_two": "{{count}} كلمة مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenCount_few": "{{count}} كلمات مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenCount_many": "{{count}} كلمة مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenCount_other": "{{count}} كلمة مخفية عن قوائم الأفلام. اضغط للاستعادة.",
+    "hiddenSummary_zero": "{{count}} كلمة مخفية عن قوائم الأفلام",
+    "hiddenSummary_one": "{{count}} كلمة مخفية عن قوائم الأفلام",
+    "hiddenSummary_two": "{{count}} كلمة مخفية عن قوائم الأفلام",
+    "hiddenSummary_few": "{{count}} كلمات مخفية عن قوائم الأفلام",
+    "hiddenSummary_many": "{{count}} كلمة مخفية عن قوائم الأفلام",
+    "hiddenSummary_other": "{{count}} كلمة مخفية عن قوائم الأفلام",
+    "restoreErrorTitle": "خطأ",
+    "restoreErrorBody": "تعذّرت استعادة تلك الكلمة. حاول مرة أخرى.",
+    "restoreBody": "ستظهر \"{{word}}\" مجددًا في قوائم مفردات الأفلام."
+  },
+  "notebook": {
+    "browseMovies": "تصفّح الأفلام",
+    "all": "الكل",
+    "byMovie": "حسب الفيلم",
+    "emptySaved": "لا توجد كلمات محفوظة بعد"
+  },
+  "lists": {
+    "title": "قوائمي",
+    "watchedFilms": "الأفلام المشاهَدة",
+    "watchedFilmsSub": "الأفلام التي علّمتها كمشاهَدة"
+  },
+  "wordsYouKnow": "كلمات تعرفها بالفعل"
+}

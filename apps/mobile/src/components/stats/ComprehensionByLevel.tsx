@@ -10,6 +10,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { cefrColors } from '../../theme/palette';
 import { MONO_FAMILY } from '../../theme/fonts';
 import type { ComprehensionByLevel as Row } from './statsSelectors';
+import { alignEnd } from '../../i18n/rtl';
 
 export interface ComprehensionByLevelProps {
   rows: ReadonlyArray<Row>;
@@ -51,5 +52,5 @@ const makeStyles = (tc: ThemeColors) =>
     level: { fontFamily: MONO_FAMILY, fontSize: 12, fontWeight: '900', width: 24 },
     track: { flex: 1, height: 8, borderRadius: 999, backgroundColor: tc.divider, overflow: 'hidden' },
     fill: { height: '100%', borderRadius: 999 },
-    pct: { fontSize: 12, fontWeight: '700', color: tc.textSecondary, width: 38, textAlign: 'right' },
+    pct: { fontSize: 12, fontWeight: '700', color: tc.textSecondary, width: 38, textAlign: alignEnd },
   });

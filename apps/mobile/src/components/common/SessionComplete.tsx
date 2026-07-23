@@ -19,6 +19,7 @@ import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { PressableScale } from '../ui/PressableScale';
 import { Confetti } from '../ui/Confetti';
 import { CountUp } from '../ui/CountUp';
+import { FORWARD_ARROW } from '../../i18n/rtl';
 
 export interface SessionStat {
   value: number;
@@ -76,7 +77,7 @@ export function SessionComplete({
             <Text style={s.compEyebrow}>COMPREHENSION</Text>
             <View style={s.compRow}>
               <Text style={s.compBefore}>{Math.round(comprehension.before)}%</Text>
-              <Text style={s.compArrow}>→</Text>
+              <Text style={s.compArrow}>{FORWARD_ARROW}</Text>
               <CountUp style={s.compAfter} value={Math.round(comprehension.after)} suffix="%" duration={1100} delay={650} />
               {compDelta !== 0 ? (
                 <Text style={[s.compDelta, compDelta > 0 ? s.compDeltaUp : s.compDeltaDown]}>
@@ -178,7 +179,7 @@ const makeStyles = (tc: ThemeColors) =>
     compArrow: { fontSize: 18, fontWeight: '700', color: tc.textFaint },
     compAfter: { fontSize: 32, fontWeight: '900', color: tc.text, letterSpacing: -0.6 },
     compDelta: {
-      marginLeft: 6,
+      marginStart: 6,
       fontSize: 13,
       fontWeight: '900',
       paddingHorizontal: 8,

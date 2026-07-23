@@ -32,6 +32,7 @@ import {
 import type { Entitlements } from '../types';
 import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
 import { VocabCoverageView } from './admin/VocabCoverageView';
+import { alignEnd } from '../i18n/rtl';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -382,7 +383,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
               const lvColor = m.difficulty_level ? LEVEL_COLORS[m.difficulty_level] : COLORS.textTertiary;
               const lvLabel = m.difficulty_level ? LEVEL_LABELS[m.difficulty_level] ?? m.difficulty_level : '—';
               return (
-                <View key={m.movie_id} style={[styles.deadCard, { borderLeftColor: lvColor }]}>
+                <View key={m.movie_id} style={[styles.deadCard, { borderStartColor: lvColor }]}>
                   <View style={styles.deadTopRow}>
                     <Text style={styles.deadTitle} numberOfLines={2}>
                       {m.title}
@@ -898,7 +899,7 @@ function StatCard({
   if (onPress) {
     return (
       <TouchableOpacity
-        style={[styles.statCard, { borderLeftColor: color }]}
+        style={[styles.statCard, { borderStartColor: color }]}
         onPress={onPress}
         activeOpacity={0.7}
       >
@@ -906,7 +907,7 @@ function StatCard({
       </TouchableOpacity>
     );
   }
-  return <View style={[styles.statCard, { borderLeftColor: color }]}>{body}</View>;
+  return <View style={[styles.statCard, { borderStartColor: color }]}>{body}</View>;
 }
 
 function DetailRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
@@ -1037,7 +1038,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.primary,
     minWidth: 60,
-    textAlign: 'right',
+    textAlign: alignEnd,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -1082,7 +1083,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderRadius: 12,
-    borderLeftWidth: 4,
+    borderStartWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1174,7 +1175,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
     flex: 1,
-    marginRight: 8,
+    marginEnd: 8,
   },
   statusChip: {
     paddingHorizontal: 10,
@@ -1339,8 +1340,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.error,
+    borderStartWidth: 4,
+    borderStartColor: COLORS.error,
     borderWidth: 1,
     borderColor: COLORS.border,
   },

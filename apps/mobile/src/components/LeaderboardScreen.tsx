@@ -265,7 +265,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   rowHighlight: { backgroundColor: tc.primary + '18', borderColor: tc.primary },
   rank: { fontSize: 16, fontWeight: '800', width: 44, textAlign: 'center' },
-  username: { flex: 1, fontSize: 15, color: tc.text, marginLeft: 8 },
+  username: { flex: 1, fontSize: 15, color: tc.text, marginStart: 8 },
   usernameBold: { fontWeight: '700', color: tc.primary },
   score: { fontSize: 15, fontWeight: '700', color: tc.text },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },

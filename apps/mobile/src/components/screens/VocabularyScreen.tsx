@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
+import { FORWARD_ARROW } from '../../i18n/rtl';
 
 interface Props {
   onBack: () => void;
@@ -46,7 +47,7 @@ export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) =>
                 : t('vocabulary:learned.hiddenSummary', { count: learnedCount })}
             </Text>
           </View>
-          <Text style={settingsStyles.settingsLinkArrow}>→</Text>
+          <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

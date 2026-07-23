@@ -16,6 +16,7 @@ import { MONO_FAMILY } from '../../theme/fonts';
 import { AVAILABLE_LANGUAGES, filterLanguages } from '../../types';
 import { StepHeader } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
+import { directionalIcon } from '../../i18n/rtl';
 
 export interface LanguageStepProps {
   selected: string | null;
@@ -91,7 +92,7 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
                   <Ionicons name="checkmark" size={14} color={tc.textInverse} />
                 </View>
               ) : (
-                <Ionicons name="chevron-forward" size={16} color={tc.textFaint} />
+                <Ionicons name={directionalIcon('chevron-forward')} size={16} color={tc.textFaint} />
               )}
             </Pressable>
           );

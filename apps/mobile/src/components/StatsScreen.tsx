@@ -15,6 +15,7 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { ContributionCalendar } from './stats/ContributionCalendar';
 import { calendarIntensity } from './stats/statsSelectors';
 import { Skeleton } from './ui/Skeleton';
+import { alignEnd } from '../i18n/rtl';
 
 const CALENDAR_WEEKS = 5;
 
@@ -332,7 +333,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: { height: 18, borderRadius: 9 },
-  barCount: { width: 28, fontSize: 13, fontWeight: '700', color: tc.text, textAlign: 'right' },
+  barCount: { width: 28, fontSize: 13, fontWeight: '700', color: tc.text, textAlign: alignEnd },
   barInterval: { width: 48, fontSize: 11, color: tc.textFaint },
   legendText: { fontSize: 13, color: tc.textSecondary, lineHeight: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: tc.text, textAlign: 'center' },

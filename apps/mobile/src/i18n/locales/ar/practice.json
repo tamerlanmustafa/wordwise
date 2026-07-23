@@ -1,0 +1,31 @@
+{
+  "eyebrow": "التدريب اليومي",
+  "pathHeading": "مسار تدريبك",
+  "freeze_zero": "تجميد",
+  "freeze_one": "تجميد",
+  "freeze_two": "تجميد",
+  "freeze_few": "تجميدات",
+  "freeze_many": "تجميدًا",
+  "freeze_other": "تجميد",
+  "dayLabel_zero": "يوم",
+  "dayLabel_one": "يوم",
+  "dayLabel_two": "يوم",
+  "dayLabel_few": "أيام",
+  "dayLabel_many": "يومًا",
+  "dayLabel_other": "يوم",
+  "emptyReelTitle": "قائمة أفلامك فارغة",
+  "emptyReelBody": "أضف فيلمًا إلى قائمتك (تبويب أفلامي) حتى يجد الغوص العميق ما يغوص فيه.",
+  "loadFailed": "واجهتنا مشكلة في الوصول إلى أفلامك. تحقق من اتصالك وحاول مرة أخرى.",
+  "tile": {
+    "quick_recall": "استرجاع سريع",
+    "tough_words": "كلمات صعبة",
+    "movie_deep_dive": "غوص عميق في فيلم"
+  },
+  "moviePicker": {
+    "eyebrow": "اختر فيلمًا",
+    "title": "اغُص في فيلم"
+  },
+  "title": "التدريب",
+  "lesson": "الدرس {{number}}",
+  "loadFailedTitle": "تعذّر تحميل قائمة أفلامك"
+}

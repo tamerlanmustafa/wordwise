@@ -274,7 +274,7 @@ const makeStyles = (tc: ThemeColors) =>
       flexShrink: 1,
     },
     starBtn: {
-      paddingLeft: 8,
+      paddingStart: 8,
       paddingVertical: 4,
     },
     word: {

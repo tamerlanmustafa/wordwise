@@ -30,6 +30,7 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
+import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
   restoreDeck,
@@ -1097,7 +1098,7 @@ export const WordCardDeck = ({
             <View style={[s.undoWrap, !canUndo && s.undoDisabled]}>
               <View style={s.undoEdge} />
               <View style={[s.undoFace, pressed && canUndo && s.undoFacePressed]}>
-                <Ionicons name="arrow-undo" size={18} color={tc.textSecondary} />
+                <Ionicons name={directionalIcon('arrow-undo')} size={18} color={tc.textSecondary} />
               </View>
             </View>
           )}
@@ -1116,7 +1117,7 @@ export const WordCardDeck = ({
                 style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}
               >
                 <Text style={s.nextLabel}>{t('vocabulary:deck.next')}</Text>
-                <Text style={s.nextArrow}>→</Text>
+                <Text style={s.nextArrow}>{FORWARD_ARROW}</Text>
               </LinearGradient>
             </View>
           )}
@@ -1354,13 +1355,13 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       justifyContent: 'center',
     },
     sentenceTrHiddenRules: {
-      paddingLeft: 12,
+      paddingStart: 12,
       gap: 12,
     },
     sentenceTrRevealed: {
-      borderLeftWidth: 2,
-      borderLeftColor: tc.gold,
-      paddingLeft: 12,
+      borderStartWidth: 2,
+      borderStartColor: tc.gold,
+      paddingStart: 12,
       overflow: 'hidden',
       justifyContent: 'center',
     },
@@ -1394,7 +1395,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       opacity: 0.5,
     },
     tapHint: {
-      marginLeft: 'auto',
+      marginStart: 'auto',
       fontFamily: MONO_FAMILY,
       fontSize: 9,
       fontWeight: '700',
