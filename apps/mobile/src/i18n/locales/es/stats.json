@@ -1,0 +1,41 @@
+{
+  "achievements": "Logros",
+  "activity": "Actividad",
+  "activitySub": "Palabras guardadas durante las últimas {{weeks}} semanas",
+  "box": "Box {{number}}",
+  "boxInterval": {
+    "d1": "1 día",
+    "d14": "14 días",
+    "d3": "3 días",
+    "d30": "30 días",
+    "d7": "7 días"
+  },
+  "boxProgression": "Progresión de cajas",
+  "boxProgressionSub": "Las palabras van subiendo a casillas más altas a medida que las vas recordando",
+  "dayStreak": "Racha de días",
+  "emptyBody": "Guarda palabras de las películas para empezar a seguir tu progreso aquí.",
+  "emptyTitle": "Aún no se ha guardado ninguna palabra",
+  "exportSub": "Descarga las palabras que has guardado para utilizarlas en Anki u otras aplicaciones",
+  "exportTitle": "Exporta tus palabras",
+  "howItWorks": "Cómo funciona",
+  "howItWorksBody": "Las palabras nuevas empiezan en la casilla 1 (se repasan a diario). Cada vez que recuerdas una palabra, pasa a la siguiente casilla con un intervalo más largo. Si la olvidas, vuelve a la casilla 1. Las palabras de la casilla 5 se repasan una vez al mes: ya forman parte de tu memoria a largo plazo.",
+  "leaderboard": {
+    "back": "← Atrás",
+    "emptyQuiz": "Aún no hay puntuaciones en los cuestionarios. ¡Juega una unidad para aparecer en el marcador!",
+    "emptyVocab": "Aún no hay datos. ¡Empieza a aprender!",
+    "retention": "Retención",
+    "reviews": "Total de reseñas",
+    "screenTitle": "Clasificación",
+    "stars": "Total de estrellas",
+    "streak": "La racha más larga",
+    "words": "Palabras guardadas",
+    "xp": "XP",
+    "yourRank": "Tu puesto: n.º {{rank}} ({{score}}{{suffix}})"
+  },
+  "reviewCta_one": "Repasar {{count}} palabra",
+  "reviewCta_other": "Repasar {{count}} palabras",
+  "rightNow": "Ahora mismo",
+  "title": "Mi progreso",
+  "totalSaved": "Total ahorrado",
+  "wordsDue": "Palabras pendientes"
+}

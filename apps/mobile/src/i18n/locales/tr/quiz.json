@@ -1,0 +1,58 @@
+{
+  "batchBuilder": {
+    "empty": "Bu seviyede film yok.",
+    "loadFailed": "Filmler yüklenemedi.",
+    "start": "Yolculuğa Başla",
+    "title": "Gelişim Süreci"
+  },
+  "finishing": {
+    "sub": "İlerlemenizi kaydediyorum…",
+    "title": "Aferin!"
+  },
+  "journey": {
+    "loadFailed": "Birimler yüklenemedi."
+  },
+  "lesson": {
+    "dontKnow": "Bilmiyorum",
+    "empty": "Bu oturumda kart yok.",
+    "kindOf": "Bir nevi",
+    "know": "Biliyorum",
+    "prompt": "Bu kelimeyi biliyor musun?",
+    "saveFailed": "Sonuçlar kaydedilemedi. “Tekrar dene” seçeneğine dokunun."
+  },
+  "mcq": {
+    "continue": "Devam et →",
+    "gotItContinue": "Anladım · Devam et →",
+    "notQuite": "HEMEN DEĞİL"
+  },
+  "result": {
+    "comprehension": "ANLAMA",
+    "done": "Tamam",
+    "playAgain": "Tekrar oyna",
+    "setComplete": "Set tamamlandı",
+    "stars0": "Devam et!",
+    "stars1": "İyi denemeydi!",
+    "stars2": "Aferin!",
+    "stars3": "Harika!",
+    "stopForToday": "Bugünlük bu kadar",
+    "wallBody": "Yarın tekrar gelin ve bu seriyi sürdürün — ya da başka bir film seçin ve devam edin.",
+    "wallTitle": "Bugünlük bu kadar.",
+    "xpEarned": "Kazanılan XP"
+  },
+  "review": {
+    "backHome": "Eve dönüş",
+    "caughtUpBody": "Kaydettiğiniz tüm kelimeler daha sonra izlenmek üzere planlandı. Yarın tekrar uğrayın — ya da yeni bir filmden daha fazla kelime kaydedin.",
+    "caughtUpTitle": "Artık her şeyi yakaladınız",
+    "dailyReview": "Günlük gözden geçirme",
+    "errorTitle": "Bir sorun oluştu",
+    "niceWork": "Aferin",
+    "startFailed": "İnceleme oturumu başlatılamadı",
+    "streakExtended": "Seri devam ediyor — {{streak}}. gün",
+    "streakExtendedGoal": "Seri devam ediyor — {{streak}}. gün!",
+    "tipBody": "Araştırmalar, bir kelimeyi ilk kez gördükten 3–6 gün sonra tekrar etmenin, hafızada kalıcılık sağlamada en etkili yöntem olduğunu gösteriyor — tek bir günde yoğun bir şekilde ezberlemeye kıyasla çok daha etkili. Sen de bu kelimeyi tam da bu ritimle tekrar görüyorsun.",
+    "tipEyebrow": "Biliyor muydunuz?",
+    "tipTitle": "İşte bu, aralık etkisinin işleyiş şekli",
+    "todaysDone": "Bugünkü iş bitti",
+    "upgradeBody": "Yarın tekrar gelin — ya da sınırsız inceleme hakkı için üyelik seviyenizi yükseltin."
+  }
+}

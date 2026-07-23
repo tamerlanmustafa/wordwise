@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors, cefrColors } from '../theme/palette';
 import { wordwiseApi } from '../services/api';
 
@@ -31,6 +32,7 @@ const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 // Build-a-journey: user hand-picks 3+ movies whose vocab will be pooled into
 // one long journey. Filter chip lets them browse across CEFR levels.
 export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatchBuilderScreenProps) {
+  const { t } = useTranslation();
   const initialLevel = (userLevel || 'B1').toUpperCase();
   const [activeLevel, setActiveLevel] = useState<string>(LEVELS.includes(initialLevel) ? initialLevel : 'B1');
   const [movies, setMovies] = useState<MovieCandidate[]>([]);
@@ -46,11 +48,11 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
       setMovies(data.movies as MovieCandidate[]);
     } catch (e) {
       console.warn('[BatchBuilder] load failed:', e);
-      setError('Could not load movies.');
+      setError(t('quiz:batchBuilder.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(activeLevel); }, [load, activeLevel]);
 
@@ -80,7 +82,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Build Journey</Text>
+        <Text style={styles.headerTitle}>{t('quiz:batchBuilder.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -117,7 +119,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
         </View>
       ) : movies.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>No movies at this level.</Text>
+          <Text style={styles.emptyText}>{t('quiz:batchBuilder.empty')}</Text>
         </View>
       ) : (
         <FlatList
@@ -156,7 +158,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
           disabled={!canStart}
           style={[styles.startBtn, !canStart && styles.startBtnDisabled]}
         >
-          <Text style={styles.startBtnText}>Start Journey</Text>
+          <Text style={styles.startBtnText}>{t('quiz:batchBuilder.start')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

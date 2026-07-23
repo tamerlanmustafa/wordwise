@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   srsApi,
   SrsPaywallError,
@@ -75,6 +76,7 @@ export function ReviewScreen({
   onBack,
   onPaywall,
 }: ReviewScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const [phase, setPhase] = useState<Phase>('loading');
@@ -171,10 +173,10 @@ export function ReviewScreen({
         return;
       }
       console.warn('[ReviewScreen] startSession failed:', e?.message);
-      setErrorMessage(e?.message || 'Failed to start review session');
+      setErrorMessage(e?.message || t('quiz:review.startFailed'));
       setPhase('error');
     }
-  }, [onPaywall, kind, movieId]);
+  }, [onPaywall, kind, movieId, t]);
 
   useEffect(() => {
     loadSession();
@@ -319,9 +321,9 @@ export function ReviewScreen({
         <EmptyState
           icon="cloud-offline-outline"
           tone="error"
-          title="Something went wrong"
+          title={t('quiz:review.errorTitle')}
           body={`${errorMessage}\n\nDon't worry — your progress is saved.`}
-          ctaLabel="Try again"
+          ctaLabel={t('action.retry')}
           onCta={loadSession}
           subCtaLabel="Continue offline"
           onSubCta={onBack}
@@ -343,9 +345,9 @@ export function ReviewScreen({
         <EmptyState
           icon="checkmark-circle"
           tone="success"
-          title="You're all caught up"
-          body="All your saved words are scheduled for later. Come back tomorrow — or save more words from a new film."
-          ctaLabel="Back home"
+          title={t('quiz:review.caughtUpTitle')}
+          body={t('quiz:review.caughtUpBody')}
+          ctaLabel={t('quiz:review.backHome')}
           onCta={onBack}
         />
       </SafeAreaView>
@@ -363,12 +365,16 @@ export function ReviewScreen({
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Today's done</Text>
+          <Text style={styles.headerTitle}>{t('quiz:review.todaysDone')}</Text>
           <View style={{ width: 60 }} />
         </View>
         <SessionComplete
-          eyebrow="Daily review"
-          title={streak > 0 ? `Streak extended — day ${streak}${justHitGoal ? '!' : ''}` : 'Nice work'}
+          eyebrow={t('quiz:review.dailyReview')}
+          title={
+            streak > 0
+              ? t(justHitGoal ? 'quiz:review.streakExtendedGoal' : 'quiz:review.streakExtended', { streak })
+              : t('quiz:review.niceWork')
+          }
           stats={[
             { value: pct, suffix: '%', label: 'accuracy', accent: true },
             { value: stats.got, label: 'remembered' },
@@ -380,7 +386,7 @@ export function ReviewScreen({
         >
           {isPreview && previewsRemaining === 0 ? (
             <Text style={styles.previewHint}>
-              Come back tomorrow — or upgrade for unlimited reviews.
+              {t('quiz:review.upgradeBody')}
             </Text>
           ) : null}
         </SessionComplete>
@@ -422,7 +428,7 @@ export function ReviewScreen({
     : null;
   const sharedHeader = (
     <QuizHeader
-      movie={currentCard.movie_title ?? 'Daily review'}
+      movie={currentCard.movie_title ?? t('quiz:review.dailyReview')}
       level={lvl}
       index={index + 1}
       total={cards.length}
@@ -432,13 +438,9 @@ export function ReviewScreen({
   const sharedTip = (
     <TipPopup
       visible={spacingTipVisible}
-      eyebrow="Did you know?"
-      title="That's the spacing effect at work"
-      body={
-        'Studies suggest that reviewing a word 3–6 days after first seeing it ' +
-        'is when memory really sticks — much better than cramming on one day. ' +
-        "You're seeing this word again on that exact rhythm."
-      }
+      eyebrow={t('quiz:review.tipEyebrow')}
+      title={t('quiz:review.tipTitle')}
+      body={t('quiz:review.tipBody')}
       onDismiss={() => setSpacingTipVisible(false)}
       onDontShowAgain={() => {
         void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);

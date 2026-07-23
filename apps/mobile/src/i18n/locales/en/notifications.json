@@ -1,0 +1,28 @@
+{
+  "sheet": {
+    "title": "NOTIFICATIONS",
+    "markAllRead": "Mark all read",
+    "markAllReadA11y": "Mark all notifications as read",
+    "emptyTitle": "You're all caught up",
+    "emptyBody": "Review reminders and streak alerts will show up here."
+  },
+  "reviewsDue": {
+    "title": "Words ready to review",
+    "body_one": "{{count}} word is waiting — a quick session keeps it fresh.",
+    "body_other": "{{count}} words are waiting — a quick session keeps them fresh."
+  },
+  "streakRisk": {
+    "title": "Don't lose your {{count}}-day streak",
+    "body": "Complete today's review to keep it going."
+  },
+  "welcome": {
+    "title": "Welcome to WordWise",
+    "body": "Save words from the movies you love — updates about your reviews and streak land here."
+  },
+  "reminder": {
+    "wordTitle": "Your Word of the Hour is ready",
+    "wordBody": "WordWise has a fresh word for you to learn. Tap to check it out!",
+    "reviewTitle": "Words due for review",
+    "reviewBody": "You have words waiting to be reviewed. A quick session keeps them in your memory!"
+  }
+}

@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 import { WordCard } from './WordCard';
 import { MCQChoice } from './MCQChoice';
 import {
@@ -63,6 +64,7 @@ export function MCQCard({
   choices,
   onAnswer,
 }: MCQCardProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const copy = MCQ_COPY;
@@ -122,8 +124,8 @@ export function MCQCard({
   const ctaLabel = phase === 'idle'
     ? copy.idleCta
     : userWasCorrect
-      ? 'Continue →'
-      : 'Got it · Continue →';
+      ? t('quiz:mcq.continue')
+      : t('quiz:mcq.gotItContinue');
   const ctaEnabled = phase === 'answered';
 
   return (
@@ -148,7 +150,7 @@ export function MCQCard({
 
         {phase === 'answered' && !userWasCorrect && correctChoice ? (
           <View style={s.notQuiteCard}>
-            <Text style={s.notQuiteEyebrow}>NOT QUITE</Text>
+            <Text style={s.notQuiteEyebrow}>{t('quiz:mcq.notQuite')}</Text>
             <Text style={s.notQuiteBody}>
               <Text style={s.notQuiteAnswer}>{correctChoice.word}</Text>
               {copy.notQuiteSuffix}

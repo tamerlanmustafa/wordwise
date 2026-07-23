@@ -31,6 +31,7 @@ import {
   View,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'JetBrains Mono';
@@ -61,6 +62,7 @@ export function MoviePickerModal({
   onPick,
   onClose,
 }: MoviePickerModalProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -83,8 +85,8 @@ export function MoviePickerModal({
         {/* Inner pressable that captures taps so they don't bubble to
             the overlay's close handler. */}
         <Pressable style={s.sheet} onPress={() => undefined}>
-          <Text style={s.eyebrow}>PICK A MOVIE</Text>
-          <Text style={s.title}>Deep-dive a film</Text>
+          <Text style={s.eyebrow}>{t('practice:moviePicker.eyebrow')}</Text>
+          <Text style={s.title}>{t('practice:moviePicker.title')}</Text>
           <Text style={s.body}>
             10 cards drawn from the words in this one movie. Comprehension
             % is your current coverage of the film's vocabulary.

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { t } from '../i18n';
 
 /** How often the "Word of the Hour" reminder fires. Defaults to once a day. */
 export type WordReminderMode = 'daily' | 'hourly';
@@ -85,8 +86,8 @@ export async function scheduleWordReminder(mode?: WordReminderMode): Promise<voi
     await Notifications.scheduleNotificationAsync({
       identifier: 'daily-word',
       content: {
-        title: 'Your Word of the Hour is ready',
-        body: 'WordWise has a fresh word for you to learn. Tap to check it out!',
+        title: t('notifications:reminder.wordTitle'),
+        body: t('notifications:reminder.wordBody'),
       },
       trigger:
         resolved === 'hourly'
@@ -113,8 +114,8 @@ export async function scheduleReviewReminder(): Promise<void> {
     await Notifications.scheduleNotificationAsync({
       identifier: 'review-reminder',
       content: {
-        title: 'Words due for review',
-        body: "You have words waiting to be reviewed. A quick session keeps them in your memory!",
+        title: t('notifications:reminder.reviewTitle'),
+        body: t('notifications:reminder.reviewBody'),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

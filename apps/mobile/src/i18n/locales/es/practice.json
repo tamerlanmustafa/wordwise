@@ -1,0 +1,23 @@
+{
+  "dayLabel_one": "DÍA",
+  "dayLabel_other": "DÍAS",
+  "emptyReelBody": "Añade una película a tu lista (pestaña «Mis películas») para que Deep-Dive tenga algo en lo que profundizar.",
+  "emptyReelTitle": "Tu carrete está vacío",
+  "eyebrow": "PRÁCTICA DIARIA",
+  "freeze_one": "CONGELACIÓN",
+  "freeze_other": "CONGELACIONES",
+  "lesson": "LESSON {{number}}",
+  "loadFailed": "Hemos tenido problemas para acceder a tus películas. Comprueba tu conexión e inténtalo de nuevo.",
+  "loadFailedTitle": "No se ha podido cargar tu carrete",
+  "moviePicker": {
+    "eyebrow": "ELIGE UNA PELÍCULA",
+    "title": "Analizar en profundidad una película"
+  },
+  "pathHeading": "TU ITINERARIO DE FORMACIÓN",
+  "tile": {
+    "movie_deep_dive": "Análisis en profundidad de la película",
+    "quick_recall": "Recordatorio rápido",
+    "tough_words": "Palabras duras"
+  },
+  "title": "Práctica"
+}

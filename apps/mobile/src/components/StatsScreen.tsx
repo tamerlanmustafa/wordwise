@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { srsApi, premiumApi, wordwiseApi, type SrsStats } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
@@ -27,7 +28,8 @@ function localDateKey(iso: string): string | null {
 // Leitner box colours are semantic (box 1 = weakest → box 5 = mastered) and
 // theme-independent, like the CEFR palette — kept as literals.
 const BOX_COLORS = ['#D66A6A', '#F4A261', '#E9C46A', '#7EC8A0', '#4CAF9A'];
-const BOX_LABELS = ['1 day', '3 days', '7 days', '14 days', '30 days'];
+// Interval copy lives in `stats:boxInterval.*`; this is just the ordering.
+const BOX_INTERVAL_KEYS = ['d1', 'd3', 'd7', 'd14', 'd30'];
 
 export interface StatsScreenProps {
   onBack: () => void;
@@ -35,6 +37,7 @@ export interface StatsScreenProps {
 }
 
 export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const [stats, setStats] = useState<SrsStats | null>(null);
@@ -90,9 +93,9 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header onBack={onBack} styles={styles} />
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>No words saved yet</Text>
+          <Text style={styles.emptyTitle}>{t('stats:emptyTitle')}</Text>
           <Text style={styles.emptyBody}>
-            Save words from movies to start tracking your progress here.
+            {t('stats:emptyBody')}
           </Text>
         </View>
       </SafeAreaView>
@@ -113,7 +116,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
         <View style={styles.heroRow}>
           <StatCard
             value={`${stats.current_streak}`}
-            label="Day streak"
+            label={t('stats:dayStreak')}
             sub={`Best: ${stats.longest_streak}`}
             color={tc.primaryOnSurface}
             styles={styles}
@@ -129,11 +132,11 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 
         {/* Due overview */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Words due</Text>
+          <Text style={styles.cardTitle}>{t('stats:wordsDue')}</Text>
           <View style={styles.dueRow}>
             <View style={styles.dueItem}>
               <Text style={styles.dueCount}>{stats.due_now}</Text>
-              <Text style={styles.dueLabel}>Right now</Text>
+              <Text style={styles.dueLabel}>{t('stats:rightNow')}</Text>
             </View>
             <View style={styles.dueDivider} />
             <View style={styles.dueItem}>
@@ -143,13 +146,13 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
             <View style={styles.dueDivider} />
             <View style={styles.dueItem}>
               <Text style={styles.dueCount}>{stats.total_saved}</Text>
-              <Text style={styles.dueLabel}>Total saved</Text>
+              <Text style={styles.dueLabel}>{t('stats:totalSaved')}</Text>
             </View>
           </View>
           {stats.due_now > 0 && (
             <TouchableOpacity style={styles.reviewBtn} onPress={onStartReview}>
               <Text style={styles.reviewBtnText}>
-                Review {stats.due_now} word{stats.due_now === 1 ? '' : 's'}
+                {t('stats:reviewCta', { count: stats.due_now })}
               </Text>
             </TouchableOpacity>
           )}
@@ -157,13 +160,13 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 
         {/* Box distribution */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Box progression</Text>
+          <Text style={styles.cardTitle}>{t('stats:boxProgression')}</Text>
           <Text style={styles.cardSub}>
             Words advance to higher boxes as you remember them
           </Text>
           {boxEntries.map(([box, count]) => (
             <View key={box} style={styles.barRow}>
-              <Text style={styles.barLabel}>Box {box}</Text>
+              <Text style={styles.barLabel}>{t('stats:box', { number: box })}</Text>
               <View style={styles.barTrack}>
                 <View
                   style={[
@@ -176,7 +179,9 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
                 />
               </View>
               <Text style={styles.barCount}>{count}</Text>
-              <Text style={styles.barInterval}>{BOX_LABELS[(box - 1) % BOX_LABELS.length]}</Text>
+              <Text style={styles.barInterval}>
+                {t(`stats:boxInterval.${BOX_INTERVAL_KEYS[(box - 1) % BOX_INTERVAL_KEYS.length]}`)}
+              </Text>
             </View>
           ))}
         </View>
@@ -184,15 +189,15 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
         {/* Activity — contribution calendar of words saved per day */}
         {calendar.length > 0 ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Activity</Text>
-            <Text style={styles.cardSub}>Words saved over the last {CALENDAR_WEEKS} weeks</Text>
+            <Text style={styles.cardTitle}>{t('stats:activity')}</Text>
+            <Text style={styles.cardSub}>{t('stats:activitySub', { weeks: CALENDAR_WEEKS })}</Text>
             <ContributionCalendar grid={calendar} weeks={CALENDAR_WEEKS} />
           </View>
         ) : null}
 
         {/* Legend */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>How it works</Text>
+          <Text style={styles.cardTitle}>{t('stats:howItWorks')}</Text>
           <Text style={styles.legendText}>
             New words start in Box 1 (reviewed daily). Each time you remember a
             word, it advances to the next box with a longer interval. Forgetting
@@ -204,9 +209,9 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
         {/* Export (premium) */}
         {isPremium && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Export your words</Text>
+            <Text style={styles.cardTitle}>{t('stats:exportTitle')}</Text>
             <Text style={styles.cardSub}>
-              Download your saved words for use in Anki or other apps
+              {t('stats:exportSub')}
             </Text>
             <View style={styles.exportRow}>
               <TouchableOpacity
@@ -232,12 +237,13 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 type Styles = ReturnType<typeof makeStyles>;
 
 function Header({ onBack, styles }: { onBack: () => void; styles: Styles }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={8}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>My Progress</Text>
+      <Text style={styles.headerTitle}>{t('stats:title')}</Text>
       <View style={{ width: 60 }} />
     </View>
   );

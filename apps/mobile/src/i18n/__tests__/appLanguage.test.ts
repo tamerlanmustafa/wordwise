@@ -29,6 +29,21 @@ beforeEach(async () => {
   await setAppLanguage('en', { persist: false });
 });
 
+describe('module-level t', () => {
+  it('works on a fresh import without an explicit initI18n() call', () => {
+    // Stores and the notification builders call `t` outside React, so importing
+    // the module has to be enough. Before init, i18next's `t` returns undefined
+    // — which shows up as a blank notification body, not an error, so this is
+    // asserted rather than left to integration luck.
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const fresh = require('..');
+      expect(fresh.t('action.save')).toBe('Save');
+      expect(fresh.t('notifications:welcome.title')).toBe('Welcome to WordWise');
+    });
+  });
+});
+
 describe('resolveAppLanguage', () => {
   it('prefers an explicit Settings choice over everything else', () => {
     expect(

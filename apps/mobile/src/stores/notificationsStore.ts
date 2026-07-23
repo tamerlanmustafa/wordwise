@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { srsApi } from '../services/api';
 import { useDailyGoalStore } from './dailyGoalStore';
+import { t } from '../i18n';
 
 const READ_KEY = 'notifications.read.v1';
 /** Dated read-ids older than this are pruned so storage can't grow forever. */
@@ -109,11 +110,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
         items.push({
           id: `reviews-due-${today}`,
           kind: 'reviews_due',
-          title: 'Words ready to review',
-          body:
-            stats.due_now === 1
-              ? '1 word is waiting — a quick session keeps it fresh.'
-              : `${stats.due_now} words are waiting — a quick session keeps them fresh.`,
+          title: t('notifications:reviewsDue.title'),
+          body: t('notifications:reviewsDue.body', { count: stats.due_now }),
           read: false,
           target: 'review',
         });
@@ -128,8 +126,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
       items.push({
         id: `streak-risk-${today}`,
         kind: 'streak_risk',
-        title: `Don't lose your ${daily.streak}-day streak`,
-        body: "Complete today's review to keep it going.",
+        title: t('notifications:streakRisk.title', { count: daily.streak }),
+        body: t('notifications:streakRisk.body'),
         read: false,
         target: 'practice',
       });
@@ -140,8 +138,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     items.push({
       id: 'welcome-v1',
       kind: 'welcome',
-      title: 'Welcome to WordWise',
-      body: 'Save words from the movies you love — updates about your reviews and streak land here.',
+      title: t('notifications:welcome.title'),
+      body: t('notifications:welcome.body'),
       read: false,
     });
 

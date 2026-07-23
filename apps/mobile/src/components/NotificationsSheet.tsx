@@ -21,6 +21,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 import {
   useNotificationsStore,
   selectHasUnread,
@@ -45,6 +46,7 @@ interface Props {
 }
 
 export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const items = useNotificationsStore((s) => s.items);
@@ -98,15 +100,15 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
         <View style={styles.handle} />
 
         <View style={styles.headerRow}>
-          <Text style={styles.eyebrow}>NOTIFICATIONS</Text>
+          <Text style={styles.eyebrow}>{t('notifications:sheet.title')}</Text>
           {hasUnread ? (
             <TouchableOpacity
               onPress={() => void useNotificationsStore.getState().markAllRead()}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Mark all notifications as read"
+              accessibilityLabel={t('notifications:sheet.markAllReadA11y')}
             >
-              <Text style={styles.markAll}>Mark all read</Text>
+              <Text style={styles.markAll}>{t('notifications:sheet.markAllRead')}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -116,9 +118,9 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
             <View style={styles.emptyChip}>
               <HomeIcon name="bell" size={20} color={tc.textFaint} />
             </View>
-            <Text style={styles.emptyTitle}>You're all caught up</Text>
+            <Text style={styles.emptyTitle}>{t('notifications:sheet.emptyTitle')}</Text>
             <Text style={styles.emptyBody}>
-              Review reminders and streak alerts will show up here.
+              {t('notifications:sheet.emptyBody')}
             </Text>
           </View>
         ) : (

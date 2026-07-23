@@ -1,0 +1,58 @@
+{
+  "mcq": {
+    "notQuite": "NOT QUITE",
+    "continue": "Continue →",
+    "gotItContinue": "Got it · Continue →"
+  },
+  "finishing": {
+    "title": "Nice work!",
+    "sub": "Saving your progress…"
+  },
+  "journey": {
+    "loadFailed": "Could not load units."
+  },
+  "lesson": {
+    "empty": "No cards in this session.",
+    "prompt": "Do you know this word?",
+    "know": "I know it",
+    "kindOf": "Kind of",
+    "dontKnow": "Don't know",
+    "saveFailed": "Could not save results. Tap retry."
+  },
+  "result": {
+    "setComplete": "Set complete",
+    "xpEarned": "XP earned",
+    "done": "Done",
+    "stopForToday": "Stop for today",
+    "wallTitle": "Today's done.",
+    "wallBody": "Come back tomorrow to keep the streak alive — or pick another movie and keep going.",
+    "comprehension": "COMPREHENSION",
+    "playAgain": "Play again",
+    "stars3": "Amazing!",
+    "stars2": "Nice work!",
+    "stars1": "Good try!",
+    "stars0": "Keep going!"
+  },
+  "batchBuilder": {
+    "title": "Build Journey",
+    "empty": "No movies at this level.",
+    "start": "Start Journey",
+    "loadFailed": "Could not load movies."
+  },
+  "review": {
+    "todaysDone": "Today's done",
+    "upgradeBody": "Come back tomorrow — or upgrade for unlimited reviews.",
+    "errorTitle": "Something went wrong",
+    "caughtUpTitle": "You're all caught up",
+    "caughtUpBody": "All your saved words are scheduled for later. Come back tomorrow — or save more words from a new film.",
+    "backHome": "Back home",
+    "dailyReview": "Daily review",
+    "startFailed": "Failed to start review session",
+    "niceWork": "Nice work",
+    "streakExtended": "Streak extended — day {{streak}}",
+    "streakExtendedGoal": "Streak extended — day {{streak}}!",
+    "tipEyebrow": "Did you know?",
+    "tipTitle": "That's the spacing effect at work",
+    "tipBody": "Studies suggest that reviewing a word 3–6 days after first seeing it is when memory really sticks — much better than cramming on one day. You're seeing this word again on that exact rhythm."
+  }
+}

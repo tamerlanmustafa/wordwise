@@ -1,0 +1,28 @@
+{
+  "reminder": {
+    "reviewBody": "İncelenmeyi bekleyen kelimeleriniz var. Kısa bir çalışma seansı, bunları hafızanızda tutmanıza yardımcı olur!",
+    "reviewTitle": "İncelenmesi gereken kelimeler",
+    "wordBody": "WordWise'da öğrenebileceğiniz yeni bir kelime var. Dokunarak göz atın!",
+    "wordTitle": "\"Saatin Kelimesi\" hazır"
+  },
+  "reviewsDue": {
+    "body_one": "{{count}} kelime bekliyor — kısa bir oturum onu taze tutar.",
+    "body_other": "{{count}} kelime bekliyor — kısa bir oturum onları taze tutar.",
+    "title": "İncelemeye hazır kelimeler"
+  },
+  "sheet": {
+    "emptyBody": "Yorum hatırlatmaları ve seri bildirimleri burada görünecektir.",
+    "emptyTitle": "Artık her şeyi yakaladınız",
+    "markAllRead": "Hepsini okundu olarak işaretle",
+    "markAllReadA11y": "Tüm bildirimleri okundu olarak işaretle",
+    "title": "BİLDİRİMLER"
+  },
+  "streakRisk": {
+    "body": "Bu günün gözden geçirme sürecini tamamlayarak devam et.",
+    "title": "{{count}} günlük serini bozma"
+  },
+  "welcome": {
+    "body": "Sevdiğiniz filmlerden alıntıları kaydedin — yorumlarınız ve izleme serinizle ilgili güncellemeler buraya gelir.",
+    "title": "WordWise’a hoş geldiniz"
+  }
+}

@@ -195,6 +195,21 @@ export function getFormattingLocale(): string {
   return getAppLanguage();
 }
 
+/**
+ * Initialise on import.
+ *
+ * `t` is used from outside React — Zustand stores and the notification
+ * builders — so any module that imports this one may call it before App.tsx
+ * has run. An uninitialised i18next returns `undefined` from `t`, which turns
+ * a missing setup step into blank notification bodies rather than an error.
+ * Init is synchronous (every locale is bundled, `initImmediate: false`), so
+ * doing it here costs nothing and makes importing this module sufficient.
+ *
+ * App.tsx still calls initI18n() explicitly — it is a no-op by then, but it
+ * documents the ordering and pins the language before the first render.
+ */
+initI18n();
+
 export { default as i18n } from 'i18next';
 export const t = i18next.t.bind(i18next);
 export * from './languages';

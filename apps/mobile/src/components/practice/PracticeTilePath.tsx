@@ -28,14 +28,9 @@ import { Fragment, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { kindAtIndex } from '../../stores/practicePathStore';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 import type { SessionKind } from '../../services/api';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
-
-const TILE_LABELS: Record<SessionKind, string> = {
-  quick_recall:    'Quick Recall',
-  tough_words:     'Tough Words',
-  movie_deep_dive: 'Movie Deep-Dive',
-};
 
 /** Total tiles rendered at once. */
 const WINDOW_SIZE = 7;
@@ -108,6 +103,7 @@ export function PracticeTilePath({
   cursor,
   onTilePress,
 }: PracticeTilePathProps) {
+  const { t } = useTranslation();
   const tiles = useMemo<RenderedTile[]>(
     () => buildWindow(cursor),
     [cursor],
@@ -115,16 +111,16 @@ export function PracticeTilePath({
 
   return (
     <View style={styles.wrap}>
-      {tiles.map((t, slot) => {
-        const x = offsetForIndex(t.index);
+      {tiles.map((tile, slot) => {
+        const x = offsetForIndex(tile.index);
         const prev = slot > 0 ? tiles[slot - 1] : null;
         return (
-          <Fragment key={t.index}>
-            {isSectionStart(t.index) ? (
+          <Fragment key={tile.index}>
+            {isSectionStart(tile.index) ? (
               <SectionDivider
-                section={sectionForIndex(t.index)}
-                completed={cursor >= t.index + SECTION_SIZE}
-                current={t.index <= cursor && cursor < t.index + SECTION_SIZE}
+                section={sectionForIndex(tile.index)}
+                completed={cursor >= tile.index + SECTION_SIZE}
+                current={tile.index <= cursor && cursor < tile.index + SECTION_SIZE}
               />
             ) : prev ? (
               // Dotted trail tying consecutive circles into one road.
@@ -132,16 +128,16 @@ export function PracticeTilePath({
               // visual break there.
               <PathConnector
                 prevIndex={prev.index}
-                nextIndex={t.index}
-                walked={t.index <= cursor}
+                nextIndex={tile.index}
+                walked={tile.index <= cursor}
               />
             ) : null}
             <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
               <PracticeTile
-                kind={t.kind}
-                label={TILE_LABELS[t.kind]}
-                state={t.state}
-                onPress={() => onTilePress(t.kind, t.index)}
+                kind={tile.kind}
+                label={t(`practice:tile.${tile.kind}`)}
+                state={tile.state}
+                onPress={() => onTilePress(tile.kind, tile.index)}
               />
             </View>
           </Fragment>

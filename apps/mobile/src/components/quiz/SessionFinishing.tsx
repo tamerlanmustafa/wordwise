@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 
 /**
@@ -17,6 +18,7 @@ import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/to
  * layout work, so it stays smooth on cheap devices (playbook §8).
  */
 export function SessionFinishing() {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
@@ -76,10 +78,10 @@ export function SessionFinishing() {
         <Animated.Text
           style={[s.title, { opacity: rise, transform: [{ translateY: riseTranslate }] }]}
         >
-          Nice work!
+          {t('quiz:finishing.title')}
         </Animated.Text>
         <Animated.Text style={[s.subtitle, { opacity: rise }]}>
-          Saving your progress…
+          {t('quiz:finishing.sub')}
         </Animated.Text>
       </View>
     </SafeAreaView>

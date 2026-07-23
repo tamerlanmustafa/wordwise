@@ -1,0 +1,28 @@
+{
+  "reminder": {
+    "reviewBody": "Tienes palabras pendientes de repasar. ¡Una sesión rápida te ayudará a recordarlas!",
+    "reviewTitle": "Términos pendientes de revisión",
+    "wordBody": "WordWise tiene una palabra nueva para que aprendas. ¡Toca aquí para verla!",
+    "wordTitle": "Tu «Palabra de la hora» ya está lista"
+  },
+  "reviewsDue": {
+    "body_one": "{{count}} palabra te espera — una sesión rápida la mantiene fresca.",
+    "body_other": "{{count}} palabras te esperan — una sesión rápida las mantiene frescas.",
+    "title": "Palabras listas para repasar"
+  },
+  "sheet": {
+    "emptyBody": "Aquí aparecerán los recordatorios de reseñas y las alertas de rachas.",
+    "emptyTitle": "Ya estás al día",
+    "markAllRead": "Marcar todo como leído",
+    "markAllReadA11y": "Marcar todas las notificaciones como leídas",
+    "title": "NOTIFICACIONES"
+  },
+  "streakRisk": {
+    "body": "Completa la revisión de hoy para seguir adelante.",
+    "title": "No pierdas tu racha de {{count}} días"
+  },
+  "welcome": {
+    "body": "Guarda frases de tus películas favoritas: aquí encontrarás novedades sobre tus reseñas y tu racha.",
+    "title": "Bienvenido a WordWise"
+  }
+}

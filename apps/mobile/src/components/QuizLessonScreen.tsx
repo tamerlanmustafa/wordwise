@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import {
@@ -48,6 +49,7 @@ export function QuizLessonScreen({
   onExit,
   onComplete,
 }: QuizLessonScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
@@ -81,7 +83,7 @@ export function QuizLessonScreen({
     return (
       <SafeAreaView style={s.container} edges={['top']}>
         <View style={s.centered}>
-          <Text style={s.emptyText}>No cards in this session.</Text>
+          <Text style={s.emptyText}>{t('quiz:lesson.empty')}</Text>
           <TouchableOpacity onPress={onExit} style={s.exitBtn}>
             <Text style={s.exitBtnText}>Back</Text>
           </TouchableOpacity>
@@ -124,7 +126,7 @@ export function QuizLessonScreen({
       onComplete(result, level, final);
     } catch (e) {
       console.warn('[QuizLesson] finish failed:', e);
-      setError('Could not save results. Tap retry.');
+      setError(t('quiz:lesson.saveFailed'));
       setFinishing(false);
     }
   };
@@ -199,7 +201,7 @@ export function QuizLessonScreen({
           />
         ) : (
           <View style={s.body}>
-            <Text style={s.prompt}>Do you know this word?</Text>
+            <Text style={s.prompt}>{t('quiz:lesson.prompt')}</Text>
             <View style={[s.wordCard, { borderColor: accent }]}>
               <Text style={s.wordText}>{card.word}</Text>
             </View>
@@ -210,21 +212,21 @@ export function QuizLessonScreen({
                 style={[s.rateBtn, { backgroundColor: tc.success }]}
                 activeOpacity={0.8}
               >
-                <Text style={s.rateBtnText}>I know it</Text>
+                <Text style={s.rateBtnText}>{t('quiz:lesson.know')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleSelfRate('kinda')}
                 style={[s.rateBtn, { backgroundColor: tc.warning }]}
                 activeOpacity={0.8}
               >
-                <Text style={[s.rateBtnText, { color: tc.goldDeep }]}>Kind of</Text>
+                <Text style={[s.rateBtnText, { color: tc.goldDeep }]}>{t('quiz:lesson.kindOf')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleSelfRate('dont')}
                 style={[s.rateBtn, { backgroundColor: tc.error }]}
                 activeOpacity={0.8}
               >
-                <Text style={s.rateBtnText}>Don't know</Text>
+                <Text style={s.rateBtnText}>{t('quiz:lesson.dontKnow')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -27,6 +27,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { cefrColors, cefrLabels } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { DAILY_GOAL } from '../stores/dailyGoalStore';
@@ -64,6 +65,7 @@ export function QuizResultScreen({
   onPlayAgain,
   journey,
 }: QuizResultScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
@@ -112,15 +114,15 @@ export function QuizResultScreen({
     return (
       <SafeAreaView style={s.container} edges={['top']}>
         <SessionComplete
-          eyebrow="Set complete"
+          eyebrow={t('quiz:result.setComplete')}
           title={`${result.correct_count} of ${result.total_scored} correct`}
           stats={[
             ...(accuracy !== null ? [{ value: accuracy, suffix: '%', label: 'accuracy', accent: true }] : []),
-            { value: result.xp_earned, label: 'XP earned' },
+            { value: result.xp_earned, label: t('quiz:result.xpEarned') },
             { value: journey.dailyStreak, label: 'day streak' },
           ]}
           comprehension={showComp ? { before: compBefore!, after: compAfter! } : null}
-          primaryLabel={hitWall ? 'Stop for today' : 'Done'}
+          primaryLabel={hitWall ? t('quiz:result.stopForToday') : t('quiz:result.done')}
           onPrimary={onDone}
           celebrate
         >
@@ -150,9 +152,9 @@ export function QuizResultScreen({
             {/* Wall copy when the user just completed today's daily goal. */}
             {hitWall ? (
               <View style={s.wallCard}>
-                <Text style={s.wallTitle}>Today's done.</Text>
+                <Text style={s.wallTitle}>{t('quiz:result.wallTitle')}</Text>
                 <Text style={s.wallBody}>
-                  Come back tomorrow to keep the streak alive — or pick another movie and keep going.
+                  {t('quiz:result.wallBody')}
                 </Text>
               </View>
             ) : null}
@@ -164,10 +166,7 @@ export function QuizResultScreen({
 
   // ── Legacy mode (movie / batch quiz) ────────────────────────────
   const headline =
-    result.stars === 3 ? 'Amazing!' :
-    result.stars === 2 ? 'Nice work!' :
-    result.stars === 1 ? 'Good try!' :
-    'Keep going!';
+    t(`quiz:result.stars${Math.min(3, Math.max(0, result.stars))}`);
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -199,12 +198,12 @@ export function QuizResultScreen({
             <StatRow label="Accuracy" value={`${accuracy}%`} s={s} />
           ) : null}
           <StatRow label="Correct" value={`${result.correct_count} / ${result.total_scored}`} s={s} />
-          <StatRow label="XP earned" value={`+${result.xp_earned}`} emphasis s={s} />
+          <StatRow label={t('quiz:result.xpEarned')} value={`+${result.xp_earned}`} emphasis s={s} />
         </FadeInUp>
 
         {showComp ? (
           <FadeInUp delay={240} style={s.compCard}>
-            <Text style={s.compEyebrow}>COMPREHENSION</Text>
+            <Text style={s.compEyebrow}>{t('quiz:result.comprehension')}</Text>
             <View style={s.compRow}>
               <Text style={s.compBefore}>{Math.round(compBefore!)}%</Text>
               <Text style={s.compArrow}>→</Text>
@@ -224,7 +223,7 @@ export function QuizResultScreen({
               onPress={onPlayAgain}
               style={[s.ghostBtn, { borderColor: accent }]}
             >
-              <Text style={[s.ghostBtnText, { color: accent }]}>Play again</Text>
+              <Text style={[s.ghostBtnText, { color: accent }]}>{t('quiz:result.playAgain')}</Text>
             </PressableScale>
           ) : null}
           <PressableScale

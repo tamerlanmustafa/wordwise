@@ -1,0 +1,23 @@
+{
+  "dayLabel_one": "DIA",
+  "dayLabel_other": "DIAS",
+  "emptyReelBody": "Adicione um filme ao seu reel (aba “Meus filmes”) para que o Deep-Dive tenha algo para explorar.",
+  "emptyReelTitle": "Seu portfólio está vazio",
+  "eyebrow": "PRÁTICA DIÁRIA",
+  "freeze_one": "CONGELAMENTO",
+  "freeze_other": "CONGELAMENTOS",
+  "lesson": "LESSON {{number}}",
+  "loadFailed": "Tivemos dificuldade para acessar seus vídeos. Verifique sua conexão e tente novamente.",
+  "loadFailedTitle": "Não foi possível carregar seu reel",
+  "moviePicker": {
+    "eyebrow": "ESCOLHA UM FILME",
+    "title": "Análise aprofundada de um filme"
+  },
+  "pathHeading": "SEU PERCURSO DE FORMAÇÃO",
+  "tile": {
+    "movie_deep_dive": "Análise aprofundada do filme",
+    "quick_recall": "Recuperação rápida",
+    "tough_words": "Palavras duras"
+  },
+  "title": "Prática"
+}

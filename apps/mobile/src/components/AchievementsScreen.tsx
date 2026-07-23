@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { achievementsApi, type Achievement, type AchievementsResponse } from '../services/api';
 
 const COLORS = {
@@ -28,6 +29,7 @@ export interface AchievementsScreenProps {
 }
 
 export function AchievementsScreen({ onBack }: AchievementsScreenProps) {
+  const { t } = useTranslation();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -57,7 +59,7 @@ export function AchievementsScreen({ onBack }: AchievementsScreenProps) {
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Achievements</Text>
+        <Text style={styles.headerTitle}>{t('stats:achievements')}</Text>
         <View style={{ width: 60 }} />
       </View>
 

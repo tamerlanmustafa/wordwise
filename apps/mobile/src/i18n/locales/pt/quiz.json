@@ -1,0 +1,58 @@
+{
+  "batchBuilder": {
+    "empty": "Não há filmes nesse nível.",
+    "loadFailed": "Não foi possível carregar os vídeos.",
+    "start": "Comece a jornada",
+    "title": "Jornada de desenvolvimento"
+  },
+  "finishing": {
+    "sub": "Salvando seu progresso…",
+    "title": "Bom trabalho!"
+  },
+  "journey": {
+    "loadFailed": "Não foi possível carregar as unidades."
+  },
+  "lesson": {
+    "dontKnow": "Não sei",
+    "empty": "Não há cartões nesta sessão.",
+    "kindOf": "Mais ou menos",
+    "know": "Eu sei disso",
+    "prompt": "Você conhece essa palavra?",
+    "saveFailed": "Não foi possível salvar os resultados. Toque em “Tentar novamente”."
+  },
+  "mcq": {
+    "continue": "Continuar →",
+    "gotItContinue": "Entendi · Continuar →",
+    "notQuite": "NÃO EXATAMENTE"
+  },
+  "result": {
+    "comprehension": "COMPREENSÃO",
+    "done": "Concluído",
+    "playAgain": "Repetir",
+    "setComplete": "Conjunto completo",
+    "stars0": "Continue assim!",
+    "stars1": "Boa tentativa!",
+    "stars2": "Bom trabalho!",
+    "stars3": "Que incrível!",
+    "stopForToday": "Por hoje é só",
+    "wallBody": "Volte amanhã para manter a sequência — ou escolha outro filme e continue.",
+    "wallTitle": "Hoje já está feito.",
+    "xpEarned": "XP ganho"
+  },
+  "review": {
+    "backHome": "De volta para casa",
+    "caughtUpBody": "Todas as palavras que você salvou estão agendadas para mais tarde. Volte amanhã — ou salve mais palavras de um novo filme.",
+    "caughtUpTitle": "Você já está em dia",
+    "dailyReview": "Revisão diária",
+    "errorTitle": "Algo deu errado",
+    "niceWork": "Bom trabalho",
+    "startFailed": "Não foi possível iniciar a sessão de revisão",
+    "streakExtended": "Série prolongada — dia {{streak}}",
+    "streakExtendedGoal": "Série prolongada — dia {{streak}}!",
+    "tipBody": "Estudos sugerem que revisar uma palavra de 3 a 6 dias depois de vê-la pela primeira vez é o momento em que a memória realmente se fixa — muito melhor do que estudar tudo de uma vez em um único dia. Você está revendo essa palavra exatamente nesse ritmo.",
+    "tipEyebrow": "Você sabia?",
+    "tipTitle": "É o efeito de espaçamento em ação",
+    "todaysDone": "Hoje já está feito",
+    "upgradeBody": "Volte amanhã — ou faça o upgrade para ter acesso ilimitado às avaliações."
+  }
+}

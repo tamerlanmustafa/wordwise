@@ -1,0 +1,41 @@
+{
+  "title": "My Progress",
+  "emptyTitle": "No words saved yet",
+  "emptyBody": "Save words from movies to start tracking your progress here.",
+  "dayStreak": "Day streak",
+  "wordsDue": "Words due",
+  "rightNow": "Right now",
+  "totalSaved": "Total saved",
+  "reviewCta_one": "Review {{count}} word",
+  "reviewCta_other": "Review {{count}} words",
+  "boxProgression": "Box progression",
+  "boxProgressionSub": "Words advance to higher boxes as you remember them",
+  "box": "Box {{number}}",
+  "boxInterval": {
+    "d1": "1 day",
+    "d3": "3 days",
+    "d7": "7 days",
+    "d14": "14 days",
+    "d30": "30 days"
+  },
+  "activity": "Activity",
+  "activitySub": "Words saved over the last {{weeks}} weeks",
+  "howItWorks": "How it works",
+  "howItWorksBody": "New words start in Box 1 (reviewed daily). Each time you remember a word, it advances to the next box with a longer interval. Forgetting sends it back to Box 1. Words in Box 5 are reviewed once a month — they're in your long-term memory.",
+  "exportTitle": "Export your words",
+  "exportSub": "Download your saved words for use in Anki or other apps",
+  "achievements": "Achievements",
+  "leaderboard": {
+    "yourRank": "Your rank: #{{rank}} ({{score}}{{suffix}})",
+    "emptyQuiz": "No quiz scores yet. Play a unit to get on the board!",
+    "emptyVocab": "No data yet. Start learning!",
+    "words": "Words Saved",
+    "streak": "Longest Streak",
+    "reviews": "Total Reviews",
+    "stars": "Total Stars",
+    "xp": "XP",
+    "retention": "Retention",
+    "screenTitle": "Leaderboard",
+    "back": "← Back"
+  }
+}

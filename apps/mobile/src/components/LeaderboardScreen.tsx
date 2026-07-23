@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { getFormattingLocale } from '../i18n';
 import {
   socialApi,
   quizApi,
@@ -25,17 +27,8 @@ type Section = 'vocab' | 'quiz';
 type VocabBoard = 'words' | 'streak' | 'reviews';
 type QuizBoard = QuizLeaderboardMetric; // 'stars' | 'xp' | 'retention'
 
-const VOCAB_LABELS: Record<VocabBoard, string> = {
-  words: 'Words Saved',
-  streak: 'Longest Streak',
-  reviews: 'Total Reviews',
-};
-
-const QUIZ_LABELS: Record<QuizBoard, string> = {
-  stars: 'Total Stars',
-  xp: 'XP',
-  retention: 'Retention',
-};
+// Board ids double as their key under `stats:leaderboard.*`, so no map is
+// needed — resolving at render is what keeps them following the app language.
 
 // Normalized row the table renders, regardless of which API fed it.
 interface BoardRow {
@@ -50,6 +43,7 @@ export interface LeaderboardScreenProps {
 }
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
 
@@ -140,8 +134,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
     </View>
   );
 
-  const activeLabel =
-    section === 'vocab' ? VOCAB_LABELS[vocabBoard] : QUIZ_LABELS[quizBoard];
+  const activeLabel = t(`stats:leaderboard.${section === 'vocab' ? vocabBoard : quizBoard}`);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -149,7 +142,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Leaderboard</Text>
+        <Text style={styles.headerTitle}>{t('stats:leaderboard.screenTitle')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -178,7 +171,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
                 onPress={() => setVocabBoard(b)}
               >
                 <Text style={[styles.tabText, vocabBoard === b && styles.tabTextActive]}>
-                  {VOCAB_LABELS[b]}
+                  {t(`stats:leaderboard.${b}`)}
                 </Text>
               </TouchableOpacity>
             ))
@@ -189,7 +182,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
                 onPress={() => setQuizBoard(b)}
               >
                 <Text style={[styles.tabText, quizBoard === b && styles.tabTextActive]}>
-                  {QUIZ_LABELS[b]}
+                  {t(`stats:leaderboard.${b}`)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -198,8 +191,11 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
       {yourRank && (
         <View style={styles.yourRank}>
           <Text style={styles.yourRankText}>
-            Your rank: #{yourRank.rank} ({yourRank.score.toLocaleString()}
-            {section === 'quiz' && quizBoard === 'retention' ? '%' : ''})
+            {t('stats:leaderboard.yourRank', {
+              rank: yourRank.rank,
+              score: yourRank.score.toLocaleString(getFormattingLocale()),
+              suffix: section === 'quiz' && quizBoard === 'retention' ? '%' : '',
+            })}
           </Text>
         </View>
       )}
@@ -218,8 +214,8 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
             <View style={styles.centered}>
               <Text style={styles.emptyText}>
                 {section === 'quiz'
-                  ? 'No quiz scores yet. Play a unit to get on the board!'
-                  : 'No data yet. Start learning!'}
+                  ? t('stats:leaderboard.emptyQuiz')
+                  : t('stats:leaderboard.emptyVocab')}
               </Text>
             </View>
           }

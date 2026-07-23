@@ -20,6 +20,10 @@ import enSettings from './locales/en/settings.json';
 import enHome from './locales/en/home.json';
 import enMovies from './locales/en/movies.json';
 import enVocabulary from './locales/en/vocabulary.json';
+import enNotifications from './locales/en/notifications.json';
+import enPractice from './locales/en/practice.json';
+import enQuiz from './locales/en/quiz.json';
+import enStats from './locales/en/stats.json';
 
 import esAuth from './locales/es/auth.json';
 import esCommon from './locales/es/common.json';
@@ -28,6 +32,10 @@ import esSettings from './locales/es/settings.json';
 import esHome from './locales/es/home.json';
 import esMovies from './locales/es/movies.json';
 import esVocabulary from './locales/es/vocabulary.json';
+import esNotifications from './locales/es/notifications.json';
+import esPractice from './locales/es/practice.json';
+import esQuiz from './locales/es/quiz.json';
+import esStats from './locales/es/stats.json';
 
 import ptAuth from './locales/pt/auth.json';
 import ptCommon from './locales/pt/common.json';
@@ -36,6 +44,10 @@ import ptSettings from './locales/pt/settings.json';
 import ptHome from './locales/pt/home.json';
 import ptMovies from './locales/pt/movies.json';
 import ptVocabulary from './locales/pt/vocabulary.json';
+import ptNotifications from './locales/pt/notifications.json';
+import ptPractice from './locales/pt/practice.json';
+import ptQuiz from './locales/pt/quiz.json';
+import ptStats from './locales/pt/stats.json';
 
 import trAuth from './locales/tr/auth.json';
 import trCommon from './locales/tr/common.json';
@@ -44,6 +56,10 @@ import trSettings from './locales/tr/settings.json';
 import trHome from './locales/tr/home.json';
 import trMovies from './locales/tr/movies.json';
 import trVocabulary from './locales/tr/vocabulary.json';
+import trNotifications from './locales/tr/notifications.json';
+import trPractice from './locales/tr/practice.json';
+import trQuiz from './locales/tr/quiz.json';
+import trStats from './locales/tr/stats.json';
 
 import ruAuth from './locales/ru/auth.json';
 import ruCommon from './locales/ru/common.json';
@@ -52,6 +68,10 @@ import ruSettings from './locales/ru/settings.json';
 import ruHome from './locales/ru/home.json';
 import ruMovies from './locales/ru/movies.json';
 import ruVocabulary from './locales/ru/vocabulary.json';
+import ruNotifications from './locales/ru/notifications.json';
+import ruPractice from './locales/ru/practice.json';
+import ruQuiz from './locales/ru/quiz.json';
+import ruStats from './locales/ru/stats.json';
 
 /**
  * Namespaces, in the order they were carved up in I18N_PLAN.md §2.
@@ -62,8 +82,12 @@ export const NAMESPACES = [
   'auth',
   'home',
   'movies',
+  'notifications',
   'onboarding',
+  'practice',
+  'quiz',
   'settings',
+  'stats',
   'vocabulary',
 ] as const;
 export type Namespace = (typeof NAMESPACES)[number];
@@ -78,6 +102,10 @@ export const resources: Resource = {
     movies: enMovies,
     onboarding: enOnboarding,
     settings: enSettings,
+    notifications: enNotifications,
+    practice: enPractice,
+    quiz: enQuiz,
+    stats: enStats,
     vocabulary: enVocabulary,
   },
   es: {
@@ -87,6 +115,10 @@ export const resources: Resource = {
     movies: esMovies,
     onboarding: esOnboarding,
     settings: esSettings,
+    notifications: esNotifications,
+    practice: esPractice,
+    quiz: esQuiz,
+    stats: esStats,
     vocabulary: esVocabulary,
   },
   pt: {
@@ -96,6 +128,10 @@ export const resources: Resource = {
     movies: ptMovies,
     onboarding: ptOnboarding,
     settings: ptSettings,
+    notifications: ptNotifications,
+    practice: ptPractice,
+    quiz: ptQuiz,
+    stats: ptStats,
     vocabulary: ptVocabulary,
   },
   tr: {
@@ -105,6 +141,10 @@ export const resources: Resource = {
     movies: trMovies,
     onboarding: trOnboarding,
     settings: trSettings,
+    notifications: trNotifications,
+    practice: trPractice,
+    quiz: trQuiz,
+    stats: trStats,
     vocabulary: trVocabulary,
   },
   ru: {
@@ -114,6 +154,10 @@ export const resources: Resource = {
     movies: ruMovies,
     onboarding: ruOnboarding,
     settings: ruSettings,
+    notifications: ruNotifications,
+    practice: ruPractice,
+    quiz: ruQuiz,
+    stats: ruStats,
     vocabulary: ruVocabulary,
   },
 };

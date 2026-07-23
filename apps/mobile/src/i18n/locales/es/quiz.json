@@ -1,0 +1,58 @@
+{
+  "batchBuilder": {
+    "empty": "No hay películas de este nivel.",
+    "loadFailed": "No se han podido cargar las películas.",
+    "start": "Comienza el viaje",
+    "title": "Recorrido de desarrollo"
+  },
+  "finishing": {
+    "sub": "Guardando tu progreso…",
+    "title": "¡Buen trabajo!"
+  },
+  "journey": {
+    "loadFailed": "No se han podido cargar las unidades."
+  },
+  "lesson": {
+    "dontKnow": "No lo sé",
+    "empty": "No hay tarjetas en esta sesión.",
+    "kindOf": "Más o menos",
+    "know": "Lo sé",
+    "prompt": "¿Conoces esta palabra?",
+    "saveFailed": "No se han podido guardar los resultados. Pulsa en «Reintentar»."
+  },
+  "mcq": {
+    "continue": "Continuar →",
+    "gotItContinue": "Entendido · Continuar →",
+    "notQuite": "NO DEL TODO"
+  },
+  "result": {
+    "comprehension": "COMPRENSIÓN",
+    "done": "Hecho",
+    "playAgain": "Volver a reproducir",
+    "setComplete": "Juego completo",
+    "stars0": "¡Sigue adelante!",
+    "stars1": "¡Buen intento!",
+    "stars2": "¡Buen trabajo!",
+    "stars3": "¡Increíble!",
+    "stopForToday": "Por hoy ya basta",
+    "wallBody": "Vuelve mañana para mantener viva la racha, o elige otra película y sigue adelante.",
+    "wallTitle": "Ya he terminado por hoy.",
+    "xpEarned": "XP ganados"
+  },
+  "review": {
+    "backHome": "De vuelta a casa",
+    "caughtUpBody": "Todas las palabras que has guardado están programadas para más tarde. Vuelve mañana, o guarda más palabras de una nueva película.",
+    "caughtUpTitle": "Ya estás al día",
+    "dailyReview": "Resumen diario",
+    "errorTitle": "Ha surgido un problema",
+    "niceWork": "Buen trabajo",
+    "startFailed": "No se ha podido iniciar la sesión de revisión",
+    "streakExtended": "La racha continúa — día {{streak}}",
+    "streakExtendedGoal": "La racha continúa: ¡día {{streak}}!",
+    "tipBody": "Los estudios indican que repasar una palabra entre 3 y 6 días después de haberla visto por primera vez es cuando realmente se fija en la memoria, mucho mejor que empollarla todo de golpe en un solo día. Estás volviendo a ver esta palabra siguiendo exactamente ese ritmo.",
+    "tipEyebrow": "¿Sabías que...?",
+    "tipTitle": "Así es como funciona el efecto de espaciado",
+    "todaysDone": "Ya he terminado por hoy",
+    "upgradeBody": "Vuelve mañana, o pasa a la versión superior para disfrutar de reseñas ilimitadas."
+  }
+}

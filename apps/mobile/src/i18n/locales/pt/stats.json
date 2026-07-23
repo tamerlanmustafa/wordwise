@@ -1,0 +1,41 @@
+{
+  "achievements": "Conquistas",
+  "activity": "Atividade",
+  "activitySub": "Palavras salvas nas últimas {{weeks}} semanas",
+  "box": "Box {{number}}",
+  "boxInterval": {
+    "d1": "1 dia",
+    "d14": "14 dias",
+    "d3": "3 dias",
+    "d30": "30 dias",
+    "d7": "7 dias"
+  },
+  "boxProgression": "Progressão da caixa",
+  "boxProgressionSub": "As palavras avançam para caixas mais altas à medida que você vai se lembrando delas",
+  "dayStreak": "Sequência de dias",
+  "emptyBody": "Salve palavras de filmes para começar a acompanhar seu progresso aqui.",
+  "emptyTitle": "Ainda não há palavras salvas",
+  "exportSub": "Baixe as palavras que você salvou para usar no Anki ou em outros aplicativos",
+  "exportTitle": "Exporte suas palavras",
+  "howItWorks": "Como funciona",
+  "howItWorksBody": "As novas palavras começam na Caixa 1 (revisadas diariamente). Cada vez que você se lembra de uma palavra, ela avança para a próxima caixa, com um intervalo maior. Se você esquecer, ela volta para a Caixa 1. As palavras na Caixa 5 são revisadas uma vez por mês — elas estão na sua memória de longo prazo.",
+  "leaderboard": {
+    "back": "← Voltar",
+    "emptyQuiz": "Ainda não há pontuações nos questionários. Jogue uma unidade para aparecer no quadro!",
+    "emptyVocab": "Ainda não há dados. Comece a aprender!",
+    "retention": "Retenção",
+    "reviews": "Total de avaliações",
+    "screenTitle": "Tabela de classificação",
+    "stars": "Total de estrelas",
+    "streak": "Maior sequência",
+    "words": "Palavras salvas",
+    "xp": "XP",
+    "yourRank": "Sua classificação: #{{rank}} ({{score}}{{suffix}})"
+  },
+  "reviewCta_one": "Revisar {{count}} palavra",
+  "reviewCta_other": "Revisar {{count}} palavras",
+  "rightNow": "Neste momento",
+  "title": "Meu progresso",
+  "totalSaved": "Total economizado",
+  "wordsDue": "Palavras a serem escritas"
+}

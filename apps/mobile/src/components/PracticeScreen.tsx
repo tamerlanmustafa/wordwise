@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
@@ -61,6 +62,7 @@ export function PracticeScreen({
   onStartDailyReview,
   active = true,
 }: PracticeScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -161,19 +163,16 @@ export function PracticeScreen({
           // is unknown, not empty, so we offer a retry instead of lying.
           if (!reelHydrated || reelLoadError) {
             Alert.alert(
-              "Couldn't load your reel",
-              'We had trouble reaching your movies. Check your connection and try again.',
+              t('practice:loadFailedTitle'),
+              t('practice:loadFailed'),
               [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Retry', onPress: () => void hydrateReel() },
+                { text: t('action.cancel'), style: 'cancel' },
+                { text: t('action.retry'), onPress: () => void hydrateReel() },
               ],
             );
             return;
           }
-          Alert.alert(
-            'Your reel is empty',
-            'Add a movie to your reel (My Movies tab) so Deep-Dive has something to dive into.',
-          );
+          Alert.alert(t('practice:emptyReelTitle'), t('practice:emptyReelBody'));
           return;
         }
         setPickerOpen(true);
@@ -181,7 +180,7 @@ export function PracticeScreen({
       }
       startKind(kind);
     },
-    [deepDiveOptions.length, reelHydrated, reelLoadError, hydrateReel, startKind],
+    [deepDiveOptions.length, reelHydrated, reelLoadError, hydrateReel, startKind, t],
   );
 
   const handleMoviePicked = useCallback(
@@ -204,21 +203,21 @@ export function PracticeScreen({
 
       <View style={s.header}>
         <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>DAILY PRACTICE</Text>
-          <Text style={s.title}>Practice</Text>
+          <Text style={s.eyebrow}>{t('practice:eyebrow')}</Text>
+          <Text style={s.title}>{t('practice:title')}</Text>
         </View>
         <View style={s.headerChips}>
           <View style={s.streakChip}>
             <Ionicons name="shield-checkmark" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
             <Text style={s.streakNumber}>{serverState?.freezes_held ?? 0}</Text>
             <Text style={s.streakLabel}>
-              {(serverState?.freezes_held ?? 0) === 1 ? 'FREEZE' : 'FREEZES'}
+              {t('practice:freeze', { count: serverState?.freezes_held ?? 0 })}
             </Text>
           </View>
           <View style={s.streakChip}>
             <Ionicons name="flame" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
             <Text style={s.streakNumber}>{effectiveStreak}</Text>
-            <Text style={s.streakLabel}>{effectiveStreak === 1 ? 'DAY' : 'DAYS'}</Text>
+            <Text style={s.streakLabel}>{t('practice:dayLabel', { count: effectiveStreak })}</Text>
           </View>
         </View>
       </View>
@@ -233,8 +232,8 @@ export function PracticeScreen({
             locked (future). The path itself doesn't know about the
             paywall / daily cap; the parent's `handleTilePress` does. */}
         <View style={s.pathWrap}>
-          <Text style={s.pathHeading}>YOUR PRACTICE PATH</Text>
-          <Text style={s.pathLesson}>LESSON {cursor + 1}</Text>
+          <Text style={s.pathHeading}>{t('practice:pathHeading')}</Text>
+          <Text style={s.pathLesson}>{t('practice:lesson', { number: cursor + 1 })}</Text>
           <PracticeTilePath
             cursor={cursor}
             onTilePress={handleTilePress}

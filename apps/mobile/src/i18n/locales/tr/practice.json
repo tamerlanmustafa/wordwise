@@ -1,0 +1,23 @@
+{
+  "dayLabel_one": "GÜN",
+  "dayLabel_other": "GÜN",
+  "emptyReelBody": "Reel’inize bir film ekleyin (Filmlerim sekmesi), böylece Deep-Dive’ın inceleyebileceği bir içerik olsun.",
+  "emptyReelTitle": "Makaranız boş",
+  "eyebrow": "GÜNLÜK UYGULAMA",
+  "freeze_one": "DONDURMA",
+  "freeze_other": "DONDURMA",
+  "lesson": "DERS {{number}}",
+  "loadFailed": "Filmlerinize erişirken sorun yaşadık. İnternet bağlantınızı kontrol edip lütfen tekrar deneyin.",
+  "loadFailedTitle": "Reel'inizi yükleyemedi",
+  "moviePicker": {
+    "eyebrow": "BİR FİLM SEÇİN",
+    "title": "Bir filmi derinlemesine incelemek"
+  },
+  "pathHeading": "SİZİN UYGULAMA YOLUNUZ",
+  "tile": {
+    "movie_deep_dive": "Film Analizi",
+    "quick_recall": "Hızlı Geri Çağırma",
+    "tough_words": "Sert Sözler"
+  },
+  "title": "Uygulama"
+}

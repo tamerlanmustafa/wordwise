@@ -1,0 +1,41 @@
+{
+  "achievements": "Başarılar",
+  "activity": "Etkinlik",
+  "activitySub": "Son {{weeks}} hafta içinde kaydedilen kelimeler",
+  "box": "Kutu {{number}}",
+  "boxInterval": {
+    "d1": "1 gün",
+    "d14": "14 gün",
+    "d3": "3 gün",
+    "d30": "30 gün",
+    "d7": "7 gün"
+  },
+  "boxProgression": "Kutu ilerlemesi",
+  "boxProgressionSub": "Kelimeleri hatırladıkça daha üstteki kutulara ilerlerler",
+  "dayStreak": "Günlük seri",
+  "emptyBody": "Filmlerden kelimeleri kaydederek ilerlemenizi buradan takip etmeye başlayın.",
+  "emptyTitle": "Henüz kaydedilmiş kelime yok",
+  "exportSub": "Anki veya diğer uygulamalarda kullanmak üzere kaydettiğiniz kelimeleri indirin",
+  "exportTitle": "Yazılarınızı dışa aktarın",
+  "howItWorks": "Nasıl çalışır?",
+  "howItWorksBody": "Yeni kelimeler 1. Kutuda başlar (her gün tekrar edilir). Bir kelimeyi her hatırladığınızda, o kelime daha uzun bir aralıkla bir sonraki kutuya geçer. Unutursanız, kelime tekrar 1. Kutuya geri döner. 5. Kutudaki kelimeler ayda bir kez tekrar edilir — bunlar artık uzun süreli hafızanızda yer almaktadır.",
+  "leaderboard": {
+    "back": "← Geri",
+    "emptyQuiz": "Henüz test puanı yok. Bir üniteyi tamamlayarak puan tablosuna girin!",
+    "emptyVocab": "Henüz veri yok. Öğrenmeye başlayın!",
+    "retention": "Müşteri tutma",
+    "reviews": "Toplam Yorum Sayısı",
+    "screenTitle": "Sıralama Tablosu",
+    "stars": "Toplam Yıldız Sayısı",
+    "streak": "En Uzun Galibiyet Serisi",
+    "words": "Kaydedilen Kelimeler",
+    "xp": "XP",
+    "yourRank": "Sıralamanız: #{{rank}} ({{score}}{{suffix}})"
+  },
+  "reviewCta_one": "{{count}} kelimeyi gözden geçir",
+  "reviewCta_other": "{{count}} kelimeyi gözden geçir",
+  "rightNow": "Şu anda",
+  "title": "İlerlemem",
+  "totalSaved": "Toplam tasarruf",
+  "wordsDue": "Teslim edilmesi gereken kelimeler"
+}

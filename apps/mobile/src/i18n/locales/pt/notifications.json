@@ -1,0 +1,28 @@
+{
+  "reminder": {
+    "reviewBody": "Você tem palavras esperando para serem revisadas. Uma sessão rápida ajuda a mantê-las na sua memória!",
+    "reviewTitle": "Palavras a serem revisadas",
+    "wordBody": "O WordWise tem uma palavra nova para você aprender. Toque para conferir!",
+    "wordTitle": "Sua Palavra da Hora está pronta"
+  },
+  "reviewsDue": {
+    "body_one": "{{count}} palavra está esperando — uma sessão rápida a mantém fresca.",
+    "body_other": "{{count}} palavras estão esperando — uma sessão rápida as mantém frescas.",
+    "title": "Palavras prontas para revisão"
+  },
+  "sheet": {
+    "emptyBody": "Os lembretes de avaliação e os alertas de sequência serão exibidos aqui.",
+    "emptyTitle": "Você já está em dia",
+    "markAllRead": "Marcar tudo como lido",
+    "markAllReadA11y": "Marcar todas as notificações como lidas",
+    "title": "NOTIFICAÇÕES"
+  },
+  "streakRisk": {
+    "body": "Conclua a revisão de hoje para dar continuidade ao processo.",
+    "title": "Não perca sua sequência de {{count}} dias"
+  },
+  "welcome": {
+    "body": "Salve frases dos filmes que você adora — as atualizações sobre suas resenhas e sua sequência de dias consecutivos aparecem aqui.",
+    "title": "Bem-vindo ao WordWise"
+  }
+}

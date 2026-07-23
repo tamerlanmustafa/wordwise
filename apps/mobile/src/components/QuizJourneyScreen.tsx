@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/palette';
 import {
   quizApi,
@@ -56,6 +57,7 @@ export function QuizJourneyScreen({
   onBack: _onBack,
   onStartSession,
 }: QuizJourneyScreenProps) {
+  const { t } = useTranslation();
   void onStartSession; void movieTitle;
 
   const user = useAuthStore((s) => s.user);
@@ -85,13 +87,13 @@ export function QuizJourneyScreen({
         if (!cancelled) setUnits(data);
       } catch (e) {
         console.warn('[QuizJourney] load failed:', e);
-        if (!cancelled) setError('Could not load units.');
+        if (!cancelled) setError(t('quiz:journey.loadFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [ids]);
+  }, [ids, t]);
 
   // Build the tile sequence. Walk levels user → C2; within each level,
   // emit ceil(word_count / 10) tiles of that level's color. Positions
