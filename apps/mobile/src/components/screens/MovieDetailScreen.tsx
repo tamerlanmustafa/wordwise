@@ -140,7 +140,8 @@ export const MovieDetailScreen = ({
   const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
   const [pendingLearned, setPendingLearned] = useState<string | null>(null);
   const pendingLearnedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isAuthenticated = useAuthStore((s) => s.status) === 'authenticated' || useAuthStore((s) => s.status) === 'offline_authenticated';
+  const authStatus = useAuthStore((s) => s.status);
+  const isAuthenticated = authStatus === 'authenticated' || authStatus === 'offline_authenticated';
   const authUser = useAuthStore((s) => s.user);
   const userProficiency = (authUser?.proficiency_level || 'B1').toUpperCase();
 
