@@ -12,31 +12,36 @@
     "save": "Kaydet"
   },
   "cefr": {
-    "A1": "Başlangıç Seviyesi",
-    "A2": "İlkokul",
-    "B1": "Orta seviye",
-    "B2": "Üst Ortaöğretim",
-    "C1": "İleri Düzey",
+    "A1": "Başlangıç",
+    "A2": "Temel",
+    "B1": "Orta",
+    "B2": "Orta-üstü",
+    "C1": "İleri",
     "C2": "Ustalık",
-    "IDIOMS": "Deyimler ve İfadeler"
+    "IDIOMS": "Deyimler ve ifadeler"
   },
   "cefrFull": {
-    "A1": "Başlangıç seviyesi",
-    "A2": "İlkokul",
-    "B1": "Orta seviye",
-    "B2": "Orta-İleri Seviye",
-    "C1": "İleri Düzey",
+    "A1": "Başlangıç",
+    "A2": "Temel",
+    "B1": "Orta",
+    "B2": "Orta-üstü",
+    "C1": "İleri",
     "C2": "Ustalık"
   },
   "cefrPicker": {
-    "A1": "A1 - Başlangıç Seviyesi",
-    "A2": "A2 - Başlangıç Seviyesi",
-    "B1": "B1 - Orta Seviye",
-    "B2": "B2 - Orta Üst Düzey",
-    "C1": "C1 - İleri Düzey",
-    "C2": "C2 - İleri Düzey"
+    "A1": "A1 - Başlangıç",
+    "A2": "A2 - Temel",
+    "B1": "B1 - Orta",
+    "B2": "B2 - Orta-üstü",
+    "C1": "C1 - İleri",
+    "C2": "C2 - Ustalık"
   },
   "genre": {
+    "10402": "Müzik",
+    "10749": "Romantik",
+    "10751": "Aile",
+    "10752": "Savaş",
+    "10770": "TV Filmi",
     "12": "Macera",
     "14": "Fantastik",
     "16": "Animasyon",
@@ -48,19 +53,14 @@
     "37": "Western",
     "53": "Gerilim",
     "80": "Suç",
-    "99": "Belgesel",
     "878": "Bilim Kurgu",
     "9648": "Gizem",
-    "10402": "Müzik",
-    "10749": "Romantik",
-    "10751": "Aile",
-    "10752": "Savaş",
-    "10770": "TV Filmi"
+    "99": "Belgesel"
   },
   "nav": {
     "home": "Ana Sayfa",
     "myMovies": "Filmlerim",
-    "practice": "Uygulama",
+    "practice": "Pratik",
     "profile": "Profil"
   },
   "offline": {

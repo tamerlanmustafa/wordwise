@@ -13,30 +13,35 @@
   },
   "cefr": {
     "A1": "Iniciante",
-    "A2": "Ensino Fundamental",
+    "A2": "Elementar",
     "B1": "Intermediário",
-    "B2": "Ensino Médio Avançado",
+    "B2": "Interm. sup.",
     "C1": "Avançado",
     "C2": "Domínio",
-    "IDIOMS": "Expressões idiomáticas e frases"
+    "IDIOMS": "Expressões idiomáticas"
   },
   "cefrFull": {
     "A1": "Iniciante",
-    "A2": "Ensino Fundamental",
+    "A2": "Elementar",
     "B1": "Intermediário",
-    "B2": "Intermediário Avançado",
+    "B2": "Intermediário superior",
     "C1": "Avançado",
     "C2": "Domínio"
   },
   "cefrPicker": {
     "A1": "A1 - Iniciante",
-    "A2": "A2 - Nível básico",
+    "A2": "A2 - Elementar",
     "B1": "B1 - Intermediário",
-    "B2": "B2 - Intermediário Avançado",
+    "B2": "B2 - Intermediário superior",
     "C1": "C1 - Avançado",
-    "C2": "C2 - Proficiente"
+    "C2": "C2 - Domínio"
   },
   "genre": {
+    "10402": "Música",
+    "10749": "Romance",
+    "10751": "Família",
+    "10752": "Guerra",
+    "10770": "Filme para a TV",
     "12": "Aventura",
     "14": "Fantasia",
     "16": "Animação",
@@ -48,17 +53,12 @@
     "37": "Faroeste",
     "53": "Suspense",
     "80": "Crime",
-    "99": "Documentário",
     "878": "Ficção científica",
     "9648": "Mistério",
-    "10402": "Música",
-    "10749": "Romance",
-    "10751": "Família",
-    "10752": "Guerra",
-    "10770": "Filme para a TV"
+    "99": "Documentário"
   },
   "nav": {
-    "home": "Página inicial",
+    "home": "Início",
     "myMovies": "Meus filmes",
     "practice": "Prática",
     "profile": "Perfil"

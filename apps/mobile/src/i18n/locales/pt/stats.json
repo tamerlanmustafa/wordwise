@@ -10,7 +10,7 @@
     "d30": "30 dias",
     "d7": "7 dias"
   },
-  "boxProgression": "Progressão da caixa",
+  "boxProgression": "Progresso por caixas",
   "boxProgressionSub": "As palavras avançam para caixas mais altas à medida que você vai se lembrando delas",
   "dayStreak": "Sequência de dias",
   "emptyBody": "Salve palavras de filmes para começar a acompanhar seu progresso aqui.",
@@ -24,18 +24,20 @@
     "emptyQuiz": "Ainda não há pontuações nos questionários. Jogue uma unidade para aparecer no quadro!",
     "emptyVocab": "Ainda não há dados. Comece a aprender!",
     "retention": "Retenção",
-    "reviews": "Total de avaliações",
+    "reviews": "Total de revisões",
     "screenTitle": "Tabela de classificação",
     "stars": "Total de estrelas",
     "streak": "Maior sequência",
     "words": "Palavras salvas",
     "xp": "XP",
+    "you": "{{username}} (você)",
     "yourRank": "Sua classificação: #{{rank}} ({{score}}{{suffix}})"
   },
   "reviewCta_one": "Revisar {{count}} palavra",
   "reviewCta_other": "Revisar {{count}} palavras",
   "rightNow": "Neste momento",
   "title": "Meu progresso",
-  "totalSaved": "Total economizado",
-  "wordsDue": "Palavras a serem escritas"
+  "today": "Hoje",
+  "totalSaved": "Total salvas",
+  "wordsDue": "Palavras a revisar"
 }

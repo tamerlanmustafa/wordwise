@@ -66,7 +66,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
-        <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
+        <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel={t('action.back')}>
           <Ionicons name="chevron-back" size={22} color={tc.text} />
         </PressableScale>
         <Text style={s.headerTitle}>{t('billing:paywall.title')}</Text>
@@ -97,8 +97,8 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
         </View>
 
         {isPremium ? (
-          <PressableScale style={s.manageBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="Done">
-            <Text style={s.manageBtnText}>Done</Text>
+          <PressableScale style={s.manageBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel={t('action.done')}>
+            <Text style={s.manageBtnText}>{t('action.done')}</Text>
           </PressableScale>
         ) : (
           <>

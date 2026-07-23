@@ -114,7 +114,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity onPress={() => load(activeLevel)} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('action.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : movies.length === 0 ? (

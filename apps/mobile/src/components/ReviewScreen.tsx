@@ -294,7 +294,7 @@ export function ReviewScreen({
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Review</Text>
+          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
           <View style={{ width: 60 }} />
         </View>
         <View style={{ padding: 20, gap: 16 }}>
@@ -315,7 +315,7 @@ export function ReviewScreen({
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Review</Text>
+          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
           <View style={{ width: 60 }} />
         </View>
         <EmptyState
@@ -339,7 +339,7 @@ export function ReviewScreen({
           <TouchableOpacity onPress={onBack} hitSlop={8}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Review</Text>
+          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
           <View style={{ width: 60 }} />
         </View>
         <EmptyState

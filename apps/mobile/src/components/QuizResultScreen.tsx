@@ -230,7 +230,7 @@ export function QuizResultScreen({
             onPress={onDone}
             style={[s.primaryBtn, { backgroundColor: ctaBg }]}
           >
-            <Text style={[s.primaryBtnText, { color: ctaFg }]}>Done</Text>
+            <Text style={[s.primaryBtnText, { color: ctaFg }]}>{t('quiz:result.done')}</Text>
           </PressableScale>
         </View>
       </View>

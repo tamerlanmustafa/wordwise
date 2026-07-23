@@ -15,6 +15,7 @@
   "lesson": {
     "dontKnow": "No lo sé",
     "empty": "No hay tarjetas en esta sesión.",
+    "exit": "Salir",
     "kindOf": "Más o menos",
     "know": "Lo sé",
     "prompt": "¿Conoces esta palabra?",
@@ -40,19 +41,20 @@
     "xpEarned": "XP ganados"
   },
   "review": {
-    "backHome": "De vuelta a casa",
+    "backHome": "Volver al inicio",
     "caughtUpBody": "Todas las palabras que has guardado están programadas para más tarde. Vuelve mañana, o guarda más palabras de una nueva película.",
     "caughtUpTitle": "Ya estás al día",
-    "dailyReview": "Resumen diario",
+    "dailyReview": "Repaso diario",
     "errorTitle": "Ha surgido un problema",
     "niceWork": "Buen trabajo",
-    "startFailed": "No se ha podido iniciar la sesión de revisión",
+    "screenTitle": "Repaso",
+    "startFailed": "No se ha podido iniciar la sesión de repaso",
     "streakExtended": "La racha continúa — día {{streak}}",
     "streakExtendedGoal": "La racha continúa: ¡día {{streak}}!",
     "tipBody": "Los estudios indican que repasar una palabra entre 3 y 6 días después de haberla visto por primera vez es cuando realmente se fija en la memoria, mucho mejor que empollarla todo de golpe en un solo día. Estás volviendo a ver esta palabra siguiendo exactamente ese ritmo.",
     "tipEyebrow": "¿Sabías que...?",
     "tipTitle": "Así es como funciona el efecto de espaciado",
     "todaysDone": "Ya he terminado por hoy",
-    "upgradeBody": "Vuelve mañana, o pasa a la versión superior para disfrutar de reseñas ilimitadas."
+    "upgradeBody": "Vuelve mañana, o mejora tu plan para repasos ilimitados."
   }
 }

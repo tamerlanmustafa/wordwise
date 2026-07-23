@@ -17,7 +17,8 @@
     "know": "I know it",
     "kindOf": "Kind of",
     "dontKnow": "Don't know",
-    "saveFailed": "Could not save results. Tap retry."
+    "saveFailed": "Could not save results. Tap retry.",
+    "exit": "Exit"
   },
   "result": {
     "setComplete": "Set complete",
@@ -53,6 +54,7 @@
     "streakExtendedGoal": "Streak extended — day {{streak}}!",
     "tipEyebrow": "Did you know?",
     "tipTitle": "That's the spacing effect at work",
-    "tipBody": "Studies suggest that reviewing a word 3–6 days after first seeing it is when memory really sticks — much better than cramming on one day. You're seeing this word again on that exact rhythm."
+    "tipBody": "Studies suggest that reviewing a word 3–6 days after first seeing it is when memory really sticks — much better than cramming on one day. You're seeing this word again on that exact rhythm.",
+    "screenTitle": "Review"
   }
 }

@@ -141,7 +141,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
             <View style={styles.dueDivider} />
             <View style={styles.dueItem}>
               <Text style={styles.dueCount}>{stats.due_today}</Text>
-              <Text style={styles.dueLabel}>Today</Text>
+              <Text style={styles.dueLabel}>{t('stats:today')}</Text>
             </View>
             <View style={styles.dueDivider} />
             <View style={styles.dueItem}>

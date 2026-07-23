@@ -53,13 +53,13 @@
     "title": "Насколько хорошо вы знаете…"
   },
   "setIntro": {
-    "a11yReview": "Набор для проверки",
+    "a11yReview": "Повторить набор",
     "a11yStart": "Начните учиться",
-    "ctaReview": "Отзыв →",
+    "ctaReview": "Повторить →",
     "ctaStart": "Начать обучение →",
     "duration": "~2 мин",
     "eyebrowPreWatch": "СЛОВАРЬ К ПРОСМОТРУ",
-    "eyebrowReview": "НАБОР ДЛЯ ОБЗОРА",
+    "eyebrowReview": "НАБОР ДЛЯ ПОВТОРЕНИЯ",
     "headline": "Выучите 5 слов из этого фильма",
     "lettersWithRank": "{{letters}} · ранг {{rank}}",
     "letters_few": "{{count}} буквы",

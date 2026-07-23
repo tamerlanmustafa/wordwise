@@ -25,6 +25,9 @@
     "inviteFailed": "Failed to invite member",
     "removeMemberBody": "Remove {{email}} from your family plan?",
     "ownersPlan": "{{email}}'s Plan",
-    "errorTitle": "Error"
+    "errorTitle": "Error",
+    "members": "Members",
+    "owner": "Owner",
+    "remove": "Remove"
   }
 }

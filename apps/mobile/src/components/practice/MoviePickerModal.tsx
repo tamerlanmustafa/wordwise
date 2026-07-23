@@ -139,7 +139,7 @@ export function MoviePickerModal({
             style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.85 }]}
             hitSlop={6}
           >
-            <Text style={s.closeBtnText}>Cancel</Text>
+            <Text style={s.closeBtnText}>{t('action.cancel')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>

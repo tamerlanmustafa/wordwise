@@ -126,10 +126,11 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         {item.rank <= 3 ? ['🥇', '🥈', '🥉'][item.rank - 1] : `#${item.rank}`}
       </Text>
       <Text style={[styles.username, item.isYou && styles.usernameBold]} numberOfLines={1}>
-        {item.username}{item.isYou ? ' (you)' : ''}
+        {item.isYou ? t('stats:leaderboard.you', { username: item.username }) : item.username}
       </Text>
       <Text style={styles.score}>
-        {item.score.toLocaleString()}{section === 'quiz' && quizBoard === 'retention' ? '%' : ''}
+        {item.score.toLocaleString(getFormattingLocale())}
+        {section === 'quiz' && quizBoard === 'retention' ? '%' : ''}
       </Text>
     </View>
   );

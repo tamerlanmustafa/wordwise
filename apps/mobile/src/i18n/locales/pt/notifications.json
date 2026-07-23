@@ -11,7 +11,7 @@
     "title": "Palavras prontas para revisão"
   },
   "sheet": {
-    "emptyBody": "Os lembretes de avaliação e os alertas de sequência serão exibidos aqui.",
+    "emptyBody": "Lembretes de revisão e alertas de sequência aparecerão aqui.",
     "emptyTitle": "Você já está em dia",
     "markAllRead": "Marcar tudo como lido",
     "markAllReadA11y": "Marcar todas as notificações como lidas",
@@ -22,7 +22,7 @@
     "title": "Não perca sua sequência de {{count}} dias"
   },
   "welcome": {
-    "body": "Salve frases dos filmes que você adora — as atualizações sobre suas resenhas e sua sequência de dias consecutivos aparecem aqui.",
+    "body": "Salve palavras dos filmes que você adora — atualizações sobre suas revisões e sua sequência aparecem aqui.",
     "title": "Bem-vindo ao WordWise"
   }
 }

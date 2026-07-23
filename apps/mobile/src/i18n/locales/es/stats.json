@@ -10,7 +10,7 @@
     "d30": "30 días",
     "d7": "7 días"
   },
-  "boxProgression": "Progresión de cajas",
+  "boxProgression": "Progreso por cajas",
   "boxProgressionSub": "Las palabras van subiendo a casillas más altas a medida que las vas recordando",
   "dayStreak": "Racha de días",
   "emptyBody": "Guarda palabras de las películas para empezar a seguir tu progreso aquí.",
@@ -24,18 +24,20 @@
     "emptyQuiz": "Aún no hay puntuaciones en los cuestionarios. ¡Juega una unidad para aparecer en el marcador!",
     "emptyVocab": "Aún no hay datos. ¡Empieza a aprender!",
     "retention": "Retención",
-    "reviews": "Total de reseñas",
+    "reviews": "Total de repasos",
     "screenTitle": "Clasificación",
     "stars": "Total de estrellas",
     "streak": "La racha más larga",
     "words": "Palabras guardadas",
     "xp": "XP",
+    "you": "{{username}} (tú)",
     "yourRank": "Tu puesto: n.º {{rank}} ({{score}}{{suffix}})"
   },
   "reviewCta_one": "Repasar {{count}} palabra",
   "reviewCta_other": "Repasar {{count}} palabras",
   "rightNow": "Ahora mismo",
   "title": "Mi progreso",
-  "totalSaved": "Total ahorrado",
+  "today": "Hoy",
+  "totalSaved": "Total guardadas",
   "wordsDue": "Palabras pendientes"
 }

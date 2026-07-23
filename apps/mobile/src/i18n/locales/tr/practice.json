@@ -3,7 +3,7 @@
   "dayLabel_other": "GÜN",
   "emptyReelBody": "Reel’inize bir film ekleyin (Filmlerim sekmesi), böylece Deep-Dive’ın inceleyebileceği bir içerik olsun.",
   "emptyReelTitle": "Makaranız boş",
-  "eyebrow": "GÜNLÜK UYGULAMA",
+  "eyebrow": "GÜNLÜK PRATİK",
   "freeze_one": "DONDURMA",
   "freeze_other": "DONDURMA",
   "lesson": "DERS {{number}}",
@@ -13,11 +13,11 @@
     "eyebrow": "BİR FİLM SEÇİN",
     "title": "Bir filmi derinlemesine incelemek"
   },
-  "pathHeading": "SİZİN UYGULAMA YOLUNUZ",
+  "pathHeading": "PRATİK YOLUNUZ",
   "tile": {
     "movie_deep_dive": "Film Analizi",
     "quick_recall": "Hızlı Geri Çağırma",
     "tough_words": "Sert Sözler"
   },
-  "title": "Uygulama"
+  "title": "Pratik"
 }

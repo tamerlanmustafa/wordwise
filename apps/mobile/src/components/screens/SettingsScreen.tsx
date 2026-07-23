@@ -307,9 +307,9 @@ export const SettingsScreen = ({
           </View>
         )}
 
-        <Text style={settingsStyles.sectionTitle}>Profile</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:profile')}</Text>
         <View style={settingsStyles.inputContainer}>
-          <Text style={settingsStyles.inputLabel}>Username</Text>
+          <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>
           <TextInput
             style={settingsStyles.textInput}
             value={username}
@@ -534,7 +534,7 @@ export const SettingsScreen = ({
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
 
-        <Text style={settingsStyles.sectionTitle}>Legal</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:legal')}</Text>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToPrivacy}>
           <Text style={settingsStyles.settingsLinkText}>{t('settings:privacyPolicy')}</Text>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>

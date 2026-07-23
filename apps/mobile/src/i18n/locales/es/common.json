@@ -13,30 +13,35 @@
   },
   "cefr": {
     "A1": "Principiante",
-    "A2": "Primaria",
-    "B1": "Nivel intermedio",
-    "B2": "Nivel superior internacional",
+    "A2": "Elemental",
+    "B1": "Intermedio",
+    "B2": "Interm. alto",
     "C1": "Avanzado",
     "C2": "Dominio",
     "IDIOMS": "Modismos y expresiones"
   },
   "cefrFull": {
     "A1": "Principiante",
-    "A2": "Primaria",
-    "B1": "Nivel intermedio",
-    "B2": "Nivel intermedio alto",
+    "A2": "Elemental",
+    "B1": "Intermedio",
+    "B2": "Intermedio alto",
     "C1": "Avanzado",
     "C2": "Dominio"
   },
   "cefrPicker": {
     "A1": "A1 - Principiante",
-    "A2": "A2 - Nivel elemental",
-    "B1": "B1 - Nivel intermedio",
-    "B2": "B2 - Nivel intermedio alto",
+    "A2": "A2 - Elemental",
+    "B1": "B1 - Intermedio",
+    "B2": "B2 - Intermedio alto",
     "C1": "C1 - Avanzado",
-    "C2": "C2 - Nivel avanzado"
+    "C2": "C2 - Dominio"
   },
   "genre": {
+    "10402": "Música",
+    "10749": "Romance",
+    "10751": "Familia",
+    "10752": "Guerra",
+    "10770": "Telefilm",
     "12": "Aventura",
     "14": "Fantasía",
     "16": "Animación",
@@ -48,14 +53,9 @@
     "37": "Western",
     "53": "Thriller",
     "80": "Crimen",
-    "99": "Documental",
     "878": "Ciencia ficción",
     "9648": "Misterio",
-    "10402": "Música",
-    "10749": "Romance",
-    "10751": "Familia",
-    "10752": "Guerra",
-    "10770": "Telefilm"
+    "99": "Documental"
   },
   "nav": {
     "home": "Inicio",

@@ -24,18 +24,20 @@
     "emptyQuiz": "Henüz test puanı yok. Bir üniteyi tamamlayarak puan tablosuna girin!",
     "emptyVocab": "Henüz veri yok. Öğrenmeye başlayın!",
     "retention": "Müşteri tutma",
-    "reviews": "Toplam Yorum Sayısı",
+    "reviews": "Toplam Tekrar",
     "screenTitle": "Sıralama Tablosu",
     "stars": "Toplam Yıldız Sayısı",
     "streak": "En Uzun Galibiyet Serisi",
     "words": "Kaydedilen Kelimeler",
     "xp": "XP",
+    "you": "{{username}} (sen)",
     "yourRank": "Sıralamanız: #{{rank}} ({{score}}{{suffix}})"
   },
-  "reviewCta_one": "{{count}} kelimeyi gözden geçir",
-  "reviewCta_other": "{{count}} kelimeyi gözden geçir",
+  "reviewCta_one": "{{count}} kelimeyi tekrar et",
+  "reviewCta_other": "{{count}} kelimeyi tekrar et",
   "rightNow": "Şu anda",
   "title": "İlerlemem",
-  "totalSaved": "Toplam tasarruf",
-  "wordsDue": "Teslim edilmesi gereken kelimeler"
+  "today": "Bugün",
+  "totalSaved": "Toplam kayıtlı",
+  "wordsDue": "Tekrar bekleyen kelimeler"
 }

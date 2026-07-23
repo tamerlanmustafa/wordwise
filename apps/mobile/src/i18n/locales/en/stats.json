@@ -36,6 +36,8 @@
     "xp": "XP",
     "retention": "Retention",
     "screenTitle": "Leaderboard",
-    "back": "← Back"
-  }
+    "back": "← Back",
+    "you": "{{username}} (you)"
+  },
+  "today": "Today"
 }

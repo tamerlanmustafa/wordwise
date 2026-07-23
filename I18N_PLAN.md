@@ -146,8 +146,8 @@ literally two lines: the import and the list entry.
 | 2 ✅ | **Done** — `home`, `movies`, `vocabulary` | Core loop |
 | 3 ✅ | **Done** — `quiz`, `practice`, `stats`, `notifications` | Study loop |
 | 4 ✅ | **Done** — `settings`, `billing`, CEFR + genre labels. Privacy/Terms deferred to #100 | Includes genre + CEFR labels |
-| 5 | Plurals → ICU, `toLocaleString` → active locale, backend email templates | Correctness pass |
-| 6 | Second locale end-to-end + overflow/clipping sweep | Proves the "add a language" promise |
+| 5 ✅ | **Done** — ICU plurals, `getFormattingLocale()`, source guards, ~190 glossary corrections. Backend emails deferred to #98 |
+| 6 ✅ | **Done** — length-ratio audit drove the glossary pass; tight-chrome labels capped. Full native review tracked in #101 |
 
 Admin (65 strings) stays English throughout.
 

@@ -40,6 +40,7 @@ import { ReadyToWatchShelf } from './journey/ReadyToWatchShelf';
 import { OfflineBanner } from './common/OfflineBanner';
 import { EmptyState } from './common/EmptyState';
 import type { MoviePreviewPayload, NodeLevel } from './journey/sharedTypes';
+import { getFormattingLocale } from '../i18n';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -257,7 +258,10 @@ function applySort(tiles: ReelTile[], sort: MyMoviesSort): ReelTile[] {
       // Reel response is already most-recently-added first; preserve.
       return arr;
     case 'title_asc':
-      return arr.sort((a, b) => a.title.localeCompare(b.title));
+      // Collate in the app language, not the device's: Turkish sorts dotted/
+      // dotless i apart and Cyrillic has its own order, so an unlocalized
+      // compare puts titles in an order the user doesn't recognise.
+      return arr.sort((a, b) => a.title.localeCompare(b.title, getFormattingLocale()));
     case 'year_desc':
       return arr.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
     case 'year_asc':

@@ -128,10 +128,10 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
             </Text>
           </View>
 
-          <Text style={styles.sectionTitle}>Members</Text>
+          <Text style={styles.sectionTitle}>{t('billing:family.members')}</Text>
           <View style={styles.memberRow}>
             <Text style={styles.memberEmail}>{plan.owner_email}</Text>
-            <Text style={styles.ownerBadge}>Owner</Text>
+            <Text style={styles.ownerBadge}>{t('billing:family.owner')}</Text>
           </View>
           {plan.members.map((m) => (
             <View key={m.user_id} style={styles.memberRow}>
@@ -141,7 +141,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
               </View>
               {isOwner && (
                 <TouchableOpacity onPress={() => handleRemove(m.user_id, m.email)}>
-                  <Text style={styles.removeBtn}>Remove</Text>
+                  <Text style={styles.removeBtn}>{t('billing:family.remove')}</Text>
                 </TouchableOpacity>
               )}
             </View>

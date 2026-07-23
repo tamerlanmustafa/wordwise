@@ -32,7 +32,7 @@
   "journey": {
     "chestAdded": "Se ha añadido a tu colección de revelaciones.",
     "collect": "Recoger",
-    "dailyChest": "Ejercicios diarios para el pecho",
+    "dailyChest": "Cofre diario",
     "milestone": {
       "box_office_flavor": "Treinta días seguidos. Ya eres oficialmente un habitual.",
       "box_office_name": "Taquilla",
@@ -61,17 +61,17 @@
     "title": "Mis películas"
   },
   "preview": {
-    "inYourReel": "EN TU CARRETE",
+    "inYourReel": "EN TU REEL",
     "prepForFilm": "Prepárate para esta película",
     "quizMe": "Ponme a prueba · {{count}} palabras →",
     "quizMeOn": "Ponte a prueba con {{count}} palabras",
     "remove": "Eliminar",
-    "removeFromReel": "Desenrollar del carrete",
+    "removeFromReel": "Quitar del reel",
     "removeFromReelBody": "«{{title}}» se eliminará de tu reel. Puedes volver a añadirlo desde la pestaña «Inicio».",
-    "removeFromReelTitle": "¿Quitarlo del carrete?",
+    "removeFromReelTitle": "¿Quitar del reel?",
     "removeSubtitle": "Quita esta película de tu lista de pendientes",
     "removing": "Eliminando…",
-    "study": "Estudio →",
+    "study": "Estudiar →",
     "studyAllWords": "Estudia todas las palabras",
     "studyAllWordsSub": "Echa un vistazo a la lista completa de vocabulario y marca las palabras que ya te sabes",
     "studyWords": "Palabras para estudiar",

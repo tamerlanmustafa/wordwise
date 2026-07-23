@@ -85,7 +85,7 @@ export function QuizLessonScreen({
         <View style={s.centered}>
           <Text style={s.emptyText}>{t('quiz:lesson.empty')}</Text>
           <TouchableOpacity onPress={onExit} style={s.exitBtn}>
-            <Text style={s.exitBtnText}>Back</Text>
+            <Text style={s.exitBtnText}>{t('action.back')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -168,10 +168,10 @@ export function QuizLessonScreen({
             onPress={() => finishSession(results)}
             style={[s.exitBtn, { backgroundColor: accent }]}
           >
-            <Text style={s.exitBtnText}>Retry</Text>
+            <Text style={s.exitBtnText}>{t('action.retry')}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onExit} style={s.exitGhost}>
-            <Text style={s.exitGhostText}>Exit</Text>
+            <Text style={s.exitGhostText}>{t('quiz:lesson.exit')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

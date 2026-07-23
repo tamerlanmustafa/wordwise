@@ -164,7 +164,7 @@ export function UserMenuSheet({
 
         <View style={styles.divider} />
 
-        <Text style={styles.sectionLabel}>APPEARANCE</Text>
+        <Text style={styles.sectionLabel}>{t('settings:menu.appearance')}</Text>
         <View style={styles.themeChips}>
           {themeOpts.map((o) => {
             const on = pref === o.key;

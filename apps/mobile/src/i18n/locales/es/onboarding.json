@@ -53,13 +53,13 @@
     "title": "¿Qué tan bien conoces…"
   },
   "setIntro": {
-    "a11yReview": "Conjunto de revisión",
+    "a11yReview": "Repasar el conjunto",
     "a11yStart": "Empieza a aprender",
-    "ctaReview": "Opinión →",
+    "ctaReview": "Repasar →",
     "ctaStart": "Empieza a aprender →",
     "duration": "~2 min",
     "eyebrowPreWatch": "VOCABULARIO PREVIO AL VISIONADO",
-    "eyebrowReview": "CONJUNTO DE REVISIÓN",
+    "eyebrowReview": "CONJUNTO DE REPASO",
     "headline": "Aprende 5 palabras de esta película",
     "lettersWithRank": "{{letters}} · rango {{rank}}",
     "letters_one": "{{count}} letra",

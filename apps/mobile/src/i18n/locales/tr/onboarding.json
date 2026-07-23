@@ -53,13 +53,13 @@
     "title": "Bunu ne kadar iyi biliyorsunuz…"
   },
   "setIntro": {
-    "a11yReview": "İnceleme seti",
+    "a11yReview": "Seti tekrar et",
     "a11yStart": "Öğrenmeye başlayın",
-    "ctaReview": "İnceleme →",
+    "ctaReview": "Tekrar →",
     "ctaStart": "Öğrenmeye başla →",
     "duration": "~2 dakika",
     "eyebrowPreWatch": "İZLEMEDEN ÖNCE KELİME LİSTESİ",
-    "eyebrowReview": "İNCELEME SETİ",
+    "eyebrowReview": "TEKRAR SETİ",
     "headline": "Bu filmden 5 kelime öğrenin",
     "lettersWithRank": "{{letters}} · sıra {{rank}}",
     "letters_one": "{{count}} harf",

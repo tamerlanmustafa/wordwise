@@ -15,6 +15,7 @@
   "lesson": {
     "dontKnow": "Não sei",
     "empty": "Não há cartões nesta sessão.",
+    "exit": "Sair",
     "kindOf": "Mais ou menos",
     "know": "Eu sei disso",
     "prompt": "Você conhece essa palavra?",
@@ -40,12 +41,13 @@
     "xpEarned": "XP ganho"
   },
   "review": {
-    "backHome": "De volta para casa",
+    "backHome": "Voltar ao início",
     "caughtUpBody": "Todas as palavras que você salvou estão agendadas para mais tarde. Volte amanhã — ou salve mais palavras de um novo filme.",
     "caughtUpTitle": "Você já está em dia",
     "dailyReview": "Revisão diária",
     "errorTitle": "Algo deu errado",
     "niceWork": "Bom trabalho",
+    "screenTitle": "Revisão",
     "startFailed": "Não foi possível iniciar a sessão de revisão",
     "streakExtended": "Série prolongada — dia {{streak}}",
     "streakExtendedGoal": "Série prolongada — dia {{streak}}!",
@@ -53,6 +55,6 @@
     "tipEyebrow": "Você sabia?",
     "tipTitle": "É o efeito de espaçamento em ação",
     "todaysDone": "Hoje já está feito",
-    "upgradeBody": "Volte amanhã — ou faça o upgrade para ter acesso ilimitado às avaliações."
+    "upgradeBody": "Volte amanhã — ou faça upgrade para revisões ilimitadas."
   }
 }

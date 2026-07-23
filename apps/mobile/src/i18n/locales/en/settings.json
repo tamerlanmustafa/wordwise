@@ -56,6 +56,10 @@
     "deleteFailedBody": "Your account was not deleted. Check your connection and try again, or email privacy@getwordwise.us.",
     "logOutBody": "You'll need to sign in again to get back to your words and progress.",
     "logout": "Logout",
-    "delete": "Delete"
-  }
+    "delete": "Delete",
+    "appearance": "APPEARANCE"
+  },
+  "profile": "Profile",
+  "username": "Username",
+  "legal": "Legal"
 }

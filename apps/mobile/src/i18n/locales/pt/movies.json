@@ -32,7 +32,7 @@
   "journey": {
     "chestAdded": "Adicionado à sua coleção de revelações.",
     "collect": "Coletar",
-    "dailyChest": "Exercício diário para o tórax",
+    "dailyChest": "Baú diário",
     "milestone": {
       "box_office_flavor": "Trinta dias seguidos. Você é oficialmente um frequentador assíduo.",
       "box_office_name": "Bilheteria",
@@ -55,7 +55,7 @@
     "eyebrow": "SEU REEL",
     "noMatch": "Não há filmes correspondentes",
     "showAll": "Mostrar todos os filmes",
-    "sortBy": "Classificar por",
+    "sortBy": "Ordenar por",
     "sortSummary_one": "{{count}} filme · ordenado por",
     "sortSummary_other": "{{count}} filmes · ordenados por",
     "title": "Meus filmes"
@@ -66,12 +66,12 @@
     "quizMe": "Teste meus conhecimentos · {{count}} palavras →",
     "quizMeOn": "Teste meu conhecimento sobre {{count}} palavras",
     "remove": "Remover",
-    "removeFromReel": "Retirar do carretel",
+    "removeFromReel": "Remover do reel",
     "removeFromReelBody": "\"{{title}}\" será removido do seu reel. Você pode adicioná-lo novamente na guia Página inicial.",
-    "removeFromReelTitle": "Retirar do carretel?",
+    "removeFromReelTitle": "Remover do reel?",
     "removeSubtitle": "Retire este filme da sua lista de espera",
     "removing": "Removendo…",
-    "study": "Estudo →",
+    "study": "Estudar →",
     "studyAllWords": "Estude todas as palavras",
     "studyAllWordsSub": "Navegue pela lista completa de vocabulário e marque as palavras que você já aprendeu",
     "studyWords": "Palavras para estudar",

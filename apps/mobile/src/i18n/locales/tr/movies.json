@@ -32,7 +32,7 @@
   "journey": {
     "chestAdded": "“Reveal” koleksiyonunuza eklendi.",
     "collect": "Topla",
-    "dailyChest": "Günlük göğüs egzersizi",
+    "dailyChest": "Günlük sandık",
     "milestone": {
       "box_office_flavor": "Otuz gün üst üste. Artık resmen düzenli bir müşterisin.",
       "box_office_name": "Gişe",
@@ -55,7 +55,7 @@
     "eyebrow": "SİZİN REEL'İNİZ",
     "noMatch": "Eşleşen film yok",
     "showAll": "Tüm filmleri göster",
-    "sortBy": "Şu kriterlere göre sırala",
+    "sortBy": "Sırala",
     "sortSummary_one": "{{count}} film · şuna göre sıralandı",
     "sortSummary_other": "{{count}} film · şuna göre sıralandı",
     "title": "Filmlerim"
@@ -66,12 +66,12 @@
     "quizMe": "Bana soru sor · {{count}} kelime →",
     "quizMeOn": "Bana {{count}} kelimelik bir test yap",
     "remove": "Kaldır",
-    "removeFromReel": "Makaradan çıkarın",
+    "removeFromReel": "Reel'den çıkar",
     "removeFromReelBody": "\"{{title}}\" reel'inizden kaldırılacaktır. Bunu \"Ana Sayfa\" sekmesinden tekrar ekleyebilirsiniz.",
-    "removeFromReelTitle": "Makaradan çıkarmak mı?",
+    "removeFromReelTitle": "Reel'den çıkarılsın mı?",
     "removeSubtitle": "Bu filmi izleme listenden çıkar",
     "removing": "Kaldırılıyor…",
-    "study": "Araştırma →",
+    "study": "Çalış →",
     "studyAllWords": "Tüm kelimeleri çalışın",
     "studyAllWordsSub": "Tüm kelime listesine göz atın ve öğrendiğiniz kelimeleri işaretleyin",
     "studyWords": "Kelime çalışması",
