@@ -1,8 +1,7 @@
 """
 DELETE /auth/me — deletion logic.
 
-The route must (a) clear UserWordList first (its FK is onDelete: NoAction, so
-a bare user.delete would be rejected by Postgres), (b) delete the user row
+The route must (a) clear UserWordList first, (b) delete the user row
 (everything else cascades per schema.prisma), (c) do both inside one
 transaction, and (d) only ever touch the *current* user's rows.
 """
@@ -51,7 +50,9 @@ async def test_deletes_wordlists_then_user_scoped_to_current_user(test_user):
     await delete_account(current_user=test_user, db=_FakeDb(log), _=None)
 
     assert [name for name, _ in log] == ["userwordlist.delete_many", "user.delete"], (
-        "UserWordList must be cleared before user.delete (NoAction FK), inside the tx"
+        "UserWordList must be cleared before user.delete, inside the tx. The FK "
+        "is Cascade since #93, but this stays explicit so the route does not "
+        "depend on an environment having replayed prisma/manual/."
     )
     assert log[0][1] == {"where": {"userId": test_user.id}}
     assert log[1][1] == {"where": {"id": test_user.id}}

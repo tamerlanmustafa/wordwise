@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import List, Optional
 from prisma import Prisma
+from prisma.errors import UniqueViolationError
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 
@@ -101,6 +102,12 @@ async def mark_word_learned(
     # Upsert a global (movieId=null) learned marker. Hides the word from all
     # movie vocabulary lists. Leaves any per-movie saved rows untouched —
     # starring and "never show again" are orthogonal.
+    #
+    # This is find-then-create rather than a Prisma upsert because the
+    # uniqueness backstop is a partial index (`user_words_global_word_unique`,
+    # movie_id IS NULL) that Prisma can't name in a `where`. Two concurrent
+    # calls can therefore both miss the find; the loser hits the index and is
+    # caught below, which is the whole point of the index — see issue #93.
     existing = await db.userword.find_first(
         where={
             "userId": current_user.id,
@@ -116,13 +123,25 @@ async def mark_word_learned(
                 data={"isLearned": True},
             )
     else:
-        await db.userword.create(
-            data={
-                "userId": current_user.id,
-                "word": request.word,
-                "isLearned": True,
-            }
-        )
+        try:
+            await db.userword.create(
+                data={
+                    "userId": current_user.id,
+                    "word": request.word,
+                    "isLearned": True,
+                }
+            )
+        except UniqueViolationError:
+            # A concurrent /mark-learned won the race. Its row is already the
+            # marker we wanted, so flag it learned and report success.
+            await db.userword.update_many(
+                where={
+                    "userId": current_user.id,
+                    "word": request.word,
+                    "movieId": None,
+                },
+                data={"isLearned": True},
+            )
 
     return {"learned": True, "word": request.word}
 
@@ -134,7 +153,11 @@ async def unlearn_word(
     db: Prisma = Depends(get_db)
 ):
     # Remove the global learned marker. Per-movie rows are untouched.
-    existing = await db.userword.find_first(
+    #
+    # delete_many, not find_first + delete: pre-#93 data can still hold
+    # duplicate global rows, and deleting only one would leave a stale marker
+    # that keeps hiding the word from every list.
+    await db.userword.delete_many(
         where={
             "userId": current_user.id,
             "word": request.word,
@@ -142,9 +165,6 @@ async def unlearn_word(
             "isLearned": True,
         }
     )
-
-    if existing:
-        await db.userword.delete(where={"id": existing.id})
 
     return {"learned": False, "word": request.word}
 
