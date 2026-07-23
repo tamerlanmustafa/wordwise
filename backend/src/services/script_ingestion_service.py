@@ -16,6 +16,7 @@ from ..utils.pdf_extractor import PDFExtractor, PDFExtractionError
 from ..utils.subtitle_parser import SubtitleParser, SubtitleParsingError
 from ..utils.stands4_client import STANDS4Client, STANDS4Error
 from ..utils.subtitle_api_client import SubtitleAPIClient, SubtitleAPIError
+from ..utils.text_sanitize import sanitize_for_db
 from ..database import get_db
 
 logger = logging.getLogger(__name__)
@@ -234,6 +235,14 @@ class ScriptIngestionService:
         tmdb_id: Optional[int] = None,
     ) -> Dict[str, any]:
         try:
+            # Postgres text columns reject NUL bytes (22021), and a source that
+            # hands us one fails identically on every retry — a poison pill that
+            # burns the job's whole retry budget (#88). Strip control bytes from
+            # every string we're about to persist, once, so all sources are
+            # covered regardless of which parser produced the text.
+            script_data = sanitize_for_db(script_data)
+            movie_title = sanitize_for_db(movie_title)
+
             if not movie_id:
                 logger.info(f"[DB] Creating new movie record for '{movie_title}' (tmdb_id={tmdb_id})")
 
