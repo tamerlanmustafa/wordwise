@@ -15,7 +15,9 @@
       "url": "https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f"
     },
     "splash": {
-      "backgroundColor": "#2196F3"
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0e0d10"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -44,7 +46,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#2196F3"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0e0d10"
       },
       "package": "com.wordwise.mobile"
     },
