@@ -1,0 +1,62 @@
+{
+  "action": {
+    "back": "Назад",
+    "cancel": "Отмена",
+    "clearSearch": "Очистить поиск",
+    "close": "Закрыть",
+    "confirm": "Подтвердить",
+    "continue": "Продолжить",
+    "done": "Готово",
+    "gotIt": "Понял",
+    "retry": "Повторить",
+    "save": "Сохранить"
+  },
+  "nav": {
+    "home": "Главная",
+    "myMovies": "Мои фильмы",
+    "practice": "Практика",
+    "profile": "Профиль"
+  },
+  "offline": {
+    "downloadsWork": "Загруженные вами ролики по-прежнему работают",
+    "pending_few": "{{count}} изменения ожидают синхронизации",
+    "pending_many": "{{count}} изменений ожидают синхронизации",
+    "pending_one": "{{count}} изменение ожидает синхронизации",
+    "pending_other": "{{count}} изменения ожидают синхронизации",
+    "syncing": "Синхронизация…",
+    "title": "Вы не в сети"
+  },
+  "report": {
+    "additionalDetails": "Дополнительная информация",
+    "detailsOptional": "Необязательно",
+    "detailsRequired": "Обязательно для «Прочее»",
+    "error": {
+      "detailsRequired": "Пожалуйста, укажите подробности по проблемам, относящимся к категории «Прочее»",
+      "selectReason": "Пожалуйста, выберите причину",
+      "submitFailed": "Не удалось отправить отчет"
+    },
+    "fromMovie": "из «{{title}}»",
+    "issueQuestion": "В чём проблема?",
+    "reason": {
+      "INAPPROPRIATE_CONTENT": "Неуместный контент",
+      "OTHER": "Другой вопрос",
+      "WRONG_CONTEXT": "Не соответствует контексту",
+      "WRONG_SPELLING": "Ошибка в написании",
+      "WRONG_TRANSLATION": "Неправильный перевод"
+    },
+    "reportingWord": "Отчетное слово",
+    "submit": "Отправить отчет",
+    "title": "Сообщить о проблеме"
+  },
+  "state": {
+    "error": "Что-то пошло не так. Попробуйте ещё раз.",
+    "loading": "Загрузка…"
+  },
+  "tip": {
+    "dontShowAgain": "Больше не показывать"
+  },
+  "wordCount_few": "{{count}} слова",
+  "wordCount_many": "{{count}} слов",
+  "wordCount_one": "{{count}} слово",
+  "wordCount_other": "{{count}} слова"
+}

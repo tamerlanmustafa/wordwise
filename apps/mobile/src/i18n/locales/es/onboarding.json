@@ -1,0 +1,84 @@
+{
+  "filmStep": {
+    "cta": "Empieza a aprender →",
+    "searchPlaceholder": "Buscar otra película",
+    "sub": "Crearemos una lista de palabras a partir de su guion; empieza por una que te encantaría entender.",
+    "title": "Elige tu primera película"
+  },
+  "goalStep": {
+    "cta": "Accede a WordWise →",
+    "finishing": "Preparando…",
+    "option": {
+      "casualLabel": "Informal",
+      "casualSub": "3 min · 1 lección al día",
+      "intenseLabel": "Intenso",
+      "intenseSub": "20 min · Más de 6 clases al día",
+      "regularLabel": "Habitual",
+      "regularSub": "6 min · 2 clases al día",
+      "seriousLabel": "Grave",
+      "seriousSub": "12 min · 4 clases al día"
+    },
+    "sub": "Puedes cambiarlo cuando quieras. La constancia es más importante que la intensidad.",
+    "title": "Fíjate un objetivo diario"
+  },
+  "languageStep": {
+    "continue": "Continuar →",
+    "noMatch": "Ningún idioma coincide con \"{{query}}\"",
+    "searchPlaceholder": "Buscar idiomas",
+    "title": "¿Qué estás aprendiendo?"
+  },
+  "levelResult": {
+    "cta": "Me parece bien →",
+    "explanation": {
+      "A1": "Acabas de empezar. Comenzaremos tus grabaciones con las palabras A1–A2 más frecuentes y iremos avanzando a partir de ahí.",
+      "A2": "Ya conoces los conceptos básicos del día a día. Empezaremos tus vídeos con vocabulario de los niveles A2–B1 y lo iremos adaptando sobre la marcha.",
+      "B1": "Reconoces las palabras más comunes, pero se te escapan los matices. Empezaremos tus «reels» con vocabulario de nivel B1-B2 y lo iremos adaptando a medida que avances.",
+      "B2": "Entiendes la mayor parte de los diálogos. Empezaremos tus vídeos con vocabulario de nivel B2–C1 para que sigas enfrentándote a retos.",
+      "C1": "Dominas el lenguaje cotidiano. Centraremos tus vídeos en palabras de nivel C1-C2: aquellas poco comunes y precisas.",
+      "C2": "Tu nivel es casi nativo. Te enseñaremos el vocabulario y las expresiones idiomáticas de nivel C2 más poco comunes que te encontrarás en las películas."
+    },
+    "eyebrow": "Tu nivel inicial"
+  },
+  "placementStep": {
+    "eyebrow": "Búsqueda rápida · palabra {{index}} de hasta {{total}}",
+    "rating": {
+      "familiarLabel": "Me resulta familiar",
+      "familiarSub": "No sé cómo definirlo",
+      "knowLabel": "Lo conozco bien",
+      "knowSub": "Podría utilizarlo en una frase",
+      "unknownLabel": "Nunca lo he visto",
+      "unknownSub": "Es nuevo para mí"
+    },
+    "skip": "Saltar — Soy principiante",
+    "title": "¿Qué tan bien conoces…"
+  },
+  "setIntro": {
+    "a11yReview": "Conjunto de revisión",
+    "a11yStart": "Empieza a aprender",
+    "ctaReview": "Opinión →",
+    "ctaStart": "Empieza a aprender →",
+    "duration": "~2 min",
+    "eyebrowPreWatch": "VOCABULARIO PREVIO AL VISIONADO",
+    "eyebrowReview": "CONJUNTO DE REVISIÓN",
+    "headline": "Aprende 5 palabras de esta película",
+    "lettersWithRank": "{{letters}} · rango {{rank}}",
+    "letters_one": "{{count}} letra",
+    "letters_other": "{{count}} letras",
+    "setReel": "CONJUNTO {{set}} · CARRETE {{reel}}",
+    "sourceFilm": "PELÍCULA ORIGINAL",
+    "subhead": "Así, cuando lo veas más tarde con subtítulos, podrás seguir realmente cada frase."
+  },
+  "stepOf": "Paso {{step}} de {{total}}",
+  "usernameStep": {
+    "placeholder": "Nombre de usuario",
+    "saveFailed": "No se ha podido guardar el nombre de usuario. Inténtalo de nuevo.",
+    "saving": "Guardando…",
+    "sub": "Tu nombre de usuario aparece en las tablas de clasificación y en tu plan familiar. Puedes cambiarlo en cualquier momento en «Ajustes».",
+    "title": "¿Cómo queremos llamarte?"
+  },
+  "welcome": {
+    "copy": "WordWise convierte el guion de cualquier película en una lista de vocabulario: aprende las palabras clave antes de verla, en el idioma que estés estudiando.",
+    "cta": "Empezar",
+    "headline": "Comprende cada línea."
+  }
+}

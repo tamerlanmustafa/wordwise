@@ -58,6 +58,13 @@ import { ListsScreen } from '../components/screens/ListsScreen';
 import { WatchedScreen } from '../components/screens/WatchedScreen';
 import { HomeScreen } from '../components/screens/HomeScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
+import { initI18n, hydrateAppLanguage } from '../i18n';
+
+// Bring up i18next before the first render so no screen ever paints raw
+// translation keys. The real language is resolved a moment later by
+// hydrateAppLanguage (it needs AsyncStorage, which is async); English is the
+// correct thing to show for that one frame.
+initI18n();
 
 // Android requires opt-in for LayoutAnimation; iOS is on by default.
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -159,6 +166,17 @@ export default function App() {
       }
     });
   }, [user?.learning_language, targetLanguageLoaded]);
+
+  // App UI language follows the translation language, so picking Spanish in
+  // onboarding gives a Spanish interface without asking a second question.
+  // hydrateAppLanguage re-checks the Settings pin on every run, so a user who
+  // explicitly chose a UI language keeps it when they change translations.
+  // Gated on targetLanguageLoaded so we derive from the *restored* value rather
+  // than the 'ES' initial state.
+  useEffect(() => {
+    if (!targetLanguageLoaded) return;
+    void hydrateAppLanguage(targetLanguage);
+  }, [targetLanguage, targetLanguageLoaded]);
 
   const handleLogin = async (user: any, token: string, refreshToken: string) => {
     await login(user, token, refreshToken);

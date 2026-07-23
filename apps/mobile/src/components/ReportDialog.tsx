@@ -9,11 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {
-  REPORT_REASON_LABELS,
-  reportsApi,
-  type ReportReason,
-} from '../services/api';
+import { useTranslation } from 'react-i18next';
+import { reportsApi, type ReportReason } from '../services/api';
 
 // Mirrors the web ReportDialog (frontend/src/components/ReportDialog.tsx),
 // adapted to React Native primitives. Same shape, same backend call.
@@ -58,6 +55,7 @@ export function ReportDialog({
   translationSource,
   onSubmitted,
 }: ReportDialogProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState<ReportReason | ''>('');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -77,11 +75,11 @@ export function ReportDialog({
 
   const handleSubmit = useCallback(async () => {
     if (!reason) {
-      setError('Please select a reason');
+      setError(t('report.error.selectReason'));
       return;
     }
     if (reason === 'OTHER' && !details.trim()) {
-      setError('Please provide details for "Other" issues');
+      setError(t('report.error.detailsRequired'));
       return;
     }
 
@@ -100,11 +98,11 @@ export function ReportDialog({
       onSubmitted?.();
       onClose();
     } catch (e: any) {
-      setError(e?.message || 'Failed to submit report');
+      setError(e?.message || t('report.error.submitFailed'));
     } finally {
       setSubmitting(false);
     }
-  }, [reason, details, word, movieId, movieTitle, translationSource, onClose, onSubmitted, reset]);
+  }, [t, reason, details, word, movieId, movieTitle, translationSource, onClose, onSubmitted, reset]);
 
   return (
     <Modal
@@ -118,20 +116,20 @@ export function ReportDialog({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerIcon}>⚑</Text>
-            <Text style={styles.headerTitle}>Report Issue</Text>
+            <Text style={styles.headerTitle}>{t('report.title')}</Text>
             <TouchableOpacity onPress={handleClose} disabled={submitting} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={styles.headerClose}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 8 }}>
-            <Text style={styles.metaLabel}>Reporting word</Text>
+            <Text style={styles.metaLabel}>{t('report.reportingWord')}</Text>
             <Text style={styles.wordText}>{word}</Text>
             {movieTitle ? (
-              <Text style={styles.movieText}>from "{movieTitle}"</Text>
+              <Text style={styles.movieText}>{t('report.fromMovie', { title: movieTitle })}</Text>
             ) : null}
 
-            <Text style={styles.sectionLabel}>What's the issue?</Text>
+            <Text style={styles.sectionLabel}>{t('report.issueQuestion')}</Text>
             {REASON_OPTIONS.map((opt) => {
               const selected = reason === opt;
               return (
@@ -148,21 +146,19 @@ export function ReportDialog({
                     {selected && <View style={styles.radioInner} />}
                   </View>
                   <Text style={[styles.reasonText, selected && styles.reasonTextSelected]}>
-                    {REPORT_REASON_LABELS[opt]}
+                    {t(`report.reason.${opt}`)}
                   </Text>
                 </TouchableOpacity>
               );
             })}
 
-            <Text style={styles.sectionLabel}>Additional details</Text>
+            <Text style={styles.sectionLabel}>{t('report.additionalDetails')}</Text>
             <TextInput
               style={styles.textInput}
               multiline
               numberOfLines={3}
               placeholder={
-                reason === 'OTHER'
-                  ? 'Required for "Other"'
-                  : 'Optional'
+                reason === 'OTHER' ? t('report.detailsRequired') : t('report.detailsOptional')
               }
               placeholderTextColor="#A0A4B0"
               value={details}
@@ -187,7 +183,7 @@ export function ReportDialog({
               onPress={handleClose}
               disabled={submitting}
             >
-              <Text style={styles.btnGhostText}>Cancel</Text>
+              <Text style={styles.btnGhostText}>{t('action.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.btnPrimary, (!reason || submitting) && styles.btnDisabled]}
@@ -197,7 +193,7 @@ export function ReportDialog({
               {submitting ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.btnPrimaryText}>Submit Report</Text>
+                <Text style={styles.btnPrimaryText}>{t('report.submit')}</Text>
               )}
             </TouchableOpacity>
           </View>

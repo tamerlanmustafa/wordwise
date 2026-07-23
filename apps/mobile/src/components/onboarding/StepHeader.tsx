@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 
@@ -21,6 +22,7 @@ export interface StepHeaderProps {
 }
 
 export function StepHeader({ step, total, title, eyebrow, onBack }: StepHeaderProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -30,7 +32,7 @@ export function StepHeader({ step, total, title, eyebrow, onBack }: StepHeaderPr
         {onBack ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t('action.back')}
             onPress={onBack}
             hitSlop={8}
             style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}

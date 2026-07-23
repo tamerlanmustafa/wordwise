@@ -21,6 +21,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
 export type BottomTab = 'home' | 'movies' | 'practice' | 'profile';
@@ -35,20 +36,24 @@ interface Props {
 
 interface TabItem {
   id: BottomTab;
-  label: string;
+  /** Key under `common:nav`. */
+  labelKey: 'home' | 'myMovies' | 'practice' | 'profile';
   icon: NavIconKind;
 }
 
 type NavIconKind = 'home' | 'film' | 'spark' | 'user';
 
+// Labels live in `common:nav.*` and are resolved at render — this array is
+// module-level, so a literal label here would freeze at the launch language.
 const TABS: TabItem[] = [
-  { id: 'home',     label: 'Home',      icon: 'home' },
-  { id: 'movies',   label: 'My Movies', icon: 'film' },
-  { id: 'practice', label: 'Practice',  icon: 'spark' },
-  { id: 'profile',  label: 'Profile',   icon: 'user' },
+  { id: 'home',     labelKey: 'home',     icon: 'home' },
+  { id: 'movies',   labelKey: 'myMovies', icon: 'film' },
+  { id: 'practice', labelKey: 'practice', icon: 'spark' },
+  { id: 'profile',  labelKey: 'profile',  icon: 'user' },
 ];
 
 export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -67,13 +72,13 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
       ]}
       onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
     >
-      {TABS.map((t) => (
+      {TABS.map((tab) => (
         <TabBtn
-          key={t.id}
-          icon={t.icon}
-          label={t.label}
-          isActive={active === t.id}
-          onPress={() => onTabPress(t.id)}
+          key={tab.id}
+          icon={tab.icon}
+          label={t(`nav.${tab.labelKey}`)}
+          isActive={active === tab.id}
+          onPress={() => onTabPress(tab.id)}
           tc={tc}
           s={s}
         />

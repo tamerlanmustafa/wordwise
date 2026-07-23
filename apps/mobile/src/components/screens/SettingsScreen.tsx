@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -28,6 +29,14 @@ import {
   type WordReminderMode,
 } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
+import {
+  UI_LANGUAGES,
+  clearExplicitAppLanguage,
+  getAppLanguage,
+  getUiLanguage,
+  hasExplicitAppLanguage,
+  setAppLanguage,
+} from '../../i18n';
 
 interface Props {
   onBack: () => void;
@@ -63,11 +72,17 @@ export const SettingsScreen = ({
   const [showNativeLangPicker, setShowNativeLangPicker] = useState(false);
   const [showLearningLangPicker, setShowLearningLangPicker] = useState(false);
   const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
+  const [showAppLangPicker, setShowAppLangPicker] = useState(false);
+  // Active UI language, plus whether it's pinned here or merely inherited from
+  // the translation language (which decides if we offer the "reset" affordance).
+  const [appLanguage, setAppLanguageState] = useState(getAppLanguage());
+  const [appLanguagePinned, setAppLanguagePinned] = useState(false);
   const [dailyWordNotif, setDailyWordNotif] = useState(true);
   const [wordReminderMode, setWordReminderModeState] = useState<WordReminderMode>('daily');
   const [reviewNotif, setReviewNotif] = useState(true);
   const [accordionMode, setAccordionMode] = useState(true);
 
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
@@ -79,7 +94,21 @@ export const SettingsScreen = ({
     getWordReminderMode().then(setWordReminderModeState);
     AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
     AsyncStorage.getItem('accordion_mode').then((v) => { if (v === 'off') setAccordionMode(false); });
+    hasExplicitAppLanguage().then(setAppLanguagePinned);
   }, []);
+
+  const handleSelectAppLanguage = async (code: string) => {
+    await setAppLanguage(code);
+    setAppLanguageState(code);
+    setAppLanguagePinned(true);
+  };
+
+  // Drop the pin so the UI follows the translation language again.
+  const handleResetAppLanguage = async () => {
+    await clearExplicitAppLanguage(targetLanguage);
+    setAppLanguageState(getAppLanguage());
+    setAppLanguagePinned(false);
+  };
 
   const toggleAccordionMode = async () => {
     const next = !accordionMode;
@@ -169,6 +198,17 @@ export const SettingsScreen = ({
 
   const getLangName = (code: string) =>
     SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code;
+
+  // Endonym first (that's what a speaker scans for), English name after —
+  // except for English itself, where the two are the same word.
+  const appLanguageItems = useMemo(
+    () =>
+      UI_LANGUAGES.map((l) => ({
+        code: l.code,
+        name: l.nativeName === l.name ? l.name : `${l.nativeName} · ${l.name}`,
+      })),
+    [],
+  );
 
   const getProfName = (code: string) =>
     PROFICIENCY_LEVELS.find((l) => l.code === code)?.name || code;
@@ -356,6 +396,31 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
+        <Text style={settingsStyles.sectionTitle}>{t('settings:appLanguage.sectionTitle')}</Text>
+
+        <TouchableOpacity
+          style={settingsStyles.selectButton}
+          onPress={() => setShowAppLangPicker(true)}
+          accessibilityRole="button"
+        >
+          <Text style={settingsStyles.selectLabel}>{t('settings:appLanguage.label')}</Text>
+          <Text style={settingsStyles.selectValue}>
+            {getUiLanguage(appLanguage)?.nativeName ?? appLanguage} ▼
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={settingsStyles.notifDesc}>{t('settings:appLanguage.description')}</Text>
+
+        {appLanguagePinned ? (
+          <TouchableOpacity onPress={handleResetAppLanguage} accessibilityRole="button">
+            <Text style={[settingsStyles.notifDesc, { color: colors.primary, marginTop: 6 }]}>
+              {t('settings:appLanguage.followTranslationHint', { language: targetLanguage })}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        <View style={settingsStyles.divider} />
+
         <Text style={settingsStyles.sectionTitle}>Translation Language</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
@@ -476,6 +541,14 @@ export const SettingsScreen = ({
         </TouchableOpacity>
       </ScrollView>
 
+      {renderPicker(
+        showAppLangPicker,
+        () => setShowAppLangPicker(false),
+        appLanguageItems,
+        appLanguage,
+        handleSelectAppLanguage,
+        t('settings:appLanguage.pickerTitle'),
+      )}
       {renderPicker(showNativeLangPicker, () => setShowNativeLangPicker(false), SUPPORTED_LANGUAGES, nativeLanguage, setNativeLanguage, 'Native Language')}
       {renderPicker(showLearningLangPicker, () => setShowLearningLangPicker(false), SUPPORTED_LANGUAGES, learningLanguage, setLearningLanguage, 'Learning Language')}
       {renderPicker(showProficiencyPicker, () => setShowProficiencyPicker(false), PROFICIENCY_LEVELS, proficiencyLevel, setProficiencyLevel, 'Proficiency Level')}

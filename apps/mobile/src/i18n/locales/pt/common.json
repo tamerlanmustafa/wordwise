@@ -1,0 +1,58 @@
+{
+  "action": {
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "clearSearch": "Limpar pesquisa",
+    "close": "Fechar",
+    "confirm": "Confirmar",
+    "continue": "Continuar",
+    "done": "Concluído",
+    "gotIt": "Entendi",
+    "retry": "Tentar novamente",
+    "save": "Salvar"
+  },
+  "nav": {
+    "home": "Página inicial",
+    "myMovies": "Meus filmes",
+    "practice": "Prática",
+    "profile": "Perfil"
+  },
+  "offline": {
+    "downloadsWork": "Os seus vídeos baixados ainda funcionam",
+    "pending_one": "{{count}} alteração aguardando sincronização",
+    "pending_other": "{{count}} alterações aguardando sincronização",
+    "syncing": "Sincronizando…",
+    "title": "Você está offline"
+  },
+  "report": {
+    "additionalDetails": "Detalhes adicionais",
+    "detailsOptional": "Opcional",
+    "detailsRequired": "Obrigatório para “Outros”",
+    "error": {
+      "detailsRequired": "Por favor, forneça detalhes sobre os problemas na categoria “Outros”",
+      "selectReason": "Selecione um motivo",
+      "submitFailed": "Não foi possível enviar o relatório"
+    },
+    "fromMovie": "de “{{title}}”",
+    "issueQuestion": "Qual é o problema?",
+    "reason": {
+      "INAPPROPRIATE_CONTENT": "Conteúdo impróprio",
+      "OTHER": "Outra questão",
+      "WRONG_CONTEXT": "Não se encaixa no contexto",
+      "WRONG_SPELLING": "Erro ortográfico",
+      "WRONG_TRANSLATION": "Tradução incorreta"
+    },
+    "reportingWord": "Palavra-chave do relatório",
+    "submit": "Enviar relatório",
+    "title": "Relatar problema"
+  },
+  "state": {
+    "error": "Algo deu errado. Tente novamente.",
+    "loading": "Carregando…"
+  },
+  "tip": {
+    "dontShowAgain": "Não mostrar novamente"
+  },
+  "wordCount_one": "{{count}} palavra",
+  "wordCount_other": "{{count}} palavras"
+}

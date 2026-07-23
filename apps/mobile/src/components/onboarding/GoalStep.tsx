@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { DAILY_GOAL_OPTIONS } from './placement';
@@ -23,13 +24,20 @@ export interface GoalStepProps {
 }
 
 export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: GoalStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <StepHeader step={6} total={6} eyebrow="Step 6 of 6" title="Set your daily goal" onBack={onBack} />
-      <Text style={s.sub}>You can change this any time. Consistency beats intensity.</Text>
+      <StepHeader
+        step={6}
+        total={6}
+        eyebrow={t('onboarding:stepOf', { step: 6, total: 6 })}
+        title={t('onboarding:goalStep.title')}
+        onBack={onBack}
+      />
+      <Text style={s.sub}>{t('onboarding:goalStep.sub')}</Text>
       <View style={s.list}>
         {DAILY_GOAL_OPTIONS.map((g) => {
           const on = g.mins === selected;
@@ -38,13 +46,13 @@ export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: Go
               key={g.mins}
               accessibilityRole="radio"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={`${g.label}, ${g.sub}`}
+              accessibilityLabel={`${t(`onboarding:goalStep.option.${g.key}Label`)}, ${t(`onboarding:goalStep.option.${g.key}Sub`)}`}
               onPress={() => onSelect(g.mins)}
               style={[s.row, { backgroundColor: on ? tc.primaryTint : tc.paper, borderColor: on ? tc.primary : tc.border }]}
             >
               <View style={s.info}>
-                <Text style={s.label}>{g.label}</Text>
-                <Text style={s.subRow}>{g.sub}</Text>
+                <Text style={s.label}>{t(`onboarding:goalStep.option.${g.key}Label`)}</Text>
+                <Text style={s.subRow}>{t(`onboarding:goalStep.option.${g.key}Sub`)}</Text>
               </View>
               <View style={[s.radio, { borderColor: on ? tc.primary : tc.border, backgroundColor: on ? tc.primary : 'transparent' }]}>
                 {on ? <Ionicons name="checkmark" size={12} color={tc.textInverse} /> : null}
@@ -54,7 +62,7 @@ export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: Go
         })}
       </View>
       <OnboardingCTA
-        label={finishing ? 'Setting up…' : 'Enter WordWise →'}
+        label={finishing ? t('onboarding:goalStep.finishing') : t('onboarding:goalStep.cta')}
         onPress={onFinish}
         disabled={!selected || finishing}
       />

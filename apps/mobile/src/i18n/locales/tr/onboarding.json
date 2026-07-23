@@ -1,0 +1,84 @@
+{
+  "filmStep": {
+    "cta": "Öğrenmeye başla →",
+    "searchPlaceholder": "Başka bir film ara",
+    "sub": "Yazısından bir kelime listesi oluşturacağız — anlamayı çok istediğiniz bir kelimeyle başlayın.",
+    "title": "İlk filmini seç"
+  },
+  "goalStep": {
+    "cta": "WordWise'a girin →",
+    "finishing": "Hazırlanıyor…",
+    "option": {
+      "casualLabel": "Gündelik",
+      "casualSub": "3 dakika · Günde 1 ders",
+      "intenseLabel": "Yoğun",
+      "intenseSub": "20 dakika · Günde 6 veya daha fazla ders",
+      "regularLabel": "Normal",
+      "regularSub": "6 dakika · Günde 2 ders",
+      "seriousLabel": "Ciddi",
+      "seriousSub": "12 dakika · Günde 4 ders"
+    },
+    "sub": "Bunu istediğiniz zaman değiştirebilirsiniz. Düzenlilik, yoğunluktan daha önemlidir.",
+    "title": "Günlük hedefinizi belirleyin"
+  },
+  "languageStep": {
+    "continue": "Devam et →",
+    "noMatch": "\"{{query}}\" ile eşleşen dil yok",
+    "searchPlaceholder": "Dil ara",
+    "title": "Ne öğreniyorsun?"
+  },
+  "levelResult": {
+    "cta": "Doğru gibi görünüyor →",
+    "explanation": {
+      "A1": "Henüz başlangıç aşamasındasın. Ses kayıtlarını en sık kullanılan A1–A2 kelimeleriyle başlatıp, oradan devam edeceğiz.",
+      "A2": "Günlük hayattaki temel kelimeleri biliyorsunuz. Reels videolarınızı A2–B1 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe içeriği buna göre uyarlayacağız.",
+      "B1": "Yaygın kelimeleri tanıyorsunuz ancak ince anlam farklılıklarını kaçırıyorsunuz. Reels videolarınızı B1–B2 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe içeriği buna göre uyarlayacağız.",
+      "B2": "Diyalogların çoğunu anlayabiliyorsun. Zorlanmaya devam etmen için videolarını B2–C1 seviyesi kelime dağarcığıyla başlatacağız.",
+      "C1": "Günlük dilde akıcı konuşuyorsunuz. Reels videolarınızı C1–C2 seviyesindeki kelimelere, yani nadir ve kesin anlamlı kelimelere odaklayacağız.",
+      "C2": "Neredeyse ana dil seviyesindesin. Filmlerde karşına çıkan en nadir C2 seviyesi kelimeleri ve deyimleri ortaya çıkaracağız."
+    },
+    "eyebrow": "Başlangıç seviyeniz"
+  },
+  "placementStep": {
+    "eyebrow": "Hızlı yerleştirme · {{total}}'a kadar olan {{index}}. kelime",
+    "rating": {
+      "familiarLabel": "Tanıdık geliyor",
+      "familiarSub": "Bunu tanımlayamıyorum",
+      "knowLabel": "Bunu çok iyi biliyorum",
+      "knowSub": "Bunu bir cümlede kullanabilirim",
+      "unknownLabel": "Bunu daha önce hiç görmedim",
+      "unknownSub": "Benim için yeni"
+    },
+    "skip": "Atla — Ben yeni başlayanım",
+    "title": "Bunu ne kadar iyi biliyorsunuz…"
+  },
+  "setIntro": {
+    "a11yReview": "İnceleme seti",
+    "a11yStart": "Öğrenmeye başlayın",
+    "ctaReview": "İnceleme →",
+    "ctaStart": "Öğrenmeye başla →",
+    "duration": "~2 dakika",
+    "eyebrowPreWatch": "İZLEMEDEN ÖNCE KELİME LİSTESİ",
+    "eyebrowReview": "İNCELEME SETİ",
+    "headline": "Bu filmden 5 kelime öğrenin",
+    "lettersWithRank": "{{letters}} · sıra {{rank}}",
+    "letters_one": "{{count}} harf",
+    "letters_other": "{{count}} harf",
+    "setReel": "SET {{set}} · REEL {{reel}}",
+    "sourceFilm": "KAYNAK FİLM",
+    "subhead": "Böylece daha sonra altyazılı olarak izlediğinizde, her repliği gerçekten anlayabileceksiniz."
+  },
+  "stepOf": "{{total}} adımın {{step}}'inci adımı",
+  "usernameStep": {
+    "placeholder": "Kullanıcı adı",
+    "saveFailed": "Kullanıcı adı kaydedilemedi. Lütfen tekrar deneyin.",
+    "saving": "Kaydediliyor…",
+    "sub": "Kullanıcı adınız, liderlik tablolarında ve aile planınızda görünür. Bunu Ayarlar bölümünden istediğiniz zaman değiştirebilirsiniz.",
+    "title": "Size nasıl hitap edelim?"
+  },
+  "welcome": {
+    "copy": "WordWise, herhangi bir filmin senaryosunu bir kelime listesine dönüştürür — izlemeden önce, öğrenmekte olduğunuz dilde anahtar kelimeleri öğrenin.",
+    "cta": "Başlayın",
+    "headline": "Her satırı iyice anlayın."
+  }
+}

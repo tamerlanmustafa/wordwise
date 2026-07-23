@@ -1,0 +1,58 @@
+{
+  "action": {
+    "back": "Atrás",
+    "cancel": "Cancelar",
+    "clearSearch": "Borrar búsqueda",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "continue": "Continuar",
+    "done": "Listo",
+    "gotIt": "Entendido",
+    "retry": "Reintentar",
+    "save": "Guardar"
+  },
+  "nav": {
+    "home": "Inicio",
+    "myMovies": "Mis películas",
+    "practice": "Práctica",
+    "profile": "Perfil"
+  },
+  "offline": {
+    "downloadsWork": "Los carretes que has descargado siguen funcionando",
+    "pending_one": "{{count}} cambio pendiente de sincronizar",
+    "pending_other": "{{count}} cambios pendientes de sincronizar",
+    "syncing": "Sincronizando…",
+    "title": "Estás desconectado"
+  },
+  "report": {
+    "additionalDetails": "Más detalles",
+    "detailsOptional": "Opcional",
+    "detailsRequired": "Obligatorio para «Otros»",
+    "error": {
+      "detailsRequired": "Por favor, facilite más detalles sobre los problemas de la categoría «Otros»",
+      "selectReason": "Selecciona un motivo, por favor",
+      "submitFailed": "No se ha podido enviar el informe"
+    },
+    "fromMovie": "de «{{title}}»",
+    "issueQuestion": "¿Cuál es el problema?",
+    "reason": {
+      "INAPPROPRIATE_CONTENT": "Contenido inapropiado",
+      "OTHER": "Otro asunto",
+      "WRONG_CONTEXT": "No encaja con el contexto",
+      "WRONG_SPELLING": "Error ortográfico",
+      "WRONG_TRANSLATION": "Traducción incorrecta"
+    },
+    "reportingWord": "Palabra clave",
+    "submit": "Enviar informe",
+    "title": "Informar de un problema"
+  },
+  "state": {
+    "error": "Algo salió mal. Inténtalo de nuevo.",
+    "loading": "Cargando…"
+  },
+  "tip": {
+    "dontShowAgain": "No volver a mostrar"
+  },
+  "wordCount_one": "{{count}} palabra",
+  "wordCount_other": "{{count}} palabras"
+}

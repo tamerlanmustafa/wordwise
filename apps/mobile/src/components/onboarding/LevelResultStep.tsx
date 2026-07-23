@@ -8,6 +8,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { cefrColors, cefrLabels } from '../../theme/palette';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
@@ -21,16 +22,8 @@ export interface LevelResultStepProps {
   onBack: () => void;
 }
 
-const EXPLANATIONS: Record<CefrLevel, string> = {
-  A1: "You're just starting out. We'll begin your reels with the highest-frequency A1–A2 words and build from there.",
-  A2: 'You know everyday basics. We\'ll start your reels with A2–B1 vocabulary and adapt as you go.',
-  B1: "You recognise common words but miss nuance. We'll start your reels with B1–B2 vocabulary and adapt as you go.",
-  B2: "You follow most dialogue. We'll start your reels with B2–C1 vocabulary so you keep being challenged.",
-  C1: "You're fluent in the everyday. We'll focus your reels on C1–C2 words — the rare, precise ones.",
-  C2: "You're near-native. We'll surface the rarest C2 vocabulary and idioms films throw at you.",
-};
-
 export function LevelResultStep({ level, onContinue, onBack: _onBack }: LevelResultStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const color = cefrColors[level] ?? tc.gold;
@@ -39,7 +32,7 @@ export function LevelResultStep({ level, onContinue, onBack: _onBack }: LevelRes
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.body}>
         <FadeInUp>
-          <Text style={s.eyebrow}>Your starting level</Text>
+          <Text style={s.eyebrow}>{t('onboarding:levelResult.eyebrow')}</Text>
         </FadeInUp>
         <FadeInUp delay={80}>
           <View style={[s.disc, { backgroundColor: color, shadowColor: color }]}>
@@ -50,7 +43,7 @@ export function LevelResultStep({ level, onContinue, onBack: _onBack }: LevelRes
           <Text style={s.label}>{cefrLabels[level] ?? level}</Text>
         </FadeInUp>
         <FadeInUp delay={200}>
-          <Text style={s.copy}>{EXPLANATIONS[level]}</Text>
+          <Text style={s.copy}>{t(`onboarding:levelResult.explanation.${level}`)}</Text>
         </FadeInUp>
         <FadeInUp delay={260} style={s.rampWrap}>
           <View style={s.ramp}>
@@ -68,7 +61,7 @@ export function LevelResultStep({ level, onContinue, onBack: _onBack }: LevelRes
           </View>
         </FadeInUp>
       </View>
-      <OnboardingCTA label="Sounds right →" onPress={onContinue} />
+      <OnboardingCTA label={t('onboarding:levelResult.cta')} onPress={onContinue} />
     </SafeAreaView>
   );
 }

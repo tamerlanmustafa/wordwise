@@ -13,6 +13,7 @@
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useAuthStore } from '../../stores/authStore';
 import { authApi } from '../../services/api';
@@ -26,6 +27,7 @@ export interface UsernameStepProps {
 }
 
 export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const currentUsername = useAuthStore((st) => st.user?.username ?? '');
@@ -53,7 +55,7 @@ export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
       onContinue();
     } catch (err: any) {
       // Backend answers 400 "Username already taken" on conflicts.
-      setError(err?.message || 'Could not save the username. Please try again.');
+      setError(err?.message || t('onboarding:usernameStep.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -65,11 +67,14 @@ export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
         style={s.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <StepHeader step={1} total={6} eyebrow="Step 1 of 6" title="What should we call you?" onBack={onBack} />
-        <Text style={s.sub}>
-          Your username shows up on leaderboards and in your family plan. You can change it any
-          time in Settings.
-        </Text>
+        <StepHeader
+          step={1}
+          total={6}
+          eyebrow={t('onboarding:stepOf', { step: 1, total: 6 })}
+          title={t('onboarding:usernameStep.title')}
+          onBack={onBack}
+        />
+        <Text style={s.sub}>{t('onboarding:usernameStep.sub')}</Text>
         <View style={s.form}>
           <TextInput
             style={[s.input, error ? { borderColor: tc.error } : null]}
@@ -78,18 +83,18 @@ export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
               setName(t);
               setError(null);
             }}
-            placeholder="Username"
+            placeholder={t('onboarding:usernameStep.placeholder')}
             placeholderTextColor={tc.textFaint}
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={USERNAME_MAX}
             editable={!saving}
-            accessibilityLabel="Username"
+            accessibilityLabel={t('onboarding:usernameStep.placeholder')}
           />
           {error ? <Text style={s.error}>{error}</Text> : null}
         </View>
         <OnboardingCTA
-          label={saving ? 'Saving…' : 'Continue'}
+          label={saving ? t('onboarding:usernameStep.saving') : t('action.continue')}
           onPress={handleContinue}
           disabled={saving || !name.trim()}
         />

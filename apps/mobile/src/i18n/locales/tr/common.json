@@ -1,0 +1,58 @@
+{
+  "action": {
+    "back": "Geri",
+    "cancel": "İptal",
+    "clearSearch": "Aramayı temizle",
+    "close": "Kapat",
+    "confirm": "Onayla",
+    "continue": "Devam et",
+    "done": "Tamam",
+    "gotIt": "Anladım",
+    "retry": "Tekrar dene",
+    "save": "Kaydet"
+  },
+  "nav": {
+    "home": "Ana Sayfa",
+    "myMovies": "Filmlerim",
+    "practice": "Uygulama",
+    "profile": "Profil"
+  },
+  "offline": {
+    "downloadsWork": "İndirdiğiniz Reels’ler hâlâ çalışıyor",
+    "pending_one": "{{count}} değişiklik eşitlenmeyi bekliyor",
+    "pending_other": "{{count}} değişiklik eşitlenmeyi bekliyor",
+    "syncing": "Senkronize ediliyor…",
+    "title": "Çevrimdışı durumdasınız"
+  },
+  "report": {
+    "additionalDetails": "Ek bilgiler",
+    "detailsOptional": "İsteğe bağlı",
+    "detailsRequired": "\"Diğer\" seçeneği için zorunludur",
+    "error": {
+      "detailsRequired": "Lütfen \"Diğer\" sorunlarla ilgili ayrıntıları belirtin",
+      "selectReason": "Lütfen bir neden seçin",
+      "submitFailed": "Rapor gönderilemedi"
+    },
+    "fromMovie": "\"{{title}}\"den",
+    "issueQuestion": "Sorun nedir?",
+    "reason": {
+      "INAPPROPRIATE_CONTENT": "Uygunsuz içerik",
+      "OTHER": "Başka bir konu",
+      "WRONG_CONTEXT": "Bağlamla uyuşmuyor",
+      "WRONG_SPELLING": "Yanlış yazım",
+      "WRONG_TRANSLATION": "Yanlış çeviri"
+    },
+    "reportingWord": "Raporlama terimi",
+    "submit": "Raporu Gönder",
+    "title": "Sorunu Bildir"
+  },
+  "state": {
+    "error": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+    "loading": "Yükleniyor…"
+  },
+  "tip": {
+    "dontShowAgain": "Bir daha gösterme"
+  },
+  "wordCount_one": "{{count}} kelime",
+  "wordCount_other": "{{count}} kelime"
+}

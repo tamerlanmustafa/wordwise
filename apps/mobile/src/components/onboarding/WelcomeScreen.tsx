@@ -11,6 +11,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
@@ -21,6 +22,7 @@ export interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -42,13 +44,10 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
         <View style={s.ring}>
           <Ionicons name="film-outline" size={40} color={tc.gold} />
         </View>
-        <Text style={s.headline}>Understand every line.</Text>
-        <Text style={s.copy}>
-          WordWise turns any film's script into a vocabulary list — learn the key
-          words before you watch, in the language you're studying.
-        </Text>
+        <Text style={s.headline}>{t('onboarding:welcome.headline')}</Text>
+        <Text style={s.copy}>{t('onboarding:welcome.copy')}</Text>
       </View>
-      <OnboardingCTA label="Get started" onPress={onGetStarted} />
+      <OnboardingCTA label={t('onboarding:welcome.cta')} onPress={onGetStarted} />
     </SafeAreaView>
   );
 }

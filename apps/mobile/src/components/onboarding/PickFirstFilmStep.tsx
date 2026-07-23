@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
@@ -41,6 +42,7 @@ function yearOf(releaseDate: string | undefined): number | null {
 }
 
 export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, onContinue }: PickFirstFilmStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -121,14 +123,20 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
         keyboardVerticalOffset={insets.top}
         style={s.kav}
       >
-      <StepHeader step={5} total={6} eyebrow="Step 5 of 6" title="Pick your first film" onBack={onBack} />
-      <Text style={s.sub}>We'll build a word list from its script — start with one you'd love to understand.</Text>
+      <StepHeader
+        step={5}
+        total={6}
+        eyebrow={t('onboarding:stepOf', { step: 5, total: 6 })}
+        title={t('onboarding:filmStep.title')}
+        onBack={onBack}
+      />
+      <Text style={s.sub}>{t('onboarding:filmStep.sub')}</Text>
 
       <View style={s.searchBox}>
         <Ionicons name="search" size={16} color={tc.textFaint} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search for another film"
+          placeholder={t('onboarding:filmStep.searchPlaceholder')}
           placeholderTextColor={tc.textFaint}
           value={query}
           onChangeText={setQuery}
@@ -136,7 +144,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
           returnKeyType="search"
         />
         {query.length > 0 ? (
-          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel={t('action.clearSearch')}>
             <Ionicons name="close-circle" size={16} color={tc.textFaint} />
           </Pressable>
         ) : null}
@@ -175,7 +183,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
         )}
       </ScrollView>
 
-      <OnboardingCTA label="Start learning →" onPress={onContinue} disabled={!selected} />
+      <OnboardingCTA label={t('onboarding:filmStep.cta')} onPress={onContinue} disabled={!selected} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

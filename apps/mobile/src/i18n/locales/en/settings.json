@@ -1,0 +1,10 @@
+{
+  "appLanguage": {
+    "sectionTitle": "App Language",
+    "label": "App language",
+    "pickerTitle": "App Language",
+    "description": "Changes the buttons, labels and instructions throughout the app. Your translation language stays separate.",
+    "followTranslation": "Same as translation language",
+    "followTranslationHint": "Follows your translation language ({{language}})"
+  }
+}

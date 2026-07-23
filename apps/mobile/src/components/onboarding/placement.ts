@@ -128,14 +128,19 @@ export function isPlacementDecided(
 
 export interface DailyGoalOption {
   mins: number;
-  label: string;
-  sub: string;
+  /**
+   * Stem for the copy under `onboarding:goalStep.option` — `${key}Label` and
+   * `${key}Sub`. The labels live in the locale files rather than here because
+   * this array is imported by two screens; carrying a key keeps one source of
+   * truth for the options and one for their wording.
+   */
+  key: 'casual' | 'regular' | 'serious' | 'intense';
 }
 
 /** Daily-goal options (prototype GOALS). Persisted via onboardingStore. */
 export const DAILY_GOAL_OPTIONS: ReadonlyArray<DailyGoalOption> = [
-  { mins: 3, label: 'Casual', sub: '3 min · 1 lesson a day' },
-  { mins: 6, label: 'Regular', sub: '6 min · 2 lessons a day' },
-  { mins: 12, label: 'Serious', sub: '12 min · 4 lessons a day' },
-  { mins: 20, label: 'Intense', sub: '20 min · 6+ lessons a day' },
+  { mins: 3, key: 'casual' },
+  { mins: 6, key: 'regular' },
+  { mins: 12, key: 'serious' },
+  { mins: 20, key: 'intense' },
 ];

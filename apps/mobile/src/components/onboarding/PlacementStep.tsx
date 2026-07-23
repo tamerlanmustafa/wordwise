@@ -8,6 +8,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
 import { StepHeader } from './StepHeader';
@@ -23,13 +24,14 @@ export interface PlacementStepProps {
 }
 
 export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: PlacementStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   const options: Array<{ label: string; sub: string; dot: string; rating: PlacementRating }> = [
-    { label: "I've never seen it", sub: 'New to me', dot: tc.textFaint, rating: 'unknown' },
-    { label: 'Looks familiar', sub: "Can't define it", dot: tc.gold, rating: 'familiar' },
-    { label: 'I know it well', sub: 'Could use it in a sentence', dot: tc.success, rating: 'know' },
+    { label: t('onboarding:placementStep.rating.unknownLabel'), sub: t('onboarding:placementStep.rating.unknownSub'), dot: tc.textFaint, rating: 'unknown' },
+    { label: t('onboarding:placementStep.rating.familiarLabel'), sub: t('onboarding:placementStep.rating.familiarSub'), dot: tc.gold, rating: 'familiar' },
+    { label: t('onboarding:placementStep.rating.knowLabel'), sub: t('onboarding:placementStep.rating.knowSub'), dot: tc.success, rating: 'know' },
   ];
 
   return (
@@ -37,8 +39,8 @@ export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: Pl
       <StepHeader
         step={3}
         total={6}
-        eyebrow={`Quick placement · word ${index + 1} of up to ${total}`}
-        title="How well do you know…"
+        eyebrow={t('onboarding:placementStep.eyebrow', { index: index + 1, total })}
+        title={t('onboarding:placementStep.title')}
         onBack={onBack}
       />
       <View style={s.body}>
@@ -65,7 +67,7 @@ export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: Pl
         </View>
       </View>
       <Pressable accessibilityRole="button" onPress={onSkip} style={s.skip} hitSlop={8}>
-        <Text style={s.skipText}>Skip — I'm a beginner</Text>
+        <Text style={s.skipText}>{t('onboarding:placementStep.skip')}</Text>
       </Pressable>
     </SafeAreaView>
   );

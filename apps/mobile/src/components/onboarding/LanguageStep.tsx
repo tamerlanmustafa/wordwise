@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
@@ -24,6 +25,7 @@ export interface LanguageStepProps {
 }
 
 export function LanguageStep({ selected, onSelect, onBack, onContinue }: LanguageStepProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const [query, setQuery] = useState('');
@@ -31,13 +33,19 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <StepHeader step={2} total={6} eyebrow="Step 2 of 6" title="What are you learning?" onBack={onBack} />
+      <StepHeader
+        step={2}
+        total={6}
+        eyebrow={t('onboarding:languageStep.eyebrow', { step: 2, total: 6 })}
+        title={t('onboarding:languageStep.title')}
+        onBack={onBack}
+      />
       {/* Search/filter (issue #80) — same box style as the film-picker step. */}
       <View style={s.searchBox}>
         <Ionicons name="search" size={16} color={tc.textFaint} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search languages"
+          placeholder={t('onboarding:languageStep.searchPlaceholder')}
           placeholderTextColor={tc.textFaint}
           value={query}
           onChangeText={setQuery}
@@ -45,14 +53,20 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
           autoCapitalize="none"
         />
         {query.length > 0 ? (
-          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+          <Pressable
+            onPress={() => setQuery('')}
+            hitSlop={8}
+            accessibilityLabel={t('action.clearSearch')}
+          >
             <Ionicons name="close-circle" size={16} color={tc.textFaint} />
           </Pressable>
         ) : null}
       </View>
       <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {shown.length === 0 ? (
-          <Text style={s.noMatch}>No languages match "{query.trim()}"</Text>
+          <Text style={s.noMatch}>
+            {t('onboarding:languageStep.noMatch', { query: query.trim() })}
+          </Text>
         ) : null}
         {shown.map((l) => {
           const on = l.code === selected;
@@ -83,7 +97,11 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
           );
         })}
       </ScrollView>
-      <OnboardingCTA label="Continue →" onPress={onContinue} disabled={!selected} />
+      <OnboardingCTA
+        label={t('onboarding:languageStep.continue')}
+        onPress={onContinue}
+        disabled={!selected}
+      />
     </SafeAreaView>
   );
 }

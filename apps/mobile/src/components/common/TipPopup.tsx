@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 export interface TipPopupProps {
@@ -48,8 +49,9 @@ export function TipPopup({
   eyebrow,
   onDismiss,
   onDontShowAgain,
-  ctaLabel = 'Got it',
+  ctaLabel,
 }: TipPopupProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = makeStyles(tc);
   const [dontShow, setDontShow] = useState(false);
@@ -77,7 +79,7 @@ export function TipPopup({
             <View style={[s.checkBox, dontShow ? s.checkBoxOn : null]}>
               {dontShow ? <Text style={s.checkGlyph}>✓</Text> : null}
             </View>
-            <Text style={s.checkLabel}>Don't show again</Text>
+            <Text style={s.checkLabel}>{t('tip.dontShowAgain')}</Text>
           </Pressable>
         ) : null}
 
@@ -86,7 +88,7 @@ export function TipPopup({
           activeOpacity={0.85}
           style={s.cta}
         >
-          <Text style={s.ctaText}>{ctaLabel}</Text>
+          <Text style={s.ctaText}>{ctaLabel ?? t('action.gotIt')}</Text>
         </TouchableOpacity>
       </View>
     </View>

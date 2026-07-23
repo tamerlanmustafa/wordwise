@@ -1,0 +1,10 @@
+{
+  "appLanguage": {
+    "sectionTitle": "Idioma do aplicativo",
+    "label": "Idioma do aplicativo",
+    "pickerTitle": "Idioma do aplicativo",
+    "description": "Altera os botões, rótulos e instruções em todo o aplicativo. Seu idioma de tradução permanece separado.",
+    "followTranslation": "Igual ao idioma de tradução",
+    "followTranslationHint": "Segue o seu idioma de tradução ({{language}})"
+  }
+}

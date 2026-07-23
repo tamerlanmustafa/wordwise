@@ -1,0 +1,84 @@
+{
+  "stepOf": "Step {{step}} of {{total}}",
+  "welcome": {
+    "headline": "Understand every line.",
+    "copy": "WordWise turns any film's script into a vocabulary list — learn the key words before you watch, in the language you're studying.",
+    "cta": "Get started"
+  },
+  "usernameStep": {
+    "title": "What should we call you?",
+    "sub": "Your username shows up on leaderboards and in your family plan. You can change it any time in Settings.",
+    "placeholder": "Username",
+    "saving": "Saving…",
+    "saveFailed": "Could not save the username. Please try again."
+  },
+  "languageStep": {
+    "title": "What are you learning?",
+    "searchPlaceholder": "Search languages",
+    "noMatch": "No languages match \"{{query}}\"",
+    "continue": "Continue →"
+  },
+  "placementStep": {
+    "eyebrow": "Quick placement · word {{index}} of up to {{total}}",
+    "title": "How well do you know…",
+    "skip": "Skip — I'm a beginner",
+    "rating": {
+      "unknownLabel": "I've never seen it",
+      "unknownSub": "New to me",
+      "familiarLabel": "Looks familiar",
+      "familiarSub": "Can't define it",
+      "knowLabel": "I know it well",
+      "knowSub": "Could use it in a sentence"
+    }
+  },
+  "levelResult": {
+    "eyebrow": "Your starting level",
+    "cta": "Sounds right →",
+    "explanation": {
+      "A1": "You're just starting out. We'll begin your reels with the highest-frequency A1–A2 words and build from there.",
+      "A2": "You know everyday basics. We'll start your reels with A2–B1 vocabulary and adapt as you go.",
+      "B1": "You recognise common words but miss nuance. We'll start your reels with B1–B2 vocabulary and adapt as you go.",
+      "B2": "You follow most dialogue. We'll start your reels with B2–C1 vocabulary so you keep being challenged.",
+      "C1": "You're fluent in the everyday. We'll focus your reels on C1–C2 words — the rare, precise ones.",
+      "C2": "You're near-native. We'll surface the rarest C2 vocabulary and idioms films throw at you."
+    }
+  },
+  "filmStep": {
+    "title": "Pick your first film",
+    "sub": "We'll build a word list from its script — start with one you'd love to understand.",
+    "searchPlaceholder": "Search for another film",
+    "cta": "Start learning →"
+  },
+  "goalStep": {
+    "title": "Set your daily goal",
+    "sub": "You can change this any time. Consistency beats intensity.",
+    "finishing": "Setting up…",
+    "cta": "Enter WordWise →",
+    "option": {
+      "casualLabel": "Casual",
+      "casualSub": "3 min · 1 lesson a day",
+      "regularLabel": "Regular",
+      "regularSub": "6 min · 2 lessons a day",
+      "seriousLabel": "Serious",
+      "seriousSub": "12 min · 4 lessons a day",
+      "intenseLabel": "Intense",
+      "intenseSub": "20 min · 6+ lessons a day"
+    }
+  },
+  "setIntro": {
+    "sourceFilm": "SOURCE FILM",
+    "setReel": "SET {{set}} · REEL {{reel}}",
+    "eyebrowReview": "REVIEW SET",
+    "eyebrowPreWatch": "PRE-WATCH VOCAB",
+    "headline": "Learn 5 words from this film",
+    "subhead": "So when you watch it with subtitles later, you'll actually follow every line.",
+    "duration": "~2 min",
+    "ctaReview": "Review →",
+    "ctaStart": "Start learning →",
+    "a11yReview": "Review set",
+    "a11yStart": "Start learning",
+    "letters_one": "{{count}} letter",
+    "letters_other": "{{count}} letters",
+    "lettersWithRank": "{{letters}} · rank {{rank}}"
+  }
+}

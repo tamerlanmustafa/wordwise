@@ -1,0 +1,10 @@
+{
+  "appLanguage": {
+    "sectionTitle": "Uygulama Dili",
+    "label": "Uygulama dili",
+    "pickerTitle": "Uygulama Dili",
+    "description": "Uygulamadaki düğmeleri, etiketleri ve yönergeleri değiştirir. Çeviri diliniz ayrı kalır.",
+    "followTranslation": "Çeviri diliyle aynı",
+    "followTranslationHint": "Çeviri dilinizi takip eder ({{language}})"
+  }
+}

@@ -11,11 +11,13 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useAuthStore } from '../../stores/authStore';
 import { useSyncQueueStore } from '../../stores/syncQueueStore';
 
 export function OfflineBanner() {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const offline = useAuthStore((st) => st.status === 'offline_authenticated');
@@ -25,14 +27,14 @@ export function OfflineBanner() {
 
   const sub =
     pending > 0
-      ? `${pending} ${pending === 1 ? 'change' : 'changes'} waiting to sync`
-      : 'Your downloaded reels still work';
+      ? t('offline.pending', { count: pending })
+      : t('offline.downloadsWork');
 
   return (
     <View style={s.bar} accessibilityRole="alert">
       <Ionicons name="cloud-offline-outline" size={16} color={tc.goldDeep} />
       <View style={s.text}>
-        <Text style={s.title}>{offline ? "You're offline" : 'Syncing…'}</Text>
+        <Text style={s.title}>{offline ? t('offline.title') : t('offline.syncing')}</Text>
         <Text style={s.sub}>{sub}</Text>
       </View>
     </View>

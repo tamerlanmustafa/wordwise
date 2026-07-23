@@ -1,0 +1,58 @@
+{
+  "action": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "clearSearch": "Clear search",
+    "close": "Close",
+    "confirm": "Confirm",
+    "continue": "Continue",
+    "done": "Done",
+    "gotIt": "Got it",
+    "retry": "Try again",
+    "save": "Save"
+  },
+  "state": {
+    "loading": "Loading…",
+    "error": "Something went wrong. Please try again."
+  },
+  "wordCount_one": "{{count}} word",
+  "wordCount_other": "{{count}} words",
+  "nav": {
+    "home": "Home",
+    "myMovies": "My Movies",
+    "practice": "Practice",
+    "profile": "Profile"
+  },
+  "offline": {
+    "title": "You're offline",
+    "syncing": "Syncing…",
+    "downloadsWork": "Your downloaded reels still work",
+    "pending_one": "{{count}} change waiting to sync",
+    "pending_other": "{{count}} changes waiting to sync"
+  },
+  "tip": {
+    "dontShowAgain": "Don't show again"
+  },
+  "report": {
+    "title": "Report Issue",
+    "reportingWord": "Reporting word",
+    "fromMovie": "from \"{{title}}\"",
+    "issueQuestion": "What's the issue?",
+    "additionalDetails": "Additional details",
+    "detailsRequired": "Required for \"Other\"",
+    "detailsOptional": "Optional",
+    "submit": "Submit Report",
+    "reason": {
+      "WRONG_TRANSLATION": "Wrong translation",
+      "WRONG_CONTEXT": "Doesn't match context",
+      "WRONG_SPELLING": "Wrong spelling",
+      "INAPPROPRIATE_CONTENT": "Inappropriate content",
+      "OTHER": "Other issue"
+    },
+    "error": {
+      "selectReason": "Please select a reason",
+      "detailsRequired": "Please provide details for \"Other\" issues",
+      "submitFailed": "Failed to submit report"
+    }
+  }
+}

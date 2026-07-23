@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export const LoginScreen = ({ onLogin }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -62,7 +64,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
 
       const userData = signInResult.data?.user || signInResult.user || signInResult.data;
       if (!userData) {
-        throw new Error('No user data received from Google');
+        throw new Error(t('auth:error.googleNoUser'));
       }
 
       let idToken = signInResult.data?.idToken || signInResult.idToken;
@@ -95,7 +97,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await backendResponse.json();
 
       if (!backendResponse.ok) {
-        throw new Error(data.detail || 'Google login failed');
+        throw new Error(data.detail || t('auth:error.googleLoginFailed'));
       }
 
       // Map backend user format to app user format
@@ -114,11 +116,11 @@ export const LoginScreen = ({ onLogin }: Props) => {
       onLogin(user, data.access_token || data.token, data.refresh_token);
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-        setError('Sign-in cancelled');
+        setError(t('auth:error.googleCancelled'));
       } else if (err.code === statusCodes.IN_PROGRESS) {
-        setError('Sign-in already in progress');
+        setError(t('auth:error.googleInProgress'));
       } else {
-        setError(err.message || 'Google sign-in failed');
+        setError(err.message || t('auth:error.googleFailed'));
       }
     } finally {
       setGoogleLoading(false);
@@ -138,7 +140,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
       });
 
       if (!credential.identityToken) {
-        throw new Error('No identity token received from Apple');
+        throw new Error(t('auth:error.appleNoToken'));
       }
 
       // Apple provides the name exactly once (first authorization); forward
@@ -162,7 +164,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await backendResponse.json();
 
       if (!backendResponse.ok) {
-        throw new Error(data.detail || 'Apple sign-in failed');
+        throw new Error(data.detail || t('auth:error.appleFailed'));
       }
 
       const user = {
@@ -181,7 +183,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
     } catch (err: any) {
       // User dismissed the Apple sheet — not an error.
       if (err?.code !== 'ERR_REQUEST_CANCELED') {
-        setError(err?.message || 'Apple sign-in failed');
+        setError(err?.message || t('auth:error.appleFailed'));
       }
     } finally {
       setAppleLoading(false);
@@ -190,7 +192,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
 
   const handleAuth = async () => {
     if (!email || !password || (!isLoginMode && !username)) {
-      setError('Please fill in all fields');
+      setError(t('auth:error.fillAllFields'));
       return;
     }
 
@@ -213,7 +215,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await authResponse.json();
 
       if (!authResponse.ok) {
-        throw new Error(data.detail || 'Authentication failed');
+        throw new Error(data.detail || t('auth:error.authFailed'));
       }
 
       const user = {
@@ -230,7 +232,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
 
       onLogin(user, data.token, data.refresh_token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setError(err instanceof Error ? err.message : t('auth:error.generic'));
     } finally {
       setLoading(false);
     }
@@ -242,7 +244,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
   const handleForgotPassword = async () => {
     const target = email.trim();
     if (!target) {
-      setError('Enter your email above first, then tap "Forgot password?"');
+      setError(t('auth:error.emailFirst'));
       return;
     }
     setError('');
@@ -254,13 +256,13 @@ export const LoginScreen = ({ onLogin }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: target }),
       });
-      if (!res.ok) throw new Error('Could not send the reset email. Please try again.');
+      if (!res.ok) throw new Error(t('auth:error.resetSendFailed'));
       showToast({
         tone: 'success',
-        message: `If an account exists for ${target}, a reset link is on its way.`,
+        message: t('auth:resetEmailSent', { email: target }),
       });
     } catch (err: any) {
-      showToast({ tone: 'error', message: err?.message ?? 'Could not send the reset email.' });
+      showToast({ tone: 'error', message: err?.message ?? t('auth:error.resetSendFailed') });
     } finally {
       setForgotLoading(false);
     }
@@ -272,7 +274,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.loginContent}>
         <Text style={styles.logo}>WordWise</Text>
-        <Text style={styles.tagline}>Learn vocabulary from movies & books</Text>
+        <Text style={styles.tagline}>{t('auth:tagline')}</Text>
 
         <View style={styles.formContainer}>
           <TouchableOpacity
@@ -285,7 +287,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             ) : (
               <>
                 <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
+                <Text style={styles.googleButtonText}>{t('auth:continueWithGoogle')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -315,7 +317,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
           {!isLoginMode && (
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder={t('auth:field.username')}
               placeholderTextColor={tc.textFaint}
               value={username}
               onChangeText={setUsername}
@@ -324,7 +326,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
           )}
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder={t('auth:field.email')}
             placeholderTextColor={tc.textFaint}
             value={email}
             onChangeText={setEmail}
@@ -333,7 +335,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
           />
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder={t('auth:field.password')}
             placeholderTextColor={tc.textFaint}
             value={password}
             onChangeText={setPassword}
@@ -348,7 +350,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
               accessibilityRole="button"
             >
               <Text style={styles.forgotButtonText}>
-                {forgotLoading ? 'Sending reset link…' : 'Forgot password?'}
+                {forgotLoading ? t('auth:sendingResetLink') : t('auth:forgotPassword')}
               </Text>
             </TouchableOpacity>
           )}
@@ -364,7 +366,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
               <ActivityIndicator color={tc.textInverse} />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {isLoginMode ? 'Login' : 'Register'}
+                {isLoginMode ? t('auth:login') : t('auth:register')}
               </Text>
             )}
           </TouchableOpacity>
@@ -374,9 +376,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             onPress={() => setIsLoginMode(!isLoginMode)}
           >
             <Text style={styles.switchButtonText}>
-              {isLoginMode
-                ? "Don't have an account? Register"
-                : 'Already have an account? Login'}
+              {isLoginMode ? t('auth:switchToRegister') : t('auth:switchToLogin')}
             </Text>
           </TouchableOpacity>
         </View>

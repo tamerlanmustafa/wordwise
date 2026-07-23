@@ -35,7 +35,8 @@
           "savePhotosPermission": "WordWise uses this to save movie posters to your Photos.",
           "isAccessMediaLocationEnabled": false
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "ios": {
       "supportsTablet": true,

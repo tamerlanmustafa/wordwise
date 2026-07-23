@@ -17,10 +17,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useConfirmStore } from '../../stores/confirmStore';
 
 export function ConfirmDialog() {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const current = useConfirmStore((st) => st.current);
@@ -68,7 +70,7 @@ export function ConfirmDialog() {
               activeOpacity={0.7}
               accessibilityRole="button"
             >
-              <Text style={s.btnGhostText}>{current.cancelLabel ?? 'Cancel'}</Text>
+              <Text style={s.btnGhostText}>{current.cancelLabel ?? t('action.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.btn, { backgroundColor: confirmColor }]}
@@ -76,7 +78,7 @@ export function ConfirmDialog() {
               activeOpacity={0.85}
               accessibilityRole="button"
             >
-              <Text style={s.btnConfirmText}>{current.confirmLabel ?? 'Confirm'}</Text>
+              <Text style={s.btnConfirmText}>{current.confirmLabel ?? t('action.confirm')}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

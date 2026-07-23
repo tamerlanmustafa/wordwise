@@ -27,6 +27,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { getFormattingLocale } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -87,6 +90,7 @@ export function SetIntroScreen({
   onBack,
   onStart,
 }: SetIntroScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
@@ -198,7 +202,7 @@ export function SetIntroScreen({
             </View>
           )}
           <View style={s.filmInfo}>
-            <Text style={s.eyebrowGold}>SOURCE FILM</Text>
+            <Text style={s.eyebrowGold}>{t('onboarding:setIntro.sourceFilm')}</Text>
             <Text style={s.filmTitle} numberOfLines={2}>
               {movie.title}
             </Text>
@@ -214,7 +218,7 @@ export function SetIntroScreen({
       {/* ── Layer 2: Top chrome ────────────────────────────────────── */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={t('action.back')}
         onPress={onBack}
         style={({ pressed }) => [
           s.backBtn,
@@ -226,7 +230,7 @@ export function SetIntroScreen({
       </Pressable>
       <View style={[s.setPill, { top: STATUS_PAD }]}>
         <Text style={s.setPillText}>
-          SET {setNumber} · REEL {reelNumber}
+          {t('onboarding:setIntro.setReel', { set: setNumber, reel: reelNumber })}
         </Text>
       </View>
 
@@ -240,18 +244,13 @@ export function SetIntroScreen({
         <View style={s.strap}>
           <View style={s.strapText}>
             <Text style={s.eyebrowGold}>
-              {isReplay ? 'REVIEW SET' : 'PRE-WATCH VOCAB'}
+              {isReplay ? t('onboarding:setIntro.eyebrowReview') : t('onboarding:setIntro.eyebrowPreWatch')}
             </Text>
-            <Text style={s.strapHeadline}>
-              Learn 5 words from this film
-            </Text>
-            <Text style={s.strapSubhead}>
-              So when you watch it with subtitles later, you'll actually
-              follow every line.
-            </Text>
+            <Text style={s.strapHeadline}>{t('onboarding:setIntro.headline')}</Text>
+            <Text style={s.strapSubhead}>{t('onboarding:setIntro.subhead')}</Text>
           </View>
           <View style={s.timePill}>
-            <Text style={s.timePillText}>~2 min</Text>
+            <Text style={s.timePillText}>{t('onboarding:setIntro.duration')}</Text>
           </View>
         </View>
 
@@ -282,7 +281,7 @@ export function SetIntroScreen({
                 <Text style={s.wordText} numberOfLines={1}>
                   {w.word}
                 </Text>
-                <Text style={s.wordMeta}>{formatMeta(w)}</Text>
+                <Text style={s.wordMeta}>{formatMeta(w, t)}</Text>
               </View>
               {w.isReview ? (
                 <Text style={s.reviewChip}>↻ Review</Text>
@@ -316,7 +315,7 @@ export function SetIntroScreen({
             isReplay ? s.ctaBtnReview : s.ctaBtnPrimary,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={isReplay ? 'Review set' : 'Start learning'}
+          accessibilityLabel={isReplay ? t('onboarding:setIntro.a11yReview') : t('onboarding:setIntro.a11yStart')}
         >
           <Text
             style={[
@@ -324,7 +323,7 @@ export function SetIntroScreen({
               isReplay ? s.ctaTextReview : s.ctaTextPrimary,
             ]}
           >
-            {isReplay ? 'Review →' : 'Start learning →'}
+            {isReplay ? t('onboarding:setIntro.ctaReview') : t('onboarding:setIntro.ctaStart')}
           </Text>
         </Pressable>
       </Animated.View>
@@ -333,10 +332,13 @@ export function SetIntroScreen({
   );
 }
 
-function formatMeta(w: SetIntroWord): string {
-  const letters = `${w.word.length} letters`;
+function formatMeta(w: SetIntroWord, t: TFunction): string {
+  const letters = t('onboarding:setIntro.letters', { count: w.word.length });
   if (w.rank == null) return letters;
-  return `${letters} · rank ${w.rank.toLocaleString()}`;
+  return t('onboarding:setIntro.lettersWithRank', {
+    letters,
+    rank: w.rank.toLocaleString(getFormattingLocale()),
+  });
 }
 
 const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => StyleSheet.create({
