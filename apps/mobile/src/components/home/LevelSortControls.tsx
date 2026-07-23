@@ -17,6 +17,7 @@
 
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { cefrColors } from '../../theme/palette';
 import { HomeIcon } from './HomeIcons';
@@ -46,6 +47,7 @@ export function LevelSortControls({
   sortAsc,
   onSortPress,
 }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -54,7 +56,7 @@ export function LevelSortControls({
     <View style={s.wrap}>
       {/* Label + gold level pill */}
       <View style={s.labelRow}>
-        <Text style={s.label}>SHOWING AT YOUR LEVEL</Text>
+        <Text style={s.label}>{t('home:levelSort.showingAtYourLevel')}</Text>
         <TouchableOpacity
           style={s.levelPill}
           onPress={() => setDropdownOpen((v) => !v)}

@@ -29,6 +29,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readyToWatchApi, reelApi, type ReadyToWatchMovie } from '../../services/api';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const DISMISS_KEY = 'journey.rtwShelf.dismissedDate';
 
@@ -49,6 +50,7 @@ export interface ReadyToWatchShelfProps {
 type Phase = 'idle' | 'loading' | 'ready' | 'empty' | 'dismissed';
 
 export function ReadyToWatchShelf({ onAdded }: ReadyToWatchShelfProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = makeStyles(tc);
 
@@ -133,7 +135,7 @@ export function ReadyToWatchShelf({ onAdded }: ReadyToWatchShelfProps) {
   return (
     <View style={s.wrap} pointerEvents="box-none">
       <View style={s.header}>
-        <Text style={s.eyebrow}>Ready to watch</Text>
+        <Text style={s.eyebrow}>{t('movies:journey.readyToWatch')}</Text>
         <TouchableOpacity onPress={dismissForToday} hitSlop={10}>
           <Text style={s.dismissText}>×</Text>
         </TouchableOpacity>

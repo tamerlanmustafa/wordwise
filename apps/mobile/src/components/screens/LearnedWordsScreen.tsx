@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
@@ -20,6 +21,7 @@ interface Props {
 // Shows every word the user has globally marked "never show again".
 // Tap a row to unlearn it (word reappears in movie lists on next load).
 export const LearnedWordsScreen = ({ onBack }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -51,7 +53,7 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
       await wordwiseApi.unlearnWord(word);
     } catch {
       setWords(snapshot);
-      Alert.alert('Error', 'Could not restore that word. Try again.');
+      Alert.alert(t('vocabulary:learned.restoreErrorTitle'), t('vocabulary:learned.restoreErrorBody'));
     }
   };
 
@@ -61,7 +63,7 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
           <Text style={settingsStyles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={settingsStyles.headerTitle}>Learned Words</Text>
+        <Text style={settingsStyles.headerTitle}>{t('vocabulary:learnedWords')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -76,13 +78,13 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
       ) : words.length === 0 ? (
         <View style={{ padding: 24, alignItems: 'center' }}>
           <Text style={{ color: tc.textSecondary, fontSize: 14, textAlign: 'center' }}>
-            No learned words yet. Swipe left on a word in any movie to mark it as known.
+            {t('vocabulary:learned.empty')}
           </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
           <Text style={{ color: tc.textSecondary, fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
-            {words.length} word{words.length === 1 ? '' : 's'} hidden from movie lists. Tap to restore.
+            {t('vocabulary:learned.hiddenCount', { count: words.length })}
           </Text>
           {words.map((w) => (
             <TouchableOpacity
@@ -90,17 +92,17 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
               style={styles.row}
               onPress={() =>
                 Alert.alert(
-                  'Restore word?',
-                  `"${w.word}" will reappear in movie vocabulary lists.`,
+                  t('vocabulary:learned.restoreTitle'),
+                  t('vocabulary:learned.restoreBody', { word: w.word }),
                   [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Restore', onPress: () => handleUnlearn(w.word) },
+                    { text: t('action.cancel'), style: 'cancel' },
+                    { text: t('vocabulary:learned.restore'), onPress: () => handleUnlearn(w.word) },
                   ],
                 )
               }
             >
               <Text style={styles.rowWord}>{w.word}</Text>
-              <Text style={styles.rowAction}>Restore</Text>
+              <Text style={styles.rowAction}>{t('vocabulary:learned.restore')}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>

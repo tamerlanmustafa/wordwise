@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import type { ThemeColors } from '../../theme/tokens';
@@ -273,6 +274,7 @@ export const WordCardDeck = ({
   onCursorChange,
   onDragStateChange,
 }: WordCardDeckProps) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeDeckStyles(tc, scheme), [tc, scheme]);
@@ -694,7 +696,7 @@ export const WordCardDeck = ({
   if (total === 0 || currentItem == null || currentKey == null) {
     return (
       <View style={s.emptyWrap}>
-        <Text style={s.emptyText}>No words in this deck yet.</Text>
+        <Text style={s.emptyText}>{t('vocabulary:deck.empty')}</Text>
       </View>
     );
   }
@@ -797,7 +799,7 @@ export const WordCardDeck = ({
               <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
             </View>
           ) : (
-            <Text style={s.noExamples}>No example in this script</Text>
+            <Text style={s.noExamples}>{t('vocabulary:deck.noExampleInScript')}</Text>
           )}
         </View>
         <View style={s.sentenceTrSlot}>
@@ -816,7 +818,7 @@ export const WordCardDeck = ({
           {isPremium && !staticIdiom ? (
             <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
           ) : null}
-          <Text style={s.tapHint}>TAP TO REVEAL</Text>
+          <Text style={s.tapHint}>{t('vocabulary:deck.tapToReveal')}</Text>
         </View>
       </>
     );
@@ -881,7 +883,7 @@ export const WordCardDeck = ({
             style={s.cardPress}
             onPress={handleCardPress}
             accessibilityRole="button"
-            accessibilityLabel={expanded ? 'Hide translation' : 'Show translation'}
+            accessibilityLabel={expanded ? t('vocabulary:deck.hideTranslation') : t('vocabulary:deck.showTranslation')}
           >
             {/* 1 · meta row: rank · level chip · idiom badge · save star */}
             <View style={s.metaRow}>
@@ -905,7 +907,7 @@ export const WordCardDeck = ({
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel={isSaved ? 'Remove from saved' : 'Save word'}
+                  accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
                 >
                   <Text style={[s.star, isSaved && s.starActive]}>{isSaved ? '★' : '☆'}</Text>
                 </TouchableOpacity>
@@ -979,7 +981,7 @@ export const WordCardDeck = ({
                   <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
                 </View>
               ) : (
-                <Text style={s.noExamples}>No example in this script</Text>
+                <Text style={s.noExamples}>{t('vocabulary:deck.noExampleInScript')}</Text>
               )}
             </View>
 
@@ -1013,7 +1015,7 @@ export const WordCardDeck = ({
                     {sentenceTranslation}
                   </Text>
                 ) : (
-                  <Text style={s.noExamples}>No translation available</Text>
+                  <Text style={s.noExamples}>{t('vocabulary:deck.noTranslation')}</Text>
                 )}
               </Animated.View>
             </View>
@@ -1034,12 +1036,12 @@ export const WordCardDeck = ({
                   style={[s.actionText, s.pronounceIcon, playingAudio && s.pronounceActive]}
                   onPress={handlePronounce}
                   accessibilityRole="button"
-                  accessibilityLabel="Pronounce word"
+                  accessibilityLabel={t('vocabulary:row.pronounce')}
                 >
                   {playingAudio ? '…' : '🔊'}
                 </Text>
               ) : null}
-              <Text style={s.tapHint}>{expanded ? 'TAP TO HIDE' : 'TAP TO REVEAL'}</Text>
+              <Text style={s.tapHint}>{expanded ? t('vocabulary:deck.tapToHide') : t('vocabulary:deck.tapToReveal')}</Text>
             </View>
           </Pressable>
         </Animated.View>
@@ -1067,7 +1069,7 @@ export const WordCardDeck = ({
           <Pressable
             onPress={() => doLearn('button')}
             accessibilityRole="button"
-            accessibilityLabel="I know this word"
+            accessibilityLabel={t('vocabulary:deck.iKnowThisWord')}
           >
             {({ pressed }) => (
               <View style={s.pillWrap}>
@@ -1076,7 +1078,7 @@ export const WordCardDeck = ({
                   style={[s.pillFace, s.knowFace, pressed && s.pillFacePressed]}
                 >
                   <Text style={s.knowCheck}>✓</Text>
-                  <Text style={s.knowLabel}>Know it</Text>
+                  <Text style={s.knowLabel}>{t('vocabulary:deck.knowIt')}</Text>
                 </View>
               </View>
             )}
@@ -1089,7 +1091,7 @@ export const WordCardDeck = ({
           onPress={doUndo}
           disabled={!canUndo}
           accessibilityRole="button"
-          accessibilityLabel="Bring back the previous card"
+          accessibilityLabel={t('vocabulary:deck.previousCard')}
         >
           {({ pressed }) => (
             <View style={[s.undoWrap, !canUndo && s.undoDisabled]}>
@@ -1104,7 +1106,7 @@ export const WordCardDeck = ({
         <Pressable
           onPress={() => doAdvance('button')}
           accessibilityRole="button"
-          accessibilityLabel="Next card"
+          accessibilityLabel={t('vocabulary:deck.nextCard')}
         >
           {({ pressed }) => (
             <View style={s.pillWrap}>
@@ -1113,7 +1115,7 @@ export const WordCardDeck = ({
                 colors={scheme === 'dark' ? ['#FFD166', '#E4B44A'] : ['#D89B22', '#C58B1B']}
                 style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}
               >
-                <Text style={s.nextLabel}>Next</Text>
+                <Text style={s.nextLabel}>{t('vocabulary:deck.next')}</Text>
                 <Text style={s.nextArrow}>→</Text>
               </LinearGradient>
             </View>

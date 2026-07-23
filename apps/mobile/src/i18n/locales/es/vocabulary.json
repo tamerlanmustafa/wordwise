@@ -1,0 +1,61 @@
+{
+  "deck": {
+    "empty": "Aún no hay palabras en esta baraja.",
+    "hideTranslation": "Ocultar traducción",
+    "iKnowThisWord": "Conozco esta palabra",
+    "knowIt": "Tenlo en cuenta",
+    "next": "Siguiente",
+    "nextCard": "Siguiente tarjeta",
+    "noExampleInScript": "No hay ningún ejemplo en este script",
+    "noTranslation": "No hay traducción disponible",
+    "previousCard": "Volver a la tarjeta anterior",
+    "showTranslation": "Mostrar traducción",
+    "tapToHide": "TOCA PARA OCULTAR",
+    "tapToReveal": "TOCA PARA VER"
+  },
+  "deckExplainer": {
+    "bodyForYou": "Las <0>{{count}} palabras más importantes</0> de esta película —adaptadas a tu nivel y ordenadas según la cantidad de diálogo que desbloquean—.",
+    "bodyLevel": "Se han encontrado un total de <0>{{count}} {{level}} palabras</0> en este guion: la lista completa, sin trucos de clasificación.",
+    "coverage": "≈{{percent}} % DE COBERTURA DE LOS SUBTÍTULOS",
+    "eyebrowForYou": "SELECCIONADO PARA TU NIVEL",
+    "eyebrowLevel": "NIVEL — {{level}} · {{label}}",
+    "sortCommon": "Los más comunes",
+    "sortRarest": "Lo más raro primero ⇅"
+  },
+  "learned": {
+    "empty": "Aún no hay palabras aprendidas. Desliza el dedo hacia la izquierda sobre una palabra de cualquier película para marcarla como conocida.",
+    "emptyShort": "Aún no he aprendido ninguna palabra",
+    "hiddenCount_one": "{{count}} palabra oculta de las listas de películas. Toca para restaurarla.",
+    "hiddenCount_other": "{{count}} palabras ocultas de las listas de películas. Toca para restaurarlas.",
+    "hiddenSummary_one": "{{count}} palabra oculta de las listas de películas",
+    "hiddenSummary_other": "{{count}} palabras ocultas de las listas de películas",
+    "restore": "Restaurar",
+    "restoreBody": "\"{{word}}\" will reappear in movie vocabulary lists.",
+    "restoreErrorBody": "No se ha podido recuperar esa palabra. Inténtalo de nuevo.",
+    "restoreErrorTitle": "Error",
+    "restoreTitle": "¿Recuperar la palabra?"
+  },
+  "learnedWords": "Palabras aprendidas",
+  "lists": {
+    "title": "Mis listas",
+    "watchedFilms": "Películas vistas",
+    "watchedFilmsSub": "Películas que has marcado como vistas"
+  },
+  "notebook": {
+    "all": "Todos",
+    "browseMovies": "Explorar películas",
+    "byMovie": "Por película",
+    "emptySaved": "Aún no hay palabras guardadas"
+  },
+  "row": {
+    "alsoAppearsIn": "También aparece en:",
+    "noExamples": "No hay ejemplos de frases disponibles",
+    "pronounce": "Pronunciar la palabra",
+    "removeFromSaved": "Eliminar de los favoritos",
+    "saveWord": "Guardar palabra",
+    "showsTranslation": "Muestra la traducción"
+  },
+  "savedWords": "Palabras guardadas",
+  "screenTitle": "Vocabulario",
+  "wordsYouKnow": "Palabras que ya conoces"
+}

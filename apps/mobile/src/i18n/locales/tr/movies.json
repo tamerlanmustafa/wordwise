@@ -1,0 +1,89 @@
+{
+  "analyzing": {
+    "buildingFor": "<0>{{title}}</0> için kelime listenizi oluşturma",
+    "reelReady": "Çekime hazır",
+    "title": "Senaryoyu inceliyorum…"
+  },
+  "detail": {
+    "cardsView": "Kartlar görünümü",
+    "downloadFailed": "İndirme işlemi başarısız oldu",
+    "downloadFailedBody": "Poster kaydedilemedi.",
+    "forYou": "Sana",
+    "hide": "Gizle",
+    "hideWordBody": "\"{{word}}\" tüm kullanıcıların film ve kitap kelime listelerinden kaldırılacaktır. Bu işlemi yönetici panelinden geri alabilirsiniz.",
+    "hideWordFailed": "\"word\" kelimesi gizlenemedi",
+    "hideWordTitle": "Kelimeyi genel olarak gizlemek mi?",
+    "hideWordUnknownError": "Bilinmeyen hata",
+    "less": "Daha az ▴",
+    "more": "Daha fazlası ▾",
+    "noNewWords": "Senin seviyende yeni kelime yok",
+    "permissionDenied": "İzin reddedildi",
+    "permissionDeniedBody": "Posteri kaydetmek için fotoğraf erişimine izin verin.",
+    "posterSavedBody": "Poster, Fotoğraflar albümüne kaydedildi.",
+    "quizMe": "Bana soru sor · {{count}} kelime",
+    "rowsView": "Satır görünümü",
+    "saveToPhotos": "Fotoğraflara kaydet",
+    "saved": "Kaydedildi",
+    "scriptTooShort": "Komut dosyası çok kısa ya da bulunamadı",
+    "sortCommon": "En yaygın olanı ⇅",
+    "sortRarest": "En nadir olan ilk ⇅",
+    "undo": "GERİ AL"
+  },
+  "journey": {
+    "chestAdded": "“Reveal” koleksiyonunuza eklendi.",
+    "collect": "Topla",
+    "dailyChest": "Günlük göğüs egzersizi",
+    "milestone": {
+      "box_office_flavor": "Otuz gün üst üste. Artık resmen düzenli bir müşterisin.",
+      "box_office_name": "Gişe",
+      "criterion_collection_flavor": "Tam bir yıl, kesintisiz. Kanona sabitlenmiş.",
+      "criterion_collection_name": "Criterion Koleksiyonu",
+      "cult_classic_flavor": "Yüz gün. Bu artık senin kimliğinin bir parçası.",
+      "cult_classic_name": "Kült Klasik",
+      "dayMilestone": "{{days}} günlük kilometre taşı",
+      "opening_weekend_flavor": "Tam bir hafta, her gün. En zorlu kısmı geride bıraktın.",
+      "opening_weekend_name": "Açılış Hafta Sonu"
+    },
+    "newUnlock": "Yeni kilit açma",
+    "readyToWatch": "İzlemeye hazır mısınız?",
+    "takeABow": "Selam verin"
+  },
+  "myMovies": {
+    "addFirstFilm": "İlk filmini ekle",
+    "empty": "Makaranız boş",
+    "emptyBody": "İlk filminizi ekleyin, biz de o filmin anahtar kelimelerini günlük alıştırmalarınıza dahil edelim.",
+    "eyebrow": "SİZİN REEL'İNİZ",
+    "noMatch": "Eşleşen film yok",
+    "showAll": "Tüm filmleri göster",
+    "sortBy": "Şu kriterlere göre sırala",
+    "sortSummary_one": "{{count}} film · şuna göre sıralandı",
+    "sortSummary_other": "{{count}} film · şuna göre sıralandı",
+    "title": "Filmlerim"
+  },
+  "preview": {
+    "inYourReel": "REEL'İNİZDE",
+    "prepForFilm": "Bu filme hazırlanın",
+    "quizMe": "Bana soru sor · {{count}} kelime →",
+    "quizMeOn": "Bana {{count}} kelimelik bir test yap",
+    "remove": "Kaldır",
+    "removeFromReel": "Makaradan çıkarın",
+    "removeFromReelBody": "\"{{title}}\" reel'inizden kaldırılacaktır. Bunu \"Ana Sayfa\" sekmesinden tekrar ekleyebilirsiniz.",
+    "removeFromReelTitle": "Makaradan çıkarmak mı?",
+    "removeSubtitle": "Bu filmi izleme listenden çıkar",
+    "removing": "Kaldırılıyor…",
+    "study": "Araştırma →",
+    "studyAllWords": "Tüm kelimeleri çalışın",
+    "studyAllWordsSub": "Tüm kelime listesine göz atın ve öğrendiğiniz kelimeleri işaretleyin",
+    "studyWords": "Kelime çalışması",
+    "whatsNext": "SIRADA NE VAR?"
+  },
+  "search": {
+    "loadMore": "Daha fazlasını yükle",
+    "placeholder": "TMDB'de bir film ara…"
+  },
+  "watched": {
+    "empty": "Henüz izlenen film yok",
+    "emptyBody": "Ana Ekran'da bir filmi sağa kaydırarak izlendi olarak işaretleyin.",
+    "title": "İzlediğim Filmler"
+  }
+}

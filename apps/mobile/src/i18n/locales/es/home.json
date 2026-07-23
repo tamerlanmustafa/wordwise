@@ -1,0 +1,26 @@
+{
+  "advertisement": "PUBLICIDAD",
+  "levelSort": {
+    "showingAtYourLevel": "ADAPTADO A TU NIVEL"
+  },
+  "notifications": "Notificaciones",
+  "rankedList": {
+    "empty": "Aún no se han encontrado películas clasificadas para este nivel.",
+    "endOfLevel": "Esto es todo en este nivel",
+    "tapToClose": "Toca para cerrar"
+  },
+  "search": {
+    "placeholder": "Busca películas, palabras o actores…",
+    "recentlyViewed": "VISITADO RECIENTEMENTE"
+  },
+  "swipe": {
+    "notInterested": "No me interesa",
+    "seenIt": "Ya lo he visto"
+  },
+  "todayWord": {
+    "doubleTapToFlip": "Toca dos veces para darle la vuelta",
+    "eyebrow": "LA PALABRA DE LA HORA",
+    "save": "Guarda esta palabra",
+    "saved": "Guardado según tus palabras"
+  }
+}

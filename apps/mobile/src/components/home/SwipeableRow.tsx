@@ -14,6 +14,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import {
   shouldClaimHorizontal,
@@ -36,6 +37,7 @@ interface Props {
 const OFFSCREEN = 700;
 
 export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const translateX = useRef(new Animated.Value(0)).current;
@@ -89,10 +91,10 @@ export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
     <View style={[s.wrap, { height }]}>
       <Animated.View style={[s.backdrop, s.watched, { opacity: watchedOpacity }]}>
         <Ionicons name="checkmark-circle" size={22} color="#fff" />
-        <Text style={s.label}>Seen it</Text>
+        <Text style={s.label}>{t('home:swipe.seenIt')}</Text>
       </Animated.View>
       <Animated.View style={[s.backdrop, s.hidden, { opacity: hiddenOpacity }]}>
-        <Text style={s.label}>Not interested</Text>
+        <Text style={s.label}>{t('home:swipe.notInterested')}</Text>
         <Ionicons name="close-circle" size={22} color="#fff" />
       </Animated.View>
       <Animated.View style={[s.card, { transform: [{ translateX }] }]} {...pan.panHandlers}>

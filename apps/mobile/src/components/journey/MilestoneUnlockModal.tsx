@@ -20,38 +20,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 /** Display copy per slug. Keys MUST match the backend
  *  `milestone_service.MILESTONES` table. */
-const MILESTONE_COPY: Record<
-  string,
-  { name: string; days: number; flavor: string; glyph: string }
-> = {
-  opening_weekend: {
-    name: 'Opening Weekend',
-    days: 7,
-    flavor: 'A full week, every day. The hardest cliff is behind you.',
-    glyph: '🎬',
-  },
-  box_office: {
-    name: 'Box Office',
-    days: 30,
-    flavor: 'Thirty straight days. You are officially a regular.',
-    glyph: '🎞️',
-  },
-  cult_classic: {
-    name: 'Cult Classic',
-    days: 100,
-    flavor: 'A hundred days. This is now part of who you are.',
-    glyph: '📽️',
-  },
-  criterion_collection: {
-    name: 'Criterion Collection',
-    days: 365,
-    flavor: 'A full year, unbroken. Pinned to the canon.',
-    glyph: '🏆',
-  },
+// Only the non-linguistic bits live here; `name` and `flavor` are looked up
+// per-slug in `movies:journey.milestone.*` so they follow the app language.
+const MILESTONE_META: Record<string, { days: number; glyph: string }> = {
+  opening_weekend: { days: 7, glyph: '\u{1F3AC}' },
+  box_office: { days: 30, glyph: '\u{1F39E}\u{FE0F}' },
+  cult_classic: { days: 100, glyph: '\u{1F4FD}\u{FE0F}' },
+  criterion_collection: { days: 365, glyph: '\u{1F3C6}' },
 };
 
 export interface MilestoneUnlockModalProps {
@@ -61,6 +41,7 @@ export interface MilestoneUnlockModalProps {
 }
 
 export function MilestoneUnlockModal({ slug, onDismiss }: MilestoneUnlockModalProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = makeStyles(tc);
 
@@ -87,7 +68,7 @@ export function MilestoneUnlockModal({ slug, onDismiss }: MilestoneUnlockModalPr
   }, [slug, scale, opacity]);
 
   if (!slug) return null;
-  const copy = MILESTONE_COPY[slug];
+  const copy = MILESTONE_META[slug];
   if (!copy) {
     // Defensive: unknown slug from the server (e.g. new release). Render
     // a generic celebration rather than swallowing the moment.
@@ -97,10 +78,10 @@ export function MilestoneUnlockModal({ slug, onDismiss }: MilestoneUnlockModalPr
           <View style={[s.glyphDisc, { backgroundColor: tc.gold }]}>
             <Text style={s.glyph}>🎉</Text>
           </View>
-          <Text style={s.eyebrow}>New unlock</Text>
+          <Text style={s.eyebrow}>{t('movies:journey.newUnlock')}</Text>
           <Text style={s.name}>{slug}</Text>
           <TouchableOpacity onPress={onDismiss} style={s.cta} activeOpacity={0.85}>
-            <Text style={s.ctaText}>Take a bow</Text>
+            <Text style={s.ctaText}>{t('movies:journey.takeABow')}</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -113,11 +94,11 @@ export function MilestoneUnlockModal({ slug, onDismiss }: MilestoneUnlockModalPr
         <View style={[s.glyphDisc, { backgroundColor: tc.gold }]}>
           <Text style={s.glyph}>{copy.glyph}</Text>
         </View>
-        <Text style={s.eyebrow}>{copy.days}-day milestone</Text>
-        <Text style={s.name}>{copy.name}</Text>
-        <Text style={s.flavor}>{copy.flavor}</Text>
+        <Text style={s.eyebrow}>{t('movies:journey.milestone.dayMilestone', { days: copy.days })}</Text>
+        <Text style={s.name}>{t(`movies:journey.milestone.${slug}_name`)}</Text>
+        <Text style={s.flavor}>{t(`movies:journey.milestone.${slug}_flavor`)}</Text>
         <TouchableOpacity onPress={onDismiss} style={s.cta} activeOpacity={0.85}>
-          <Text style={s.ctaText}>Take a bow</Text>
+          <Text style={s.ctaText}>{t('movies:journey.takeABow')}</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

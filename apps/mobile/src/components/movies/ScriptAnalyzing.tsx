@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Trans, useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
@@ -24,6 +25,7 @@ export interface ScriptAnalyzingProps {
 }
 
 export function ScriptAnalyzing({ activeStep, movieTitle }: ScriptAnalyzingProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -58,10 +60,14 @@ export function ScriptAnalyzing({ activeStep, movieTitle }: ScriptAnalyzingProps
           <View style={[s.hub, { backgroundColor: tc.gold }]} />
         </Animated.View>
 
-        <Text style={s.title}>Analyzing the script…</Text>
+        <Text style={s.title}>{t('movies:analyzing.title')}</Text>
         {movieTitle ? (
           <Text style={s.sub}>
-            Building your word list for <Text style={s.subEm}>{movieTitle}</Text>
+            <Trans
+              i18nKey="movies:analyzing.buildingFor"
+              values={{ title: movieTitle }}
+              components={[<Text key="em" style={s.subEm} />]}
+            />
           </Text>
         ) : null}
 

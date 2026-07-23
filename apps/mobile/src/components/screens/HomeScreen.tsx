@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TMDB_API_KEY } from '../../config/env';
@@ -59,6 +60,7 @@ export const HomeScreen = ({
   targetLanguage,
   onOpenNotifications,
 }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   // Real unread state for the bell dot; refresh once on mount so the dot is
   // meaningful before the sheet is ever opened.
@@ -381,7 +383,7 @@ export const HomeScreen = ({
             Hidden while the search dropdown is open. */}
         {showAds && !dropdownOpen ? (
           <View style={s.adSlot}>
-            <Text style={s.adText}>ADVERTISEMENT</Text>
+            <Text style={s.adText}>{t('home:advertisement')}</Text>
           </View>
         ) : null}
 

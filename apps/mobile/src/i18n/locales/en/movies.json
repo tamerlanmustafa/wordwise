@@ -1,0 +1,89 @@
+{
+  "detail": {
+    "forYou": "For You",
+    "noNewWords": "No new words at your level",
+    "saveToPhotos": "Save to photos",
+    "undo": "UNDO",
+    "quizMe": "Quiz me · {{count}} words",
+    "hideWordTitle": "Hide word globally?",
+    "hideWordFailed": "Failed to hide word",
+    "hide": "Hide",
+    "saved": "Saved",
+    "permissionDenied": "Permission denied",
+    "downloadFailed": "Download failed",
+    "scriptTooShort": "Script too short or not found",
+    "less": "Less ▴",
+    "more": "More ▾",
+    "sortRarest": "Rarest first ⇅",
+    "sortCommon": "Common first ⇅",
+    "rowsView": "Rows view",
+    "cardsView": "Cards view",
+    "hideWordBody": "\"{{word}}\" will be removed from every movie and book vocabulary list for all users. You can undo this from the admin panel.",
+    "hideWordUnknownError": "Unknown error",
+    "posterSavedBody": "Poster saved to your Photos.",
+    "permissionDeniedBody": "Allow photo access to save the poster.",
+    "downloadFailedBody": "Could not save poster."
+  },
+  "preview": {
+    "inYourReel": "IN YOUR REEL",
+    "whatsNext": "WHAT'S NEXT",
+    "prepForFilm": "Prep for this film",
+    "study": "Study →",
+    "quizMe": "Quiz me · {{count}} words →",
+    "studyAllWords": "Study all words",
+    "studyWords": "Study words",
+    "quizMeOn": "Quiz me on {{count}} words",
+    "removeFromReel": "Remove from reel",
+    "removeFromReelTitle": "Remove from reel?",
+    "removeFromReelBody": "\"{{title}}\" will be removed from your reel. You can add it back from the Home tab.",
+    "remove": "Remove",
+    "removing": "Removing…",
+    "studyAllWordsSub": "Browse the full vocab list and mark words learned",
+    "removeSubtitle": "Take this movie out of your queue"
+  },
+  "myMovies": {
+    "eyebrow": "YOUR REEL",
+    "title": "My Movies",
+    "noMatch": "No films match",
+    "showAll": "Show all films",
+    "empty": "Your reel is empty",
+    "emptyBody": "Add your first film and we'll pull its key words into your daily practice.",
+    "addFirstFilm": "Add your first film",
+    "sortBy": "Sort by",
+    "sortSummary_one": "{{count}} film · sorted by",
+    "sortSummary_other": "{{count}} films · sorted by"
+  },
+  "analyzing": {
+    "title": "Analyzing the script…",
+    "buildingFor": "Building your word list for <0>{{title}}</0>",
+    "reelReady": "Reel ready"
+  },
+  "search": {
+    "placeholder": "Search TMDB for a movie…",
+    "loadMore": "Load more"
+  },
+  "watched": {
+    "title": "Watched Films",
+    "empty": "No watched films yet",
+    "emptyBody": "Swipe a movie right on Home to mark it as seen."
+  },
+  "journey": {
+    "readyToWatch": "Ready to watch",
+    "dailyChest": "Daily chest",
+    "chestAdded": "Added to your reveal collection.",
+    "collect": "Collect",
+    "newUnlock": "New unlock",
+    "takeABow": "Take a bow",
+    "milestone": {
+      "dayMilestone": "{{days}}-day milestone",
+      "opening_weekend_name": "Opening Weekend",
+      "opening_weekend_flavor": "A full week, every day. The hardest cliff is behind you.",
+      "box_office_name": "Box Office",
+      "box_office_flavor": "Thirty straight days. You are officially a regular.",
+      "cult_classic_name": "Cult Classic",
+      "cult_classic_flavor": "A hundred days. This is now part of who you are.",
+      "criterion_collection_name": "Criterion Collection",
+      "criterion_collection_flavor": "A full year, unbroken. Pinned to the canon."
+    }
+  }
+}

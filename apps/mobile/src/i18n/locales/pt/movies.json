@@ -1,0 +1,89 @@
+{
+  "analyzing": {
+    "buildingFor": "Criando sua lista de palavras para <0>{{title}}</0>",
+    "reelReady": "Pronto para filmar",
+    "title": "Analisando o roteiro…"
+  },
+  "detail": {
+    "cardsView": "Visualização em cartões",
+    "downloadFailed": "Falha no download",
+    "downloadFailedBody": "Não foi possível salvar o pôster.",
+    "forYou": "Para você",
+    "hide": "Ocultar",
+    "hideWordBody": "\"{{word}}\" será removido de todas as listas de vocabulário de filmes e livros de todos os usuários. Você pode desfazer essa ação no painel de administração.",
+    "hideWordFailed": "Não foi possível ocultar a palavra",
+    "hideWordTitle": "Ocultar a palavra globalmente?",
+    "hideWordUnknownError": "Erro desconhecido",
+    "less": "Menos ▴",
+    "more": "Mais ▾",
+    "noNewWords": "Não há palavras novas no seu nível",
+    "permissionDenied": "Permissão negada",
+    "permissionDeniedBody": "Permita o acesso às fotos para salvar o pôster.",
+    "posterSavedBody": "O pôster foi salvo no seu Álbum de Fotos.",
+    "quizMe": "Teste meus conhecimentos · {{count}} palavras",
+    "rowsView": "Visualização por linhas",
+    "saveToPhotos": "Salvar nas fotos",
+    "saved": "Salvo",
+    "scriptTooShort": "Script muito curto ou não encontrado",
+    "sortCommon": "Primeiro comum ⇅",
+    "sortRarest": "O mais raro primeiro ⇅",
+    "undo": "DESFAZER"
+  },
+  "journey": {
+    "chestAdded": "Adicionado à sua coleção de revelações.",
+    "collect": "Coletar",
+    "dailyChest": "Exercício diário para o tórax",
+    "milestone": {
+      "box_office_flavor": "Trinta dias seguidos. Você é oficialmente um frequentador assíduo.",
+      "box_office_name": "Bilheteria",
+      "criterion_collection_flavor": "Um ano inteiro, sem interrupção. Fixado no cânone.",
+      "criterion_collection_name": "Coleção Criterion",
+      "cult_classic_flavor": "Cem dias. Isso agora faz parte de quem você é.",
+      "cult_classic_name": "Clássico de culto",
+      "dayMilestone": "Marco de {{days}} dias",
+      "opening_weekend_flavor": "Uma semana inteira, todos os dias. A parte mais difícil já ficou para trás.",
+      "opening_weekend_name": "Fim de semana de estreia"
+    },
+    "newUnlock": "Novo desbloqueio",
+    "readyToWatch": "Pronto para assistir",
+    "takeABow": "Faça uma reverência"
+  },
+  "myMovies": {
+    "addFirstFilm": "Adicione seu primeiro filme",
+    "empty": "Seu portfólio está vazio",
+    "emptyBody": "Adicione seu primeiro filme e vamos incorporar as palavras-chave dele à sua prática diária.",
+    "eyebrow": "SEU REEL",
+    "noMatch": "Não há filmes correspondentes",
+    "showAll": "Mostrar todos os filmes",
+    "sortBy": "Classificar por",
+    "sortSummary_one": "{{count}} filme · ordenado por",
+    "sortSummary_other": "{{count}} filmes · ordenados por",
+    "title": "Meus filmes"
+  },
+  "preview": {
+    "inYourReel": "NO SEU REEL",
+    "prepForFilm": "Preparação para este filme",
+    "quizMe": "Teste meus conhecimentos · {{count}} palavras →",
+    "quizMeOn": "Teste meu conhecimento sobre {{count}} palavras",
+    "remove": "Remover",
+    "removeFromReel": "Retirar do carretel",
+    "removeFromReelBody": "\"{{title}}\" será removido do seu reel. Você pode adicioná-lo novamente na guia Página inicial.",
+    "removeFromReelTitle": "Retirar do carretel?",
+    "removeSubtitle": "Retire este filme da sua lista de espera",
+    "removing": "Removendo…",
+    "study": "Estudo →",
+    "studyAllWords": "Estude todas as palavras",
+    "studyAllWordsSub": "Navegue pela lista completa de vocabulário e marque as palavras que você já aprendeu",
+    "studyWords": "Palavras para estudar",
+    "whatsNext": "O QUE VEM A SEGUIR"
+  },
+  "search": {
+    "loadMore": "Carregar mais",
+    "placeholder": "Pesquise um filme no TMDB…"
+  },
+  "watched": {
+    "empty": "Ainda não assisti a nenhum filme",
+    "emptyBody": "Deslize o dedo para a direita sobre um filme na tela inicial para marcá-lo como assistido.",
+    "title": "Filmes assistidos"
+  }
+}

@@ -11,6 +11,7 @@
 
 import { ActionSheetIOS, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 import {
   SORT_LABELS,
   SORT_ORDER,
@@ -27,6 +28,7 @@ export interface SortPillProps {
 }
 
 export function SortPill({ value, onChange, summary }: SortPillProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = makeStyles(tc);
 
@@ -36,9 +38,9 @@ export function SortPill({ value, onChange, summary }: SortPillProps) {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: [...labels, 'Cancel'],
+          options: [...labels, t('action.cancel')],
           cancelButtonIndex: labels.length,
-          title: 'Sort by',
+          title: t('movies:myMovies.sortBy'),
         },
         (idx) => {
           if (idx >= 0 && idx < SORT_ORDER.length) onChange(SORT_ORDER[idx]);

@@ -1,0 +1,26 @@
+{
+  "advertisement": "REKLAM",
+  "levelSort": {
+    "showingAtYourLevel": "SEVİYENİZE UYGUN GÖSTERİM"
+  },
+  "notifications": "Bildirimler",
+  "rankedList": {
+    "empty": "Bu seviye için henüz sınıflandırılmış film bulunamadı.",
+    "endOfLevel": "Bu seviyedeki konular bu kadar",
+    "tapToClose": "Kapatmak için dokunun"
+  },
+  "search": {
+    "placeholder": "Filmleri, kelimeleri veya oyuncuları ara…",
+    "recentlyViewed": "SON GÖRÜLENLER"
+  },
+  "swipe": {
+    "notInterested": "İlgi duymuyorum",
+    "seenIt": "Gördüm"
+  },
+  "todayWord": {
+    "doubleTapToFlip": "Çevirmek için iki kez dokunun",
+    "eyebrow": "GÜNÜN KELİMESİ",
+    "save": "Bu kelimeyi kaydet",
+    "saved": "Sözlerine kaydedildi"
+  }
+}

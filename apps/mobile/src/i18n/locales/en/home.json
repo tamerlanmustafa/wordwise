@@ -1,0 +1,26 @@
+{
+  "advertisement": "ADVERTISEMENT",
+  "notifications": "Notifications",
+  "search": {
+    "placeholder": "Search films, words, or actors…",
+    "recentlyViewed": "RECENTLY VIEWED"
+  },
+  "levelSort": {
+    "showingAtYourLevel": "SHOWING AT YOUR LEVEL"
+  },
+  "rankedList": {
+    "endOfLevel": "That's everything at this level",
+    "empty": "No classified movies found for this level yet.",
+    "tapToClose": "Tap to close"
+  },
+  "swipe": {
+    "seenIt": "Seen it",
+    "notInterested": "Not interested"
+  },
+  "todayWord": {
+    "eyebrow": "WORD OF THE HOUR",
+    "doubleTapToFlip": "Double tap to flip",
+    "saved": "Saved to your words",
+    "save": "Save this word"
+  }
+}

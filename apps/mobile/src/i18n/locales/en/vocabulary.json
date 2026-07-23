@@ -1,0 +1,61 @@
+{
+  "screenTitle": "Vocabulary",
+  "learnedWords": "Learned Words",
+  "savedWords": "Saved Words",
+  "deckExplainer": {
+    "eyebrowForYou": "PICKED FOR YOUR LEVEL",
+    "eyebrowLevel": "LEVEL — {{level}} · {{label}}",
+    "bodyForYou": "The <0>{{count}} words that matter most</0> in this movie — matched to your level, ranked by how much dialogue they unlock.",
+    "bodyLevel": "All <0>{{count}} {{level}} words</0> found in this script — the full list, no ranking magic.",
+    "coverage": "≈{{percent}}% SUBTITLE COVERAGE",
+    "sortRarest": "Rarest first ⇅",
+    "sortCommon": "Most common"
+  },
+  "row": {
+    "noExamples": "No sentence examples available",
+    "alsoAppearsIn": "Also appears in:",
+    "showsTranslation": "Shows the translation",
+    "pronounce": "Pronounce word",
+    "removeFromSaved": "Remove from saved",
+    "saveWord": "Save word"
+  },
+  "deck": {
+    "empty": "No words in this deck yet.",
+    "noExampleInScript": "No example in this script",
+    "noTranslation": "No translation available",
+    "tapToReveal": "TAP TO REVEAL",
+    "tapToHide": "TAP TO HIDE",
+    "knowIt": "Know it",
+    "next": "Next",
+    "iKnowThisWord": "I know this word",
+    "previousCard": "Bring back the previous card",
+    "nextCard": "Next card",
+    "hideTranslation": "Hide translation",
+    "showTranslation": "Show translation"
+  },
+  "learned": {
+    "empty": "No learned words yet. Swipe left on a word in any movie to mark it as known.",
+    "emptyShort": "No learned words yet",
+    "restore": "Restore",
+    "restoreTitle": "Restore word?",
+    "hiddenCount_one": "{{count}} word hidden from movie lists. Tap to restore.",
+    "hiddenCount_other": "{{count}} words hidden from movie lists. Tap to restore.",
+    "hiddenSummary_one": "{{count}} word hidden from movie lists",
+    "hiddenSummary_other": "{{count}} words hidden from movie lists",
+    "restoreErrorTitle": "Error",
+    "restoreErrorBody": "Could not restore that word. Try again.",
+    "restoreBody": "\"{{word}}\" will reappear in movie vocabulary lists."
+  },
+  "notebook": {
+    "browseMovies": "Browse movies",
+    "all": "All",
+    "byMovie": "By Movie",
+    "emptySaved": "No saved words yet"
+  },
+  "lists": {
+    "title": "My Lists",
+    "watchedFilms": "Watched Films",
+    "watchedFilmsSub": "Movies you have marked as seen"
+  },
+  "wordsYouKnow": "Words you already know"
+}

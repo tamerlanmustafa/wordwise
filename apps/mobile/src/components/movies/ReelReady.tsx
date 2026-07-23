@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
@@ -36,6 +37,7 @@ export function ReelReady({
   secondaryLabel = 'Back to my reel',
   onSecondary,
 }: ReelReadyProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -55,7 +57,7 @@ export function ReelReady({
             <Ionicons name="checkmark" size={22} color="#fff" />
           </View>
         </View>
-        <Text style={s.eyebrow}>Reel ready</Text>
+        <Text style={s.eyebrow}>{t('movies:analyzing.reelReady')}</Text>
         <Text style={s.title}>{title} is on your reel</Text>
         <Text style={s.promise}>{promise}</Text>
       </View>

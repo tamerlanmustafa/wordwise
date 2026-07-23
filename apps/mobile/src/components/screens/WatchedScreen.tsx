@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../../core/styles';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -39,6 +40,7 @@ const toMovieData = (m: WatchedMovie): MovieData => ({
 });
 
 export const WatchedScreen = ({ onBack, onMoviePress }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   // null = still loading; [] = loaded-empty.
@@ -69,7 +71,7 @@ export const WatchedScreen = ({ onBack, onMoviePress }: Props) => {
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={[styles.backButtonText, { color: tc.primary }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>Watched Films</Text>
+        <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>{t('movies:watched.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -80,8 +82,8 @@ export const WatchedScreen = ({ onBack, onMoviePress }: Props) => {
       ) : movies.length === 0 ? (
         <View style={s.center}>
           <Ionicons name="film-outline" size={40} color={tc.textFaint} />
-          <Text style={s.emptyTitle}>No watched films yet</Text>
-          <Text style={s.emptyBody}>Swipe a movie right on Home to mark it as seen.</Text>
+          <Text style={s.emptyTitle}>{t('movies:watched.empty')}</Text>
+          <Text style={s.emptyBody}>{t('movies:watched.emptyBody')}</Text>
         </View>
       ) : (
         <FlatList

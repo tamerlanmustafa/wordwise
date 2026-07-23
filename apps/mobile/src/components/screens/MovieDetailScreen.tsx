@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -103,6 +104,7 @@ export const MovieDetailScreen = ({
   sceneStrips,
   onStartQuiz,
 }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
@@ -277,7 +279,7 @@ export const MovieDetailScreen = ({
     const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
     const scriptResult = await wordwiseApi.fetchScript('', cleanTitle, tmdbId);
     if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
-      if (!opts.silent) setError('Script too short or not found');
+      if (!opts.silent) setError(t('movies:detail.scriptTooShort'));
       return null;
     }
 
@@ -461,12 +463,12 @@ export const MovieDetailScreen = ({
   // row disappears without needing a full refetch.
   const handleHideWord = useCallback((word: string) => {
     Alert.alert(
-      'Hide word globally?',
-      `"${word}" will be removed from every movie and book vocabulary list for all users. You can undo this from the admin panel.`,
+      t('movies:detail.hideWordTitle'),
+      t('movies:detail.hideWordBody', { word }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('action.cancel'), style: 'cancel' },
         {
-          text: 'Hide',
+          text: t('movies:detail.hide'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -480,14 +482,14 @@ export const MovieDetailScreen = ({
                 return { ...prev, top_words_by_level: nextByLevel };
               });
             } catch (e: any) {
-              Alert.alert('Failed to hide word', e?.message || 'Unknown error');
+              Alert.alert(t('movies:detail.hideWordFailed'), e?.message || t('movies:detail.hideWordUnknownError'));
             }
           },
         },
       ]
     );
-  // No deps that change — adminApi is stable, setVocabulary is stable.
-  }, []);
+  // adminApi and setVocabulary are stable; `t` changes when the app language does.
+  }, [t]);
 
   async function readBookmark(): Promise<StoredMovieBookmark | null> {
     try {
@@ -1007,7 +1009,7 @@ export const MovieDetailScreen = ({
                     </Text>
                     {overviewTruncated ? (
                       <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
-                        {overviewExpanded ? 'Less ▴' : 'More ▾'}
+                        {overviewExpanded ? t('movies:detail.less') : t('movies:detail.more')}
                       </Text>
                     ) : null}
                   </Pressable>
@@ -1102,7 +1104,7 @@ export const MovieDetailScreen = ({
                             },
                           ]}
                         >
-                          For You
+                          {t('movies:detail.forYou')}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1158,7 +1160,7 @@ export const MovieDetailScreen = ({
                   )}
                 </View>
                 {wordsView === 'foryou' && suggestedWords.length === 0 ? (
-                  <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>No new words at your level</Text>
+                  <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
                 ) : viewMode === 'cards' ? (
                   /* Deck header row: CARD n / total on the left, the deck's
                      identity tag on the right (sorting lives in the band). */
@@ -1185,7 +1187,7 @@ export const MovieDetailScreen = ({
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
-                          {wordSortOrder === 'rare' ? 'Rarest first ⇅' : 'Common first ⇅'}
+                          {wordSortOrder === 'rare' ? t('movies:detail.sortRarest') : t('movies:detail.sortCommon')}
                         </Text>
                       </TouchableOpacity>
                       {ROWS_MODE_ENABLED ? (
@@ -1202,7 +1204,7 @@ export const MovieDetailScreen = ({
                                 ],
                               ]}
                               accessibilityRole="button"
-                              accessibilityLabel={m === 'rows' ? 'Rows view' : 'Cards view'}
+                              accessibilityLabel={m === 'rows' ? t('movies:detail.rowsView') : t('movies:detail.cardsView')}
                             >
                               <Ionicons
                                 name={m === 'rows' ? 'list' : 'albums-outline'}
@@ -1240,7 +1242,7 @@ export const MovieDetailScreen = ({
             <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
               <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
               <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>{t('action.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -1471,16 +1473,16 @@ export const MovieDetailScreen = ({
                       const { status } = await MediaLibrary.requestPermissionsAsync();
                       if (status === 'granted') {
                         await MediaLibrary.saveToLibraryAsync(uri);
-                        Alert.alert('Saved', 'Poster saved to your Photos.');
+                        Alert.alert(t('movies:detail.saved'), t('movies:detail.posterSavedBody'));
                       } else {
-                        Alert.alert('Permission denied', 'Allow photo access to save the poster.');
+                        Alert.alert(t('movies:detail.permissionDenied'), t('movies:detail.permissionDeniedBody'));
                       }
                     } catch (e) {
-                      Alert.alert('Download failed', 'Could not save poster.');
+                      Alert.alert(t('movies:detail.downloadFailed'), t('movies:detail.downloadFailedBody'));
                     }
                   }}
                 >
-                  <Text style={styles.posterShareBtnText}>Save to photos</Text>
+                  <Text style={styles.posterShareBtnText}>{t('movies:detail.saveToPhotos')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -1496,7 +1498,7 @@ export const MovieDetailScreen = ({
               "{pendingLearned}" hidden
             </Text>
             <TouchableOpacity onPress={handleUndoLearned} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.undoToastAction}>UNDO</Text>
+              <Text style={styles.undoToastAction}>{t('movies:detail.undo')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1508,7 +1510,7 @@ export const MovieDetailScreen = ({
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('action.back')}
           onPress={onBack}
           style={({ pressed }) => [
             backBtnStyles.backBtn,
@@ -1531,7 +1533,7 @@ export const MovieDetailScreen = ({
           >
             <Text style={quizPillStyles.pillGlyph}>⚡</Text>
             <Text style={quizPillStyles.pillText}>
-              Quiz me · 5 words
+              {t('movies:detail.quizMe', { count: 5 })}
             </Text>
           </TouchableOpacity>
         </View>

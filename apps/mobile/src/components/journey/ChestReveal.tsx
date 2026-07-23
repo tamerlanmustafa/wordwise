@@ -24,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 import type { ChestKind, ChestPayload } from '../../services/api';
 
 export interface ChestRevealProps {
@@ -47,6 +48,7 @@ const KIND_STYLES: Record<ChestKind, KindStyle> = {
 };
 
 export function ChestReveal({ chest, onCollect }: ChestRevealProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const ks = KIND_STYLES[chest.kind] ?? KIND_STYLES.xp_small;
   const accent = tc[ks.accent];
@@ -88,14 +90,14 @@ export function ChestReveal({ chest, onCollect }: ChestRevealProps) {
           <Text style={styles.iconGlyph}>{ks.glyph}</Text>
         </View>
         <Text style={[styles.eyebrow, { color: tc.textSecondary }]}>
-          Daily chest
+          {t('movies:journey.dailyChest')}
         </Text>
         <Text style={[styles.label, { color: tc.text }]} numberOfLines={2}>
           {chest.label}
         </Text>
         {chest.kind === 'cosmetic' ? (
           <Text style={[styles.subLabel, { color: tc.textSecondary }]}>
-            Added to your reveal collection.
+            {t('movies:journey.chestAdded')}
           </Text>
         ) : null}
         <TouchableOpacity
@@ -103,7 +105,7 @@ export function ChestReveal({ chest, onCollect }: ChestRevealProps) {
           activeOpacity={0.85}
           style={[styles.cta, { backgroundColor: accent }]}
         >
-          <Text style={[styles.ctaText, { color: fg }]}>Collect</Text>
+          <Text style={[styles.ctaText, { color: fg }]}>{t('movies:journey.collect')}</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

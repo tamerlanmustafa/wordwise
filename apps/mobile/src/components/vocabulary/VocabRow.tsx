@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { LayoutAnimation, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import {
   wordwiseApi,
@@ -123,6 +124,7 @@ export const VocabRow = ({
   onHide,
   preloadedSentence,
 }: VocabRowProps) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const dark = useColorScheme() === 'dark';
   const styles = useMemo(() => makeRowStyles(tc), [tc]);
@@ -245,7 +247,7 @@ export const VocabRow = ({
         onPress={handlePress}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityHint="Shows the translation"
+        accessibilityHint={t('vocabulary:row.showsTranslation')}
       >
         {bookmarkHighlight && <View style={styles.leftBar} />}
 
@@ -320,7 +322,7 @@ export const VocabRow = ({
                   {sentenceTranslation ? (
                     <Text style={styles.sentenceTranslation}>{sentenceTranslation}</Text>
                   ) : isIdiom && movieId && !enrichment ? (
-                    <Text style={styles.noExamples}>No sentence examples available</Text>
+                    <Text style={styles.noExamples}>{t('vocabulary:row.noExamples')}</Text>
                   ) : null}
 
                   <View style={styles.actionsRow}>
@@ -347,7 +349,7 @@ export const VocabRow = ({
                         style={[styles.actionText, styles.pronounceIcon, playingAudio && styles.pronounceIconActive]}
                         onPress={handlePronounce}
                         accessibilityRole="button"
-                        accessibilityLabel="Pronounce word"
+                        accessibilityLabel={t('vocabulary:row.pronounce')}
                       >
                         {playingAudio ? '…' : '🔊'}
                       </Text>
@@ -356,7 +358,7 @@ export const VocabRow = ({
 
                   {isPremium && !isIdiom && crossMovieSentences.length > 0 && (
                     <View style={styles.crossMovieSection}>
-                      <Text style={styles.crossMovieLabel}>Also appears in:</Text>
+                      <Text style={styles.crossMovieLabel}>{t('vocabulary:row.alsoAppearsIn')}</Text>
                       {crossMovieSentences.slice(0, 3).map((s, i) => (
                         <View key={i} style={styles.crossMovieItem}>
                           <Text style={styles.crossMovieMovie}>{s.movie_title}</Text>
@@ -377,7 +379,7 @@ export const VocabRow = ({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.starBtn}
             accessibilityRole="button"
-            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save word'}
+            accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
           >
             <Text style={[styles.star, isSaved && styles.starActive]}>{isSaved ? '★' : '☆'}</Text>
           </TouchableOpacity>

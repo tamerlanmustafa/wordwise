@@ -1,0 +1,61 @@
+{
+  "deck": {
+    "empty": "Bu destede henüz hiçbir kelime yok.",
+    "hideTranslation": "Çeviriyi gizle",
+    "iKnowThisWord": "Bu kelimeyi biliyorum",
+    "knowIt": "Bunu bilin",
+    "next": "Sonraki",
+    "nextCard": "Sonraki kart",
+    "noExampleInScript": "Bu betikte örnek yok",
+    "noTranslation": "Çeviri mevcut değil",
+    "previousCard": "Önceki kartı geri getir",
+    "showTranslation": "Çeviriyi göster",
+    "tapToHide": "GİZLEMEK İÇİN DOKUN",
+    "tapToReveal": "GÖSTERMEK İÇİN DOKUN"
+  },
+  "deckExplainer": {
+    "bodyForYou": "Bu filmde <0>{{count}} en önemli kelime</0> — seviyenize uygun olarak seçilmiş ve diyalogların ne kadarını açtıklarına göre sıralanmış.",
+    "bodyLevel": "Bu senaryoda bulunan tüm <0>{{count}} {{level}} kelime</0> — tam liste, sıralama hilesi yok.",
+    "coverage": "≈{{percent}}% ALTYAZI KAPSAMI",
+    "eyebrowForYou": "SEVİYENİZE UYGUN SEÇİLMİŞ",
+    "eyebrowLevel": "SEVİYE — {{level}} · {{label}}",
+    "sortCommon": "En yaygın",
+    "sortRarest": "En nadir olan ilk ⇅"
+  },
+  "learned": {
+    "empty": "Henüz öğrenilen kelime yok. Herhangi bir videodaki bir kelimeye sola kaydırarak onu “biliniyor” olarak işaretleyebilirsin.",
+    "emptyShort": "Henüz öğrenilmiş kelime yok",
+    "hiddenCount_one": "Film listelerinden gizlenen {{count}} kelime. Geri yüklemek için dokunun.",
+    "hiddenCount_other": "Film listelerinden gizlenen {{count}} kelime. Geri yüklemek için dokunun.",
+    "hiddenSummary_one": "Film listelerinden gizlenen {{count}} kelime",
+    "hiddenSummary_other": "Film listelerinden gizlenen {{count}} kelime",
+    "restore": "Geri Yükle",
+    "restoreBody": "\"{{word}}\" kelimesi, film kelime listelerinde yeniden yer alacaktır.",
+    "restoreErrorBody": "Bu kelime geri yüklenemedi. Lütfen tekrar deneyin.",
+    "restoreErrorTitle": "Hata",
+    "restoreTitle": "Kelimeyi geri yüklemek mi?"
+  },
+  "learnedWords": "Öğrenilen Kelimeler",
+  "lists": {
+    "title": "Listelerim",
+    "watchedFilms": "İzlediğim Filmler",
+    "watchedFilmsSub": "\"İzlendi\" olarak işaretlediğiniz filmler"
+  },
+  "notebook": {
+    "all": "Tümü",
+    "browseMovies": "Filmlere göz at",
+    "byMovie": "Film'e göre",
+    "emptySaved": "Henüz kaydedilmiş kelime yok"
+  },
+  "row": {
+    "alsoAppearsIn": "Ayrıca şu kaynaklarda da yer almaktadır:",
+    "noExamples": "Cümle örneği bulunmamaktadır",
+    "pronounce": "Kelimeyi telaffuz et",
+    "removeFromSaved": "Kaydedilenlerden kaldır",
+    "saveWord": "Kelimeyi kaydet",
+    "showsTranslation": "Çeviriyi gösterir"
+  },
+  "savedWords": "Kaydedilen Kelimeler",
+  "screenTitle": "Kelime Dağarcığı",
+  "wordsYouKnow": "Zaten bildiğiniz kelimeler"
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { wordwiseApi, watchedApi } from '../../services/api';
 import { styles } from '../../core/styles';
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [learnedCount, setLearnedCount] = useState<number | null>(null);
@@ -47,7 +49,7 @@ export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
     {
       key: 'saved',
       icon: 'bookmark-outline',
-      name: 'Saved Words',
+      name: t('vocabulary:savedWords'),
       description: 'All words you have saved from movies',
       count: savedCount,
       color: '#F4A261',
@@ -55,7 +57,7 @@ export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
     {
       key: 'learned',
       icon: 'checkmark-circle-outline',
-      name: 'Learned Words',
+      name: t('vocabulary:learnedWords'),
       description: 'Words you have marked as learned',
       count: learnedCount,
       color: '#4CAF9A',
@@ -68,7 +70,7 @@ export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={[styles.backButtonText, { color: tc.primary }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>My Lists</Text>
+        <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>{t('vocabulary:lists.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -106,9 +108,9 @@ export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
             <Ionicons name="film-outline" size={22} color="#6C8EBF" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.listsCardName, { color: tc.text }]}>Watched Films</Text>
+            <Text style={[styles.listsCardName, { color: tc.text }]}>{t('vocabulary:lists.watchedFilms')}</Text>
             <Text style={[styles.listsCardDesc, { color: tc.textSecondary }]}>
-              Movies you have marked as seen
+              {t('vocabulary:lists.watchedFilmsSub')}
             </Text>
           </View>
           <View style={[styles.listsCardBadge, { backgroundColor: '#6C8EBF' }]}>

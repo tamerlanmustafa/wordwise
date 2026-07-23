@@ -16,6 +16,7 @@
  */
 
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Image,
   StyleSheet,
@@ -91,6 +92,7 @@ export function HomeSearchBar({
   onMoviePress,
   onSeeAll,
 }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -104,7 +106,7 @@ export function HomeSearchBar({
           <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
           <TextInput
             style={s.input}
-            placeholder="Search films, words, or actors…"
+            placeholder={t('home:search.placeholder')}
             placeholderTextColor={tc.textFaint}
             value={query}
             onChangeText={onChangeText}
@@ -140,7 +142,7 @@ export function HomeSearchBar({
           </View>
         ) : showRecent ? (
           <View style={s.dropdown}>
-            <Text style={s.recentLabel}>RECENTLY VIEWED</Text>
+            <Text style={s.recentLabel}>{t('home:search.recentlyViewed')}</Text>
             {recentlyViewed.slice(0, 5).map((movie: any) => (
               <Row
                 key={movie.id}

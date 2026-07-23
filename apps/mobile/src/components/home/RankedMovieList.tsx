@@ -27,6 +27,7 @@ import {
   View,
 } from 'react-native';
 import type { RefreshControlProps } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { FlashList } from '@shopify/flash-list';
 import { colors } from '../../theme/palette';
 import { TmdbPoster } from '../movies/TmdbPoster';
@@ -288,6 +289,7 @@ const MovieCard = React.memo(({
 
 // ── Footer: bottom-of-list spinner / end marker ──────────────────────────────
 const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; hasMore?: boolean; count: number }) => {
+  const { t } = useTranslation();
   if (loadingMore) {
     return (
       <View style={s.footer}>
@@ -298,7 +300,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
   if (!hasMore && count > 0) {
     return (
       <View style={s.footer}>
-        <Text style={s.footerText}>That's everything at this level</Text>
+        <Text style={s.footerText}>{t('home:rankedList.endOfLevel')}</Text>
       </View>
     );
   }
@@ -307,6 +309,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction }: Props) => {
+  const { t } = useTranslation();
   const [zoomed, setZoomed] = useState<{ uri: string; title: string } | null>(null);
 
   // Hydrate the reel store once so the chip can read membership state
@@ -321,7 +324,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
     return (
       <View style={fillHeight ? s.fill : undefined}>
         <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
-          No classified movies found for this level yet.
+          {t('home:rankedList.empty')}
         </Text>
       </View>
     );
@@ -384,7 +387,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
               resizeMode="contain"
             />
           )}
-          <Text style={s.lightboxHint}>Tap to close</Text>
+          <Text style={s.lightboxHint}>{t('home:rankedList.tapToClose')}</Text>
         </TouchableOpacity>
       </Modal>
     </View>

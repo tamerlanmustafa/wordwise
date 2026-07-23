@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../../theme/palette';
 import { wordwiseApi, tmdbApi } from '../../services/api';
 import { styles } from '../../core/styles';
@@ -33,6 +34,7 @@ interface Props {
 //    or `/movies/by-level` (old enum), with per-row TMDB enrichment.
 //  - anything else → TMDB title text search.
 export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open' }: Props) => {
+  const { t } = useTranslation();
   // In addToReel mode the user types into an inline search box; we
   // re-run the query whenever `liveQuery` changes (debounced).
   const [liveQuery, setLiveQuery] = useState(query);
@@ -195,7 +197,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
           <TextInput
             value={liveQuery}
             onChangeText={setLiveQuery}
-            placeholder="Search TMDB for a movie…"
+            placeholder={t('movies:search.placeholder')}
             placeholderTextColor="#9aa"
             autoFocus
             autoCorrect={false}
@@ -263,7 +265,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
               <ActivityIndicator size="small" color={colors.primary} style={{ padding: 16 }} />
             ) : hasMore ? (
               <TouchableOpacity style={styles.seeAllButton} onPress={loadMore}>
-                <Text style={styles.seeAllText}>Load more</Text>
+                <Text style={styles.seeAllText}>{t('movies:search.loadMore')}</Text>
               </TouchableOpacity>
             ) : null
           }

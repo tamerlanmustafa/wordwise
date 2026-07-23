@@ -9,6 +9,7 @@
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { HomeIcon } from './HomeIcons';
 
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function HomeHeader({ level, hasUnread = false, onNotificationsPress }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -35,7 +37,7 @@ export function HomeHeader({ level, hasUnread = false, onNotificationsPress }: P
         onPress={onNotificationsPress}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel="Notifications"
+        accessibilityLabel={t('home:notifications')}
       >
         <HomeIcon name="bell" size={16} color={tc.textSecondary} />
         {hasUnread ? <View style={s.unreadDot} /> : null}

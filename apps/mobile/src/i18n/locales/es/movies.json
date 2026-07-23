@@ -1,0 +1,89 @@
+{
+  "analyzing": {
+    "buildingFor": "Cómo crear tu lista de palabras para <0>{{title}}</0>",
+    "reelReady": "Listo para rodar",
+    "title": "Analizando el guion…"
+  },
+  "detail": {
+    "cardsView": "Vista de tarjetas",
+    "downloadFailed": "Error al descargar",
+    "downloadFailedBody": "No se ha podido guardar el póster.",
+    "forYou": "Para ti",
+    "hide": "Ocultar",
+    "hideWordBody": "«{{word}}» se eliminará de todas las listas de vocabulario de películas y libros de todos los usuarios. Puedes deshacer esta acción desde el panel de administración.",
+    "hideWordFailed": "No se ha podido ocultar la palabra",
+    "hideWordTitle": "¿Ocultar la palabra en todo el texto?",
+    "hideWordUnknownError": "Error desconocido",
+    "less": "Menos ▴",
+    "more": "Más ▾",
+    "noNewWords": "No hay palabras nuevas de tu nivel",
+    "permissionDenied": "Permiso denegado",
+    "permissionDeniedBody": "Permite el acceso a las fotos para guardar el póster.",
+    "posterSavedBody": "El póster se ha guardado en tu álbum «Fotos».",
+    "quizMe": "Ponme a prueba · {{count}} palabras",
+    "rowsView": "Vista de filas",
+    "saveToPhotos": "Guardar en «Fotos»",
+    "saved": "Guardado",
+    "scriptTooShort": "El script es demasiado corto o no se ha encontrado",
+    "sortCommon": "Nombre más común ⇅",
+    "sortRarest": "Lo más raro primero ⇅",
+    "undo": "DESHACER"
+  },
+  "journey": {
+    "chestAdded": "Se ha añadido a tu colección de revelaciones.",
+    "collect": "Recoger",
+    "dailyChest": "Ejercicios diarios para el pecho",
+    "milestone": {
+      "box_office_flavor": "Treinta días seguidos. Ya eres oficialmente un habitual.",
+      "box_office_name": "Taquilla",
+      "criterion_collection_flavor": "Un año entero, sin interrupciones. Incluido en el canon.",
+      "criterion_collection_name": "Colección Criterion",
+      "cult_classic_flavor": "Cien días. Esto ya forma parte de quién eres.",
+      "cult_classic_name": "Clásico de culto",
+      "dayMilestone": "Hito de {{days}} días",
+      "opening_weekend_flavor": "Una semana completa, todos los días. Ya has superado la parte más difícil.",
+      "opening_weekend_name": "Fin de semana de estreno"
+    },
+    "newUnlock": "Nuevo desbloqueo",
+    "readyToWatch": "¿Listo para verlo?",
+    "takeABow": "Haz una reverencia"
+  },
+  "myMovies": {
+    "addFirstFilm": "Añade tu primera película",
+    "empty": "Tu carrete está vacío",
+    "emptyBody": "Añade tu primera película y incorporaremos sus palabras clave a tu rutina diaria.",
+    "eyebrow": "TU CARRETE",
+    "noMatch": "No hay películas que coincidan",
+    "showAll": "Mostrar todas las películas",
+    "sortBy": "Ordenar por",
+    "sortSummary_one": "{{count}} película · ordenada por",
+    "sortSummary_other": "{{count}} películas · ordenadas por",
+    "title": "Mis películas"
+  },
+  "preview": {
+    "inYourReel": "EN TU CARRETE",
+    "prepForFilm": "Prepárate para esta película",
+    "quizMe": "Ponme a prueba · {{count}} palabras →",
+    "quizMeOn": "Ponte a prueba con {{count}} palabras",
+    "remove": "Eliminar",
+    "removeFromReel": "Desenrollar del carrete",
+    "removeFromReelBody": "«{{title}}» se eliminará de tu reel. Puedes volver a añadirlo desde la pestaña «Inicio».",
+    "removeFromReelTitle": "¿Quitarlo del carrete?",
+    "removeSubtitle": "Quita esta película de tu lista de pendientes",
+    "removing": "Eliminando…",
+    "study": "Estudio →",
+    "studyAllWords": "Estudia todas las palabras",
+    "studyAllWordsSub": "Echa un vistazo a la lista completa de vocabulario y marca las palabras que ya te sabes",
+    "studyWords": "Palabras para estudiar",
+    "whatsNext": "¿QUÉ VIENE A CONTINUACIÓN?"
+  },
+  "search": {
+    "loadMore": "Cargar más",
+    "placeholder": "Busca una película en TMDB…"
+  },
+  "watched": {
+    "empty": "Aún no he visto ninguna película",
+    "emptyBody": "Desliza el dedo hacia la derecha sobre una película en la pantalla de inicio para marcarla como vista.",
+    "title": "Películas vistas"
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
@@ -14,6 +15,7 @@ interface Props {
 // vocabulary-related sub-sections (currently just Learned Words; room
 // for future things like custom word lists, etc.).
 export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
   const [learnedCount, setLearnedCount] = useState<number | null>(null);
@@ -30,18 +32,18 @@ export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) =>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
           <Text style={settingsStyles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={settingsStyles.headerTitle}>Vocabulary</Text>
+        <Text style={settingsStyles.headerTitle}>{t('vocabulary:screenTitle')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={{ paddingTop: 12 }}>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToLearnedWords}>
           <View style={{ flex: 1 }}>
-            <Text style={settingsStyles.settingsLinkText}>Learned Words</Text>
+            <Text style={settingsStyles.settingsLinkText}>{t('vocabulary:learnedWords')}</Text>
             <Text style={{ color: tc.textSecondary, fontSize: 12, marginTop: 2 }}>
               {learnedCount === null
-                ? 'Words you already know'
-                : `${learnedCount} word${learnedCount === 1 ? '' : 's'} hidden from movie lists`}
+                ? t('vocabulary:wordsYouKnow')
+                : t('vocabulary:learned.hiddenSummary', { count: learnedCount })}
             </Text>
           </View>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>

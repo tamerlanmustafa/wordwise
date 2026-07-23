@@ -26,6 +26,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -71,6 +72,7 @@ export function MoviePreviewHub({
   onRemove,
   quizStarting,
 }: MoviePreviewHubProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const levelColor = cefrColors[level] ?? GOLD;
@@ -94,12 +96,12 @@ export function MoviePreviewHub({
   const [removing, setRemoving] = useState(false);
   const handleRemove = () => {
     Alert.alert(
-      'Remove from reel?',
-      `"${tile.title}" will be removed from your reel. You can add it back from the Home tab.`,
+      t('movies:preview.removeFromReelTitle'),
+      t('movies:preview.removeFromReelBody', { title: tile.title }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('action.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('movies:preview.remove'),
           style: 'destructive',
           onPress: () => {
             setRemoving(true);
@@ -145,7 +147,7 @@ export function MoviePreviewHub({
             </View>
           )}
           <View style={styles.filmInfo}>
-            <Text style={styles.eyebrowGold}>IN YOUR REEL</Text>
+            <Text style={styles.eyebrowGold}>{t('movies:preview.inYourReel')}</Text>
             <Text style={styles.filmTitle} numberOfLines={2}>
               {tile.title}
             </Text>
@@ -164,7 +166,7 @@ export function MoviePreviewHub({
       {/* ── Top chrome ────────────────────────────────────────────── */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={t('action.back')}
         onPress={onBack}
         style={({ pressed }) => [
           styles.backBtn,
@@ -182,9 +184,9 @@ export function MoviePreviewHub({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.strap}>
-          <Text style={styles.eyebrowGoldSurface}>WHAT'S NEXT</Text>
+          <Text style={styles.eyebrowGoldSurface}>{t('movies:preview.whatsNext')}</Text>
           <Text style={styles.strapHeadline}>
-            Prep for this film
+            {t('movies:preview.prepForFilm')}
           </Text>
           <Text style={styles.strapSubhead}>
             Quiz yourself on 5 key words for a quick win, or browse the
@@ -196,16 +198,16 @@ export function MoviePreviewHub({
         <View style={styles.actionList}>
           <ActionRow
             icon="library-outline"
-            title="Study all words"
-            subtitle="Browse the full vocab list and mark words learned"
+            title={t('movies:preview.studyAllWords')}
+            subtitle={t('movies:preview.studyAllWordsSub')}
             onPress={onStudy}
             styles={styles}
             tc={tc}
           />
           <ActionRow
             icon="trash-outline"
-            title="Remove from reel"
-            subtitle={removing ? 'Removing…' : 'Take this movie out of your queue'}
+            title={t('movies:preview.removeFromReel')}
+            subtitle={removing ? t('movies:preview.removing') : t('movies:preview.removeSubtitle')}
             destructive
             disabled={removing}
             onPress={handleRemove}
@@ -229,10 +231,10 @@ export function MoviePreviewHub({
             onPress={onStudy}
             style={[styles.ctaBtn, styles.ctaBtnSecondary]}
             accessibilityRole="button"
-            accessibilityLabel="Study words"
+            accessibilityLabel={t('movies:preview.studyWords')}
           >
             <Text style={[styles.ctaText, styles.ctaTextSecondary]}>
-              Study →
+              {t('movies:preview.study')}
             </Text>
           </Pressable>
         </Animated.View>
@@ -253,13 +255,13 @@ export function MoviePreviewHub({
               quizStarting && { opacity: 0.7 },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Quiz me on 5 words"
+            accessibilityLabel={t('movies:preview.quizMeOn', { count: 5 })}
           >
             {quizStarting ? (
               <ActivityIndicator size="small" color={tc.goldDeep} />
             ) : (
               <Text style={[styles.ctaText, styles.ctaTextPrimary]}>
-                Quiz me · 5 words →
+                {t('movies:preview.quizMe', { count: 5 })}
               </Text>
             )}
           </Pressable>

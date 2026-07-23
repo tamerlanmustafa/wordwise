@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { wordwiseApi, type SavedWordEntry } from '../services/api';
 import { swr, writeCache } from '../services/swrCache';
 import { Skeleton } from './ui/Skeleton';
@@ -32,11 +33,12 @@ export interface NotebookScreenProps {
 }
 
 export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScreenProps) {
+  const { t } = useTranslation();
   const [words, setWords] = useState<SavedWordEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupMode, setGroupMode] = useState<GroupMode>('all');
 
-  const headerTitle = title ?? (filter === 'learned' ? 'Learned Words' : 'Saved Words');
+  const headerTitle = title ?? (filter === 'learned' ? t('vocabulary:learnedWords') : t('vocabulary:savedWords'));
 
   // Cache the already-filtered list per filter so each view stays self-consistent.
   const cacheKey = `saved_words_${filter}`;
@@ -116,7 +118,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
         <Header onBack={onBack} title={headerTitle} />
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>
-            {filter === 'learned' ? 'No learned words yet' : 'No saved words yet'}
+            {filter === 'learned' ? t('vocabulary:learned.emptyShort') : t('vocabulary:notebook.emptySaved')}
           </Text>
           <Text style={styles.emptyBody}>
             {filter === 'learned'
@@ -124,7 +126,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
               : "Tap the star icon on any word in a movie's vocabulary list to save it here."}
           </Text>
           <TouchableOpacity style={styles.primaryBtn} onPress={onBack}>
-            <Text style={styles.primaryBtnText}>Browse movies</Text>
+            <Text style={styles.primaryBtnText}>{t('vocabulary:notebook.browseMovies')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -137,19 +139,19 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
 
       {/* Toggle + count */}
       <View style={styles.toolbar}>
-        <Text style={styles.wordCount}>{words.length} word{words.length === 1 ? '' : 's'}</Text>
+        <Text style={styles.wordCount}>{t('wordCount', { count: words.length })}</Text>
         <View style={styles.toggleRow}>
           <TouchableOpacity
             style={[styles.toggleBtn, groupMode === 'all' && styles.toggleBtnActive]}
             onPress={() => setGroupMode('all')}
           >
-            <Text style={[styles.toggleText, groupMode === 'all' && styles.toggleTextActive]}>All</Text>
+            <Text style={[styles.toggleText, groupMode === 'all' && styles.toggleTextActive]}>{t('vocabulary:notebook.all')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, groupMode === 'movie' && styles.toggleBtnActive]}
             onPress={() => setGroupMode('movie')}
           >
-            <Text style={[styles.toggleText, groupMode === 'movie' && styles.toggleTextActive]}>By Movie</Text>
+            <Text style={[styles.toggleText, groupMode === 'movie' && styles.toggleTextActive]}>{t('vocabulary:notebook.byMovie')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -169,7 +171,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
           renderItem={({ item }) => (
             <View style={styles.movieGroup}>
               <Text style={styles.movieGroupTitle}>{item.title}</Text>
-              <Text style={styles.movieGroupCount}>{item.items.length} word{item.items.length === 1 ? '' : 's'}</Text>
+              <Text style={styles.movieGroupCount}>{t('wordCount', { count: item.items.length })}</Text>
               {item.items.map((w) => (
                 <WordItem key={w.id} word={w} onUnsave={handleUnsave} compact />
               ))}

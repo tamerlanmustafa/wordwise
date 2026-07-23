@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { wordwiseApi, type TodaysWord } from '../../services/api';
 import { useDoubleTap } from '../../hooks/useDoubleTap';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -35,7 +36,8 @@ interface Props {
   targetLanguage: string;
 }
 
-const _TodayWordCard = ({ word, targetLanguage }: Props) => {
+const TodayWordCardBase = ({ word, targetLanguage }: Props) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -129,7 +131,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}
       >
         <View style={s.header}>
-          <Text style={s.eyebrow}>WORD OF THE HOUR</Text>
+          <Text style={s.eyebrow}>{t('home:todayWord.eyebrow')}</Text>
         </View>
         <View style={s.wordRow}>
           <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>
@@ -140,7 +142,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
             hitSlop={14}
             style={s.starBtn}
             accessibilityRole="button"
-            accessibilityLabel={saved ? 'Saved to your words' : 'Save this word'}
+            accessibilityLabel={saved ? t('home:todayWord.saved') : t('home:todayWord.save')}
           >
             <HomeIcon name="star" size={24} color={saved ? tc.gold : tc.textFaint} />
           </Pressable>
@@ -148,7 +150,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone} />
         <View style={s.frontFooter}>
           {word.cefr_level ? <Text style={s.level}>{word.cefr_level}</Text> : <View />}
-          <Text style={s.hint}>Double tap to flip</Text>
+          <Text style={s.hint}>{t('home:todayWord.doubleTapToFlip')}</Text>
         </View>
       </Animated.View>
 
@@ -158,7 +160,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
         style={[s.face, { transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}
       >
         <View style={s.header}>
-          <Text style={s.eyebrow}>WORD OF THE HOUR</Text>
+          <Text style={s.eyebrow}>{t('home:todayWord.eyebrow')}</Text>
         </View>
         <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
           {translating ? (
@@ -188,7 +190,7 @@ const _TodayWordCard = ({ word, targetLanguage }: Props) => {
   );
 };
 
-export const TodayWordCard = memo(_TodayWordCard);
+export const TodayWordCard = memo(TodayWordCardBase);
 
 export const TodayWordCardSkeleton = () => {
   const tc = useThemeColors();

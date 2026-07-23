@@ -22,6 +22,7 @@
 import { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useReelStore } from '../stores/reelStore';
@@ -56,6 +57,7 @@ const STATIC_FILTERS: MyMoviesFilter[] = ['all', 'in_progress', 'mastered', 'not
 const CEFR_RANK: Record<string, number> = { A1: 0, A2: 1, B1: 2, B2: 3, C1: 4, C2: 5 };
 
 export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -114,8 +116,8 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
       {/* ── Header row ─────────────────────────────────────────────── */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>YOUR REEL</Text>
-          <Text style={s.title}>My Movies</Text>
+          <Text style={s.eyebrow}>{t('movies:myMovies.eyebrow')}</Text>
+          <Text style={s.title}>{t('movies:myMovies.title')}</Text>
         </View>
         <View style={s.headerBtns}>
           {/* Search is the only header action — the old sliders button beside
@@ -152,7 +154,7 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
       <SortPill
         value={sort}
         onChange={setSort}
-        summary={`${visible.length} ${visible.length === 1 ? 'film' : 'films'} · sorted by`}
+        summary={t('movies:myMovies.sortSummary', { count: visible.length })}
       />
 
       {/* ── List card OR empty state ───────────────────────────────── */}
@@ -160,9 +162,9 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}>
           <EmptyState
             icon="film-outline"
-            title="Your reel is empty"
-            body="Add your first film and we'll pull its key words into your daily practice."
-            ctaLabel="Add your first film"
+            title={t('movies:myMovies.empty')}
+            body={t('movies:myMovies.emptyBody')}
+            ctaLabel={t('movies:myMovies.addFirstFilm')}
             onCta={onSearchPress}
             style={s.emptyStateInline}
           />
@@ -176,7 +178,7 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
         </ScrollView>
       ) : sorted.length === 0 ? (
         <View style={s.emptyState}>
-          <Text style={s.emptyTitle}>No films match</Text>
+          <Text style={s.emptyTitle}>{t('movies:myMovies.noMatch')}</Text>
           <Text style={s.emptyBody}>
             Your current filter excludes everything in your reel. Try
             another chip — or clear the filter.
@@ -185,7 +187,7 @@ export function MyMoviesScreen({ onSearchPress, onOpenMoviePreview }: MyMoviesSc
             onPress={() => setFilter('all')}
             style={({ pressed }) => [s.resetBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={s.resetBtnText}>Show all films</Text>
+            <Text style={s.resetBtnText}>{t('movies:myMovies.showAll')}</Text>
           </Pressable>
         </View>
       ) : (

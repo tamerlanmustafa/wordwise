@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Trans, useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { cefrColors, cefrLabelsFull } from '../../theme/palette';
@@ -40,6 +41,7 @@ export type DeckExplainerBandProps =
     };
 
 export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
@@ -53,7 +55,7 @@ export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
       >
         <View style={s.eyebrowRow}>
           <Text style={s.sparkle}>✦</Text>
-          <Text style={s.eyebrowGold}>PICKED FOR YOUR LEVEL</Text>
+          <Text style={s.eyebrowGold}>{t('vocabulary:deckExplainer.eyebrowForYou')}</Text>
           <View style={s.flexSpacer} />
           <View style={s.mixTag}>
             <Text style={s.mixTagText}>{mixLabel}</Text>
@@ -61,8 +63,11 @@ export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
         </View>
         <View style={s.bodyRow}>
           <Text style={s.bodyText}>
-            The <Text style={s.bodyBold}>{deckSize} words that matter most</Text> in this movie —
-            matched to your level, ranked by how much dialogue they unlock.
+            <Trans
+              i18nKey="vocabulary:deckExplainer.bodyForYou"
+              count={deckSize}
+              components={[<Text key="b" style={s.bodyBold} />]}
+            />
           </Text>
         </View>
         {coveragePct != null ? (
@@ -75,7 +80,7 @@ export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
                 style={[s.meterFill, { width: `${Math.min(100, Math.max(0, coveragePct))}%` }]}
               />
             </View>
-            <Text style={s.meterLabel}>≈{Math.round(coveragePct)}% SUBTITLE COVERAGE</Text>
+            <Text style={s.meterLabel}>{t('vocabulary:deckExplainer.coverage', { percent: Math.round(coveragePct) })}</Text>
           </View>
         ) : null}
       </LinearGradient>
@@ -90,20 +95,24 @@ export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
       <View style={s.eyebrowRow}>
         <View style={[s.levelDot, { backgroundColor: levelColor }]} />
         <Text style={s.eyebrowQuiet}>
-          LEVEL — {level} · {label.toUpperCase()}
+          {t('vocabulary:deckExplainer.eyebrowLevel', { level, label: label.toUpperCase() })}
         </Text>
       </View>
       <View style={s.bodyRow}>
         <Text style={s.bodyText}>
-          All <Text style={s.bodyBold}>{count} {level} words</Text> found in this script — the
-          full list, no ranking magic.
+          <Trans
+            i18nKey="vocabulary:deckExplainer.bodyLevel"
+            count={count}
+            values={{ level }}
+            components={[<Text key="b" style={s.bodyBold} />]}
+          />
         </Text>
       </View>
       <View style={s.sortRow}>
         {(
           [
-            { key: 'rare' as const, label: 'Rarest first ⇅' },
-            { key: 'common' as const, label: 'Most common' },
+            { key: 'rare' as const, label: t('vocabulary:deckExplainer.sortRarest') },
+            { key: 'common' as const, label: t('vocabulary:deckExplainer.sortCommon') },
           ]
         ).map(({ key, label: pillLabel }) => {
           const selected = sortOrder === key;
