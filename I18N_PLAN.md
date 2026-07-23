@@ -142,10 +142,10 @@ literally two lines: the import and the list entry.
 | Phase | Work | Why this order |
 |---|---|---|
 | 0 ✅ | **Done** — deps, `i18n/index.ts`, locale resolution, `UI_LANGUAGES`, parity tests, Settings picker, `LanguageStep` extracted | Infrastructure lands and is provably correct before 500 strings move |
-| 1 | Extract `common` + `auth` + `onboarding` (175 strings) | First-run experience — the highest-value surface for a non-English user |
-| 2 | Extract `home`, `movies`, `vocabulary` (148) | Core loop |
-| 3 | Extract `quiz`, `practice`, `stats`, `notifications` (91) | Study loop |
-| 4 | Extract `settings`, `billing`, `other` (117) | Includes genre + CEFR labels |
+| 1 ✅ | **Done** — `common`, `auth`, `onboarding` | First-run experience — the highest-value surface for a non-English user |
+| 2 ✅ | **Done** — `home`, `movies`, `vocabulary` | Core loop |
+| 3 ✅ | **Done** — `quiz`, `practice`, `stats`, `notifications` | Study loop |
+| 4 ✅ | **Done** — `settings`, `billing`, CEFR + genre labels. Privacy/Terms deferred to #100 | Includes genre + CEFR labels |
 | 5 | Plurals → ICU, `toLocaleString` → active locale, backend email templates | Correctness pass |
 | 6 | Second locale end-to-end + overflow/clipping sweep | Proves the "add a language" promise |
 
