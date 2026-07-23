@@ -28,7 +28,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { cefrColors, cefrLabels } from '../theme/palette';
+import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { DAILY_GOAL } from '../stores/dailyGoalStore';
 import type { QuizCompleteResponse, QuizCardResultInput } from '../services/api';
@@ -71,7 +71,7 @@ export function QuizResultScreen({
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
   const accent = cefrColors[level] || tc.primaryOnSurface;
-  const label = cefrLabels[level] || level;
+  const label = t(`cefr.${level}`, { defaultValue: level });
 
   // Primary CTA accent inverts: gold on dark, purple on light.
   const ctaBg = scheme === 'dark' ? tc.gold : tc.primary;

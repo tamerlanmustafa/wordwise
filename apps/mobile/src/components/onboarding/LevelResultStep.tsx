@@ -2,7 +2,8 @@
  * LevelResultStep — onboarding step 4 (prototype §4). Shows the CEFR band the
  * placement quiz derived: a big coloured disc, the level label, a short
  * explanation, and the A1→C2 ramp with the user's level lit. Colours come
- * from the centralized cefrColors/cefrLabels maps (theme/palette).
+ * from the centralized cefrColors map (theme/palette); level names come
+ * from `common:cefr.*`.
  */
 
 import { useMemo } from 'react';
@@ -10,7 +11,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { cefrColors, cefrLabels } from '../../theme/palette';
+import { cefrColors } from '../../theme/palette';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { CEFR_LEVELS, type CefrLevel } from '../../types';
 import { FadeInUp } from '../ui/FadeInUp';
@@ -40,7 +41,7 @@ export function LevelResultStep({ level, onContinue, onBack: _onBack }: LevelRes
           </View>
         </FadeInUp>
         <FadeInUp delay={140}>
-          <Text style={s.label}>{cefrLabels[level] ?? level}</Text>
+          <Text style={s.label}>{t(`cefr.${level}`, { defaultValue: level })}</Text>
         </FadeInUp>
         <FadeInUp delay={200}>
           <Text style={s.copy}>{t(`onboarding:levelResult.explanation.${level}`)}</Text>

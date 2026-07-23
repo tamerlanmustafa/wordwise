@@ -44,22 +44,3 @@ export const cefrColorsDark: Record<string, string> = {
   C2: '#7B1FA2',
 };
 
-export const cefrLabels: Record<string, string> = {
-  A1: 'Beginner',
-  A2: 'Elementary',
-  B1: 'Intermediate',
-  B2: 'Upper Int.',
-  C1: 'Advanced',
-  C2: 'Mastery',
-  IDIOMS: 'Idioms & Phrases',
-};
-
-/** Unabbreviated level names — the explainer band's eyebrow line. */
-export const cefrLabelsFull: Record<string, string> = {
-  A1: 'Beginner',
-  A2: 'Elementary',
-  B1: 'Intermediate',
-  B2: 'Upper Intermediate',
-  C1: 'Advanced',
-  C2: 'Mastery',
-};

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SUPPORTED_LANGUAGES, PROFICIENCY_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
+import { SUPPORTED_LANGUAGES, CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { DAILY_GOAL_OPTIONS } from '../onboarding/placement';
 import { colors } from '../../theme/palette';
@@ -154,7 +154,7 @@ export const SettingsScreen = ({
 
   const handleSave = async () => {
     if (!username.trim()) {
-      setError('Username is required');
+      setError(t('settings:usernameRequired'));
       return;
     }
 
@@ -183,14 +183,14 @@ export const SettingsScreen = ({
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || 'Failed to update settings');
+        throw new Error(data.detail || t('settings:saveFailed'));
       }
 
       const updatedUser = await response.json();
       onUserUpdated(updatedUser);
-      setSuccess('Settings updated successfully!');
+      setSuccess(t('settings:saveSuccess'));
     } catch (err: any) {
-      setError(err.message || 'Failed to update settings');
+      setError(err.message || t('settings:saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -201,6 +201,11 @@ export const SettingsScreen = ({
 
   // Endonym first (that's what a speaker scans for), English name after —
   // except for English itself, where the two are the same word.
+  const proficiencyItems = useMemo(
+    () => CEFR_LEVELS.map((code) => ({ code, name: t(`cefrPicker.${code}`) })),
+    [t],
+  );
+
   const appLanguageItems = useMemo(
     () =>
       UI_LANGUAGES.map((l) => ({
@@ -210,8 +215,7 @@ export const SettingsScreen = ({
     [],
   );
 
-  const getProfName = (code: string) =>
-    PROFICIENCY_LEVELS.find((l) => l.code === code)?.name || code;
+  const getProfName = (code: string) => t(`cefrPicker.${code}`, { defaultValue: code });
 
   const renderPicker = (
     visible: boolean,
@@ -229,7 +233,7 @@ export const SettingsScreen = ({
             <View style={settingsStyles.modalHeader}>
               <Text style={settingsStyles.modalTitle}>{title}</Text>
               <TouchableOpacity onPress={onClose}>
-                <Text style={settingsStyles.modalClose}>Done</Text>
+                <Text style={settingsStyles.modalClose}>{t('action.done')}</Text>
               </TouchableOpacity>
             </View>
             <ScrollView style={settingsStyles.modalScroll}>
@@ -267,9 +271,9 @@ export const SettingsScreen = ({
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
-          <Text style={settingsStyles.backButtonText}>← Back</Text>
+          <Text style={settingsStyles.backButtonText}>← {t('action.back')}</Text>
         </TouchableOpacity>
-        <Text style={settingsStyles.headerTitle}>Settings</Text>
+        <Text style={settingsStyles.headerTitle}>{t('settings:title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -285,7 +289,7 @@ export const SettingsScreen = ({
             </View>
           )}
           <View style={settingsStyles.profileInfo}>
-            <Text style={settingsStyles.profileTitle}>Account Settings</Text>
+            <Text style={settingsStyles.profileTitle}>{t('settings:accountSettings')}</Text>
             <Text style={settingsStyles.profileEmail}>{user?.email}</Text>
           </View>
         </View>
@@ -310,20 +314,20 @@ export const SettingsScreen = ({
             style={settingsStyles.textInput}
             value={username}
             onChangeText={setUsername}
-            placeholder="Enter username"
+            placeholder={t('settings:usernamePlaceholder')}
             placeholderTextColor={colors.textSecondary}
           />
         </View>
 
         <View style={settingsStyles.divider} />
 
-        <Text style={settingsStyles.sectionTitle}>Language Preferences</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:languagePreferences')}</Text>
 
         <TouchableOpacity
           style={settingsStyles.selectButton}
           onPress={() => setShowNativeLangPicker(true)}
         >
-          <Text style={settingsStyles.selectLabel}>Native Language</Text>
+          <Text style={settingsStyles.selectLabel}>{t('settings:nativeLanguage')}</Text>
           <Text style={settingsStyles.selectValue}>{getLangName(nativeLanguage)} ▼</Text>
         </TouchableOpacity>
 
@@ -331,7 +335,7 @@ export const SettingsScreen = ({
           style={settingsStyles.selectButton}
           onPress={() => setShowLearningLangPicker(true)}
         >
-          <Text style={settingsStyles.selectLabel}>Learning Language</Text>
+          <Text style={settingsStyles.selectLabel}>{t('settings:learningLanguage')}</Text>
           <Text style={settingsStyles.selectValue}>{getLangName(learningLanguage)} ▼</Text>
         </TouchableOpacity>
 
@@ -339,14 +343,14 @@ export const SettingsScreen = ({
           style={settingsStyles.selectButton}
           onPress={() => setShowProficiencyPicker(true)}
         >
-          <Text style={settingsStyles.selectLabel}>Proficiency Level</Text>
+          <Text style={settingsStyles.selectLabel}>{t('settings:proficiencyLevel')}</Text>
           <Text style={settingsStyles.selectValue}>{getProfName(proficiencyLevel)} ▼</Text>
         </TouchableOpacity>
 
         <View style={settingsStyles.divider} />
 
         {/* Daily goal — set once in onboarding, now editable here (F-026). */}
-        <Text style={settingsStyles.sectionTitle}>Daily Goal</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:dailyGoal')}</Text>
         <View style={appearanceStyles.segmented}>
           {DAILY_GOAL_OPTIONS.map((g) => {
             const isActive = dailyGoalMinutes === g.mins;
@@ -367,7 +371,7 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
-        <Text style={settingsStyles.sectionTitle}>Appearance</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:appearance')}</Text>
         <View style={appearanceStyles.segmented}>
           {(['light', 'system', 'dark'] as ThemePreference[]).map((opt) => {
             const isActive = themePreference === opt;
@@ -387,7 +391,7 @@ export const SettingsScreen = ({
                     isActive && appearanceStyles.segmentTextActive,
                   ]}
                 >
-                  {opt === 'system' ? 'System' : opt === 'light' ? 'Light' : 'Dark'}
+                  {t(`settings:theme.${opt}`)}
                 </Text>
               </TouchableOpacity>
             );
@@ -421,7 +425,7 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
-        <Text style={settingsStyles.sectionTitle}>Translation Language</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:translationLanguage')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
             <TouchableOpacity
@@ -450,17 +454,17 @@ export const SettingsScreen = ({
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={settingsStyles.saveButtonText}>Save Changes</Text>
+            <Text style={settingsStyles.saveButtonText}>{t('settings:saveChanges')}</Text>
           )}
         </TouchableOpacity>
 
         <View style={settingsStyles.divider} />
 
-        <Text style={settingsStyles.sectionTitle}>Vocabulary</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:vocabulary')}</Text>
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>Auto-collapse word rows</Text>
-            <Text style={settingsStyles.notifDesc}>Close the previously opened row when you open a new one</Text>
+            <Text style={settingsStyles.notifLabel}>{t('settings:autoCollapse')}</Text>
+            <Text style={settingsStyles.notifDesc}>{t('settings:autoCollapseDesc')}</Text>
           </View>
           <TouchableOpacity
             style={[settingsStyles.notifToggle, accordionMode && settingsStyles.notifToggleOn]}
@@ -470,11 +474,11 @@ export const SettingsScreen = ({
           </TouchableOpacity>
         </View>
 
-        <Text style={settingsStyles.sectionTitle}>Notifications</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:notifications')}</Text>
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>Word of the Hour</Text>
-            <Text style={settingsStyles.notifDesc}>A fresh word to discover and learn</Text>
+            <Text style={settingsStyles.notifLabel}>{t('settings:wordOfTheHour')}</Text>
+            <Text style={settingsStyles.notifDesc}>{t('settings:wordOfTheHourDesc')}</Text>
           </View>
           <TouchableOpacity
             style={[settingsStyles.notifToggle, dailyWordNotif && settingsStyles.notifToggleOn]}
@@ -486,7 +490,7 @@ export const SettingsScreen = ({
         {dailyWordNotif && (
           <View style={settingsStyles.notifRow}>
             <View style={settingsStyles.notifInfo}>
-              <Text style={settingsStyles.notifLabel}>Reminder frequency</Text>
+              <Text style={settingsStyles.notifLabel}>{t('settings:reminderFrequency')}</Text>
               <Text style={settingsStyles.notifDesc}>
                 {wordReminderMode === 'hourly'
                   ? 'Remind me every hour'
@@ -505,8 +509,8 @@ export const SettingsScreen = ({
         )}
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>Review Reminder (6:00 PM)</Text>
-            <Text style={settingsStyles.notifDesc}>Reminder to review your saved words</Text>
+            <Text style={settingsStyles.notifLabel}>{t('settings:reviewReminder')}</Text>
+            <Text style={settingsStyles.notifDesc}>{t('settings:reviewReminderDesc')}</Text>
           </View>
           <TouchableOpacity
             style={[settingsStyles.notifToggle, reviewNotif && settingsStyles.notifToggleOn]}
@@ -516,27 +520,27 @@ export const SettingsScreen = ({
           </TouchableOpacity>
         </View>
 
-        <Text style={settingsStyles.sectionTitle}>Subscription</Text>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:subscription')}</Text>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToFamilyPlan}>
-          <Text style={settingsStyles.settingsLinkText}>Family Plan</Text>
+          <Text style={settingsStyles.settingsLinkText}>{t('settings:familyPlan')}</Text>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={async () => {
           const { restorePurchases } = require('../../services/billing');
           const result = await restorePurchases();
-          Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
+          Alert.alert(result.restored ? t('billing:paywall.restoredTitle') : t('billing:paywall.notFoundTitle'), result.message);
         }}>
-          <Text style={settingsStyles.settingsLinkText}>Restore Purchases</Text>
+          <Text style={settingsStyles.settingsLinkText}>{t('settings:restorePurchases')}</Text>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
 
         <Text style={settingsStyles.sectionTitle}>Legal</Text>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToPrivacy}>
-          <Text style={settingsStyles.settingsLinkText}>Privacy Policy</Text>
+          <Text style={settingsStyles.settingsLinkText}>{t('settings:privacyPolicy')}</Text>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToTerms}>
-          <Text style={settingsStyles.settingsLinkText}>Terms of Service</Text>
+          <Text style={settingsStyles.settingsLinkText}>{t('settings:termsOfService')}</Text>
           <Text style={settingsStyles.settingsLinkArrow}>→</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -549,9 +553,9 @@ export const SettingsScreen = ({
         handleSelectAppLanguage,
         t('settings:appLanguage.pickerTitle'),
       )}
-      {renderPicker(showNativeLangPicker, () => setShowNativeLangPicker(false), SUPPORTED_LANGUAGES, nativeLanguage, setNativeLanguage, 'Native Language')}
-      {renderPicker(showLearningLangPicker, () => setShowLearningLangPicker(false), SUPPORTED_LANGUAGES, learningLanguage, setLearningLanguage, 'Learning Language')}
-      {renderPicker(showProficiencyPicker, () => setShowProficiencyPicker(false), PROFICIENCY_LEVELS, proficiencyLevel, setProficiencyLevel, 'Proficiency Level')}
+      {renderPicker(showNativeLangPicker, () => setShowNativeLangPicker(false), SUPPORTED_LANGUAGES, nativeLanguage, setNativeLanguage, t('settings:nativeLanguage'))}
+      {renderPicker(showLearningLangPicker, () => setShowLearningLangPicker(false), SUPPORTED_LANGUAGES, learningLanguage, setLearningLanguage, t('settings:learningLanguage'))}
+      {renderPicker(showProficiencyPicker, () => setShowProficiencyPicker(false), proficiencyItems, proficiencyLevel, setProficiencyLevel, t('settings:proficiencyLevel'))}
     </SafeAreaView>
   );
 };

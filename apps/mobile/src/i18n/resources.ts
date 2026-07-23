@@ -14,6 +14,7 @@
 import type { Resource } from 'i18next';
 
 import enAuth from './locales/en/auth.json';
+import enBilling from './locales/en/billing.json';
 import enCommon from './locales/en/common.json';
 import enOnboarding from './locales/en/onboarding.json';
 import enSettings from './locales/en/settings.json';
@@ -26,6 +27,7 @@ import enQuiz from './locales/en/quiz.json';
 import enStats from './locales/en/stats.json';
 
 import esAuth from './locales/es/auth.json';
+import esBilling from './locales/es/billing.json';
 import esCommon from './locales/es/common.json';
 import esOnboarding from './locales/es/onboarding.json';
 import esSettings from './locales/es/settings.json';
@@ -38,6 +40,7 @@ import esQuiz from './locales/es/quiz.json';
 import esStats from './locales/es/stats.json';
 
 import ptAuth from './locales/pt/auth.json';
+import ptBilling from './locales/pt/billing.json';
 import ptCommon from './locales/pt/common.json';
 import ptOnboarding from './locales/pt/onboarding.json';
 import ptSettings from './locales/pt/settings.json';
@@ -50,6 +53,7 @@ import ptQuiz from './locales/pt/quiz.json';
 import ptStats from './locales/pt/stats.json';
 
 import trAuth from './locales/tr/auth.json';
+import trBilling from './locales/tr/billing.json';
 import trCommon from './locales/tr/common.json';
 import trOnboarding from './locales/tr/onboarding.json';
 import trSettings from './locales/tr/settings.json';
@@ -62,6 +66,7 @@ import trQuiz from './locales/tr/quiz.json';
 import trStats from './locales/tr/stats.json';
 
 import ruAuth from './locales/ru/auth.json';
+import ruBilling from './locales/ru/billing.json';
 import ruCommon from './locales/ru/common.json';
 import ruOnboarding from './locales/ru/onboarding.json';
 import ruSettings from './locales/ru/settings.json';
@@ -80,6 +85,7 @@ import ruStats from './locales/ru/stats.json';
 export const NAMESPACES = [
   'common',
   'auth',
+  'billing',
   'home',
   'movies',
   'notifications',
@@ -98,6 +104,7 @@ export const resources: Resource = {
   en: {
     common: enCommon,
     auth: enAuth,
+    billing: enBilling,
     home: enHome,
     movies: enMovies,
     onboarding: enOnboarding,
@@ -111,6 +118,7 @@ export const resources: Resource = {
   es: {
     common: esCommon,
     auth: esAuth,
+    billing: esBilling,
     home: esHome,
     movies: esMovies,
     onboarding: esOnboarding,
@@ -124,6 +132,7 @@ export const resources: Resource = {
   pt: {
     common: ptCommon,
     auth: ptAuth,
+    billing: ptBilling,
     home: ptHome,
     movies: ptMovies,
     onboarding: ptOnboarding,
@@ -137,6 +146,7 @@ export const resources: Resource = {
   tr: {
     common: trCommon,
     auth: trAuth,
+    billing: trBilling,
     home: trHome,
     movies: trMovies,
     onboarding: trOnboarding,
@@ -150,6 +160,7 @@ export const resources: Resource = {
   ru: {
     common: ruCommon,
     auth: ruAuth,
+    billing: ruBilling,
     home: ruHome,
     movies: ruMovies,
     onboarding: ruOnboarding,

@@ -1,0 +1,30 @@
+{
+  "family": {
+    "create": "Criar plano familiar",
+    "createFailed": "Falha ao criar o plano familiar",
+    "emailPlaceholder": "Endereço de e-mail",
+    "errorTitle": "Erro",
+    "invite": "Convidar membro",
+    "inviteFailed": "Falha ao convidar o membro",
+    "leave": "Cancelar o Plano Familiar",
+    "leaveBody": "Você perderá o acesso premium. Deseja continuar?",
+    "leaveTitle": "Cancelar o plano familiar",
+    "ownersPlan": "Plano de {{email}}",
+    "removeMember": "Remover membro",
+    "removeMemberBody": "Deseja remover {{email}} do seu plano familiar?",
+    "requiresPlus": "Requer uma assinatura ativa do WordWise Plus.",
+    "title": "Plano Familiar",
+    "yourPlan": "Seu Plano Familiar"
+  },
+  "paywall": {
+    "alreadyPlus": "Você está no WordWise Plus — tudo está desbloqueado. Obrigado!",
+    "notFoundTitle": "Não encontrado",
+    "restore": "Recuperar compras",
+    "restoredTitle": "Restaurado!",
+    "startTrial": "Comece o teste gratuito de 7 dias",
+    "starting": "Começando…",
+    "title": "WordWise Plus",
+    "welcomeBody": "Sua assinatura já está ativa.",
+    "welcomeTitle": "Bem-vindo ao Plus!"
+  }
+}

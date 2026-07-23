@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { cefrColors, cefrLabels } from '../theme/palette';
+import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 import type { ReelTile } from '../services/api';
@@ -76,7 +76,7 @@ export function MoviePreviewHub({
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   const levelColor = cefrColors[level] ?? GOLD;
-  const levelLabel = cefrLabels[level] ?? level;
+  const levelLabel = t(`cefr.${level}`, { defaultValue: level });
 
   const posterW500 = tile.poster_path
     ? `https://image.tmdb.org/t/p/w500${tile.poster_path}`

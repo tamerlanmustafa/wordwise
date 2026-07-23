@@ -67,6 +67,11 @@ export const AVAILABLE_LANGUAGES: ReadonlyArray<LanguageOption> = [
   { code: 'AZ', name: 'Azerbaijani (Beta)', nativeName: 'Azərbaycan' },
 ];
 
+/**
+ * Kept for parity with packages/types (the frozen web app renders these
+ * names directly). Mobile shows the localized copy from `common:cefrPicker.*`
+ * instead and only reads the codes from CEFR_LEVELS.
+ */
 export const PROFICIENCY_LEVELS: ReadonlyArray<ProficiencyLevel> = [
   { code: 'A1', name: 'A1 - Beginner' },
   { code: 'A2', name: 'A2 - Elementary' },

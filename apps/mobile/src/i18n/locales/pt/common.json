@@ -11,6 +11,52 @@
     "retry": "Tentar novamente",
     "save": "Salvar"
   },
+  "cefr": {
+    "A1": "Iniciante",
+    "A2": "Ensino Fundamental",
+    "B1": "Intermediário",
+    "B2": "Ensino Médio Avançado",
+    "C1": "Avançado",
+    "C2": "Domínio",
+    "IDIOMS": "Expressões idiomáticas e frases"
+  },
+  "cefrFull": {
+    "A1": "Iniciante",
+    "A2": "Ensino Fundamental",
+    "B1": "Intermediário",
+    "B2": "Intermediário Avançado",
+    "C1": "Avançado",
+    "C2": "Domínio"
+  },
+  "cefrPicker": {
+    "A1": "A1 - Iniciante",
+    "A2": "A2 - Nível básico",
+    "B1": "B1 - Intermediário",
+    "B2": "B2 - Intermediário Avançado",
+    "C1": "C1 - Avançado",
+    "C2": "C2 - Proficiente"
+  },
+  "genre": {
+    "12": "Aventura",
+    "14": "Fantasia",
+    "16": "Animação",
+    "18": "Drama",
+    "27": "Terror",
+    "28": "Ação",
+    "35": "Comédia",
+    "36": "História",
+    "37": "Faroeste",
+    "53": "Suspense",
+    "80": "Crime",
+    "99": "Documentário",
+    "878": "Ficção científica",
+    "9648": "Mistério",
+    "10402": "Música",
+    "10749": "Romance",
+    "10751": "Família",
+    "10752": "Guerra",
+    "10770": "Filme para a TV"
+  },
   "nav": {
     "home": "Página inicial",
     "myMovies": "Meus filmes",

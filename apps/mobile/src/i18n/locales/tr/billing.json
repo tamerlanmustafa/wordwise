@@ -1,0 +1,30 @@
+{
+  "family": {
+    "create": "Aile Paketi Oluştur",
+    "createFailed": "Aile planı oluşturulamadı",
+    "emailPlaceholder": "E-posta adresi",
+    "errorTitle": "Hata",
+    "invite": "Üye davet et",
+    "inviteFailed": "Üye davet edilemedi",
+    "leave": "Aile Planından Çık",
+    "leaveBody": "Premium erişiminizi kaybedeceksiniz. Devam etmek istiyor musunuz?",
+    "leaveTitle": "Aile planından çık",
+    "ownersPlan": "{{email}}'in Planı",
+    "removeMember": "Üyeyi kaldır",
+    "removeMemberBody": "{{email}}'i aile planınızdan çıkarmak ister misiniz?",
+    "requiresPlus": "Etkin bir WordWise Plus aboneliği gerektirir.",
+    "title": "Aile Paketi",
+    "yourPlan": "Aile Planınız"
+  },
+  "paywall": {
+    "alreadyPlus": "WordWise Plus'ta bulunuyorsunuz — tüm özellikler kullanıma açık. Teşekkür ederiz!",
+    "notFoundTitle": "Bulunamadı",
+    "restore": "Satın alımları geri yükle",
+    "restoredTitle": "Yeniden canlandırıldı!",
+    "startTrial": "7 günlük ücretsiz denemeyi başlatın",
+    "starting": "Başlıyoruz…",
+    "title": "WordWise Plus",
+    "welcomeBody": "Aboneliğiniz artık aktif hale geldi.",
+    "welcomeTitle": "Plus’a hoş geldiniz!"
+  }
+}

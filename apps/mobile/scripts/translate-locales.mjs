@@ -23,6 +23,12 @@
  *  • Stale keys are pruned. Renaming an English key otherwise orphans the old
  *    one in all four locales, which the parity test then fails on.
  *
+ *  • Single-word labels need a human eye. DeepL translates each string in
+ *    isolation, so a bare noun gets its most common sense, not the domain one:
+ *    the film genre "Action" came back as Turkish "Eylem" (a deed) and Russian
+ *    "Действие" (an act) rather than "Aksiyon"/"Боевик". Review any key whose
+ *    English value is one or two words before trusting it.
+ *
  *  • Plural keys are NOT machine-translated. English has two forms; Russian
  *    needs four, and there is no honest way to derive `wordCount_many` from
  *    `wordCount_other`. Those keys are listed at the end for a human to write.

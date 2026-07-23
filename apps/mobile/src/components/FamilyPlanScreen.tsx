@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { familyApi, type FamilyPlan } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 
@@ -22,6 +23,7 @@ export interface FamilyPlanScreenProps {
 }
 
 export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
+  const { t } = useTranslation();
   const isPremium = useIsPremium();
   const [plan, setPlan] = useState<FamilyPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
       const p = await familyApi.createPlan();
       setPlan(p);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to create family plan');
+      Alert.alert(t('billing:family.errorTitle'), e.message || t('billing:family.createFailed'));
     }
   };
 
@@ -59,14 +61,14 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
       setInviteEmail('');
       load();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to invite member');
+      Alert.alert(t('billing:family.errorTitle'), e.message || t('billing:family.inviteFailed'));
     } finally {
       setInviting(false);
     }
   };
 
   const handleRemove = (memberId: number, email: string) => {
-    Alert.alert('Remove member', `Remove ${email} from your family plan?`, [
+    Alert.alert(t('billing:family.removeMember'), t('billing:family.removeMemberBody', { email }), [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => {
         try { await familyApi.removeMember(memberId); load(); } catch {}
@@ -75,7 +77,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
   };
 
   const handleLeave = () => {
-    Alert.alert('Leave family plan', 'You will lose premium access. Continue?', [
+    Alert.alert(t('billing:family.leaveTitle'), t('billing:family.leaveBody'), [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Leave', style: 'destructive', onPress: async () => {
         try { await familyApi.leave(); load(); } catch {}
@@ -91,7 +93,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Family Plan</Text>
+        <Text style={styles.headerTitle}>{t('billing:family.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -102,24 +104,24 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
       ) : !plan ? (
         <View style={styles.centered}>
           <Text style={styles.emptyIcon}>👨‍👩‍👧‍👦</Text>
-          <Text style={styles.emptyTitle}>Family Plan</Text>
+          <Text style={styles.emptyTitle}>{t('billing:family.title')}</Text>
           <Text style={styles.emptyBody}>
             Share your WordWise Plus subscription with up to 4 family members.
             Each member gets full premium access.
           </Text>
           {isPremium ? (
             <TouchableOpacity style={styles.primaryBtn} onPress={handleCreate}>
-              <Text style={styles.primaryBtnText}>Create Family Plan</Text>
+              <Text style={styles.primaryBtnText}>{t('billing:family.create')}</Text>
             </TouchableOpacity>
           ) : (
-            <Text style={styles.needsPremium}>Requires an active WordWise Plus subscription.</Text>
+            <Text style={styles.needsPremium}>{t('billing:family.requiresPlus')}</Text>
           )}
         </View>
       ) : (
         <View style={styles.content}>
           <View style={styles.planCard}>
             <Text style={styles.planTitle}>
-              {isOwner ? 'Your Family Plan' : `${plan.owner_email}'s Plan`}
+              {isOwner ? t('billing:family.yourPlan') : t('billing:family.ownersPlan', { email: plan.owner_email })}
             </Text>
             <Text style={styles.memberCount}>
               {plan.members.length + 1} / {plan.max_members} members
@@ -147,11 +149,11 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
 
           {isOwner && plan.members.length < plan.max_members - 1 && (
             <View style={styles.inviteSection}>
-              <Text style={styles.sectionTitle}>Invite member</Text>
+              <Text style={styles.sectionTitle}>{t('billing:family.invite')}</Text>
               <View style={styles.inviteRow}>
                 <TextInput
                   style={styles.inviteInput}
-                  placeholder="Email address"
+                  placeholder={t('billing:family.emailPlaceholder')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={inviteEmail}
                   onChangeText={setInviteEmail}
@@ -171,7 +173,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
 
           {!isOwner && (
             <TouchableOpacity style={styles.leaveBtn} onPress={handleLeave}>
-              <Text style={styles.leaveBtnText}>Leave Family Plan</Text>
+              <Text style={styles.leaveBtnText}>{t('billing:family.leave')}</Text>
             </TouchableOpacity>
           )}
         </View>

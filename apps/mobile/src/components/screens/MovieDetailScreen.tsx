@@ -21,12 +21,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, cefrColors, cefrColorsDark, cefrLabels } from '../../theme/palette';
+import { colors, cefrColors, cefrColorsDark } from '../../theme/palette';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
-import { tmdbGenres } from '../../core/types';
+
 import {
   wordwiseApi,
   adminApi,
@@ -283,7 +283,7 @@ export const MovieDetailScreen = ({
       return null;
     }
 
-    const genreNames = movie.genre_ids?.map((id) => tmdbGenres[id]).filter(Boolean) || [];
+    const genreNames = movie.genre_ids?.map((id) => t(`genre.${id}`, { defaultValue: '' })).filter(Boolean) || [];
     await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang, genreNames);
 
     // Run /difficulty and vocabulary fetch in parallel — neither depends on
@@ -561,11 +561,11 @@ export const MovieDetailScreen = ({
     const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
     return levels.map((level) => ({
       level,
-      label: cefrLabels[level] || level,
+      label: t(`cefr.${level}`, { defaultValue: level }),
       count: vocabulary.level_distribution[level as keyof typeof vocabulary.level_distribution] || 0,
       words: vocabulary.top_words_by_level[level] || [],
     }));
-  }, [vocabulary]);
+  }, [vocabulary, t]);
 
   const idioms = vocabulary?.idioms || [];
 
@@ -950,7 +950,7 @@ export const MovieDetailScreen = ({
                         <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
                       ) : null}
                       {movie.genre_ids && movie.genre_ids.length > 0
-                        ? movie.genre_ids.slice(0, 3).map((id) => tmdbGenres[id]).filter(Boolean).join(' · ')
+                        ? movie.genre_ids.slice(0, 3).map((id) => t(`genre.${id}`, { defaultValue: '' })).filter(Boolean).join(' · ')
                         : null}
                     </Text>
                   </View>

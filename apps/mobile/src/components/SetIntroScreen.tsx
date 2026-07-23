@@ -33,7 +33,7 @@ import { getFormattingLocale } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { cefrColors, cefrLabels } from '../theme/palette';
+import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 
@@ -95,7 +95,7 @@ export function SetIntroScreen({
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
   const levelColor = cefrColors[level] ?? tc.gold;
-  const levelLabel = cefrLabels[level] ?? level;
+  const levelLabel = t(`cefr.${level}`, { defaultValue: level });
 
   const posterW500 = movie.poster_path
     ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`

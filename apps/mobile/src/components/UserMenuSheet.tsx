@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -62,6 +63,7 @@ export function UserMenuSheet({
   isAdmin,
   bottomOffset,
 }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   // Start hidden well off-screen; the real distance is set once we measure the
@@ -96,13 +98,13 @@ export function UserMenuSheet({
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
   const navItems: { icon: MenuIconName; label: string; action: () => void }[] = [
-    { icon: 'progress', label: 'My Progress', action: wrap(onNavigateToStats) },
+    { icon: 'progress', label: t('settings:menu.myProgress'), action: wrap(onNavigateToStats) },
     { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
     { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
-    { icon: 'lists', label: 'My Lists', action: wrap(onNavigateToLists) },
+    { icon: 'lists', label: t('settings:menu.myLists'), action: wrap(onNavigateToLists) },
     { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
     { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
-    ...(isAdmin ? [{ icon: 'admin' as MenuIconName, label: 'Admin Panel', action: wrap(onNavigateToAdmin) }] : []),
+    ...(isAdmin ? [{ icon: 'admin' as MenuIconName, label: t('settings:menu.adminPanel'), action: wrap(onNavigateToAdmin) }] : []),
   ];
 
   const themeOpts: { key: ThemePreference; label: string; icon: MenuIconName }[] = [
@@ -142,7 +144,7 @@ export function UserMenuSheet({
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>YOUR ACCOUNT</Text>
+            <Text style={styles.eyebrow}>{t('settings:menu.yourAccount')}</Text>
             <Text style={styles.userName} numberOfLines={1}>{user?.username || 'User'}</Text>
             <Text style={styles.userEmail} numberOfLines={1}>{user?.email}</Text>
           </View>
@@ -191,9 +193,9 @@ export function UserMenuSheet({
             // Themed dialog (not native Alert) so it matches the in-app theme.
             onClose();
             showConfirm({
-              title: 'Log out?',
-              message: "You'll need to sign in again to get back to your words and progress.",
-              confirmLabel: 'Log out',
+              title: t('settings:menu.logOutTitle'),
+              message: t('settings:menu.logOutBody'),
+              confirmLabel: t('settings:menu.logOut'),
               tone: 'destructive',
               onConfirm: onLogout,
             });
@@ -203,7 +205,7 @@ export function UserMenuSheet({
           <View style={[styles.iconChip, styles.iconChipDanger]}>
             <MenuIcon name="logout" size={18} color={tc.error} />
           </View>
-          <Text style={[styles.rowLabel, { color: tc.error }]}>Logout</Text>
+          <Text style={[styles.rowLabel, { color: tc.error }]}>{t('settings:menu.logout')}</Text>
         </TouchableOpacity>
 
         {/* App Store 5.1.1(v): account deletion must be reachable in-app.
@@ -214,18 +216,17 @@ export function UserMenuSheet({
           onPress={() => {
             onClose();
             showConfirm({
-              title: 'Delete account?',
-              message:
-                'This permanently deletes your account and all of your data (saved words, progress, streaks). This cannot be undone.',
-              confirmLabel: 'Delete',
+              title: t('settings:menu.deleteAccountTitle'),
+              message: t('settings:menu.deleteAccountBody'),
+              confirmLabel: t('settings:menu.delete'),
               tone: 'destructive',
               onConfirm: () => {
                 useAuthStore.getState().deleteAccount().catch(() => {
                   // Rare error path — native Alert so it stays until the user
                   // acknowledges (it carries a support email to copy).
                   Alert.alert(
-                    'Deletion failed',
-                    'Your account was not deleted. Check your connection and try again, or email privacy@getwordwise.us.',
+                    t('settings:menu.deleteFailedTitle'),
+                    t('settings:menu.deleteFailedBody'),
                   );
                 });
               },
@@ -236,7 +237,7 @@ export function UserMenuSheet({
           <View style={[styles.iconChip, styles.iconChipDanger]}>
             <MenuIcon name="trash" size={18} color={tc.error} />
           </View>
-          <Text style={[styles.rowLabel, { color: tc.error }]}>Delete account</Text>
+          <Text style={[styles.rowLabel, { color: tc.error }]}>{t('settings:menu.deleteAccount')}</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

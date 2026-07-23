@@ -11,6 +11,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { purchaseProduct, restorePurchases, PRODUCTS } from '../services/billing';
 import { useIsPremium } from '../stores/entitlementsStore';
@@ -33,6 +34,7 @@ export interface PaywallScreenProps {
 type Plan = 'annual' | 'monthly';
 
 export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallScreenProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const isPremium = useIsPremium();
@@ -47,7 +49,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
       const product = plan === 'annual' ? PRODUCTS.ANNUAL : PRODUCTS.MONTHLY;
       const success = await purchaseProduct(product);
       if (success) {
-        Alert.alert('Welcome to Plus!', 'Your subscription is now active.');
+        Alert.alert(t('billing:paywall.welcomeTitle'), t('billing:paywall.welcomeBody'));
         onBack();
       }
     } finally {
@@ -57,7 +59,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
 
   const restore = async () => {
     const result = await restorePurchases();
-    Alert.alert(result.restored ? 'Restored!' : 'Not found', result.message);
+    Alert.alert(result.restored ? t('billing:paywall.restoredTitle') : t('billing:paywall.notFoundTitle'), result.message);
     if (result.restored) onBack();
   };
 
@@ -67,14 +69,14 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
         <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="chevron-back" size={22} color={tc.text} />
         </PressableScale>
-        <Text style={s.headerTitle}>WordWise Plus</Text>
+        <Text style={s.headerTitle}>{t('billing:paywall.title')}</Text>
         <View style={{ width: 22 }} />
       </View>
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Text style={s.heroTitle}>Unlock your full{'\n'}vocabulary potential</Text>
         {isPremium ? (
-          <Text style={s.heroSub}>You're on WordWise Plus — everything's unlocked. Thank you!</Text>
+          <Text style={s.heroSub}>{t('billing:paywall.alreadyPlus')}</Text>
         ) : (
           <Text style={s.heroSub}>
             You've used {previewsUsed} of {previewsLimit} free review sessions. Upgrade to keep learning with
@@ -124,17 +126,17 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
               style={[s.trialBtn, busy && { opacity: 0.6 }]}
               onPress={buy}
               accessibilityRole="button"
-              accessibilityLabel="Start 7-day free trial"
+              accessibilityLabel={t('billing:paywall.startTrial')}
             >
-              <Text style={s.trialBtnText}>{busy ? 'Starting…' : 'Start 7-day free trial'}</Text>
+              <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t('billing:paywall.startTrial')}</Text>
             </PressableScale>
             <Text style={s.priceHint}>
               Then {plan === 'annual' ? `${ANNUAL_PRICE_LABEL}/year` : `${MONTHLY_PRICE_LABEL}/month`} · Cancel
               anytime
             </Text>
 
-            <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel="Restore purchases">
-              <Text style={s.restoreBtnText}>Restore purchases</Text>
+            <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel={t('billing:paywall.restore')}>
+              <Text style={s.restoreBtnText}>{t('billing:paywall.restore')}</Text>
             </PressableScale>
           </>
         )}

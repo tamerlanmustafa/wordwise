@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Trans, useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
-import { cefrColors, cefrLabelsFull } from '../../theme/palette';
+import { cefrColors } from '../../theme/palette';
 
 /**
  * DeckExplainerBand — the fixed 104px band between the level filters and the
@@ -89,7 +89,7 @@ export const DeckExplainerBand = (props: DeckExplainerBandProps) => {
 
   const { level, count, sortOrder, onSortChange } = props;
   const levelColor = cefrColors[level] || tc.primary;
-  const label = cefrLabelsFull[level] || level;
+  const label = t(`cefrFull.${level}`, { defaultValue: level });
   return (
     <View style={[s.band, s.bandLevel]}>
       <View style={s.eyebrowRow}>

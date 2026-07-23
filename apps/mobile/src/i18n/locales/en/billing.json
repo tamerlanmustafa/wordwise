@@ -1,0 +1,30 @@
+{
+  "paywall": {
+    "title": "WordWise Plus",
+    "alreadyPlus": "You're on WordWise Plus — everything's unlocked. Thank you!",
+    "restore": "Restore purchases",
+    "startTrial": "Start 7-day free trial",
+    "starting": "Starting…",
+    "welcomeTitle": "Welcome to Plus!",
+    "welcomeBody": "Your subscription is now active.",
+    "restoredTitle": "Restored!",
+    "notFoundTitle": "Not found"
+  },
+  "family": {
+    "title": "Family Plan",
+    "yourPlan": "Your Family Plan",
+    "create": "Create Family Plan",
+    "requiresPlus": "Requires an active WordWise Plus subscription.",
+    "invite": "Invite member",
+    "emailPlaceholder": "Email address",
+    "removeMember": "Remove member",
+    "leave": "Leave Family Plan",
+    "leaveTitle": "Leave family plan",
+    "leaveBody": "You will lose premium access. Continue?",
+    "createFailed": "Failed to create family plan",
+    "inviteFailed": "Failed to invite member",
+    "removeMemberBody": "Remove {{email}} from your family plan?",
+    "ownersPlan": "{{email}}'s Plan",
+    "errorTitle": "Error"
+  }
+}
