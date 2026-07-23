@@ -1942,11 +1942,20 @@ class HybridCEFRClassifier:
             _GLOBAL_CEFR_CACHE.set(cache_key, result)
             return result
 
-        # PROPER NOUNS & FANTASY WORDS: Detect before classification
-        if is_proper_noun_or_fantasy_word(word):
+        lemma = self._get_lemma_fast(word_lower)
+
+        # PROPER NOUNS & FANTASY WORDS: Detect before classification.
+        # Known-English words are exempt: sentence-initial capitalization
+        # ("Stakeholders were...") must not skip lemmatization, which used
+        # to store the raw plural as its own lemma.
+        if (
+            is_proper_noun_or_fantasy_word(word)
+            and word_lower not in self.cefr_wordlist
+            and lemma not in self.cefr_wordlist
+        ):
             result = WordClassification(
                 word=word,
-                lemma=word_lower,
+                lemma=lemma,
                 pos="",
                 cefr_level=CEFRLevel.A2,
                 confidence=0.9,
@@ -1954,8 +1963,6 @@ class HybridCEFRClassifier:
             )
             _GLOBAL_CEFR_CACHE.set(cache_key, result)
             return result
-
-        lemma = self._get_lemma_fast(word_lower)
 
         if ' ' in word_lower and word_lower in self.multi_word_expressions:
             level, source = self.multi_word_expressions[word_lower]
@@ -2173,12 +2180,36 @@ class HybridCEFRClassifier:
             if is_kids_genre:
                 logger.debug(f"Kids/family genre detected - applying conservative classification")
 
+        # ── Lemma purity guard ──
+        # Drop gibberish, typos, OCR artifacts, and foreign words BEFORE
+        # classification so they never reach word_classifications. Curated
+        # wordlist entries always pass (rescues "hmm", "tv", slang, MWEs).
+        from .lemma_guard import evaluate_lemma
+
+        def _wordlist_known(w: str) -> bool:
+            return (
+                w in self.cefr_wordlist
+                or w in self.multi_word_expressions
+                or w in KIDS_SIMPLE_VOCAB
+                or w in INFORMAL_SIMPLE_VOCAB
+            )
+
         lemma_to_word: Dict[str, str] = {}
+        guard_dropped: Dict[str, int] = {}
         for word in unique_words:
             lemma = self._get_lemma_fast(word)
+            decision = evaluate_lemma(lemma, word=word, is_wordlist_known=_wordlist_known)
+            if not decision.keep:
+                guard_dropped[decision.reason] = guard_dropped.get(decision.reason, 0) + 1
+                continue
             if lemma not in lemma_to_word:
                 # Use original capitalized form if available
                 lemma_to_word[lemma] = original_case_map.get(word, word)
+
+        if guard_dropped:
+            logger.info(
+                f"Lemma guard dropped {sum(guard_dropped.values())} tokens: {guard_dropped}"
+            )
 
         classifications = []
         for lemma, original_word in lemma_to_word.items():

@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
 from ..middleware.auth import get_current_active_user, get_current_user_optional
+from ..services.lemma_guard import display_form
 
 logger = logging.getLogger(__name__)
 
@@ -639,7 +640,7 @@ async def get_vocabulary_preview(
     level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
 
     for word in all_words:
-        if word.word.lower() in hidden:
+        if word.word.lower() in hidden or (word.lemma or "").lower() in hidden:
             continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
         level_distribution[level] = level_distribution.get(level, 0) + 1
@@ -648,7 +649,9 @@ async def get_vocabulary_preview(
             top_words_by_level[level] = []
         if len(top_words_by_level[level]) < 3:
             top_words_by_level[level].append({
-                "word": word.word,
+                # Display the lemma, not the inflected surface form
+                # ("stakeholders" row renders as "stakeholder").
+                "word": display_form(word.word, word.lemma),
                 "lemma": word.lemma,
                 "confidence": word.confidence,
                 "frequency_rank": word.frequencyRank
@@ -752,7 +755,7 @@ async def get_vocabulary_full(
         return rank
 
     for word in cefr_words:
-        if word.word.lower() in hidden:
+        if word.word.lower() in hidden or (word.lemma or "").lower() in hidden:
             continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
 
@@ -768,7 +771,9 @@ async def get_vocabulary_full(
         if level not in top_words_by_level:
             top_words_by_level[level] = []
         top_words_by_level[level].append({
-            "word": word.word,
+            # Display the lemma, not the inflected surface form
+            # ("stakeholders" row renders as "stakeholder").
+            "word": display_form(word.word, word.lemma),
             "lemma": word.lemma,
             "confidence": word.confidence,
             "frequency_rank": rank

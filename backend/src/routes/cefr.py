@@ -26,6 +26,7 @@ from src.services.lemmatization_service import (
 )
 from src.database import get_db
 from src.middleware.auth import get_admin_user, get_current_active_user
+from src.services.lemma_guard import display_form
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -371,7 +372,9 @@ async def run_script_classification(
                     level_groups[level] = []
 
                 level_groups[level].append({
-                    'word': cls.word,
+                    # Display the lemma, not the inflected surface form
+                    # ("stakeholders" row renders as "stakeholder").
+                    'word': display_form(cls.word, cls.lemma),
                     'lemma': cls.lemma,
                     'confidence': cls.confidence,
                     'frequency_rank': cls.frequencyRank
@@ -493,7 +496,9 @@ async def run_script_classification(
                 level_groups[level] = []
 
             level_groups[level].append({
-                'word': cls.word,
+                # Display the lemma, not the inflected surface form
+                # ("stakeholders" row renders as "stakeholder").
+                'word': display_form(cls.word, cls.lemma),
                 'lemma': cls.lemma,
                 'confidence': cls.confidence,
                 'frequency_rank': cls.frequency_rank

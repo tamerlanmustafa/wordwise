@@ -16,6 +16,7 @@ from prisma import Prisma
 from prisma import Json
 
 from src.services.cefr_classifier import PHRASAL_VERBS, COMMON_IDIOMS
+from src.services.lemma_guard import evaluate_lemma
 
 logger = logging.getLogger(__name__)
 
@@ -116,14 +117,18 @@ def lemmatize_script(text: str) -> LemmaResult:
     tokens: List[LemmaToken] = []
     lemma_freq: Dict[str, int] = {}
     unique_lemmas: Dict[str, LemmaToken] = {}
+    # Purity decisions are per-lemma and this loop sees each lemma many
+    # times, so memoize locally instead of re-running the guard.
+    guard_cache: Dict[str, bool] = {}
+    guard_dropped = 0
 
     for token in doc:
         # Skip punctuation, spaces, and single characters
         if token.is_punct or token.is_space or len(token.text.strip()) <= 1:
             continue
 
-        # Skip numbers
-        if token.like_num or token.pos_ == "NUM":
+        # Skip numbers, symbols, and unclassifiable tokens (subtitle/OCR debris)
+        if token.like_num or token.pos_ in ("NUM", "SYM", "X"):
             continue
 
         lemma = token.lemma_.lower().strip()
@@ -131,6 +136,16 @@ def lemmatize_script(text: str) -> LemmaResult:
 
         # Skip if lemma is empty after normalization
         if not lemma:
+            continue
+
+        # Purity guard: gibberish, typos, and foreign words never enter the
+        # global Lemma registry.
+        keep = guard_cache.get(lemma)
+        if keep is None:
+            keep = evaluate_lemma(lemma).keep
+            guard_cache[lemma] = keep
+        if not keep:
+            guard_dropped += 1
             continue
 
         lt = LemmaToken(word=token.text, lemma=lemma, pos=pos)
@@ -141,6 +156,12 @@ def lemmatize_script(text: str) -> LemmaResult:
         # Keep the first occurrence as representative
         if lemma not in unique_lemmas:
             unique_lemmas[lemma] = lt
+
+    if guard_dropped:
+        logger.info(
+            f"Lemma guard dropped {guard_dropped} tokens "
+            f"({sum(1 for k in guard_cache.values() if not k)} unique lemmas)"
+        )
 
     # Detect multi-word expressions
     mwes = _detect_multi_word_expressions(text)
