@@ -145,7 +145,6 @@ async def upload_file(
             data={
                 "movieId": movie.id,
                 "sourceUsed": scriptsource.MANUAL_UPLOAD,
-                "rawSubtitleText": extracted.get("raw_text", "")[:50000],  # Limit raw storage
                 "cleanedScriptText": extracted["cleaned_text"],
                 "cleanedWordCount": extracted["word_count"],
                 "isComplete": True,
