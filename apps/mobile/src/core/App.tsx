@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { StatusBar, Alert, Platform, UIManager, View, InteractionManager, BackHandler } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -48,6 +49,7 @@ import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import type { Screen, ListFilter, MovieData } from './types';
+import { PARENT_OF, PROFILE_SHEET } from './navParents';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
 import { LoginScreen } from '../components/screens/LoginScreen';
@@ -89,6 +91,7 @@ export default function App() {
   const logout = useAuthStore((s) => s.logout);
   const initialize = useAuthStore((s) => s.initialize);
 
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
@@ -99,6 +102,9 @@ export default function App() {
 
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  // Base tab the Profile sheet was last opened over, so closing a screen
+  // launched from the sheet returns there instead of teleporting to Home.
+  const rootTabForSheet = useRef<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
   const [listFilter, setListFilter] = useState<ListFilter>('saved');
@@ -275,11 +281,17 @@ export default function App() {
   };
 
   // Back from a Profile-sheet-launched screen returns to the sheet (its
-  // origin) rather than teleporting to Home (UX audit F-006).
-  const backToProfile = () => {
-    navigateToHome();
+  // origin) rather than teleporting to Home (UX audit F-006). We drop back to
+  // the base tab the sheet was opened over — Home/My Movies/Practice are all
+  // mounted under KeepAlive, so that switch is instant and the sheet animates
+  // straight back with no Home flash. Deliberately skips navigateToHome's
+  // movie/search resets and notification refresh, which caused that flash.
+  // Stable identity (it only touches setters and a ref) so the hardware-back
+  // effect below can depend on it without re-subscribing every render.
+  const backToProfile = useCallback(() => {
+    setCurrentScreen(rootTabForSheet.current);
     setShowUserSheet(true);
-  };
+  }, []);
 
   const navigateToNotebook = (filter: ListFilter = 'saved') => {
     setListFilter(filter);
@@ -320,6 +332,40 @@ export default function App() {
 
   const navigateToVocabulary = () => {
     setCurrentScreen('vocabulary');
+  };
+
+  // ── Back navigation for the account area ──────────────────────────
+  // On-screen Back and Android's hardware back both resolve through
+  // PARENT_OF, so they can't disagree about where a screen returns to.
+
+  /** Navigate to `from`'s parent. False when it has none (not in the map). */
+  const goToParent = useCallback((from: Screen): boolean => {
+    const parent = PARENT_OF[from];
+    if (!parent) return false;
+    if (parent === PROFILE_SHEET) backToProfile();
+    else setCurrentScreen(parent);
+    return true;
+  }, [backToProfile]);
+
+  /** `onBack` handler for a screen, derived from its parent. */
+  const backFrom = (from: Screen) => () => {
+    goToParent(from);
+  };
+
+  /** Back-button label — names the destination so Back is never a guess. */
+  const backLabelFor = (from: Screen): string => {
+    switch (PARENT_OF[from]) {
+      case PROFILE_SHEET:
+        return t('nav.profile');
+      case 'settings':
+        return t('settings:title');
+      case 'vocabulary':
+        return t('vocabulary:screenTitle');
+      case 'lists':
+        return t('vocabulary:lists.title');
+      default:
+        return t('action.back');
+    }
   };
 
   // Quiz state. Journey shows units for a movie; lesson plays a session;
@@ -369,15 +415,26 @@ export default function App() {
     else navigateToPractice();
   };
 
-  const handleTabPress = (t: BottomTab) => {
+  const handleTabPress = (tab: BottomTab) => {
     // Switching to any other tab collapses the profile sheet if it's open.
-    if (t !== 'profile') setShowUserSheet(false);
+    if (tab !== 'profile') setShowUserSheet(false);
     // Any tab tap dismisses the notifications sheet.
     setShowNotifSheet(false);
-    if (t === 'home') navigateToHome();
-    else if (t === 'movies') navigateToMyMovies();
-    else if (t === 'practice') navigateToPractice();
-    else if (t === 'profile') setShowUserSheet((prev) => !prev);
+    if (tab === 'home') navigateToHome();
+    else if (tab === 'movies') navigateToMyMovies();
+    else if (tab === 'practice') navigateToPractice();
+    else if (tab === 'profile') {
+      setShowUserSheet((prev) => {
+        // Remember what the sheet is opening over, so backToProfile can
+        // return there rather than to Home.
+        if (!prev) {
+          rootTabForSheet.current = (['home', 'movies', 'practice'] as Screen[]).includes(currentScreen)
+            ? currentScreen
+            : 'home';
+        }
+        return !prev;
+      });
+    }
   };
 
   // Android hardware back — map it to in-app navigation so it never exits the
@@ -395,14 +452,16 @@ export default function App() {
       }
       const rootTabs: Screen[] = ['home', 'movies', 'journey', 'practice'];
       if (authed && !rootTabs.includes(currentScreen)) {
-        navigateToHome();
+        // Account screens have a real parent — go there, exactly as the
+        // on-screen Back does. Everything else still unwinds to Home.
+        if (!goToParent(currentScreen)) navigateToHome();
         return true;
       }
       return false; // on a root tab (or login) — let Android do its default
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
     return () => sub.remove();
-  }, [currentScreen, showUserSheet, showNotifSheet, status]);
+  }, [currentScreen, showUserSheet, showNotifSheet, status, goToParent]);
 
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
@@ -743,13 +802,13 @@ export default function App() {
         </KeepAlive>
 
         {currentScreen === 'settings' ? (
-          <SettingsScreen onBack={backToProfile} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
+          <SettingsScreen onBack={backFrom('settings')} backLabel={backLabelFor('settings')} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
         ) : currentScreen === 'vocabulary' ? (
-          <VocabularyScreen onBack={backToProfile} onNavigateToLearnedWords={navigateToLearnedWords} />
+          <VocabularyScreen onBack={backFrom('vocabulary')} backLabel={backLabelFor('vocabulary')} onNavigateToLearnedWords={navigateToLearnedWords} />
         ) : currentScreen === 'learnedWords' ? (
-          <LearnedWordsScreen onBack={() => setCurrentScreen('vocabulary')} />
+          <LearnedWordsScreen onBack={backFrom('learnedWords')} backLabel={backLabelFor('learnedWords')} />
         ) : currentScreen === 'admin' ? (
-          <AdminScreen onBack={navigateToHome} />
+          <AdminScreen onBack={backFrom('admin')} backLabel={backLabelFor('admin')} />
         ) : currentScreen === 'review' ? (
           <ReviewScreen
             kind={reviewLaunch.kind}
@@ -760,23 +819,23 @@ export default function App() {
         ) : currentScreen === 'paywall' ? (
           <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
         ) : currentScreen === 'stats' ? (
-          <StatsScreen onBack={backToProfile} onStartReview={navigateToReview} />
+          <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (
-          <NotebookScreen onBack={navigateToLists} filter={listFilter} />
+          <NotebookScreen onBack={backFrom('notebook')} backLabel={backLabelFor('notebook')} filter={listFilter} />
         ) : currentScreen === 'lists' ? (
-          <ListsScreen onBack={backToProfile} onOpenList={navigateToNotebook} onOpenWatched={navigateToWatched} />
+          <ListsScreen onBack={backFrom('lists')} backLabel={backLabelFor('lists')} onOpenList={navigateToNotebook} onOpenWatched={navigateToWatched} />
         ) : currentScreen === 'watched' ? (
-          <WatchedScreen onBack={navigateToLists} onMoviePress={navigateToMovie} />
+          <WatchedScreen onBack={backFrom('watched')} backLabel={backLabelFor('watched')} onMoviePress={navigateToMovie} />
         ) : currentScreen === 'achievements' ? (
-          <AchievementsScreen onBack={backToProfile} />
+          <AchievementsScreen onBack={backFrom('achievements')} backLabel={backLabelFor('achievements')} />
         ) : currentScreen === 'leaderboard' ? (
-          <LeaderboardScreen onBack={backToProfile} />
+          <LeaderboardScreen onBack={backFrom('leaderboard')} backLabel={backLabelFor('leaderboard')} />
         ) : currentScreen === 'familyPlan' ? (
-          <FamilyPlanScreen onBack={navigateToHome} userId={user!.id} />
+          <FamilyPlanScreen onBack={backFrom('familyPlan')} backLabel={backLabelFor('familyPlan')} userId={user!.id} />
         ) : currentScreen === 'privacy' ? (
-          <PrivacyScreen onBack={navigateToHome} mode="privacy" />
+          <PrivacyScreen onBack={backFrom('privacy')} backLabel={backLabelFor('privacy')} mode="privacy" />
         ) : currentScreen === 'terms' ? (
-          <PrivacyScreen onBack={navigateToHome} mode="terms" />
+          <PrivacyScreen onBack={backFrom('terms')} backLabel={backLabelFor('terms')} mode="terms" />
         ) : currentScreen === 'moviePreview' && activePreviewTile ? (
           <MoviePreviewHub
             tile={activePreviewTile.tile}

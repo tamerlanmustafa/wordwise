@@ -13,14 +13,17 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
+import { BACK_ARROW } from '../../i18n/rtl';
 
 interface Props {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
 }
 
 // Shows every word the user has globally marked "never show again".
 // Tap a row to unlearn it (word reappears in movie lists on next load).
-export const LearnedWordsScreen = ({ onBack }: Props) => {
+export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
@@ -61,7 +64,7 @@ export const LearnedWordsScreen = ({ onBack }: Props) => {
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
-          <Text style={settingsStyles.backButtonText}>← Back</Text>
+          <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={settingsStyles.headerTitle}>{t('vocabulary:learnedWords')}</Text>
         <View style={{ width: 60 }} />

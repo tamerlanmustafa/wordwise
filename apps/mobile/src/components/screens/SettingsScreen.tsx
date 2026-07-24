@@ -29,7 +29,7 @@ import {
   type WordReminderMode,
 } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
-import { FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
+import { BACK_ARROW, FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
 import {
   UI_LANGUAGES,
   clearExplicitAppLanguage,
@@ -41,6 +41,8 @@ import {
 
 interface Props {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   user: any;
   onUserUpdated: (user: any) => void;
   onNavigateToFamilyPlan: () => void;
@@ -52,6 +54,7 @@ interface Props {
 
 export const SettingsScreen = ({
   onBack,
+  backLabel,
   user,
   onUserUpdated,
   onNavigateToFamilyPlan,
@@ -305,7 +308,7 @@ export const SettingsScreen = ({
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
-          <Text style={settingsStyles.backButtonText}>← {t('action.back')}</Text>
+          <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={settingsStyles.headerTitle}>{t('settings:title')}</Text>
         <View style={{ width: 60 }} />

@@ -32,7 +32,7 @@ import {
 import type { Entitlements } from '../types';
 import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
 import { VocabCoverageView } from './admin/VocabCoverageView';
-import { alignEnd } from '../i18n/rtl';
+import { alignEnd, BACK_ARROW } from '../i18n/rtl';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -88,11 +88,13 @@ const LEVEL_COLORS: Record<string, string> = {
 
 export interface AdminScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
 }
 
 type AdminView = 'main' | 'dead' | 'processed' | 'coverage';
 
-export function AdminScreen({ onBack }: AdminScreenProps) {
+export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [view, setView] = useState<AdminView>('main');
   const [deadJobs, setDeadJobs] = useState<DeadJob[] | null>(null);
   const [deadLoading, setDeadLoading] = useState(false);
@@ -524,7 +526,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? 'Back'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin</Text>
         <TouchableOpacity onPress={() => fetchAll()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>

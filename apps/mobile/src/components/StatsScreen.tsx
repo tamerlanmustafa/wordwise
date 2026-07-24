@@ -15,7 +15,7 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { ContributionCalendar } from './stats/ContributionCalendar';
 import { calendarIntensity } from './stats/statsSelectors';
 import { Skeleton } from './ui/Skeleton';
-import { alignEnd } from '../i18n/rtl';
+import { alignEnd, BACK_ARROW } from '../i18n/rtl';
 
 const CALENDAR_WEEKS = 5;
 
@@ -34,10 +34,12 @@ const BOX_INTERVAL_KEYS = ['d1', 'd3', 'd7', 'd14', 'd30'];
 
 export interface StatsScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   onStartReview: () => void;
 }
 
-export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
+export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -76,7 +78,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
     // the screen reads as "almost there" rather than a dead spinner (F-015).
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} styles={styles} />
+        <Header onBack={onBack} backLabel={backLabel} styles={styles} />
         <View style={styles.scrollContent}>
           <View style={styles.heroRow}>
             <Skeleton height={96} radius={14} sheen style={{ flex: 1 }} />
@@ -92,7 +94,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
   if (!stats || stats.total_saved === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} styles={styles} />
+        <Header onBack={onBack} backLabel={backLabel} styles={styles} />
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>{t('stats:emptyTitle')}</Text>
           <Text style={styles.emptyBody}>
@@ -111,7 +113,7 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={onBack} styles={styles} />
+      <Header onBack={onBack} backLabel={backLabel} styles={styles} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Streak + Retention hero */}
         <View style={styles.heroRow}>
@@ -237,12 +239,12 @@ export function StatsScreen({ onBack, onStartReview }: StatsScreenProps) {
 
 type Styles = ReturnType<typeof makeStyles>;
 
-function Header({ onBack, styles }: { onBack: () => void; styles: Styles }) {
+function Header({ onBack, backLabel, styles }: { onBack: () => void; backLabel?: string; styles: Styles }) {
   const { t } = useTranslation();
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={8}>
-        <Text style={styles.backText}>← Back</Text>
+        <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{t('stats:title')}</Text>
       <View style={{ width: 60 }} />

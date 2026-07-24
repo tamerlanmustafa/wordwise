@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { getFormattingLocale } from '../i18n';
+import { BACK_ARROW } from '../i18n/rtl';
 import {
   socialApi,
   quizApi,
@@ -40,9 +41,11 @@ interface BoardRow {
 
 export interface LeaderboardScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
 }
 
-export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
+export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -141,7 +144,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('stats:leaderboard.screenTitle')}</Text>
         <View style={{ width: 60 }} />

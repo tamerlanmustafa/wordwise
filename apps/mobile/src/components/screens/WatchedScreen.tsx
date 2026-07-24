@@ -25,9 +25,12 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { watchedApi, type WatchedMovie } from '../../services/api';
 import { showToast } from '../../stores/toastStore';
 import type { MovieData } from '../../core/types';
+import { BACK_ARROW } from '../../i18n/rtl';
 
 interface Props {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   onMoviePress: (movie: MovieData) => void;
 }
 
@@ -39,7 +42,7 @@ const toMovieData = (m: WatchedMovie): MovieData => ({
   release_date: m.year ? `${m.year}-01-01` : '',
 });
 
-export const WatchedScreen = ({ onBack, onMoviePress }: Props) => {
+export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -69,7 +72,7 @@ export const WatchedScreen = ({ onBack, onMoviePress }: Props) => {
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
       <View style={[styles.detailHeader, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={[styles.backButtonText, { color: tc.primary }]}>← Back</Text>
+          <Text style={[styles.backButtonText, { color: tc.primary }]}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>{t('movies:watched.title')}</Text>
         <View style={{ width: 60 }} />

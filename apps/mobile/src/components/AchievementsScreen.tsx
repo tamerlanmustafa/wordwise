@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { BACK_ARROW } from '../i18n/rtl';
 import { achievementsApi, type Achievement, type AchievementsResponse } from '../services/api';
 
 const COLORS = {
@@ -26,9 +27,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export interface AchievementsScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
 }
 
-export function AchievementsScreen({ onBack }: AchievementsScreenProps) {
+export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProps) {
   const { t } = useTranslation();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +60,7 @@ export function AchievementsScreen({ onBack }: AchievementsScreenProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('stats:achievements')}</Text>
         <View style={{ width: 60 }} />

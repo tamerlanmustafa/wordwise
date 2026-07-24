@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { BACK_ARROW } from '../i18n/rtl';
 import { wordwiseApi, type SavedWordEntry } from '../services/api';
 import { swr, writeCache } from '../services/swrCache';
 import { Skeleton } from './ui/Skeleton';
@@ -28,11 +29,13 @@ type ListFilter = 'saved' | 'learned';
 
 export interface NotebookScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   filter?: ListFilter;
   title?: string;
 }
 
-export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScreenProps) {
+export function NotebookScreen({ onBack, backLabel, filter = 'saved', title }: NotebookScreenProps) {
   const { t } = useTranslation();
   const [words, setWords] = useState<SavedWordEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +100,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} title={headerTitle} />
+        <Header onBack={onBack} backLabel={backLabel} title={headerTitle} />
         {/* Skeleton rows mirror the real word list so nothing shifts when the
             data lands, and read as "almost there" rather than a blank spinner. */}
         <View style={styles.listContent}>
@@ -115,7 +118,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
   if (words.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={onBack} title={headerTitle} />
+        <Header onBack={onBack} backLabel={backLabel} title={headerTitle} />
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>
             {filter === 'learned' ? t('vocabulary:learned.emptyShort') : t('vocabulary:notebook.emptySaved')}
@@ -135,7 +138,7 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={onBack} title={headerTitle} />
+      <Header onBack={onBack} backLabel={backLabel} title={headerTitle} />
 
       {/* Toggle + count */}
       <View style={styles.toolbar}>
@@ -183,11 +186,12 @@ export function NotebookScreen({ onBack, filter = 'saved', title }: NotebookScre
   );
 }
 
-function Header({ onBack, title }: { onBack: () => void; title?: string }) {
+function Header({ onBack, backLabel, title }: { onBack: () => void; backLabel?: string; title?: string }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} hitSlop={8}>
-        <Text style={styles.backText}>← Back</Text>
+        <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title ?? 'My Words'}</Text>
       <View style={{ width: 60 }} />

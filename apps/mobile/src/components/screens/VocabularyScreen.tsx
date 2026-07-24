@@ -5,17 +5,19 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
-import { FORWARD_ARROW } from '../../i18n/rtl';
+import { BACK_ARROW, FORWARD_ARROW } from '../../i18n/rtl';
 
 interface Props {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   onNavigateToLearnedWords: () => void;
 }
 
 // Vocabulary hub — dedicated page under the user icon. Lists the user's
 // vocabulary-related sub-sections (currently just Learned Words; room
 // for future things like custom word lists, etc.).
-export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) => {
+export const VocabularyScreen = ({ onBack, backLabel, onNavigateToLearnedWords }: Props) => {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
@@ -31,7 +33,7 @@ export const VocabularyScreen = ({ onBack, onNavigateToLearnedWords }: Props) =>
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
-          <Text style={settingsStyles.backButtonText}>← Back</Text>
+          <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={settingsStyles.headerTitle}>{t('vocabulary:screenTitle')}</Text>
         <View style={{ width: 60 }} />

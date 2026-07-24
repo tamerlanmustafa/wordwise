@@ -7,14 +7,17 @@ import { wordwiseApi, watchedApi } from '../../services/api';
 import { styles } from '../../core/styles';
 import { useThemeColors } from '../../theme/tokens';
 import type { ListFilter } from '../../core/types';
+import { BACK_ARROW } from '../../i18n/rtl';
 
 interface Props {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   onOpenList: (filter: ListFilter) => void;
   onOpenWatched: () => void;
 }
 
-export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
+export const ListsScreen = ({ onBack, backLabel, onOpenList, onOpenWatched }: Props) => {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const [savedCount, setSavedCount] = useState<number | null>(null);
@@ -68,7 +71,7 @@ export const ListsScreen = ({ onBack, onOpenList, onOpenWatched }: Props) => {
     <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
       <View style={[styles.detailHeader, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={[styles.backButtonText, { color: tc.primary }]}>← Back</Text>
+          <Text style={[styles.backButtonText, { color: tc.primary }]}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={[styles.detailHeaderTitle, { color: tc.text }]} numberOfLines={1}>{t('vocabulary:lists.title')}</Text>
         <View style={{ width: 60 }} />

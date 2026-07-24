@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { BACK_ARROW } from '../i18n/rtl';
 import { familyApi, type FamilyPlan } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 
@@ -19,10 +20,12 @@ const COLORS = {
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   userId: number;
 }
 
-export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
+export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreenProps) {
   const { t } = useTranslation();
   const isPremium = useIsPremium();
   const [plan, setPlan] = useState<FamilyPlan | null>(null);
@@ -91,7 +94,7 @@ export function FamilyPlanScreen({ onBack, userId }: FamilyPlanScreenProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('billing:family.title')}</Text>
         <View style={{ width: 60 }} />

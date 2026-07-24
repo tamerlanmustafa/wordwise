@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BACK_ARROW } from '../i18n/rtl';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -12,17 +13,19 @@ const COLORS = {
 
 export interface PrivacyScreenProps {
   onBack: () => void;
+  /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
+  backLabel?: string;
   mode: 'privacy' | 'terms';
 }
 
-export function PrivacyScreen({ onBack, mode }: PrivacyScreenProps) {
+export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
   const isPrivacy = mode === 'privacy';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? 'Back'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isPrivacy ? 'Privacy Policy' : 'Terms of Service'}</Text>
         <View style={{ width: 60 }} />
