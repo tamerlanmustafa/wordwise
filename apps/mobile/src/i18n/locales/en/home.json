@@ -5,9 +5,6 @@
     "placeholder": "Search films, words, or actors…",
     "recentlyViewed": "RECENTLY VIEWED"
   },
-  "levelSort": {
-    "showingAtYourLevel": "SHOWING AT YOUR LEVEL"
-  },
   "rankedList": {
     "endOfLevel": "That's everything at this level",
     "empty": "No classified movies found for this level yet.",

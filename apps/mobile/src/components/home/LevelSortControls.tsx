@@ -3,21 +3,21 @@
  * header, replacing the old purple `LevelToggle` row (and the now-removed
  * "🎮 Journey · Soon" pill).
  *
- * Layout (home/home-mobile.jsx → ControlRow):
- *   • Label row: `SHOWING AT YOUR LEVEL` (left) + gold pill
- *     `★ {level} · Your level ▾` (right). Tap the pill → a paper dropdown
- *     where each option is a CEFR colour swatch + label; the active row is
- *     gold-tinted with a check. (Replaces the 🟢🟡🟠🔴 emoji dots.)
+ * Layout — one wrapping chip row:
  *   • Sort chips: Rating / Popularity / Level %. Active = chipBgOn/chipTxtOn,
  *     inactive = chipBg/text2 + 1px border. Active chip shows a trailing
  *     ↓ (desc) / ↑ (asc); re-tapping the active sort flips direction.
+ *   • Level chip, last in the row: gold `★ {level} ▾`. Tap → a paper dropdown
+ *     where each option is a CEFR colour swatch + label; the active row is
+ *     gold-tinted with a check.
  *
- * Behaviour is unchanged from the old controls — only the skin changes.
+ * The level used to sit in a separate label row above the chips
+ * (`SHOWING AT YOUR LEVEL` + a gold pill); it now shares the filter row. The
+ * row wraps rather than clipping, since four chips overflow narrow phones.
  */
 
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { cefrColors } from '../../theme/palette';
 import { HomeIcon } from './HomeIcons';
@@ -47,25 +47,40 @@ export function LevelSortControls({
   sortAsc,
   onSortPress,
 }: Props) {
-  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
     <View style={s.wrap}>
-      {/* Label + gold level pill */}
-      <View style={s.labelRow}>
-        <Text style={s.label}>{t('home:levelSort.showingAtYourLevel')}</Text>
+      {/* Sort chips + the level filter chip at the end */}
+      <View style={s.sortRow}>
+        {SORTS.map((opt) => {
+          const on = opt.key === sort;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              style={[s.chip, on ? s.chipOn : s.chipOff]}
+              onPress={() => onSortPress(opt.key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.chipText, on ? s.chipTextOn : s.chipTextOff]}>
+                {opt.label}
+                {on ? (sortAsc ? ' ↑' : ' ↓') : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
         <TouchableOpacity
-          style={s.levelPill}
+          style={[s.chip, s.levelChip]}
           onPress={() => setDropdownOpen((v) => !v)}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={`Level ${level}. Tap to change.`}
         >
           <HomeIcon name="star" size={12} color={tc.goldDeep} />
-          <Text style={s.levelPillText}>{level} · Your level</Text>
+          <Text style={[s.chipText, s.chipTextOn]}>{level}</Text>
           <HomeIcon name="chevron" size={13} color={tc.goldDeep} sw={2.6} />
         </TouchableOpacity>
       </View>
@@ -105,26 +120,6 @@ export function LevelSortControls({
           })}
         </View>
       ) : null}
-
-      {/* Sort chips */}
-      <View style={s.sortRow}>
-        {SORTS.map((opt) => {
-          const on = opt.key === sort;
-          return (
-            <TouchableOpacity
-              key={opt.key}
-              style={[s.chip, on ? s.chipOn : s.chipOff]}
-              onPress={() => onSortPress(opt.key)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.chipText, on ? s.chipTextOn : s.chipTextOff]}>
-                {opt.label}
-                {on ? (sortAsc ? ' ↑' : ' ↓') : ''}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
     </View>
   );
 }
@@ -135,38 +130,10 @@ const makeStyles = (tc: ThemeColors) =>
       position: 'relative',
       zIndex: 60,
     },
-    labelRow: {
-      paddingHorizontal: 18,
-      paddingBottom: 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    label: {
-      fontSize: 11,
-      fontWeight: '800',
-      letterSpacing: 1.4,
-      color: tc.textFaint,
-      textTransform: 'uppercase',
-    },
-    levelPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 7,
-      paddingVertical: 7,
-      paddingHorizontal: 12,
-      borderRadius: 999,
-      backgroundColor: tc.gold,
-    },
-    levelPillText: {
-      color: tc.goldDeep,
-      fontSize: 12,
-      fontWeight: '900',
-      letterSpacing: 0.3,
-    },
     dropdown: {
       position: 'absolute',
-      top: 38,
+      // Just below the (first line of the) chip row: 30px chip + 4px gap.
+      top: 34,
       end: 18,
       zIndex: 200,
       minWidth: 200,
@@ -213,6 +180,9 @@ const makeStyles = (tc: ThemeColors) =>
       paddingHorizontal: 18,
       paddingBottom: 12,
       flexDirection: 'row',
+      alignItems: 'center',
+      // Four chips overflow a 375pt screen, so wrap instead of clipping.
+      flexWrap: 'wrap',
       gap: 7,
     },
     chip: {
@@ -221,6 +191,13 @@ const makeStyles = (tc: ThemeColors) =>
       borderRadius: 999,
     },
     chipOn: {
+      backgroundColor: tc.gold,
+    },
+    levelChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 11,
       backgroundColor: tc.gold,
     },
     chipOff: {

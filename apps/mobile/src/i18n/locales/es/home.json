@@ -1,8 +1,5 @@
 {
   "advertisement": "PUBLICIDAD",
-  "levelSort": {
-    "showingAtYourLevel": "ADAPTADO A TU NIVEL"
-  },
   "notifications": "Notificaciones",
   "rankedList": {
     "empty": "Aún no se han encontrado películas clasificadas para este nivel.",

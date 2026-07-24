@@ -1,8 +1,5 @@
 {
   "advertisement": "РЕКЛАМА",
-  "levelSort": {
-    "showingAtYourLevel": "ПОДХОДЯЩИЕ ДЛЯ ВАШЕГО УРОВНЯ"
-  },
   "notifications": "Уведомления",
   "rankedList": {
     "empty": "На данный момент фильмов с таким рейтингом для этого уровня не найдено.",

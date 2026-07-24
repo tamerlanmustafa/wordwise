@@ -1,8 +1,5 @@
 {
   "advertisement": "REKLAM",
-  "levelSort": {
-    "showingAtYourLevel": "SEVİYENİZE UYGUN GÖSTERİM"
-  },
   "notifications": "Bildirimler",
   "rankedList": {
     "empty": "Bu seviye için henüz sınıflandırılmış film bulunamadı.",

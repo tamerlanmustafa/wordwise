@@ -1,37 +1,32 @@
 /**
  * HomeHeader — the top row of the redesigned Home screen.
  *
- * Eyebrow `YOUR FEED · {level} LEVEL` (gold, 10/900) with a circular
- * notification button on the right carrying a small gold unread dot. The
- * eyebrow matches the My Movies / Practice headers (10/900 ls 2
- * goldOnSurface). No emoji — the bell is a stroked icon.
+ * A circular notification button, right-aligned, carrying a small gold unread
+ * dot. The `YOUR FEED · {level} LEVEL` eyebrow that used to sit on the left is
+ * gone — the level now lives on the filter row (see `LevelSortControls`), so
+ * the row is just the bell. No emoji — the bell is a stroked icon.
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { HomeIcon } from './HomeIcons';
 
 interface Props {
-  /** User CEFR level, shown in the eyebrow. */
-  level: string;
   /** Whether to show the gold unread dot on the bell. */
   hasUnread?: boolean;
   /** Tap handler for the notification button. */
   onNotificationsPress?: () => void;
 }
 
-export function HomeHeader({ level, hasUnread = false, onNotificationsPress }: Props) {
+export function HomeHeader({ hasUnread = false, onNotificationsPress }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   return (
     <View style={s.header}>
-      <View style={{ flex: 1 }}>
-        <Text style={s.eyebrow}>YOUR FEED · {level} LEVEL</Text>
-      </View>
       <TouchableOpacity
         style={s.bellBtn}
         onPress={onNotificationsPress}
@@ -51,17 +46,12 @@ const makeStyles = (tc: ThemeColors) =>
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      // Bell only — `flex-end` follows the writing direction, so it stays on
+      // the trailing edge under RTL too.
+      justifyContent: 'flex-end',
       paddingHorizontal: 18,
       paddingTop: 4,
       paddingBottom: 12,
-    },
-    eyebrow: {
-      fontSize: 10,
-      fontWeight: '900',
-      letterSpacing: 2,
-      color: tc.goldOnSurface,
-      textTransform: 'uppercase',
     },
     bellBtn: {
       width: 38,

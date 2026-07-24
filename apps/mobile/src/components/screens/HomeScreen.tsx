@@ -344,7 +344,6 @@ export const HomeScreen = ({
       />
 
       <HomeHeader
-        level={selectedLevel}
         hasUnread={notifUnread}
         onNotificationsPress={onOpenNotifications}
       />
