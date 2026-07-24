@@ -15,6 +15,25 @@ class WordData:
         self.zipf_score = zipf_score  # Zipf frequency (0-7 scale, higher = more common)
 
 
+# The six real CEFR levels. `proficiencylevel` also carries UNKNOWN (#91),
+# which is a "could not classify" marker, not a difficulty — a movie is not
+# easier because it says "Fezziwig" a lot.
+SCORABLE_CEFR_LEVELS = ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')
+
+
+def scorable_words(words: List['WordData']) -> List['WordData']:
+    """
+    Drop words that carry no difficulty signal (UNKNOWN, blank).
+
+    Every difficulty metric here is a proportion or a median over levels, so
+    unscorable words must be removed from the *input*, not defaulted: a
+    `.get(level, 1)` would score proper nouns as A1 and an unmatched
+    `level_counts[level]` bucket would swell the denominator while
+    contributing to no band. Both silently made name-heavy films look easier.
+    """
+    return [w for w in words if w.cefr_level in SCORABLE_CEFR_LEVELS]
+
+
 def count_syllables(word: str) -> int:
     """Simple syllable counter based on vowel groups. Ignores proper nouns."""
     # Skip proper nouns (capitalized words)
@@ -439,6 +458,10 @@ def compute_median_cefr_level(words: List[WordData]) -> float:
     """Compute median CEFR level on unique words."""
     CEFR_NUMERIC = {'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 6}
 
+    # Called directly by some callers, so filter here too rather than
+    # relying on compute_difficulty_advanced having done it.
+    words = scorable_words(words)
+
     # Get unique words
     unique_word_levels = {}
     for w in words:
@@ -612,6 +635,7 @@ def compute_difficulty_advanced(
 
     Returns difficulty_level, score (0-100), and breakdown percentages.
     """
+    words = scorable_words(words)
     if not words:
         return difficultylevel.BEGINNER, 0, {}
 
@@ -910,6 +934,11 @@ def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylev
     Legacy difficulty computation using only CEFR distribution counts.
     Kept for backward compatibility.
     """
+    # UNKNOWN (#91) is not a difficulty band: leaving it in `total` would
+    # shrink every percentage below and drag films toward BEGINNER.
+    cefr_distribution = {
+        k: v for k, v in cefr_distribution.items() if k in SCORABLE_CEFR_LEVELS
+    }
     total = sum(cefr_distribution.values())
     if total == 0:
         return difficultylevel.BEGINNER, 0, cefr_distribution

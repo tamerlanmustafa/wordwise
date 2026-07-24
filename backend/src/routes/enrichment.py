@@ -818,7 +818,13 @@ async def get_word_sentences(
             from src.services.translation_service import TranslationService
             ts = TranslationService(db)
             tgt = target_lang.upper()
+            # UNKNOWN (#91) is not a level, so it takes the same "no usable
+            # classification" default as a missing row — it must not reach
+            # word_sentence_examples.cefr_level, which the saved-words export
+            # renders verbatim.
             cefr_val = classification.cefrLevel if (classification and classification.cefrLevel) else "B1"
+            if cefr_val == "UNKNOWN":
+                cefr_val = "B1"
             for item in raw_sentences:
                 cached_ex = None
                 try:

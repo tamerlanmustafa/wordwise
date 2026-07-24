@@ -89,11 +89,17 @@ def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
     Args:
         word: The word token
         lemma: The lemmatized form
-        cefr_level: CEFR level (A1, A2, B1, B2, C1, C2)
+        cefr_level: CEFR level (A1, A2, B1, B2, C1, C2) or UNKNOWN
 
     Returns:
         True if word should be shown to user, False if it should be filtered out
     """
+    # UNKNOWN is the "classifier could not place this" bucket, not a level
+    # (#91): proper nouns, fantasy words and unrecognised debris. Nothing in
+    # it is taught until we've looked at what accumulates there.
+    if cefr_level == "UNKNOWN":
+        return False
+
     # Swear words and slurs are never taught. Checked here (not only via the
     # upstream lemma guard) because classifications cached before the guard
     # existed are served straight from the DB on the fast path.

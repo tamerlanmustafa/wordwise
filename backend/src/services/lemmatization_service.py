@@ -61,8 +61,14 @@ class LemmaResult:
     multi_word_expressions: List[LemmaToken]
 
 
-# CEFR weight map for priority score computation
-CEFR_WEIGHTS = {"A1": 0.1, "A2": 0.3, "B1": 0.5, "B2": 0.7, "C1": 0.9, "C2": 1.0}
+# CEFR weight map for priority score computation. UNKNOWN (#91) scores 0 so
+# unclassifiable words sink to the bottom of every priority-ordered queue
+# instead of taking the `.get(..., 0.5)` default and outranking real B1
+# vocabulary — the sentence worker reads this order.
+CEFR_WEIGHTS = {
+    "A1": 0.1, "A2": 0.3, "B1": 0.5, "B2": 0.7, "C1": 0.9, "C2": 1.0,
+    "UNKNOWN": 0.0,
+}
 
 # Priority score weights
 FREQ_WEIGHT = 0.5

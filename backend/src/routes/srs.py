@@ -547,7 +547,11 @@ async def start_session(
             list(set(word_texts + unique_lemmas)),
         )
         for r in cefr_rows:
-            cefr_map[r["word"]] = r["cefr_level"]
+            # UNKNOWN is a "could not classify" marker, not a level (#91).
+            # cefr_level is Optional, so leave it unset rather than render a
+            # word the user saved with an "UNKNOWN" badge.
+            if r["cefr_level"] != "UNKNOWN":
+                cefr_map[r["word"]] = r["cefr_level"]
 
     # v0.7 §7 — batch-translate the LEMMAS (not surface forms) so the
     # translation MCQ matches the canonical word the user is studying.

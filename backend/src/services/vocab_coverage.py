@@ -198,6 +198,24 @@ def build_report(
         warn_at=50.0, direction="max", max_value=100.0,
     ))
 
+    # 3b. UNKNOWN bucket — words the classifier could not place (#91). Not a
+    # pass/fail signal: it exists so we can watch WHAT collects here before
+    # deciding what to do with it, so it only ever reports "ok". A share that
+    # keeps climbing means the classifier is giving up more often, which is
+    # the thing worth noticing.
+    unknown = raw.get("unknown", 0)
+    unknown_share = round(100.0 * unknown / lemmas_total, 2) if lemmas_total else 0.0
+    metrics.append(_metric(
+        "unknown_registry_share",
+        "UNKNOWN share of lemma registry",
+        unknown_share, "%",
+        "ok",
+        "observation only — awaiting a decision on this bucket (issue #91)",
+        prev=prev.get("unknown_registry_share"),
+        detail=f"{unknown:,} / {lemmas_total:,} lemmas unclassifiable",
+        direction="max", max_value=100.0,
+    ))
+
     # 4. Translation cache growth — rows created in the last 7d. >0 = MT caching
     # is alive; 0 means the shared cache stalled. Was 301.
     tc_7d = raw.get("translation_cache_7d", 0)
@@ -345,9 +363,12 @@ async def _gather_raw(db: Prisma) -> dict[str, Any]:
     raw["uncovered_visible_lemmas"] = int(rows[0]["n"])
 
     rows = await db.query_raw(
-        "SELECT count(*) FILTER (WHERE cefr_level = 'A2') AS a2, count(*) AS total FROM lemmas"
+        "SELECT count(*) FILTER (WHERE cefr_level = 'A2') AS a2, "
+        "count(*) FILTER (WHERE cefr_level = 'UNKNOWN') AS unknown, "
+        "count(*) AS total FROM lemmas"
     )
     raw["a2"] = int(rows[0]["a2"])
+    raw["unknown"] = int(rows[0]["unknown"])
     raw["lemmas_total"] = int(rows[0]["total"])
 
     rows = await db.query_raw(

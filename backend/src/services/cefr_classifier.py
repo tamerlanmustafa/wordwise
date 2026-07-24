@@ -1948,6 +1948,13 @@ class HybridCEFRClassifier:
         # Known-English words are exempt: sentence-initial capitalization
         # ("Stakeholders were...") must not skip lemmatization, which used
         # to store the raw plural as its own lemma.
+        #
+        # These are UNKNOWN, not A2 (#91). Deciding a word is a name is not
+        # deciding it is beginner vocabulary — labelling it A2 put "Aleppo",
+        # "Orson" and "Fezziwig" in front of A2 learners, and made this
+        # branch alone 14.4k of the registry's 22.5k A2 lemmas. The
+        # confidence stays 0.9: it is the confidence that the word is
+        # unteachable, and it is high.
         if (
             is_proper_noun_or_fantasy_word(word)
             and word_lower not in self.cefr_wordlist
@@ -1957,7 +1964,7 @@ class HybridCEFRClassifier:
                 word=word,
                 lemma=lemma,
                 pos="",
-                cefr_level=CEFRLevel.A2,
+                cefr_level=CEFRLevel.UNKNOWN,
                 confidence=0.9,
                 source=ClassificationSource.FALLBACK
             )
@@ -2070,12 +2077,19 @@ class HybridCEFRClassifier:
             _GLOBAL_CEFR_CACHE.set(cache_key, freq_result)
             return freq_result
 
-        # Final fallback: Unknown words → A2
+        # Final fallback: words no wordlist, frequency table or heuristic
+        # could place. They go to UNKNOWN and are never taught (#91).
+        #
+        # This used to return A2, which quietly turned the beginner band into
+        # the bucket for everything the classifier gave up on. UNKNOWN keeps
+        # them stored and countable (see src/services/vocab_coverage.py) so
+        # we can look at what actually collects here before deciding what to
+        # do with it — but out of every learner-facing surface.
         result = WordClassification(
             word=word,
             lemma=lemma,
             pos="",
-            cefr_level=CEFRLevel.A2,
+            cefr_level=CEFRLevel.UNKNOWN,
             confidence=0.2,
             source=ClassificationSource.FALLBACK
         )

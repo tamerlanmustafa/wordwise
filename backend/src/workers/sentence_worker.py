@@ -65,8 +65,11 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
     """
     Lemmas that appear in at least one movie's vocabulary but have no global
     LLM sentence yet. Excludes admin-hidden words (never displayed, so not
-    worth spend) and `skip_ids` (failed in this process). Highest
-    priority_score first so the words users hit most get covered first.
+    worth spend), UNKNOWN-level words (#91 — the classifier could not place
+    them, so they are never displayed either, and they are exactly the
+    proper-noun residue the LLM keeps declining) and `skip_ids` (failed in
+    this process). Highest priority_score first so the words users hit most
+    get covered first.
 
     The "no LLM sentence yet" exclusion must stay an uncorrelated
     `l.id NOT IN (SELECT …)` — Postgres hashes that subplan once (like the
@@ -93,6 +96,7 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
             WHERE sb.movie_id IS NULL AND sb.source = 'llm'
         )
         AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
+        AND l.cefr_level <> 'UNKNOWN'
         {skip_clause}
         ORDER BY l.priority_score DESC, l.id
         LIMIT {int(limit)}

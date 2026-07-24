@@ -33,6 +33,7 @@ def _report(raw_overrides: dict, previous=None, cap_usd: float = 50.0) -> dict[s
         "mlm_covered": 950,          # 95% coverage → ok
         "uncovered_visible_lemmas": 100,
         "a2": 400,
+        "unknown": 150,               # #91 bucket — observation only, never fails
         "lemmas_total": 1000,         # 40% A2 → ok
         "translation_cache_7d": 50,   # >0 → ok
         "wse_rows": 100,
@@ -98,6 +99,20 @@ def test_a2_share_warns_over_half():
     m = _report({"a2": 818})["a2_registry_share"]   # 81.8% like prod
     assert m["status"] == vc.WARN
     assert m["value"] == pytest.approx(81.8)
+
+
+def test_unknown_share_is_observation_only():
+    """
+    The #91 bucket is there to be watched, not policed: we have not decided
+    what these words deserve yet, so no size of it may warn or fail.
+    """
+    small = _report({"unknown": 10})["unknown_registry_share"]
+    huge = _report({"unknown": 900})["unknown_registry_share"]
+
+    assert small["status"] == vc.OK
+    assert huge["status"] == vc.OK
+    assert huge["value"] == pytest.approx(90.0)
+    assert (huge["warn_at"], huge["fail_at"]) == (None, None)
 
 
 def test_translation_cache_growth_stall():
@@ -200,6 +215,7 @@ def test_meter_vs_tile_split_is_stable():
     assert meters == {
         "usage_weighted_sentence_coverage",
         "a2_registry_share",
+        "unknown_registry_share",
         "word_sentence_gloss_share",
         "llm_cost_last_24h",
     }
@@ -248,7 +264,11 @@ class _FakeDb:
         if "hidden_words" in s:
             return [{"n": self._raw["uncovered_visible_lemmas"]}]
         if "cefr_level = 'A2'" in s:
-            return [{"a2": self._raw["a2"], "total": self._raw["lemmas_total"]}]
+            return [{
+                "a2": self._raw["a2"],
+                "unknown": self._raw["unknown"],
+                "total": self._raw["lemmas_total"],
+            }]
         if "translation_cache WHERE created_at" in s:
             return [{"n": self._raw["translation_cache_7d"]}]
         if "with_gloss" in s:
@@ -269,6 +289,7 @@ _BASELINE_RAW = {
     "mlm_covered": 950,
     "uncovered_visible_lemmas": 65000,
     "a2": 818,
+    "unknown": 150,
     "lemmas_total": 1000,
     "translation_cache_7d": 50,
     "wse_rows": 100,

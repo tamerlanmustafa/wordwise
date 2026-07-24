@@ -198,7 +198,7 @@ def test_capitalized_known_word_is_lemmatized_not_proper_nouned():
     result = HybridCEFRClassifier.classify_word(fake, "Stakeholders")
 
     assert result.lemma == "stakeholder"       # NOT "stakeholders"
-    assert result.cefr_level == CEFRLevel.B2   # NOT the proper-noun A2 shortcut
+    assert result.cefr_level == CEFRLevel.B2   # NOT the proper-noun shortcut
 
 
 def test_capitalized_unknown_word_still_hits_proper_noun_branch():
@@ -207,5 +207,6 @@ def test_capitalized_unknown_word_still_hits_proper_noun_branch():
     fake = _fake_classifier(wordlist={}, lemma_map={})
     result = HybridCEFRClassifier.classify_word(fake, "Yabzick")
 
-    assert result.cefr_level == CEFRLevel.A2
+    # UNKNOWN since #91 — this branch used to say A2, which taught names.
+    assert result.cefr_level == CEFRLevel.UNKNOWN
     assert result.confidence == 0.9

@@ -671,6 +671,11 @@ async def get_vocabulary_preview(
         if is_internationalism_entry(word.word, word.lemma):
             continue
         level = word.cefrLevel if isinstance(word.cefrLevel, str) else word.cefrLevel.value
+        # Words the classifier could not place (#91) are not a band and are
+        # not taught. This loop predates should_keep_word and inlines its
+        # filters, so it needs the check spelled out too.
+        if level == "UNKNOWN":
+            continue
         level_distribution[level] = level_distribution.get(level, 0) + 1
 
         if level not in top_words_by_level:

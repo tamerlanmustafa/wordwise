@@ -457,6 +457,16 @@ enum proficiencylevel {
   B2
   C1
   C2
+  // Added in #91. Not a proficiency level: the bucket for words the
+  // classifier could not place. A2 used to be that bucket, which is how
+  // 87% of the A2 registry ended up being proper names and rare junk
+  // ("fezziwig", "geoduck"). Never written to users.proficiency_level, and
+  // never shown to a learner — src/routes/cefr.py::should_keep_word drops
+  // it, and the quiz/SRS band queries list levels explicitly so it falls
+  // out on its own. Declared last so it also sorts above C2, keeping any
+  // ordering comparison from mistaking it for beginner vocabulary.
+  // See manual/2026_07_23_unknown_cefr_bucket_issue_91.sql.
+  UNKNOWN
 }
 
 enum scriptsource {
