@@ -32,9 +32,6 @@ const SERIF_FAMILY = 'Source Serif 4';
 /** The shared curve for every Explore movement. */
 export const EXPLORE_EASING = Easing.bezier(0.22, 0.75, 0.28, 1);
 
-/** How far the lifting group rises when a panel is open. */
-export const CARD_LIFT = 150;
-
 interface Props {
   item: FeedItem;
   height: number;
@@ -42,9 +39,21 @@ interface Props {
   lift: Animated.Value;
   revealed: boolean;
   onToggleReveal: () => void;
+  /** How far the lifting group rises when a panel opens, and the rail's
+   *  lane width — both scale with the viewport (see explore/metrics). */
+  liftDistance: number;
+  lane: number;
 }
 
-function WordCardBase({ item, height, lift, revealed, onToggleReveal }: Props) {
+function WordCardBase({
+  item,
+  height,
+  lift,
+  revealed,
+  onToggleReveal,
+  liftDistance,
+  lane,
+}: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -76,7 +85,7 @@ function WordCardBase({ item, height, lift, revealed, onToggleReveal }: Props) {
       {
         translateY: lift.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, -CARD_LIFT],
+          outputRange: [0, -liftDistance],
         }),
       },
     ],
@@ -86,7 +95,7 @@ function WordCardBase({ item, height, lift, revealed, onToggleReveal }: Props) {
 
   return (
     <Pressable
-      style={[s.card, { height }]}
+      style={[s.card, { height, paddingEnd: lane }]}
       onPress={onToggleReveal}
       // The whole card is the reveal target, so it should read as one
       // control rather than announcing every line separately.
@@ -220,10 +229,9 @@ type Styles = ReturnType<typeof makeStyles>;
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     card: {
-      // The 76px right inset is the action rail's lane — text never runs
-      // underneath it.
+      // paddingEnd is supplied per-render: it's the action rail's lane, so
+      // text never runs underneath the glyphs.
       paddingTop: 18,
-      paddingEnd: 76,
       paddingBottom: 20,
       paddingStart: 24,
       backgroundColor: tc.feedBg,

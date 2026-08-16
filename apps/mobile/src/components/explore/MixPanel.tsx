@@ -39,7 +39,6 @@ import {
   type MixLevel,
 } from '../../utils/levelMix';
 import { directionSign } from '../../i18n/rtl';
-import { RAIL_BOTTOM, RAIL_HEIGHT, RAIL_LANE } from './ActionRail';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -51,9 +50,23 @@ interface Props {
   /** 0 = fully off-screen left, 1 = open. */
   progress: Animated.Value;
   visible: boolean;
+  /** Must match the rail exactly — same height, same bottom edge, and an
+   *  end inset that leaves the rail visible and tappable. */
+  height: number;
+  bottom: number;
+  lane: number;
 }
 
-export function MixPanel({ draft, onChange, onDone, progress, visible }: Props) {
+export function MixPanel({
+  draft,
+  onChange,
+  onDone,
+  progress,
+  visible,
+  height,
+  bottom,
+  lane,
+}: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -65,6 +78,9 @@ export function MixPanel({ draft, onChange, onDone, progress, visible }: Props) 
       style={[
         s.panel,
         {
+          height,
+          bottom,
+          end: lane,
           opacity: progress,
           transform: [
             {
@@ -217,9 +233,6 @@ const makeStyles = (tc: ThemeColors) =>
     panel: {
       position: 'absolute',
       start: 0,
-      end: RAIL_LANE,
-      bottom: RAIL_BOTTOM,
-      height: RAIL_HEIGHT,
       backgroundColor: tc.paper,
       // Flush left: only the right corners round, and there is no left
       // border — the panel runs off the screen edge.

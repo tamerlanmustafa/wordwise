@@ -18,12 +18,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { RailIcon, type RailGlyph } from './ExploreIcons';
 
-/** Rail geometry. Exported so the panels can align to it exactly. */
-export const RAIL_HEIGHT = 285;
-export const RAIL_BOTTOM = 132;
-export const RAIL_LANE = 76;
-
 interface Props {
+  /** Geometry from `exploreMetrics` — the rail scales with the card area
+   *  so it never crowds the word on a small phone. */
+  height: number;
+  bottom: number;
+  end: number;
   /** Dominant level from the mix, e.g. "B1" — the mix glyph's label. */
   mixLabel: string;
   mixOpen: boolean;
@@ -34,6 +34,9 @@ interface Props {
 }
 
 export function ActionRail({
+  height,
+  bottom,
+  end,
   mixLabel,
   mixOpen,
   saved,
@@ -45,7 +48,7 @@ export function ActionRail({
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   return (
-    <View style={s.rail} pointerEvents="box-none">
+    <View style={[s.rail, { height, bottom, end }]} pointerEvents="box-none">
       <RailButton
         glyph="sliders"
         size={26}
@@ -120,9 +123,6 @@ const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     rail: {
       position: 'absolute',
-      end: 10,
-      bottom: RAIL_BOTTOM,
-      height: RAIL_HEIGHT,
       flexDirection: 'column',
       justifyContent: 'space-between',
       alignItems: 'center',

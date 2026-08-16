@@ -5,13 +5,15 @@
  * screen, the toast strip and the tab bar are one flat surface (`feedBg`):
  * no header, no title, no chips, no counter, no instructional text.
  *
- *   62px spacer (Dynamic Island / status bar)
+ *   top spacer (Dynamic Island / status bar)
  *   FlatList — one WordCard per viewport, snapped
  *   toast strip (share failures only)
  *   [GlobalBottomBar is rendered by App.tsx below this]
  *
  * The action rail floats over the list on the right; the mix panel slides in
- * from the left and stops 76px short so the rail stays visible. While a
+ * from the left and stops one rail-lane short so the rail stays visible. All
+ * of that geometry scales with the measured viewport — see explore/metrics.
+ * While a
  * panel is open a scrim makes the card and the rail inert, and any tap on it
  * closes the panel.
  *
@@ -29,6 +31,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,15 +40,9 @@ import { useWordFeedStore, PREFETCH_THRESHOLD, logFeedFlip } from '../stores/wor
 import { dominantLevel } from '../utils/levelMix';
 import type { FeedItem, LevelMix } from '../services/api';
 import { WordCard, EXPLORE_EASING } from './explore/WordCard';
+import { exploreMetrics } from './explore/metrics';
 import { ActionRail } from './explore/ActionRail';
 import { MixPanel } from './explore/MixPanel';
-
-/** Clears the Dynamic Island / notch. Larger insets win on devices that
- *  report more (spec's floor is 62). */
-const TOP_SPACER = 62;
-
-/** Reserved so the surface never reflows when a toast comes and goes. */
-const TOAST_STRIP_HEIGHT = 46;
 
 interface Props {
   /** Whether this tab is the visible one — drives panel reset on leave. */
@@ -58,6 +55,7 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const items = useWordFeedStore((st) => st.items);
   const mix = useWordFeedStore((st) => st.mix);
@@ -83,8 +81,14 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   const liftAnim = useRef(new Animated.Value(0)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
 
-  const topSpacer = Math.max(TOP_SPACER, insets.top);
-  const cardHeight = Math.max(0, available - topSpacer - TOAST_STRIP_HEIGHT);
+  // Every fixed dimension the feed used to hard-code is derived from the
+  // measured viewport, so a 4.7" phone gets a proportionally smaller rail
+  // and lift instead of one tuned for a 6.7" screen.
+  const m = useMemo(
+    () => exploreMetrics({ viewport: available, width, topInset: insets.top }),
+    [available, width, insets.top],
+  );
+  const cardHeight = m.cardHeight;
 
   useEffect(() => {
     hydrate(proficiencyLevel, targetLanguage);
@@ -209,9 +213,11 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
         lift={liftAnim}
         revealed={revealed.has(item.lemma_id)}
         onToggleReveal={() => handleToggleReveal(item)}
+        liftDistance={m.cardLift}
+        lane={m.railLane}
       />
     ),
-    [cardHeight, liftAnim, revealed, handleToggleReveal],
+    [cardHeight, liftAnim, revealed, handleToggleReveal, m.cardLift, m.railLane],
   );
 
   const getItemLayout = useCallback(
@@ -228,7 +234,7 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
       style={s.root}
       onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
     >
-      <View style={{ height: topSpacer }} />
+      <View style={{ height: m.topSpacer }} />
 
       <View style={s.listArea}>
         {cardHeight > 0 ? (
@@ -273,6 +279,9 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
         ) : null}
 
         <ActionRail
+          height={m.railHeight}
+          bottom={m.railBottom}
+          end={m.railEnd}
           mixLabel={dominantLevel(mix)}
           mixOpen={mixOpen}
           saved={current ? saved.has(current.lemma_id) : false}
@@ -287,10 +296,13 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
           onDone={handleDone}
           progress={panelAnim}
           visible={mixOpen}
+          height={m.railHeight}
+          bottom={m.railBottom}
+          lane={m.railLane}
         />
       </View>
 
-      <View style={s.toastStrip} pointerEvents="none">
+      <View style={[s.toastStrip, { height: m.toastStrip }]} pointerEvents="none">
         {toast ? (
           <Animated.View
             style={[
@@ -336,7 +348,6 @@ const makeStyles = (tc: ThemeColors) =>
     root: { flex: 1, backgroundColor: tc.feedBg },
     listArea: { flex: 1 },
     toastStrip: {
-      height: TOAST_STRIP_HEIGHT,
       paddingHorizontal: 24,
       paddingBottom: 14,
       justifyContent: 'flex-end',
@@ -356,7 +367,6 @@ const makeStyles = (tc: ThemeColors) =>
     },
     skeleton: {
       paddingTop: 18,
-      paddingEnd: 76,
       paddingStart: 24,
       justifyContent: 'center',
     },
