@@ -107,6 +107,17 @@ export interface ThemeColors {
   toastBg:            string;
   toastText:          string;
 
+  // Home-feed movie card. `cardStock` is deliberately neither `paper` nor
+  // `background` — it sits one step above the page so the card separates
+  // without going white, and it is the SAME on every card (per-card tinting
+  // from artwork was built and rejected). The scrim and the level-ring hole
+  // must use this exact RGB or seams show where they meet the card.
+  cardStock:          string;
+  cardInk:            string;  // title + the percent inside the ring
+  cardMeta:           string;  // year, rating, CEFR band, ring arc
+  cardRank:           string;  // the big mono list position
+  cardRingTrack:      string;  // unfilled part of the level ring
+
   // Reel-only: the film stock substrate + sprocket palette
   reelStock:          string;  // film body colour
   reelStockDeep:      string;  // shadow/vignette inner colour
@@ -196,6 +207,12 @@ const light: ThemeColors = {
   toastBg:            '#2D2418',
   toastText:          '#FFF6E0',
 
+  cardStock:          '#FBF7EE',
+  cardInk:            '#2D2418',
+  cardMeta:           '#8B5A00',
+  cardRank:           'rgba(45,36,24,0.28)',
+  cardRingTrack:      'rgba(45,36,24,0.12)',
+
   reelStock:          '#F4EFE3',
   reelStockDeep:      '#E5DCBE',
   reelStockLight:     '#FAF6E8',
@@ -277,6 +294,12 @@ const dark: ThemeColors = {
   panelShadowColor:   'rgba(255,209,102,0.30)',
   toastBg:            '#FFD166',
   toastText:          '#3a2400',
+
+  cardStock:          '#0F1013',
+  cardInk:            '#F3EEE4',
+  cardMeta:           '#FFD166',
+  cardRank:           'rgba(244,243,239,0.30)',
+  cardRingTrack:      'rgba(255,255,255,0.10)',
 
   reelStock:          '#1a1109',
   reelStockDeep:      '#0e0805',
