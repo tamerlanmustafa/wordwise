@@ -116,6 +116,9 @@ describe('label / threshold maps', () => {
       quick_recall: 0,
       tough_words: 0,
       movie_deep_dive: 0,
+      // Lists tab kinds — started from a list's gold action, never gated.
+      list_words: 0,
+      list_films: 0,
     });
   });
 });

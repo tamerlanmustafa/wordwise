@@ -8,6 +8,7 @@ import {
   quizApi,
   wordwiseApi,
   reportsApi,
+  listsApi,
   SrsPaywallError,
   API_BASE_URL,
 } from '../api';
@@ -112,6 +113,188 @@ describe('API endpoint wrappers', () => {
     it('returns null on a non-OK response', async () => {
       fetchMock.mockResolvedValue(ok({}, 404));
       await expect(srsApi.todaysWord(5, 'FR')).resolves.toBeNull();
+    });
+  });
+
+  // ─── Lists ─────────────────────────────────────────────────────────────
+  // All nine wrappers. The mapping assertions matter as much as the request
+  // shape: the wire is snake_case and the client is camelCase, so a missed
+  // field surfaces as a silently-undefined count rather than a type error.
+  describe('listsApi', () => {
+    const wireSummary = {
+      id: 12,
+      name: 'Saved from Home',
+      kind: 'films',
+      system_key: 'reel',
+      count: 5,
+      due_count: null,
+      total_words: 20424,
+      preview: { posters: ['/a.jpg'], words: null },
+      updated_at: '2026-08-11T09:14:00Z',
+    };
+
+    it('list GETs /lists with no kind filter by default', async () => {
+      fetchMock.mockResolvedValue(ok({ lists: [] }));
+      await listsApi.list();
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists`);
+    });
+
+    it('list passes the kind filter through', async () => {
+      fetchMock.mockResolvedValue(ok({ lists: [] }));
+      await listsApi.list('words');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists?kind=words`);
+    });
+
+    it('list maps the wire shape onto camelCase', async () => {
+      fetchMock.mockResolvedValue(ok({ lists: [wireSummary] }));
+      const [summary] = await listsApi.list();
+      expect(summary).toMatchObject({
+        id: 12,
+        systemKey: 'reel',
+        count: 5,
+        dueCount: null,
+        totalWords: 20424,
+      });
+      expect(summary.preview.posters).toEqual(['/a.jpg']);
+    });
+
+    it('detail GETs the list with limit, cursor and sort', async () => {
+      fetchMock.mockResolvedValue(ok({ list: wireSummary, items: [], next_cursor: null }));
+      await listsApi.detail(12, { limit: 20, cursor: '40', sort: 'rating' });
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/12?limit=20&cursor=40&sort=rating`);
+    });
+
+    it('detail maps film items by the list kind', async () => {
+      fetchMock.mockResolvedValue(ok({
+        list: wireSummary,
+        items: [{
+          tmdb_id: 238, title: 'The Godfather', poster_path: '/g.jpg', year: 1972,
+          rating: 8.7, cefr: 'B2', word_count: 4218, added_at: '2026-08-11T00:00:00Z',
+        }],
+        next_cursor: '50',
+      }));
+      const detail = await listsApi.detail(12);
+      expect(detail.items[0]).toMatchObject({ tmdbId: 238, wordCount: 4218, cefr: 'B2' });
+      expect(detail.nextCursor).toBe('50');
+    });
+
+    it('detail maps word items and defaults an absent SRS state to new', async () => {
+      // A word added from Explore and never studied has no user_words row.
+      fetchMock.mockResolvedValue(ok({
+        list: { ...wireSummary, kind: 'words', system_key: 'favourites' },
+        items: [{ word: 'reluctant', lemma_id: 8123, pos: 'adjective', cefr: 'B2', added_at: 'x' }],
+        next_cursor: null,
+      }));
+      const detail = await listsApi.detail(11);
+      expect(detail.items[0]).toMatchObject({ word: 'reluctant', lemmaId: 8123, srsState: 'new' });
+    });
+
+    it('create POSTs the name and kind', async () => {
+      fetchMock.mockResolvedValue(ok({ ...wireSummary, id: 30, system_key: null }, 201));
+      await listsApi.create('Film noir night', 'films');
+      expect(methodOf(fetchMock)).toBe('POST');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists`);
+      expect(bodyOf(fetchMock)).toEqual({ name: 'Film noir night', kind: 'films' });
+    });
+
+    it('create surfaces a duplicate name as a coded ListApiError', async () => {
+      // The sheet switches on this code to put the message on its name field
+      // rather than in a toast.
+      fetchMock.mockResolvedValue(
+        ok({ detail: { code: 'duplicate_name', message: 'You already have a list with that name' } }, 409),
+      );
+      await expect(listsApi.create('Film noir', 'films')).rejects.toMatchObject({
+        name: 'ListApiError',
+        code: 'duplicate_name',
+        status: 409,
+      });
+    });
+
+    it('rename PATCHes just the name', async () => {
+      fetchMock.mockResolvedValue(ok(wireSummary));
+      await listsApi.rename(30, 'Noir night');
+      expect(methodOf(fetchMock)).toBe('PATCH');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/30`);
+      expect(bodyOf(fetchMock)).toEqual({ name: 'Noir night' });
+    });
+
+    it('rename of a pinned list surfaces the system_list code', async () => {
+      fetchMock.mockResolvedValue(
+        ok({ detail: { code: 'system_list', message: 'This list cannot be renamed' } }, 409),
+      );
+      await expect(listsApi.rename(12, 'Nope')).rejects.toMatchObject({ code: 'system_list' });
+    });
+
+    it('remove DELETEs the list and tolerates a 204 with no body', async () => {
+      fetchMock.mockResolvedValue({ status: 204, ok: true, json: async () => { throw new Error('no body'); } });
+      await expect(listsApi.remove(30)).resolves.toBeUndefined();
+      expect(methodOf(fetchMock)).toBe('DELETE');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/30`);
+    });
+
+    it('addItems POSTs a batch in one request', async () => {
+      fetchMock.mockResolvedValue(ok(wireSummary));
+      await listsApi.addItems(30, {
+        films: [
+          { tmdb_id: 238, title: 'The Godfather', poster_path: '/g.jpg', year: 1972 },
+          { tmdb_id: 240, title: 'Part II', poster_path: null, year: 1974 },
+        ],
+      });
+      expect(methodOf(fetchMock)).toBe('POST');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/30/items`);
+      expect(bodyOf(fetchMock).films).toHaveLength(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('removeItem DELETEs by tmdb id for films', async () => {
+      fetchMock.mockResolvedValue({ status: 204, ok: true, json: async () => undefined });
+      await listsApi.removeItem(30, 238);
+      expect(methodOf(fetchMock)).toBe('DELETE');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/30/items/238`);
+    });
+
+    it('removeItem URL-encodes a word key', async () => {
+      // Multi-word lemmas exist; an unescaped space would 404.
+      fetchMock.mockResolvedValue({ status: 204, ok: true, json: async () => undefined });
+      await listsApi.removeItem(11, 'give up');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/11/items/give%20up`);
+    });
+
+    it('reorder PUTs the id order', async () => {
+      fetchMock.mockResolvedValue({ status: 204, ok: true, json: async () => undefined });
+      await listsApi.reorder([12, 9, 30]);
+      expect(methodOf(fetchMock)).toBe('PUT');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/order`);
+      expect(bodyOf(fetchMock)).toEqual({ ids: [12, 9, 30] });
+    });
+
+    it('practice POSTs and returns the standard session payload', async () => {
+      fetchMock.mockResolvedValue(ok({
+        cards: [{ user_word_id: 1 }], total_due: 6, session_size: 10,
+        is_preview: false, previews_remaining: 0, kind: 'list_words',
+      }));
+      const session = await listsApi.practice(11);
+      expect(methodOf(fetchMock)).toBe('POST');
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/11/practice`);
+      expect(session.kind).toBe('list_words');
+    });
+
+    it('practice maps the free-tier daily cap to SrsPaywallError', async () => {
+      // Same cap as the Practice tab — a list is not a way around it.
+      fetchMock.mockResolvedValue(
+        ok({ detail: { paywall: 'srs_daily_cap_reached', message: 'Tomorrow', previews_used: 1, previews_limit: 1 } }, 402),
+      );
+      await expect(listsApi.practice(11)).rejects.toMatchObject({
+        name: 'SrsPaywallError',
+        kind: 'daily_cap_reached',
+      });
+    });
+
+    it('practice surfaces an empty pool as nothing_to_practice', async () => {
+      fetchMock.mockResolvedValue(
+        ok({ detail: { code: 'nothing_to_practice', message: "There's nothing to practise in this list yet" } }, 409),
+      );
+      await expect(listsApi.practice(30)).rejects.toMatchObject({ code: 'nothing_to_practice' });
     });
   });
 

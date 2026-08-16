@@ -37,7 +37,8 @@ interface Props {
   user: any;
   onNavigateToSettings: () => void;
   onNavigateToAdmin: () => void;
-  onNavigateToLists: () => void;
+  onNavigateToNotebook: () => void;
+  onNavigateToWatched: () => void;
   onNavigateToSavedMovies: () => void;
   onNavigateToVocabulary: () => void;
   onNavigateToStats: () => void;
@@ -55,7 +56,8 @@ export function UserMenuSheet({
   user,
   onNavigateToSettings,
   onNavigateToAdmin,
-  onNavigateToLists,
+  onNavigateToNotebook,
+  onNavigateToWatched,
   onNavigateToSavedMovies,
   onNavigateToVocabulary,
   onNavigateToStats,
@@ -103,7 +105,13 @@ export function UserMenuSheet({
     { icon: 'progress', label: t('settings:menu.myProgress'), action: wrap(onNavigateToStats) },
     { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
     { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
-    { icon: 'lists', label: t('settings:menu.myLists'), action: wrap(onNavigateToLists) },
+    // "My Lists" was a hub screen whose job the Lists *tab* now does. Its two
+    // genuinely distinct children are linked directly instead: Saved Words
+    // groups per-movie saves by film, which is a different view from the
+    // tab's flat Favourites set, and Watched is a films-seen log rather than
+    // a study list.
+    { icon: 'lists', label: t('vocabulary:savedWords'), action: wrap(onNavigateToNotebook) },
+    { icon: 'film', label: t('vocabulary:lists.watchedFilms'), action: wrap(onNavigateToWatched) },
     // The saved reel's home since Explore took its place in the tab bar.
     { icon: 'film', label: t('movies:myMovies.title'), action: wrap(onNavigateToSavedMovies) },
     { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },

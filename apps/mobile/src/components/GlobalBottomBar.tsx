@@ -1,33 +1,39 @@
 /**
- * GlobalBottomBar — v0.7 4-tab persistent nav.
+ * GlobalBottomBar — v0.8 5-tab persistent nav.
  *
- *   Home · Explore · Practice · Profile
+ *   Home · Explore · Practice · Lists · Profile
  *
- * Replaces the v0.6 5-tab bar (Home / My Lists / Reel / Rankings /
- * Profile). The Journey/Reel surface is gone; My Lists, Rankings
- * (Leaderboard), Progress, Badges, etc. are reachable from the Profile
- * sheet (UserMenuSheet) — the old HomeScreen menu was removed in this
- * refactor. Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon`
- * translated to `react-native-svg` (stroke 1.9, 22px, rounded caps).
+ * Lists joins the bar as the fourth tab: the one place a user finds
+ * everything they have kept, films and words alike. It also gives the reel
+ * back a home of its own — the reel had been demoted to the Profile sheet
+ * when the Explore word feed took position 2, and `Saved from Home` inside
+ * the Lists tab is now where it lives.
  *
- * Light/dark: surface + active accent flip via tokens. Active = gold
- * stroke + full-contrast label; inactive = textFaint for both. The
- * Reel-flight landing target (legacy v0.6 add-to-reel animation) is
- * intentionally dropped — the "+ Add" flows live on Home and the
- * Ready-to-Watch shelf, neither of which fly into the bar.
+ * Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon` translated to
+ * `react-native-svg` (stroke 1.9, 22px, rounded caps).
  *
- * Position 2 was My Movies until the Explore word feed replaced it; the
- * saved reel now hangs off the Profile sheet.
+ * Light/dark: surface + active accent flip via tokens. Active = gold stroke
+ * + full-contrast label; inactive = textFaint for both.
+ *
+ * The reel-flight landing target is live again on this tab. v0.7 dropped it
+ * — nothing reported `reelTabRect`, so `PosterFlight` silently discarded
+ * every flight — and it is restored here because the reel now has a visible
+ * destination in the bar to fly to. Only the Lists cell reports its rect.
+ *
+ * Width: five cells in the same bar leaves ~66px each at 320pt (SE). Labels
+ * are 10px/800 and must not wrap — `__tests__/globalBottomBar.test.ts`
+ * pins the label lengths that fit.
  */
 
-import { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useMemo, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, type View as RNView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useFlightStore } from '../stores/flightStore';
 
-export type BottomTab = 'home' | 'explore' | 'practice' | 'profile';
+export type BottomTab = 'home' | 'explore' | 'practice' | 'lists' | 'profile';
 
 interface Props {
   /** Which tab to render as active; `null` when inside a sub-page that
@@ -40,18 +46,19 @@ interface Props {
 interface TabItem {
   id: BottomTab;
   /** Key under `common:nav`. */
-  labelKey: 'home' | 'explore' | 'practice' | 'profile';
+  labelKey: 'home' | 'explore' | 'practice' | 'lists' | 'profile';
   icon: NavIconKind;
 }
 
-type NavIconKind = 'home' | 'explore' | 'spark' | 'user';
+type NavIconKind = 'home' | 'explore' | 'spark' | 'list' | 'user';
 
 // Labels live in `common:nav.*` and are resolved at render — this array is
 // module-level, so a literal label here would freeze at the launch language.
-const TABS: TabItem[] = [
+export const TABS: TabItem[] = [
   { id: 'home',     labelKey: 'home',     icon: 'home' },
   { id: 'explore',  labelKey: 'explore',  icon: 'explore' },
   { id: 'practice', labelKey: 'practice', icon: 'spark' },
+  { id: 'lists',    labelKey: 'lists',    icon: 'list' },
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },
 ];
 
@@ -60,6 +67,17 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  const setReelTabRect = useFlightStore((st) => st.setReelTabRect);
+
+  // The reel lives in Lists, so that cell is where a saved poster flies.
+  // measureInWindow (not onLayout's local rect) because PosterFlight is an
+  // absolute-fill overlay at the root and needs window coordinates.
+  const listsRef = useRef<RNView | null>(null);
+  const measureListsTab = useCallback(() => {
+    listsRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) setReelTabRect({ x, y, width, height });
+    });
+  }, [setReelTabRect]);
 
   return (
     <View
@@ -84,6 +102,8 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
           onPress={() => onTabPress(tab.id)}
           tc={tc}
           s={s}
+          viewRef={tab.id === 'lists' ? listsRef : undefined}
+          onMeasure={tab.id === 'lists' ? measureListsTab : undefined}
         />
       ))}
     </View>
@@ -97,6 +117,8 @@ function TabBtn({
   onPress,
   tc,
   s,
+  viewRef,
+  onMeasure,
 }: {
   icon: NavIconKind;
   label: string;
@@ -104,13 +126,31 @@ function TabBtn({
   onPress: () => void;
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
+  viewRef?: React.MutableRefObject<RNView | null>;
+  onMeasure?: () => void;
 }) {
   const strokeColor = isActive ? tc.gold : tc.textFaint;
   const labelColor = isActive ? tc.text : tc.textFaint;
   return (
-    <TouchableOpacity style={s.btn} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      ref={viewRef}
+      style={s.btn}
+      onPress={onPress}
+      activeOpacity={0.7}
+      onLayout={onMeasure}
+    >
       <NavIcon kind={icon} stroke={strokeColor} fillActive={isActive ? tc.gold : undefined} />
-      <Text style={[s.label, { color: labelColor }]}>{label}</Text>
+      <Text
+        style={[s.label, { color: labelColor }]}
+        numberOfLines={1}
+        // Five cells leave ~66px each at 320pt. Shrink rather than wrap or
+        // clip — a two-line label would break the bar's fixed height, and
+        // the floor keeps it above the 9px legibility limit.
+        adjustsFontSizeToFit
+        minimumFontScale={0.9}
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -157,6 +197,18 @@ function NavIcon({
       <Svg {...props}>
         <Path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
         <Circle cx="12" cy="12" r="3" fill={fillActive ?? 'none'} />
+      </Svg>
+    );
+  }
+  if (kind === 'list') {
+    // Three rules with leading dots — a list of kept things, distinct from
+    // the magnifier (Explore) and the home roof.
+    return (
+      <Svg {...props}>
+        <Circle cx="4.5" cy="7" r="1.15" fill={stroke} stroke="none" />
+        <Circle cx="4.5" cy="12" r="1.15" fill={stroke} stroke="none" />
+        <Circle cx="4.5" cy="17" r="1.15" fill={stroke} stroke="none" />
+        <Path d="M9 7h11M9 12h11M9 17h11" />
       </Svg>
     );
   }

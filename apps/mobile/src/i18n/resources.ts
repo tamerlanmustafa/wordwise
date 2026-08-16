@@ -25,6 +25,7 @@ import enNotifications from './locales/en/notifications.json';
 import enPractice from './locales/en/practice.json';
 import enQuiz from './locales/en/quiz.json';
 import enStats from './locales/en/stats.json';
+import enLists from './locales/en/lists.json';
 
 import esAuth from './locales/es/auth.json';
 import esBilling from './locales/es/billing.json';
@@ -38,6 +39,7 @@ import esNotifications from './locales/es/notifications.json';
 import esPractice from './locales/es/practice.json';
 import esQuiz from './locales/es/quiz.json';
 import esStats from './locales/es/stats.json';
+import esLists from './locales/es/lists.json';
 
 import ptAuth from './locales/pt/auth.json';
 import ptBilling from './locales/pt/billing.json';
@@ -51,6 +53,7 @@ import ptNotifications from './locales/pt/notifications.json';
 import ptPractice from './locales/pt/practice.json';
 import ptQuiz from './locales/pt/quiz.json';
 import ptStats from './locales/pt/stats.json';
+import ptLists from './locales/pt/lists.json';
 
 import trAuth from './locales/tr/auth.json';
 import trBilling from './locales/tr/billing.json';
@@ -64,6 +67,7 @@ import trNotifications from './locales/tr/notifications.json';
 import trPractice from './locales/tr/practice.json';
 import trQuiz from './locales/tr/quiz.json';
 import trStats from './locales/tr/stats.json';
+import trLists from './locales/tr/lists.json';
 
 import ruAuth from './locales/ru/auth.json';
 import ruBilling from './locales/ru/billing.json';
@@ -77,6 +81,7 @@ import ruNotifications from './locales/ru/notifications.json';
 import ruPractice from './locales/ru/practice.json';
 import ruQuiz from './locales/ru/quiz.json';
 import ruStats from './locales/ru/stats.json';
+import ruLists from './locales/ru/lists.json';
 
 import arAuth from './locales/ar/auth.json';
 import arBilling from './locales/ar/billing.json';
@@ -90,6 +95,7 @@ import arNotifications from './locales/ar/notifications.json';
 import arPractice from './locales/ar/practice.json';
 import arQuiz from './locales/ar/quiz.json';
 import arStats from './locales/ar/stats.json';
+import arLists from './locales/ar/lists.json';
 
 /**
  * Namespaces, in the order they were carved up in I18N_PLAN.md §2.
@@ -108,6 +114,7 @@ export const NAMESPACES = [
   'settings',
   'stats',
   'vocabulary',
+  'lists',
 ] as const;
 export type Namespace = (typeof NAMESPACES)[number];
 
@@ -127,6 +134,7 @@ export const resources: Resource = {
     quiz: enQuiz,
     stats: enStats,
     vocabulary: enVocabulary,
+    lists: enLists,
   },
   es: {
     common: esCommon,
@@ -141,6 +149,7 @@ export const resources: Resource = {
     quiz: esQuiz,
     stats: esStats,
     vocabulary: esVocabulary,
+    lists: esLists,
   },
   pt: {
     common: ptCommon,
@@ -155,6 +164,7 @@ export const resources: Resource = {
     quiz: ptQuiz,
     stats: ptStats,
     vocabulary: ptVocabulary,
+    lists: ptLists,
   },
   tr: {
     common: trCommon,
@@ -169,6 +179,7 @@ export const resources: Resource = {
     quiz: trQuiz,
     stats: trStats,
     vocabulary: trVocabulary,
+    lists: trLists,
   },
   ru: {
     common: ruCommon,
@@ -183,6 +194,7 @@ export const resources: Resource = {
     quiz: ruQuiz,
     stats: ruStats,
     vocabulary: ruVocabulary,
+    lists: ruLists,
   },
   ar: {
     common: arCommon,
@@ -197,5 +209,6 @@ export const resources: Resource = {
     quiz: arQuiz,
     stats: arStats,
     vocabulary: arVocabulary,
+    lists: arLists,
   },
 };

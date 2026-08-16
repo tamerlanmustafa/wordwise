@@ -8,9 +8,12 @@ describe('PARENT_OF', () => {
       'stats',
       'achievements',
       'leaderboard',
-      'lists',
       'vocabulary',
       'admin',
+      // The "My Lists" hub was replaced by the Lists tab; the two screens it
+      // uniquely reached are now linked from the sheet directly.
+      'notebook',
+      'watched',
     ];
     for (const screen of fromSheet) {
       expect(PARENT_OF[screen]).toBe(PROFILE_SHEET);
@@ -27,8 +30,14 @@ describe('PARENT_OF', () => {
 
   it('returns second-level lists to the list they were opened from', () => {
     expect(PARENT_OF.learnedWords).toBe('vocabulary');
-    expect(PARENT_OF.notebook).toBe('lists');
-    expect(PARENT_OF.watched).toBe('lists');
+    // An open list returns to the Lists tab index, not to Home.
+    expect(PARENT_OF.listDetail).toBe('lists');
+  });
+
+  it('leaves the Lists tab itself parentless like every other root tab', () => {
+    // 'lists' used to be a sheet-launched hub screen. As a tab it must not
+    // have a parent, or hardware back would bounce it into the Profile sheet.
+    expect(PARENT_OF.lists).toBeUndefined();
   });
 
   it('returns the saved reel to the Profile sheet it is now opened from', () => {
@@ -37,7 +46,7 @@ describe('PARENT_OF', () => {
   });
 
   it('leaves root tabs parentless so hardware back can exit the app', () => {
-    const rootTabs: Screen[] = ['home', 'explore', 'journey', 'practice'];
+    const rootTabs: Screen[] = ['home', 'explore', 'journey', 'practice', 'lists'];
     for (const screen of rootTabs) {
       expect(PARENT_OF[screen]).toBeUndefined();
     }

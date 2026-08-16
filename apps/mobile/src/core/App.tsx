@@ -32,7 +32,7 @@ import { SavedMoviesScreen } from '../components/SavedMoviesScreen';
 import { PracticeScreen } from '../components/PracticeScreen';
 import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
-import type { ReelTile } from '../services/api';
+import type { ReelTile, SrsSessionStart } from '../services/api';
 import type { NodeLevel } from '../components/journey/JourneyNode';
 import { UserMenuSheet } from '../components/UserMenuSheet';
 import { NotificationsSheet } from '../components/NotificationsSheet';
@@ -50,7 +50,7 @@ import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import { useWordFeedStore } from '../stores/wordFeedStore';
-import type { Screen, ListFilter, MovieData } from './types';
+import type { Screen, ListFilter, MovieData, ListSummary } from './types';
 import { PARENT_OF, PROFILE_SHEET } from './navParents';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
@@ -58,7 +58,8 @@ import { LoginScreen } from '../components/screens/LoginScreen';
 import { VocabularyScreen } from '../components/screens/VocabularyScreen';
 import { LearnedWordsScreen } from '../components/screens/LearnedWordsScreen';
 import { SettingsScreen } from '../components/screens/SettingsScreen';
-import { ListsScreen } from '../components/screens/ListsScreen';
+import { ListsIndexScreen } from '../components/screens/ListsIndexScreen';
+import { ListDetailScreen } from '../components/screens/ListDetailScreen';
 import { WatchedScreen } from '../components/screens/WatchedScreen';
 import { HomeScreen } from '../components/screens/HomeScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
@@ -263,6 +264,9 @@ export default function App() {
   const [reviewLaunch, setReviewLaunch] = useState<{
     kind?: import('../services/api').SessionKind;
     movieId?: number;
+    listId?: number;
+    /** Set only by the Lists tab — see ReviewScreen's `initialSession`. */
+    session?: SrsSessionStart;
   }>({});
 
   const navigateToReview = (
@@ -270,6 +274,19 @@ export default function App() {
     movieId?: number,
   ) => {
     setReviewLaunch({ kind, movieId });
+    setCurrentScreen('review');
+  };
+
+  // The Lists tab's gold button already started the session (so the server
+  // could 409 an empty pool before we navigate). Hand it straight to
+  // ReviewScreen rather than letting it start a second one, which would burn
+  // two of a free user's one-per-day sessions.
+  const handleListPractice = (session: SrsSessionStart, listId: number) => {
+    setReviewLaunch({
+      kind: session.kind as import('../services/api').SessionKind,
+      listId,
+      session,
+    });
     setCurrentScreen('review');
   };
 
@@ -302,6 +319,15 @@ export default function App() {
 
   const navigateToLists = () => {
     setCurrentScreen('lists');
+  };
+
+  // Which list the detail screen is showing. Held here rather than in the
+  // store because it is navigation state, not data — the store keeps the
+  // list's contents, App keeps "which one is open".
+  const [openList, setOpenList] = useState<ListSummary | null>(null);
+  const navigateToListDetail = (list: ListSummary) => {
+    setOpenList(list);
+    setCurrentScreen('listDetail');
   };
 
   const navigateToWatched = () => {
@@ -428,12 +454,13 @@ export default function App() {
     if (tab === 'home') navigateToHome();
     else if (tab === 'explore') navigateToExplore();
     else if (tab === 'practice') navigateToPractice();
+    else if (tab === 'lists') navigateToLists();
     else if (tab === 'profile') {
       setShowUserSheet((prev) => {
         // Remember what the sheet is opening over, so backToProfile can
         // return there rather than to Home.
         if (!prev) {
-          rootTabForSheet.current = (['home', 'explore', 'practice'] as Screen[]).includes(currentScreen)
+          rootTabForSheet.current = (['home', 'explore', 'practice', 'lists'] as Screen[]).includes(currentScreen)
             ? currentScreen
             : 'home';
         }
@@ -464,7 +491,7 @@ export default function App() {
       // 'explore' is deliberately absent: back from the feed lands on Home
       // rather than exiting the app, since it's a browsing surface rather
       // than the app's root.
-      const rootTabs: Screen[] = ['home', 'journey', 'practice'];
+      const rootTabs: Screen[] = ['home', 'journey', 'practice', 'lists'];
       if (authed && !rootTabs.includes(currentScreen)) {
         // Account screens have a real parent — go there, exactly as the
         // on-screen Back does. Everything else still unwinds to Home.
@@ -759,6 +786,10 @@ export default function App() {
         return 'home';
       case 'explore':
         return 'explore';
+      // The Lists tab owns both its index and any list opened from it.
+      case 'lists':
+      case 'listDetail':
+        return 'lists';
       // Movie preview is reached from Home's ranked list (and from the
       // saved reel in the Profile sheet), so Home keeps the highlight.
       case 'moviePreview':
@@ -821,6 +852,15 @@ export default function App() {
         <KeepAlive visible={currentScreen === 'practice'}>
           <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} />
         </KeepAlive>
+        {/* Lists keeps its place in KeepAlive so the selected segment and
+            scroll position survive a tab switch, same as Home and Explore. */}
+        <KeepAlive visible={currentScreen === 'lists'}>
+          <ListsIndexScreen
+            active={currentScreen === 'lists'}
+            onOpenList={navigateToListDetail}
+            bottomOffset={barHeight}
+          />
+        </KeepAlive>
 
         {currentScreen === 'settings' ? (
           <SettingsScreen onBack={backFrom('settings')} backLabel={backLabelFor('settings')} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
@@ -834,7 +874,9 @@ export default function App() {
           <ReviewScreen
             kind={reviewLaunch.kind}
             movieId={reviewLaunch.movieId}
-            onBack={navigateToHome}
+            listId={reviewLaunch.listId}
+            initialSession={reviewLaunch.session}
+            onBack={reviewLaunch.listId ? navigateToLists : navigateToHome}
             onPaywall={navigateToPaywall}
           />
         ) : currentScreen === 'paywall' ? (
@@ -843,8 +885,21 @@ export default function App() {
           <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (
           <NotebookScreen onBack={backFrom('notebook')} backLabel={backLabelFor('notebook')} filter={listFilter} />
-        ) : currentScreen === 'lists' ? (
-          <ListsScreen onBack={backFrom('lists')} backLabel={backLabelFor('lists')} onOpenList={navigateToNotebook} onOpenWatched={navigateToWatched} />
+        ) : currentScreen === 'listDetail' && openList ? (
+          <ListDetailScreen
+            list={openList}
+            onBack={navigateToLists}
+            onStartSession={handleListPractice}
+            onOpenFilm={(item) => navigateToMovie({
+              id: item.tmdbId,
+              title: item.title,
+              poster_path: item.posterPath,
+              release_date: item.year ? `${item.year}-01-01` : '',
+            })}
+            onOpenWord={() => navigateToNotebook('saved')}
+            onPaywall={() => navigateToPaywall(0, 0)}
+            bottomOffset={barHeight}
+          />
         ) : currentScreen === 'savedMovies' ? (
           <SavedMoviesScreen
             onBack={backFrom('savedMovies')}
@@ -961,7 +1016,8 @@ export default function App() {
           user={user}
           onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
           onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
-          onNavigateToLists={() => { setShowUserSheet(false); navigateToLists(); }}
+          onNavigateToNotebook={() => { setShowUserSheet(false); navigateToNotebook('saved'); }}
+          onNavigateToWatched={() => { setShowUserSheet(false); navigateToWatched(); }}
           onNavigateToSavedMovies={() => { setShowUserSheet(false); navigateToSavedMovies(); }}
           onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}

@@ -1,0 +1,77 @@
+{
+  "title": "Listas",
+  "segment": {
+    "films": "Películas",
+    "words": "Palabras"
+  },
+  "system": {
+    "reel": "Guardado desde Inicio",
+    "favourites": "Favoritos"
+  },
+  "meta": {
+    "filmCount_one": "{{count}} PELÍCULA",
+    "filmCount_other": "{{count}} PELÍCULAS",
+    "wordCount_one": "{{count}} PALABRA",
+    "wordCount_other": "{{count}} PALABRAS",
+    "dueCount_one": "{{count}} PENDIENTE",
+    "dueCount_other": "{{count}} PENDIENTES",
+    "addedFromHome": "AÑADIDO DESDE INICIO",
+    "nothingSaved": "AÚN NO HAY NADA"
+  },
+  "new": {
+    "title": "Nueva lista",
+    "subtitle": "Una lista contiene películas o palabras, no ambas.",
+    "kindFilms": "Películas",
+    "kindWords": "Palabras",
+    "placeholderFilms": "Sesión doble del domingo",
+    "placeholderWords": "Palabras de las noticias",
+    "submit": "Crear lista",
+    "errorEmpty": "Ponle un nombre a tu lista.",
+    "errorDuplicate": "Ya tienes una lista con ese nombre."
+  },
+  "practice": {
+    "films": "Practicar palabras de estas películas",
+    "due_one": "Practicar {{count}} pendiente",
+    "due_other": "Practicar {{count}} pendientes",
+    "none": "Practicar esta lista",
+    "empty": "Aún no hay nada que practicar"
+  },
+  "sort": {
+    "title": "Ordenar por",
+    "added": "Añadido recientemente",
+    "titleAZ": "Título",
+    "rating": "Valoración",
+    "due": "Vence antes",
+    "alpha": "A–Z"
+  },
+  "menu": {
+    "rename": "Cambiar nombre",
+    "delete": "Eliminar"
+  },
+  "delete": {
+    "title": "¿Eliminar esta lista?",
+    "body": "Las películas y palabras seguirán en tu cuenta.",
+    "confirm": "Eliminar",
+    "undo": "Deshacer",
+    "done": "Lista eliminada"
+  },
+  "rename": {
+    "title": "Cambiar nombre",
+    "submit": "Guardar"
+  },
+  "empty": {
+    "reel": "Toca + en una película en Inicio para guardarla aquí.",
+    "favourites": "Toca el corazón en Explorar para guardar una palabra.",
+    "films": "Añade películas desde Inicio o desde su ficha.",
+    "words": "Añade palabras desde Explorar."
+  },
+  "error": {
+    "retry": "No se pudo actualizar. Toca para reintentar."
+  },
+  "srs": {
+    "new": "nueva",
+    "learning": "aprendiendo",
+    "due": "toca hoy",
+    "learned": "aprendida"
+  }
+}

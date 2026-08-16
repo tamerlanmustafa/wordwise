@@ -31,12 +31,77 @@ export type Screen =
   | 'explore'
   /** The saved reel, now reached from the Profile sheet rather than a tab. */
   | 'savedMovies'
+  /** An open list inside the Lists tab. The tab stays lit while it shows. */
+  | 'listDetail'
   | 'practice'
   | 'moviePreview'
   | 'setIntro'
   | 'addToReel';
 
 export type ListFilter = 'saved' | 'learned';
+
+// ─── Lists tab ───────────────────────────────────────────────────────────
+// A list holds films or words, never both. That constraint is what lets a
+// row honestly preview its contents and keeps the Practice handoff
+// unambiguous. camelCase here; the API layer maps from the wire's
+// snake_case so components never see two conventions.
+
+export type ListKind = 'films' | 'words';
+
+/** `null` for user-created lists. The two non-null keys are the pinned
+ *  lists — undeletable, unrenameable, and rendered from `lists.system.*`
+ *  so their names localise. */
+export type ListSystemKey = 'reel' | 'favourites' | null;
+
+export interface ListSummary {
+  id: number;
+  name: string;
+  kind: ListKind;
+  systemKey: ListSystemKey;
+  count: number;
+  /** Words lists only — members due for review right now. */
+  dueCount: number | null;
+  /** Films lists only — combined vocabulary size of its films. */
+  totalWords: number | null;
+  /** At most 3, in list order. Exactly one side is populated, per `kind`. */
+  preview: { posters: string[] | null; words: string[] | null };
+  updatedAt: string;
+}
+
+export interface ListFilmItem {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  year: number | null;
+  rating: number | null;
+  cefr: string | null;
+  wordCount: number | null;
+  addedAt: string;
+}
+
+export type ListWordSrsState = 'new' | 'learning' | 'due' | 'learned';
+
+export interface ListWordItem {
+  word: string;
+  lemmaId: number | null;
+  pos: string | null;
+  cefr: string | null;
+  /** `new` covers "added from Explore, never studied" — a legitimate state,
+   *  not missing data. */
+  srsState: ListWordSrsState;
+  nextReviewAt: string | null;
+  addedAt: string;
+}
+
+export type ListItem = ListFilmItem | ListWordItem;
+
+export interface ListDetail {
+  summary: ListSummary;
+  items: ListItem[];
+  nextCursor: string | null;
+}
+
+export type ListSort = 'added' | 'title' | 'rating' | 'due' | 'alpha';
 
 // TMDB-shaped movie with optional fields our backend sometimes supplies
 // (e.g. when enriching by-level results). Used across Search/Home/Detail.

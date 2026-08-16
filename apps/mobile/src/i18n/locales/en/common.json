@@ -22,7 +22,8 @@
     "home": "Home",
     "explore": "Explore",
     "practice": "Practice",
-    "profile": "Profile"
+    "profile": "Profile",
+    "lists": "Lists"
   },
   "offline": {
     "title": "You're offline",

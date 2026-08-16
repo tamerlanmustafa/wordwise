@@ -1,0 +1,77 @@
+{
+  "title": "Lists",
+  "segment": {
+    "films": "Films",
+    "words": "Words"
+  },
+  "system": {
+    "reel": "Saved from Home",
+    "favourites": "Favourites"
+  },
+  "meta": {
+    "filmCount_one": "{{count}} FILM",
+    "filmCount_other": "{{count}} FILMS",
+    "wordCount_one": "{{count}} WORD",
+    "wordCount_other": "{{count}} WORDS",
+    "dueCount_one": "{{count}} DUE",
+    "dueCount_other": "{{count}} DUE",
+    "addedFromHome": "ADDED FROM HOME",
+    "nothingSaved": "NOTHING SAVED YET"
+  },
+  "new": {
+    "title": "New list",
+    "subtitle": "A list holds films or words, not both.",
+    "kindFilms": "Films",
+    "kindWords": "Words",
+    "placeholderFilms": "Sunday double feature",
+    "placeholderWords": "Words from the news",
+    "submit": "Create list",
+    "errorEmpty": "Give your list a name.",
+    "errorDuplicate": "You already have a list with that name."
+  },
+  "practice": {
+    "films": "Practice words from these films",
+    "due_one": "Practice {{count}} due",
+    "due_other": "Practice {{count}} due",
+    "none": "Practice this list",
+    "empty": "Nothing to practise yet"
+  },
+  "sort": {
+    "title": "Sort by",
+    "added": "Recently added",
+    "titleAZ": "Title",
+    "rating": "Rating",
+    "due": "Soonest due",
+    "alpha": "A–Z"
+  },
+  "menu": {
+    "rename": "Rename",
+    "delete": "Delete"
+  },
+  "delete": {
+    "title": "Delete this list?",
+    "body": "The films and words in it stay in your account.",
+    "confirm": "Delete",
+    "undo": "Undo",
+    "done": "List deleted"
+  },
+  "rename": {
+    "title": "Rename list",
+    "submit": "Save"
+  },
+  "empty": {
+    "reel": "Tap + on a film on Home to save it here.",
+    "favourites": "Tap the heart in Explore to keep a word.",
+    "films": "Add films from Home, or from a film's page.",
+    "words": "Add words from Explore."
+  },
+  "error": {
+    "retry": "Couldn't refresh. Tap to try again."
+  },
+  "srs": {
+    "new": "new",
+    "learning": "learning",
+    "due": "due today",
+    "learned": "learned"
+  }
+}

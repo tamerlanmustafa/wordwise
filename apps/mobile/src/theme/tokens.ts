@@ -107,6 +107,12 @@ export interface ThemeColors {
   toastBg:            string;
   toastText:          string;
 
+  // Lists tab. The index rows sit on `feedBg` (same surface as the Explore
+  // feed), so they need a lighter drop than `panelShadowColor` — that one is
+  // tuned for a panel lifting over the page, not a row resting on it.
+  cardShadowColor:    string;  // list-row lift
+  segmentThumb:       string;  // selected segment fill on a `chipBg` track
+
   // Home-feed movie card. `cardStock` is deliberately neither `paper` nor
   // `background` — it sits one step above the page so the card separates
   // without going white, and it is the SAME on every card (per-card tinting
@@ -207,6 +213,10 @@ const light: ThemeColors = {
   toastBg:            '#2D2418',
   toastText:          '#FFF6E0',
 
+  // Lists tab
+  cardShadowColor:    'rgba(60,40,10,0.10)',
+  segmentThumb:       '#FFFDF7',
+
   cardStock:          '#FBF7EE',
   cardInk:            '#2D2418',
   cardMeta:           '#8B5A00',
@@ -294,6 +304,11 @@ const dark: ThemeColors = {
   panelShadowColor:   'rgba(255,209,102,0.30)',
   toastBg:            '#FFD166',
   toastText:          '#3a2400',
+
+  // Lists tab. Unlike the panel glow above, a row's lift on this surface
+  // reads better as a plain black drop.
+  cardShadowColor:    'rgba(0,0,0,0.45)',
+  segmentThumb:       'rgba(255,255,255,0.13)',
 
   cardStock:          '#0F1013',
   cardInk:            '#F3EEE4',

@@ -15,6 +15,7 @@ import {
   type ChestPayload,
   type SessionKind,
   type SrsReviewCard,
+  type SrsSessionStart,
 } from '../services/api';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
@@ -60,6 +61,16 @@ export interface ReviewScreenProps {
   kind?: SessionKind;
   /** Required when `kind === 'movie_deep_dive'`. */
   movieId?: number;
+  /** Set for the Lists tab's `list_words` / `list_films` kinds. Scopes the
+   *  resume cache so quitting a list session and opening Quick Recall
+   *  doesn't try to resume the wrong deck. */
+  listId?: number;
+  /** A session the caller already started, used by the Lists tab: its gold
+   *  button hits POST /lists/{id}/practice so it can 409 on an empty pool
+   *  *before* navigating here. Starting a second one would consume two of a
+   *  free user's one-per-day sessions, so when this is present we adopt it
+   *  instead of calling /srs/session/start again. */
+  initialSession?: SrsSessionStart;
   onBack: () => void;
   onPaywall: (previews_used: number, previews_limit: number) => void;
 }
@@ -73,6 +84,8 @@ type Phase = 'loading' | 'card' | 'done' | 'empty' | 'error';
 export function ReviewScreen({
   kind,
   movieId,
+  listId,
+  initialSession,
   onBack,
   onPaywall,
 }: ReviewScreenProps) {
@@ -134,7 +147,9 @@ export function ReviewScreen({
       await session_store.hydrate();
     }
     const resolvedKind: SessionKind = kind ?? 'quick_recall';
-    const resumable = useReviewSessionStore.getState().resumable(resolvedKind, movieId);
+    // List sessions key their cache on the list, movie tiles on the movie.
+    const scopeId = listId ?? movieId;
+    const resumable = useReviewSessionStore.getState().resumable(resolvedKind, scopeId);
     if (resumable) {
       setCards(resumable.remaining);
       setIsPreview(false);
@@ -148,7 +163,7 @@ export function ReviewScreen({
       // v0.7.2 — kind + movieId are passed through to the backend so
       // the queue composer matches the Practice-tab tile the user
       // tapped. Undefined kind hits the legacy quick_recall default.
-      const session = await srsApi.startSession({ kind, movieId });
+      const session = initialSession ?? await srsApi.startSession({ kind, movieId });
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
@@ -160,7 +175,7 @@ export function ReviewScreen({
         // the same deck (within 24h, same kind+movie).
         useReviewSessionStore.getState().start({
           kind: resolvedKind,
-          movieId: movieId ?? null,
+          movieId: scopeId ?? null,
           remaining: session.cards,
           got: 0,
           forgot: 0,
@@ -176,7 +191,7 @@ export function ReviewScreen({
       setErrorMessage(e?.message || t('quiz:review.startFailed'));
       setPhase('error');
     }
-  }, [onPaywall, kind, movieId, t]);
+  }, [onPaywall, kind, movieId, listId, initialSession, t]);
 
   useEffect(() => {
     loadSession();

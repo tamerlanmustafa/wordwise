@@ -1,6 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config, TMDB_API_KEY } from '../config/env';
 import { tokenStorage } from './auth/tokenStorage';
+import type {
+  ListDetail,
+  ListItem,
+  ListKind,
+  ListSort,
+  ListSummary,
+  ListSystemKey,
+  ListWordItem,
+} from '../core/types';
 
 // Use centralized config for API URL
 const API_BASE_URL = config.API_URL;
@@ -744,7 +753,12 @@ export interface SrsReviewCard {
 export type SessionKind =
   | 'quick_recall'
   | 'tough_words'
-  | 'movie_deep_dive';
+  | 'movie_deep_dive'
+  // Lists tab. Started from a list's gold action rather than a Practice
+  // tile, so these never appear on the Practice path — but a session in
+  // flight is cached by kind, so the union has to carry them.
+  | 'list_words'
+  | 'list_films';
 
 /** @deprecated v0.7.3 — streak-based unlocks were retired in favor of
  *  the Duolingo-style linear path (see `stores/practicePathStore.ts`).
@@ -754,9 +768,11 @@ export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
   quick_recall:    0,
   tough_words:     0,
   movie_deep_dive: 0,
+  list_words:      0,
+  list_films:      0,
 };
 
-interface SrsSessionStart {
+export interface SrsSessionStart {
   cards: SrsReviewCard[];
   total_due: number;
   session_size: number;
@@ -1782,6 +1798,214 @@ export const reelApi = {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Failed to seed reel');
+    return res.json();
+  },
+};
+
+// ─── Lists ───────────────────────────────────────────────────────────────
+// The Lists tab. A list holds films or words, never both. The two pinned
+// lists are adapters server-side — `Saved from Home` reads/writes the reel
+// and `Favourites` reads/writes the global saved-word rows — so the client
+// treats every list uniformly and never needs to know which table backs it.
+
+/** Domain error from /lists/*. `code` is the switchable value (e.g.
+ *  `duplicate_name`, which the new-list sheet shows on its name field
+ *  rather than as a toast); `message` is already user-facing. */
+export class ListApiError extends Error {
+  code: string;
+  status: number;
+  constructor(code: string, message: string, status: number) {
+    super(message);
+    this.name = 'ListApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function listsRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await authFetch(`${API_BASE_URL}/lists${path}`, init);
+  if (res.status === 204) return undefined as T;
+  if (!res.ok) {
+    let code = 'unknown';
+    let message = 'Something went wrong. Please try again.';
+    try {
+      const body = await res.json();
+      const detail = body?.detail;
+      if (detail && typeof detail === 'object') {
+        code = detail.code ?? code;
+        message = detail.message ?? message;
+      } else if (typeof detail === 'string') {
+        message = detail;
+      }
+    } catch {
+      // Non-JSON body (gateway error, offline) — keep the generic message.
+    }
+    throw new ListApiError(code, message, res.status);
+  }
+  return res.json();
+}
+
+interface ListSummaryWire {
+  id: number;
+  name: string;
+  kind: ListKind;
+  system_key: ListSystemKey;
+  count: number;
+  due_count: number | null;
+  total_words: number | null;
+  preview: { posters: string[] | null; words: string[] | null };
+  updated_at: string;
+}
+
+function toSummary(w: ListSummaryWire): ListSummary {
+  return {
+    id: w.id,
+    name: w.name,
+    kind: w.kind,
+    systemKey: w.system_key ?? null,
+    count: w.count,
+    dueCount: w.due_count ?? null,
+    totalWords: w.total_words ?? null,
+    preview: {
+      posters: w.preview?.posters ?? null,
+      words: w.preview?.words ?? null,
+    },
+    updatedAt: w.updated_at,
+  };
+}
+
+function toItem(kind: ListKind, raw: Record<string, unknown>): ListItem {
+  if (kind === 'films') {
+    return {
+      tmdbId: raw.tmdb_id as number,
+      title: raw.title as string,
+      posterPath: (raw.poster_path as string | null) ?? null,
+      year: (raw.year as number | null) ?? null,
+      rating: (raw.rating as number | null) ?? null,
+      cefr: (raw.cefr as string | null) ?? null,
+      wordCount: (raw.word_count as number | null) ?? null,
+      addedAt: raw.added_at as string,
+    };
+  }
+  return {
+    word: raw.word as string,
+    lemmaId: (raw.lemma_id as number | null) ?? null,
+    pos: (raw.pos as string | null) ?? null,
+    cefr: (raw.cefr as string | null) ?? null,
+    srsState: (raw.srs_state as ListWordItem['srsState']) ?? 'new',
+    nextReviewAt: (raw.next_review_at as string | null) ?? null,
+    addedAt: raw.added_at as string,
+  };
+}
+
+export const listsApi = {
+  list: async (kind?: ListKind): Promise<ListSummary[]> => {
+    const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    const res = await listsRequest<{ lists: ListSummaryWire[] }>(qs);
+    return (res.lists ?? []).map(toSummary);
+  },
+
+  detail: async (
+    id: number,
+    opts: { limit?: number; cursor?: string | null; sort?: ListSort } = {},
+  ): Promise<ListDetail> => {
+    // RN's URLSearchParams polyfill lacks .set, so build the query by hand
+    // (same reason as srsApi.startSession).
+    const parts: string[] = [];
+    if (opts.limit) parts.push(`limit=${opts.limit}`);
+    if (opts.cursor) parts.push(`cursor=${encodeURIComponent(opts.cursor)}`);
+    if (opts.sort) parts.push(`sort=${encodeURIComponent(opts.sort)}`);
+    const qs = parts.length ? `?${parts.join('&')}` : '';
+    const res = await listsRequest<{
+      list: ListSummaryWire;
+      items: Record<string, unknown>[];
+      next_cursor: string | null;
+    }>(`/${id}${qs}`);
+    const summary = toSummary(res.list);
+    return {
+      summary,
+      items: (res.items ?? []).map((i) => toItem(summary.kind, i)),
+      nextCursor: res.next_cursor ?? null,
+    };
+  },
+
+  create: async (name: string, kind: ListKind): Promise<ListSummary> =>
+    toSummary(await listsRequest<ListSummaryWire>('', {
+      method: 'POST',
+      body: JSON.stringify({ name, kind }),
+    })),
+
+  rename: async (id: number, name: string): Promise<ListSummary> =>
+    toSummary(await listsRequest<ListSummaryWire>(`/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    })),
+
+  remove: async (id: number): Promise<void> => {
+    await listsRequest<void>(`/${id}`, { method: 'DELETE' });
+  },
+
+  /** Batch, so an Add-to-list multi-select is one round trip. Idempotent
+   *  server-side, which is what lets the store retry safely. */
+  addItems: async (
+    id: number,
+    payload: {
+      films?: Array<{ tmdb_id: number; title: string; poster_path: string | null; year: number | null }>;
+      words?: Array<{ word: string; lemma_id?: number | null }>;
+    },
+  ): Promise<ListSummary> =>
+    toSummary(await listsRequest<ListSummaryWire>(`/${id}/items`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })),
+
+  /** `key` is the TMDB id for films, the word for words. */
+  removeItem: async (id: number, key: number | string): Promise<void> => {
+    await listsRequest<void>(`/${id}/items/${encodeURIComponent(String(key))}`, {
+      method: 'DELETE',
+    });
+  },
+
+  reorder: async (ids: number[]): Promise<void> => {
+    await listsRequest<void>('/order', {
+      method: 'PUT',
+      body: JSON.stringify({ ids }),
+    });
+  },
+
+  /** The gold action. Returns the standard session-start payload, so the
+   *  review screen consumes it with no new parsing. Throws SrsPaywallError
+   *  on 402 exactly as srsApi.startSession does — a free user who already
+   *  did today's session hits the same cap here. */
+  practice: async (id: number): Promise<SrsSessionStart> => {
+    const res = await authFetch(`${API_BASE_URL}/lists/${id}/practice`, {
+      method: 'POST',
+    });
+    if (res.status === 402) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body?.detail ?? {};
+      throw new SrsPaywallError(
+        detail.message ?? 'Upgrade for unlimited sessions',
+        detail.previews_used ?? 0,
+        detail.previews_limit ?? 0,
+        detail.paywall === 'srs_daily_cap_reached' ? 'daily_cap_reached' : 'preview_exhausted',
+      );
+    }
+    if (!res.ok) {
+      let code = 'unknown';
+      let message = 'Something went wrong. Please try again.';
+      try {
+        const body = await res.json();
+        const detail = body?.detail;
+        if (detail && typeof detail === 'object') {
+          code = detail.code ?? code;
+          message = detail.message ?? message;
+        }
+      } catch {
+        // keep the generic message
+      }
+      throw new ListApiError(code, message, res.status);
+    }
     return res.json();
   },
 };

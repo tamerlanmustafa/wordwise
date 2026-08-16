@@ -30,7 +30,6 @@ export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
   stats: PROFILE_SHEET,
   achievements: PROFILE_SHEET,
   leaderboard: PROFILE_SHEET,
-  lists: PROFILE_SHEET,
   vocabulary: PROFILE_SHEET,
   admin: PROFILE_SHEET,
   // The saved reel lost its tab to Explore and now hangs off the sheet.
@@ -41,6 +40,10 @@ export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
   terms: 'settings',
   // Second-level lists, reached from their parent list screen.
   learnedWords: 'vocabulary',
-  notebook: 'lists',
-  watched: 'lists',
+  // Both were reached through the old "My Lists" hub, which the Lists tab
+  // replaced; the Profile sheet now links them directly.
+  notebook: PROFILE_SHEET,
+  watched: PROFILE_SHEET,
+  // An open list returns to the Lists tab index.
+  listDetail: 'lists',
 };

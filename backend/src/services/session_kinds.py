@@ -34,20 +34,33 @@ SessionKind = Literal[
     "quick_recall",
     "tough_words",
     "movie_deep_dive",
+    "list_words",
+    "list_films",
 ]
 
 VALID_KINDS: set[str] = {
     "quick_recall",
     "tough_words",
     "movie_deep_dive",
+    "list_words",
+    "list_films",
 }
+
+# Kinds driven by a list rather than a movie — they require `list_id` where
+# movie_deep_dive requires `movie_id`.
+LIST_KINDS: set[str] = {"list_words", "list_films"}
 
 # Streak thresholds at which each kind unlocks. Quick recall is the
 # baseline (0); the rest space out across the critical first 2 weeks.
+# The list kinds are ungated at 0: they are started from the Lists tab's
+# gold button, not the Practice path, so a streak gate there would read as
+# the button being broken.
 KIND_UNLOCK_THRESHOLDS: dict[str, int] = {
     "quick_recall":    0,
     "tough_words":     5,
     "movie_deep_dive": 7,
+    "list_words":      0,
+    "list_films":      0,
 }
 
 # Soft target session size — same as the existing SESSION_SIZE in
@@ -193,17 +206,117 @@ async def compose_movie_deep_dive(
     )
 
 
+async def compose_list_words(
+    db: Prisma,
+    *,
+    user_id: int,
+    list_id: int,
+    now: Optional[datetime] = None,
+) -> list:
+    """Cards drawn from a words list, due first then by list order.
+
+    A list member with no UserWord row is legitimate — it was added from
+    Explore and never studied — so once the due/existing rows run short we
+    materialise rows for the unstudied members, exactly as
+    `_pad_with_fresh_reel_lemmas` does for reel lemmas. Only as many as the
+    session needs are created, so opening Practice on a 2000-word list does
+    not write 2000 rows.
+    """
+    from . import lists as lists_service  # local: avoids an import cycle
+
+    row = await lists_service.get_list_row(db, user_id, list_id)
+    words = await lists_service.list_words(db, user_id, row)
+    if not words:
+        return []
+
+    when = now if now is not None else datetime.now(timezone.utc)
+    existing = await db.userword.find_many(
+        where={
+            "userId": user_id,
+            "word": {"in": words},
+            "isLearned": False,
+        },
+        order=[{"srsDueAt": "asc"}, {"id": "asc"}],
+        take=KIND_SESSION_SIZE,
+    )
+    picked = list(existing)
+    if len(picked) >= KIND_SESSION_SIZE:
+        return picked
+
+    # Top up from members that have no row yet, in list order.
+    have = {r.word.lower() for r in picked}
+    all_rows = await db.userword.find_many(
+        where={"userId": user_id, "word": {"in": words}},
+    )
+    known = {r.word.lower() for r in all_rows}
+    created = []
+    for word in words:
+        if len(picked) + len(created) >= KIND_SESSION_SIZE:
+            break
+        if word in have or word in known:
+            continue
+        try:
+            created.append(await db.userword.create(data={
+                "userId": user_id,
+                "word": word,
+                "srsDueAt": when,
+            }))
+        except Exception:
+            # Lost a race against the partial unique index — skip it rather
+            # than fail the whole session start.
+            continue
+    return picked + created
+
+
+async def compose_list_films(
+    db: Prisma,
+    *,
+    user_id: int,
+    list_id: int,
+    now: Optional[datetime] = None,
+) -> list:
+    """Cards drawn from the combined vocabulary of a films list.
+
+    Returns the user's existing, not-yet-learned rows for those films; the
+    route tops the queue up with fresh lemmas from the same films via
+    `_pad_with_fresh_reel_lemmas(movie_ids=…)`. Without that padding a
+    freshly-built films list would always be empty, since the user has no
+    UserWord rows for a film they have not studied yet.
+    """
+    from . import lists as lists_service  # local: avoids an import cycle
+
+    row = await lists_service.get_list_row(db, user_id, list_id)
+    movie_ids = await lists_service.list_movie_ids(db, user_id, row)
+    if not movie_ids:
+        return []
+
+    when = now if now is not None else datetime.now(timezone.utc)
+    cutoff = recently_reviewed_cutoff(when)
+    return await db.userword.find_many(
+        where={
+            "userId": user_id,
+            "movieId": {"in": movie_ids},
+            "isLearned": False,
+            **cooldown_where_fragment(cutoff),
+        },
+        order=[{"srsDueAt": "asc"}, {"id": "asc"}],
+        take=KIND_SESSION_SIZE,
+    )
+
+
 async def compose_for_kind(
     db: Prisma,
     *,
     kind: str,
     user_id: int,
     movie_id: Optional[int] = None,
+    list_id: Optional[int] = None,
     now: Optional[datetime] = None,
 ) -> list:
-    """Dispatch helper. Raises ValueError for unknown kinds or for
-    movie_deep_dive without a movie_id — the route layer should
-    translate those into 400/422 responses."""
+    """Dispatch helper. Raises ValueError for unknown kinds, for
+    movie_deep_dive without a movie_id, or for a list kind without a
+    list_id — the route layer should translate those into 400/422
+    responses."""
     if kind == "quick_recall":
         return await compose_quick_recall(db, user_id=user_id, now=now)
     if kind == "tough_words":
@@ -213,5 +326,15 @@ async def compose_for_kind(
             raise ValueError("movie_deep_dive requires movie_id")
         return await compose_movie_deep_dive(
             db, user_id=user_id, movie_id=movie_id, now=now,
+        )
+    if kind in LIST_KINDS:
+        if list_id is None:
+            raise ValueError(f"{kind} requires list_id")
+        if kind == "list_words":
+            return await compose_list_words(
+                db, user_id=user_id, list_id=list_id, now=now,
+            )
+        return await compose_list_films(
+            db, user_id=user_id, list_id=list_id, now=now,
         )
     raise ValueError(f"unknown session kind: {kind}")

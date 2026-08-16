@@ -1,0 +1,85 @@
+{
+  "title": "Списки",
+  "segment": {
+    "films": "Фильмы",
+    "words": "Слова"
+  },
+  "system": {
+    "reel": "Сохранённое с главной",
+    "favourites": "Избранное"
+  },
+  "meta": {
+    "filmCount_one": "{{count}} ФИЛЬМ",
+    "filmCount_few": "{{count}} ФИЛЬМА",
+    "filmCount_many": "{{count}} ФИЛЬМОВ",
+    "filmCount_other": "{{count}} ФИЛЬМА",
+    "wordCount_one": "{{count}} СЛОВО",
+    "wordCount_few": "{{count}} СЛОВА",
+    "wordCount_many": "{{count}} СЛОВ",
+    "wordCount_other": "{{count}} СЛОВА",
+    "dueCount_one": "{{count}} К ПОВТОРЕНИЮ",
+    "dueCount_few": "{{count}} К ПОВТОРЕНИЮ",
+    "dueCount_many": "{{count}} К ПОВТОРЕНИЮ",
+    "dueCount_other": "{{count}} К ПОВТОРЕНИЮ",
+    "addedFromHome": "ДОБАВЛЕНО С ГЛАВНОЙ",
+    "nothingSaved": "ПОКА ПУСТО"
+  },
+  "new": {
+    "title": "Новый список",
+    "subtitle": "В списке либо фильмы, либо слова — не вместе.",
+    "kindFilms": "Фильмы",
+    "kindWords": "Слова",
+    "placeholderFilms": "Воскресный киносеанс",
+    "placeholderWords": "Слова из новостей",
+    "submit": "Создать список",
+    "errorEmpty": "Назовите список.",
+    "errorDuplicate": "Список с таким названием уже есть."
+  },
+  "practice": {
+    "films": "Учить слова из этих фильмов",
+    "due_one": "Повторить {{count}}",
+    "due_few": "Повторить {{count}}",
+    "due_many": "Повторить {{count}}",
+    "due_other": "Повторить {{count}}",
+    "none": "Учить этот список",
+    "empty": "Пока нечего повторять"
+  },
+  "sort": {
+    "title": "Сортировка",
+    "added": "Недавно добавленные",
+    "titleAZ": "Название",
+    "rating": "Рейтинг",
+    "due": "Скорее повторять",
+    "alpha": "А–Я"
+  },
+  "menu": {
+    "rename": "Переименовать",
+    "delete": "Удалить"
+  },
+  "delete": {
+    "title": "Удалить этот список?",
+    "body": "Фильмы и слова останутся в вашем аккаунте.",
+    "confirm": "Удалить",
+    "undo": "Отменить",
+    "done": "Список удалён"
+  },
+  "rename": {
+    "title": "Переименовать список",
+    "submit": "Сохранить"
+  },
+  "empty": {
+    "reel": "Нажмите + на фильме на главной, чтобы сохранить его здесь.",
+    "favourites": "Нажмите на сердце в Обзоре, чтобы сохранить слово.",
+    "films": "Добавляйте фильмы с главной или со страницы фильма.",
+    "words": "Добавляйте слова из Обзора."
+  },
+  "error": {
+    "retry": "Не удалось обновить. Нажмите, чтобы повторить."
+  },
+  "srs": {
+    "new": "новое",
+    "learning": "учится",
+    "due": "сегодня",
+    "learned": "выучено"
+  }
+}

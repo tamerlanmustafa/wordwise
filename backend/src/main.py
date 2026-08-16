@@ -14,7 +14,7 @@ from .database import connect_db, disconnect_db
 from .logging_config import configure_logging
 from .middleware import RequestIDMiddleware
 from .utils.rate_limit import GlobalRateLimitMiddleware
-from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router
+from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router
 from .services import fetch_movie_script
 import logging
 from pathlib import Path
@@ -109,6 +109,7 @@ app.include_router(quiz_router)
 app.include_router(reel_router)
 app.include_router(daily_router)
 app.include_router(consumables_router)
+app.include_router(lists_router)
 
 @app.get("/")
 def read_root():

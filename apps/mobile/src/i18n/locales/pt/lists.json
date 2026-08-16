@@ -1,0 +1,77 @@
+{
+  "title": "Listas",
+  "segment": {
+    "films": "Filmes",
+    "words": "Palavras"
+  },
+  "system": {
+    "reel": "Guardado do Início",
+    "favourites": "Favoritos"
+  },
+  "meta": {
+    "filmCount_one": "{{count}} FILME",
+    "filmCount_other": "{{count}} FILMES",
+    "wordCount_one": "{{count}} PALAVRA",
+    "wordCount_other": "{{count}} PALAVRAS",
+    "dueCount_one": "{{count}} PENDENTE",
+    "dueCount_other": "{{count}} PENDENTES",
+    "addedFromHome": "ADICIONADO DO INÍCIO",
+    "nothingSaved": "AINDA SEM NADA"
+  },
+  "new": {
+    "title": "Nova lista",
+    "subtitle": "Uma lista guarda filmes ou palavras, não os dois.",
+    "kindFilms": "Filmes",
+    "kindWords": "Palavras",
+    "placeholderFilms": "Sessão dupla de domingo",
+    "placeholderWords": "Palavras do noticiário",
+    "submit": "Criar lista",
+    "errorEmpty": "Dê um nome à sua lista.",
+    "errorDuplicate": "Já tens uma lista com esse nome."
+  },
+  "practice": {
+    "films": "Praticar palavras destes filmes",
+    "due_one": "Praticar {{count}} pendente",
+    "due_other": "Praticar {{count}} pendentes",
+    "none": "Praticar esta lista",
+    "empty": "Ainda não há nada para praticar"
+  },
+  "sort": {
+    "title": "Ordenar por",
+    "added": "Adicionado recentemente",
+    "titleAZ": "Título",
+    "rating": "Avaliação",
+    "due": "Vence primeiro",
+    "alpha": "A–Z"
+  },
+  "menu": {
+    "rename": "Mudar nome",
+    "delete": "Eliminar"
+  },
+  "delete": {
+    "title": "Eliminar esta lista?",
+    "body": "Os filmes e as palavras continuam na tua conta.",
+    "confirm": "Eliminar",
+    "undo": "Anular",
+    "done": "Lista eliminada"
+  },
+  "rename": {
+    "title": "Mudar nome da lista",
+    "submit": "Guardar"
+  },
+  "empty": {
+    "reel": "Toca em + num filme no Início para o guardares aqui.",
+    "favourites": "Toca no coração em Explorar para guardares uma palavra.",
+    "films": "Adiciona filmes a partir do Início ou da página do filme.",
+    "words": "Adiciona palavras a partir de Explorar."
+  },
+  "error": {
+    "retry": "Não foi possível atualizar. Toca para tentar de novo."
+  },
+  "srs": {
+    "new": "nova",
+    "learning": "a aprender",
+    "due": "hoje",
+    "learned": "aprendida"
+  }
+}

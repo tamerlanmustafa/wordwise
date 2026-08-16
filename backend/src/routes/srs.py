@@ -34,6 +34,7 @@ from ..services.chest_service import award_session_chest
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.session_kinds import (
+    LIST_KINDS,
     VALID_KINDS,
     compose_for_kind,
 )
@@ -310,48 +311,66 @@ async def _pad_with_fresh_reel_lemmas(
     excluded_words: set[str],
     needed: int,
     restrict_movie_id: Optional[int] = None,
+    movie_ids: Optional[list[int]] = None,
 ):
-    """Top up a short SRS queue with fresh lemmas from the user's reel.
+    """Top up a short SRS queue with fresh lemmas from a set of movies.
 
-    Walks reel movies in position order, pulling top-frequency lemmas at
-    the user's CEFR ±1 band that aren't yet in `user_words` and aren't in
-    the running `excluded_words` set. Each picked lemma gets a new
-    UserWord row (defaults: srsBox=1, srsDueAt=now) so it surfaces in
-    the response with a real id and naturally enters the SRS lifecycle.
+    Walks those movies in order, pulling top-frequency lemmas at the user's
+    CEFR ±1 band that aren't yet in `user_words` and aren't in the running
+    `excluded_words` set. Each picked lemma gets a new UserWord row
+    (defaults: srsBox=1, srsDueAt=now) so it surfaces in the response with a
+    real id and naturally enters the SRS lifecycle.
 
-    `restrict_movie_id` constrains the pull to that one movie — used by
-    the v0.7.2 Movie Deep-Dive tile so padding stays inside the user's
-    pick rather than spilling into other reel movies.
+    Which movies:
+      • default — the user's reel, in position order.
+      • `movie_ids` — an explicit ordered list of internal `movies.id`,
+        used by the Lists tab's `list_films` kind so a films list draws from
+        its own films rather than the reel. Without this a freshly-built
+        films list could never practise: the user has no UserWord rows for
+        a film they have not studied yet.
+
+    `restrict_movie_id` further narrows to a single movie — used by the
+    v0.7.2 Movie Deep-Dive tile so padding stays inside the user's pick
+    rather than spilling into other reel movies.
 
     Returns the list of newly-created UserWord rows (already fetched), in
-    the order they were picked. Empty list when the reel can't fill the
-    gap (no reel, no movie data, or no fresh lemmas at this level).
+    the order they were picked. Empty list when the source can't fill the
+    gap (no movies, no movie data, or no fresh lemmas at this level).
     """
     if needed <= 0:
         return []
-    reel = await db.userreelmovie.find_many(
-        where={"userId": user_id},
-        order={"position": "asc"},
-    )
-    if not reel:
+
+    if movie_ids is not None:
+        ordered_movie_ids = list(movie_ids)
+    else:
+        reel = await db.userreelmovie.find_many(
+            where={"userId": user_id},
+            order={"position": "asc"},
+        )
+        if not reel:
+            return []
+        tmdb_ids = [r.tmdbId for r in reel]
+        movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
+        tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
+        ordered_movie_ids = [
+            tmdb_to_movie_id[r.tmdbId]
+            for r in reel
+            if r.tmdbId in tmdb_to_movie_id
+        ]
+
+    # Deep-dive: keep only the picked movie.
+    if restrict_movie_id is not None:
+        ordered_movie_ids = [m for m in ordered_movie_ids if m == restrict_movie_id]
+    if not ordered_movie_ids:
         return []
-    tmdb_ids = [r.tmdbId for r in reel]
-    movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
-    tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
 
     band = _band_levels_around(user_level)
     band_placeholders = ",".join(f"${i + 4}" for i in range(len(band)))
 
     created_ids: list[int] = []
-    for r in reel:
+    for movie_id in ordered_movie_ids:
         if len(created_ids) >= needed:
             break
-        movie_id = tmdb_to_movie_id.get(r.tmdbId)
-        if movie_id is None:
-            continue
-        # Deep-dive: skip every reel movie except the picked one.
-        if restrict_movie_id is not None and movie_id != restrict_movie_id:
-            continue
         # Over-fetch (2x remaining) to give us headroom against the
         # in-flight excluded_words dedupe below.
         remaining = needed - len(created_ids)
@@ -403,8 +422,11 @@ async def _pad_with_fresh_reel_lemmas(
 async def start_session(
     kind: str = Query("quick_recall", description="Practice tile (v0.7.2). One of "
                                                  "quick_recall / tough_words / "
-                                                 "movie_deep_dive."),
+                                                 "movie_deep_dive / list_words / "
+                                                 "list_films."),
     movie_id: Optional[int] = Query(None, description="Required when kind=movie_deep_dive."),
+    list_id: Optional[int] = Query(None, description="Required when kind=list_words "
+                                                    "or kind=list_films."),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
@@ -445,6 +467,11 @@ async def start_session(
             status_code=422,
             detail="movie_deep_dive requires the `movie_id` query parameter.",
         )
+    if kind in LIST_KINDS and list_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{kind} requires the `list_id` query parameter.",
+        )
 
     premium = is_premium(current_user)
     now = datetime.now(timezone.utc)
@@ -477,8 +504,18 @@ async def start_session(
         kind=kind,
         user_id=current_user.id,
         movie_id=movie_id,
+        list_id=list_id,
         now=now,
     )
+
+    # Lists tab: `list_films` pads from the list's own films, so resolve them
+    # once here rather than inside the padding helper (which has no notion of
+    # a list). Empty means the list has no film with catalogue vocabulary.
+    pad_movie_ids: Optional[list[int]] = None
+    if kind == "list_films":
+        from ..services import lists as lists_service
+        list_row = await lists_service.get_list_row(db, current_user.id, list_id)
+        pad_movie_ids = await lists_service.list_movie_ids(db, current_user.id, list_row)
 
     # Pad short sessions with fresh lemmas from the next reel movie so
     # the daily 2-min habit always has SESSION_SIZE cards to chew on.
@@ -503,7 +540,12 @@ async def start_session(
         seen_lemmas.add(lemma)
         session_rows.append(r)
 
-    if len(session_rows) < SESSION_SIZE:
+    # `list_words` is deliberately excluded from padding: a words list must
+    # practise its own members and nothing else, and its composer has already
+    # materialised the unstudied ones. Padding it from the reel would put
+    # words the user never put in the list into a session they started from
+    # that list.
+    if len(session_rows) < SESSION_SIZE and kind != "list_words":
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
         fresh_rows = await _pad_with_fresh_reel_lemmas(
@@ -513,6 +555,7 @@ async def start_session(
             excluded_words=set(seen_lemmas),
             needed=SESSION_SIZE - len(session_rows),
             restrict_movie_id=movie_id if kind == "movie_deep_dive" else None,
+            movie_ids=pad_movie_ids,
         )
         session_rows.extend(fresh_rows)
 
@@ -1245,43 +1288,52 @@ async def word_feed(
     )
     by_lemma = {r["lemma_id"]: r for r in sentence_rows}
 
+    # Keep only picks that actually have a sentence. The EXISTS filter
+    # guarantees one, but a link row can point at a sentence that was since
+    # deleted — skip rather than ship a card with nothing to read.
+    renderable = [
+        (pick, by_lemma[pick["lemma_id"]])
+        for pick in picks
+        if by_lemma.get(pick["lemma_id"]) and by_lemma[pick["lemma_id"]].get("sentence")
+    ]
+
+    # Translate the whole page in one shot: one cache read, then one DeepL
+    # request per 50 misses. Doing this per item cost 2 round trips per card
+    # (40 for a page of 20) and dominated the endpoint's latency.
+    translations: dict[str, str] = {}
     needs_translation = resolved_target and resolved_target.lower() != "en"
-    ts = None
-    if needs_translation:
+    if needs_translation and renderable:
         from ..services.translation_service import TranslationService
         ts = TranslationService(db)
 
-    items: list[FeedItem] = []
-    for pick in picks:
-        row = by_lemma.get(pick["lemma_id"])
-        # The EXISTS filter guarantees a sentence, but a link row can point
-        # at a sentence that was since deleted — skip rather than ship a
-        # card with nothing to read.
-        if not row or not row.get("sentence"):
-            continue
-        sentence = row["sentence"]
+        # Words and sentences share one batch — they are just strings to
+        # DeepL, and one request beats two.
+        to_translate: list[str] = []
+        for pick, row in renderable:
+            to_translate.append(pick["word"])
+            to_translate.append(row["sentence"])
 
-        translated_word = None
-        translated_sentence = None
-        translation_source = None
-        if ts is not None:
-            # Cached in translation_cache by the service; a miss falls
-            # through to DeepL/Google and is written back, so the client
-            # never has to translate on tap.
-            try:
-                word_tx = await ts.get_translation(pick["word"], resolved_target.upper(), "en")
-                if word_tx and word_tx.get("translated"):
-                    translated_word = word_tx["translated"]
-                    translation_source = word_tx.get("source")
-            except Exception as e:
-                logger.warning(f"[feed] word translation failed '{pick['word']}': {e}")
-            try:
-                sent_tx = await ts.get_translation(sentence, resolved_target.upper(), "en")
-                if sent_tx and sent_tx.get("translated"):
-                    translated_sentence = sent_tx["translated"]
-                    translation_source = translation_source or sent_tx.get("source")
-            except Exception as e:
-                logger.warning(f"[feed] sentence translation failed: {e}")
+        try:
+            results = await ts.batch_translate(
+                texts=to_translate,
+                target_lang=resolved_target.upper(),
+                source_lang="en",
+            )
+            for source, result in zip(to_translate, results):
+                value = result.get("translated")
+                if value:
+                    translations[source] = value
+        except Exception as e:
+            # An untranslated page still renders — the card hides the
+            # translation block rather than failing.
+            logger.warning(f"[feed] batch translation failed: {e}")
+
+    items: list[FeedItem] = []
+    for pick, row in renderable:
+        sentence = row["sentence"]
+        translated_word = translations.get(pick["word"])
+        translated_sentence = translations.get(sentence)
+        translation_source = "batch" if (translated_word or translated_sentence) else None
 
         match = _sentence_match(sentence, row.get("matched_form"), pick["word"])
         items.append(

@@ -82,6 +82,7 @@ model User {
   familyPlanOwned         FamilyPlan?
   familyMemberships       FamilyMember[]
   studentVerifications    StudentVerification[]
+  lists                   UserList[]
 
   @@map("users")
 }
@@ -498,6 +499,14 @@ enum interactiontype {
   DEFINITION_VIEW
   WORD_SAVE
   WORD_UNSAVE
+  LIST_ADD
+  LIST_REMOVE
+}
+
+// Lists tab. A list holds films or words, never both — see UserList.
+enum listkind {
+  films
+  words
 }
 
 enum reportreason {
@@ -562,6 +571,7 @@ model Lemma {
 
   movieMappings MovieLemmaMapping[]
   sentenceLinks SentenceLemmaLink[]
+  listWords     UserListWord[]
 
   @@index([cefrLevel], map: "ix_lemmas_cefr_level")
   @@index([frequencyRank], map: "ix_lemmas_frequency_rank")
@@ -788,6 +798,75 @@ model UserReelMovie {
   @@unique([userId, position], map: "ux_user_reel_movies_user_position")
   @@index([userId, addedAt], map: "ix_user_reel_movies_user_added_at")
   @@map("user_reel_movies")
+}
+
+// Lists tab — a user-owned list of films OR words, never both (`kind`).
+//
+// `systemKey` marks the two pinned lists, which cannot be renamed or deleted.
+// They are ADAPTERS, not storage: the row exists so the index can render them,
+// but their members live in the pre-existing tables —
+//   'reel'       -> UserReelMovie  (Home + button, PosterFlight, /reel/*)
+//   'favourites' -> UserWord where movieId IS NULL AND isLearned = false
+//                   (the Explore heart, i.e. POST /user-words/save)
+// so `films` / `words` below are populated ONLY for user-created lists.
+// Everything must go through services/lists.py — `id` alone does not tell you
+// where a list's rows are. See manual/2026_08_11_user_lists.sql.
+//
+// Prisma cannot express the case-insensitive `lower(name)` unique or the
+// partial unique on `systemKey`; both live in that SQL file and carry real
+// invariants (duplicate names, double-created system lists).
+model UserList {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @db.VarChar(60)
+  kind      listkind
+  systemKey String?  @map("system_key") @db.VarChar(20)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  films UserListFilm[]
+  words UserListWord[]
+
+  @@index([userId, kind, position], map: "ix_user_lists_user_kind")
+  @@map("user_lists")
+}
+
+// Title / posterPath / year denormalized so the index renders poster fans
+// without per-row TMDB roundtrips (same rationale as UserReelMovie).
+model UserListFilm {
+  listId     BigInt   @map("list_id")
+  tmdbId     Int      @map("tmdb_id")
+  position   Int
+  title      String   @db.VarChar
+  posterPath String?  @map("poster_path") @db.VarChar
+  year       Int?
+  addedAt    DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  list UserList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@id([listId, tmdbId])
+  @@index([listId, addedAt], map: "ix_user_list_films_list_added")
+  @@map("user_list_films")
+}
+
+// Keyed by the lowercased `word` string UserWord uses — NOT by lemmaId — so
+// membership joins straight onto the SRS table. lemmaId is optional display
+// enrichment (CEFR / part of speech) and nulls out if a lemma is retired.
+model UserListWord {
+  listId   BigInt   @map("list_id")
+  word     String   @db.VarChar
+  lemmaId  Int?     @map("lemma_id")
+  position Int
+  addedAt  DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  list  UserList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  lemma Lemma?   @relation(fields: [lemmaId], references: [id], onDelete: SetNull)
+
+  @@id([listId, word])
+  @@index([listId, addedAt], map: "ix_user_list_words_list_added")
+  @@map("user_list_words")
 }
 
 // Per-user "Watched" list — movies the user marked as already seen (swipe

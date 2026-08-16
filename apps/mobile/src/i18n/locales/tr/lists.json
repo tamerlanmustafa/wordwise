@@ -1,0 +1,77 @@
+{
+  "title": "Listeler",
+  "segment": {
+    "films": "Filmler",
+    "words": "Kelimeler"
+  },
+  "system": {
+    "reel": "Ana Sayfadan Kaydedilenler",
+    "favourites": "Favoriler"
+  },
+  "meta": {
+    "filmCount_one": "{{count}} FİLİM",
+    "filmCount_other": "{{count}} FİLİM",
+    "wordCount_one": "{{count}} KELİME",
+    "wordCount_other": "{{count}} KELİME",
+    "dueCount_one": "{{count}} TEKRAR",
+    "dueCount_other": "{{count}} TEKRAR",
+    "addedFromHome": "ANA SAYFADAN EKLENDİ",
+    "nothingSaved": "HENÜZ BİR ŞEY YOK"
+  },
+  "new": {
+    "title": "Yeni liste",
+    "subtitle": "Bir liste film ya da kelime tutar, ikisini birden değil.",
+    "kindFilms": "Filmler",
+    "kindWords": "Kelimeler",
+    "placeholderFilms": "Pazar kuşağı",
+    "placeholderWords": "Haberlerden kelimeler",
+    "submit": "Liste oluştur",
+    "errorEmpty": "Listene bir ad ver.",
+    "errorDuplicate": "Bu adda bir listen zaten var."
+  },
+  "practice": {
+    "films": "Bu filmlerin kelimelerini çalış",
+    "due_one": "{{count}} tekrarı çalış",
+    "due_other": "{{count}} tekrarı çalış",
+    "none": "Bu listeyi çalış",
+    "empty": "Henüz çalışılacak bir şey yok"
+  },
+  "sort": {
+    "title": "Sıralama",
+    "added": "Son eklenen",
+    "titleAZ": "Başlık",
+    "rating": "Puan",
+    "due": "Önce vadesi gelen",
+    "alpha": "A–Z"
+  },
+  "menu": {
+    "rename": "Yeniden adlandır",
+    "delete": "Sil"
+  },
+  "delete": {
+    "title": "Bu liste silinsin mi?",
+    "body": "İçindeki filmler ve kelimeler hesabında kalır.",
+    "confirm": "Sil",
+    "undo": "Geri al",
+    "done": "Liste silindi"
+  },
+  "rename": {
+    "title": "Listeyi yeniden adlandır",
+    "submit": "Kaydet"
+  },
+  "empty": {
+    "reel": "Buraya kaydetmek için Ana Sayfada bir filmde + simgesine dokun.",
+    "favourites": "Bir kelimeyi saklamak için Keşfet'te kalbe dokun.",
+    "films": "Ana Sayfadan veya filmin sayfasından film ekle.",
+    "words": "Keşfet'ten kelime ekle."
+  },
+  "error": {
+    "retry": "Yenilenemedi. Tekrar denemek için dokun."
+  },
+  "srs": {
+    "new": "yeni",
+    "learning": "öğreniliyor",
+    "due": "bugün",
+    "learned": "öğrenildi"
+  }
+}

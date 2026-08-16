@@ -13,6 +13,7 @@ import pytest
 from src.services.session_kinds import (
     KIND_SESSION_SIZE,
     KIND_UNLOCK_THRESHOLDS,
+    LIST_KINDS,
     REVIEW_COOLDOWN_HOURS,
     VALID_KINDS,
     cooldown_where_fragment,
@@ -56,10 +57,25 @@ class TestValidKindsSet:
     def test_set_contains_expected_keys(self):
         assert VALID_KINDS == {
             "quick_recall", "tough_words", "movie_deep_dive",
+            # Lists tab — started from a list's gold button, not the
+            # Practice path.
+            "list_words", "list_films",
         }
+
+    def test_list_kinds_are_a_subset_of_valid_kinds(self):
+        assert LIST_KINDS <= VALID_KINDS
+
+    @pytest.mark.parametrize("kind", [
+        "list_words", "list_films",
+    ])
+    def test_list_kinds_are_ungated(self, kind):
+        # A streak gate on a button the user pressed in the Lists tab would
+        # read as the button being broken.
+        assert is_kind_unlocked(kind, current_streak=0)
 
     @pytest.mark.parametrize("kind", [
         "quick_recall", "tough_words", "movie_deep_dive",
+        "list_words", "list_films",
     ])
     def test_each_kind_has_threshold(self, kind):
         assert kind in KIND_UNLOCK_THRESHOLDS

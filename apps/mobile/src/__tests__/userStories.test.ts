@@ -23,10 +23,15 @@ jest.mock('../services/api', () => {
       feed: jest.fn(),
     },
     wordwiseApi: { saveWord: jest.fn(), logInteraction: jest.fn() },
+    listsApi: {
+      list: jest.fn(), detail: jest.fn(), create: jest.fn(), rename: jest.fn(),
+      remove: jest.fn(), addItems: jest.fn(), removeItem: jest.fn(),
+      reorder: jest.fn(), practice: jest.fn(),
+    },
   };
 });
 
-import { srsApi, reelApi, wordwiseApi, SrsPaywallError, type SrsReviewCard, type SessionKind, type FeedItem } from '../services/api';
+import { srsApi, reelApi, wordwiseApi, listsApi, SrsPaywallError, type SrsReviewCard, type SessionKind, type FeedItem } from '../services/api';
 import { useWordFeedStore } from '../stores/wordFeedStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore, kindAtIndex } from '../stores/practicePathStore';
@@ -35,6 +40,7 @@ import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReelStore } from '../stores/reelStore';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { useFlightStore } from '../stores/flightStore';
+import { useListsStore } from '../stores/listsStore';
 
 // Microtask flush — fake timers are active in this file, so setImmediate is
 // faked; the AsyncStorage mock resolves on microtasks, which still run.
@@ -86,6 +92,7 @@ describe('user stories (cross-store integration)', () => {
     useFlightStore.setState({ pending: null, reelTabRect: null });
     useWordFeedStore.getState().reset();
     useWordFeedStore.setState({ seen: new Set(), mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
+    useListsStore.getState().reset();
   });
 
   afterEach(() => jest.useRealTimers());
@@ -243,6 +250,68 @@ describe('user stories (cross-store integration)', () => {
 
     expect(useReelStore.getState().has(1)).toBe(false);
     expect(useReelBadgeStore.getState().count).toBe(0);
+  });
+
+  it('Story: a film saved on Home shows up in Saved from Home without a restart', async () => {
+    // §12.2. The reel and the Lists tab are the same rows read two ways
+    // (`Saved from Home` is an adapter over user_reel_movies), so they must
+    // never disagree on screen. The tab re-reads that one row on focus.
+    (reelApi.add as jest.Mock).mockResolvedValue({
+      tmdb_id: 603, title: 'The Matrix', poster_path: '/matrix.jpg', year: 1999, source: 'user',
+    });
+    (reelApi.list as jest.Mock).mockResolvedValue({
+      tiles: [{ tmdb_id: 603, title: 'The Matrix', poster_path: '/matrix.jpg', year: 1999, source: 'user' }],
+      has_more: false,
+    });
+
+    const reelRow = {
+      id: 12, name: 'Saved from Home', kind: 'films' as const, systemKey: 'reel' as const,
+      count: 0, dueCount: null, totalWords: 0,
+      preview: { posters: [] as string[], words: null }, updatedAt: '2026-06-02T00:00:00Z',
+    };
+    (listsApi.list as jest.Mock).mockResolvedValue([reelRow]);
+    await useListsStore.getState().fetchLists();
+    expect(useListsStore.getState().lists[0].count).toBe(0);
+
+    // User taps + on a Home card: the reel takes the write, and the poster
+    // flies to the Lists tab cell.
+    await useReelStore.getState().add({
+      tmdb_id: 603, title: 'The Matrix', poster_path: '/matrix.jpg', year: 1999,
+    });
+    useFlightStore.getState().fly({ posterPath: '/matrix.jpg', from: { x: 10, y: 20, width: 80, height: 120 } });
+    expect(useFlightStore.getState().pending?.posterPath).toBe('/matrix.jpg');
+
+    // Switching to the Lists tab re-reads the reel-backed row.
+    (listsApi.detail as jest.Mock).mockResolvedValue({
+      summary: { ...reelRow, count: 1, preview: { posters: ['/matrix.jpg'], words: null } },
+      items: [],
+      nextCursor: null,
+    });
+    await useListsStore.getState().syncFromReel();
+
+    expect(useListsStore.getState().lists[0].count).toBe(1);
+    expect(useListsStore.getState().lists[0].preview.posters).toEqual(['/matrix.jpg']);
+  });
+
+  it('Story: the pinned lists cannot be renamed from the client either', async () => {
+    // §12.5 — the server 409s, and the store must roll its optimistic rename
+    // back rather than leaving a name on screen that the server rejected.
+    const reelRow = {
+      id: 12, name: 'Saved from Home', kind: 'films' as const, systemKey: 'reel' as const,
+      count: 3, dueCount: null, totalWords: 900,
+      preview: { posters: [] as string[], words: null }, updatedAt: '2026-06-02T00:00:00Z',
+    };
+    useListsStore.setState({ lists: [reelRow] });
+
+    const { ListApiError } = jest.requireActual('../services/api');
+    (listsApi.rename as jest.Mock).mockRejectedValue(
+      new ListApiError('system_list', 'This list cannot be renamed', 409),
+    );
+
+    await expect(useListsStore.getState().rename(12, 'My reel')).rejects.toMatchObject({
+      code: 'system_list',
+    });
+    expect(useListsStore.getState().lists[0].name).toBe('Saved from Home');
   });
 
   it('Story: three perfect days build a streak of 3, then a skipped day resets it to 1', async () => {

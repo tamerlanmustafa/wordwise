@@ -1,0 +1,93 @@
+{
+  "title": "القوائم",
+  "segment": {
+    "films": "أفلام",
+    "words": "كلمات"
+  },
+  "system": {
+    "reel": "محفوظ من الرئيسية",
+    "favourites": "المفضلة"
+  },
+  "meta": {
+    "filmCount_zero": "{{count}} فيلم",
+    "filmCount_one": "{{count}} فيلم",
+    "filmCount_two": "{{count}} فيلمان",
+    "filmCount_few": "{{count}} أفلام",
+    "filmCount_many": "{{count}} فيلمًا",
+    "filmCount_other": "{{count}} فيلم",
+    "wordCount_zero": "{{count}} كلمة",
+    "wordCount_one": "{{count}} كلمة",
+    "wordCount_two": "{{count}} كلمتان",
+    "wordCount_few": "{{count}} كلمات",
+    "wordCount_many": "{{count}} كلمة",
+    "wordCount_other": "{{count}} كلمة",
+    "dueCount_zero": "{{count}} للمراجعة",
+    "dueCount_one": "{{count}} للمراجعة",
+    "dueCount_two": "{{count}} للمراجعة",
+    "dueCount_few": "{{count}} للمراجعة",
+    "dueCount_many": "{{count}} للمراجعة",
+    "dueCount_other": "{{count}} للمراجعة",
+    "addedFromHome": "مُضاف من الرئيسية",
+    "nothingSaved": "لا شيء محفوظ بعد"
+  },
+  "new": {
+    "title": "قائمة جديدة",
+    "subtitle": "القائمة تضم أفلامًا أو كلماتٍ، لا الاثنين معًا.",
+    "kindFilms": "أفلام",
+    "kindWords": "كلمات",
+    "placeholderFilms": "عرض الأحد المزدوج",
+    "placeholderWords": "كلمات من الأخبار",
+    "submit": "إنشاء القائمة",
+    "errorEmpty": "أعطِ قائمتك اسمًا.",
+    "errorDuplicate": "لديك قائمة بهذا الاسم بالفعل."
+  },
+  "practice": {
+    "films": "تدرّب على كلمات هذه الأفلام",
+    "due_zero": "تدرّب على {{count}}",
+    "due_one": "تدرّب على {{count}}",
+    "due_two": "تدرّب على {{count}}",
+    "due_few": "تدرّب على {{count}}",
+    "due_many": "تدرّب على {{count}}",
+    "due_other": "تدرّب على {{count}}",
+    "none": "تدرّب على هذه القائمة",
+    "empty": "لا شيء للتدرّب عليه بعد"
+  },
+  "sort": {
+    "title": "الترتيب حسب",
+    "added": "الأحدث إضافة",
+    "titleAZ": "الاسم",
+    "rating": "التقييم",
+    "due": "الأقرب للمراجعة",
+    "alpha": "أ–ي"
+  },
+  "menu": {
+    "rename": "إعادة التسمية",
+    "delete": "حذف"
+  },
+  "delete": {
+    "title": "حذف هذه القائمة؟",
+    "body": "ستبقى الأفلام والكلمات في حسابك.",
+    "confirm": "حذف",
+    "undo": "تراجع",
+    "done": "تم حذف القائمة"
+  },
+  "rename": {
+    "title": "إعادة تسمية القائمة",
+    "submit": "حفظ"
+  },
+  "empty": {
+    "reel": "اضغط + على فيلم في الرئيسية لحفظه هنا.",
+    "favourites": "اضغط على القلب في استكشاف لحفظ كلمة.",
+    "films": "أضف أفلامًا من الرئيسية أو من صفحة الفيلم.",
+    "words": "أضف كلمات من استكشاف."
+  },
+  "error": {
+    "retry": "تعذر التحديث. اضغط لإعادة المحاولة."
+  },
+  "srs": {
+    "new": "جديدة",
+    "learning": "قيد التعلم",
+    "due": "اليوم",
+    "learned": "متعلمة"
+  }
+}
