@@ -1023,16 +1023,24 @@ export const srsApi = {
     return body || null;
   },
 
-  /** Explore feed page. Deliberately uncached: the server seeds the order
-   *  per user per day, so paging is already stable, and caching would
-   *  fight the reset-on-mix-change flow. */
+  /** Explore feed page.
+   *
+   *  No response cache here on purpose — `wordFeedStore` keeps its own
+   *  buffer of recent cards on disk, which is what makes the tab paint
+   *  instantly, and a second cache layer keyed by URL would fight both the
+   *  per-launch `seed` and the reset-on-mix-change flow.
+   *
+   *  `seed` fixes the server's shuffle. Pass the same one for every page of
+   *  a session: `offset` indexes into a sequence that only holds still while
+   *  the seed does. */
   feed: async (params: {
     limit?: number;
     offset?: number;
     targetLang?: string;
     mix?: LevelMix;
+    seed?: string;
   } = {}): Promise<FeedResponse> => {
-    const { limit = 20, offset = 0, targetLang, mix } = params;
+    const { limit = 20, offset = 0, targetLang, mix, seed } = params;
     const qs = [`limit=${limit}`, `offset=${offset}`];
     if (targetLang) qs.push(`target_lang=${encodeURIComponent(targetLang)}`);
     if (mix) {
@@ -1041,6 +1049,7 @@ export const srsApi = {
         .join(',');
       qs.push(`mix=${encodeURIComponent(encoded)}`);
     }
+    if (seed) qs.push(`seed=${encodeURIComponent(seed)}`);
     const res = await authFetch(`${API_BASE_URL}/srs/feed?${qs.join('&')}`);
     if (!res.ok) {
       const text = await res.text().catch(() => '');

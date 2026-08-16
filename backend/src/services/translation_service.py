@@ -10,7 +10,7 @@ Provides translation with:
 
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
 from prisma import Prisma
@@ -100,7 +100,7 @@ class TranslationService:
         # "Turkish"). Don't persist those — they'd serve wrong data forever
         # and inflate the cache. The rare truly-identical word just re-resolves
         # next time at negligible cost.
-        if translated.strip().lower() == source_text.strip().lower():
+        if self._is_passthrough(source_text, translated):
             return
         try:
             await self.db.translationcache.upsert(
@@ -125,6 +125,54 @@ class TranslationService:
             )
         except Exception as e:
             logger.error(f"Failed to save to cache: {e}")
+
+    @staticmethod
+    def _is_passthrough(source_text: str, translated: str) -> bool:
+        """Whether a result is the provider handing the input straight back.
+
+        Shared by the single and batched cache writes so both refuse to
+        persist the same junk — see `_save_to_cache` for why it matters.
+        """
+        return translated.strip().lower() == source_text.strip().lower()
+
+    async def _save_many_to_cache(
+        self,
+        rows: List[Tuple[str, str, Optional[str]]],
+        target_lang: str,
+    ) -> None:
+        """Persist a whole batch of fresh translations in one statement.
+
+        `_save_to_cache` awaits one upsert per row, which is fine for a
+        single lookup but was costing a feed page up to 40 sequential round
+        trips *after* DeepL had already answered — pure added latency on the
+        first card the user waits for.
+
+        `skip_duplicates` rather than an upsert: every row here was a cache
+        miss moments ago, so the only way one exists is a concurrent request
+        that raced us to it. Its value is equally good, and skipping keeps
+        this to a single insert.
+        """
+        payload = [
+            {
+                "sourceText": source_text,
+                "targetLang": target_lang,
+                "translated": translated,
+                "sourceLang": source_lang,
+            }
+            for source_text, translated, source_lang in rows
+            if not self._is_passthrough(source_text, translated)
+        ]
+        if not payload:
+            return
+        try:
+            await self.db.translationcache.create_many(
+                data=payload,
+                skip_duplicates=True,
+            )
+        except Exception as e:
+            # A failed cache write costs the next caller a re-translation;
+            # it must not fail the page that already has its answers.
+            logger.error(f"Failed to save batch to cache: {e}")
 
     async def _track_user_translation(
         self,
@@ -394,6 +442,7 @@ class TranslationService:
                     target_lang=target_lang_upper,
                     source_lang=source_lang,
                 )
+                fresh: List[Tuple[str, str, Optional[str]]] = []
                 for source_text, result in zip(misses, translated):
                     value = result.get("translated") or ""
                     if not value:
@@ -402,15 +451,14 @@ class TranslationService:
                         "translated": value,
                         "source_lang": result.get("detected_source_lang"),
                     }
-                    # Persist so the next user of this word pays nothing. The
-                    # cache is global, which is what makes the corpus a
-                    # one-time cost rather than a per-user one.
-                    await self._save_to_cache(
-                        source_text=source_text,
-                        target_lang=target_lang_upper,
-                        translated=value,
-                        source_lang=result.get("detected_source_lang"),
+                    fresh.append(
+                        (source_text, value, result.get("detected_source_lang"))
                     )
+                # Persist so the next user of these words pays nothing. The
+                # cache is global, which is what makes the corpus a one-time
+                # cost rather than a per-user one. One statement for the whole
+                # batch — see `_save_many_to_cache`.
+                await self._save_many_to_cache(fresh, target_lang_upper)
                 misses = []
             except Exception as e:
                 # Fall through to the per-item path, which handles the Google

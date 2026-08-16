@@ -2,13 +2,23 @@
  * wordFeedStore — paging + actions for the Explore word feed.
  *
  * Mirrors `reelStore`'s paging shape (optimistic writes, rollback on
- * failure, AsyncStorage for anything that must survive a relaunch). Two
- * pieces of local state outlive the session:
+ * failure, AsyncStorage for anything that must survive a relaunch).
  *
- *   • `mix`  — the CEFR blend the user dialled in (key `feedLevelMix`).
- *   • `seen` — lemma ids already scrolled past, so a passive swipe doesn't
- *              resurface tomorrow. Deliberately client-side: the server has
- *              no FEED_SEEN interaction type and v1 adds no schema.
+ * Two things shape how this store behaves on a cold start:
+ *
+ *   • `mix`    — the CEFR blend the user dialled in (key `feedLevelMix`).
+ *   • `buffer` — the tail of the cards fetched last launch (key `feedBuffer`).
+ *                Restored and reshuffled before the first request is even
+ *                sent, so the tab paints a word immediately instead of a
+ *                skeleton. The fetch that follows appends behind it, so
+ *                nothing the user is already looking at moves.
+ *
+ * The feed is deliberately amnesiac about position. Every launch mints a new
+ * `sessionSeed`, which the server uses to shuffle its candidate pool, so
+ * reopening the app is a fresh scroll rather than a resumed one. (It used to
+ * seed on the UTC date, which made the first card identical all day.) The
+ * seed is minted once and echoed on every page of the session: `offset`
+ * addresses a stable sequence only for as long as the seed holds still.
  *
  * The heart ("Save") is the existing global word save — a `user_words` row
  * with no movie — which is what puts the word in the notebook and the next
@@ -19,18 +29,32 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
 import { defaultMixForLevel, isBalanced } from '../utils/levelMix';
+import { randomToken, shuffle } from '../utils/random';
 
 const MIX_KEY = 'feedLevelMix';
-const SEEN_KEY = 'feedSeenLemmas.v1';
+const BUFFER_KEY = 'feedBuffer.v1';
 
 export const FEED_PAGE_SIZE = 20;
 
 /** Prefetch when the user is this many cards from the end. */
 export const PREFETCH_THRESHOLD = 2;
 
-/** Cap on the persisted seen-set. Unbounded growth would make every launch
- *  parse a bigger blob for progressively less benefit. */
-const SEEN_LIMIT = 2000;
+/** How many recent cards to keep on disk for the next cold start. Deep
+ *  enough that a launch has real runway before it needs the network, small
+ *  enough that parsing it is not itself the thing delaying first paint. */
+export const BUFFER_LIMIT = 60;
+
+/** Buffered cards older than this are dropped rather than shown — lemmas get
+ *  curated away and translations get corrected underneath us. */
+export const BUFFER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface BufferedFeed {
+  /** The language the cards were translated into. A buffer in the wrong
+   *  language is worse than no buffer at all. */
+  lang: string | null;
+  savedAt: number;
+  items: FeedItem[];
+}
 
 interface WordFeedState {
   items: FeedItem[];
@@ -43,7 +67,6 @@ interface WordFeedState {
   /** What the server actually honoured on the last page. */
   mixApplied: LevelMix;
   activeIndex: number;
-  seen: Set<number>;
   /** Lemma ids the user has saved this session, for the heart's fill. */
   saved: Set<number>;
   hydrated: boolean;
@@ -64,14 +87,53 @@ interface WordFeedState {
  *  putting them in state would re-render every card when they resolve. */
 let targetLanguage: string | null = null;
 
-async function persistSeen(seen: Set<number>): Promise<void> {
-  // Keep the most recent ids — a Set preserves insertion order, so the tail
-  // is the newest.
-  const ids = Array.from(seen).slice(-SEEN_LIMIT);
+/** Fixes the server's shuffle for this launch. Re-minted on hydrate and on
+ *  any mix change — both are moments the deck should be dealt again. */
+let sessionSeed: string = randomToken();
+
+/** Synchronous re-entry guard for `hydrate`. `hydrated` can't do this job on
+ *  its own: it is only set after two awaits, so two callers arriving in the
+ *  same tick — App's boot effect and the Explore screen's mount effect — would
+ *  both sail past it and fetch page 0 twice. */
+let hydrating = false;
+
+async function persistBuffer(items: FeedItem[], saved: Set<number>): Promise<void> {
+  // Keep the tail. Fresh pages append, so the newest cards are the ones the
+  // next launch is least likely to have already shown. Saved words are
+  // dropped because the server excludes them from future pages — leaving
+  // them here would resurface a word the user has already filed away.
+  const keep = items.filter((i) => !saved.has(i.lemma_id)).slice(-BUFFER_LIMIT);
+  if (keep.length === 0) return;
+
+  const payload: BufferedFeed = {
+    lang: targetLanguage,
+    savedAt: Date.now(),
+    items: keep,
+  };
   try {
-    await AsyncStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+    await AsyncStorage.setItem(BUFFER_KEY, JSON.stringify(payload));
   } catch {
-    // A failed write just means the word may reappear — not worth surfacing.
+    // The buffer is an optimisation. Failing to write it costs the next
+    // launch its instant first card and nothing else.
+  }
+}
+
+async function readBuffer(): Promise<FeedItem[]> {
+  try {
+    const stored = await AsyncStorage.getItem(BUFFER_KEY);
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored) as BufferedFeed;
+    if (!Array.isArray(parsed?.items) || parsed.items.length === 0) return [];
+    // Showing Spanish translations to someone who has switched to Turkish is
+    // a worse first impression than a brief skeleton.
+    if (parsed.lang !== targetLanguage) return [];
+    if (Date.now() - (parsed.savedAt ?? 0) > BUFFER_TTL_MS) return [];
+
+    return parsed.items;
+  } catch {
+    // An unreadable buffer just means a normal, network-bound cold start.
+    return [];
   }
 }
 
@@ -84,14 +146,17 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   mix: defaultMixForLevel('B1'),
   mixApplied: {},
   activeIndex: 0,
-  seen: new Set<number>(),
   saved: new Set<number>(),
   hydrated: false,
   panelOpen: false,
 
   hydrate: async (proficiencyLevel, targetLang) => {
-    if (get().hydrated) return;
+    if (hydrating || get().hydrated) return;
+    hydrating = true;
+
     targetLanguage = targetLang ?? null;
+    // A new launch is a new deck.
+    sessionSeed = randomToken();
 
     let mix = defaultMixForLevel(proficiencyLevel);
     try {
@@ -106,15 +171,13 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       // Fall through to the default.
     }
 
-    let seen = new Set<number>();
-    try {
-      const stored = await AsyncStorage.getItem(SEEN_KEY);
-      if (stored) seen = new Set<number>(JSON.parse(stored) as number[]);
-    } catch {
-      // An unreadable seen-set just means repeats, not a broken feed.
-    }
+    // Paint last launch's cards, in a new order, before the request is sent.
+    const buffered = await readBuffer();
 
-    set({ mix, seen, hydrated: true });
+    set({ mix, items: shuffle(buffered), hydrated: true });
+    // `hydrated` is the guard from here on.
+    hydrating = false;
+
     await get().fetchNext();
   },
 
@@ -129,21 +192,28 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
         offset: page * FEED_PAGE_SIZE,
         targetLang: targetLanguage ?? undefined,
         mix,
+        seed: sessionSeed,
       });
 
-      // Drop anything already on screen. The server pages a stable
-      // per-day sequence, so this only fires if a page is re-requested,
-      // but a duplicate key in a FlatList is worse than a short page.
+      // Drop anything already on screen. With a restored buffer this does
+      // real work rather than being belt-and-braces: the server has no idea
+      // what we cached, so its first page can legitimately re-offer a word
+      // the user is holding, and a duplicate key in a FlatList is worse than
+      // a short page.
       const known = new Set(items.map((i) => i.lemma_id));
       const fresh = res.items.filter((i) => !known.has(i.lemma_id));
+      const next = [...items, ...fresh];
 
       set({
-        items: [...items, ...fresh],
+        items: next,
         page: page + 1,
         mixApplied: res.mix_applied ?? {},
         exhausted: !res.has_more,
         loading: false,
       });
+
+      // Fire-and-forget: only the next cold start reads this.
+      persistBuffer(next, get().saved);
     } catch (e) {
       console.warn('[wordFeedStore] fetchNext failed:', e);
       set({ loading: false, loadError: true });
@@ -161,6 +231,12 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       // Persisting is best-effort; the mix still applies this session.
     }
 
+    // The buffer holds the previous mix's levels, so restoring it next
+    // launch would contradict the proportions just dialled in. A new seed
+    // makes this a genuinely new deck rather than the old one re-cut.
+    AsyncStorage.removeItem(BUFFER_KEY).catch(() => {});
+    sessionSeed = randomToken();
+
     // Reset to page 0 so the new proportions are visible immediately
     // rather than after the current page drains.
     set({
@@ -175,17 +251,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   },
 
   setActiveIndex: (index) => {
-    const { items, activeIndex, seen } = get();
-    if (index === activeIndex) return;
-
-    const item = items[index];
-    if (item && !seen.has(item.lemma_id)) {
-      const next = new Set(seen);
-      next.add(item.lemma_id);
-      set({ activeIndex: index, seen: next });
-      persistSeen(next);
-      return;
-    }
+    if (index === get().activeIndex) return;
     set({ activeIndex: index });
   },
 
@@ -208,6 +274,10 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       else confirmed.delete(item.lemma_id);
       set({ saved: confirmed });
 
+      // Keep the buffer in step, so a word saved now doesn't come back on
+      // the next cold start via the cache.
+      persistBuffer(get().items, confirmed);
+
       wordwiseApi.logInteraction(
         item.word,
         res.saved ? 'WORD_SAVE' : 'WORD_UNSAVE',
@@ -220,7 +290,8 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     }
   },
 
-  reset: () =>
+  reset: () => {
+    hydrating = false;
     set({
       items: [],
       page: 0,
@@ -231,7 +302,8 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       saved: new Set<number>(),
       hydrated: false,
       panelOpen: false,
-    }),
+    });
+  },
 }));
 
 /** Fire-and-forget: the card flip is interaction data for the difficulty

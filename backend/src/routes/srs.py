@@ -17,6 +17,7 @@ from the grant UI and log in as that user instead.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import logging
 import random
@@ -982,6 +983,26 @@ def _page_plan(
     return cursors, applied
 
 
+def _feed_seed(user_id: int, token: Optional[str]) -> int:
+    """The shuffle seed for one user's feed ordering.
+
+    `token` comes from the client, which mints a fresh one on every cold
+    start, so each launch deals a different deck. It must be echoed back on
+    every page of that launch: `offset` only addresses a stable sequence if
+    every page hashes to the same seed, and a seed that drifted mid-session
+    would make page 2 overlap page 1.
+
+    Older clients send nothing. They fall back to the UTC day, which is the
+    behaviour the feed shipped with — stable for a day, reshuffled overnight.
+
+    The user id stays in the hash so two users passing the same token still
+    get different orders.
+    """
+    if not token:
+        token = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return int(hashlib.md5(f"{user_id}:{token}".encode()).hexdigest()[:8], 16)
+
+
 def _sentence_match(
     sentence: str,
     matched_form: Optional[str],
@@ -1180,6 +1201,7 @@ async def word_feed(
     offset: int = Query(0, ge=0),
     target_lang: Optional[str] = None,
     mix: Optional[str] = None,
+    seed: Optional[str] = Query(None, max_length=64),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
@@ -1192,14 +1214,14 @@ async def word_feed(
 
     `mix` (e.g. `A2:0,B1:70,B2:20,C1:10`, must sum to 100) sets how much of
     each page comes from each CEFR level. Omit it to get the /today
-    behaviour: the user's level plus one above. The pick order is seeded per
-    user per UTC day, so paging is stable within a day and reshuffles
-    overnight.
-    """
-    import hashlib
+    behaviour: the user's level plus one above.
 
-    day_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    seed = int(hashlib.md5(f"{current_user.id}:{day_str}".encode()).hexdigest()[:8], 16)
+    `seed` is an opaque client token that fixes the pick order. The app mints
+    one per cold start and echoes it on every page, so each launch is a fresh
+    shuffle while paging within a launch stays coherent. Omit it and the
+    order falls back to being seeded per user per UTC day — see `_feed_seed`.
+    """
+    shuffle_seed = _feed_seed(current_user.id, seed)
 
     raw_level = current_user.proficiencyLevel
     user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
@@ -1234,15 +1256,16 @@ async def word_feed(
         logger.warning(f"[feed] no eligible lemmas user={current_user.id} levels={levels}")
         return FeedResponse(items=[], mix_applied={}, has_more=False)
 
-    # Bucket by level, then shuffle each bucket with the day seed. Same user
-    # + same day = same order, so `offset` addresses a stable sequence.
+    # Bucket by level, then shuffle each bucket with the session seed. Same
+    # user + same seed = same order, so `offset` addresses a stable sequence
+    # for as long as the client keeps sending that seed.
     buckets: dict[str, list[dict]] = {lvl: [] for lvl in levels}
     for row in candidates:
         bucket = buckets.get((row.get("cefr_level") or "").upper())
         if bucket is not None:
             bucket.append(row)
     for lvl, rows in buckets.items():
-        rng = random.Random(f"{seed}:{lvl}")
+        rng = random.Random(f"{shuffle_seed}:{lvl}")
         rng.shuffle(rows)
 
     page_index = offset // limit
@@ -1259,7 +1282,7 @@ async def word_feed(
         return FeedResponse(items=[], mix_applied={}, has_more=False)
 
     # Interleave so a page doesn't read as blocks of one level.
-    rng = random.Random(f"{seed}:page:{page_index}")
+    rng = random.Random(f"{shuffle_seed}:page:{page_index}")
     rng.shuffle(picks)
 
     has_more = any(len(buckets[lvl]) - cursors[lvl] > 0 for lvl in levels)

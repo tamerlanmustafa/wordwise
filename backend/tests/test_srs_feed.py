@@ -9,6 +9,8 @@ candidate query is checked at the SQL level with a recording stub.
 from __future__ import annotations
 
 import asyncio
+import random
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -16,6 +18,7 @@ from fastapi import HTTPException
 from src.routes.srs import (
     _allocate_mix,
     _eligible_lemma_candidates,
+    _feed_seed,
     _page_plan,
     _parse_mix,
     _sentence_match,
@@ -146,6 +149,38 @@ class TestPagePlan:
         assert cursors["C1"] == 2
         assert page1["C1"] == 1
         assert sum(page1.values()) == 20
+
+
+class TestFeedSeed:
+    """The client mints a token per cold start; the feed's order follows it."""
+
+    def test_same_token_gives_the_same_order(self):
+        # Paging depends on this: `offset` addresses a stable sequence only
+        # while every page of a session hashes to the same seed.
+        assert _feed_seed(7, "abc123") == _feed_seed(7, "abc123")
+
+    def test_a_new_token_deals_a_new_deck(self):
+        assert _feed_seed(7, "abc123") != _feed_seed(7, "def456")
+
+    def test_two_users_sharing_a_token_still_differ(self):
+        assert _feed_seed(7, "abc123") != _feed_seed(8, "abc123")
+
+    def test_no_token_falls_back_to_the_utc_day(self):
+        # Older clients send nothing and keep the original behaviour:
+        # stable for the day, reshuffled overnight.
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        assert _feed_seed(7, None) == _feed_seed(7, day)
+
+    def test_empty_token_is_treated_as_absent(self):
+        assert _feed_seed(7, "") == _feed_seed(7, None)
+
+    def test_is_seedable_by_random(self):
+        # The route feeds this straight into random.Random(...), which needs
+        # a hashable, deterministic value.
+        seed = _feed_seed(7, "abc123")
+        first = random.Random(f"{seed}:B1")
+        second = random.Random(f"{seed}:B1")
+        assert first.random() == second.random()
 
 
 class TestSentenceMatch:

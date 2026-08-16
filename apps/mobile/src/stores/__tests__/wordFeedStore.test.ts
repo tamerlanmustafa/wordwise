@@ -7,11 +7,17 @@ jest.mock('../../services/api', () => ({
   wordwiseApi: { saveWord: jest.fn(), logInteraction: jest.fn() },
 }));
 
-import { useWordFeedStore, FEED_PAGE_SIZE, logFeedFlip } from '../wordFeedStore';
+import {
+  useWordFeedStore,
+  FEED_PAGE_SIZE,
+  BUFFER_LIMIT,
+  BUFFER_TTL_MS,
+  logFeedFlip,
+} from '../wordFeedStore';
 import { srsApi, wordwiseApi, type FeedItem } from '../../services/api';
 
 const MIX_KEY = 'feedLevelMix';
-const SEEN_KEY = 'feedSeenLemmas.v1';
+const BUFFER_KEY = 'feedBuffer.v1';
 
 const mockFeed = srsApi.feed as jest.Mock;
 const mockSave = wordwiseApi.saveWord as jest.Mock;
@@ -38,12 +44,22 @@ const page = (items: FeedItem[], has_more = true) => ({
   has_more,
 });
 
+/** What `persistBuffer` writes. `lang` must match what hydrate was handed. */
+const buffered = (items: FeedItem[], lang: string | null = 'es', savedAt = Date.now()) =>
+  JSON.stringify({ lang, savedAt, items });
+
+const ids = () => useWordFeedStore.getState().items.map((i) => i.lemma_id);
+
+const readBuffer = async () => JSON.parse((await AsyncStorage.getItem(BUFFER_KEY))!);
+
+const seedOf = (call: number) => mockFeed.mock.calls[call][0].seed as string;
+
 describe('wordFeedStore', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     jest.clearAllMocks();
     useWordFeedStore.getState().reset();
-    useWordFeedStore.setState({ seen: new Set(), mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
+    useWordFeedStore.setState({ mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
   });
 
   describe('paging', () => {
@@ -114,36 +130,159 @@ describe('wordFeedStore', () => {
     });
   });
 
-  describe('seen-set persistence', () => {
-    it('records a lemma as seen when it becomes the active card', async () => {
-      mockFeed.mockResolvedValue(page([item(1), item(2)]));
-      await useWordFeedStore.getState().fetchNext();
+  describe('instant open (disk buffer)', () => {
+    it('shows the buffered cards before the request resolves', async () => {
+      await AsyncStorage.setItem(BUFFER_KEY, buffered([item(1), item(2)]));
+      // A request that never settles: whatever is on screen came from disk.
+      mockFeed.mockReturnValue(new Promise(() => {}));
 
-      useWordFeedStore.getState().setActiveIndex(1);
+      const pending = useWordFeedStore.getState().hydrate('B1', 'es');
       await flush();
 
-      expect(useWordFeedStore.getState().seen.has(2)).toBe(true);
-      expect(JSON.parse((await AsyncStorage.getItem(SEEN_KEY))!)).toContain(2);
+      expect(ids().sort()).toEqual([1, 2]);
+      expect(useWordFeedStore.getState().hydrated).toBe(true);
+      void pending;
     });
 
-    it('restores the seen set on hydrate', async () => {
-      await AsyncStorage.setItem(SEEN_KEY, JSON.stringify([7, 8]));
-      mockFeed.mockResolvedValue(page([item(1)]));
+    it('appends the fetched page behind the buffer so nothing on screen moves', async () => {
+      await AsyncStorage.setItem(BUFFER_KEY, buffered([item(1), item(2)]));
+      mockFeed.mockResolvedValue(page([item(3)]));
 
       await useWordFeedStore.getState().hydrate('B1', 'es');
 
-      expect(useWordFeedStore.getState().seen.has(7)).toBe(true);
-      expect(useWordFeedStore.getState().seen.has(8)).toBe(true);
+      expect(ids().slice(-1)).toEqual([3]);
+      expect(ids()).toHaveLength(3);
     });
 
-    it('survives an unreadable seen set rather than failing to load', async () => {
-      await AsyncStorage.setItem(SEEN_KEY, 'not json');
-      mockFeed.mockResolvedValue(page([item(1)]));
+    it('drops a fetched card the buffer is already showing', async () => {
+      await AsyncStorage.setItem(BUFFER_KEY, buffered([item(1), item(2)]));
+      mockFeed.mockResolvedValue(page([item(2), item(3)]));
 
       await useWordFeedStore.getState().hydrate('B1', 'es');
 
-      expect(useWordFeedStore.getState().seen.size).toBe(0);
-      expect(useWordFeedStore.getState().items).toHaveLength(1);
+      expect(ids().sort()).toEqual([1, 2, 3]);
+    });
+
+    it('ignores a buffer translated into a different language', async () => {
+      await AsyncStorage.setItem(BUFFER_KEY, buffered([item(1)], 'es'));
+      mockFeed.mockResolvedValue(page([item(9)]));
+
+      await useWordFeedStore.getState().hydrate('B1', 'tr');
+
+      expect(ids()).toEqual([9]);
+    });
+
+    it('ignores a buffer past its TTL', async () => {
+      const stale = Date.now() - BUFFER_TTL_MS - 1;
+      await AsyncStorage.setItem(BUFFER_KEY, buffered([item(1)], 'es', stale));
+      mockFeed.mockResolvedValue(page([item(9)]));
+
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+
+      expect(ids()).toEqual([9]);
+    });
+
+    it('falls back to a normal cold start on an unreadable buffer', async () => {
+      await AsyncStorage.setItem(BUFFER_KEY, 'not json');
+      mockFeed.mockResolvedValue(page([item(9)]));
+
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+
+      expect(ids()).toEqual([9]);
+    });
+
+    it('writes the page to disk for the next launch', async () => {
+      mockFeed.mockResolvedValue(page([item(1), item(2)]));
+
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      await flush();
+
+      const stored = await readBuffer();
+      expect(stored.lang).toBe('es');
+      expect(stored.items.map((i: FeedItem) => i.lemma_id)).toEqual([1, 2]);
+    });
+
+    it('keeps only the newest cards, so the buffer rotates', async () => {
+      const many = Array.from({ length: BUFFER_LIMIT + 5 }, (_, n) => item(n + 1));
+      mockFeed.mockResolvedValue(page(many));
+
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      await flush();
+
+      const stored = await readBuffer();
+      expect(stored.items).toHaveLength(BUFFER_LIMIT);
+      // The tail, not the head — the oldest five are the ones dropped.
+      expect(stored.items[0].lemma_id).toBe(6);
+    });
+
+    it('keeps a saved word out of the buffer so it does not come back', async () => {
+      mockFeed.mockResolvedValue(page([item(1), item(2)]));
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+
+      mockSave.mockResolvedValue({ saved: true, word: 'word1' });
+      await useWordFeedStore.getState().favourite(item(1));
+      await flush();
+
+      const stored = await readBuffer();
+      expect(stored.items.map((i: FeedItem) => i.lemma_id)).toEqual([2]);
+    });
+
+    it('hydrates once when boot and the screen both ask in the same tick', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+
+      await Promise.all([
+        useWordFeedStore.getState().hydrate('B1', 'es'),
+        useWordFeedStore.getState().hydrate('B1', 'es'),
+      ]);
+
+      expect(mockFeed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('per-launch shuffle seed', () => {
+    it('sends one seed and reuses it for every page of the session', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      mockFeed.mockResolvedValue(page([item(2)]));
+      await useWordFeedStore.getState().fetchNext();
+
+      expect(seedOf(0)).toBeTruthy();
+      // Paging only addresses a stable sequence while the seed holds still.
+      expect(seedOf(1)).toBe(seedOf(0));
+    });
+
+    it('mints a new seed on the next cold start', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      const first = seedOf(0);
+
+      useWordFeedStore.getState().reset();
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+
+      expect(seedOf(1)).not.toBe(first);
+    });
+
+    it('re-cuts the deck when the mix changes', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      const first = seedOf(0);
+
+      await useWordFeedStore.getState().setMix({ A2: 0, B1: 0, B2: 0, C1: 100 });
+
+      expect(seedOf(1)).not.toBe(first);
+    });
+
+    it('clears the buffer on a mix change so the old levels do not return', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+      await flush();
+      expect(await AsyncStorage.getItem(BUFFER_KEY)).not.toBeNull();
+
+      mockFeed.mockReturnValue(new Promise(() => {}));
+      void useWordFeedStore.getState().setMix({ A2: 0, B1: 0, B2: 0, C1: 100 });
+      await flush();
+
+      expect(await AsyncStorage.getItem(BUFFER_KEY)).toBeNull();
     });
   });
 

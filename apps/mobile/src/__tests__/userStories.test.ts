@@ -91,7 +91,7 @@ describe('user stories (cross-store integration)', () => {
     useReelBadgeStore.setState({ count: 0 });
     useFlightStore.setState({ pending: null, reelTabRect: null });
     useWordFeedStore.getState().reset();
-    useWordFeedStore.setState({ seen: new Set(), mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
+    useWordFeedStore.setState({ mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
     useListsStore.getState().reset();
   });
 

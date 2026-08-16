@@ -19,11 +19,17 @@ from src.utils.deepl_client import DeepLClient, DeepLError, MAX_TEXTS_PER_REQUES
 
 
 class _FakeCacheTable:
-    """Stands in for `db.translationcache`, counting reads."""
+    """Stands in for `db.translationcache`, counting reads and writes.
+
+    `written` is every row that reached the table whatever statement carried
+    it; `write_calls` is how many statements that took. The batch path has to
+    move the first number without moving the second.
+    """
 
     def __init__(self, rows=None):
         self.rows = rows or []
         self.read_calls = 0
+        self.write_calls = 0
         self.written = []
 
     async def find_many(self, where):
@@ -39,8 +45,14 @@ class _FakeCacheTable:
         return None
 
     async def upsert(self, where, data):
+        self.write_calls += 1
         self.written.append(data["create"])
         return None
+
+    async def create_many(self, data, skip_duplicates=False):
+        self.write_calls += 1
+        self.written.extend(data)
+        return len(data)
 
 
 class _FakeDb:
@@ -110,6 +122,27 @@ class TestBatchTranslateRoundTrips:
         # the client splits it — either way, no per-text calls.
         assert len(deepl.calls) == 1
 
+    def test_one_write_statement_for_the_whole_batch(self):
+        # The last sequential hop on the path: DeepL had already answered,
+        # and the page then waited on one upsert per miss before it could be
+        # sent. A feed page of 20 cards meant 40 of them.
+        db = _FakeDb()
+        deepl = _RecordingDeepL()
+        texts = [f"word{i}" for i in range(40)]
+
+        asyncio.run(_service(db, deepl).batch_translate(texts, "ES"))
+
+        assert db.translationcache.write_calls == 1
+        assert len(db.translationcache.written) == 40
+
+    def test_nothing_is_written_when_every_text_was_cached(self):
+        db = _FakeDb([_row("hello", "hola")])
+        deepl = _RecordingDeepL()
+
+        asyncio.run(_service(db, deepl).batch_translate(["hello"], "ES"))
+
+        assert db.translationcache.write_calls == 0
+
     def test_cached_texts_never_reach_deepl(self):
         db = _FakeDb([_row("hello", "hola"), _row("world", "mundo")])
         deepl = _RecordingDeepL()
@@ -159,6 +192,37 @@ class TestBatchTranslateCorrectness:
         asyncio.run(_service(db, deepl).batch_translate(["hello"], "ES"))
 
         assert [w["sourceText"] for w in db.translationcache.written] == ["hello"]
+
+    def test_a_passthrough_result_is_not_cached(self):
+        # A provider handing the input straight back is a failure, not a
+        # translation. Persisting it would serve wrong data forever — the
+        # batched write has to refuse it exactly as the single write does.
+        db = _FakeDb()
+
+        class _Passthrough(_RecordingDeepL):
+            async def translate_many(self, texts, target_lang, source_lang="auto", context=None):
+                self.calls.append(list(texts))
+                return [{"translated": t, "detected_source_lang": "EN"} for t in texts]
+
+        deepl = _Passthrough()
+        out = asyncio.run(_service(db, deepl).batch_translate(["hello", "world"], "TR"))
+
+        assert db.translationcache.written == []
+        # The caller still gets an answer for this page; it just isn't kept.
+        assert [r["translated"] for r in out] == ["hello", "world"]
+
+    def test_a_failed_cache_write_still_returns_the_page(self):
+        db = _FakeDb()
+
+        async def boom(data, skip_duplicates=False):
+            raise RuntimeError("db down")
+
+        db.translationcache.create_many = boom
+        deepl = _RecordingDeepL()
+
+        out = asyncio.run(_service(db, deepl).batch_translate(["hello"], "ES"))
+
+        assert out[0]["translated"] == "hello-ES"
 
     def test_lookup_is_normalized_the_same_way_as_single_translation(self):
         # get_translation caches on the normalized key, so a batch read that

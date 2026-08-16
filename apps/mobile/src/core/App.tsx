@@ -195,6 +195,19 @@ export default function App() {
     });
   }, [targetLanguage, targetLanguageLoaded]);
 
+  // Warm the Explore feed during boot instead of on the first tab tap. The
+  // tab is lazily mounted (KeepAlive), so without this its first request
+  // doesn't even start until the user is already looking at the screen —
+  // and that request is the slowest one the app makes. Gated on the restored
+  // target language so we never fetch, or cache, a page of translations in
+  // the wrong language, and on `user` so a logged-out boot doesn't fire a
+  // guaranteed 401. `hydrate` is idempotent, so the Explore screen's own
+  // mount effect becomes a no-op when this wins the race.
+  useEffect(() => {
+    if (!targetLanguageLoaded || !user) return;
+    void useWordFeedStore.getState().hydrate(user.proficiency_level, targetLanguage);
+  }, [targetLanguageLoaded, user?.proficiency_level, targetLanguage, user]);
+
   const handleLogin = async (user: any, token: string, refreshToken: string) => {
     await login(user, token, refreshToken);
   };
