@@ -38,6 +38,7 @@ interface Props {
   onNavigateToSettings: () => void;
   onNavigateToAdmin: () => void;
   onNavigateToLists: () => void;
+  onNavigateToSavedMovies: () => void;
   onNavigateToVocabulary: () => void;
   onNavigateToStats: () => void;
   onNavigateToAchievements: () => void;
@@ -55,6 +56,7 @@ export function UserMenuSheet({
   onNavigateToSettings,
   onNavigateToAdmin,
   onNavigateToLists,
+  onNavigateToSavedMovies,
   onNavigateToVocabulary,
   onNavigateToStats,
   onNavigateToAchievements,
@@ -102,6 +104,8 @@ export function UserMenuSheet({
     { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
     { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
     { icon: 'lists', label: t('settings:menu.myLists'), action: wrap(onNavigateToLists) },
+    // The saved reel's home since Explore took its place in the tab bar.
+    { icon: 'film', label: t('movies:myMovies.title'), action: wrap(onNavigateToSavedMovies) },
     { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
     { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
     ...(isAdmin ? [{ icon: 'admin' as MenuIconName, label: t('settings:menu.adminPanel'), action: wrap(onNavigateToAdmin) }] : []),
@@ -251,6 +255,7 @@ type MenuIconName =
   | 'badge'
   | 'leaderboard'
   | 'lists'
+  | 'film'
   | 'book'
   | 'settings'
   | 'admin'
@@ -300,6 +305,13 @@ function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; siz
         <Svg {...p}>
           <Path d="M9 6h11M9 12h11M9 18h11" />
           <Path d="M4 6h.01M4 12h.01M4 18h.01" />
+        </Svg>
+      );
+    case 'film':
+      return (
+        <Svg {...p}>
+          <Rect x={3} y={4} width={18} height={16} rx={2} />
+          <Path d="M3 8h18M3 16h18M8 4v16M16 4v16" />
         </Svg>
       );
     case 'book':

@@ -27,7 +27,8 @@ import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
 import type { MoviePreviewPayload } from '../components/journey/sharedTypes';
-import { MyMoviesScreen } from '../components/MyMoviesScreen';
+import { ExploreScreen } from '../components/ExploreScreen';
+import { SavedMoviesScreen } from '../components/SavedMoviesScreen';
 import { PracticeScreen } from '../components/PracticeScreen';
 import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
@@ -48,6 +49,7 @@ import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
+import { useWordFeedStore } from '../stores/wordFeedStore';
 import type { Screen, ListFilter, MovieData } from './types';
 import { PARENT_OF, PROFILE_SHEET } from './navParents';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
@@ -395,9 +397,12 @@ export default function App() {
   const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
 
   // v0.7: navigation targets for the new two-tab world.
-  const navigateToMyMovies = () => {
+  const navigateToExplore = () => {
     useReelBadgeStore.getState().clear();
-    setCurrentScreen('movies');
+    setCurrentScreen('explore');
+  };
+  const navigateToSavedMovies = () => {
+    setCurrentScreen('savedMovies');
   };
   const navigateToPractice = () => {
     setCurrentScreen('practice');
@@ -421,14 +426,14 @@ export default function App() {
     // Any tab tap dismisses the notifications sheet.
     setShowNotifSheet(false);
     if (tab === 'home') navigateToHome();
-    else if (tab === 'movies') navigateToMyMovies();
+    else if (tab === 'explore') navigateToExplore();
     else if (tab === 'practice') navigateToPractice();
     else if (tab === 'profile') {
       setShowUserSheet((prev) => {
         // Remember what the sheet is opening over, so backToProfile can
         // return there rather than to Home.
         if (!prev) {
-          rootTabForSheet.current = (['home', 'movies', 'practice'] as Screen[]).includes(currentScreen)
+          rootTabForSheet.current = (['home', 'explore', 'practice'] as Screen[]).includes(currentScreen)
             ? currentScreen
             : 'home';
         }
@@ -450,7 +455,16 @@ export default function App() {
         setShowUserSheet(false);
         return true;
       }
-      const rootTabs: Screen[] = ['home', 'movies', 'journey', 'practice'];
+      // An open Explore panel swallows the first back press, exactly as the
+      // profile/notification sheets above do.
+      if (currentScreen === 'explore' && useWordFeedStore.getState().panelOpen) {
+        useWordFeedStore.getState().setPanelOpen(false);
+        return true;
+      }
+      // 'explore' is deliberately absent: back from the feed lands on Home
+      // rather than exiting the app, since it's a browsing surface rather
+      // than the app's root.
+      const rootTabs: Screen[] = ['home', 'journey', 'practice'];
       if (authed && !rootTabs.includes(currentScreen)) {
         // Account screens have a real parent — go there, exactly as the
         // on-screen Back does. Everything else still unwinds to Home.
@@ -743,9 +757,12 @@ export default function App() {
       case 'home':
       case 'searchResults':
         return 'home';
-      case 'movies':
+      case 'explore':
+        return 'explore';
+      // Movie preview is reached from Home's ranked list (and from the
+      // saved reel in the Profile sheet), so Home keeps the highlight.
       case 'moviePreview':
-        return 'movies';
+        return 'home';
       // Practice tab owns the daily SRS habit + per-movie lesson nodes.
       // Set intro / quiz / review all originate from Practice now.
       case 'practice':
@@ -766,6 +783,7 @@ export default function App() {
       case 'familyPlan':
       case 'privacy':
       case 'terms':
+      case 'savedMovies':
         return 'profile';
       default:
         return null;
@@ -791,10 +809,13 @@ export default function App() {
         <KeepAlive visible={currentScreen === 'home'}>
           <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} onOpenNotifications={() => setShowNotifSheet(true)} />
         </KeepAlive>
-        <KeepAlive visible={currentScreen === 'movies' || currentScreen === 'journey'}>
-          <MyMoviesScreen
-            onSearchPress={() => navigateToSearch('')}
-            onOpenMoviePreview={handleOpenMoviePreview}
+        {/* Explore keeps its place in KeepAlive so the feed doesn't lose
+            its scroll position when the user dips into Profile. */}
+        <KeepAlive visible={currentScreen === 'explore' || currentScreen === 'journey'}>
+          <ExploreScreen
+            active={currentScreen === 'explore'}
+            proficiencyLevel={user?.proficiency_level}
+            targetLanguage={targetLanguage}
           />
         </KeepAlive>
         <KeepAlive visible={currentScreen === 'practice'}>
@@ -824,6 +845,13 @@ export default function App() {
           <NotebookScreen onBack={backFrom('notebook')} backLabel={backLabelFor('notebook')} filter={listFilter} />
         ) : currentScreen === 'lists' ? (
           <ListsScreen onBack={backFrom('lists')} backLabel={backLabelFor('lists')} onOpenList={navigateToNotebook} onOpenWatched={navigateToWatched} />
+        ) : currentScreen === 'savedMovies' ? (
+          <SavedMoviesScreen
+            onBack={backFrom('savedMovies')}
+            backLabel={backLabelFor('savedMovies')}
+            onSearchPress={() => navigateToSearch('')}
+            onOpenMoviePreview={handleOpenMoviePreview}
+          />
         ) : currentScreen === 'watched' ? (
           <WatchedScreen onBack={backFrom('watched')} backLabel={backLabelFor('watched')} onMoviePress={navigateToMovie} />
         ) : currentScreen === 'achievements' ? (
@@ -934,6 +962,7 @@ export default function App() {
           onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
           onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
           onNavigateToLists={() => { setShowUserSheet(false); navigateToLists(); }}
+          onNavigateToSavedMovies={() => { setShowUserSheet(false); navigateToSavedMovies(); }}
           onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
           onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}

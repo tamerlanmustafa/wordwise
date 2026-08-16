@@ -28,7 +28,9 @@ export type Screen =
   // but kept in the union so any legacy navigation paths still typecheck
   // until they're cleaned up. App.tsx no longer routes anything here.
   | 'journey'
-  | 'movies'
+  | 'explore'
+  /** The saved reel, now reached from the Profile sheet rather than a tab. */
+  | 'savedMovies'
   | 'practice'
   | 'moviePreview'
   | 'setIntro'

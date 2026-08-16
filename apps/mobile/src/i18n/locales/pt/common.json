@@ -8,9 +8,9 @@
     "continue": "Continuar",
     "done": "Concluído",
     "gotIt": "Entendi",
+    "later": "Mais tarde",
     "retry": "Tentar novamente",
-    "save": "Salvar",
-    "later": "Mais tarde"
+    "save": "Salvar"
   },
   "cefr": {
     "A1": "Iniciante",
@@ -38,11 +38,6 @@
     "C2": "C2 - Domínio"
   },
   "genre": {
-    "10402": "Música",
-    "10749": "Romance",
-    "10751": "Família",
-    "10752": "Guerra",
-    "10770": "Filme para a TV",
     "12": "Aventura",
     "14": "Fantasia",
     "16": "Animação",
@@ -54,13 +49,18 @@
     "37": "Faroeste",
     "53": "Suspense",
     "80": "Crime",
+    "99": "Documentário",
     "878": "Ficção científica",
     "9648": "Mistério",
-    "99": "Documentário"
+    "10402": "Música",
+    "10749": "Romance",
+    "10751": "Família",
+    "10752": "Guerra",
+    "10770": "Filme para a TV"
   },
   "nav": {
+    "explore": "Explorar",
     "home": "Início",
-    "myMovies": "Meus filmes",
     "practice": "Prática",
     "profile": "Perfil"
   },

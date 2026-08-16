@@ -790,6 +790,40 @@ export interface TodaysWord {
   movie_id?: number | null;
 }
 
+/** Char offsets of the inflected form inside `sentence`, computed server-side
+ *  so the Explore card can gold-wash "lingered", not "linger". */
+export interface SentenceMatch {
+  start: number;
+  end: number;
+}
+
+/** One card in the Explore feed (GET /srs/feed). */
+export interface FeedItem {
+  lemma_id: number;
+  word: string;
+  /** No pronunciation source exists yet — always null today. The card hides
+   *  the IPA line when it is, so a future source needs no client change. */
+  ipa: string | null;
+  pos: string | null;
+  cefr: string | null;
+  sentence: string;
+  sentence_match: SentenceMatch | null;
+  translated_word: string | null;
+  translated_sentence: string | null;
+  translation_source: string | null;
+}
+
+/** The share of each page drawn from each CEFR level. Must total 100. */
+export type LevelMix = Record<string, number>;
+
+export interface FeedResponse {
+  items: FeedItem[];
+  /** What the server could honour — diverges from the request when a
+   *  level runs dry. */
+  mix_applied: LevelMix;
+  has_more: boolean;
+}
+
 export interface SrsStats {
   total_saved: number;
   due_now: number;
@@ -971,6 +1005,32 @@ export const srsApi = {
       AsyncStorage.setItem(cacheKey, JSON.stringify(body)).catch(() => {});
     }
     return body || null;
+  },
+
+  /** Explore feed page. Deliberately uncached: the server seeds the order
+   *  per user per day, so paging is already stable, and caching would
+   *  fight the reset-on-mix-change flow. */
+  feed: async (params: {
+    limit?: number;
+    offset?: number;
+    targetLang?: string;
+    mix?: LevelMix;
+  } = {}): Promise<FeedResponse> => {
+    const { limit = 20, offset = 0, targetLang, mix } = params;
+    const qs = [`limit=${limit}`, `offset=${offset}`];
+    if (targetLang) qs.push(`target_lang=${encodeURIComponent(targetLang)}`);
+    if (mix) {
+      const encoded = Object.entries(mix)
+        .map(([level, pct]) => `${level}:${pct}`)
+        .join(',');
+      qs.push(`mix=${encodeURIComponent(encoded)}`);
+    }
+    const res = await authFetch(`${API_BASE_URL}/srs/feed?${qs.join('&')}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`GET /srs/feed → ${res.status} ${text.slice(0, 120)}`);
+    }
+    return res.json();
   },
 };
 

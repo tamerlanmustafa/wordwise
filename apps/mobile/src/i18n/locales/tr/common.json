@@ -8,9 +8,9 @@
     "continue": "Devam et",
     "done": "Tamam",
     "gotIt": "Anladım",
+    "later": "Daha sonra",
     "retry": "Tekrar dene",
-    "save": "Kaydet",
-    "later": "Daha sonra"
+    "save": "Kaydet"
   },
   "cefr": {
     "A1": "Başlangıç",
@@ -38,11 +38,6 @@
     "C2": "C2 - Ustalık"
   },
   "genre": {
-    "10402": "Müzik",
-    "10749": "Romantik",
-    "10751": "Aile",
-    "10752": "Savaş",
-    "10770": "TV Filmi",
     "12": "Macera",
     "14": "Fantastik",
     "16": "Animasyon",
@@ -54,13 +49,18 @@
     "37": "Western",
     "53": "Gerilim",
     "80": "Suç",
+    "99": "Belgesel",
     "878": "Bilim Kurgu",
     "9648": "Gizem",
-    "99": "Belgesel"
+    "10402": "Müzik",
+    "10749": "Romantik",
+    "10751": "Aile",
+    "10752": "Savaş",
+    "10770": "TV Filmi"
   },
   "nav": {
+    "explore": "Keşfet",
     "home": "Ana Sayfa",
-    "myMovies": "Filmlerim",
     "practice": "Pratik",
     "profile": "Profil"
   },

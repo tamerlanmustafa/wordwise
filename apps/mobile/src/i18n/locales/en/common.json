@@ -20,7 +20,7 @@
   "wordCount_other": "{{count}} words",
   "nav": {
     "home": "Home",
-    "myMovies": "My Movies",
+    "explore": "Explore",
     "practice": "Practice",
     "profile": "Profile"
   },

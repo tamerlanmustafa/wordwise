@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import logging
 import random
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -153,6 +154,41 @@ class TodaysWordResponse(BaseModel):
     movie_title: Optional[str] = None
     movie_poster_url: Optional[str] = None
     movie_id: Optional[int] = None
+
+
+class SentenceMatch(BaseModel):
+    """Character offsets of the inflected surface form inside `sentence`.
+
+    Computed server-side so the Explore card can gold-wash the form that
+    actually appears ("lingered"), not the dictionary lemma ("linger").
+    """
+    start: int
+    end: int
+
+
+class FeedItem(BaseModel):
+    lemma_id: int
+    word: str
+    # No IPA source exists yet (no pronunciation column on `lemmas`), so this
+    # is always None today. The card hides the line when null, so wiring a
+    # source in later needs no client change.
+    ipa: Optional[str] = None
+    pos: Optional[str] = None
+    cefr: Optional[str] = None
+    sentence: str
+    sentence_match: Optional[SentenceMatch] = None
+    translated_word: Optional[str] = None
+    translated_sentence: Optional[str] = None
+    translation_source: Optional[str] = None
+
+
+class FeedResponse(BaseModel):
+    items: list[FeedItem]
+    # What the server could actually honour this page. Diverges from the
+    # requested mix when a CEFR bucket runs dry — see `_allocate_mix`.
+    mix_applied: dict[str, int]
+    # False once every bucket is drained, so the client stops paging.
+    has_more: bool
 
 
 class ReviewBody(BaseModel):
@@ -777,6 +813,223 @@ async def complete_session(
 
 _CEFR_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
+# Levels the Explore mix can address. A1 is deliberately out — the feed is a
+# stretch surface, and A1 lemmas are almost entirely function words.
+_FEED_MIX_LEVELS = ["A2", "B1", "B2", "C1"]
+
+
+def _parse_mix(raw: str) -> dict[str, int]:
+    """Parse `A2:0,B1:70,B2:20,C1:10` into {level: percent}.
+
+    Raises HTTPException(400) on anything malformed or not summing to 100 —
+    a silently-renormalised mix would make the feed's distribution differ
+    from what the user dialled in, with no way to tell.
+    """
+    mix: dict[str, int] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        level, _, pct = part.partition(":")
+        level = level.strip().upper()
+        if level not in _FEED_MIX_LEVELS:
+            raise HTTPException(400, f"Unknown level in mix: {level!r}")
+        try:
+            value = int(pct)
+        except ValueError:
+            raise HTTPException(400, f"Non-numeric share for {level}: {pct!r}")
+        if value < 0 or value > 100:
+            raise HTTPException(400, f"Share for {level} out of range: {value}")
+        mix[level] = value
+
+    if not mix:
+        raise HTTPException(400, "Empty mix")
+    total = sum(mix.values())
+    if total != 100:
+        raise HTTPException(400, f"Mix must sum to 100, got {total}")
+    return mix
+
+
+def _allocate_mix(
+    mix: dict[str, int],
+    limit: int,
+    available: dict[str, int],
+) -> dict[str, int]:
+    """Split `limit` slots across CEFR buckets in the requested proportions.
+
+    A page of 20 at 70/20/10 draws 14 B1 / 4 B2 / 2 C1. Fractional slots go
+    to the largest remainder so the page always totals `limit` when there is
+    enough stock. When a bucket is short, its shortfall is redistributed
+    across the buckets that still have headroom, largest requested share
+    first, so the page stays full rather than short-changing the user.
+    """
+    if limit <= 0:
+        return {}
+
+    wanted = {lvl: pct for lvl, pct in mix.items() if pct > 0}
+    if not wanted:
+        return {}
+
+    # Largest-remainder apportionment: floor everything, then hand out the
+    # leftover slots to whichever levels lost the most to rounding.
+    exact = {lvl: (pct / 100.0) * limit for lvl, pct in wanted.items()}
+    counts = {lvl: int(value) for lvl, value in exact.items()}
+    leftover = limit - sum(counts.values())
+    if leftover > 0:
+        by_remainder = sorted(
+            wanted,
+            key=lambda lvl: (-(exact[lvl] - counts[lvl]), _CEFR_ORDER.index(lvl)),
+        )
+        for lvl in by_remainder[:leftover]:
+            counts[lvl] += 1
+
+    # Clamp to stock, then push the shortfall onto whoever can still take it.
+    deficit = 0
+    for lvl in list(counts):
+        stock = available.get(lvl, 0)
+        if counts[lvl] > stock:
+            deficit += counts[lvl] - stock
+            counts[lvl] = stock
+
+    if deficit:
+        # Largest requested share first — the dominant level absorbs the
+        # slack, which keeps the page feeling like the mix the user chose.
+        receivers = sorted(
+            wanted,
+            key=lambda lvl: (-wanted[lvl], _CEFR_ORDER.index(lvl)),
+        )
+        # Repeat until nobody has headroom: one pass can leave slots unfilled
+        # when the first receiver also caps out.
+        progressed = True
+        while deficit > 0 and progressed:
+            progressed = False
+            for lvl in receivers:
+                if deficit <= 0:
+                    break
+                headroom = available.get(lvl, 0) - counts[lvl]
+                if headroom > 0:
+                    take = min(headroom, deficit)
+                    counts[lvl] += take
+                    deficit -= take
+                    progressed = True
+
+    return {lvl: n for lvl, n in counts.items() if n > 0}
+
+
+def _page_plan(
+    requested: dict[str, int],
+    limit: int,
+    stock: dict[str, int],
+    page_index: int,
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Where page `page_index` starts in each bucket, and what it draws.
+
+    Replays every earlier page so the cursors account for buckets that ran
+    dry along the way — allocation is pure arithmetic, so this is cheap
+    even deep into a feed. Returns `(cursors, applied)`.
+    """
+    cursors = {lvl: 0 for lvl in stock}
+    applied: dict[str, int] = {}
+    for page in range(page_index + 1):
+        remaining = {lvl: stock[lvl] - cursors[lvl] for lvl in stock}
+        applied = _allocate_mix(requested, limit, remaining)
+        if page < page_index:
+            for lvl, n in applied.items():
+                cursors[lvl] += n
+    return cursors, applied
+
+
+def _sentence_match(
+    sentence: str,
+    matched_form: Optional[str],
+    lemma: str,
+) -> Optional[dict[str, int]]:
+    """Locate the target word's surface form inside `sentence`.
+
+    Prefers `sentence_lemma_links.matched_form` (what the tagger actually
+    saw); falls back to the lemma so a link row with no recorded form still
+    highlights something. Matching is case-insensitive and anchored to word
+    boundaries so "art" doesn't light up inside "start".
+    """
+    for needle in (matched_form, lemma):
+        if not needle:
+            continue
+        # `\b` only asserts a boundary next to a word character, so anchor
+        # each end only when the needle actually starts/ends with one —
+        # otherwise a form like "(net)" could never match.
+        lead = r"\b" if needle[0].isalnum() or needle[0] == "_" else ""
+        trail = r"\b" if needle[-1].isalnum() or needle[-1] == "_" else ""
+        hit = re.search(
+            f"{lead}{re.escape(needle)}{trail}", sentence, re.IGNORECASE
+        )
+        if hit:
+            return {"start": hit.start(), "end": hit.end()}
+    return None
+
+
+async def _eligible_lemma_candidates(
+    db: Prisma,
+    levels: list[str],
+    *,
+    exclude_user_id: Optional[int] = None,
+    limit: int = 2000,
+) -> list[dict]:
+    """Lemmas eligible to be surfaced as a study card.
+
+    Shared by /today (Word of the Hour) and /feed (Explore). A candidate:
+      - sits at one of `levels`
+      - isn't curated away in hidden_words
+      - looks like a real English word (alphabetic, length >= 4)
+      - has at least one global LLM-authored example sentence, so the card
+        always has something to show
+
+    Pass `exclude_user_id` to also drop anything already in that user's
+    user_words — the feed never re-shows a word you saved or marked known.
+    """
+    # `levels` is always drawn from _CEFR_ORDER by the callers, never from
+    # raw user input, so inlining it is safe. The user id is parameterised.
+    levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
+    exclude_sql = ""
+    args: list = []
+    if exclude_user_id is not None:
+        args.append(exclude_user_id)
+        exclude_sql = """
+          AND NOT EXISTS (
+              SELECT 1 FROM user_words uw
+              WHERE uw.user_id = $1 AND uw.word = l.lemma
+          )
+        """
+
+    return await db.query_raw(
+        f"""
+        SELECT
+            l.id              AS lemma_id,
+            l.lemma           AS word,
+            l.pos             AS pos,
+            l.cefr_level::text AS cefr_level,
+            l.frequency_rank
+        FROM lemmas l
+        WHERE l.cefr_level::text IN ({levels_sql})
+          AND l.lemma ~ '^[a-zA-Z]+$'
+          AND length(l.lemma) >= 4
+          AND NOT EXISTS (
+              SELECT 1 FROM hidden_words hw WHERE hw.word = l.lemma
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM sentence_lemma_links sll
+              JOIN sentence_bank sb ON sb.id = sll.sentence_id
+              WHERE sll.lemma_id = l.id
+                AND sb.movie_id IS NULL
+                AND sb.source = 'llm'
+          )
+          {exclude_sql}
+        ORDER BY l.frequency_rank ASC NULLS LAST
+        LIMIT {int(limit)}
+        """,
+        *args,
+    )
+
 
 @router.get("/today", response_model=Optional[TodaysWordResponse])
 async def todays_word(
@@ -812,41 +1065,12 @@ async def todays_word(
     levels = [_CEFR_ORDER[level_idx]]
     if level_idx + 1 < len(_CEFR_ORDER):
         levels.append(_CEFR_ORDER[level_idx + 1])
-    levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
 
     logger.info(f"[today_word] user={current_user.id} levels={levels} target_lang={resolved_target}")
 
-    # Pick lemmas at the target levels that:
-    #   - aren't flagged as garbage in hidden_words (admin curation)
-    #   - look like real English words (alphabetic, length >= 4)
-    #   - have at least one global LLM-authored example sentence, so the card
-    #     always has something to flip to
-    candidates = await db.query_raw(
-        f"""
-        SELECT
-            l.id              AS lemma_id,
-            l.lemma           AS word,
-            l.cefr_level::text AS cefr_level,
-            l.frequency_rank
-        FROM lemmas l
-        WHERE l.cefr_level::text IN ({levels_sql})
-          AND l.lemma ~ '^[a-zA-Z]+$'
-          AND length(l.lemma) >= 4
-          AND NOT EXISTS (
-              SELECT 1 FROM hidden_words hw WHERE hw.word = l.lemma
-          )
-          AND EXISTS (
-              SELECT 1
-              FROM sentence_lemma_links sll
-              JOIN sentence_bank sb ON sb.id = sll.sentence_id
-              WHERE sll.lemma_id = l.id
-                AND sb.movie_id IS NULL
-                AND sb.source = 'llm'
-          )
-        ORDER BY l.frequency_rank ASC NULLS LAST
-        LIMIT 2000
-        """
-    )
+    # Pick lemmas at the target levels — see `_eligible_lemma_candidates` for
+    # the filters (hidden_words, real-word shape, guaranteed LLM sentence).
+    candidates = await _eligible_lemma_candidates(db, levels)
 
     logger.info(f"[today_word] candidates={len(candidates)} levels={levels}")
 
@@ -905,3 +1129,177 @@ async def todays_word(
         translated_sentence=translated_sentence,
         cefr_level=pick.get("cefr_level"),
     )
+
+
+@router.get("/feed", response_model=FeedResponse)
+async def word_feed(
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    target_lang: Optional[str] = None,
+    mix: Optional[str] = None,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """
+    The Explore feed — an endless, level-mixed stream of single words.
+
+    Same candidate pool as /today (real-word shape, hidden_words filtered,
+    guaranteed global LLM sentence) plus an exclusion for anything already
+    in the user's user_words, so saved and known words never come back.
+
+    `mix` (e.g. `A2:0,B1:70,B2:20,C1:10`, must sum to 100) sets how much of
+    each page comes from each CEFR level. Omit it to get the /today
+    behaviour: the user's level plus one above. The pick order is seeded per
+    user per UTC day, so paging is stable within a day and reshuffles
+    overnight.
+    """
+    import hashlib
+
+    day_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    seed = int(hashlib.md5(f"{current_user.id}:{day_str}".encode()).hexdigest()[:8], 16)
+
+    raw_level = current_user.proficiencyLevel
+    user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
+    resolved_target = (target_lang or current_user.nativeLanguage or "en").lower()
+
+    if mix:
+        requested = _parse_mix(mix)
+        levels = [lvl for lvl in _FEED_MIX_LEVELS if requested.get(lvl, 0) > 0]
+    else:
+        # No mix supplied — fall back to /today's band (level + one above),
+        # split evenly so the page isn't dominated by whichever level
+        # happens to have more stock.
+        try:
+            level_idx = _CEFR_ORDER.index(user_level)
+        except ValueError:
+            level_idx = _CEFR_ORDER.index("B1")
+        levels = [_CEFR_ORDER[level_idx]]
+        if level_idx + 1 < len(_CEFR_ORDER):
+            levels.append(_CEFR_ORDER[level_idx + 1])
+        share = 100 // len(levels)
+        requested = {lvl: share for lvl in levels}
+        # Hand any rounding remainder to the user's own level.
+        requested[levels[0]] += 100 - share * len(levels)
+
+    if not levels:
+        return FeedResponse(items=[], mix_applied={}, has_more=False)
+
+    candidates = await _eligible_lemma_candidates(
+        db, levels, exclude_user_id=current_user.id, limit=4000
+    )
+    if not candidates:
+        logger.warning(f"[feed] no eligible lemmas user={current_user.id} levels={levels}")
+        return FeedResponse(items=[], mix_applied={}, has_more=False)
+
+    # Bucket by level, then shuffle each bucket with the day seed. Same user
+    # + same day = same order, so `offset` addresses a stable sequence.
+    buckets: dict[str, list[dict]] = {lvl: [] for lvl in levels}
+    for row in candidates:
+        bucket = buckets.get((row.get("cefr_level") or "").upper())
+        if bucket is not None:
+            bucket.append(row)
+    for lvl, rows in buckets.items():
+        rng = random.Random(f"{seed}:{lvl}")
+        rng.shuffle(rows)
+
+    page_index = offset // limit
+    stock = {lvl: len(buckets[lvl]) for lvl in levels}
+    cursors, applied = _page_plan(requested, limit, stock, page_index)
+
+    picks: list[dict] = []
+    for lvl, n in applied.items():
+        start = cursors[lvl]
+        picks.extend(buckets[lvl][start:start + n])
+        cursors[lvl] += n
+
+    if not picks:
+        return FeedResponse(items=[], mix_applied={}, has_more=False)
+
+    # Interleave so a page doesn't read as blocks of one level.
+    rng = random.Random(f"{seed}:page:{page_index}")
+    rng.shuffle(picks)
+
+    has_more = any(len(buckets[lvl]) - cursors[lvl] > 0 for lvl in levels)
+
+    # One query for every pick's best sentence. is_representative wins, then
+    # score — matching the ordering /today uses for its single lemma.
+    lemma_ids = [p["lemma_id"] for p in picks]
+    sentence_rows = await db.query_raw(
+        """
+        SELECT DISTINCT ON (sll.lemma_id)
+            sll.lemma_id      AS lemma_id,
+            sb.sentence       AS sentence,
+            sll.matched_form  AS matched_form
+        FROM sentence_lemma_links sll
+        JOIN sentence_bank sb ON sb.id = sll.sentence_id
+        WHERE sll.lemma_id = ANY($1::int[])
+          AND sb.movie_id IS NULL
+          AND sb.source = 'llm'
+        ORDER BY
+          sll.lemma_id,
+          sll.is_representative DESC,
+          sll.score DESC NULLS LAST,
+          sb.id ASC
+        """,
+        lemma_ids,
+    )
+    by_lemma = {r["lemma_id"]: r for r in sentence_rows}
+
+    needs_translation = resolved_target and resolved_target.lower() != "en"
+    ts = None
+    if needs_translation:
+        from ..services.translation_service import TranslationService
+        ts = TranslationService(db)
+
+    items: list[FeedItem] = []
+    for pick in picks:
+        row = by_lemma.get(pick["lemma_id"])
+        # The EXISTS filter guarantees a sentence, but a link row can point
+        # at a sentence that was since deleted — skip rather than ship a
+        # card with nothing to read.
+        if not row or not row.get("sentence"):
+            continue
+        sentence = row["sentence"]
+
+        translated_word = None
+        translated_sentence = None
+        translation_source = None
+        if ts is not None:
+            # Cached in translation_cache by the service; a miss falls
+            # through to DeepL/Google and is written back, so the client
+            # never has to translate on tap.
+            try:
+                word_tx = await ts.get_translation(pick["word"], resolved_target.upper(), "en")
+                if word_tx and word_tx.get("translated"):
+                    translated_word = word_tx["translated"]
+                    translation_source = word_tx.get("source")
+            except Exception as e:
+                logger.warning(f"[feed] word translation failed '{pick['word']}': {e}")
+            try:
+                sent_tx = await ts.get_translation(sentence, resolved_target.upper(), "en")
+                if sent_tx and sent_tx.get("translated"):
+                    translated_sentence = sent_tx["translated"]
+                    translation_source = translation_source or sent_tx.get("source")
+            except Exception as e:
+                logger.warning(f"[feed] sentence translation failed: {e}")
+
+        match = _sentence_match(sentence, row.get("matched_form"), pick["word"])
+        items.append(
+            FeedItem(
+                lemma_id=pick["lemma_id"],
+                word=pick["word"],
+                pos=_POS_FRIENDLY.get((pick.get("pos") or "").upper()),
+                cefr=pick.get("cefr_level"),
+                sentence=sentence,
+                sentence_match=SentenceMatch(**match) if match else None,
+                translated_word=translated_word,
+                translated_sentence=translated_sentence,
+                translation_source=translation_source,
+            )
+        )
+
+    logger.info(
+        f"[feed] user={current_user.id} page={page_index} items={len(items)} "
+        f"mix_applied={applied} has_more={has_more}"
+    )
+    return FeedResponse(items=items, mix_applied=applied, has_more=has_more)

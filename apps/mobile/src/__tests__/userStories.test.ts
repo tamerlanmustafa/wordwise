@@ -16,11 +16,18 @@ jest.mock('../services/api', () => {
   return {
     ...actual,
     reelApi: { list: jest.fn(), seed: jest.fn(), add: jest.fn(), remove: jest.fn() },
-    srsApi: { startSession: jest.fn(), review: jest.fn(), completeSession: jest.fn() },
+    srsApi: {
+      startSession: jest.fn(),
+      review: jest.fn(),
+      completeSession: jest.fn(),
+      feed: jest.fn(),
+    },
+    wordwiseApi: { saveWord: jest.fn(), logInteraction: jest.fn() },
   };
 });
 
-import { srsApi, reelApi, SrsPaywallError, type SrsReviewCard, type SessionKind } from '../services/api';
+import { srsApi, reelApi, wordwiseApi, SrsPaywallError, type SrsReviewCard, type SessionKind, type FeedItem } from '../services/api';
+import { useWordFeedStore } from '../stores/wordFeedStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore, kindAtIndex } from '../stores/practicePathStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
@@ -77,6 +84,8 @@ describe('user stories (cross-store integration)', () => {
     useReelStore.getState().reset();
     useReelBadgeStore.setState({ count: 0 });
     useFlightStore.setState({ pending: null, reelTabRect: null });
+    useWordFeedStore.getState().reset();
+    useWordFeedStore.setState({ seen: new Set(), mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
   });
 
   afterEach(() => jest.useRealTimers());
@@ -248,6 +257,59 @@ describe('user stories (cross-store integration)', () => {
     // Skip day 5 (the 5th), come back day 6 → streak resets.
     jest.setSystemTime(new Date(2026, 5, 6, 12, 0, 0));
     expect(useDailyGoalStore.getState().bump().streak).toBe(1);
+  });
+
+  it('Story: saving a word from the Explore feed puts it in the notebook and the next SRS session', async () => {
+    // The feed's heart is the global word save — the same `user_words` row
+    // the notebook lists and SRS draws from. This is the contract that makes
+    // Explore feed the learning loop rather than being a dead-end surface.
+    const feedItem: FeedItem = {
+      lemma_id: 8123,
+      word: 'reluctant',
+      ipa: null,
+      pos: 'adj',
+      cefr: 'B2',
+      sentence: 'She was reluctant to admit it.',
+      sentence_match: { start: 8, end: 17 },
+      translated_word: 'reacio',
+      translated_sentence: 'Se resistía a admitirlo.',
+      translation_source: 'deepl',
+    };
+    (srsApi.feed as jest.Mock).mockResolvedValue({
+      items: [feedItem],
+      mix_applied: { B2: 1 },
+      has_more: true,
+    });
+    (wordwiseApi.saveWord as jest.Mock).mockResolvedValue({ saved: true, word: 'reluctant' });
+
+    await useWordFeedStore.getState().hydrate('B1', 'es');
+    await useWordFeedStore.getState().favourite(feedItem);
+
+    // Saved globally (no movie id) — that's what makes it a notebook entry
+    // rather than a per-movie save.
+    expect(wordwiseApi.saveWord).toHaveBeenCalledWith('reluctant');
+    expect(useWordFeedStore.getState().saved.has(8123)).toBe(true);
+
+    // …and the very next session deals it as a box-1 card.
+    (srsApi.startSession as jest.Mock).mockResolvedValue({
+      cards: [{ ...card(99), word: 'reluctant', cefr_level: 'B2' }],
+      total_due: 1,
+      session_size: 10,
+      is_preview: false,
+      previews_remaining: 0,
+      kind: 'quick_recall',
+    });
+    const session = await srsApi.startSession({ kind: 'quick_recall' });
+    useReviewSessionStore.getState().start({
+      kind: 'quick_recall',
+      movieId: null,
+      remaining: session.cards,
+      got: 0,
+      forgot: 0,
+      totalCards: session.cards.length,
+    });
+
+    expect(useReviewSessionStore.getState().cached!.remaining[0].word).toBe('reluctant');
   });
 
   it('Story: the practice path keeps cycling kinds as the user completes sessions', () => {

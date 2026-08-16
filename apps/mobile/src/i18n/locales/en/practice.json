@@ -6,7 +6,7 @@
   "dayLabel_one": "DAY",
   "dayLabel_other": "DAYS",
   "emptyReelTitle": "Your reel is empty",
-  "emptyReelBody": "Add a movie to your reel (My Movies tab) so Deep-Dive has something to dive into.",
+  "emptyReelBody": "Add a movie from Home so Deep-Dive has something to dive into.",
   "loadFailed": "We had trouble reaching your movies. Check your connection and try again.",
   "tile": {
     "quick_recall": "Quick Recall",

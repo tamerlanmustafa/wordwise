@@ -2,7 +2,7 @@
  * Stable type re-exports for journey-adjacent components.
  *
  * The v0.7 redesign archives JourneyScreen.tsx (the zigzag reel) but
- * `MoviePreviewPayload` is still consumed by MyMoviesScreen, PracticeScreen,
+ * `MoviePreviewPayload` is still consumed by SavedMoviesScreen, PracticeScreen,
  * MoviePreviewHub and App.tsx. Re-housing it here means archiving the
  * reel doesn't ripple through every screen.
  *

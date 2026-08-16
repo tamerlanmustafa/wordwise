@@ -96,6 +96,17 @@ export interface ThemeColors {
   warningTint:        string;  // "showed you" reveal callout bg (yellow per §7.2)
   warningBorder:      string;  // "showed you" reveal callout border
 
+  // Explore word feed — the surface is deliberately its own flat colour so
+  // the screen, the toast strip and the tab bar read as one plane from the
+  // status bar down. It matches the opaque value behind `tabBg`, which is
+  // why the bar disappears into it.
+  feedBg:             string;
+  goldLine:           string;  // gold hairline borders (CEFR badge, dashed CTAs)
+  goldWash:           string;  // highlight behind the target word in a sentence
+  panelShadowColor:   string;  // slide-in panel lift; warm glow in dark, brown in light
+  toastBg:            string;
+  toastText:          string;
+
   // Reel-only: the film stock substrate + sprocket palette
   reelStock:          string;  // film body colour
   reelStockDeep:      string;  // shadow/vignette inner colour
@@ -177,6 +188,14 @@ const light: ThemeColors = {
   warningTint:        'rgba(244,162,97,0.16)',
   warningBorder:      'rgba(244,162,97,0.55)',
 
+  // Explore feed
+  feedBg:             '#FFFDF7',
+  goldLine:           'rgba(197,139,27,0.42)',
+  goldWash:           'rgba(197,139,27,0.16)',
+  panelShadowColor:   'rgba(60,40,10,0.18)',
+  toastBg:            '#2D2418',
+  toastText:          '#FFF6E0',
+
   reelStock:          '#F4EFE3',
   reelStockDeep:      '#E5DCBE',
   reelStockLight:     '#FAF6E8',
@@ -249,6 +268,15 @@ const dark: ThemeColors = {
   errorBorder:        'rgba(229,115,115,0.55)',
   warningTint:        'rgba(244,162,97,0.20)',
   warningBorder:      'rgba(244,162,97,0.55)',
+
+  // Explore feed. A black shadow is invisible on this surface, so the panel
+  // lift is carried by a warm gold glow instead.
+  feedBg:             '#14121C',
+  goldLine:           'rgba(255,209,102,0.45)',
+  goldWash:           'rgba(255,209,102,0.16)',
+  panelShadowColor:   'rgba(255,209,102,0.30)',
+  toastBg:            '#FFD166',
+  toastText:          '#3a2400',
 
   reelStock:          '#1a1109',
   reelStockDeep:      '#0e0805',

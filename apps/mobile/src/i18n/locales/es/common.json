@@ -8,9 +8,9 @@
     "continue": "Continuar",
     "done": "Listo",
     "gotIt": "Entendido",
+    "later": "Más tarde",
     "retry": "Reintentar",
-    "save": "Guardar",
-    "later": "Más tarde"
+    "save": "Guardar"
   },
   "cefr": {
     "A1": "Principiante",
@@ -38,11 +38,6 @@
     "C2": "C2 - Dominio"
   },
   "genre": {
-    "10402": "Música",
-    "10749": "Romance",
-    "10751": "Familia",
-    "10752": "Guerra",
-    "10770": "Telefilm",
     "12": "Aventura",
     "14": "Fantasía",
     "16": "Animación",
@@ -54,13 +49,18 @@
     "37": "Western",
     "53": "Thriller",
     "80": "Crimen",
+    "99": "Documental",
     "878": "Ciencia ficción",
     "9648": "Misterio",
-    "99": "Documental"
+    "10402": "Música",
+    "10749": "Romance",
+    "10751": "Familia",
+    "10752": "Guerra",
+    "10770": "Telefilm"
   },
   "nav": {
+    "explore": "Explorar",
     "home": "Inicio",
-    "myMovies": "Mis películas",
     "practice": "Práctica",
     "profile": "Perfil"
   },

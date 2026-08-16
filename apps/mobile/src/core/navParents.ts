@@ -33,6 +33,8 @@ export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
   lists: PROFILE_SHEET,
   vocabulary: PROFILE_SHEET,
   admin: PROFILE_SHEET,
+  // The saved reel lost its tab to Explore and now hangs off the sheet.
+  savedMovies: PROFILE_SHEET,
   // Opened from inside Settings → Back steps into Settings, not out to Home.
   familyPlan: 'settings',
   privacy: 'settings',

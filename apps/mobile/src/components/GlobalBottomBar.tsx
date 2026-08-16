@@ -1,7 +1,7 @@
 /**
  * GlobalBottomBar — v0.7 4-tab persistent nav.
  *
- *   Home · My Movies · Practice · Profile
+ *   Home · Explore · Practice · Profile
  *
  * Replaces the v0.6 5-tab bar (Home / My Lists / Reel / Rankings /
  * Profile). The Journey/Reel surface is gone; My Lists, Rankings
@@ -13,18 +13,21 @@
  * Light/dark: surface + active accent flip via tokens. Active = gold
  * stroke + full-contrast label; inactive = textFaint for both. The
  * Reel-flight landing target (legacy v0.6 add-to-reel animation) is
- * intentionally dropped — the new "+ Add" flows live inside My Movies
- * and the Ready-to-Watch shelf, neither of which fly into the bar.
+ * intentionally dropped — the "+ Add" flows live on Home and the
+ * Ready-to-Watch shelf, neither of which fly into the bar.
+ *
+ * Position 2 was My Movies until the Explore word feed replaced it; the
+ * saved reel now hangs off the Profile sheet.
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
-export type BottomTab = 'home' | 'movies' | 'practice' | 'profile';
+export type BottomTab = 'home' | 'explore' | 'practice' | 'profile';
 
 interface Props {
   /** Which tab to render as active; `null` when inside a sub-page that
@@ -37,17 +40,17 @@ interface Props {
 interface TabItem {
   id: BottomTab;
   /** Key under `common:nav`. */
-  labelKey: 'home' | 'myMovies' | 'practice' | 'profile';
+  labelKey: 'home' | 'explore' | 'practice' | 'profile';
   icon: NavIconKind;
 }
 
-type NavIconKind = 'home' | 'film' | 'spark' | 'user';
+type NavIconKind = 'home' | 'explore' | 'spark' | 'user';
 
 // Labels live in `common:nav.*` and are resolved at render — this array is
 // module-level, so a literal label here would freeze at the launch language.
 const TABS: TabItem[] = [
   { id: 'home',     labelKey: 'home',     icon: 'home' },
-  { id: 'movies',   labelKey: 'myMovies', icon: 'film' },
+  { id: 'explore',  labelKey: 'explore',  icon: 'explore' },
   { id: 'practice', labelKey: 'practice', icon: 'spark' },
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },
 ];
@@ -140,11 +143,12 @@ function NavIcon({
       </Svg>
     );
   }
-  if (kind === 'film') {
+  if (kind === 'explore') {
+    // Magnifier with a plus — "find new words", not "search the catalogue".
     return (
       <Svg {...props}>
-        <Rect x="3" y="4" width="18" height="16" rx="2" />
-        <Path d="M3 8h18M3 12h18M3 16h18M8 4v16M16 4v16" />
+        <Circle cx="11" cy="11" r="7" />
+        <Path d="M21 21l-4.3-4.3M11 8v6M8 11h6" />
       </Svg>
     );
   }

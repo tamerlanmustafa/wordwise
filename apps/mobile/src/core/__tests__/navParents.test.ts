@@ -31,8 +31,13 @@ describe('PARENT_OF', () => {
     expect(PARENT_OF.watched).toBe('lists');
   });
 
+  it('returns the saved reel to the Profile sheet it is now opened from', () => {
+    // My Movies lost its tab to Explore; the reel hangs off the sheet.
+    expect(PARENT_OF.savedMovies).toBe(PROFILE_SHEET);
+  });
+
   it('leaves root tabs parentless so hardware back can exit the app', () => {
-    const rootTabs: Screen[] = ['home', 'movies', 'journey', 'practice'];
+    const rootTabs: Screen[] = ['home', 'explore', 'journey', 'practice'];
     for (const screen of rootTabs) {
       expect(PARENT_OF[screen]).toBeUndefined();
     }
