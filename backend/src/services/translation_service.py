@@ -346,39 +346,141 @@ class TranslationService:
 
         Returns:
             List of translation results (same order as input)
+
+        Shape of the work: ONE cache read for every text, then ONE DeepL
+        request per 50 misses. The previous implementation looped
+        `get_translation` behind a semaphore, which cost a DB round trip *and*
+        an HTTP round trip per text — 40 texts meant 40 of each. Batching both
+        halves matters: batching only the API would still leave 40 sequential
+        cache queries.
+
+        `max_concurrent` is retained for signature compatibility but is no
+        longer meaningful on the fast path — there is nothing left to run
+        concurrently. It still bounds the per-item fallback below.
         """
-        import asyncio
+        if not texts:
+            return []
 
-        semaphore = asyncio.Semaphore(max_concurrent)
-        rate_limit_delay = 0.1  # 100ms delay between API calls to avoid rate limiting
+        target_lang_upper = target_lang.upper()
+        normalized = [self._normalize_text(t) for t in texts]
 
-        async def translate_with_semaphore(text: str, index: int) -> Dict[str, Any]:
-            async with semaphore:
-                # Add small delay between API calls to avoid rate limiting
-                if index > 0:
-                    await asyncio.sleep(rate_limit_delay * (index % max_concurrent))
-
-                try:
-                    return await self.get_translation(
-                        text=text,
-                        target_lang=target_lang,
-                        source_lang=source_lang,
-                        user_id=user_id
-                    )
-                except Exception as e:
-                    logger.error(f"Batch translation failed for '{text}': {e}")
-                    return {
-                        "source": text,
-                        "error": str(e),
-                        "target_lang": target_lang.upper()
+        # ── 1. One cache read for the whole batch ────────────────────────
+        # Deduped: a page routinely repeats a word across its sentences, and
+        # there is no reason to look it up twice or pay for it twice.
+        unique_texts = sorted({n for n in normalized if n})
+        cache_hits: Dict[str, Dict[str, Any]] = {}
+        if unique_texts:
+            try:
+                rows = await self.db.translationcache.find_many(
+                    where={
+                        "targetLang": target_lang_upper,
+                        "sourceText": {"in": unique_texts},
                     }
+                )
+                cache_hits = {r.sourceText: {"translated": r.translated,
+                                             "source_lang": r.sourceLang} for r in rows}
+            except Exception as e:
+                # A failed cache read must not fail the batch — it just means
+                # everything is treated as a miss.
+                logger.warning(f"[batch_translate] cache read failed: {e}")
 
-        # Run translations with controlled concurrency
-        results = await asyncio.gather(*[
-            translate_with_semaphore(text, i) for i, text in enumerate(texts)
-        ])
+        misses = [t for t in unique_texts if t not in cache_hits]
 
-        return list(results)
+        # ── 2. One DeepL request per 50 misses ───────────────────────────
+        if misses and target_lang_upper in DEEPL_SUPPORTED_TARGET_LANGS:
+            try:
+                translated = await self.deepl_client.translate_many(
+                    texts=misses,
+                    target_lang=target_lang_upper,
+                    source_lang=source_lang,
+                )
+                for source_text, result in zip(misses, translated):
+                    value = result.get("translated") or ""
+                    if not value:
+                        continue
+                    cache_hits[source_text] = {
+                        "translated": value,
+                        "source_lang": result.get("detected_source_lang"),
+                    }
+                    # Persist so the next user of this word pays nothing. The
+                    # cache is global, which is what makes the corpus a
+                    # one-time cost rather than a per-user one.
+                    await self._save_to_cache(
+                        source_text=source_text,
+                        target_lang=target_lang_upper,
+                        translated=value,
+                        source_lang=result.get("detected_source_lang"),
+                    )
+                misses = []
+            except Exception as e:
+                # Fall through to the per-item path, which handles the Google
+                # fallback, quota errors and unsupported languages.
+                logger.warning(f"[batch_translate] batched DeepL failed, falling back: {e}")
+
+        # ── 3. Per-item fallback for whatever is still missing ───────────
+        # Unsupported target languages and DeepL failures land here, so the
+        # Google path and its error handling stay in exactly one place.
+        if misses:
+            import asyncio
+
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def resolve(text: str) -> None:
+                async with semaphore:
+                    try:
+                        result = await self.get_translation(
+                            text=text,
+                            target_lang=target_lang_upper,
+                            source_lang=source_lang,
+                        )
+                        if result.get("translated"):
+                            cache_hits[text] = {
+                                "translated": result["translated"],
+                                "source_lang": result.get("source_lang"),
+                            }
+                    except Exception as e:
+                        logger.error(f"Batch translation failed for '{text}': {e}")
+
+            await asyncio.gather(*[resolve(t) for t in misses])
+
+        # ── 4. Reassemble in input order ─────────────────────────────────
+        results: List[Dict[str, Any]] = []
+        for original, key in zip(texts, normalized):
+            hit = cache_hits.get(key)
+            if hit:
+                results.append({
+                    "source": original.strip(),
+                    "translated": hit["translated"],
+                    "target_lang": target_lang_upper,
+                    "source_lang": hit.get("source_lang"),
+                    "cached": True,
+                    "provider": "batch",
+                })
+            else:
+                results.append({
+                    "source": original.strip(),
+                    "error": "translation unavailable",
+                    "target_lang": target_lang_upper,
+                })
+
+        if user_id:
+            # Tracking is per-user bookkeeping, not part of the translation —
+            # do it once per unique word rather than inside the hot loop.
+            for key in unique_texts:
+                hit = cache_hits.get(key)
+                if hit:
+                    try:
+                        await self._track_user_translation(
+                            user_id=user_id,
+                            word=key,
+                            target_lang=target_lang_upper,
+                            translation=hit["translated"],
+                            provider="batch",
+                        )
+                    except Exception as e:
+                        logger.warning(f"[batch_translate] tracking failed: {e}")
+
+        return results
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """Get translation cache statistics"""
