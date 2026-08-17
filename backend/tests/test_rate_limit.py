@@ -22,6 +22,7 @@ from src.utils.auth import create_access_token
 from src.utils.rate_limit import (
     GlobalRateLimitMiddleware,
     _SlidingWindow,
+    _client_ip,
     rate_limit,
 )
 
@@ -174,4 +175,73 @@ def test_enrichment_single_sentence_is_throttled():
     calls = _dependency_calls(
         router, "/api/enrichment/movies/{movie_id}/sentences/{word}", "GET"
     )
+    assert _has_rate_limit(calls)
+
+
+# --- client IP behind the platform edge proxy ----------------------------
+#
+# In prod the API sits behind Railway's proxy and uvicorn runs without
+# --proxy-headers, so the socket peer is the proxy for every request. Keying
+# on it alone put all unauthenticated callers in ONE shared bucket — a
+# per-endpoint limit would then have throttled every logged-out user
+# collectively rather than the caller who was abusing it.
+
+def test_client_ip_prefers_the_address_the_edge_observed():
+    # One proxy in front: the edge appends what it saw, so that is the right
+    # value and it is the rightmost one.
+    assert _client_ip("203.0.113.9", peer="10.0.0.1") == "203.0.113.9"
+
+
+def test_client_ip_ignores_a_spoofed_leading_entry():
+    # A caller sending its own X-Forwarded-For gets its value kept on the LEFT
+    # once the edge appends the address it actually saw. Trusting the leftmost
+    # would let anyone rotate a header to get unlimited budget.
+    assert _client_ip("1.2.3.4, 203.0.113.9", peer="10.0.0.1") == "203.0.113.9"
+
+
+def test_client_ip_falls_back_to_the_socket_peer_without_the_header():
+    # Local runs and direct connections behave exactly as they did before.
+    assert _client_ip(None, peer="127.0.0.1") == "127.0.0.1"
+    assert _client_ip("", peer="127.0.0.1") == "127.0.0.1"
+    assert _client_ip("  ,  ", peer="127.0.0.1") == "127.0.0.1"
+
+
+def test_client_ip_reports_unknown_when_there_is_nothing_to_key_on():
+    assert _client_ip(None, peer=None) == "unknown"
+
+
+def test_dependency_gives_separate_budgets_to_callers_behind_one_proxy():
+    """The regression guard: two users arriving through the same edge proxy
+    must not share a bucket. TestClient reports the same socket peer for both,
+    so only the forwarded address can tell them apart."""
+    client = TestClient(_dependency_app(limit=2))
+    a = {"X-Forwarded-For": "203.0.113.9"}
+    b = {"X-Forwarded-For": "198.51.100.7"}
+
+    assert client.get("/ping", headers=a).status_code == 200
+    assert client.get("/ping", headers=a).status_code == 200
+    assert client.get("/ping", headers=a).status_code == 429  # A spent its own
+
+    # B is untouched by A's abuse. Before the fix this was 429.
+    assert client.get("/ping", headers=b).status_code == 200
+    assert client.get("/ping", headers=b).status_code == 200
+
+
+def test_global_middleware_also_keys_on_the_forwarded_address():
+    client = TestClient(_global_app(limit=1))
+    assert client.get("/ping", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 200
+    assert client.get("/ping", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 429
+    # A different caller through the same proxy still has its full budget.
+    assert client.get("/ping", headers={"X-Forwarded-For": "198.51.100.7"}).status_code == 200
+
+
+# --- unauthenticated, CPU-heavy endpoints --------------------------------
+
+def test_movie_vocabulary_preview_is_throttled():
+    """Public (no auth) and ~12s of spaCy + ~600 MB per call. #117 stopped it
+    blocking the event loop; this stops one caller monopolising the single NLP
+    worker thread."""
+    from src.routes.movies import router
+
+    calls = _dependency_calls(router, "/movies/{movie_id}/vocabulary/preview", "GET")
     assert _has_rate_limit(calls)

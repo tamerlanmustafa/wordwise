@@ -69,13 +69,43 @@ def _user_key_from_token(token: str | None) -> str | None:
     return None
 
 
+def _client_ip(forwarded_for: str | None, peer: str | None) -> str:
+    """Resolve the caller's IP from behind the platform edge proxy.
+
+    In prod the API sits behind Railway's proxy, so the socket peer is the
+    proxy for *every* request — keying on it alone puts all unauthenticated
+    callers in one shared bucket. uvicorn is started without `--proxy-headers`
+    (and its default `forwarded_allow_ips` is 127.0.0.1, which the edge never
+    matches), so the header has to be read here.
+
+    The RIGHTMOST `X-Forwarded-For` entry is the address the edge itself
+    observed. The leftmost is whatever the caller sent and is trivially
+    spoofed, so it must never be trusted: a client sending
+    `X-Forwarded-For: 1.2.3.4` produces `1.2.3.4, <real ip>` once the edge
+    appends, and only the right-hand value is real. This holds for exactly one
+    trusted proxy in front, which is the deployment (docker/Dockerfile.backend).
+
+    Falls back to the socket peer when there is no header — local runs, tests,
+    and any direct connection behave exactly as before.
+    """
+    if forwarded_for:
+        hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
+    return peer or "unknown"
+
+
 def _client_key(request: Request, token: str | None) -> str:
     """Prefer a stable user id from the bearer token; fall back to IP."""
     user = _user_key_from_token(token)
     if user:
         return user
     client = request.client
-    return f"ip:{client.host if client else 'unknown'}"
+    ip = _client_ip(
+        request.headers.get("X-Forwarded-For"),
+        client.host if client else None,
+    )
+    return f"ip:{ip}"
 
 
 def rate_limit(limit: int, window_seconds: float, *, scope: str):
@@ -121,13 +151,25 @@ def _bearer_from_scope(scope) -> str | None:
     return None
 
 
+def _forwarded_for_from_scope(scope) -> str | None:
+    """X-Forwarded-For off a raw ASGI scope (headers are lowercased bytes)."""
+    for key, value in scope.get("headers", []):
+        if key == b"x-forwarded-for":
+            return value.decode("latin-1")
+    return None
+
+
 def _client_key_from_scope(scope, token: str | None) -> str:
     """Scope-based twin of `_client_key` for the ASGI middleware."""
     user = _user_key_from_token(token)
     if user:
         return user
     client = scope.get("client")
-    return f"ip:{client[0] if client else 'unknown'}"
+    ip = _client_ip(
+        _forwarded_for_from_scope(scope),
+        client[0] if client else None,
+    )
+    return f"ip:{ip}"
 
 
 class GlobalRateLimitMiddleware:

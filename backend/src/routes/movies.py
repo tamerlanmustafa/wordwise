@@ -11,10 +11,19 @@ from ..middleware.auth import get_current_active_user, get_current_user_optional
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
 from ..services.profanity_filter import is_profane_entry
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/movies", tags=["movies"])
+
+# /vocabulary/preview takes no auth (it is the logged-out teaser), and each
+# call parses a whole script: ~12s of CPU on the single NLP worker thread and
+# ~600 MB of transient spaCy Doc. #117 stopped that blocking the event loop,
+# but nothing stopped one caller from queueing parses indefinitely. Five per
+# minute is well above what the one worker thread can physically serve, so it
+# bites abuse and not browsing.
+_vocab_preview_throttle = rate_limit(5, 60.0, scope="movie-vocab-preview")
 
 
 async def _get_hidden_word_set(db: Prisma, forms: Iterable[Optional[str]]) -> set:
@@ -627,7 +636,8 @@ async def create_movie(
 @router.get("/{movie_id}/vocabulary/preview")
 async def get_vocabulary_preview(
     movie_id: int,
-    db: Prisma = Depends(get_db)
+    db: Prisma = Depends(get_db),
+    _: None = Depends(_vocab_preview_throttle),
 ) -> Dict[str, Any]:
     """
     Get a preview of the movie vocabulary (PUBLIC - no auth required).
