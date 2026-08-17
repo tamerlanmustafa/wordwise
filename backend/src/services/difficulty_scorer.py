@@ -929,6 +929,24 @@ def compute_difficulty_advanced(
     return level, score, breakdown
 
 
+async def compute_difficulty_advanced_async(
+    words: List[WordData],
+    genres: Optional[List[str]] = None,
+    text: Optional[str] = None
+) -> Tuple[difficultylevel, int, Dict[str, float]]:
+    """
+    Await `compute_difficulty_advanced` on the NLP worker thread.
+
+    Use this from `async def` handlers. When `text` is supplied, signals 13-17
+    fan out to the syntactic, semantic and discourse analyzers, each of which
+    runs its own full spaCy parse of the script — seconds of CPU that would
+    otherwise block every other request in the process (issue #117).
+    """
+    from src.utils.nlp_executor import run_nlp
+
+    return await run_nlp(compute_difficulty_advanced, words, genres=genres, text=text)
+
+
 def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylevel, int, Dict[str, int]]:
     """
     Legacy difficulty computation using only CEFR distribution counts.

@@ -17,10 +17,10 @@ from src.services.cefr_classifier import (
     CEFRLevel,
     ClassificationSource,
     WordClassification,
-    detect_phrasal_verbs_and_idioms
+    detect_phrasal_verbs_and_idioms_async
 )
 from src.services.lemmatization_service import (
-    lemmatize_script,
+    lemmatize_script_async,
     populate_lemma_registry,
     backfill_lemmas_from_classifications,
 )
@@ -416,7 +416,7 @@ async def run_script_classification(
             average_confidence = total_confidence / total_kept if total_kept > 0 else 0.0
 
             # Detect idioms and phrasal verbs from the script text
-            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
             idioms = [
                 IdiomInfo(
                     phrase=phrase,
@@ -436,7 +436,7 @@ async def run_script_classification(
                         data={'genre': json.dumps(request.genres)}
                     )
                     # Recompute difficulty with genres
-                    from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
+                    from src.services.difficulty_scorer import compute_difficulty_advanced_async, WordData
                     word_data_list = [
                         WordData(
                             cefr_level=cls.cefrLevel if isinstance(cls.cefrLevel, str) else cls.cefrLevel.value,
@@ -446,7 +446,7 @@ async def run_script_classification(
                         )
                         for cls in existing_classifications
                     ]
-                    level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=request.genres, text=script.cleanedScriptText)
+                    level, score, breakdown = await compute_difficulty_advanced_async(word_data_list, genres=request.genres, text=script.cleanedScriptText)
                     await db.movie.update(
                         where={'id': request.movie_id},
                         data={
@@ -581,7 +581,7 @@ async def run_script_classification(
             # V2 DUAL-WRITE: Populate Lemma registry + MovieLemmaMapping
             # ================================================================
             try:
-                lemma_result = lemmatize_script(script.cleanedScriptText)
+                lemma_result = await lemmatize_script_async(script.cleanedScriptText)
 
                 # Build classification lookup for the lemmatization service
                 cls_lookup = {}
@@ -609,7 +609,7 @@ async def run_script_classification(
 
             # Compute difficulty using advanced algorithm with ALL words (no cap)
             # The 50-word cap is applied ONLY to API response, not to scoring
-            from src.services.difficulty_scorer import compute_difficulty_advanced, WordData
+            from src.services.difficulty_scorer import compute_difficulty_advanced_async, WordData
 
             # Use ALL classifications for difficulty scoring (critical fix)
             word_data_list = [
@@ -623,7 +623,7 @@ async def run_script_classification(
             ]
 
             # genres already extracted above (from request or DB)
-            level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=genres, text=script.cleanedScriptText)
+            level, score, breakdown = await compute_difficulty_advanced_async(word_data_list, genres=genres, text=script.cleanedScriptText)
 
             # Convert dict to JSON string for Prisma Json field
             await db.movie.update(
@@ -643,7 +643,7 @@ async def run_script_classification(
             logger.info(f"✓ Updated movie difficulty: {level.value}, score: {score}")
 
         # Detect idioms and phrasal verbs from the script text
-        idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+        idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
         idioms = [
             IdiomInfo(
                 phrase=phrase,

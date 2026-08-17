@@ -8,6 +8,7 @@ Works alongside the existing CEFR classifier (dual-write).
 
 import logging
 import hashlib
+import threading
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -25,21 +26,27 @@ ALL_MULTI_WORD_EXPRESSIONS: Dict[str, str] = {**PHRASAL_VERBS, **COMMON_IDIOMS}
 
 # spaCy model singleton
 _nlp = None
+# Parses now run on the NLP worker thread (see utils/nlp_executor), so the
+# first caller to reach here may not be the main thread. Guard the load so a
+# race can't spend a second model's worth of memory building a throwaway.
+_nlp_lock = threading.Lock()
 
 
 def get_nlp():
     """Load spaCy model (singleton, ~12MB, loads once)."""
     global _nlp
     if _nlp is None:
-        # Lazy import, same as the other analyzers: spacy is a heavy ML dep
-        # that isn't installed in the CI test env, and route modules import
-        # this module transitively — an eager import would make the whole
-        # test suite uncollectable there.
-        import spacy
+        with _nlp_lock:
+            if _nlp is None:
+                # Lazy import, same as the other analyzers: spacy is a heavy ML
+                # dep that isn't installed in the CI test env, and route modules
+                # import this module transitively — an eager import would make
+                # the whole test suite uncollectable there.
+                import spacy
 
-        logger.info("Loading spaCy en_core_web_sm model...")
-        _nlp = spacy.load("en_core_web_sm", disable=["ner"])  # NER not needed
-        logger.info("spaCy model loaded")
+                logger.info("Loading spaCy en_core_web_sm model...")
+                _nlp = spacy.load("en_core_web_sm", disable=["ner"])  # NER not needed
+                logger.info("spaCy model loaded")
     return _nlp
 
 
@@ -178,6 +185,18 @@ def lemmatize_script(text: str) -> LemmaResult:
         lemma_frequencies=lemma_freq,
         multi_word_expressions=mwes,
     )
+
+
+async def lemmatize_script_async(text: str) -> LemmaResult:
+    """
+    Await `lemmatize_script` on the NLP worker thread.
+
+    Use this from `async def` handlers — parsing a full script directly on the
+    event loop blocks every other request in the process (issue #117).
+    """
+    from src.utils.nlp_executor import run_nlp
+
+    return await run_nlp(lemmatize_script, text)
 
 
 def _detect_multi_word_expressions(text: str) -> List[LemmaToken]:

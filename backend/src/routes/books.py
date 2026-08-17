@@ -24,7 +24,7 @@ from ..services.gutendex_client import get_gutendex_client
 from ..services.open_library_client import get_open_library_client
 from ..utils.rate_limit import rate_limit
 from .cefr import get_classifier, should_keep_word
-from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms
+from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 
 logger = logging.getLogger(__name__)
 
@@ -776,7 +776,7 @@ async def get_book_vocabulary(
         try:
             # Use first 50k chars to avoid performance issues with long books
             sample_text = book.bookText.cleanedText[:50000]
-            idiom_results = detect_phrasal_verbs_and_idioms(sample_text)
+            idiom_results = await detect_phrasal_verbs_and_idioms_async(sample_text)
             idioms = [
                 {
                     "phrase": phrase,
@@ -866,7 +866,7 @@ async def get_book_vocabulary_preview(
         try:
             # Use first 20k chars for preview to keep it fast
             sample_text = book.bookText.cleanedText[:20000]
-            idiom_results = detect_phrasal_verbs_and_idioms(sample_text)
+            idiom_results = await detect_phrasal_verbs_and_idioms_async(sample_text)
             idioms = [
                 {
                     "phrase": phrase,

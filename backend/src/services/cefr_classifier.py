@@ -1218,6 +1218,22 @@ def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
     return detected
 
 
+async def detect_phrasal_verbs_and_idioms_async(text: str) -> List[Tuple[str, str, str]]:
+    """
+    Await `detect_phrasal_verbs_and_idioms` on the NLP worker thread.
+
+    Use this from `async def` handlers. The spaCy dependency parse inside is
+    CPU-bound and holds the GIL for seconds on a full script, so running it on
+    the event loop stalls every other request in the process (issue #117).
+    """
+    # Imported here, not at module scope: `src.utils.__init__` pulls in the
+    # auth helpers (jose, passlib), and the offline ingestion scripts import
+    # this classifier without needing any of that.
+    from src.utils.nlp_executor import run_nlp
+
+    return await run_nlp(detect_phrasal_verbs_and_idioms, text)
+
+
 def count_phrasal_verbs_and_idioms(text: str) -> Dict[str, int]:
     """
     Count phrasal verbs and idioms by CEFR level.

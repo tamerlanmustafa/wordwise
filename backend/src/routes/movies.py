@@ -691,12 +691,12 @@ async def get_vocabulary_preview(
             })
 
     # Detect idioms from script text
-    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms
+    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 
     idioms = []
     if script.cleanedScriptText:
         try:
-            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
             idioms = [
                 {
                     "phrase": phrase,
@@ -826,12 +826,12 @@ async def get_vocabulary_full(
     log.info(f"[VOCAB-FULL] movie_id={movie_id} script_id={script.id} title={movie.title!r} dist={level_distribution}")
 
     # Detect idioms from script text
-    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms
+    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 
     idioms = []
     if script.cleanedScriptText:
         try:
-            idiom_results = detect_phrasal_verbs_and_idioms(script.cleanedScriptText)
+            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
             idioms = [
                 {
                     "phrase": phrase,
