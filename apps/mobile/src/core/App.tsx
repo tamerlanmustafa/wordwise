@@ -497,8 +497,8 @@ export default function App() {
       }
       // An open Explore panel swallows the first back press, exactly as the
       // profile/notification sheets above do.
-      if (currentScreen === 'explore' && useWordFeedStore.getState().panelOpen) {
-        useWordFeedStore.getState().setPanelOpen(false);
+      if (currentScreen === 'explore' && useWordFeedStore.getState().openPanel) {
+        useWordFeedStore.getState().setPanelOpen(null);
         return true;
       }
       // 'explore' is deliberately absent: back from the feed lands on Home

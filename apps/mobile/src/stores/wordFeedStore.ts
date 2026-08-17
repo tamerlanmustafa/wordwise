@@ -28,11 +28,16 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
+import { useListsStore } from './listsStore';
 import { defaultMixForLevel, isBalanced } from '../utils/levelMix';
 import { randomToken, shuffle } from '../utils/random';
 
 const MIX_KEY = 'feedLevelMix';
 const BUFFER_KEY = 'feedBuffer.v1';
+const MEMBERSHIP_KEY = 'feedListMembership.v1';
+
+/** The two slide-in panels share one lane, so at most one is ever open. */
+export type PanelId = 'mix' | 'list' | null;
 
 export const FEED_PAGE_SIZE = 20;
 
@@ -70,15 +75,24 @@ interface WordFeedState {
   /** Lemma ids the user has saved this session, for the heart's fill. */
   saved: Set<number>;
   hydrated: boolean;
-  /** Whether a slide-in panel is open. Lives here rather than in the screen
-   *  so App's Android back handler can close it before leaving the tab. */
-  panelOpen: boolean;
+  /** Which slide-in panel is open, if any. Lives here rather than in the
+   *  screen so App's Android back handler can close it before leaving the
+   *  tab. Only one can be open at a time — they occupy the same lane. */
+  openPanel: PanelId;
+  /** Which lists each lemma has been added to, by lemma id.
+   *
+   *  Session/device-local and persisted: the API has no "which lists is this
+   *  word in" endpoint, and deriving it would mean fetching every list's
+   *  items on every panel open. Adds are idempotent server-side, so the worst
+   *  case of a stale local set is a redundant add, never a wrong one. */
+  listMembership: Record<number, number[]>;
 
   hydrate: (proficiencyLevel?: string | null, targetLang?: string | null) => Promise<void>;
   fetchNext: () => Promise<void>;
   setMix: (mix: LevelMix) => Promise<void>;
   setActiveIndex: (index: number) => void;
-  setPanelOpen: (open: boolean) => void;
+  setPanelOpen: (panel: PanelId) => void;
+  toggleList: (item: FeedItem, listId: number) => Promise<void>;
   favourite: (item: FeedItem) => Promise<void>;
   reset: () => void;
 }
@@ -96,6 +110,29 @@ let sessionSeed: string = randomToken();
  *  same tick — App's boot effect and the Explore screen's mount effect — would
  *  both sail past it and fetch page 0 twice. */
 let hydrating = false;
+
+async function persistMembership(membership: Record<number, number[]>): Promise<void> {
+  try {
+    // Drop emptied entries so the blob doesn't grow with every un-tick.
+    const pruned = Object.fromEntries(
+      Object.entries(membership).filter(([, ids]) => ids.length > 0),
+    );
+    await AsyncStorage.setItem(MEMBERSHIP_KEY, JSON.stringify(pruned));
+  } catch {
+    // Losing this only costs the rail its label until the next add.
+  }
+}
+
+async function readMembership(): Promise<Record<number, number[]>> {
+  try {
+    const stored = await AsyncStorage.getItem(MEMBERSHIP_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored) as Record<number, number[]>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 async function persistBuffer(items: FeedItem[], saved: Set<number>): Promise<void> {
   // Keep the tail. Fresh pages append, so the newest cards are the ones the
@@ -148,7 +185,8 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   activeIndex: 0,
   saved: new Set<number>(),
   hydrated: false,
-  panelOpen: false,
+  openPanel: null,
+  listMembership: {},
 
   hydrate: async (proficiencyLevel, targetLang) => {
     if (hydrating || get().hydrated) return;
@@ -173,8 +211,9 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
 
     // Paint last launch's cards, in a new order, before the request is sent.
     const buffered = await readBuffer();
+    const listMembership = await readMembership();
 
-    set({ mix, items: shuffle(buffered), hydrated: true });
+    set({ mix, items: shuffle(buffered), listMembership, hydrated: true });
     // `hydrated` is the guard from here on.
     hydrating = false;
 
@@ -255,7 +294,45 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     set({ activeIndex: index });
   },
 
-  setPanelOpen: (open) => set({ panelOpen: open }),
+  setPanelOpen: (panel) => set({ openPanel: panel }),
+
+  /** Membership is a set, not an assignment — a word can sit in several
+   *  lists at once, and tapping a row toggles just that one. Optimistic,
+   *  because the panel stays open and the user is expected to tick more. */
+  toggleList: async (item, listId) => {
+    const before = get().listMembership;
+    const current = before[item.lemma_id] ?? [];
+    const isMember = current.includes(listId);
+    const next = isMember
+      ? current.filter((id) => id !== listId)
+      : [...current, listId];
+
+    const optimistic = { ...before, [item.lemma_id]: next };
+    set({ listMembership: optimistic });
+    persistMembership(optimistic);
+
+    try {
+      const lists = useListsStore.getState();
+      if (isMember) {
+        // Word lists key their items on the word itself, not the lemma id.
+        await lists.removeItem(listId, item.word);
+      } else {
+        await lists.addItems(listId, {
+          words: [{ word: item.word, lemma_id: item.lemma_id }],
+        });
+      }
+      wordwiseApi.logInteraction(
+        item.word,
+        isMember ? 'WORD_UNSAVE' : 'WORD_SAVE',
+        null,
+        { lemma_id: item.lemma_id, cefr: item.cefr, source: 'feed', list_id: listId },
+      );
+    } catch (e) {
+      console.warn('[wordFeedStore] toggleList failed, rolling back:', e);
+      set({ listMembership: before });
+      persistMembership(before);
+    }
+  },
 
   favourite: async (item) => {
     const before = get().saved;
@@ -301,7 +378,8 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       activeIndex: 0,
       saved: new Set<number>(),
       hydrated: false,
-      panelOpen: false,
+      openPanel: null,
+  listMembership: {},
     });
   },
 }));

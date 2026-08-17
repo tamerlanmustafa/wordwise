@@ -9,7 +9,7 @@
 
 import Svg, { Circle, Path } from 'react-native-svg';
 
-export type RailGlyph = 'sliders' | 'heart' | 'send';
+export type RailGlyph = 'sliders' | 'heart' | 'bookmark' | 'send';
 
 interface Props {
   kind: RailGlyph;
@@ -47,6 +47,17 @@ export function RailIcon({ kind, size, stroke, fill }: Props) {
       <Svg {...props}>
         <Path
           d="M12 20.3l-1.5-1.35C5.4 14.36 2 11.28 2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2 16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.5 11.45z"
+          fill={fill ?? 'none'}
+        />
+      </Svg>
+    );
+  }
+
+  if (kind === 'bookmark') {
+    return (
+      <Svg {...props}>
+        <Path
+          d="M6 3h12a1 1 0 0 1 1 1v17l-7-5-7 5V4a1 1 0 0 1 1-1z"
           fill={fill ?? 'none'}
         />
       </Svg>

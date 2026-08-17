@@ -10,12 +10,12 @@
  *   toast strip (share failures only)
  *   [GlobalBottomBar is rendered by App.tsx below this]
  *
- * The action rail floats over the list on the right; the mix panel slides in
- * from the left and stops one rail-lane short so the rail stays visible. All
- * of that geometry scales with the measured viewport — see explore/metrics.
- * While a
- * panel is open a scrim makes the card and the rail inert, and any tap on it
- * closes the panel.
+ * The action rail floats over the list on the right. Two panels — the level
+ * mix and add-to-list — slide in from the left into the same lane, stopping
+ * one rail-lane short so the rail stays visible; only one is ever open. All
+ * of that geometry scales with the measured viewport (see explore/metrics).
+ * While a panel is open a scrim makes the card and the rail inert, and any
+ * tap on it closes the panel.
  *
  * Known deviation: the scrim covers this screen only, so the tab bar stays
  * live while a panel is open (the bar is App-owned and renders below this
@@ -43,6 +43,8 @@ import { WordCard, EXPLORE_EASING } from './explore/WordCard';
 import { exploreMetrics } from './explore/metrics';
 import { ActionRail } from './explore/ActionRail';
 import { MixPanel } from './explore/MixPanel';
+import { ListPanel } from './explore/ListPanel';
+import { useListsStore } from '../stores/listsStore';
 
 interface Props {
   /** Whether this tab is the visible one — drives panel reset on leave. */
@@ -69,8 +71,20 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   const favourite = useWordFeedStore((st) => st.favourite);
   // Panel state lives in the store so App's Android back handler can
   // close the panel before it leaves the tab.
-  const mixOpen = useWordFeedStore((st) => st.panelOpen);
-  const setMixOpen = useWordFeedStore((st) => st.setPanelOpen);
+  const openPanel = useWordFeedStore((st) => st.openPanel);
+  const setOpenPanel = useWordFeedStore((st) => st.setPanelOpen);
+  const listMembership = useWordFeedStore((st) => st.listMembership);
+  const toggleList = useWordFeedStore((st) => st.toggleList);
+
+  // Only word lists can hold a lemma, so film lists are filtered out rather
+  // than shown as rows that cannot work.
+  const allLists = useListsStore((st) => st.lists);
+  const listsLoading = useListsStore((st) => st.status === 'loading');
+  const wordLists = useMemo(() => allLists.filter((l) => l.kind === 'words'), [allLists]);
+
+  const mixOpen = openPanel === 'mix';
+  const listOpen = openPanel === 'list';
+  const anyPanelOpen = openPanel !== null;
 
   const [available, setAvailable] = useState(0);
   const [draftMix, setDraftMix] = useState<LevelMix>(mix);
@@ -78,6 +92,7 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   const [toast, setToast] = useState<string | null>(null);
 
   const panelAnim = useRef(new Animated.Value(0)).current;
+  const listAnim = useRef(new Animated.Value(0)).current;
   const liftAnim = useRef(new Animated.Value(0)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
 
@@ -99,6 +114,14 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
     if (!mixOpen) setDraftMix(mix);
   }, [mix, mixOpen]);
 
+  // Lists are fetched lazily — the feed shouldn't pay for them unless the
+  // user actually opens the panel.
+  useEffect(() => {
+    if (listOpen && !useListsStore.getState().hydrated) {
+      void useListsStore.getState().hydrate();
+    }
+  }, [listOpen]);
+
   // Panel slide + card lift share one curve and one duration so the word
   // rises exactly as the panel arrives.
   useEffect(() => {
@@ -109,20 +132,26 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
         easing: EXPLORE_EASING,
         useNativeDriver: true,
       }),
+      Animated.timing(listAnim, {
+        toValue: listOpen ? 1 : 0,
+        duration: 300,
+        easing: EXPLORE_EASING,
+        useNativeDriver: true,
+      }),
       Animated.timing(liftAnim, {
-        toValue: mixOpen ? 1 : 0,
+        toValue: anyPanelOpen ? 1 : 0,
         duration: 300,
         easing: EXPLORE_EASING,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [mixOpen, panelAnim, liftAnim]);
+  }, [mixOpen, listOpen, anyPanelOpen, panelAnim, listAnim, liftAnim]);
 
   // Leaving the tab closes the panel — otherwise it would still be open,
   // and lifted, on the way back in.
   useEffect(() => {
-    if (!active) setMixOpen(false);
-  }, [active, setMixOpen]);
+    if (!active) setOpenPanel(null);
+  }, [active, setOpenPanel]);
 
   // Prefetch while the user still has cards in hand, so a flick never
   // lands on a spinner.
@@ -169,6 +198,11 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
 
   const current: FeedItem | undefined = items[activeIndex];
 
+  const memberOf = useMemo(
+    () => (current ? listMembership[current.lemma_id] ?? [] : []),
+    [current, listMembership],
+  );
+
   const handleToggleReveal = useCallback(
     (item: FeedItem) => {
       setRevealed((prev) => {
@@ -201,9 +235,16 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   }, [current, showToast]);
 
   const handleDone = useCallback(() => {
-    setMixOpen(false);
+    setOpenPanel(null);
     setMix(draftMix);
-  }, [draftMix, setMix, setMixOpen]);
+  }, [draftMix, setMix, setOpenPanel]);
+
+  const handleCreateList = useCallback(async (name: string) => {
+    const created = await useListsStore.getState().create(name, 'words');
+    // Creating a list from here means "put this word in it" — the extra tap
+    // to then tick the row you just made would be pure ceremony.
+    if (current) await toggleList(current, created.id);
+  }, [current, toggleList]);
 
   const renderItem = useCallback(
     ({ item }: { item: FeedItem }) => (
@@ -256,7 +297,7 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
             viewabilityConfig={viewabilityConfig}
             // The panel's scrim already blocks touches, but stopping the
             // list outright avoids a half-scrolled card behind it.
-            scrollEnabled={!mixOpen}
+            scrollEnabled={!anyPanelOpen}
             ListEmptyComponent={
               loading ? <CardSkeleton height={cardHeight} s={s} /> : null
             }
@@ -270,10 +311,10 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
 
         {/* Scrim — above the card and the rail, below the panel. Any tap
             closes the panel and does nothing else. */}
-        {mixOpen ? (
+        {anyPanelOpen ? (
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => setMixOpen(false)}
+            onPress={() => setOpenPanel(null)}
             accessibilityLabel="Close word mix"
           />
         ) : null}
@@ -285,7 +326,10 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
           mixLabel={dominantLevel(mix)}
           mixOpen={mixOpen}
           saved={current ? saved.has(current.lemma_id) : false}
-          onToggleMix={() => setMixOpen(!mixOpen)}
+          listCount={memberOf.length}
+          listOpen={listOpen}
+          onToggleMix={() => setOpenPanel(mixOpen ? null : 'mix')}
+          onToggleList={() => setOpenPanel(listOpen ? null : 'list')}
           onFavourite={() => current && favourite(current)}
           onShare={handleShare}
         />
@@ -296,6 +340,20 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
           onDone={handleDone}
           progress={panelAnim}
           visible={mixOpen}
+          height={m.railHeight}
+          bottom={m.railBottom}
+          lane={m.railLane}
+        />
+
+        <ListPanel
+          word={current?.word ?? ''}
+          lists={wordLists}
+          memberOf={memberOf}
+          onToggle={(listId) => current && toggleList(current, listId)}
+          onCreate={handleCreateList}
+          loading={listsLoading}
+          progress={listAnim}
+          visible={listOpen}
           height={m.railHeight}
           bottom={m.railBottom}
           lane={m.railLane}

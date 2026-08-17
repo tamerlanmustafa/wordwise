@@ -15,6 +15,7 @@ import {
   logFeedFlip,
 } from '../wordFeedStore';
 import { srsApi, wordwiseApi, type FeedItem } from '../../services/api';
+import { useListsStore } from '../listsStore';
 
 const MIX_KEY = 'feedLevelMix';
 const BUFFER_KEY = 'feedBuffer.v1';
@@ -418,6 +419,134 @@ describe('wordFeedStore', () => {
         null,
         { lemma_id: 3, cefr: 'C1', source: 'feed' },
       );
+    });
+  });
+
+  describe('list membership', () => {
+    const MEMBERSHIP_KEY = 'feedListMembership.v1';
+    let mockAdd: jest.Mock;
+    let mockRemove: jest.Mock;
+
+    beforeEach(() => {
+      mockAdd = jest.fn().mockResolvedValue(undefined);
+      mockRemove = jest.fn().mockResolvedValue(undefined);
+      useListsStore.setState({ addItems: mockAdd, removeItem: mockRemove });
+    });
+
+    const membership = () => useWordFeedStore.getState().listMembership;
+
+    it('adds the word to a list and ticks it immediately', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+
+      expect(mockAdd).toHaveBeenCalledWith(10, {
+        words: [{ word: 'word1', lemma_id: 1 }],
+      });
+      expect(membership()[1]).toEqual([10]);
+    });
+
+    it('is set membership, not assignment — a word can be in several lists', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await useWordFeedStore.getState().toggleList(item(1), 20);
+
+      expect(membership()[1]).toEqual([10, 20]);
+    });
+
+    it('untoggles just the one list, leaving the others alone', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await useWordFeedStore.getState().toggleList(item(1), 20);
+
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+
+      // Word lists key their items on the word, not the lemma id.
+      expect(mockRemove).toHaveBeenCalledWith(10, 'word1');
+      expect(membership()[1]).toEqual([20]);
+    });
+
+    it('keeps each word’s membership separate', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await useWordFeedStore.getState().toggleList(item(2), 20);
+
+      expect(membership()[1]).toEqual([10]);
+      expect(membership()[2]).toEqual([20]);
+    });
+
+    it('ticks optimistically, before the request resolves', async () => {
+      let resolve!: () => void;
+      mockAdd.mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+
+      const pending = useWordFeedStore.getState().toggleList(item(1), 10);
+      expect(membership()[1]).toEqual([10]);
+
+      resolve();
+      await pending;
+      expect(membership()[1]).toEqual([10]);
+    });
+
+    it('rolls the tick back when the add fails', async () => {
+      mockAdd.mockRejectedValue(new Error('500'));
+
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+
+      expect(membership()[1] ?? []).toEqual([]);
+    });
+
+    it('restores the tick when a remove fails', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      mockRemove.mockRejectedValue(new Error('500'));
+
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+
+      expect(membership()[1]).toEqual([10]);
+    });
+
+    it('survives a relaunch so the rail label is right on cold start', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await flush();
+      expect(JSON.parse((await AsyncStorage.getItem(MEMBERSHIP_KEY))!)).toEqual({ 1: [10] });
+
+      mockFeed.mockResolvedValue(page([item(1)]));
+      useWordFeedStore.getState().reset();
+      await useWordFeedStore.getState().hydrate('B1', 'es');
+
+      expect(membership()[1]).toEqual([10]);
+    });
+
+    it('prunes emptied entries rather than storing dead keys', async () => {
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      await flush();
+
+      expect(JSON.parse((await AsyncStorage.getItem(MEMBERSHIP_KEY))!)).toEqual({});
+    });
+
+    it('logs the add with feed provenance and the list it went to', async () => {
+      await useWordFeedStore.getState().toggleList(item(1, 'B2'), 10);
+
+      expect(mockLog).toHaveBeenCalledWith(
+        'word1',
+        'WORD_SAVE',
+        null,
+        { lemma_id: 1, cefr: 'B2', source: 'feed', list_id: 10 },
+      );
+    });
+
+    it('does not log when the request failed', async () => {
+      mockAdd.mockRejectedValue(new Error('500'));
+      await useWordFeedStore.getState().toggleList(item(1), 10);
+      expect(mockLog).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('panels', () => {
+    it('opens one panel at a time — they share a lane', () => {
+      useWordFeedStore.getState().setPanelOpen('mix');
+      expect(useWordFeedStore.getState().openPanel).toBe('mix');
+
+      useWordFeedStore.getState().setPanelOpen('list');
+      expect(useWordFeedStore.getState().openPanel).toBe('list');
+
+      useWordFeedStore.getState().setPanelOpen(null);
+      expect(useWordFeedStore.getState().openPanel).toBeNull();
     });
   });
 });

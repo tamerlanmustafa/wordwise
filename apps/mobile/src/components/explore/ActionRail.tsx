@@ -7,10 +7,14 @@
  * open — the panel's right edge stops 76px short precisely so this column
  * is never covered.
  *
- * Three items, not four: the design's "Add to list" glyph is absent because
- * the product has no user-created lists to add to (no table, no API). The
- * heart is the real save — it writes the same global `user_words` row the
- * notebook and SRS read, and toggles silently with no toast.
+ * Four items: level mix, save, add-to-list, share. The list glyph was absent
+ * in the first cut because user-created lists did not exist yet; it came back
+ * with the Lists tab.
+ *
+ * Save and list are deliberately different actions. The heart writes the
+ * global `user_words` row that the notebook and SRS read, and toggles
+ * silently with no toast. Adding to a list is set membership — a word can sit
+ * in several at once — and is independent of whether it is saved.
  */
 
 import { useMemo } from 'react';
@@ -28,9 +32,21 @@ interface Props {
   mixLabel: string;
   mixOpen: boolean;
   saved: boolean;
+  /** How many lists the current word is in — drives the label and fill. */
+  listCount: number;
+  listOpen: boolean;
   onToggleMix: () => void;
   onFavourite: () => void;
+  onToggleList: () => void;
   onShare: () => void;
+}
+
+/** `List` → `In list` → `2 lists`. The singular case says where the word is,
+ *  not how many — "1 list" reads like a counter rather than a state. */
+export function listLabel(count: number): string {
+  if (count <= 0) return 'List';
+  if (count === 1) return 'In list';
+  return `${count} lists`;
 }
 
 export function ActionRail({
@@ -40,8 +56,11 @@ export function ActionRail({
   mixLabel,
   mixOpen,
   saved,
+  listCount,
+  listOpen,
   onToggleMix,
   onFavourite,
+  onToggleList,
   onShare,
 }: Props) {
   const tc = useThemeColors();
@@ -64,6 +83,15 @@ export function ActionRail({
         label={saved ? 'Saved' : 'Save'}
         active={saved}
         onPress={onFavourite}
+        tc={tc}
+        s={s}
+      />
+      <RailButton
+        glyph="bookmark"
+        size={25}
+        label={listLabel(listCount)}
+        active={listCount > 0 || listOpen}
+        onPress={onToggleList}
         tc={tc}
         s={s}
       />
