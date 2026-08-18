@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.hidden_words import get_hidden_word_set
 from ..services.quiz_service import (
     CARDS_PER_SESSION,
     CardSpec,
@@ -153,8 +154,7 @@ async def _load_level_word_pool(
     classifications = await db.wordclassification.find_many(
         where={"scriptId": script.id, "cefrLevel": level}
     )
-    hidden_rows = await db.hiddenword.find_many()
-    hidden = {h.word for h in hidden_rows}
+    hidden = await get_hidden_word_set(db, (c.word for c in classifications))
     seen: set[str] = set()
     words: List[str] = []
     for c in classifications:
@@ -517,8 +517,7 @@ async def get_movie_units(
     classifications = await db.wordclassification.find_many(
         where={"scriptId": script.id}
     )
-    hidden_rows = await db.hiddenword.find_many()
-    hidden = {h.word for h in hidden_rows}
+    hidden = await get_hidden_word_set(db, (c.word for c in classifications))
     counts: Dict[str, int] = {lv: 0 for lv in LEVEL_ORDER}
     for c in classifications:
         level = c.cefrLevel if isinstance(c.cefrLevel, str) else c.cefrLevel.value
@@ -852,8 +851,7 @@ async def _get_journey_words_at_level(
         """,
         level, offset, limit,
     )
-    hidden_rows = await db.hiddenword.find_many()
-    hidden = {h.word.lower() for h in hidden_rows}
+    hidden = await get_hidden_word_set(db, (r["word"] for r in rows))
     return [r["word"] for r in rows if r["word"].lower() not in hidden]
 
 

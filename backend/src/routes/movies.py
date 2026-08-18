@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
 from prisma.enums import difficultylevel
 from pydantic import BaseModel
-from typing import Iterable, Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
 from ..middleware.auth import get_current_active_user, get_current_user_optional
+from ..services.hidden_words import get_hidden_word_set
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
 from ..services.profanity_filter import is_profane_entry
@@ -32,32 +33,6 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 # that, shedding beats queueing.
 _vocab_preview_throttle = rate_limit(5, 60.0, scope="movie-vocab-preview")
 MAX_PENDING_PREVIEW_PARSES = 4
-
-
-async def _get_hidden_word_set(db: Prisma, forms: Iterable[Optional[str]]) -> set:
-    """
-    Admin-hidden words (misspellings, bad data) that occur in `forms`.
-
-    Scoped to the caller's candidate forms rather than loading the table:
-    hidden_words holds ~34k rows, an unfiltered find_many() spent >100ms per
-    request transferring all of them to answer a few thousand membership
-    tests. Postgres does the intersection against ix_hidden_words_word and
-    returns only the rows that actually matter (~150 for a large script).
-
-    Passed as a single text[] parameter, not one placeholder per form, so a
-    long vocabulary can never approach the bind-parameter limit.
-
-    Both sides are lowercased here, so the returned set is lowercase and
-    callers must compare lowercased forms.
-    """
-    candidates = sorted({f.strip().lower() for f in forms if f and f.strip()})
-    if not candidates:
-        return set()
-    rows = await db.query_raw(
-        "SELECT LOWER(word) AS word FROM hidden_words WHERE LOWER(word) = ANY($1::text[])",
-        candidates,
-    )
-    return {r["word"] for r in rows}
 
 
 @router.get("/", response_model=MovieListResponse)
@@ -673,7 +648,7 @@ async def get_vocabulary_preview(
         order={'confidence': 'desc'}
     )
 
-    hidden = await _get_hidden_word_set(
+    hidden = await get_hidden_word_set(
         db, (form for w in all_words for form in (w.word, w.lemma))
     )
 
@@ -784,7 +759,7 @@ async def get_vocabulary_full(
         order={'confidence': 'desc'}
     )
 
-    hidden = await _get_hidden_word_set(
+    hidden = await get_hidden_word_set(
         db, (form for w in cefr_words for form in (w.word, w.lemma))
     )
 

@@ -1,0 +1,51 @@
+-- Issue #121 — every hidden_words lookup filters on LOWER(word), which the
+-- plain btree ix_hidden_words_word cannot serve. So even the *scoped* query
+-- (the one movies.py adopted in f1c25a1, and that quiz.py/books.py adopt in
+-- this commit) still sequentially scanned all 34,095 rows.
+--
+-- Measured on prod, 837 candidate forms (one real script, one CEFR level),
+-- 7 interleaved iterations, medians:
+--
+--   scoped lookup, no functional index    6.38 ms   Seq Scan, 336 buffers
+--   scoped lookup, functional index       1.81 ms   Index Scan, 219 buffers
+--
+-- and for a small candidate list (5 forms) the gap is far wider, because the
+-- seq scan cost is fixed while the index scan is proportional:
+--
+--   no functional index                   6.91 ms   Seq Scan, 336 buffers
+--   functional index (index-only)         0.09 ms   Index Scan, 10 buffers
+--
+-- This index is what makes the scoped predicate actually cheap.
+--
+-- It deliberately does NOT help the two background readers:
+--
+--   src/workers/sentence_worker.py:98   LOWER(l.lemma) NOT IN (SELECT LOWER(word) ...)
+--   src/services/vocab_coverage.py:360  same shape
+--
+-- Verified after creating it — those still seq-scan, and correctly so: an
+-- uncorrelated `NOT IN` has to materialize every value in the table, so there
+-- is no predicate for an index to seek on. Issue #121 suggests this index
+-- would fix them; it does not. They must not be rewritten as a correlated
+-- NOT EXISTS either — that shape is what wedged the sentence worker in a
+-- timeout/retry loop on 2026-07-22 (see build_backlog_sql's docstring). Both
+-- run once per background cycle rather than per request, so their ~7ms is not
+-- worth trading that risk for.
+--
+-- Not expressible in schema.prisma (Prisma has no expression indexes), so this
+-- file is the only definition — replayed by the bootstrap procedure in
+-- prisma/manual/README.md.
+--
+--   railway connect Postgres     # or: psql "$DATABASE_PUBLIC_URL"
+--   \i backend/prisma/manual/2026_08_18_hidden_words_lower_index_issue_121.sql
+--
+-- Additive and idempotent: no column, constraint, or row is changed, so code
+-- deployed before this runs keeps working — it is a speedup, not a dependency.
+
+-- CONCURRENTLY so the write path (admin hide/unhide, the hide_*_lemmas.py
+-- backfills) is never blocked. It cannot run inside a transaction block, so
+-- run this file through psql WITHOUT -1/--single-transaction.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_hidden_words_word_lower
+    ON hidden_words (LOWER(word));
+
+-- The planner needs stats on the expression before it will trust the index.
+ANALYZE hidden_words;

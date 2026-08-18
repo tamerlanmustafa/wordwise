@@ -21,6 +21,7 @@ from fastapi.responses import PlainTextResponse
 from ..middleware.auth import get_current_active_user, get_admin_user
 from ..services.book_ingestion_service import get_book_ingestion_service
 from ..services.gutendex_client import get_gutendex_client
+from ..services.hidden_words import get_hidden_word_set
 from ..services.open_library_client import get_open_library_client
 from ..utils.rate_limit import rate_limit
 from .cefr import get_classifier, should_keep_word
@@ -738,8 +739,7 @@ async def get_book_vocabulary(
         order={"frequencyRank": "asc"}
     )
 
-    hidden_rows = await db.hiddenword.find_many()
-    hidden = {r.word for r in hidden_rows}
+    hidden = await get_hidden_word_set(db, (c.word for c in classifications))
 
     # Build level distribution and top words by level, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
@@ -828,8 +828,7 @@ async def get_book_vocabulary_preview(
         take=100  # Limited for preview
     )
 
-    hidden_rows = await db.hiddenword.find_many()
-    hidden = {r.word for r in hidden_rows}
+    hidden = await get_hidden_word_set(db, (c.word for c in classifications))
 
     # Build level distribution, filtering ultra-common A1 words
     level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
