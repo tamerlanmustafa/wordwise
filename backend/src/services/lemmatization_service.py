@@ -246,7 +246,13 @@ async def populate_lemma_registry(
     # Process single-word lemmas
     for lemma_str, token in lemma_result.unique_lemmas.items():
         cls = classifications.get(lemma_str, {})
-        cefr_level = cls.get("cefr_level", "A2")
+        # spaCy's lemma set and the classifier's don't match exactly, so some
+        # lemmas arrive with no classification at all. Defaulting those to A2
+        # was #91's mistake in miniature — it is how "adumbrate" and "asse"
+        # became beginner vocabulary in the registry (83 such lemmas in prod,
+        # all at confidence 0). They belong in the same holding pen as
+        # everything else the classifier could not place (#119).
+        cefr_level = cls.get("cefr_level") or "UNKNOWN"
         confidence = cls.get("confidence", 0.0)
         source = cls.get("source", "fallback")
         frequency_rank = cls.get("frequency_rank")

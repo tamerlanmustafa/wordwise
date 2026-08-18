@@ -6,6 +6,7 @@ from typing import Optional
 from src.database import get_db
 from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
+from src.services.cefr_registry import apply_registry_levels
 from src.services.difficulty_scorer import compute_difficulty
 from src.services.latency_stats import compute_latency_report
 from src.services.vocab_coverage import compute_vocab_coverage
@@ -354,6 +355,9 @@ async def reprocess_script(
     classifier = get_classifier()
     classifications = classifier.classify_text(script.cleanedScriptText)
 
+    # Keep words the registry can place out of the UNKNOWN bucket (#119).
+    await apply_registry_levels(db, classifications)
+
     statistics = classifier.get_statistics(classifications)
 
     unique = {}
@@ -444,6 +448,10 @@ async def reprocess_all_scripts(
 
             # Reclassify
             classifications = classifier.classify_text(script.cleanedScriptText)
+
+            # Keep words the registry can place out of the UNKNOWN bucket (#119).
+            await apply_registry_levels(db, classifications)
+
             statistics = classifier.get_statistics(classifications)
 
             # Deduplicate by lemma+level

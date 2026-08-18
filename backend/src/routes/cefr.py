@@ -25,6 +25,7 @@ from src.services.lemmatization_service import (
 )
 from src.database import get_db
 from src.middleware.auth import get_admin_user, get_current_active_user
+from src.services.cefr_registry import apply_registry_levels
 from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
 from src.services.profanity_filter import is_profane_entry
@@ -494,6 +495,11 @@ async def run_script_classification(
 
         classifier = get_classifier()
         classifications = classifier.classify_text(script.cleanedScriptText, genres=genres)
+
+        # A word the registry can already place must not be stored UNKNOWN
+        # just because this script capitalised it (#119). Before statistics,
+        # so difficulty and the lemma registry below see the same levels.
+        await apply_registry_levels(db, classifications)
 
         # Compute statistics
         statistics = classifier.get_statistics(classifications)

@@ -19,6 +19,7 @@ from ..middleware.auth import get_current_active_user
 from ..schemas.upload import FileUploadResponse
 from ..utils.subtitle_parser import SubtitleParser
 from ..utils.pdf_extractor import PDFExtractor
+from ..services.cefr_registry import apply_registry_levels
 from ..utils.epub_extractor import EPUBExtractor, EPUBExtractionError
 from .cefr import get_classifier
 
@@ -165,6 +166,9 @@ async def upload_file(
     try:
         classifier = get_classifier()
         classifications = classifier.classify_text(extracted["cleaned_text"])
+
+        # Keep words the registry can place out of the UNKNOWN bucket (#119).
+        await apply_registry_levels(db, classifications)
 
         # Compute statistics
         level_distribution = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
