@@ -7,6 +7,7 @@ from src.database import get_db
 from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.difficulty_scorer import compute_difficulty
+from src.services.latency_stats import compute_latency_report
 from src.services.vocab_coverage import compute_vocab_coverage
 from src.utils.rate_limit import rate_limit
 from src.utils.subscription import entitlements_payload
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # Admin health reads are cheap but run several COUNT/EXISTS queries; throttle so
 # a stuck dashboard poll can't hammer them.
 _vocab_health_throttle = rate_limit(30, 60.0, scope="admin-vocab-health")
+# The latency read touches no database, but it does sort every route's sample
+# window under a lock — its own budget so it can't starve the vocab read.
+_latency_health_throttle = rate_limit(30, 60.0, scope="admin-latency-health")
 
 
 @router.get("/stats")
@@ -87,6 +91,23 @@ async def vocab_coverage_health(
     recent daily snapshot written by the sentence worker. See
     src/services/vocab_coverage.py for the metric definitions and thresholds."""
     return await compute_vocab_coverage(db)
+
+
+@router.get("/health/latency")
+async def latency_health(
+    admin_user=Depends(get_admin_user),
+    _: None = Depends(_latency_health_throttle),
+):
+    """Per-endpoint request latency (issue #130): p50/p95/p99 per route template
+    plus app-wide percentiles and the 5xx rate, in the same metric shape as
+    /admin/health/vocab-coverage.
+
+    Read from the in-process registry the access middleware writes to, so the
+    window covers this API instance since its last restart — a deploy resets
+    it. The per-request `duration_ms` / `route` fields in the structured logs
+    are the durable record. No database access, so this stays honest even when
+    the thing that is slow *is* Postgres."""
+    return compute_latency_report()
 
 
 @router.get("/movies/processed")

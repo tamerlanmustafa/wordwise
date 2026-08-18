@@ -1,7 +1,8 @@
 /**
  * VocabCoverageView — the charted, categorised body of the admin vocab-pipeline
- * health screen. Presentation only: all grouping, copy and meter geometry come
- * from `vocabCoverageContent`, all thresholds come from the server.
+ * health screen. Presentation only: grouping and copy come from
+ * `vocabCoverageContent`, the metric card and formatting are shared with the
+ * other health reports, and all thresholds come from the server.
  *
  * Form follows the data's job (see the dataviz guidance):
  * - bounded metrics (a %, or spend vs cap) render as a **meter** with threshold
@@ -17,16 +18,14 @@
 
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import type { VocabCoverageMetric, VocabCoverageReport, VocabCoverageStatus } from '../../services/api';
+import type { VocabCoverageReport, VocabCoverageStatus } from '../../services/api';
 import { COLORS, STATUS_LABEL, STATUS_MEANING, STATUS_TOKENS } from './adminTheme';
+import { HealthMetricCard } from './HealthMetricCard';
+import { statusCounts, worstStatus } from './healthMetricContent';
 import {
   explanationFor,
-  formatMetricValue,
   formatTrend,
   groupMetricsByCategory,
-  meterGeometry,
-  statusCounts,
-  worstStatus,
   type CoverageCategoryId,
 } from './vocabCoverageContent';
 
@@ -89,9 +88,11 @@ export function VocabCoverageView({ report }: { report: VocabCoverageReport }) {
           <>
             <Text style={styles.sectionBlurb}>{active.category.blurb}</Text>
             {active.metrics.map((m) => (
-              <MetricCard
+              <HealthMetricCard
                 key={m.key}
                 metric={m}
+                explanation={explanationFor(m.key)}
+                trend={formatTrend(m)}
                 expanded={expandedKey === m.key}
                 onToggle={() => setExpandedKey(expandedKey === m.key ? null : m.key)}
               />
@@ -215,91 +216,6 @@ function Overview({
   );
 }
 
-// ── Metric card ─────────────────────────────────────────────────────────────
-
-function MetricCard({
-  metric,
-  expanded,
-  onToggle,
-}: {
-  metric: VocabCoverageMetric;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const tokens = STATUS_TOKENS[metric.status];
-  const geo = meterGeometry(metric);
-  const trend = formatTrend(metric);
-
-  return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onToggle}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityState={{ expanded }}
-      accessibilityHint="Shows what this check means"
-    >
-      <View style={styles.metricTop}>
-        <Text style={styles.cardTitle}>{metric.label}</Text>
-        <View style={[styles.chip, { backgroundColor: tokens.chipBg }]}>
-          <Text style={[styles.chipText, { color: tokens.chipInk }]}>
-            {STATUS_LABEL[metric.status]}
-          </Text>
-        </View>
-      </View>
-
-      {/* Value is always printed — never gated behind the meter or a tap. */}
-      <Text style={styles.metricValue}>{formatMetricValue(metric)}</Text>
-
-      {trend ? (
-        <Text
-          style={[
-            styles.metricTrend,
-            { color: trend.good ? STATUS_TOKENS.ok.chipInk : STATUS_TOKENS.warn.chipInk },
-          ]}
-        >
-          {trend.text}
-        </Text>
-      ) : null}
-
-      {geo ? (
-        <View style={styles.meterWrap}>
-          <View style={styles.meterTrack}>
-            <View
-              style={[styles.meterFill, { width: `${geo.fillPct}%`, backgroundColor: tokens.mark }]}
-            />
-            {/* Threshold markers: solid hairlines, so "where warn/fail sits" is
-                visible rather than something you infer from the caption. */}
-            {geo.warnPct != null ? (
-              <View style={[styles.meterMark, { left: `${geo.warnPct}%` }]} />
-            ) : null}
-            {geo.failPct != null ? (
-              <View style={[styles.meterMark, { left: `${geo.failPct}%` }]} />
-            ) : null}
-          </View>
-          <View style={styles.meterScale}>
-            <Text style={styles.meterScaleText}>0</Text>
-            <Text style={styles.meterScaleText}>
-              {metric.unit === '%' ? '100%' : `$${metric.max_value}`}
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
-      {metric.detail ? <Text style={styles.metricDetail}>{metric.detail}</Text> : null}
-
-      {expanded ? (
-        <View style={styles.explainBox}>
-          <Text style={styles.explainText}>{explanationFor(metric.key)}</Text>
-          <Text style={styles.explainThreshold}>Alert rule: {metric.threshold}</Text>
-        </View>
-      ) : (
-        <Text style={styles.explainPrompt}>Tap to see what this means</Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   tabBar: { borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.paper },
@@ -339,6 +255,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 
   stackTrack: { flexDirection: 'row', gap: 2, height: 10, marginTop: 10 },
   stackSeg: { height: '100%', borderRadius: 5 },
@@ -357,44 +275,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: COLORS.textSecondary,
     marginBottom: 2,
-  },
-
-  metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
-  metricValue: { fontSize: 26, fontWeight: '700', color: COLORS.text, marginTop: 8 },
-  metricTrend: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-
-  meterWrap: { marginTop: 12 },
-  meterTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  meterFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 999 },
-  meterMark: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: COLORS.text, opacity: 0.35 },
-  meterScale: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  meterScaleText: { fontSize: 10, color: COLORS.textTertiary },
-
-  metricDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 10, lineHeight: 17 },
-
-  explainPrompt: { fontSize: 11, color: COLORS.textTertiary, marginTop: 10 },
-  explainBox: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  explainText: { fontSize: 13, lineHeight: 20, color: COLORS.text },
-  explainThreshold: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    marginTop: 8,
-    fontStyle: 'italic',
   },
 
   footnote: { fontSize: 11, color: COLORS.textTertiary, marginTop: 16, lineHeight: 16 },

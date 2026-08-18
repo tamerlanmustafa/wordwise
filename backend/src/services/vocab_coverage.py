@@ -13,7 +13,8 @@ tables. The V2 sense tables (word_senses / translation_memory) were dropped
 
 Splitting rule: `build_report` is pure (raw counts + previous values -> metric
 dicts) so thresholds are unit-testable without a database; the `_gather_raw`
-and snapshot helpers own all DB I/O.
+and snapshot helpers own all DB I/O. The metric shape and the ok/warn/fail
+bands are shared with the other /admin/health/* reports — see health_metrics.
 """
 from __future__ import annotations
 
@@ -25,13 +26,17 @@ from prisma import Json, Prisma
 
 from src.config import get_settings
 
+from .health_metrics import (
+    FAIL,
+    OK,
+    WARN,
+    metric as _metric,
+    overall_status as _overall_status,
+    status_max as _status_max,
+    status_min as _status_min,
+)
+
 logger = logging.getLogger(__name__)
-
-OK = "ok"
-WARN = "warn"
-FAIL = "fail"
-
-_STATUS_RANK = {OK: 0, WARN: 1, FAIL: 2}
 
 # The reveal cache "climbs from ~0", so a low aligned-gloss share on a tiny
 # sample is a rollout artifact, not a regression — don't hard-fail (and drag the
@@ -39,25 +44,8 @@ _STATUS_RANK = {OK: 0, WARN: 1, FAIL: 2}
 _GLOSS_MIN_SAMPLE = 200
 
 
-# ── status classifiers ──────────────────────────────────────────────────────
-
-def _status_min(value: float, warn: Optional[float], fail: Optional[float]) -> str:
-    """Higher is better. warn/fail are lower bounds; None disables a band."""
-    if fail is not None and value < fail:
-        return FAIL
-    if warn is not None and value < warn:
-        return WARN
-    return OK
-
-
-def _status_max(value: float, warn: Optional[float], fail: Optional[float]) -> str:
-    """Higher is worse. warn/fail are upper bounds; None disables a band."""
-    if fail is not None and value > fail:
-        return FAIL
-    if warn is not None and value > warn:
-        return WARN
-    return OK
-
+# ── status classifiers (snapshot-relative; the absolute bands live in
+# health_metrics, these need a previous value to mean anything) ─────────────
 
 def _status_no_increase(value: float, previous: Optional[float]) -> str:
     """Regression guard: FAIL if the value rose above the last snapshot, WARN
@@ -86,58 +74,7 @@ def _status_watch_fall(value: float, previous: Optional[float]) -> str:
     return OK
 
 
-def _overall_status(metrics: list[dict]) -> str:
-    worst = OK
-    for m in metrics:
-        if _STATUS_RANK[m["status"]] > _STATUS_RANK[worst]:
-            worst = m["status"]
-    return worst
-
-
 # ── metric assembly (pure) ──────────────────────────────────────────────────
-
-def _metric(
-    key: str,
-    label: str,
-    value,
-    unit: str,
-    status: str,
-    threshold: str,
-    *,
-    prev=None,
-    detail: Optional[str] = None,
-    warn_at: Optional[float] = None,
-    fail_at: Optional[float] = None,
-    direction: Optional[str] = None,
-    max_value: Optional[float] = None,
-) -> dict:
-    """`threshold` is the human-readable band; warn_at/fail_at/direction/max_value
-    are the same bands in structured form so the admin UI can draw a meter with
-    threshold markers without re-declaring (and drifting from) these numbers.
-    max_value present = the metric has a natural scale (a %, or spend vs cap) and
-    renders as a meter; absent = an unbounded count, which renders as a stat tile.
-    direction is "min" when higher is better, "max" when higher is worse."""
-    m: dict[str, Any] = {
-        "key": key,
-        "label": label,
-        "value": value,
-        "unit": unit,
-        "status": status,
-        "threshold": threshold,
-        "warn_at": warn_at,
-        "fail_at": fail_at,
-        "direction": direction,
-        "max_value": max_value,
-    }
-    if detail is not None:
-        m["detail"] = detail
-    if prev is not None:
-        m["previous"] = prev
-        if isinstance(value, (int, float)) and isinstance(prev, (int, float)):
-            delta = value - prev
-            m["delta"] = round(delta, 2) if isinstance(delta, float) else delta
-    return m
-
 
 def build_report(
     raw: dict[str, Any],

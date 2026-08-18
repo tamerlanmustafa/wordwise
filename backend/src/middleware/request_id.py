@@ -1,5 +1,5 @@
 """
-Per-request correlation-id middleware.
+Per-request correlation-id + access-telemetry middleware.
 
 A pure-ASGI middleware (rather than BaseHTTPMiddleware) so it can:
   - read/generate the id before anything else runs,
@@ -10,6 +10,12 @@ Every request gets an ``X-Request-ID``: an inbound one is honoured (so a
 correlation id can span the mobile client → API → logs), otherwise a fresh
 uuid4 is minted. The id is echoed back in the response header and tagged onto
 every log line emitted while the request is in flight.
+
+It also owns the one wall-clock measurement of each request (issue #130). The
+duration goes two places: the structured access log, and the in-process
+latency registry behind GET /admin/health/latency. Timing here rather than in a
+second middleware means there is exactly one number and the log and the
+percentiles can never disagree.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import time
 import uuid
 
 from ..logging_config import request_id_ctx
+from ..services.latency_stats import record_request
 from ..utils.rate_limit import _forwarded_for_from_scope, client_ip_from_scope
 
 _DEFAULT_HEADER = "X-Request-ID"
@@ -39,6 +46,18 @@ def _sanitize(value: str | None) -> str | None:
     if value and _VALID_ID.match(value):
         return value
     return None
+
+
+def _route_template(scope) -> str | None:
+    """The matched route's path template, e.g. ``/movies/{movie_id}/words``.
+
+    Starlette writes the matched route onto the same scope dict we were handed,
+    so it is readable once the downstream app has returned. None means nothing
+    matched (404, or a CORS preflight short-circuited above the router) — the
+    caller buckets those together rather than by raw path, which is unbounded.
+    """
+    route = scope.get("route")
+    return getattr(route, "path", None) if route is not None else None
 
 
 class RequestIDMiddleware:
@@ -77,15 +96,29 @@ class RequestIDMiddleware:
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
+            duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            method = scope.get("method") or "-"
+            route = _route_template(scope)
+
+            # Telemetry must never be able to fail a request that already
+            # succeeded, so it is isolated from the response path.
+            try:
+                record_request(method, route, status_holder["status"], duration_ms)
+            except Exception:  # pragma: no cover - defensive
+                access_logger.debug("latency recording failed", exc_info=True)
+
             # Log the path only (never the query string) so tokens or other
             # secrets passed as query params never reach the logs.
             access_logger.info(
                 "request",
                 extra={
-                    "method": scope.get("method"),
+                    "method": method,
                     "path": scope.get("path"),
+                    # Low-cardinality template — this is the field to group by
+                    # in the logs; `path` still carries the concrete id.
+                    "route": route,
                     "status": status_holder["status"],
-                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "duration_ms": duration_ms,
                     # The resolved caller, plus the raw chain it came from.
                     # Rate limiting is only as good as this value, and the
                     # only way to tell whether TRUSTED_PROXY_HOPS matches the

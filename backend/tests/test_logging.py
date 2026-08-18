@@ -18,6 +18,7 @@ from src.logging_config import (
     request_id_ctx,
 )
 from src.middleware.request_id import RequestIDMiddleware
+from src.services import latency_stats as ls
 
 
 def _format(record: logging.LogRecord) -> dict:
@@ -87,6 +88,10 @@ def _app() -> FastAPI:
         # The id set by the middleware must be visible inside the handler.
         return {"request_id": get_request_id()}
 
+    @app.get("/movies/{movie_id}/words")
+    def movie_words(movie_id: int):
+        return {"movie_id": movie_id}
+
     return app
 
 
@@ -121,6 +126,42 @@ def test_correlation_id_does_not_leak_between_requests():
     assert first != second
     # And the context is cleared once the request is done.
     assert get_request_id() is None
+
+
+# --- access telemetry (issue #130) ---------------------------------------
+
+def test_access_log_carries_route_template_and_duration(caplog):
+    client = TestClient(_app())
+    with caplog.at_level(logging.INFO, logger="wordwise.access"):
+        client.get("/movies/42/words")
+
+    record = next(r for r in caplog.records if r.getMessage() == "request")
+    # Raw path for the concrete request, template for grouping.
+    assert record.path == "/movies/42/words"
+    assert record.route == "/movies/{movie_id}/words"
+    assert record.method == "GET"
+    assert record.status == 200
+    assert isinstance(record.duration_ms, float)
+
+
+def test_middleware_feeds_the_latency_registry():
+    ls.registry.reset()
+    client = TestClient(_app())
+    client.get("/movies/42/words")
+    client.get("/movies/7/words")
+
+    routes = {(r["method"], r["route"]): r for r in ls.registry.snapshot()["routes"]}
+    # Two different movies are one endpoint, not two.
+    assert routes[("GET", "/movies/{movie_id}/words")]["count"] == 2
+
+
+def test_unmatched_path_is_not_tracked_by_raw_path():
+    ls.registry.reset()
+    client = TestClient(_app())
+    client.get("/definitely-not-a-route")
+
+    routes = [r["route"] for r in ls.registry.snapshot()["routes"]]
+    assert routes == [ls.UNMATCHED_ROUTE]
 
 
 # --- configure_logging ----------------------------------------------------

@@ -638,6 +638,43 @@ export interface VocabCoverageReport {
   metrics: VocabCoverageMetric[];
 }
 
+/** Every /admin/health/* report returns metrics in this one shape, so the admin
+ *  app renders them all with the same card. */
+export type HealthStatus = VocabCoverageStatus;
+export type HealthMetric = VocabCoverageMetric;
+
+/** One endpoint's slice of GET /admin/health/latency. `route` is the path
+ *  template (`/movies/{movie_id}/words`), never a concrete path. */
+export interface LatencyRoute {
+  method: string;
+  route: string;
+  /** Requests seen since the API last restarted. */
+  count: number;
+  /** How many of those are still in the rolling window the percentiles use. */
+  sampled: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  max_ms: number;
+  avg_ms: number;
+  server_errors: number;
+  client_errors: number;
+  server_error_rate: number;
+  status: HealthStatus;
+}
+
+export interface LatencyReport {
+  generated_at: string;
+  overall_status: HealthStatus;
+  /** In-process window: a deploy or restart resets it. */
+  window_started_at: string;
+  window_samples_per_route: number;
+  /** True when more endpoints were seen than the registry tracks separately. */
+  routes_truncated: boolean;
+  metrics: HealthMetric[];
+  routes: LatencyRoute[];
+}
+
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   WRONG_TRANSLATION: 'Wrong translation',
   WRONG_CONTEXT: "Doesn't match context",
@@ -1242,6 +1279,18 @@ export const adminApi = {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/health/vocab-coverage → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Per-endpoint request latency: p50/p95/p99 by route template plus the 5xx
+  // rate. Read from the API's in-process window, so it covers the time since
+  // that instance last restarted — a deploy resets it.
+  latency: async (): Promise<LatencyReport> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/health/latency`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/health/latency → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
   },

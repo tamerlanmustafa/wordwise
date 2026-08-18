@@ -2,17 +2,14 @@
  * vocabCoverageContent — the plain-English layer over /admin/health/vocab-coverage.
  *
  * The API returns raw metrics with terse thresholds ("warn <90%, fail <20%").
- * This module owns (a) how those metrics are grouped into tabs, (b) a human
- * explanation of what each one actually means, and (c) the meter geometry the
- * view draws. All pure — no React, no fetching — so it's unit-testable and the
- * view stays presentation-only.
- *
- * Thresholds themselves are NOT redeclared here: warn_at/fail_at/max_value come
- * from the server so the markers can never drift from the bands the backend
- * actually classifies against.
+ * This module owns what is specific to *this* report: (a) how its metrics are
+ * grouped into tabs, (b) a human explanation of what each one means, and (c)
+ * the snapshot-relative trend line. Formatting and meter geometry are shared
+ * with the other health reports — see healthMetricContent. All pure — no React,
+ * no fetching — so it's unit-testable and the view stays presentation-only.
  */
 
-import type { VocabCoverageMetric, VocabCoverageStatus } from '../../services/api';
+import type { VocabCoverageMetric } from '../../services/api';
 
 export type CoverageCategoryId = 'coverage' | 'quality' | 'caches' | 'cost' | 'other';
 
@@ -126,63 +123,6 @@ export function groupMetricsByCategory(
     sections.push({ category: OTHER_CATEGORY, metrics: leftovers });
   }
   return sections;
-}
-
-export function statusCounts(
-  metrics: readonly VocabCoverageMetric[]
-): Record<VocabCoverageStatus, number> {
-  const counts: Record<VocabCoverageStatus, number> = { ok: 0, warn: 0, fail: 0 };
-  for (const m of metrics) counts[m.status] += 1;
-  return counts;
-}
-
-const STATUS_RANK: Record<VocabCoverageStatus, number> = { ok: 0, warn: 1, fail: 2 };
-
-/** Worst status in the list — mirrors the server's overall rollup. */
-export function worstStatus(metrics: readonly VocabCoverageMetric[]): VocabCoverageStatus {
-  let worst: VocabCoverageStatus = 'ok';
-  for (const m of metrics) {
-    if (STATUS_RANK[m.status] > STATUS_RANK[worst]) worst = m.status;
-  }
-  return worst;
-}
-
-export interface MeterGeometry {
-  /** Fill width as a 0–100 percentage of the track. */
-  fillPct: number;
-  /** Marker positions along the track, or null when that band doesn't apply. */
-  warnPct: number | null;
-  failPct: number | null;
-}
-
-const clampPct = (n: number): number => Math.max(0, Math.min(100, n));
-
-/**
- * Meter geometry for a bounded metric, or null when the metric is an unbounded
- * count (which renders as a stat tile instead).
- */
-export function meterGeometry(metric: VocabCoverageMetric): MeterGeometry | null {
-  const max = metric.max_value;
-  if (max == null || max <= 0) return null;
-  const toPct = (n: number | null): number | null =>
-    n == null ? null : clampPct((n / max) * 100);
-  return {
-    fillPct: metric.value == null ? 0 : clampPct((metric.value / max) * 100),
-    warnPct: toPct(metric.warn_at),
-    failPct: toPct(metric.fail_at),
-  };
-}
-
-/** Display string for a metric value, respecting its unit. */
-export function formatMetricValue(metric: VocabCoverageMetric): string {
-  const { value, unit } = metric;
-  if (value == null) return '—';
-  const n = Number.isInteger(value)
-    ? value.toLocaleString()
-    : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (unit === '%') return `${n}%`;
-  if (unit === '$') return `$${n}`;
-  return `${n} ${unit}`;
 }
 
 /**
