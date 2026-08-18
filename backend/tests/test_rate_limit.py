@@ -18,6 +18,7 @@ from datetime import timedelta
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from src.config import get_settings
 from src.utils.auth import create_access_token
 from src.utils.rate_limit import (
     GlobalRateLimitMiddleware,
@@ -186,37 +187,60 @@ def test_enrichment_single_sentence_is_throttled():
 # per-endpoint limit would then have throttled every logged-out user
 # collectively rather than the caller who was abusing it.
 
-def test_client_ip_prefers_the_address_the_edge_observed():
-    # One proxy in front: the edge appends what it saw, so that is the right
-    # value and it is the rightmost one.
-    assert _client_ip("203.0.113.9", peer="10.0.0.1") == "203.0.113.9"
+def test_client_ip_counts_hops_from_the_right():
+    # client -> edge -> internal -> app leaves "<client>, <edge>" in the header
+    # and the internal hop as the socket peer. With two appending proxies in
+    # front, the caller is two entries from the right.
+    xff = "203.0.113.9, 152.233.47.65"
+    assert _client_ip(xff, peer="100.64.0.21", trusted_hops=2) == "203.0.113.9"
 
 
-def test_client_ip_ignores_a_spoofed_leading_entry():
-    # A caller sending its own X-Forwarded-For gets its value kept on the LEFT
-    # once the edge appends the address it actually saw. Trusting the leftmost
-    # would let anyone rotate a header to get unlimited budget.
-    assert _client_ip("1.2.3.4, 203.0.113.9", peer="10.0.0.1") == "203.0.113.9"
+def test_client_ip_ignores_a_spoofed_prefix():
+    # A caller who sends their own header only PREPENDS to it. Counting from
+    # the right still lands on the address a proxy actually observed, so the
+    # forged entry buys nothing.
+    xff = "1.2.3.4, 203.0.113.9, 152.233.47.65"
+    assert _client_ip(xff, peer="100.64.0.21", trusted_hops=2) == "203.0.113.9"
+
+
+def test_client_ip_taking_the_rightmost_entry_returns_the_proxy_not_the_caller():
+    # Why trusted_hops exists. Measured on Railway 2026-08-17: hops=1 resolved
+    # to a rotating pool of five edge addresses instead of the caller, so every
+    # request landed in a different bucket and no limit ever bound.
+    xff = "203.0.113.9, 152.233.47.65"
+    assert _client_ip(xff, peer="100.64.0.21", trusted_hops=1) == "152.233.47.65"
+
+
+def test_client_ip_ignores_the_header_when_no_proxies_are_trusted():
+    # The default. Fails CLOSED: a misconfigured deployment shares buckets
+    # rather than letting every caller mint their own identity via a header.
+    xff = "1.2.3.4"
+    assert _client_ip(xff, peer="198.51.100.7", trusted_hops=0) == "198.51.100.7"
+
+
+def test_client_ip_handles_a_shorter_chain_than_configured():
+    # A request that skipped a hop must not fall off the front of the list.
+    assert _client_ip("203.0.113.9", peer="10.0.0.1", trusted_hops=2) == "203.0.113.9"
 
 
 def test_client_ip_falls_back_to_the_socket_peer_without_the_header():
-    # Local runs and direct connections behave exactly as they did before.
-    assert _client_ip(None, peer="127.0.0.1") == "127.0.0.1"
-    assert _client_ip("", peer="127.0.0.1") == "127.0.0.1"
-    assert _client_ip("  ,  ", peer="127.0.0.1") == "127.0.0.1"
+    assert _client_ip(None, peer="127.0.0.1", trusted_hops=2) == "127.0.0.1"
+    assert _client_ip("", peer="127.0.0.1", trusted_hops=2) == "127.0.0.1"
+    assert _client_ip("  ,  ", peer="127.0.0.1", trusted_hops=2) == "127.0.0.1"
 
 
 def test_client_ip_reports_unknown_when_there_is_nothing_to_key_on():
     assert _client_ip(None, peer=None) == "unknown"
 
 
-def test_dependency_gives_separate_budgets_to_callers_behind_one_proxy():
-    """The regression guard: two users arriving through the same edge proxy
+def test_dependency_gives_separate_budgets_to_callers_behind_one_proxy(monkeypatch):
+    """The regression guard: two users arriving through the same proxy chain
     must not share a bucket. TestClient reports the same socket peer for both,
     so only the forwarded address can tell them apart."""
+    monkeypatch.setattr(get_settings(), "trusted_proxy_hops", 2)
     client = TestClient(_dependency_app(limit=2))
-    a = {"X-Forwarded-For": "203.0.113.9"}
-    b = {"X-Forwarded-For": "198.51.100.7"}
+    a = {"X-Forwarded-For": "203.0.113.9, 152.233.47.65"}
+    b = {"X-Forwarded-For": "198.51.100.7, 152.233.47.65"}
 
     assert client.get("/ping", headers=a).status_code == 200
     assert client.get("/ping", headers=a).status_code == 200
@@ -227,12 +251,15 @@ def test_dependency_gives_separate_budgets_to_callers_behind_one_proxy():
     assert client.get("/ping", headers=b).status_code == 200
 
 
-def test_global_middleware_also_keys_on_the_forwarded_address():
+def test_global_middleware_also_keys_on_the_forwarded_address(monkeypatch):
+    monkeypatch.setattr(get_settings(), "trusted_proxy_hops", 2)
     client = TestClient(_global_app(limit=1))
-    assert client.get("/ping", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 200
-    assert client.get("/ping", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 429
-    # A different caller through the same proxy still has its full budget.
-    assert client.get("/ping", headers={"X-Forwarded-For": "198.51.100.7"}).status_code == 200
+    a = {"X-Forwarded-For": "203.0.113.9, 152.233.47.65"}
+    b = {"X-Forwarded-For": "198.51.100.7, 152.233.47.65"}
+    assert client.get("/ping", headers=a).status_code == 200
+    assert client.get("/ping", headers=a).status_code == 429
+    # A different caller through the same chain still has its full budget.
+    assert client.get("/ping", headers=b).status_code == 200
 
 
 # --- unauthenticated, CPU-heavy endpoints --------------------------------

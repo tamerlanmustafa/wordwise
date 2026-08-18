@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 600
 
+    # How many proxies sit between the caller and this process, each appending
+    # to X-Forwarded-For. The caller's address is that many entries from the
+    # RIGHT of the header; counting from the right is what stops a caller
+    # forging their own identity by prepending to it.
+    #
+    # 0 (the default) ignores the header and keys on the socket peer — right
+    # for a directly-exposed process, and a safe default because it fails
+    # closed: callers share a bucket rather than each minting their own.
+    # Railway fronts the app with two appending hops (edge + internal router),
+    # so prod sets TRUSTED_PROXY_HOPS=2. Verify before changing: a value that
+    # is too high hands out spoofable identities.
+    trusted_proxy_hops: int = 0
+
     # Sign in with Apple: identity tokens are verified against Apple's JWKS
     # with our bundle id as the required audience (utils/apple_auth.py).
     apple_bundle_id: str = "com.wordwise.mobile"

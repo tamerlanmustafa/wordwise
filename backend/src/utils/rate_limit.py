@@ -22,6 +22,7 @@ from typing import Deque, Dict
 
 from fastapi import Depends, HTTPException, Request, status
 
+from ..config import get_settings
 from ..utils.auth import verify_token
 
 
@@ -69,29 +70,44 @@ def _user_key_from_token(token: str | None) -> str | None:
     return None
 
 
-def _client_ip(forwarded_for: str | None, peer: str | None) -> str:
-    """Resolve the caller's IP from behind the platform edge proxy.
+def _client_ip(
+    forwarded_for: str | None,
+    peer: str | None,
+    trusted_hops: int = 0,
+) -> str:
+    """Resolve the caller's IP from behind the platform's proxies.
 
-    In prod the API sits behind Railway's proxy, so the socket peer is the
-    proxy for *every* request — keying on it alone puts all unauthenticated
-    callers in one shared bucket. uvicorn is started without `--proxy-headers`
-    (and its default `forwarded_allow_ips` is 127.0.0.1, which the edge never
-    matches), so the header has to be read here.
+    uvicorn runs without `--proxy-headers` (its default `forwarded_allow_ips`
+    is 127.0.0.1, which the edge never matches), so the socket peer is a proxy
+    on every request and the header has to be read here.
 
-    The RIGHTMOST `X-Forwarded-For` entry is the address the edge itself
-    observed. The leftmost is whatever the caller sent and is trivially
-    spoofed, so it must never be trusted: a client sending
-    `X-Forwarded-For: 1.2.3.4` produces `1.2.3.4, <real ip>` once the edge
-    appends, and only the right-hand value is real. This holds for exactly one
-    trusted proxy in front, which is the deployment (docker/Dockerfile.backend).
+    Each proxy in the chain APPENDS the address it saw, so with `trusted_hops`
+    proxies in front, the caller sits at index `-trusted_hops`:
 
-    Falls back to the socket peer when there is no header — local runs, tests,
-    and any direct connection behave exactly as before.
+        client -> edge -> internal -> app
+        X-Forwarded-For: "<client>, <edge>"      peer: <internal>
+
+    Counting from the RIGHT is what makes this safe. A caller who sends their
+    own header only prepends to it — `"<spoof>, <client>, <edge>"` — so a
+    fixed offset from the right still lands on the address a proxy actually
+    observed. Counting from the left would hand every caller a free identity.
+
+    Measured on Railway (2026-08-17): taking the rightmost entry yielded a
+    rotating pool of five edge addresses (152.233.47.65-69) rather than the
+    caller, which is why `trusted_hops` exists rather than a hardcoded index.
+
+    `trusted_hops=0` disables header parsing entirely and uses the socket
+    peer — the correct setting for a directly-exposed deployment, and the
+    default so that a misconfigured environment fails closed (everyone shares
+    a bucket) rather than open (everyone gets a spoofable identity).
     """
-    if forwarded_for:
+    if forwarded_for and trusted_hops > 0:
         hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
         if hops:
-            return hops[-1]
+            # Fewer entries than expected means the request did not traverse
+            # the full chain; the leftmost is then the closest to the client.
+            index = max(0, len(hops) - trusted_hops)
+            return hops[index]
     return peer or "unknown"
 
 
@@ -104,6 +120,7 @@ def _client_key(request: Request, token: str | None) -> str:
     ip = _client_ip(
         request.headers.get("X-Forwarded-For"),
         client.host if client else None,
+        get_settings().trusted_proxy_hops,
     )
     return f"ip:{ip}"
 
@@ -171,6 +188,7 @@ def client_ip_from_scope(scope) -> str:
     return _client_ip(
         _forwarded_for_from_scope(scope),
         client[0] if client else None,
+        get_settings().trusted_proxy_hops,
     )
 
 
