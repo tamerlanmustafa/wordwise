@@ -366,7 +366,9 @@ async def _pad_with_fresh_reel_lemmas(
         return []
 
     band = _band_levels_around(user_level)
-    band_placeholders = ",".join(f"${i + 4}" for i in range(len(band)))
+    # Cast the parameters to the enum, never the column — see
+    # `_eligible_lemma_candidates` for why `cefr_level::text` is a trap.
+    band_placeholders = ",".join(f"${i + 4}::proficiencylevel" for i in range(len(band)))
 
     created_ids: list[int] = []
     for movie_id in ordered_movie_ids:
@@ -381,7 +383,7 @@ async def _pad_with_fresh_reel_lemmas(
             FROM movie_lemma_mappings mlm
             JOIN lemmas l ON l.id = mlm.lemma_id
             WHERE mlm.movie_id = $1
-              AND l.cefr_level::text IN ({band_placeholders})
+              AND l.cefr_level IN ({band_placeholders})
               AND NOT EXISTS (
                   SELECT 1 FROM user_words uw
                   WHERE uw.user_id = $2
@@ -1052,6 +1054,14 @@ async def _eligible_lemma_candidates(
     """
     # `levels` is always drawn from _CEFR_ORDER by the callers, never from
     # raw user input, so inlining it is safe. The user id is parameterised.
+    #
+    # Compare against `cefr_level` bare, NOT `cefr_level::text`. The cast turns
+    # a column reference into an expression, which costs twice: the planner has
+    # no statistics for it and falls back to a guess (this filter estimated 425
+    # rows against an actual 6,448), and the b-tree index on the column can no
+    # longer supply an Index Cond, so a matching scan reads the whole index and
+    # filters. Every level string here is a valid `proficiencylevel` label, so
+    # the bare comparison is total.
     levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
     exclude_sql = ""
     args: list = []
@@ -1073,7 +1083,7 @@ async def _eligible_lemma_candidates(
             l.cefr_level::text AS cefr_level,
             l.frequency_rank
         FROM lemmas l
-        WHERE l.cefr_level::text IN ({levels_sql})
+        WHERE l.cefr_level IN ({levels_sql})
           AND l.lemma ~ '^[a-zA-Z]+$'
           AND length(l.lemma) >= 4
           AND NOT EXISTS (

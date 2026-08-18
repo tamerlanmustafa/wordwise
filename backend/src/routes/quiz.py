@@ -830,6 +830,10 @@ async def _get_journey_words_at_level(
     Deduplication is done across all movies: the same word can be
     classified in many scripts, so we pick the single occurrence with
     the best (lowest) frequencyRank and sort by that.
+
+    `level` is cast to the enum rather than `cefr_level` being cast to text:
+    on this table (4.8M rows) the text cast cost an Index Cond, so the scan
+    read the whole 5,512-buffer index instead of seeking 414 buffers.
     """
     rows = await db.query_raw(
         """
@@ -838,7 +842,7 @@ async def _get_journey_words_at_level(
             SELECT LOWER(word) AS word,
                    MIN(frequency_rank) AS best_rank
             FROM word_classifications
-            WHERE cefr_level::text = $1
+            WHERE cefr_level = $1::proficiencylevel
               AND word IS NOT NULL
               AND TRIM(word) <> ''
             GROUP BY LOWER(word)
@@ -907,7 +911,9 @@ async def _movie_specific_words(
     # 2. Movie-specific unknowns at level ±1. Excludes lemmas the user
     #    already has in user_words (whether learned or in SRS queue) so
     #    we don't duplicate the SRS slice.
-    band_placeholders = ",".join(f"${i + 4}" for i in range(len(band)))
+    #    Cast the parameters to the enum, never the column — see
+    #    `_get_journey_words_at_level`.
+    band_placeholders = ",".join(f"${i + 4}::proficiencylevel" for i in range(len(band)))
     movie_rows = await db.query_raw(
         f"""
         SELECT l.lemma
@@ -915,7 +921,7 @@ async def _movie_specific_words(
         JOIN movies m  ON m.id = mlm.movie_id
         JOIN lemmas l  ON l.id = mlm.lemma_id
         WHERE m.tmdb_id = $1
-          AND l.cefr_level::text IN ({band_placeholders})
+          AND l.cefr_level IN ({band_placeholders})
           AND NOT EXISTS (
               SELECT 1 FROM user_words uw
               WHERE uw.user_id = $2
