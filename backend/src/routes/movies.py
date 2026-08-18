@@ -11,6 +11,7 @@ from ..middleware.auth import get_current_active_user, get_current_user_optional
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
 from ..services.profanity_filter import is_profane_entry
+from ..utils.nlp_executor import NLPOverloaded, nlp_slot
 from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,17 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 # /vocabulary/preview takes no auth (it is the logged-out teaser), and each
 # call parses a whole script: ~12s of CPU on the single NLP worker thread and
 # ~600 MB of transient spaCy Doc. #117 stopped that blocking the event loop,
-# but nothing stopped one caller from queueing parses indefinitely. Five per
-# minute is well above what the one worker thread can physically serve, so it
-# bites abuse and not browsing.
+# but nothing stopped one caller from queueing parses indefinitely.
+#
+# Two defences, because they fail differently:
+#  - a per-caller throttle, which only bites when the caller can be identified
+#    (reliable for logged-in users, not for anonymous ones behind the edge
+#    proxy — see rate_limit._client_ip);
+#  - a cap on the NLP queue itself, which needs no notion of who is calling.
+# At ~12s a parse, four queued already means the last one waits ~48s; past
+# that, shedding beats queueing.
 _vocab_preview_throttle = rate_limit(5, 60.0, scope="movie-vocab-preview")
+MAX_PENDING_PREVIEW_PARSES = 4
 
 
 async def _get_hidden_word_set(db: Prisma, forms: Iterable[Optional[str]]) -> set:
@@ -704,9 +712,14 @@ async def get_vocabulary_preview(
     from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 
     idioms = []
+    idioms_unavailable = False
     if script.cleanedScriptText:
         try:
-            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
+            # Everything above this point is DB work; the parse below is the
+            # only expensive part. Under load, shed it and return the word
+            # list without idioms — a fast partial answer beats a 90s wait.
+            with nlp_slot(MAX_PENDING_PREVIEW_PARSES):
+                idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
             idioms = [
                 {
                     "phrase": phrase,
@@ -716,12 +729,18 @@ async def get_vocabulary_preview(
                 }
                 for phrase, expr_type, level in idiom_results
             ]
+        except NLPOverloaded:
+            logger.warning(
+                "movie %s: NLP queue full, serving preview without idioms", movie_id
+            )
+            idioms_unavailable = True
         except Exception:
             logger.exception("Error detecting idioms")
             idioms = []
 
     return {
         "movie_id": movie_id,
+        "idioms_unavailable": idioms_unavailable,
         "total_words": len(all_words),
         "unique_words": len(all_words),
         "level_distribution": level_distribution,

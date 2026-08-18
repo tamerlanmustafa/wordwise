@@ -237,3 +237,85 @@ def test_async_wrappers_are_coroutines():
         lemmatize_script_async,
     ):
         assert asyncio.iscoroutinefunction(fn), f"{fn.__name__} must be awaitable"
+
+
+# ---------------------------------------------------------------------------
+# 7. Queue cap — bounding the resource without needing to know the caller
+# ---------------------------------------------------------------------------
+#
+# The per-caller throttle on /vocabulary/preview only bites when the caller can
+# be identified, which behind the platform edge proxy is unreliable for
+# anonymous traffic. The cap below needs no notion of who is calling: it
+# bounds the one scarce thing, the single NLP worker.
+
+def test_slot_admits_up_to_the_cap():
+    from src.utils.nlp_executor import nlp_queue_depth, nlp_slot
+
+    assert nlp_queue_depth() == 0
+    with nlp_slot(2):
+        assert nlp_queue_depth() == 1
+        with nlp_slot(2):
+            assert nlp_queue_depth() == 2
+    assert nlp_queue_depth() == 0
+
+
+def test_slot_sheds_past_the_cap():
+    from src.utils.nlp_executor import NLPOverloaded, nlp_slot
+
+    with nlp_slot(1):
+        with pytest.raises(NLPOverloaded):
+            with nlp_slot(1):
+                pass
+
+
+def test_slot_is_released_even_when_the_parse_raises():
+    from src.utils.nlp_executor import nlp_queue_depth, nlp_slot
+
+    with pytest.raises(ValueError):
+        with nlp_slot(1):
+            raise ValueError("parse blew up")
+
+    assert nlp_queue_depth() == 0
+    # The freed slot is immediately reusable.
+    with nlp_slot(1):
+        assert nlp_queue_depth() == 1
+
+
+@pytest.mark.asyncio
+async def test_cap_sheds_a_burst_instead_of_queueing_it():
+    """The behaviour that matters: with a cap of 2, a burst of 6 gets 2 parses
+    and 4 immediate rejections — rather than a sixth caller waiting out five
+    parses ahead of it."""
+    from src.utils.nlp_executor import NLPOverloaded, nlp_slot, run_nlp
+
+    admitted = 0
+    shed = 0
+
+    async def one_request():
+        nonlocal admitted, shed
+        try:
+            with nlp_slot(2):
+                await run_nlp(time.sleep, 0.05)
+                admitted += 1
+        except NLPOverloaded:
+            shed += 1
+
+    await asyncio.gather(*(one_request() for _ in range(6)))
+
+    assert admitted == 2
+    assert shed == 4
+
+
+def test_preview_route_caps_the_queue_and_degrades():
+    """The cap must be wired into the public endpoint, and a shed parse must
+    return the word list without idioms rather than failing the request."""
+    import inspect
+
+    from src.routes import movies
+
+    assert movies.MAX_PENDING_PREVIEW_PARSES > 0
+    src = inspect.getsource(movies.get_vocabulary_preview)
+    assert "nlp_slot(MAX_PENDING_PREVIEW_PARSES)" in src
+    assert "except NLPOverloaded" in src
+    # Degrades rather than 503s: the DB-derived word list is still returned.
+    assert "idioms_unavailable" in src

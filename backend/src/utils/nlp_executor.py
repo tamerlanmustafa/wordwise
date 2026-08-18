@@ -26,15 +26,57 @@ everything else slow. Precomputing at ingestion is the real fix (issue #106).
 from __future__ import annotations
 
 import asyncio
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from functools import partial
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Iterator, TypeVar
 
 T = TypeVar("T")
 
 # Module-level singleton: one thread for the whole process, created eagerly so
 # every caller shares the same queue.
 _nlp_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nlp")
+
+# How many parses are queued or running right now. One worker means the queue
+# is the only thing that grows under load, and it grows at ~12s per entry.
+_pending = 0
+_pending_lock = threading.Lock()
+
+
+class NLPOverloaded(RuntimeError):
+    """The NLP worker queue is already at capacity — shed this parse."""
+
+
+@contextmanager
+def nlp_slot(max_pending: int) -> Iterator[None]:
+    """Reserve a place in the NLP worker queue, or raise `NLPOverloaded`.
+
+    Rate limiting by client identity cannot protect this queue on a platform
+    where the caller's address is not reliably visible (see
+    `rate_limit._client_ip`). This bounds the scarce resource directly instead,
+    which needs no notion of who is calling: past `max_pending`, callers are
+    shed immediately rather than joining a queue that already guarantees them
+    a minute-long wait.
+    """
+    global _pending
+    with _pending_lock:
+        if _pending >= max_pending:
+            raise NLPOverloaded(
+                f"NLP queue at capacity ({_pending}/{max_pending})"
+            )
+        _pending += 1
+    try:
+        yield
+    finally:
+        with _pending_lock:
+            _pending -= 1
+
+
+def nlp_queue_depth() -> int:
+    """Parses currently queued or running. Exposed for tests and diagnostics."""
+    with _pending_lock:
+        return _pending
 
 
 async def run_nlp(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:

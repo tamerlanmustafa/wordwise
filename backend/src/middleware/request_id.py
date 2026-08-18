@@ -20,6 +20,7 @@ import time
 import uuid
 
 from ..logging_config import request_id_ctx
+from ..utils.rate_limit import client_ip_from_scope
 
 _DEFAULT_HEADER = "X-Request-ID"
 # Accept only ids that are safe to log and to write back into a header
@@ -85,6 +86,9 @@ class RequestIDMiddleware:
                     "path": scope.get("path"),
                     "status": status_holder["status"],
                     "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                    # Whether this is stable per caller or per edge-proxy node
+                    # decides whether IP-keyed rate limiting can work here.
+                    "client_ip": client_ip_from_scope(scope),
                 },
             )
             request_id_ctx.reset(token)

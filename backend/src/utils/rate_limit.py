@@ -159,17 +159,27 @@ def _forwarded_for_from_scope(scope) -> str | None:
     return None
 
 
+def client_ip_from_scope(scope) -> str:
+    """The caller's IP as this process can best determine it, from an ASGI scope.
+
+    Public so the access log can record it: whether this value is stable per
+    caller (rather than per edge-proxy node) is exactly what decides if
+    IP-keyed rate limiting works on this platform, and the log is the only
+    place that question can be answered against real traffic.
+    """
+    client = scope.get("client")
+    return _client_ip(
+        _forwarded_for_from_scope(scope),
+        client[0] if client else None,
+    )
+
+
 def _client_key_from_scope(scope, token: str | None) -> str:
     """Scope-based twin of `_client_key` for the ASGI middleware."""
     user = _user_key_from_token(token)
     if user:
         return user
-    client = scope.get("client")
-    ip = _client_ip(
-        _forwarded_for_from_scope(scope),
-        client[0] if client else None,
-    )
-    return f"ip:{ip}"
+    return f"ip:{client_ip_from_scope(scope)}"
 
 
 class GlobalRateLimitMiddleware:
