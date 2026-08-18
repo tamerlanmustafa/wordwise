@@ -8,6 +8,7 @@ from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.cefr_registry import apply_registry_levels
 from src.services.difficulty_scorer import compute_difficulty
+from src.services.event_loop_lag import compute_event_loop_report
 from src.services.latency_stats import compute_latency_report
 from src.services.vocab_coverage import compute_vocab_coverage
 from src.utils.rate_limit import rate_limit
@@ -24,6 +25,8 @@ _vocab_health_throttle = rate_limit(30, 60.0, scope="admin-vocab-health")
 # The latency read touches no database, but it does sort every route's sample
 # window under a lock — its own budget so it can't starve the vocab read.
 _latency_health_throttle = rate_limit(30, 60.0, scope="admin-latency-health")
+# Same shape as the latency read: no database, one sort of the probe window.
+_event_loop_health_throttle = rate_limit(30, 60.0, scope="admin-event-loop-health")
 
 
 @router.get("/stats")
@@ -109,6 +112,27 @@ async def latency_health(
     are the durable record. No database access, so this stays honest even when
     the thing that is slow *is* Postgres."""
     return compute_latency_report()
+
+
+@router.get("/health/event-loop")
+async def event_loop_health(
+    admin_user=Depends(get_admin_user),
+    _: None = Depends(_event_loop_health_throttle),
+):
+    """Event-loop lag (issue #146): how late a fixed-interval probe comes back,
+    which is exactly how long the API spent blocked and unable to serve anyone.
+
+    The API is one uvicorn process by design, so a synchronous call inside an
+    `async def` stalls every concurrent request. That bug class is invisible to
+    ruff, to a single-user test and to reading one function in isolation — this
+    is the runtime layer that catches it.
+
+    Known limitation: lag says *that* the loop stalled and *when*, never *which
+    handler did it* — every coroutine is stalled equally. Attribution means
+    taking a stall's timestamp to /admin/health/latency and the access logs and
+    looking for the #117 signature: one endpoint slow **and** every unrelated
+    endpoint slow in the same window."""
+    return compute_event_loop_report()
 
 
 @router.get("/movies/processed")

@@ -31,7 +31,15 @@ from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Optional
 
-from .health_metrics import FAIL, OK, STATUS_RANK, WARN, metric, overall_status, status_max
+from .health_metrics import (
+    OK,
+    STATUS_RANK,
+    WARN,
+    capped_by_sample_size,
+    metric,
+    overall_status,
+    status_max,
+)
 
 # Recent samples kept per route. 500 × ~200 tracked routes is a few MB worst
 # case, and in practice only the handful of routes taking real traffic fill up.
@@ -196,14 +204,12 @@ def record_request(method: str, route: Optional[str], status_code: int, duration
 # ── report assembly (pure) ──────────────────────────────────────────────────
 
 def _capped_by_sample_size(status: str, sampled: int) -> str:
-    """Downgrade a FAIL to a WARN when there is too little to judge on.
+    """This report's sample-size floor, over the shared rule in health_metrics.
 
     Percentiles over a handful of requests swing wildly, and a single
     cold-start request should not paint the whole dashboard red.
     """
-    if status == FAIL and sampled < MIN_SAMPLES_FOR_FAIL:
-        return WARN
-    return status
+    return capped_by_sample_size(status, sampled, MIN_SAMPLES_FOR_FAIL)
 
 
 def route_status(route: dict[str, Any]) -> str:

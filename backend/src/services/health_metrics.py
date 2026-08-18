@@ -38,6 +38,19 @@ def status_max(value: float, warn: Optional[float], fail: Optional[float]) -> st
     return OK
 
 
+def capped_by_sample_size(status: str, sampled: int, minimum: int) -> str:
+    """Downgrade a FAIL to a WARN when there is too little to judge on.
+
+    Percentiles over a handful of observations swing wildly, and one cold-start
+    request (or one probe taken during boot) should not paint a dashboard red.
+    Each report passes its own `minimum` — what counts as "enough" differs by
+    orders of magnitude between a per-endpoint sample and a 20-per-second probe.
+    """
+    if status == FAIL and sampled < minimum:
+        return WARN
+    return status
+
+
 def overall_status(metrics: list[dict]) -> str:
     """The worst status across a report — what the dashboard card shows."""
     worst = OK

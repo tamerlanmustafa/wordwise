@@ -680,6 +680,28 @@ export interface LatencyReport {
   routes: LatencyRoute[];
 }
 
+/** One stall from GET /admin/health/event-loop: a moment when the API was
+ *  busy holding its single event loop and could serve nobody. */
+export interface EventLoopStall {
+  /** ISO timestamp — the join key against the latency report and the logs. */
+  at: string;
+  lag_ms: number;
+  severity: 'stall' | 'severe';
+}
+
+export interface EventLoopReport {
+  generated_at: string;
+  overall_status: HealthStatus;
+  /** In-process window: a deploy or restart resets it. */
+  window_started_at: string;
+  probe_interval_ms: number;
+  stall_threshold_ms: number;
+  severe_threshold_ms: number;
+  metrics: HealthMetric[];
+  /** Most recent stalls, newest first. Capped server-side. */
+  recent_stalls: EventLoopStall[];
+}
+
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   WRONG_TRANSLATION: 'Wrong translation',
   WRONG_CONTEXT: "Doesn't match context",
@@ -1296,6 +1318,18 @@ export const adminApi = {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/health/latency → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Event-loop lag: how late a fixed-interval probe comes back, which is
+  // exactly how long the API spent blocked and unable to answer anyone. Same
+  // in-process window as the latency report — a deploy resets it.
+  eventLoop: async (): Promise<EventLoopReport> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/health/event-loop`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/health/event-loop → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
   },

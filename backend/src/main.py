@@ -16,6 +16,7 @@ from .middleware import RequestIDMiddleware
 from .utils.rate_limit import GlobalRateLimitMiddleware
 from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router
 from .services import fetch_movie_script
+from .services.event_loop_lag import start_watchdog
 import asyncio
 import logging
 from pathlib import Path
@@ -67,9 +68,17 @@ async def lifespan(app: FastAPI):
     # Startup
     await connect_db()
     warmup = asyncio.create_task(_warm_nlp_model())
+    # The event-loop lag watchdog (issue #146). Blocking work inside an
+    # `async def` is invisible to the linter, to a single-user test and to code
+    # review; this probe is the layer that notices it at runtime, by measuring
+    # how late its own sleep comes back. Started here so it covers the whole
+    # serving lifetime, including the warmup above.
+    watchdog = start_watchdog() if settings.event_loop_watchdog_enabled else None
     yield
     # Shutdown
     warmup.cancel()
+    if watchdog is not None:
+        watchdog.cancel()
     await disconnect_db()
 
 app = FastAPI(

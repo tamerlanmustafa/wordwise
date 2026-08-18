@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 600
 
+    # Event-loop lag watchdog (issue #146): a background probe that measures
+    # how late `asyncio.sleep` comes back, which is exactly how long the loop
+    # spent blocked and unavailable to every other request. Feeds
+    # GET /admin/health/event-loop and logs a WARNING per stall. Costs ~20
+    # no-op wakeups a second; the switch exists so it can be turned off
+    # without a code change, not because it is expected to be.
+    event_loop_watchdog_enabled: bool = True
+
     # How many proxies sit between the caller and this process, each appending
     # to X-Forwarded-For. The caller's address is that many entries from the
     # RIGHT of the header; counting from the right is what stops a caller

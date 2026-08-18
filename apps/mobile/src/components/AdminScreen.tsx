@@ -19,6 +19,7 @@ import {
   REPORT_STATUS_LABELS,
   type AdminStats,
   type DeadJob,
+  type EventLoopReport,
   type ProcessedMovie,
   type ReportStats,
   type LatencyReport,
@@ -32,6 +33,7 @@ import {
 } from '../stores/entitlementsStore';
 import type { Entitlements } from '../types';
 import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
+import { EventLoopView } from './admin/EventLoopView';
 import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
@@ -94,7 +96,7 @@ export interface AdminScreenProps {
   backLabel?: string;
 }
 
-type AdminView = 'main' | 'dead' | 'processed' | 'coverage' | 'latency';
+type AdminView = 'main' | 'dead' | 'processed' | 'coverage' | 'latency' | 'eventLoop';
 
 export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [view, setView] = useState<AdminView>('main');
@@ -104,6 +106,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [latency, setLatency] = useState<LatencyReport | null>(null);
   const [latencyLoading, setLatencyLoading] = useState(false);
+  const [eventLoop, setEventLoop] = useState<EventLoopReport | null>(null);
+  const [eventLoopLoading, setEventLoopLoading] = useState(false);
   const [processedMovies, setProcessedMovies] = useState<ProcessedMovie[] | null>(null);
   const [processedLoading, setProcessedLoading] = useState(false);
   const [processedFilter, setProcessedFilter] = useState<string | null>(null);
@@ -347,6 +351,23 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     if (latency === null) loadLatency();
   }, [latency, loadLatency]);
 
+  const loadEventLoop = useCallback(async () => {
+    setEventLoopLoading(true);
+    try {
+      const report = await adminApi.eventLoop();
+      setEventLoop(report);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load event-loop health');
+    } finally {
+      setEventLoopLoading(false);
+    }
+  }, []);
+
+  const openEventLoop = useCallback(() => {
+    setView('eventLoop');
+    if (eventLoop === null) loadEventLoop();
+  }, [eventLoop, loadEventLoop]);
+
   const tabCounts = useMemo(
     () => ({
       ALL: reportStats?.total ?? 0,
@@ -584,6 +605,47 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     );
   }
 
+  if (view === 'eventLoop') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setView('main')}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backText}>← Admin</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Event loop</Text>
+          <TouchableOpacity onPress={loadEventLoop} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        </View>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)}>
+              <Text style={styles.errorBannerClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {eventLoopLoading && eventLoop === null ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : !eventLoop ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No data</Text>
+          </View>
+        ) : (
+          <EventLoopView report={eventLoop} />
+        )}
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -626,8 +688,10 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           />
         </View>
 
-        {/* Health surfaces — each opens its own /admin/health/* view. Both show
-            their overall status once loaded at least once this session. */}
+        {/* Health surfaces — each opens its own /admin/health/* view. All show
+            their overall status once loaded at least once this session.
+            Latency and Event loop are a pair: latency says which endpoint is
+            slow, the event loop says whether one of them is freezing the rest. */}
         <Text style={styles.sectionLabel}>Health</Text>
         <View style={styles.statsGrid}>
           <StatCard
@@ -643,6 +707,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             sublabel={latency ? undefined : 'how fast the app’s requests answer'}
             color={latency ? STATUS_TOKENS[latency.overall_status].mark : COLORS.primary}
             onPress={openLatency}
+          />
+          <StatCard
+            label="Event loop"
+            value={eventLoop ? COVERAGE_STATUS_LABEL[eventLoop.overall_status] : 'View →'}
+            sublabel={eventLoop ? undefined : 'whether one request freezes the rest'}
+            color={eventLoop ? STATUS_TOKENS[eventLoop.overall_status].mark : COLORS.primary}
+            onPress={openEventLoop}
           />
         </View>
 
