@@ -163,11 +163,11 @@ def test_fast_api_reports_ok(reg):
 
 
 def test_slow_route_warns_then_fails(reg):
-    _fill(reg, "GET", "/books/{book_id}/vocabulary", [800.0] * 50)
+    _fill(reg, "GET", "/movies/{movie_id}/vocabulary/full", [800.0] * 50)
     assert _report(reg)["routes"][0]["status"] == ls.WARN
 
     reg.reset()
-    _fill(reg, "GET", "/books/{book_id}/vocabulary", [21000.0] * 50)
+    _fill(reg, "GET", "/movies/{movie_id}/vocabulary/full", [21000.0] * 50)
     assert _report(reg)["routes"][0]["status"] == "fail"
 
 
@@ -191,20 +191,20 @@ def test_server_errors_fail_even_when_fast(reg):
 
 def test_slowest_route_is_named(reg):
     _fill(reg, "GET", "/health", [5.0] * 100)
-    _fill(reg, "GET", "/books/{book_id}/vocabulary", [1200.0] * 30)
+    _fill(reg, "GET", "/movies/{movie_id}/vocabulary/full", [1200.0] * 30)
     slowest = _metrics(_report(reg))["slowest_route_p95_ms"]
 
     assert slowest["value"] == 1200.0
-    assert "/books/{book_id}/vocabulary" in slowest["detail"]
+    assert "/movies/{movie_id}/vocabulary/full" in slowest["detail"]
 
 
 def test_routes_are_sorted_slowest_first(reg):
     _fill(reg, "GET", "/health", [5.0] * 30)
     _fill(reg, "GET", "/srs/feed", [300.0] * 30)
-    _fill(reg, "GET", "/books/{book_id}/vocabulary", [1200.0] * 30)
+    _fill(reg, "GET", "/movies/{movie_id}/vocabulary/full", [1200.0] * 30)
 
     assert [r["route"] for r in _report(reg)["routes"]] == [
-        "/books/{book_id}/vocabulary",
+        "/movies/{movie_id}/vocabulary/full",
         "/srs/feed",
         "/health",
     ]
@@ -213,7 +213,7 @@ def test_routes_are_sorted_slowest_first(reg):
 def test_over_budget_count_tracks_the_whole_surface(reg):
     _fill(reg, "GET", "/health", [5.0] * 30)
     _fill(reg, "GET", "/srs/feed", [900.0] * 30)
-    _fill(reg, "GET", "/books/{book_id}/vocabulary", [1200.0] * 30)
+    _fill(reg, "GET", "/movies/{movie_id}/vocabulary/full", [1200.0] * 30)
 
     m = _metrics(_report(reg))["routes_over_budget"]
     assert m["value"] == 2

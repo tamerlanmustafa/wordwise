@@ -55,12 +55,12 @@ describe('sortRoutes', () => {
   const routes = [
     route({ route: '/health', p95_ms: 5, count: 9000, server_error_rate: 0 }),
     route({ route: '/srs/feed', p95_ms: 300, count: 500, server_error_rate: 2 }),
-    route({ route: '/books/{book_id}/vocabulary', p95_ms: 21000, count: 40, server_error_rate: 0 }),
+    route({ route: '/movies/{movie_id}/vocabulary/full', p95_ms: 21000, count: 40, server_error_rate: 0 }),
   ];
 
   it('ranks by p95 by default', () => {
     expect(sortRoutes(routes, 'p95').map((r) => r.route)).toEqual([
-      '/books/{book_id}/vocabulary',
+      '/movies/{movie_id}/vocabulary/full',
       '/srs/feed',
       '/health',
     ]);
