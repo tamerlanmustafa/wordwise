@@ -31,7 +31,7 @@ from typing import List
 
 from prisma import Prisma
 
-from src.services.script_idioms import compute_idioms, store_script_idioms
+from src.services.script_idioms import compute_idioms, spacy_available, store_script_idioms
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,6 +70,17 @@ async def main():
     parser.add_argument("--movie", type=int, default=None, help="Process a single movie id")
     parser.add_argument("--dry-run", action="store_true", help="Report what would be parsed, write nothing")
     args = parser.parse_args()
+
+    # Refuse to run without the model. `detect_phrasal_verbs_and_idioms` falls
+    # back to substring matching when spaCy is missing — a quieter, worse
+    # answer ("her makeup" → "make up") that this script would then write into
+    # every row it touches. The lean CI/test env has no spacy, so this is a
+    # realistic way to poison the corpus, not a theoretical one.
+    if not args.dry_run and not await spacy_available():
+        raise SystemExit(
+            "spaCy is not available in this interpreter. Backfilling now would store "
+            "substring-only matches permanently. Install spacy + en_core_web_sm first."
+        )
 
     db = Prisma()
     await db.connect()

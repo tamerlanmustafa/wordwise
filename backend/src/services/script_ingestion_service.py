@@ -211,7 +211,14 @@ class ScriptIngestionService:
         try:
             from prisma import Json
 
-            from .script_idioms import compute_idioms
+            from .script_idioms import compute_idioms, spacy_available
+
+            # Never store a parse made without the model — the detector falls
+            # back to substring matching, which is fine for one response and
+            # wrong to keep forever. NULL just means the read path retries.
+            if not await spacy_available():
+                logger.warning("[DB] spaCy unavailable — leaving idioms NULL rather than storing a degraded parse")
+                return None
 
             idioms = await compute_idioms(cleaned_text)
             logger.info(f"[DB] Precomputed {len(idioms)} idioms/phrasal verbs for script text")

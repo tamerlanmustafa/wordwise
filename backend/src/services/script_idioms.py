@@ -64,6 +64,42 @@ def _as_idiom_list(stored: Any) -> Optional[List[Idiom]]:
     return [i for i in stored if isinstance(i, dict) and "phrase" in i]
 
 
+_spacy_ok: Optional[bool] = None
+
+
+async def spacy_available() -> bool:
+    """
+    Whether the spaCy model actually loads in this process.
+
+    This gates *writing*, not reading. `detect_phrasal_verbs_and_idioms` has a
+    deliberate fallback: with no model it drops the in-context dependency parse
+    and matches phrasal verbs by substring, which is the path that produces
+    "her makeup" → "make up". That degradation is acceptable for one response
+    and unacceptable in the column, where it would be served forever without
+    anything looking broken. So a process that cannot load spaCy still answers
+    requests — it just never freezes its answer.
+
+    The check is the real model load, cached after the first success, so it
+    costs a thread hop once and nothing after.
+    """
+    global _spacy_ok
+    if _spacy_ok:
+        return True
+
+    from src.utils.nlp_executor import run_nlp
+
+    def _load() -> bool:
+        try:
+            from src.services.lemmatization_service import get_nlp
+
+            return get_nlp() is not None
+        except Exception:
+            return False
+
+    _spacy_ok = await run_nlp(_load)
+    return _spacy_ok
+
+
 async def compute_idioms(text: str) -> List[Idiom]:
     """
     Run the detector on the NLP worker thread and shape the result for storage.
@@ -113,10 +149,19 @@ async def get_script_idioms(
     if max_pending is not None:
         with nlp_slot(max_pending):
             idioms = await compute_idioms(text)
+            storable = await spacy_available()
     else:
         idioms = await compute_idioms(text)
+        storable = await spacy_available()
 
-    await store_script_idioms(db, script.id, idioms)
+    if storable:
+        await store_script_idioms(db, script.id, idioms)
+    else:
+        logger.warning(
+            "script %s: spaCy unavailable, serving substring-only idioms without "
+            "storing them — a degraded parse must not become the permanent answer",
+            script.id,
+        )
     return idioms
 
 

@@ -62,14 +62,22 @@ def script(idioms=None, text="he had to give up"):
 
 @pytest.fixture
 def no_real_spacy(monkeypatch):
-    """Stand in for the detector, counting how often it is actually run."""
+    """Stand in for the detector, counting how often it is actually run.
+
+    `spacy_available` is forced True here: the model isn't installed in this
+    env, and the write-gating behaviour it drives has its own tests below.
+    """
     calls = []
 
     async def fake_compute(text):
         calls.append(text)
         return IDIOMS
 
+    async def available():
+        return True
+
     monkeypatch.setattr(script_idioms, "compute_idioms", fake_compute)
+    monkeypatch.setattr(script_idioms, "spacy_available", available)
     return calls
 
 
@@ -206,7 +214,11 @@ async def test_ingestion_precomputes_idioms_for_the_text_it_stores(monkeypatch):
         assert text == "he had to give up"
         return IDIOMS
 
+    async def available():
+        return True
+
     monkeypatch.setattr(script_idioms, "compute_idioms", fake_compute)
+    monkeypatch.setattr(script_idioms, "spacy_available", available)
 
     service = ScriptIngestionService.__new__(ScriptIngestionService)
     value = await service._precompute_idioms("he had to give up")
@@ -222,14 +234,91 @@ async def test_ingestion_leaves_the_column_null_when_the_parse_fails(monkeypatch
     from src.services.script_ingestion_service import ScriptIngestionService
 
     async def boom(text):
-        raise RuntimeError("model missing")
+        raise RuntimeError("parse blew up")
 
+    async def available():
+        return True
+
+    # spaCy present, parse itself fails — otherwise this would pass for the
+    # unrelated reason that the test env has no model.
     monkeypatch.setattr(script_idioms, "compute_idioms", boom)
+    monkeypatch.setattr(script_idioms, "spacy_available", available)
 
     service = ScriptIngestionService.__new__(ScriptIngestionService)
 
     assert await service._precompute_idioms("some text") is None
     assert await service._precompute_idioms(None) is None
+
+
+# ---------------------------------------------------------------------------
+# 7. A parse made without spaCy is served, never stored
+# ---------------------------------------------------------------------------
+#
+# detect_phrasal_verbs_and_idioms deliberately degrades when the model is
+# missing: it drops the in-context dependency parse and matches phrasal verbs
+# by substring, which is what produces "her makeup" -> "make up". Tolerable for
+# one response; permanent if it lands in the column.
+
+@pytest.fixture
+def spacy_missing(monkeypatch):
+    calls = []
+
+    async def fake_compute(text):
+        calls.append(text)
+        return IDIOMS
+
+    async def unavailable():
+        return False
+
+    monkeypatch.setattr(script_idioms, "compute_idioms", fake_compute)
+    monkeypatch.setattr(script_idioms, "spacy_available", unavailable)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_a_degraded_parse_is_served_but_not_stored(spacy_missing):
+    db = FakeDB()
+
+    result = await get_script_idioms(db, script(idioms=None))
+
+    assert result == IDIOMS, "the request must still be answered"
+    assert db.moviescript.updates == [], "a substring-only parse must not be frozen in"
+
+
+@pytest.mark.asyncio
+async def test_ingestion_stores_nothing_when_spacy_is_missing(monkeypatch):
+    from src.services.script_ingestion_service import ScriptIngestionService
+
+    async def unavailable():
+        return False
+
+    async def fake_compute(text):
+        raise AssertionError("must not even parse without the model")
+
+    monkeypatch.setattr(script_idioms, "spacy_available", unavailable)
+    monkeypatch.setattr(script_idioms, "compute_idioms", fake_compute)
+
+    service = ScriptIngestionService.__new__(ScriptIngestionService)
+
+    assert await service._precompute_idioms("he had to give up") is None
+
+
+def test_the_backfill_refuses_to_run_without_spacy():
+    """The offline backfill writes to every row it touches, so it is the most
+    damaging place to run a degraded parse."""
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "backfill_script_idioms.py").read_text()
+    tree = ast.parse(src)
+    called = {
+        getattr(n.func, "id", None) or getattr(n.func, "attr", None)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+    }
+
+    assert "spacy_available" in called
+    assert "SystemExit" in called
 
 
 def test_routes_read_idioms_through_the_cache_not_the_detector():
