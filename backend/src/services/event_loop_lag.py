@@ -156,6 +156,16 @@ class EventLoopLagMonitor:
         self._last_probe_at: Optional[datetime] = None
         self._started_at = datetime.now(timezone.utc)
 
+    def note_interval(self, interval_s: float) -> None:
+        """The probe declares the cadence it is actually running at.
+
+        Without this the report could claim one interval while the watchdog ran
+        at another — the screen prints "checked every 50 ms" as fact, so the
+        probe, not the constant, has to be the source of it.
+        """
+        with self._lock:
+            self._interval_s = interval_s
+
     def record(self, lag_ms: float, at: Optional[datetime] = None) -> str:
         """Add one probe result. Returns "", "stall" or "severe".
 
@@ -295,6 +305,7 @@ async def watch_event_loop(
     up here as lateness equal to its own duration.
     """
     target = mon if mon is not None else monitor
+    target.note_interval(interval)
     throttle = _StallLogThrottle()
 
     while True:

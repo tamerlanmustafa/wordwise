@@ -97,6 +97,19 @@ async def test_probe_keeps_running_after_a_stall():
     assert still_running
 
 
+async def test_report_names_the_cadence_the_probe_actually_runs_at():
+    """The screen prints "checked every N ms" as fact, so it comes from the
+    running probe rather than the module constant."""
+    monitor = ell.EventLoopLagMonitor()
+    task = ell.start_watchdog(monitor, interval=0.01)
+    try:
+        await asyncio.sleep(0.05)
+    finally:
+        task.cancel()
+
+    assert monitor.snapshot()["probe_interval_ms"] == 10.0
+
+
 async def test_a_free_loop_reports_near_zero_lag():
     """The negative control: with nothing blocking, lateness is jitter, not a
     stall. Without this the detector could be trivially always-on."""
