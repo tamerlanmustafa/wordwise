@@ -462,6 +462,11 @@ async def get_llm_examples_for_lemmas(
     poor study examples (fragments, character names, missing context).
     Within a lemma we prefer the representative link, then the highest
     score, then the oldest row for stability.
+
+    That filter is spelled `sll.is_global` (#120) — the same predicate,
+    denormalized onto the link and kept true by trigger, so it reads a 2 MB
+    partial index instead of the 1.0 GB link relation. `sll.sentence_id` is
+    `sb.id`, stated on the link side so the ORDER BY matches the index key.
     """
     if not lemmas:
         return {}
@@ -474,13 +479,12 @@ async def get_llm_examples_for_lemmas(
         JOIN sentence_lemma_links sll ON sll.lemma_id = l.id
         JOIN sentence_bank sb ON sb.id = sll.sentence_id
         WHERE l.lemma = ANY($1::text[])
-          AND sb.movie_id IS NULL
-          AND sb.source = 'llm'
+          AND sll.is_global
         ORDER BY
           l.lemma,
           sll.is_representative DESC,
           sll.score DESC NULLS LAST,
-          sb.id ASC
+          sll.sentence_id ASC
         """,
         lemmas,
     )

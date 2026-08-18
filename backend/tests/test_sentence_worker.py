@@ -85,7 +85,7 @@ def test_backlog_sql_targets_uncovered_movie_lemmas():
     # In some movie's vocabulary…
     assert "movie_lemma_mappings" in sql
     # …without a global LLM sentence…
-    assert "sb.movie_id IS NULL AND sb.source = 'llm'" in sql
+    assert "sll.is_global" in sql
     # …never spending on admin-hidden words, most valuable lemmas first.
     assert "hidden_words" in sql
     assert "ORDER BY l.priority_score DESC" in sql
@@ -104,6 +104,18 @@ def test_backlog_sql_keeps_coverage_exclusion_uncorrelated():
     assert "NOT EXISTS" not in sql
     assert "l.id NOT IN (" in sql
     assert "SELECT sll.lemma_id" in sql
+
+
+def test_backlog_sql_reads_the_denormalized_flag_not_a_join():
+    """
+    #120: the coverage subplan must filter on sentence_lemma_links.is_global,
+    never by joining to sentence_bank. The join made this subplan walk 48,537
+    sentences and probe a 7.7M-entry index once each — 145,783 buffers, 97% of
+    the query — to rebuild the same answer on every worker cycle.
+    """
+    sql = sw.build_backlog_sql(skip_ids=[], limit=100)
+    assert "sll.is_global" in sql
+    assert "sentence_bank" not in sql
 
 
 def test_backlog_sql_excludes_skip_ids():

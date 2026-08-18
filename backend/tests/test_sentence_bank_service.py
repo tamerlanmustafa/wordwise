@@ -43,10 +43,27 @@ async def test_query_restricts_to_global_llm_rows():
     await get_llm_examples_for_lemmas(db, ["run"])
     sql, args = db.calls[0]
     # The whole point of the helper: subtitle-extracted rows must never
-    # qualify — only the Haiku-authored global sentences.
-    assert "sb.movie_id IS NULL" in sql
-    assert "sb.source = 'llm'" in sql
+    # qualify — only the Haiku-authored global sentences. Since #120 that
+    # filter is the denormalized flag on the link rather than two predicates
+    # on sentence_bank, so it reads a 2 MB partial index.
+    assert "sll.is_global" in sql
+    assert "sb.movie_id IS NULL" not in sql
     assert args == (["run"],)
+
+
+async def test_query_orders_by_the_partial_index_key():
+    """
+    #120: ORDER BY must name `sll.sentence_id`, not `sb.id`. They are the same
+    value, but only the link-side spelling matches ix_sll_global_lemma's key
+    order — which is what lets DISTINCT ON walk the index instead of sorting.
+    """
+    db = _FakeDb([])
+    await get_llm_examples_for_lemmas(db, ["run"])
+    sql, _ = db.calls[0]
+    assert "sll.is_representative DESC" in sql
+    assert "sll.score DESC NULLS LAST" in sql
+    assert "sll.sentence_id ASC" in sql
+    assert "sb.id ASC" not in sql
 
 
 async def test_empty_input_short_circuits():

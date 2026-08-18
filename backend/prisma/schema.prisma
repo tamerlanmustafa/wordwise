@@ -659,6 +659,14 @@ model SentenceLemmaLink {
   matchedForm      String? @map("matched_form") @db.VarChar
   score            Float   @default(0)
   isRepresentative Boolean @default(false) @map("is_representative")
+  // Denormalized copy of the linked sentence's "is a global LLM sentence"
+  // predicate (sentence_bank.movie_id IS NULL AND source = 'llm') — the filter
+  // every study surface applies. Never write it from application code: a
+  // trigger derives it on insert and re-derives it if anything tries to set
+  // it, so it cannot drift from sentence_bank. The partial index that makes it
+  // worth having (ix_sll_global_lemma) is not expressible in Prisma and lives
+  // in prisma/manual/2026_08_18_hot_cold_sentence_links_issue_120.sql.
+  isGlobal         Boolean @default(false) @map("is_global")
 
   sentence SentenceBank @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
   lemma    Lemma        @relation(fields: [lemmaId], references: [id], onDelete: Cascade)

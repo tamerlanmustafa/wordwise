@@ -25,12 +25,19 @@ destructive reset. Schema changes ship as hand-written SQL here instead.
 ## Bootstrapping a fresh database
 
 `schema.prisma` alone does **not** reproduce prod. Prisma cannot express
-partial unique indexes, and there are two of them carrying real invariants:
+partial indexes, and there are three of them carrying real invariants or
+carrying the hot read path:
 
 | Index | Table | Purpose |
 |---|---|---|
 | `sentence_bank_hash_global_unique` | `sentence_bank` | dedup of global (`movie_id IS NULL`) LLM sentences |
 | `user_words_global_word_unique` | `user_words` | dedup of global (`movie_id IS NULL`) learned markers |
+| `ix_sll_global_lemma` | `sentence_lemma_links` | the hot/cold split (#120) — every study surface's lemma lookup. Without it those queries fall back to scanning the 1.0 GB relation |
+
+Prisma also cannot express triggers, and `sentence_lemma_links.is_global`
+depends on two of them (`trg_sll_set_is_global`, `trg_sb_resync_link_is_global`)
+to stay true. A database built without replaying #120's file gets a column that
+is silently always `false`, which makes every study surface look empty.
 
 So a fresh environment is: apply the schema, then replay **both**
 `prisma/migrations_manual/*.sql` and `prisma/manual/*.sql` in filename order

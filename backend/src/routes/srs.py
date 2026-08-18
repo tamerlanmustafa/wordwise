@@ -1062,6 +1062,13 @@ async def _eligible_lemma_candidates(
     # longer supply an Index Cond, so a matching scan reads the whole index and
     # filters. Every level string here is a valid `proficiencylevel` label, so
     # the bare comparison is total.
+    #
+    # The "has a sentence" test reads `sll.is_global` instead of joining to
+    # sentence_bank (#120). Joining made this query rebuild the global-LLM set
+    # from scratch every request: 48,537 B-tree descents into a 7.7M-entry
+    # index, 145,783 of its 150,441 buffers. `is_global` is that predicate
+    # denormalized onto the link (trigger-maintained), so the same test is a
+    # single probe into a 2 MB partial index.
     levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
     exclude_sql = ""
     args: list = []
@@ -1092,10 +1099,8 @@ async def _eligible_lemma_candidates(
           AND EXISTS (
               SELECT 1
               FROM sentence_lemma_links sll
-              JOIN sentence_bank sb ON sb.id = sll.sentence_id
               WHERE sll.lemma_id = l.id
-                AND sb.movie_id IS NULL
-                AND sb.source = 'llm'
+                AND sll.is_global
           )
           {exclude_sql}
         ORDER BY l.frequency_rank ASC NULLS LAST
@@ -1298,7 +1303,10 @@ async def word_feed(
     has_more = any(len(buckets[lvl]) - cursors[lvl] > 0 for lvl in levels)
 
     # One query for every pick's best sentence. is_representative wins, then
-    # score — matching the ordering /today uses for its single lemma.
+    # score — matching the ordering /today uses for its single lemma. The tie
+    # break is spelled `sll.sentence_id`, not `sb.id`: same value, but stating
+    # it on the link side makes the ORDER BY exactly ix_sll_global_lemma's key
+    # order, so DISTINCT ON walks the index instead of sorting (#120).
     lemma_ids = [p["lemma_id"] for p in picks]
     sentence_rows = await db.query_raw(
         """
@@ -1309,13 +1317,12 @@ async def word_feed(
         FROM sentence_lemma_links sll
         JOIN sentence_bank sb ON sb.id = sll.sentence_id
         WHERE sll.lemma_id = ANY($1::int[])
-          AND sb.movie_id IS NULL
-          AND sb.source = 'llm'
+          AND sll.is_global
         ORDER BY
           sll.lemma_id,
           sll.is_representative DESC,
           sll.score DESC NULLS LAST,
-          sb.id ASC
+          sll.sentence_id ASC
         """,
         lemma_ids,
     )

@@ -79,6 +79,13 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
     timeout/retry loop (2026-07-22 outage). NULL-safe because
     sentence_lemma_links.lemma_id is NOT NULL.
 
+    That subplan reads `sll.is_global` rather than joining to sentence_bank
+    (#120). The join had to walk 48,537 sentences and probe a 7.7M-entry index
+    once per sentence — 145,783 buffers, 97% of this query's cost — to rebuild
+    the same 44k-row answer on every cycle. `is_global` is the same predicate
+    denormalized onto the link and kept true by trigger, so the subplan is now
+    an index-only scan of a 2 MB partial index.
+
     skip_ids/limit are server-side integers, safe to inline — and inlining
     keeps the query compatible with prisma's query_raw (no array params).
     """
@@ -92,8 +99,7 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
         )
         AND l.id NOT IN (SELECT sll.lemma_id
             FROM sentence_lemma_links sll
-            JOIN sentence_bank sb ON sb.id = sll.sentence_id
-            WHERE sb.movie_id IS NULL AND sb.source = 'llm'
+            WHERE sll.is_global
         )
         AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
         AND l.cefr_level <> 'UNKNOWN'

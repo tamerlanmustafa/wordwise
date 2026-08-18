@@ -206,6 +206,11 @@ class LLMSentenceService:
                     continue
                 # Race-tolerant link insert. Unique (sentenceId, lemmaId)
                 # — duplicates are a no-op.
+                #
+                # `isGlobal` is deliberately absent: a trigger derives it from
+                # the sentence row (#120). Setting it here would create a
+                # second source of truth for the flag every study surface
+                # filters on, and the drift would be silent.
                 try:
                     await db.sentencelemmalink.create(
                         data={

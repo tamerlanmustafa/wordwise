@@ -236,8 +236,11 @@ class TestEligibleCandidatesQuery:
     def test_always_filters_hidden_words_and_requires_an_llm_sentence(self):
         db = self._run()
         assert "hidden_words" in db.sql
-        assert "sb.movie_id IS NULL" in db.sql
-        assert "sb.source = 'llm'" in db.sql
+        # #120: the "has a Haiku sentence" test is the denormalized flag on the
+        # link, never a join to sentence_bank — the join rebuilt the whole
+        # global-LLM set on every feed request (145,783 of 150,441 buffers).
+        assert "sll.is_global" in db.sql
+        assert "sentence_bank" not in db.sql
         # Real-word shape guard, shared with /today.
         assert "^[a-zA-Z]+$" in db.sql
 
