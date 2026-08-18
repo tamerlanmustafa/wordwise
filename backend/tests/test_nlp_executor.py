@@ -308,14 +308,18 @@ async def test_cap_sheds_a_burst_instead_of_queueing_it():
 
 def test_preview_route_caps_the_queue_and_degrades():
     """The cap must be wired into the public endpoint, and a shed parse must
-    return the word list without idioms rather than failing the request."""
+    return the word list without idioms rather than failing the request.
+
+    Since #106 the slot is reserved inside `get_script_idioms`, which only
+    parses on a cache miss — so the cap now bounds first-time parses rather
+    than every request, but it must still be passed in and still degrade."""
     import inspect
 
     from src.routes import movies
 
     assert movies.MAX_PENDING_PREVIEW_PARSES > 0
     src = inspect.getsource(movies.get_vocabulary_preview)
-    assert "nlp_slot(MAX_PENDING_PREVIEW_PARSES)" in src
+    assert "max_pending=MAX_PENDING_PREVIEW_PARSES" in src
     assert "except NLPOverloaded" in src
     # Degrades rather than 503s: the DB-derived word list is still returned.
     assert "idioms_unavailable" in src

@@ -12,17 +12,19 @@ from ..services.hidden_words import get_hidden_word_set
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
 from ..services.profanity_filter import is_profane_entry
-from ..utils.nlp_executor import NLPOverloaded, nlp_slot
+from ..services.script_idioms import get_script_idioms
+from ..utils.nlp_executor import NLPOverloaded
 from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
-# /vocabulary/preview takes no auth (it is the logged-out teaser), and each
-# call parses a whole script: ~12s of CPU on the single NLP worker thread and
-# ~600 MB of transient spaCy Doc. #117 stopped that blocking the event loop,
-# but nothing stopped one caller from queueing parses indefinitely.
+# /vocabulary/preview takes no auth (it is the logged-out teaser). Since #106
+# the idiom list is stored per script, so only the *first* request for a movie
+# parses — ~12s of CPU on the single NLP worker thread and ~600 MB of transient
+# spaCy Doc. #117 stopped that blocking the event loop, but nothing stopped one
+# caller from walking the catalogue and queueing a parse per movie.
 #
 # Two defences, because they fail differently:
 #  - a per-caller throttle, which only bites when the caller can be identified
@@ -683,35 +685,24 @@ async def get_vocabulary_preview(
                 "frequency_rank": word.frequencyRank
             })
 
-    # Detect idioms from script text
-    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
-
+    # Idioms: a stored column read for every script that has been parsed once
+    # (issue #106). Only a never-parsed script reaches spaCy here, and when it
+    # does, the queue slot below still applies — under load, shed the parse and
+    # return the word list without idioms. A fast partial answer beats a 90s wait.
     idioms = []
     idioms_unavailable = False
-    if script.cleanedScriptText:
-        try:
-            # Everything above this point is DB work; the parse below is the
-            # only expensive part. Under load, shed it and return the word
-            # list without idioms — a fast partial answer beats a 90s wait.
-            with nlp_slot(MAX_PENDING_PREVIEW_PARSES):
-                idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
-            idioms = [
-                {
-                    "phrase": phrase,
-                    "type": expr_type,
-                    "cefr_level": level,
-                    "words": phrase.split()
-                }
-                for phrase, expr_type, level in idiom_results
-            ]
-        except NLPOverloaded:
-            logger.warning(
-                "movie %s: NLP queue full, serving preview without idioms", movie_id
-            )
-            idioms_unavailable = True
-        except Exception:
-            logger.exception("Error detecting idioms")
-            idioms = []
+    try:
+        idioms = await get_script_idioms(
+            db, script, max_pending=MAX_PENDING_PREVIEW_PARSES
+        )
+    except NLPOverloaded:
+        logger.warning(
+            "movie %s: NLP queue full, serving preview without idioms", movie_id
+        )
+        idioms_unavailable = True
+    except Exception:
+        logger.exception("Error detecting idioms")
+        idioms = []
 
     return {
         "movie_id": movie_id,
@@ -829,25 +820,13 @@ async def get_vocabulary_full(
     log = logging.getLogger("uvicorn.error")
     log.info(f"[VOCAB-FULL] movie_id={movie_id} script_id={script.id} title={movie.title!r} dist={level_distribution}")
 
-    # Detect idioms from script text
-    from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
-
+    # Idioms: stored per script, parsed at most once (issue #106).
     idioms = []
-    if script.cleanedScriptText:
-        try:
-            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
-            idioms = [
-                {
-                    "phrase": phrase,
-                    "type": expr_type,
-                    "cefr_level": level,
-                    "words": phrase.split()
-                }
-                for phrase, expr_type, level in idiom_results
-            ]
-        except Exception:
-            logger.exception("Error detecting idioms")
-            idioms = []
+    try:
+        idioms = await get_script_idioms(db, script)
+    except Exception:
+        logger.exception("Error detecting idioms")
+        idioms = []
 
     return {
         "movie_id": movie_id,

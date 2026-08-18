@@ -17,7 +17,6 @@ from src.services.cefr_classifier import (
     CEFRLevel,
     ClassificationSource,
     WordClassification,
-    detect_phrasal_verbs_and_idioms_async
 )
 from src.services.lemmatization_service import (
     lemmatize_script_async,
@@ -29,6 +28,7 @@ from src.middleware.auth import get_admin_user, get_current_active_user
 from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
 from src.services.profanity_filter import is_profane_entry
+from src.services.script_idioms import get_script_idioms
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -415,17 +415,11 @@ async def run_script_classification(
             total_kept = sum(level_distribution.values())
             average_confidence = total_confidence / total_kept if total_kept > 0 else 0.0
 
-            # Detect idioms and phrasal verbs from the script text
-            idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
-            idioms = [
-                IdiomInfo(
-                    phrase=phrase,
-                    type=expr_type,
-                    cefr_level=level,
-                    words=phrase.split()
-                )
-                for phrase, expr_type, level in idiom_results
-            ]
+            # Idioms come from the stored column (issue #106). This branch used
+            # to reparse the script even though every other value here is read
+            # from the DB — so "already classified" saved nothing on the NLP
+            # cost, and opening a movie paid for the same parse twice (#122).
+            idioms = [IdiomInfo(**i) for i in await get_script_idioms(db, script)]
             logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
             # If genres provided and movie has no genre or no difficulty, update now
@@ -642,17 +636,8 @@ async def run_script_classification(
 
             logger.info(f"✓ Updated movie difficulty: {level.value}, score: {score}")
 
-        # Detect idioms and phrasal verbs from the script text
-        idiom_results = await detect_phrasal_verbs_and_idioms_async(script.cleanedScriptText)
-        idioms = [
-            IdiomInfo(
-                phrase=phrase,
-                type=expr_type,
-                cefr_level=level,
-                words=phrase.split()
-            )
-            for phrase, expr_type, level in idiom_results
-        ]
+        # Idioms from the stored column, computed once per script (issue #106).
+        idioms = [IdiomInfo(**i) for i in await get_script_idioms(db, script)]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
         # Final response

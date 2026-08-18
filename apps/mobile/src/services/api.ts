@@ -88,7 +88,7 @@ export interface VocabularyResponse {
   idioms?: IdiomInfo[];
 }
 
-interface ScriptResponse {
+export interface ScriptResponse {
   script_id: number;
   movie_id: number;
   source_used: string;
@@ -97,6 +97,11 @@ interface ScriptResponse {
   is_complete: boolean;
   is_truncated: boolean;
   from_cache: boolean;
+  // Set when this movie already has CEFR classifications stored, so the caller
+  // can skip waiting on /api/cefr/classify-script (issue #122). Optional: an
+  // older backend omits it, and the safe reading of "missing" is "not
+  // classified" — the caller then keeps the slower sequential path.
+  is_classified?: boolean;
   metadata: {
     title: string;
     year?: string;

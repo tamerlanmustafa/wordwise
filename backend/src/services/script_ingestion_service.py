@@ -175,6 +175,51 @@ class ScriptIngestionService:
         logger.error(f"[ScriptIngestion] {msg}")
         raise ScriptNotFoundError(msg)
 
+    async def _is_classified(self, script_id: int) -> bool:
+        """
+        Whether this script already has CEFR word classifications.
+
+        The mobile movie-open path used to call /api/cefr/classify-script and
+        wait for it before it could ask for vocabulary, on every open — even
+        though for an already-classified movie that call only re-reads what
+        /vocabulary/full is about to return anyway (issue #122). Reporting this
+        here lets the client drop a whole sequential stage. Counted rather than
+        read off `is_preprocessed`, which #105 showed can be true for a script
+        that has nothing stored.
+        """
+        try:
+            return await self.db.wordclassification.count(
+                where={"scriptId": script_id}
+            ) > 0
+        except Exception:
+            # Only an optimization hint — never fail a fetch over it. False is
+            # the safe answer: the client just keeps the old sequential path.
+            logger.warning(f"[DB] classification count failed for script {script_id}", exc_info=True)
+            return False
+
+    async def _precompute_idioms(self, cleaned_text: Optional[str]):
+        """
+        Parse the idiom/phrasal-verb list for text about to be stored.
+
+        Returns a Prisma `Json` value to write, or None to leave the column
+        NULL — which the read path treats as "not computed yet" and heals on
+        first use, so a parse failure here degrades to the old behaviour for
+        one request instead of losing idioms for the movie.
+        """
+        if not cleaned_text:
+            return None
+        try:
+            from prisma import Json
+
+            from .script_idioms import compute_idioms
+
+            idioms = await compute_idioms(cleaned_text)
+            logger.info(f"[DB] Precomputed {len(idioms)} idioms/phrasal verbs for script text")
+            return Json(idioms)
+        except Exception:
+            logger.warning("[DB] Idiom precompute failed — leaving column NULL", exc_info=True)
+            return None
+
     async def _get_from_database(
         self,
         movie_title: str,
@@ -219,6 +264,7 @@ class ScriptIngestionService:
                 "word_count": script.cleanedWordCount,
                 "is_complete": script.isComplete,
                 "is_truncated": script.isTruncated,
+                "is_classified": await self._is_classified(script.id),
                 "metadata": json.loads(script.processingMetadata) if script.processingMetadata else {}
             }
 
@@ -278,6 +324,13 @@ class ScriptIngestionService:
 
             metadata_json = json.dumps(script_data.get("metadata", {}))
 
+            # Idioms are derived from the text, so they are computed here, once,
+            # in the same write that stores the text (issue #106) — rather than
+            # on every later read of it. On the update path this also replaces
+            # the previous script's idioms, which a refetch would otherwise
+            # leave behind as stale derived data.
+            idioms = await self._precompute_idioms(script_data.get("cleaned_text"))
+
             if existing:
                 script = await self.db.moviescript.update(
                     where={"movieId": movie_id},
@@ -287,6 +340,7 @@ class ScriptIngestionService:
                         "cleanedWordCount": script_data.get("word_count", 0),
                         "isTruncated": script_data.get("is_truncated", False),
                         "isComplete": script_data.get("is_complete", True),
+                        "idioms": idioms,
                         "processingMetadata": metadata_json,
                         "fetchedAt": datetime.utcnow(),
                         "updatedAt": datetime.utcnow()
@@ -301,6 +355,7 @@ class ScriptIngestionService:
                         "cleanedWordCount": script_data.get("word_count", 0),
                         "isTruncated": script_data.get("is_truncated", False),
                         "isComplete": script_data.get("is_complete", True),
+                        "idioms": idioms,
                         "processingMetadata": metadata_json
                     }
                 )
@@ -315,6 +370,7 @@ class ScriptIngestionService:
                 "word_count": script.cleanedWordCount,
                 "is_complete": script.isComplete,
                 "is_truncated": script.isTruncated,
+                "is_classified": await self._is_classified(script.id),
                 "metadata": json.loads(script.processingMetadata) if script.processingMetadata else {}
             }
 

@@ -16,6 +16,7 @@ from .middleware import RequestIDMiddleware
 from .utils.rate_limit import GlobalRateLimitMiddleware
 from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router
 from .services import fetch_movie_script
+import asyncio
 import logging
 from pathlib import Path
 
@@ -38,12 +39,37 @@ warnings.filterwarnings('ignore', category=MarkupResemblesLocatorWarning)
 
 logger = logging.getLogger(__name__)
 
+async def _warm_nlp_model():
+    """
+    Load the spaCy model on the NLP worker thread at boot.
+
+    The model is lazily loaded on first use and takes ~1.8s to build, so
+    without this that cost lands on whichever user request happens to arrive
+    first after a deploy or a restart (issue #106, option 3). Doing it here
+    means it lands on nobody.
+
+    Deliberately fire-and-forget: it must not delay the server accepting
+    traffic, and it must not stop the app booting in environments where spaCy
+    isn't installed (CI, the test env) — hence the broad except.
+    """
+    try:
+        from .services.lemmatization_service import get_nlp
+        from .utils.nlp_executor import run_nlp
+
+        await run_nlp(get_nlp)
+        logger.info("spaCy model warmed on the NLP worker thread")
+    except Exception as e:
+        logger.warning(f"spaCy warmup skipped: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await connect_db()
+    warmup = asyncio.create_task(_warm_nlp_model())
     yield
     # Shutdown
+    warmup.cancel()
     await disconnect_db()
 
 app = FastAPI(

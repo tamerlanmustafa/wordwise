@@ -32,6 +32,11 @@ class ScriptResponse(BaseModel):
     is_complete: bool
     is_truncated: bool
     from_cache: bool
+    # True when this script already has CEFR classifications stored, i.e. the
+    # client can go straight to /vocabulary/full and skip the classify call
+    # (issue #122). Defaults False so a client always gets the safe, if slower,
+    # sequential path if the backend can't answer.
+    is_classified: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
     fetched_at: Optional[datetime] = None
 

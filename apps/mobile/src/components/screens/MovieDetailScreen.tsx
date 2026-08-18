@@ -30,7 +30,6 @@ import type { MovieData } from '../../core/types';
 import {
   wordwiseApi,
   adminApi,
-  API_BASE_URL,
   type VocabularyResponse,
   type WordInfo,
   type IdiomInfo,
@@ -41,6 +40,7 @@ import {
 type RowItem = WordInfo | IdiomInfo;
 const isIdiom = (item: RowItem): item is IdiomInfo => 'phrase' in item;
 import { useAuthStore } from '../../stores/authStore';
+import { fetchMovieVocabulary } from '../../services/movieVocabulary';
 import { offlineCache } from '../../services/offlineCache';
 import { stickySpacerRange } from './stickyHeaderSpacer';
 import { WordRow } from '../vocabulary/WordRow';
@@ -279,41 +279,27 @@ export const MovieDetailScreen = ({
     opts: { silent: boolean },
   ): Promise<{ vocab: VocabularyResponse; movieId: number; difficulty: { level: string; score: number } | null } | null> => {
     const cleanTitle = movie.title.replace(/["""'']/g, '').trim();
-    const scriptResult = await wordwiseApi.fetchScript('', cleanTitle, tmdbId);
-    if (!scriptResult.cleaned_text || scriptResult.word_count < 100) {
+    const genreNames = movie.genre_ids?.map((id) => t(`genre.${id}`, { defaultValue: '' })).filter(Boolean) || [];
+
+    const result = await fetchMovieVocabulary({
+      title: cleanTitle,
+      tmdbId,
+      targetLang,
+      genreNames,
+    });
+
+    if (result.status === 'script_too_short') {
       if (!opts.silent) setError(t('movies:detail.scriptTooShort'));
       return null;
     }
 
-    const genreNames = movie.genre_ids?.map((id) => t(`genre.${id}`, { defaultValue: '' })).filter(Boolean) || [];
-    await wordwiseApi.classifyVocabulary(scriptResult.movie_id, targetLang, genreNames);
-
-    // Run /difficulty and vocabulary fetch in parallel — neither depends on
-    // the other, so there's no reason to wait for difficulty before fetching
-    // words. Saves one sequential round-trip (~30% faster first-time open).
-    const [diffResult, vocab] = await Promise.all([
-      fetch(`${API_BASE_URL}/movies/${scriptResult.movie_id}/difficulty`)
-        .then(async (r) => {
-          if (!r.ok) return null;
-          const d = await r.json();
-          return d.difficulty_score != null
-            ? ({ level: d.difficulty_level, score: d.difficulty_score } as { level: string; score: number })
-            : null;
-        })
-        .catch(() => null),
-      wordwiseApi.getVocabularyFull(scriptResult.movie_id)
-        .catch(() => wordwiseApi.getVocabularyPreview(scriptResult.movie_id)),
-    ]);
-
-    const diff = diffResult;
-
     offlineCache.savePayload(cacheKey, movie.title, {
-      vocabulary: vocab,
-      movieId: scriptResult.movie_id,
-      difficulty: diff,
+      vocabulary: result.vocab,
+      movieId: result.movieId,
+      difficulty: result.difficulty,
     });
 
-    return { vocab, movieId: scriptResult.movie_id, difficulty: diff };
+    return { vocab: result.vocab, movieId: result.movieId, difficulty: result.difficulty };
   };
 
   const loadVocabulary = async () => {
