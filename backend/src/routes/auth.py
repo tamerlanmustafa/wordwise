@@ -9,12 +9,13 @@ from ..schemas.user import (
     RefreshRequest, RefreshResponse, ForgotPasswordRequest, SUPPORTED_LANGUAGES,
 )
 from ..utils.auth import (
-    verify_password, get_password_hash, create_access_token,
+    check_password_async, get_password_hash_async, create_access_token,
     create_refresh_token, create_password_reset_token,
     password_hash_fingerprint, verify_token,
 )
 from ..config import get_settings
 from ..middleware.auth import get_current_user
+from ..utils.offload import CPUOverloaded
 from ..utils.rate_limit import rate_limit
 from ..services import email_service
 
@@ -28,6 +29,23 @@ settings = get_settings()
 _login_throttle = rate_limit(10, 60.0, scope="auth-login")
 _register_throttle = rate_limit(5, 60.0, scope="auth-register")
 _refresh_throttle = rate_limit(30, 60.0, scope="auth-refresh")
+
+
+def _password_work_shed() -> HTTPException:
+    """503 for a password hash that was shed at the door.
+
+    Every endpoint here costs ~173ms of bcrypt, so a burst of them is the one
+    thing that can fill the CPU pool. Refusing the last arrivals keeps the wait
+    for everyone already in the queue bounded; `Retry-After` says this is
+    transient capacity rather than a rejected credential. Deliberately the same
+    answer whether or not the account exists — shedding must not become its own
+    enumeration oracle.
+    """
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Server busy, please try again in a moment",
+        headers={"Retry-After": "1"},
+    )
 
 
 def _issue_tokens(user) -> tuple[str, str]:
@@ -70,7 +88,11 @@ async def register(
         )
 
     # Create new user
-    hashed_password = get_password_hash(user_data.password)
+    try:
+        hashed_password = await get_password_hash_async(user_data.password)
+    except CPUOverloaded:
+        logger.warning("Registration shed: CPU pool at capacity")
+        raise _password_work_shed()
     new_user = await db.user.create(
         data={
             "email": user_data.email,
@@ -112,7 +134,19 @@ async def login(
     logger.info("Login attempt for email: %s", credentials.email)
     user = await db.user.find_unique(where={"email": credentials.email})
 
-    if not user or not user.passwordHash or not verify_password(credentials.password, user.passwordHash):
+    # Unconditional: an unknown email verifies against a decoy hash rather than
+    # returning early, so a wrong guess costs the same whether or not the
+    # account exists. The hashing itself runs on the CPU pool — inline it would
+    # freeze every other request in flight for ~173ms.
+    try:
+        password_ok = await check_password_async(
+            credentials.password, user.passwordHash if user else None
+        )
+    except CPUOverloaded:
+        logger.warning("Login shed: CPU pool at capacity")
+        raise _password_work_shed()
+
+    if not user or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -405,9 +439,22 @@ async def reset_password_submit(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    try:
+        new_hash = await get_password_hash_async(new_password)
+    except CPUOverloaded:
+        logger.warning("Password reset shed: CPU pool at capacity")
+        return HTMLResponse(
+            _auth_page(
+                "Server busy",
+                "We couldn't process that right now. Wait a moment and submit "
+                "the form again — your reset link is still valid.",
+            ),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     await db.user.update(
         where={"id": user.id},
-        data={"passwordHash": get_password_hash(new_password)},
+        data={"passwordHash": new_hash},
     )
     logger.info("Password reset completed for user id=%s", user.id)
 
