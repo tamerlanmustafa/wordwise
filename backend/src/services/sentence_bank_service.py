@@ -8,9 +8,12 @@ Works alongside existing WordSentenceExample (dual-write).
 
 import hashlib
 import logging
+from functools import partial
 from typing import Dict, List, Optional, Set, Tuple
 
 from prisma import Prisma
+
+from src.utils.nlp_executor import nlp_slot, run_nlp
 
 logger = logging.getLogger(__name__)
 
@@ -268,12 +271,83 @@ async def fill_movie_sentence_bank_gaps(
     }
 
 
+def extract_lemma_sentences(
+    script_text: str,
+    target_lemmas: Set[str],
+    word_to_lemma: Dict[str, str],
+    max_per_lemma: int,
+) -> Dict[str, List[Tuple[str, int, str]]]:
+    """
+    Every example sentence a script can supply, as one blocking call.
+
+    Two passes over the same text, deliberately kept in one function: the
+    spaCy pass that catches inflected forms ("ran" for "run"), and the
+    literal whole-word regex fallback that covers whatever the parse missed.
+    Both are CPU-bound and script-sized — on a 126k-char script, 1.6-2.9s for
+    the parse (#140) and a measured ~0.2s of fallback per 1,000 words it
+    missed — so both belong on the NLP worker thread, and on the *same* trip
+    to it. Two hops would take two queue slots and let another caller's parse
+    interleave between them for no gain (`utils/offload.py`).
+
+    Pure by construction: no DB, no `await`, `nlp` resolved here rather than
+    passed in, so the caller has nothing left to run on the event loop.
+
+    Returns lemma → [(sentence, word_position, matched_form)]; lemmas with no
+    sentence at all are absent.
+    """
+    import re as _re
+
+    from src.services.lemmatization_service import get_nlp
+    from src.services.sentence_example_service import SentenceExampleService
+
+    sentence_service = SentenceExampleService()
+    lemma_sentences = sentence_service.extract_sentences_for_lemmas(
+        script_text,
+        target_lemmas,
+        get_nlp(),
+        max_per_lemma=max_per_lemma,
+    )
+
+    # Gap-filler. Any classified (word, lemma) that didn't pick up a
+    # sentence from the spaCy pass — usually because of a lemma-matching
+    # disagreement or a sentence-quality filter — gets a literal whole-word
+    # regex fallback so every classified word that appears as a standalone
+    # token in the script gets at least one example. This is what the user
+    # actually expects: "the word is in the script, just find a sentence."
+    sentences_split = sentence_service.split_into_sentences(script_text)
+    for word, lemma in word_to_lemma.items():
+        if lemma not in target_lemmas:
+            continue
+        if lemma_sentences.get(lemma):
+            continue
+        # Literal whole-word search — first hit wins.
+        pat = _re.compile(rf"\b{_re.escape(word)}\b", _re.IGNORECASE)
+        best = None
+        for sent in sentences_split:
+            if pat.search(sent):
+                # Use the matcher's standard length filters; fall back to
+                # accepting any length if nothing matches in range.
+                tokens = sentence_service.tokenize_sentence(sent)
+                if sentence_service.MIN_SENTENCE_WORDS <= len(tokens) <= sentence_service.MAX_SENTENCE_WORDS:
+                    best = sent
+                    break
+                if best is None:  # remember first match as last-resort
+                    best = sent
+        if best is not None:
+            tokens = sentence_service.tokenize_sentence(best)
+            pos = next((i for i, t in enumerate(tokens) if t == word), 0)
+            lemma_sentences.setdefault(lemma, []).append((best, pos, word))
+
+    return lemma_sentences
+
+
 async def populate_movie_sentence_bank(
     db: Prisma,
     movie_id: int,
     *,
     skip_if_exists: bool = True,
     max_per_lemma: int = 3,
+    max_pending: Optional[int] = None,
 ) -> Dict[str, int]:
     """
     Translation-free SentenceBank population for one movie. Stores up to
@@ -289,15 +363,24 @@ async def populate_movie_sentence_bank(
     Idempotent: skips if the movie already has SentenceBank rows when
     skip_if_exists is True (default).
 
+    Every CPU-bound step runs on the NLP worker thread (issue #142). This is
+    reached from a FastAPI `BackgroundTask`, which is not offloading — it runs
+    on the event loop, just after the response is sent — so an inline parse
+    here stalled every other request in the process.
+
+    `max_pending`, when given, reserves a slot in that worker's queue and
+    raises `NLPOverloaded` if it is already full. The API path passes it so a
+    burst of first-time movie opens sheds instead of piling multi-second
+    parses in front of user-facing ones; population is idempotent and refires
+    on the next classification, so a shed costs nothing but a delay. Offline
+    callers (the backfill script, the movie worker) leave it unset.
+
     Used by:
       • the background task that fires after classify-script
       • the backfill_sentence_bank.py script
 
     Returns a small stats dict so callers can log what happened.
     """
-    from src.services.sentence_example_service import SentenceExampleService
-    from src.services.lemmatization_service import get_nlp
-
     if skip_if_exists:
         existing = await db.sentencebank.find_first(where={"movieId": movie_id})
         if existing:
@@ -330,48 +413,22 @@ async def populate_movie_sentence_bank(
         }
 
     # One spaCy pass over the script catches every inflected form for every
-    # target lemma. extract_sentences_for_lemmas also pads short dialogue
-    # with the previous line so we don't drop one-token sentences.
-    nlp = get_nlp()
-    sentence_service = SentenceExampleService()
-    lemma_sentences = sentence_service.extract_sentences_for_lemmas(
+    # target lemma, and the regex gap-filler mops up the rest — both on the
+    # worker thread, in a single hop, because this whole function runs on the
+    # event loop otherwise (issue #142).
+    word_to_lemma_lower: Dict[str, str] = {wc.word.lower(): wc.lemma.lower() for wc in classifications}
+    extract = partial(
+        extract_lemma_sentences,
         script.cleanedScriptText,
         set(lemma_id_map.keys()),
-        nlp,
-        max_per_lemma=max_per_lemma,
+        word_to_lemma_lower,
+        max_per_lemma,
     )
-
-    # Gap-filler. Any classified (word, lemma) that didn't pick up a
-    # sentence from the spaCy pass — usually because of a lemma-matching
-    # disagreement or a sentence-quality filter — gets a literal whole-word
-    # regex fallback so every classified word that appears as a standalone
-    # token in the script gets at least one example. This is what the user
-    # actually expects: "the word is in the script, just find a sentence."
-    import re as _re
-    word_to_lemma_lower: Dict[str, str] = {wc.word.lower(): wc.lemma.lower() for wc in classifications}
-    sentences_split = sentence_service.split_into_sentences(script.cleanedScriptText)
-    for word, lemma in word_to_lemma_lower.items():
-        if lemma not in lemma_id_map:
-            continue
-        if lemma in lemma_sentences and lemma_sentences[lemma]:
-            continue
-        # Literal whole-word search — first hit wins.
-        pat = _re.compile(rf"\b{_re.escape(word)}\b", _re.IGNORECASE)
-        best = None
-        for sent in sentences_split:
-            if pat.search(sent):
-                # Use the matcher's standard length filters; fall back to
-                # accepting any length if nothing matches in range.
-                tokens = sentence_service.tokenize_sentence(sent)
-                if sentence_service.MIN_SENTENCE_WORDS <= len(tokens) <= sentence_service.MAX_SENTENCE_WORDS:
-                    best = sent
-                    break
-                if best is None:  # remember first match as last-resort
-                    best = sent
-        if best is not None:
-            tokens = sentence_service.tokenize_sentence(best)
-            pos = next((i for i, t in enumerate(tokens) if t == word), 0)
-            lemma_sentences.setdefault(lemma, []).append((best, pos, word))
+    if max_pending is not None:
+        with nlp_slot(max_pending):
+            lemma_sentences = await run_nlp(extract)
+    else:
+        lemma_sentences = await run_nlp(extract)
 
     # Write SentenceBank rows (deduped by hash), then SentenceLemmaLink rows.
     sentence_id_by_hash: Dict[str, int] = {}

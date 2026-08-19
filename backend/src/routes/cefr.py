@@ -30,11 +30,20 @@ from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
 from src.services.profanity_filter import is_profane_entry
 from src.services.script_idioms import get_script_idioms
+from src.utils.nlp_executor import NLPOverloaded
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cefr", tags=["CEFR Classification"])
+
+# Queue depth at which a sentence-bank population gives up its place on the
+# NLP worker. The gate counts *all* pending work on that thread and each caller
+# brings its own threshold, so a low number here is really a priority: at a
+# depth of 2 this sheds while a user-facing preview parse (cap 4, movies.py)
+# still gets in. A drop costs nothing — the next classification of the movie
+# starts it again (issue #142).
+MAX_PENDING_BANK_PARSES = 2
 
 # Global classifier instance (initialized on startup)
 _classifier: Optional[HybridCEFRClassifier] = None
@@ -232,7 +241,7 @@ class FrequencyThresholdUpdate(BaseModel):
 
 # === Endpoints ===
 
-async def populate_sentence_bank_bg(movie_id: int):
+async def populate_sentence_bank_bg(movie_id: int, *, max_pending: Optional[int] = None):
     """
     Background task: populate SentenceBank + SentenceLemmaLink for a movie's
     classified vocabulary. Translation-free (pure spaCy + DB), so safe to fire
@@ -241,14 +250,30 @@ async def populate_sentence_bank_bg(movie_id: int):
 
     Owns its own Prisma connection because the request-scoped `db` injected
     into the handler is closed by the time this task runs.
+
+    `max_pending` bounds the NLP worker queue for the parse this triggers. The
+    API passes it (a `BackgroundTask` runs on the event loop, so this competes
+    with live requests for the one worker); the movie worker is a separate
+    process doing one movie at a time and leaves it unset.
     """
     db = None
     try:
         db = Prisma()
         await db.connect()
         from src.services.sentence_bank_service import populate_movie_sentence_bank
-        stats = await populate_movie_sentence_bank(db, movie_id)
+        stats = await populate_movie_sentence_bank(
+            db, movie_id, max_pending=max_pending
+        )
         logger.info(f"[bg-sentencebank] movie={movie_id} {stats}")
+    except NLPOverloaded:
+        # Not a failure: the queue was full, and this work has another chance
+        # every time the movie is classified. Shedding it keeps the wait for
+        # whoever is holding the queue open from growing.
+        logger.warning(
+            "[bg-sentencebank] movie=%s skipped, NLP queue full — will retry "
+            "on the next classification",
+            movie_id,
+        )
     except Exception as e:
         logger.error(f"[bg-sentencebank] movie={movie_id} FAILED: {e}", exc_info=True)
     finally:
@@ -685,7 +710,11 @@ async def classify_script(
     endpoint is still the explicit opt-in.
     """
     result = await run_script_classification(db, request)
-    background_tasks.add_task(populate_sentence_bank_bg, request.movie_id)
+    background_tasks.add_task(
+        populate_sentence_bank_bg,
+        request.movie_id,
+        max_pending=MAX_PENDING_BANK_PARSES,
+    )
     return result
 
 
