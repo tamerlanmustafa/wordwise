@@ -162,10 +162,18 @@ def _compute_polysemy(words: list) -> tuple:
     return polysemy, len(sense_counts), avg_senses
 
 
-def _compute_semantic_density_and_referential(text: str) -> tuple:
-    """Compute semantic density and referential complexity using spaCy."""
-    nlp = _get_nlp()
-    doc = nlp(text[:500_000])  # Cap text length
+def _compute_semantic_density_and_referential(text: Optional[str] = None, doc=None) -> tuple:
+    """Compute semantic density and referential complexity using spaCy.
+
+    `doc`, when given, is an already-parsed `Doc` of the same text — the caller
+    is sharing one parse across several analyzers (issue #140).
+    """
+    if doc is not None:
+        from .script_doc import capped
+        doc = capped(doc, 500_000)  # Cap applied to the doc, not the text
+    else:
+        nlp = _get_nlp()
+        doc = nlp(text[:500_000])  # Cap text length
 
     sentences = list(doc.sents)
     if not sentences:
@@ -218,6 +226,7 @@ def _compute_semantic_density_and_referential(text: str) -> tuple:
 def analyze_semantics(
     text: Optional[str] = None,
     word_list: Optional[List[str]] = None,
+    doc=None,
 ) -> SemanticResult:
     """
     Analyze semantic/conceptual complexity.
@@ -226,19 +235,25 @@ def analyze_semantics(
         text: Raw text for density and referential analysis (optional).
         word_list: List of content words for abstractness and polysemy (optional).
                    If not provided, words are extracted from text via spaCy.
+        doc: An already-parsed spaCy `Doc` for the same text. When given, nothing
+             here parses — the caller has one parse serving several analyzers
+             (issue #140).
     """
-    if not text and not word_list:
+    if not text and not word_list and doc is None:
         return SemanticResult(
             abstractness=0.3, polysemy_load=0.3, semantic_density=0.3,
             referential_complexity=0.3, composite_score=0.3, raw={}
         )
 
     # Extract content words from text if word_list not provided
-    if not word_list and text:
-        nlp = _get_nlp()
-        doc = nlp(text[:200_000])
+    if not word_list and (text or doc is not None):
         content_pos = {"NOUN", "VERB", "ADJ", "ADV"}
-        word_list = list(set(t.lemma_.lower() for t in doc if t.pos_ in content_pos and len(t.text) > 2))
+        if doc is not None:
+            from .script_doc import capped
+            tokens = capped(doc, 200_000)
+        else:
+            tokens = _get_nlp()(text[:200_000])
+        word_list = list(set(t.lemma_.lower() for t in tokens if t.pos_ in content_pos and len(t.text) > 2))
 
     if not word_list:
         word_list = []
@@ -250,9 +265,9 @@ def analyze_semantics(
     polysemy, polysemy_looked_up, avg_senses = _compute_polysemy(word_list)
 
     # 3 & 4. Semantic density and referential complexity
-    if text:
+    if text or doc is not None:
         semantic_density, referential_complexity, density_raw, ref_raw = (
-            _compute_semantic_density_and_referential(text)
+            _compute_semantic_density_and_referential(text, doc=doc)
         )
     else:
         semantic_density = 0.3

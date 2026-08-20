@@ -90,38 +90,45 @@ def _compute_tree_depth(token) -> int:
     return depth
 
 
-def analyze_morphosyntax(text: str, max_chars: int = 500_000) -> MorphosyntaxResult:
+def analyze_morphosyntax(text: Optional[str] = None, max_chars: int = 500_000, doc=None) -> MorphosyntaxResult:
     """
     Analyze morphosyntactic complexity of text.
 
     Args:
         text: Raw text to analyze (movie script, book chapter, etc.)
         max_chars: Truncate text beyond this length to keep processing time reasonable.
+        doc: An already-parsed spaCy `Doc` for the same text. When given, nothing
+             here parses — the caller has one parse serving several analyzers
+             (issue #140). The cap still applies, to the doc instead of the text.
 
     Returns:
         MorphosyntaxResult with normalized scores and raw values.
     """
-    if not text or len(text.strip()) < 20:
+    if doc is None and (not text or len(text.strip()) < 20):
         return MorphosyntaxResult(
             clause_density=0.3, syntactic_depth=0.3,
             passive_ratio=0.1, nominalization_density=0.1,
             composite_score=0.2, raw={}
         )
 
-    # Truncate very long texts
-    if len(text) > max_chars:
-        text = text[:max_chars]
+    if doc is not None:
+        from .script_doc import capped
+        doc = capped(doc, max_chars)
+    else:
+        # Truncate very long texts
+        if len(text) > max_chars:
+            text = text[:max_chars]
 
-    try:
-        nlp = _get_nlp()
-        doc = nlp(text)
-    except Exception as e:
-        logger.error(f"spaCy analysis failed: {e}")
-        return MorphosyntaxResult(
-            clause_density=0.3, syntactic_depth=0.3,
-            passive_ratio=0.1, nominalization_density=0.1,
-            composite_score=0.2, raw={}
-        )
+        try:
+            nlp = _get_nlp()
+            doc = nlp(text)
+        except Exception as e:
+            logger.error(f"spaCy analysis failed: {e}")
+            return MorphosyntaxResult(
+                clause_density=0.3, syntactic_depth=0.3,
+                passive_ratio=0.1, nominalization_density=0.1,
+                composite_score=0.2, raw={}
+            )
 
     sentences = list(doc.sents)
     if not sentences:

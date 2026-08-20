@@ -1104,7 +1104,7 @@ def _zipf_to_cefr(word: str) -> str:
     return 'C2'
 
 
-def _detect_phrasal_verbs_spacy(text: str) -> List[Tuple[str, str]]:
+def _detect_phrasal_verbs_spacy(text: str, doc=None) -> List[Tuple[str, str]]:
     """
     Use spaCy dependency parsing to detect verb+particle phrasal verbs in
     context — eliminating false positives like 'her makeup' matching 'make up'.
@@ -1119,17 +1119,22 @@ def _detect_phrasal_verbs_spacy(text: str) -> List[Tuple[str, str]]:
     Returns list of (phrase, cefr_level) tuples (deduplicated).
     Returns [] if spaCy can't be loaded — caller should fall back to the
     substring-based detection path.
-    """
-    try:
-        from .lemmatization_service import get_nlp
-        nlp = get_nlp()
-    except Exception:
-        return []
 
-    try:
-        doc = nlp(text)
-    except Exception:
-        return []
+    `doc`, when given, is an already-parsed `Doc` of the same text, shared with
+    the other consumers in the request (issue #140). Only `dep_`/`pos_`/`lemma_`
+    are read, so any parse of this text will do.
+    """
+    if doc is None:
+        try:
+            from .lemmatization_service import get_nlp
+            nlp = get_nlp()
+        except Exception:
+            return []
+
+        try:
+            doc = nlp(text)
+        except Exception:
+            return []
 
     found: Dict[str, str] = {}
     for token in doc:
@@ -1155,7 +1160,7 @@ def _detect_phrasal_verbs_spacy(text: str) -> List[Tuple[str, str]]:
     return list(found.items())
 
 
-def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
+def detect_phrasal_verbs_and_idioms(text: str, doc=None) -> List[Tuple[str, str, str]]:
     """
     Detect phrasal verbs and idioms in text.
 
@@ -1173,6 +1178,8 @@ def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
 
     Args:
         text: The input text to analyze
+        doc: Optional already-parsed spaCy `Doc` of the same text, so a caller
+             that has one parse can serve several consumers with it (#140).
 
     Returns:
         List of tuples: (expression, type, cefr_level)
@@ -1190,7 +1197,7 @@ def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
 
     # 2. Phrasal verbs — spaCy in-context detection (preferred)
     seen_pvs = set()
-    spacy_pvs = _detect_phrasal_verbs_spacy(text)
+    spacy_pvs = _detect_phrasal_verbs_spacy(text, doc=doc)
     for phrase, level in spacy_pvs:
         if phrase not in seen_pvs:
             detected.append((phrase, 'phrasal_verb', level))
@@ -1218,20 +1225,24 @@ def detect_phrasal_verbs_and_idioms(text: str) -> List[Tuple[str, str, str]]:
     return detected
 
 
-async def detect_phrasal_verbs_and_idioms_async(text: str) -> List[Tuple[str, str, str]]:
+async def detect_phrasal_verbs_and_idioms_async(text: str, doc=None) -> List[Tuple[str, str, str]]:
     """
     Await `detect_phrasal_verbs_and_idioms` on the NLP worker thread.
 
     Use this from `async def` handlers. The spaCy dependency parse inside is
     CPU-bound and holds the GIL for seconds on a full script, so running it on
     the event loop stalls every other request in the process (issue #117).
+
+    Pass `doc` when the caller already parsed this script (issue #140). The hop
+    is still needed: the substring matching over the curated idiom tables is
+    itself CPU-bound on a full script.
     """
     # Imported here, not at module scope: `src.utils.__init__` pulls in the
     # auth helpers (jose, passlib), and the offline ingestion scripts import
     # this classifier without needing any of that.
     from src.utils.nlp_executor import run_nlp
 
-    return await run_nlp(detect_phrasal_verbs_and_idioms, text)
+    return await run_nlp(detect_phrasal_verbs_and_idioms, text, doc=doc)
 
 
 def count_phrasal_verbs_and_idioms(text: str) -> Dict[str, int]:

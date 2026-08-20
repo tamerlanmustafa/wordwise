@@ -69,7 +69,7 @@ def no_real_spacy(monkeypatch):
     """
     calls = []
 
-    async def fake_compute(text):
+    async def fake_compute(text, doc=None):
         calls.append(text)
         return IDIOMS
 
@@ -210,7 +210,7 @@ async def test_a_cache_hit_does_not_consume_a_queue_slot(no_real_spacy):
 async def test_ingestion_precomputes_idioms_for_the_text_it_stores(monkeypatch):
     from src.services.script_ingestion_service import ScriptIngestionService
 
-    async def fake_compute(text):
+    async def fake_compute(text, doc=None):
         assert text == "he had to give up"
         return IDIOMS
 
@@ -263,7 +263,7 @@ async def test_ingestion_leaves_the_column_null_when_the_parse_fails(monkeypatch
 def spacy_missing(monkeypatch):
     calls = []
 
-    async def fake_compute(text):
+    async def fake_compute(text, doc=None):
         calls.append(text)
         return IDIOMS
 
@@ -292,7 +292,7 @@ async def test_ingestion_stores_nothing_when_spacy_is_missing(monkeypatch):
     async def unavailable():
         return False
 
-    async def fake_compute(text):
+    async def fake_compute(text, doc=None):
         raise AssertionError("must not even parse without the model")
 
     monkeypatch.setattr(script_idioms, "spacy_available", unavailable)

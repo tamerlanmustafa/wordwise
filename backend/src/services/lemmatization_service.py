@@ -114,18 +114,23 @@ def compute_priority_score(
     return FREQ_WEIGHT * freq_norm + CEFR_WEIGHT * difficulty + USAGE_WEIGHT * usage
 
 
-def lemmatize_script(text: str) -> LemmaResult:
+def lemmatize_script(text: str, doc=None) -> LemmaResult:
     """
     Tokenize and lemmatize a full script using spaCy.
 
     Returns unique lemmas with POS tags and frequency counts.
     Also detects multi-word expressions (phrasal verbs, idioms).
-    """
-    nlp = get_nlp()
 
-    # Process text in chunks if very long (spaCy max_length)
-    nlp.max_length = max(len(text) + 1000, nlp.max_length)
-    doc = nlp(text)
+    `doc`, when given, is an already-parsed `Doc` of the same text — one script
+    parse shared with the other consumers in the request (issue #140). Only
+    `lemma_`/`pos_`/`text` are read, so any parse of this text will do.
+    """
+    if doc is None:
+        nlp = get_nlp()
+
+        # Process text in chunks if very long (spaCy max_length)
+        nlp.max_length = max(len(text) + 1000, nlp.max_length)
+        doc = nlp(text)
 
     tokens: List[LemmaToken] = []
     lemma_freq: Dict[str, int] = {}
@@ -187,16 +192,18 @@ def lemmatize_script(text: str) -> LemmaResult:
     )
 
 
-async def lemmatize_script_async(text: str) -> LemmaResult:
+async def lemmatize_script_async(text: str, doc=None) -> LemmaResult:
     """
     Await `lemmatize_script` on the NLP worker thread.
 
     Use this from `async def` handlers — parsing a full script directly on the
-    event loop blocks every other request in the process (issue #117).
+    event loop blocks every other request in the process (issue #117). Pass
+    `doc` when the caller already parsed this script (issue #140); the hop is
+    still needed, since the token loop below is itself CPU-bound.
     """
     from src.utils.nlp_executor import run_nlp
 
-    return await run_nlp(lemmatize_script, text)
+    return await run_nlp(lemmatize_script, text, doc=doc)
 
 
 def _detect_multi_word_expressions(text: str) -> List[LemmaToken]:

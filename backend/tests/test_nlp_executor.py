@@ -172,11 +172,13 @@ def test_get_nlp_loads_the_model_only_once_under_concurrency(monkeypatch):
 # 6. No route calls the synchronous spaCy entry points
 # ---------------------------------------------------------------------------
 
-# Sync names that reach spaCy. `compute_difficulty_advanced` fans out to the
-# syntactic/semantic/discourse analyzers, each of which parses the full script.
+# Sync names that reach spaCy. `compute_difficulty_advanced` reaches it too,
+# via the syntactic/semantic/discourse analyzers it shares one parse with
+# (#140); it has its own check below, since it only parses when given `text=`.
 BLOCKING_NLP_CALLS = {
     "detect_phrasal_verbs_and_idioms",
     "lemmatize_script",
+    "parse_script",
 }
 
 ROUTES_DIR = Path(__file__).resolve().parents[1] / "src" / "routes"
@@ -208,7 +210,9 @@ def test_routes_never_call_spacy_synchronously(route_file):
 
 def test_compute_difficulty_is_offloaded_wherever_a_script_is_passed():
     """`compute_difficulty_advanced` only touches spaCy when `text=` is given
-    (signals 13-17), so the sync version is fine for the text-free callers."""
+    (signals 13-17), so the sync version is fine for the text-free callers.
+    Since #140 that's one parse rather than three — still far too much for the
+    event loop."""
     for route_file in sorted(ROUTES_DIR.glob("*.py")):
         tree = ast.parse(route_file.read_text())
         for node in ast.walk(tree):

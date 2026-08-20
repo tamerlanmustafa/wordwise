@@ -16,21 +16,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded spaCy
-_nlp = None
-
-
-def _get_nlp():
-    global _nlp
-    if _nlp is None:
-        try:
-            from .syntactic_analyzer import _get_nlp as _get_shared_nlp
-            _nlp = _get_shared_nlp()
-        except Exception:
-            import spacy
-            _nlp = spacy.load("en_core_web_sm")
-            _nlp.max_length = 2_000_000
-    return _nlp
+# spaCy lives in `script_doc.get_nlp_with_ner()`. This module used to carry its
+# own lazy loader *and* a `spacy.load` per call that ignored it; the loader
+# delegated to the NER-free singleton, which is the wrong model for the one
+# thing here that touches spaCy (entities). One NER-enabled singleton now serves
+# both this analyzer and the shared script parse (issue #140).
 
 
 # ── Indirect Speech & Hedging Markers ──
@@ -179,17 +169,33 @@ def _compute_cohesion_complexity(text: str) -> tuple:
     return score, raw
 
 
-def _compute_cultural_reference_density(text: str) -> tuple:
-    """Use spaCy NER to count named entities as proxy for cultural knowledge."""
-    # NER needs to be enabled for this
-    try:
-        import spacy
-        nlp = spacy.load("en_core_web_sm")  # Need NER enabled
-        nlp.max_length = 2_000_000
-    except Exception:
-        return 0.2, {"entity_count": 0, "note": "spaCy NER unavailable"}
+def _compute_cultural_reference_density(text: Optional[str] = None, doc=None) -> tuple:
+    """Use spaCy NER to count named entities as proxy for cultural knowledge.
 
-    doc = nlp(text[:300_000])  # Cap for performance
+    This is the one analyzer that needs entities, so `doc` must come from
+    `script_doc.parse_script`, which keeps NER enabled. A doc parsed by the
+    NER-free singleton has an empty `doc.ents` and would score every script as
+    culturally reference-free instead of falling back (issue #140).
+
+    Without a doc it loads the shared NER model — once per process. This used to
+    call `spacy.load` on *every* invocation (~0.1s and a whole orphaned model
+    each time), bypassing the singleton right above it.
+    """
+    if doc is not None:
+        from .script_doc import capped
+        doc = capped(doc, 300_000)  # Cap applied to the doc, not the text
+    else:
+        try:
+            from .script_doc import get_nlp_with_ner
+            nlp = get_nlp_with_ner()
+        except Exception:
+            return 0.2, {"entity_count": 0, "note": "spaCy NER unavailable"}
+
+        try:
+            doc = nlp(text[:300_000])  # Cap for performance
+        except Exception:
+            return 0.2, {"entity_count": 0, "note": "spaCy NER unavailable"}
+
     sentences = list(doc.sents)
     num_sentences = max(1, len(sentences))
 
@@ -215,13 +221,20 @@ def _compute_cultural_reference_density(text: str) -> tuple:
     return score, raw
 
 
-def analyze_discourse(text: Optional[str] = None) -> DiscourseResult:
+def analyze_discourse(text: Optional[str] = None, doc=None) -> DiscourseResult:
     """
     Analyze pragmatic and discourse complexity.
 
     Args:
         text: Raw text to analyze.
+        doc: An already-parsed spaCy `Doc` for the same text, from
+             `script_doc.parse_script` (NER enabled — see
+             `_compute_cultural_reference_density`). When given, nothing here
+             parses (issue #140).
     """
+    if not text and doc is not None:
+        text = doc.text
+
     if not text or len(text.strip()) < 20:
         return DiscourseResult(
             indirect_speech=0.1, cohesion_complexity=0.1,
@@ -235,7 +248,7 @@ def analyze_discourse(text: Optional[str] = None) -> DiscourseResult:
     cohesion, cohesion_raw = _compute_cohesion_complexity(text)
 
     # 3. Cultural references
-    cultural, cultural_raw = _compute_cultural_reference_density(text)
+    cultural, cultural_raw = _compute_cultural_reference_density(text, doc=doc)
 
     composite = (
         0.35 * indirect +

@@ -29,6 +29,7 @@ from src.services.cefr_registry import apply_registry_levels
 from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
 from src.services.profanity_filter import is_profane_entry
+from src.services.script_doc import parse_script_async
 from src.services.script_idioms import get_script_idioms
 from src.utils.nlp_executor import NLPOverloaded
 from prisma import Prisma
@@ -562,6 +563,12 @@ async def run_script_classification(
             for level, words in level_groups.items()
         }
 
+        # One parse of this script, shared by everything below that needs one
+        # (issue #140). It stays None when there is nothing to save: the only
+        # consumer left is the idiom detector, which then parses for itself
+        # exactly as it did before.
+        script_doc = None
+
         # Save to database (only if NOT cached)
         if request.save_to_db and not existing_classifications:
             # Deduplicate by lemma + CEFR level (avoid storing duplicates)
@@ -602,11 +609,20 @@ async def run_script_classification(
 
             logger.info(f"✓ Saved {len(cls_list)} classifications in {num_batches} batches")
 
+            # Parse the script once, here, for the three consumers below
+            # (lemmatization, difficulty scoring, idiom detection). Built after
+            # the classification inserts rather than at the top of the slow
+            # path so the doc — hundreds of MB on a long script — isn't held
+            # alive across the batched writes.
+            script_doc = await parse_script_async(script.cleanedScriptText)
+
             # ================================================================
             # V2 DUAL-WRITE: Populate Lemma registry + MovieLemmaMapping
             # ================================================================
             try:
-                lemma_result = await lemmatize_script_async(script.cleanedScriptText)
+                lemma_result = await lemmatize_script_async(
+                    script.cleanedScriptText, doc=script_doc
+                )
 
                 # Build classification lookup for the lemmatization service
                 cls_lookup = {}
@@ -648,7 +664,9 @@ async def run_script_classification(
             ]
 
             # genres already extracted above (from request or DB)
-            level, score, breakdown = await compute_difficulty_advanced_async(word_data_list, genres=genres, text=script.cleanedScriptText)
+            level, score, breakdown = await compute_difficulty_advanced_async(
+                word_data_list, genres=genres, text=script.cleanedScriptText, doc=script_doc
+            )
 
             # Convert dict to JSON string for Prisma Json field
             await db.movie.update(
@@ -668,7 +686,9 @@ async def run_script_classification(
             logger.info(f"✓ Updated movie difficulty: {level.value}, score: {score}")
 
         # Idioms from the stored column, computed once per script (issue #106).
-        idioms = [IdiomInfo(**i) for i in await get_script_idioms(db, script)]
+        # On the miss that a brand-new movie always takes, the detector reads
+        # the parse made above instead of building a fifth one (issue #140).
+        idioms = [IdiomInfo(**i) for i in await get_script_idioms(db, script, doc=script_doc)]
         logger.info(f"Detected {len(idioms)} idioms/phrasal verbs in script")
 
         # Final response

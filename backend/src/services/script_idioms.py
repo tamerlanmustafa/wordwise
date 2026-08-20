@@ -100,16 +100,20 @@ async def spacy_available() -> bool:
     return _spacy_ok
 
 
-async def compute_idioms(text: str) -> List[Idiom]:
+async def compute_idioms(text: str, doc=None) -> List[Idiom]:
     """
     Run the detector on the NLP worker thread and shape the result for storage.
 
     The stored shape is the API shape (`phrase`/`type`/`cefr_level`/`words`) so
     the read path is a plain column read with no per-request transformation.
+
+    `doc` is an already-parsed `Doc` of the same text when the caller has one
+    (issue #140) — the classification path parses the script once and every
+    consumer, this one included, reads that parse.
     """
     from src.services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 
-    results = await detect_phrasal_verbs_and_idioms_async(text)
+    results = await detect_phrasal_verbs_and_idioms_async(text, doc=doc)
     return [
         {
             "phrase": phrase,
@@ -126,6 +130,7 @@ async def get_script_idioms(
     script: Any,
     *,
     max_pending: Optional[int] = None,
+    doc=None,
 ) -> List[Idiom]:
     """
     The idioms for `script`, computing and storing them if this is the first ask.
@@ -137,6 +142,11 @@ async def get_script_idioms(
     cache-miss parse and raises `NLPOverloaded` if the queue is already full.
     Public endpoints pass it so a burst of first-time movies sheds instead of
     queueing; the cached path never touches the queue at all.
+
+    `doc`, when given, is a parse of this script the caller already has (issue
+    #140), so the cache miss costs no parse at all. A supplied doc *is* proof
+    that the model loaded, which is what `spacy_available` otherwise probes for
+    before allowing a degraded result to be frozen into the column.
     """
     stored = _as_idiom_list(getattr(script, "idioms", None))
     if stored is not None:
@@ -148,11 +158,11 @@ async def get_script_idioms(
 
     if max_pending is not None:
         with nlp_slot(max_pending):
-            idioms = await compute_idioms(text)
-            storable = await spacy_available()
+            idioms = await compute_idioms(text, doc=doc)
+            storable = True if doc is not None else await spacy_available()
     else:
-        idioms = await compute_idioms(text)
-        storable = await spacy_available()
+        idioms = await compute_idioms(text, doc=doc)
+        storable = True if doc is not None else await spacy_available()
 
     if storable:
         await store_script_idioms(db, script.id, idioms)

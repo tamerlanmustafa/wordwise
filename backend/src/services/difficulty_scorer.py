@@ -610,7 +610,8 @@ def compute_cefr_spread(level_counts: Dict[str, int], total_words: int) -> int:
 def compute_difficulty_advanced(
     words: List[WordData],
     genres: Optional[List[str]] = None,
-    text: Optional[str] = None
+    text: Optional[str] = None,
+    doc=None,
 ) -> Tuple[difficultylevel, int, Dict[str, float]]:
     """
     Refined multi-signal difficulty computation with genre normalization.
@@ -632,6 +633,10 @@ def compute_difficulty_advanced(
         words: List of WordData objects with CEFR classifications
         genres: Optional list of movie genres (e.g., ['Animation', 'Family'])
         text: Optional raw text for readability metrics
+        doc: Optional spaCy `Doc` of `text`, already parsed by the caller. Passing
+             `text=` alone used to fan out into three independent parses of the
+             same script (issue #140); it now parses once here and shares that
+             doc, and a caller that already has one passes it in.
 
     Returns difficulty_level, score (0-100), and breakdown percentages.
     """
@@ -776,9 +781,18 @@ def compute_difficulty_advanced(
     cognitive_score = 0.3
 
     if text:
+        # One parse, three consumers. Signals 13, 14 and 16 each used to build
+        # their own full dependency parse of this same unchanged text — three
+        # of the five parses a new movie paid for (#140). Nothing at the call
+        # site suggested that passing `text=` cost seconds of CPU, which is
+        # exactly why it went unnoticed.
+        if doc is None:
+            from .script_doc import parse_script
+            doc = parse_script(text)
+
         try:
             from .syntactic_analyzer import analyze_morphosyntax
-            morpho_result = analyze_morphosyntax(text)
+            morpho_result = analyze_morphosyntax(text, doc=doc)
             morphosyntax_score = morpho_result.composite_score
         except Exception as e:
             import logging
@@ -787,7 +801,7 @@ def compute_difficulty_advanced(
         try:
             from .semantic_analyzer import analyze_semantics
             word_strs = list(set(w.word.lower() for w in words if w.word))
-            semantic_result = analyze_semantics(text=text, word_list=word_strs)
+            semantic_result = analyze_semantics(text=text, word_list=word_strs, doc=doc)
             semantic_score = semantic_result.composite_score
         except Exception as e:
             import logging
@@ -804,7 +818,7 @@ def compute_difficulty_advanced(
 
         try:
             from .discourse_analyzer import analyze_discourse
-            discourse_result = analyze_discourse(text=text)
+            discourse_result = analyze_discourse(text=text, doc=doc)
             discourse_score = discourse_result.composite_score
         except Exception as e:
             import logging
@@ -932,19 +946,22 @@ def compute_difficulty_advanced(
 async def compute_difficulty_advanced_async(
     words: List[WordData],
     genres: Optional[List[str]] = None,
-    text: Optional[str] = None
+    text: Optional[str] = None,
+    doc=None,
 ) -> Tuple[difficultylevel, int, Dict[str, float]]:
     """
     Await `compute_difficulty_advanced` on the NLP worker thread.
 
     Use this from `async def` handlers. When `text` is supplied, signals 13-17
-    fan out to the syntactic, semantic and discourse analyzers, each of which
-    runs its own full spaCy parse of the script — seconds of CPU that would
+    reach the syntactic, semantic and discourse analyzers, which share a single
+    spaCy parse of the script (issue #140) — still seconds of CPU that would
     otherwise block every other request in the process (issue #117).
+
+    `doc` skips even that parse when the caller already has one.
     """
     from src.utils.nlp_executor import run_nlp
 
-    return await run_nlp(compute_difficulty_advanced, words, genres=genres, text=text)
+    return await run_nlp(compute_difficulty_advanced, words, genres=genres, text=text, doc=doc)
 
 
 def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylevel, int, Dict[str, int]]:
