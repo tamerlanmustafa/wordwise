@@ -17,6 +17,7 @@ from src.services.quiz_service import (
     build_translation_choices,
     compute_stars,
     compute_xp,
+    is_near_form,
     is_unit_unlocked,
     pick_card_types,
     srs_outcome_for_card,
@@ -93,6 +94,84 @@ class TestBuildTranslationChoices:
         a = build_translation_choices("run", self.TRANSLATIONS, rng=random.Random(7))
         b = build_translation_choices("run", self.TRANSLATIONS, rng=random.Random(7))
         assert a == b
+
+    def test_distractor_containing_the_answer_is_rejected(self):
+        # "casa de campo" is built out of the answer — showing both tiles
+        # either gives the answer away or reads as a trick.
+        deck = {
+            "house": "casa",
+            "cottage": "casa de campo",
+            "eat": "comer",
+            "sleep": "dormir",
+            "speak": "hablar",
+        }
+        choices = build_translation_choices("house", deck, rng=random.Random(1))
+        assert choices is not None
+        assert "casa de campo" not in {c["word"] for c in choices}
+
+    def test_distractor_contained_in_the_answer_is_rejected(self):
+        # Other direction, and case-insensitively: "Hand" sits inside
+        # "Handschuh".
+        deck = {
+            "glove": "Handschuh",
+            "hand": "Hand",
+            "eat": "essen",
+            "sleep": "schlafen",
+            "speak": "sprechen",
+        }
+        choices = build_translation_choices("glove", deck, rng=random.Random(1))
+        assert choices is not None
+        assert "Hand" not in {c["word"] for c in choices}
+
+    def test_short_incidental_substring_is_kept(self):
+        # "ir" sits inside "vivir" but is an unrelated word; the
+        # min-length guard keeps it as a legitimate distractor.
+        deck = {
+            "live": "vivir",
+            "go": "ir",
+            "eat": "comer",
+            "sleep": "dormir",
+        }
+        choices = build_translation_choices("live", deck, rng=random.Random(3))
+        assert choices is not None
+        assert "ir" in {c["word"] for c in choices}
+
+    def test_near_forms_can_starve_the_grid(self):
+        # Both "casa de campo" and "casas" are dropped, leaving 2
+        # distractors — under the 3 needed, so the caller falls back to
+        # self_rate rather than shipping a confusing grid.
+        deck = {
+            "house": "casa",
+            "cottage": "casa de campo",
+            "houses": "casas",
+            "eat": "comer",
+            "sleep": "dormir",
+        }
+        assert build_translation_choices("house", deck, rng=random.Random(1)) is None
+
+
+class TestIsNearForm:
+    def test_identical_after_normalization(self):
+        assert is_near_form(" Correr ", "correr") is True
+
+    def test_containment_both_directions(self):
+        # Inflection of the answer, and the answer inside a compound.
+        assert is_near_form("casas", "casa") is True
+        assert is_near_form("casa", "casas") is True
+        assert is_near_form("Hand", "Handschuh") is True
+
+    def test_min_length_guard(self):
+        # Shorter side under 3 chars — containment doesn't count.
+        assert is_near_form("ir", "vivir") is False
+        assert is_near_form("vivir", "ir") is False
+        # At the boundary it does.
+        assert is_near_form("dar", "andar") is True
+
+    def test_unrelated_translations_pass(self):
+        assert is_near_form("comer", "correr") is False
+
+    def test_empty_string_is_not_near(self):
+        assert is_near_form("", "correr") is False
 
 
 class TestComputeStars:

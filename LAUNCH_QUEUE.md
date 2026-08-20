@@ -28,8 +28,8 @@ Rules for whoever works this file:
 |---|--------|-------|------|
 | 5 | `running` | #124 | **Shipped and warming unattended** (a2a7021, f2ae24e). `translation_warm_worker` is the 4th worker process; scope is hot-set only (~874k chars/lang); DeepL then Google, `provider` column records which. TR at 20,048/23,503 (~85%). Remaining ~10 langs at ~1/month — **no action needed, just watch `/admin/health/translation-cache`**; coverage that stops climbing = worker wedged. |
 | 6 | `done` | #125 | Proxy + cache TMDB server-side; key gone from the client. **Rotate the TMDB key only after the new build is adopted** — old installs and `frontend/` still carry the old one. |
-| 7 | `doing` | #103 | Converge the two movie CEFR derivations. 1,006 of 4,406 movies disagree. |
-| 8 | `todo` | #94 | Translation-MCQ distractors must not be near-forms of the correct answer. |
+| 7 | `done` | #103 | Converged all four movie CEFR derivations onto `difficulty_score`. **Run `prisma/manual/2026_08_20_converge_movie_cefr_issue_103.sql` AFTER the deploy is green, not before** — it drops a column the live client still selects. |
+| 8 | `done` | #94 | Translation-MCQ distractors must not be near-forms of the correct answer. |
 | 9 | `todo` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. Header change, not infrastructure. |
 | 10 | `user` | #101 | Native-speaker review of es/pt/tr/ru. Needs real speakers. Gate on *promoting* those locales. |
 
@@ -79,6 +79,8 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 | Date | Item | Outcome |
 |------|------|---------|
+| 2026-08-20 | 8 (#94) | Distractors that contain (or sit inside) the correct translation are filtered out of the grid. Measured on the live TR cache: 0.28% of cards swap a distractor, 0 dropped at the standard 10-card deck; only a 4-word deck can starve, ~1 card in 1,000. Edit distance deliberately rejected — it would have killed fair pairs like `comer`/`correr`. |
+| 2026-08-20 | 7 (#103) | Four derivations, not two: only 61% of movies got the same level from all paths, and 418 read B1/B2/C1 at once. The enum was just the score re-bucketed lossily, so it's gone — level is derived from `difficulty_score` on read. Also fixed two silent bugs it was hiding: onboarding's first-film list 400'd for every new user, and the quiz treated every movie as B1. Column drop SQL is written but **must run after the deploy**. |
 | 2026-08-20 | 6 (#125) | TMDB moved behind `/api/tmdb/*` with a single-flight TTL cache; a 20-row page is 1 request, not 20, and no key ships in the bundle. Key still hard-coded in frozen `frontend/` — rotation would break those pages. |
 | 2026-08-20 | Triage | 45 → 41 open. Queue created. |
 | 2026-08-20 | 2 (#133) | `/health` gate live on `wordwise`; first healthchecked deploy passed. Couldn't go in `railway.json` — shared with `Worker`, which binds no port. #133's premise was wrong: Railway healthchecks are deploy-time only, so this gates bad deploys, it does not restart a wedged process. |

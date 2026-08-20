@@ -15,6 +15,12 @@ from typing import List, Optional
 CARDS_PER_SESSION = 10
 MCQ_RATIO = 0.7  # ~70% scored MCQ cards, ~30% self-rate
 
+# How long the shorter of two translations must be before one containing
+# the other counts as "too similar". Without this, a legitimate 2-letter
+# distractor ("ir") would be thrown out for sitting inside an unrelated
+# answer ("vivir").
+MIN_CONTAINMENT_LEN = 3
+
 # XP economy — round numbers, tune later.
 XP_PER_CORRECT = 10
 XP_PER_SELF_RATE = 5  # participation credit; self-rating is honest effort
@@ -52,6 +58,51 @@ def pick_card_types(total: int = CARDS_PER_SESSION, *, rng: Optional[random.Rand
     return deck
 
 
+def normalize_choice(text: str) -> str:
+    """Comparison key for a translation tile: whitespace collapsed and
+    case folded. `casefold()` rather than `lower()` because the target
+    languages include German (ß/ss) and Turkish (İ/i), where `lower()`
+    leaves two spellings of the same word looking different."""
+    return " ".join(text.split()).casefold()
+
+
+def is_near_form(candidate: str, correct: str) -> bool:
+    """True when a distractor is spelled closely enough to the correct
+    translation that putting both in one grid would confuse the learner
+    or give the answer away.
+
+    The rule is containment in either direction, after normalization —
+    which covers the three shapes seen in the live TR cache: a suffixed
+    inflection ("dakik" vs "dakiklik", "yaşlı" vs "yaşlılar"), a compound
+    swallowing the answer ("Hand" vs "Handschuh"), and a phrase built
+    around it ("tütsü" vs "tütsü evi"). MIN_CONTAINMENT_LEN keeps a short
+    unrelated word that merely sits inside a longer one from being
+    rejected.
+
+    Two deliberate limits:
+      • It does not catch a related form that alters the stem
+        ("casa"/"casita" share no substring), and no cheap string rule
+        would without a stemmer per target language.
+      • Edit distance is not used. It looks tempting but misfires on real
+        decks: Spanish "comer"/"correr" are two edits apart and are a
+        perfectly fair pair to show together.
+
+    It over-rejects slightly — an unrelated short word can be an
+    incidental substring ("kar" inside "karaciğerle ilgili"). That costs
+    one candidate out of a pool that has spares (see the near-form tests),
+    so the trade favors the false positive.
+    """
+    a, b = normalize_choice(candidate), normalize_choice(correct)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) < MIN_CONTAINMENT_LEN:
+        return False
+    return shorter in longer
+
+
 def build_translation_choices(
     word: str,
     translations: dict[str, str],
@@ -67,21 +118,25 @@ def build_translation_choices(
 
     Distractors are deduped case-insensitively against the correct answer
     and each other, so two deck words sharing a translation can't produce
-    a grid with two "right" tiles. Returns None when the word has no
-    translation or fewer than `n_choices - 1` distinct distractors exist —
-    the caller falls back to self_rate.
+    a grid with two "right" tiles, and near-forms of the correct answer
+    are dropped as well (see `is_near_form`). Returns None when the word
+    has no translation or fewer than `n_choices - 1` usable distractors
+    remain — quiz then falls back to a self_rate card, SRS drops the word
+    from the session, so keep the filter cheap on candidates.
     """
     correct = translations.get(word)
     if not correct:
         return None
     r = rng or random.Random()
-    seen = {correct.strip().lower()}
+    seen = {normalize_choice(correct)}
     pool: List[str] = []
     for other, t in translations.items():
         if other == word:
             continue
-        key = t.strip().lower()
+        key = normalize_choice(t)
         if key in seen:
+            continue
+        if is_near_form(t, correct):
             continue
         seen.add(key)
         pool.append(t)
