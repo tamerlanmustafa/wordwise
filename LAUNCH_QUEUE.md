@@ -28,7 +28,7 @@ Rules for whoever works this file:
 |---|--------|-------|------|
 | 5 | `running` | #124 | **Shipped and warming unattended** (a2a7021, f2ae24e). `translation_warm_worker` is the 4th worker process; scope is hot-set only (~874k chars/lang); DeepL then Google, `provider` column records which. TR at 20,048/23,503 (~85%). Remaining ~10 langs at ~1/month — **no action needed, just watch `/admin/health/translation-cache`**; coverage that stops climbing = worker wedged. |
 | 6 | `done` | #125 | Proxy + cache TMDB server-side; key gone from the client. **Rotate the TMDB key only after the new build is adopted** — old installs and `frontend/` still carry the old one. |
-| 7 | `done` | #103 | Converged all four movie CEFR derivations onto `difficulty_score`. **Run `prisma/manual/2026_08_20_converge_movie_cefr_issue_103.sql` AFTER the deploy is green, not before** — it drops a column the live client still selects. |
+| 7 | `done` | #103 | Converged all four movie CEFR derivations onto `difficulty_score`. ⏳ **Deploy is green as of 2026-08-20 (c07387c) and `/movies/by-level?level=A1` returns 200, so `prisma/manual/2026_08_20_converge_movie_cefr_issue_103.sql` is now unblocked and still UNAPPLIED.** Needs the user to run it; `movies.difficulty_level` + `ix_movies_difficulty` are still in prod. Safe to sit on — an unused column costs nothing. |
 | 8 | `done` | #94 | Translation-MCQ distractors must not be near-forms of the correct answer. |
 | 9 | `todo` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. Header change, not infrastructure. |
 | 10 | `user` | #101 | Native-speaker review of es/pt/tr/ru. Needs real speakers. Gate on *promoting* those locales. |
