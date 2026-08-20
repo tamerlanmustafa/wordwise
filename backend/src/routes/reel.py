@@ -18,24 +18,12 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.movie_cefr import CEFR_LEVELS, cefr_from_score
 
 router = APIRouter(prefix="/reel", tags=["reel"])
 
 # CEFR ladder used for ±1 banding when seeding starter movies.
-LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
-
-# Map our internal `difficultylevel` enum (long names) → CEFR codes
-# the client renders. The DB enum predates the CEFR convention so it
-# stores ELEMENTARY/INTERMEDIATE/... rather than A2/B1. Single source
-# of truth — also used by /movies/by-level downstream.
-DIFFICULTY_TO_CEFR: dict[str, str] = {
-    "BEGINNER":          "A1",
-    "ELEMENTARY":        "A2",
-    "INTERMEDIATE":      "B1",
-    "UPPER_INTERMEDIATE": "B2",
-    "ADVANCED":          "C1",
-    "PROFICIENT":        "C2",
-}
+LEVELS = list(CEFR_LEVELS)
 
 # How many starter movies to drop into a fresh reel.
 SEED_TARGET_COUNT = 6
@@ -135,9 +123,10 @@ class ReelTile(BaseModel):
     # for display; the float in the DB is preserved for future tuning.
     status: Literal["unstudied", "studied", "mastered"] = "unstudied"
     comprehensibility_percent: int = 0
-    # v0.7: CEFR difficulty from `Movie.difficultyLevel`. Null when the
-    # user-added TMDB id doesn't have a matching internal Movie row
-    # (rare — happens before our catalog ingest catches up).
+    # v0.7: CEFR difficulty banded off `Movie.difficultyScore` (#103). Null
+    # when the user-added TMDB id doesn't have a matching internal Movie row
+    # (rare — happens before our catalog ingest catches up), or when that row
+    # exists but its script has not been scored yet.
     cefr_level: Optional[Literal["A1", "A2", "B1", "B2", "C1", "C2"]] = None
     # v0.7.2: internal Movie.id when we have a matching catalog entry.
     # Needed by the Movie Deep-Dive practice tile, which calls
@@ -192,19 +181,14 @@ async def list_reel(
         movies = await db.movie.find_many(where={"tmdbId": {"in": tmdb_ids}})
         tmdb_to_movie_id = {m.tmdbId: m.id for m in movies}
         # Snap CEFR off the same `movies` query — no extra round trip.
-        # The DB stores the long-name enum (ELEMENTARY/INTERMEDIATE/...);
-        # DIFFICULTY_TO_CEFR translates to the A1..C2 codes the client
-        # renders against `cefrColors`.
+        # Derived from `difficulty_score`, the way every other surface does it
+        # since #103. This used to read the `difficultylevel` enum, which had
+        # collapsed A1/A2 and B1/B2 into one label each, so a tile here read B1
+        # while the same film's detail screen read B2.
         for m in movies:
-            if m.difficultyLevel is not None:
-                long_name = (
-                    m.difficultyLevel.value
-                    if hasattr(m.difficultyLevel, "value")
-                    else str(m.difficultyLevel)
-                ).upper()
-                cefr = DIFFICULTY_TO_CEFR.get(long_name)
-                if cefr is not None:
-                    cefr_by_tmdb[m.tmdbId] = cefr
+            cefr = cefr_from_score(m.difficultyScore)
+            if cefr is not None:
+                cefr_by_tmdb[m.tmdbId] = cefr
         movie_ids = list(tmdb_to_movie_id.values())
         if movie_ids:
             progress_rows = await db.usermovieprogress.find_many(

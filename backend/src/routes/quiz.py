@@ -35,6 +35,7 @@ from ..services.quiz_service import (
     pick_card_types,
     srs_outcome_for_card,
 )
+from ..services.movie_cefr import cefr_from_score
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
@@ -667,8 +668,11 @@ async def start_pre_movie_quiz(
 
     user_level = current_user.proficiencyLevel
     user_level = user_level.value if hasattr(user_level, "value") else (user_level or "B1")
-    movie_level = movie.difficultyLevel
-    movie_level = movie_level.value if hasattr(movie_level, "value") else (movie_level or "B1")
+    # #103: this read `movie.difficultyLevel`, whose values were long enum
+    # names (INTERMEDIATE, ...) that are never in LEVEL_ORDER — so `_rank`
+    # below silently fell through to 2 and every film counted as B1 when
+    # picking which level's words to quiz on.
+    movie_level = cefr_from_score(movie.difficultyScore) or "B1"
 
     def _rank(level: str) -> int:
         return LEVEL_ORDER.index(level) if level in LEVEL_ORDER else 2

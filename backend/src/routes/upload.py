@@ -226,12 +226,12 @@ async def upload_file(
             for cls in classifications
         ]
 
-        level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=[])
+        # Score only — the CEFR level is derived from it on read (#103).
+        score, breakdown = compute_difficulty_advanced(word_data_list, genres=[])
 
         await db.movie.update(
             where={'id': movie.id},
             data={
-                'difficultyLevel': level,
                 'difficultyScore': score,
                 'cefrDistribution': json.dumps(breakdown) if breakdown else None
             }

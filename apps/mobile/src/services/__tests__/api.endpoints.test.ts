@@ -356,6 +356,15 @@ describe('API endpoint wrappers', () => {
       expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/movies/by-cefr?level=B1&limit=10&offset=20&sort=rating&order=desc`);
     });
 
+    it('getMoviesByLevel sends the learner CEFR band onboarding actually holds', async () => {
+      // #103: onboarding's "pick your first film" passes startingLevel, a CEFR
+      // code. The endpoint used to validate against the retired long-name enum
+      // and 400, so every new user got an empty suggestion list.
+      fetchMock.mockResolvedValue(ok({ level: 'A1', total: 0, movies: [] }));
+      await wordwiseApi.getMoviesByLevel('A1', 12);
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/movies/by-level?level=A1&limit=12`);
+    });
+
     it('searchMovies URL-encodes the query', async () => {
       fetchMock.mockResolvedValue(ok({ query: 'die hard', results: [], total: 0, tmdb_metadata: null }));
       await wordwiseApi.searchMovies('die hard');

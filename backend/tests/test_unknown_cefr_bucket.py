@@ -183,16 +183,18 @@ def test_name_heavy_script_does_not_score_easier():
     ]
     names = [WordData("UNKNOWN", 0.9, None, n) for n in ("Fezziwig", "Aleppo", "Orson")]
 
-    level_real, score_real, _ = compute_difficulty_advanced(real)
-    level_named, score_named, _ = compute_difficulty_advanced(real + names)
+    score_real, _ = compute_difficulty_advanced(real)
+    score_named, _ = compute_difficulty_advanced(real + names)
 
-    assert (level_real, score_real) == (level_named, score_named)
+    # The score is the whole answer since #103 — the level is banded off it on
+    # read, so pinning the score pins the level too.
+    assert score_real == score_named
 
 
 def test_legacy_compute_difficulty_excludes_unknown_from_total():
     dist = {"A1": 40, "A2": 30, "B1": 20, "B2": 10}
 
-    level_real, score_real, _ = compute_difficulty(dist)
-    level_named, score_named, _ = compute_difficulty({**dist, "UNKNOWN": 500})
+    score_real, _ = compute_difficulty(dist)
+    score_named, _ = compute_difficulty({**dist, "UNKNOWN": 500})
 
-    assert (level_real, score_real) == (level_named, score_named)
+    assert score_real == score_named

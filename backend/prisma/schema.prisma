@@ -93,7 +93,11 @@ model Movie {
   actualTitle      String?               @map("actual_title") @db.VarChar
   year             Int
   genre            String?               @db.VarChar
-  difficultyLevel  difficultylevel?      @map("difficulty_level")
+  // #103: `difficulty_level` is gone. It was a six-value enum that the scorer
+  // filled by bucketing `difficultyScore`, but collapsing two CEFR bands onto
+  // each label — so it contradicted its own source on 1,006 of 4,406 films.
+  // The level is now derived on read by `services/movie_cefr.py` and stored
+  // nowhere. Filtering by level is a range over `difficultyScore`.
   difficultyScore  Int?                  @map("difficulty_score")
   cefrDistribution Json?                 @map("cefr_distribution")
   // Vestigial (#93): legacy large-text column on the hottest table,
@@ -122,7 +126,9 @@ model Movie {
   userProgress     UserMovieProgress[]
 
   @@index([title], map: "ix_movies_title")
-  @@index([difficultyLevel], map: "ix_movies_difficulty")
+  // Replaces ix_movies_difficulty (#103): every level filter is now a range
+  // over the score — /movies/by-level, /movies/by-cefr, /admin/movies/processed.
+  @@index([difficultyScore], map: "ix_movies_difficulty_score")
   @@map("movies")
 }
 
@@ -415,13 +421,16 @@ model WordSentenceExample {
   @@map("word_sentence_examples")
 }
 
-// #93: three difficulty vocabularies coexist. Mapping, for anyone converting:
-//   difficultylevel (movies, books)   BEGINNER ELEMENTARY INTERMEDIATE
+// #103 took `movies` off this enum — a movie's level is banded off
+// `difficulty_score` by services/movie_cefr.py and never stored. What is left
+// holding the type is two empty tables: `books` (0 rows) and the vestigial
+// `words` (0 rows, #93). Dropping the type is therefore free, but it waits on
+// books becoming real or being retired. Nothing here reaches a learner.
+//   difficultylevel (books, words)    BEGINNER ELEMENTARY INTERMEDIATE
 //                                     UPPER_INTERMEDIATE ADVANCED PROFICIENT
-//   proficiencylevel (everywhere else)      A1 A2         B1
+//   proficiencylevel (words, lemmas)        A1 A2         B1
 //                                                B2       C1       C2
 //   quiz tables (cefr_level)          the same CEFR codes as raw varchar(2).
-// CEFR is the target; converging the movie/book enum is a separate change.
 enum difficultylevel {
   BEGINNER
   ELEMENTARY

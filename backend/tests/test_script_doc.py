@@ -176,7 +176,7 @@ def test_difficulty_reuses_a_doc_the_caller_already_has(monkeypatch, nothing_may
     )
 
     words = [WordData(cefr_level="B1", confidence=0.9, frequency_rank=900, word="detective")]
-    level, score, _breakdown = compute_difficulty_advanced(
+    score, _breakdown = compute_difficulty_advanced(
         words, genres=[], text=TEXT, doc=FakeDoc(ents=["PERSON"])
     )
 
@@ -198,9 +198,8 @@ def test_a_failed_parse_leaves_the_analyzers_to_their_own_fallbacks(monkeypatch,
     )
 
     words = [WordData(cefr_level="B1", confidence=0.9, frequency_rank=900, word="detective")]
-    level, score, _breakdown = compute_difficulty_advanced(words, genres=[], text=TEXT)
+    score, _breakdown = compute_difficulty_advanced(words, genres=[], text=TEXT)
 
-    assert level is not None
     assert 0 <= score <= 100
 
 

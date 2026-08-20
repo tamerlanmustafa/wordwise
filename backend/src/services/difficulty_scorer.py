@@ -1,5 +1,5 @@
 from typing import Dict, Tuple, List, Optional
-from prisma.enums import difficultylevel, proficiencylevel
+from prisma.enums import proficiencylevel
 import statistics
 import re
 import math
@@ -612,7 +612,7 @@ def compute_difficulty_advanced(
     genres: Optional[List[str]] = None,
     text: Optional[str] = None,
     doc=None,
-) -> Tuple[difficultylevel, int, Dict[str, float]]:
+) -> Tuple[int, Dict[str, float]]:
     """
     Refined multi-signal difficulty computation with genre normalization.
 
@@ -638,11 +638,12 @@ def compute_difficulty_advanced(
              same script (issue #140); it now parses once here and shares that
              doc, and a caller that already has one passes it in.
 
-    Returns difficulty_level, score (0-100), and breakdown percentages.
+    Returns score (0-100) and breakdown percentages. The CEFR level is not
+    returned or stored — `services.movie_cefr.cefr_from_score` derives it (#103).
     """
     words = scorable_words(words)
     if not words:
-        return difficultylevel.BEGINNER, 0, {}
+        return 0, {}
 
     # Filter out likely misclassified words (slang contractions, non-English, gibberish)
     # These inflate C1/C2 counts in casual/kids movies
@@ -923,24 +924,17 @@ def compute_difficulty_advanced(
         score = int(score * genre_multiplier)
         score = max(0, min(100, score))
 
-    # CEFR thresholds: 0-20 A1, 20-35 A2, 35-50 B1, 50-65 B2, 65-80 C1, 80-100 C2
-    if score < 20:
-        level = difficultylevel.ELEMENTARY  # A1
-    elif score < 35:
-        level = difficultylevel.ELEMENTARY  # A2
-    elif score < 50:
-        level = difficultylevel.INTERMEDIATE  # B1
-    elif score < 65:
-        level = difficultylevel.INTERMEDIATE  # B2
-    elif score < 80:
-        level = difficultylevel.ADVANCED  # C1
-    else:
-        level = difficultylevel.PROFICIENT  # C2
+    # #103: this used to bucket `score` into the `difficultylevel` enum here and
+    # store it alongside. The buckets mapped two CEFR bands onto one label — A1
+    # and A2 both became ELEMENTARY, B1 and B2 both became INTERMEDIATE — so the
+    # stored label contradicted the score it came from on 1,006 of 4,406 films.
+    # The score is the whole signal; `services.movie_cefr.cefr_from_score` bands
+    # it on read, and nothing stores a level that could go stale.
 
     # Calculate breakdown percentages
     breakdown = {k: v / total_words for k, v in level_counts.items() if v > 0}
 
-    return level, score, breakdown
+    return score, breakdown
 
 
 async def compute_difficulty_advanced_async(
@@ -948,7 +942,7 @@ async def compute_difficulty_advanced_async(
     genres: Optional[List[str]] = None,
     text: Optional[str] = None,
     doc=None,
-) -> Tuple[difficultylevel, int, Dict[str, float]]:
+) -> Tuple[int, Dict[str, float]]:
     """
     Await `compute_difficulty_advanced` on the NLP worker thread.
 
@@ -964,10 +958,15 @@ async def compute_difficulty_advanced_async(
     return await run_nlp(compute_difficulty_advanced, words, genres=genres, text=text, doc=doc)
 
 
-def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylevel, int, Dict[str, int]]:
+def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[int, Dict[str, int]]:
     """
     Legacy difficulty computation using only CEFR distribution counts.
-    Kept for backward compatibility.
+    Kept for backward compatibility — the admin reprocess endpoints still use it.
+
+    Returns score (0-100) and the filtered distribution. It used to return a
+    level too, picked by a *third* set of rules (percentage thresholds on the
+    distribution) that had nothing to do with the score it returned alongside
+    (#103). Callers band the score with `movie_cefr.cefr_from_score` instead.
     """
     # UNKNOWN (#91) is not a difficulty band: leaving it in `total` would
     # shrink every percentage below and drag films toward BEGINNER.
@@ -976,36 +975,18 @@ def compute_difficulty(cefr_distribution: Dict[str, int]) -> Tuple[difficultylev
     }
     total = sum(cefr_distribution.values())
     if total == 0:
-        return difficultylevel.BEGINNER, 0, cefr_distribution
+        return 0, cefr_distribution
 
     percentages = {k: (v / total) * 100 for k, v in cefr_distribution.items()}
 
-    a1_pct = percentages.get("A1", 0)
-    a2_pct = percentages.get("A2", 0)
-    b1_pct = percentages.get("B1", 0)
-    b2_pct = percentages.get("B2", 0)
-    c1_pct = percentages.get("C1", 0)
-    c2_pct = percentages.get("C2", 0)
-
     weighted_sum = (
-        a1_pct * 10 +
-        a2_pct * 25 +
-        b1_pct * 45 +
-        b2_pct * 65 +
-        c1_pct * 85 +
-        c2_pct * 100
+        percentages.get("A1", 0) * 10 +
+        percentages.get("A2", 0) * 25 +
+        percentages.get("B1", 0) * 45 +
+        percentages.get("B2", 0) * 65 +
+        percentages.get("C1", 0) * 85 +
+        percentages.get("C2", 0) * 100
     )
     score = int(weighted_sum / 100 * 100)
 
-    if (a1_pct + a2_pct) > 60:
-        level = difficultylevel.ELEMENTARY
-    elif b1_pct > 30 or ((a2_pct + b1_pct) > 50):
-        level = difficultylevel.INTERMEDIATE
-    elif b2_pct > 25:
-        level = difficultylevel.ADVANCED
-    elif (c1_pct + c2_pct) > 20:
-        level = difficultylevel.PROFICIENT
-    else:
-        level = difficultylevel.INTERMEDIATE
-
-    return level, score, cefr_distribution
+    return score, cefr_distribution

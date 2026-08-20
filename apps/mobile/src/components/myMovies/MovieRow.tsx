@@ -128,8 +128,9 @@ export function MovieRow({
 }
 
 /** Best-effort CEFR inference. v0.7+: the ReelTile payload carries
- *  `cefr_level` from `Movie.difficultyLevel`; null when the user's
- *  added TMDB id has no internal Movie row yet (catalog ingest lag). */
+ *  `cefr_level`, banded off `Movie.difficultyScore` since #103; null when the
+ *  user's added TMDB id has no internal Movie row yet (catalog ingest lag),
+ *  or when that row's script has not been scored. */
 function inferCefrFromTile(tile: ReelTile): keyof typeof cefrColors | null {
   return tile.cefr_level && tile.cefr_level in cefrColors
     ? (tile.cefr_level as keyof typeof cefrColors)

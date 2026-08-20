@@ -34,6 +34,8 @@ from typing import Any, Literal, Optional
 
 from prisma import Prisma
 
+from .movie_cefr import CEFR_LEVELS, cefr_from_score
+
 # ── Rules ──────────────────────────────────────────────────────────────────
 
 ListKind = Literal["films", "words"]
@@ -574,7 +576,7 @@ async def _film_items(
         SELECT
             f.tmdb_id, f.title, f.poster_path, f.year, f.added_at,
             m.tmdb_vote_average AS rating,
-            m.difficulty_level::text AS difficulty_level,
+            m.difficulty_score AS difficulty_score,
             (
                 SELECT COUNT(DISTINCT mlm.lemma_id)
                 FROM movie_lemma_mappings mlm
@@ -594,7 +596,7 @@ async def _film_items(
             "poster_path": r["poster_path"],
             "year": r["year"],
             "rating": r["rating"],
-            "cefr": DIFFICULTY_TO_CEFR.get((r["difficulty_level"] or "").upper()),
+            "cefr": cefr_from_score(r["difficulty_score"]),
             "word_count": int(r["word_count"]) if r["word_count"] is not None else None,
             "added_at": r["added_at"],
         }
@@ -689,22 +691,12 @@ def _srs_state(row: dict, now: datetime) -> str:
     return "learning" if int(box) > 1 else "new"
 
 
-# Reused from routes/reel.py's mapping — the DB enum predates the CEFR
-# convention, so it stores ELEMENTARY/INTERMEDIATE/… rather than A2/B1.
-DIFFICULTY_TO_CEFR: dict[str, str] = {
-    "BEGINNER":           "A1",
-    "ELEMENTARY":         "A2",
-    "INTERMEDIATE":       "B1",
-    "UPPER_INTERMEDIATE": "B2",
-    "ADVANCED":           "C1",
-    "PROFICIENT":         "C2",
-}
-
 # `lemmas.cefr_level` is the `proficiencylevel` enum, which stores A1..C2
-# directly — no mapping needed, unlike `movies.difficulty_level` above. #91
-# added an UNKNOWN label to it: a holding pen for words the classifier could
+# directly. A movie's level is not stored at all — it is banded off
+# `movies.difficulty_score` by `services.movie_cefr` (#103). #91 added an
+# UNKNOWN label to the word enum: a holding pen for words the classifier could
 # not place, which must never render as a CEFR pill.
-CEFR_CODES: set[str] = {"A1", "A2", "B1", "B2", "C1", "C2"}
+CEFR_CODES: set[str] = set(CEFR_LEVELS)
 
 
 def lemma_cefr(raw: str | None) -> Optional[str]:

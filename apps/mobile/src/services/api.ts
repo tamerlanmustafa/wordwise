@@ -10,6 +10,7 @@ import type {
   ListSystemKey,
   ListWordItem,
 } from '../core/types';
+import type { CefrLevel } from '../types/constants';
 
 // Use centralized config for API URL
 const API_BASE_URL = config.API_URL;
@@ -412,9 +413,13 @@ export const wordwiseApi = {
   },
 
   // List processed movies filtered by CEFR difficulty (no auth required).
-  // Backend joins movie_jobs to surface tmdb_id so the client can lazily
-  // fetch poster/overview from TMDB.
-  getMoviesByLevel: async (level: string, limit: number = 50): Promise<{
+  // Backend surfaces tmdb_id so the client can lazily fetch poster/overview
+  // from TMDB.
+  //
+  // Takes a CEFR code (A1..C2). Before #103 the endpoint only accepted the
+  // retired `difficultylevel` enum names, so onboarding's "pick your first
+  // film" — which passes the learner's band — got a 400 and showed nothing.
+  getMoviesByLevel: async (level: CefrLevel | string, limit: number = 50): Promise<{
     level: string;
     total: number;
     movies: Array<{

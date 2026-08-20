@@ -20,7 +20,6 @@ import pytest
 
 from src.services.lists import (
     CEFR_CODES,
-    DIFFICULTY_TO_CEFR,
     MAX_FILMS_PER_LIST,
     MAX_LISTS_PER_KIND,
     MAX_NAME_LENGTH,
@@ -243,13 +242,25 @@ class TestLemmaCefr:
 
 
 class TestMovieDifficultyCefr:
-    def test_maps_the_long_names_the_movies_table_stores(self):
-        assert DIFFICULTY_TO_CEFR["ELEMENTARY"] == "A2"
-        assert DIFFICULTY_TO_CEFR["UPPER_INTERMEDIATE"] == "B2"
+    def test_film_rows_band_the_score_rather_than_read_a_stored_level(self):
+        # #103: list rows used to translate `movies.difficulty_level`, which
+        # disagreed with the score on 1,006 films. They now go through the one
+        # shared derivation, so a saved film's pill matches its detail screen.
+        from src.services.movie_cefr import cefr_from_score
 
-    def test_does_not_accept_bare_codes(self):
-        # Guards against someone "simplifying" the two maps into one.
-        assert DIFFICULTY_TO_CEFR.get("B2") is None
+        assert cefr_from_score(50) == "B2"
+        assert cefr_from_score(None) is None
+
+    def test_the_sql_selects_the_column_the_row_builder_reads(self):
+        # `difficulty_level` no longer exists on `movies`; selecting it is a
+        # runtime SQL error that no typecheck catches.
+        import inspect
+
+        from src.services import lists as lists_module
+
+        source = inspect.getsource(lists_module._film_items)
+        assert "m.difficulty_score" in source
+        assert "difficulty_level" not in source
 
 
 # ── Raw SQL column names ───────────────────────────────────────────────────

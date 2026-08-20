@@ -2,7 +2,6 @@ import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from prisma import Prisma
-from prisma.enums import difficultylevel
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from ..database import get_db
@@ -11,6 +10,12 @@ from ..middleware.auth import get_current_active_user, get_current_user_optional
 from ..services.hidden_words import get_hidden_word_set
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
+from ..services.movie_cefr import (
+    CEFR_SCORE_RANGES,
+    cefr_from_score,
+    normalize_level,
+    score_range_for_cefr,
+)
 from ..services.profanity_filter import is_profane_entry
 from ..services.script_idioms import get_script_idioms
 from ..utils.nlp_executor import NLPOverloaded
@@ -41,14 +46,21 @@ MAX_PENDING_PREVIEW_PARSES = 4
 async def list_movies(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    difficulty: Optional[difficultylevel] = None,
+    difficulty: Optional[str] = Query(None, description="CEFR level: A1..C2"),
     db: Prisma = Depends(get_db)
 ):
     """List all movies with pagination and optional filtering"""
-    where_clause = {}
+    where_clause: Dict[str, Any] = {}
 
+    # #103: the level is a band of `difficulty_score`, not a stored column, so
+    # filtering is a range rather than an equality. Legacy enum names still
+    # resolve for builds that predate the change.
     if difficulty:
-        where_clause["difficultyLevel"] = difficulty
+        key = normalize_level(difficulty)
+        if key is None:
+            raise HTTPException(status_code=400, detail=f"Invalid level: {difficulty}")
+        lo, hi = CEFR_SCORE_RANGES[key]
+        where_clause["difficultyScore"] = {"gte": lo, "lte": hi}
 
     total = await db.movie.count(where=where_clause)
     movies = await db.movie.find_many(
@@ -67,22 +79,25 @@ async def list_movies(
 
 @router.get("/by-level")
 async def list_movies_by_level(
-    level: str = Query(..., description="Difficulty level: ELEMENTARY, INTERMEDIATE, ADVANCED, etc."),
+    level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
     limit: int = Query(50, ge=1, le=200),
     db: Prisma = Depends(get_db),
 ):
     """
-    List processed movies filtered by their stored CEFR difficulty level.
-    Joined with movie_jobs to surface tmdb_id (when available) so the
-    mobile client can lazily fetch poster/overview from TMDB.
+    List processed movies at a CEFR level. Returns tmdb_id when available so
+    the mobile client can lazily fetch poster/overview from TMDB.
+
+    Before #103 this only accepted the retired `difficultylevel` enum names,
+    which meant onboarding's "pick your first film" step — the one caller that
+    passes the learner's CEFR band — got a 400 and showed an empty list to
+    every new user. Legacy enum names still resolve, for installs already out
+    in the wild.
     """
-    try:
-        target = level.upper()
-        # Validate against enum
-        difficultylevel(target)
-    except ValueError:
+    target = normalize_level(level)
+    if target is None:
         raise HTTPException(status_code=400, detail=f"Invalid level: {level}")
 
+    lo, hi = CEFR_SCORE_RANGES[target]
     rows = await db.query_raw(
         """
         SELECT m.id               AS movie_id,
@@ -93,11 +108,13 @@ async def list_movies_by_level(
                m.difficulty_score AS difficulty_score,
                m.tmdb_id          AS tmdb_id
         FROM movies m
-        WHERE m.difficulty_level::text = $1
-        ORDER BY m.difficulty_score ASC NULLS LAST, m.id ASC
-        LIMIT $2
+        WHERE m.difficulty_score >= $1
+          AND m.difficulty_score <= $2
+        ORDER BY m.difficulty_score ASC, m.id ASC
+        LIMIT $3
         """,
-        target,
+        lo,
+        hi,
         limit,
     )
 
@@ -117,16 +134,6 @@ async def list_movies_by_level(
         ],
         "total": len(rows),
     }
-
-
-CEFR_SCORE_RANGES = {
-    "A1": (0, 24),
-    "A2": (25, 34),
-    "B1": (35, 44),
-    "B2": (45, 54),
-    "C1": (55, 69),
-    "C2": (70, 100),
-}
 
 
 # Maps the client-facing `sort` value to a real DB column. Keeping this a
@@ -177,8 +184,8 @@ async def list_movies_by_cefr(
     server-side so they never resurface and pagination stays consistent.
     Anonymous callers get the unfiltered feed.
     """
-    key = level.upper()
-    if key not in CEFR_SCORE_RANGES:
+    key = normalize_level(level)
+    if key is None:
         raise HTTPException(status_code=400, detail=f"Invalid CEFR level: {level}")
 
     sort_col = CEFR_SORT_COLUMNS.get(sort.lower())
@@ -192,7 +199,7 @@ async def list_movies_by_cefr(
     # Over-fetch by one row to detect whether another page exists, then trim.
     fetch_limit = limit + 1
 
-    lo, hi = CEFR_SCORE_RANGES[key]
+    lo, hi = score_range_for_cefr(key)
 
     # Personalized exclusion: drop the caller's watched / not-interested
     # movies. `user_id` is None for anonymous callers, and the clause is a
@@ -568,26 +575,11 @@ async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
         else:
             breakdown = movie.cefrDistribution
 
-    # Map difficulty level to CEFR level based on score
-    difficulty_level = None
-    if movie.difficultyScore is not None:
-        # Map 0-100 score to CEFR levels
-        score = movie.difficultyScore
-        if score < 20:
-            difficulty_level = "A1"
-        elif score < 35:
-            difficulty_level = "A2"
-        elif score < 50:
-            difficulty_level = "B1"
-        elif score < 65:
-            difficulty_level = "B2"
-        elif score < 80:
-            difficulty_level = "C1"
-        else:
-            difficulty_level = "C2"
-
     return {
-        "difficulty_level": difficulty_level,
+        # #103: this used to bucket the score on its own boundaries, one band
+        # off from the home feed, so the same film could read B1 on the shelf
+        # and B2 on its detail screen.
+        "difficulty_level": cefr_from_score(movie.difficultyScore),
         "difficulty_score": movie.difficultyScore,
         "breakdown": breakdown
     }
@@ -608,7 +600,6 @@ async def create_movie(
             "title": movie_data.title,
             "year": movie_data.year,
             "genre": movie_data.genre,
-            "difficultyLevel": movie_data.difficulty_level,
             "script_text": movie_data.script_text,
             "description": movie_data.description,
             "poster_url": movie_data.poster_url

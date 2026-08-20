@@ -1,14 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from prisma.enums import difficultylevel
 
 
 class MovieCreate(BaseModel):
     title: str
     year: int
     genre: Optional[str] = None
-    difficulty_level: Optional[difficultylevel] = difficultylevel.INTERMEDIATE
     script_text: Optional[str] = None
     description: Optional[str] = None
     poster_url: Optional[str] = None
@@ -19,7 +17,10 @@ class MovieResponse(BaseModel):
     title: str
     year: int
     genre: Optional[str]
-    difficultyLevel: Optional[difficultylevel]
+    # #103: a movie's level is derived from `difficultyScore`, never stored, so
+    # there is no level field to echo back here. Callers that need one ask
+    # /movies/{id}/difficulty or read it off the by-level / by-cefr rows.
+    difficultyScore: Optional[int]
     wordCount: Optional[int]
     description: Optional[str]
     poster_url: Optional[str]

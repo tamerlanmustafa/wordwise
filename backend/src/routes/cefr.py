@@ -28,6 +28,7 @@ from src.middleware.auth import get_admin_user, get_current_active_user
 from src.services.cefr_registry import apply_registry_levels
 from src.services.internationalism_filter import is_internationalism_entry
 from src.services.lemma_guard import display_form
+from src.services.movie_cefr import cefr_from_score
 from src.services.profanity_filter import is_profane_entry
 from src.services.script_doc import parse_script_async
 from src.services.script_idioms import get_script_idioms
@@ -467,16 +468,16 @@ async def run_script_classification(
                         )
                         for cls in existing_classifications
                     ]
-                    level, score, breakdown = await compute_difficulty_advanced_async(word_data_list, genres=request.genres, text=script.cleanedScriptText)
+                    # Score only — the CEFR level is derived from it on read (#103).
+                    score, breakdown = await compute_difficulty_advanced_async(word_data_list, genres=request.genres, text=script.cleanedScriptText)
                     await db.movie.update(
                         where={'id': request.movie_id},
                         data={
-                            'difficultyLevel': level,
                             'difficultyScore': score,
                             'cefrDistribution': json.dumps(breakdown) if breakdown else None
                         }
                     )
-                    logger.info(f"✓ Updated difficulty with genres {request.genres}: {level.value}, score: {score}")
+                    logger.info(f"✓ Updated difficulty with genres {request.genres}: {cefr_from_score(score)}, score: {score}")
                 except Exception as e:
                     logger.warning(f"Failed to update difficulty with genres: {e}")
 
@@ -664,7 +665,8 @@ async def run_script_classification(
             ]
 
             # genres already extracted above (from request or DB)
-            level, score, breakdown = await compute_difficulty_advanced_async(
+            # Score only — the CEFR level is derived from it on read (#103).
+            score, breakdown = await compute_difficulty_advanced_async(
                 word_data_list, genres=genres, text=script.cleanedScriptText, doc=script_doc
             )
 
@@ -672,7 +674,6 @@ async def run_script_classification(
             await db.movie.update(
                 where={'id': request.movie_id},
                 data={
-                    'difficultyLevel': level,
                     'difficultyScore': score,
                     'cefrDistribution': json.dumps(breakdown) if breakdown else None
                 }

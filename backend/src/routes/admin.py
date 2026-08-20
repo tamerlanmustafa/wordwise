@@ -11,6 +11,12 @@ from src.services.client_ip_health import build_report as build_client_ip_report
 from src.services.difficulty_scorer import compute_difficulty
 from src.services.event_loop_lag import compute_event_loop_report
 from src.services.latency_stats import compute_latency_report
+from src.services.movie_cefr import (
+    CEFR_LEVELS,
+    CEFR_SCORE_RANGES,
+    cefr_from_score,
+    normalize_level,
+)
 from src.services.vocab_coverage import compute_vocab_coverage
 from src.utils.rate_limit import client_ip_observation, rate_limit
 from src.utils.subscription import entitlements_payload
@@ -46,15 +52,21 @@ async def get_admin_stats(
     movies_processed = await db.moviescript.count(where={"isPreprocessed": True})
     users_total = await db.user.count()
 
-    # Distribution across CEFR-ish difficulty buckets. Any movie with a
-    # non-null difficulty_level has been fully scored by our classifier,
-    # so this doubles as "how many are actually usable".
-    level_rows = await db.query_raw(
-        "SELECT difficulty_level::text AS level, COUNT(*)::int AS n "
-        "FROM movies WHERE difficulty_level IS NOT NULL "
-        "GROUP BY difficulty_level"
+    # Distribution across CEFR buckets. Any movie with a non-null
+    # difficulty_score has been fully scored by our classifier, so this doubles
+    # as "how many are actually usable". Since #103 the bucket is banded off
+    # the score in Python rather than read from a stored enum, so the admin
+    # dashboard and the learner-facing shelves can no longer drift apart.
+    score_rows = await db.query_raw(
+        "SELECT difficulty_score AS score, COUNT(*)::int AS n "
+        "FROM movies WHERE difficulty_score IS NOT NULL "
+        "GROUP BY difficulty_score"
     )
-    movies_by_level = {r["level"]: r["n"] for r in level_rows}
+    movies_by_level = {lvl: 0 for lvl in CEFR_LEVELS}
+    for r in score_rows:
+        level = cefr_from_score(r["score"])
+        if level is not None:
+            movies_by_level[level] += r["n"]
 
     # Worker queue progress (best-effort — table may not exist if the worker
     # subsystem hasn't been bootstrapped yet on this environment).
@@ -200,13 +212,19 @@ async def list_processed_movies(
     """
     Admin browser: every fully-processed movie (has a preprocessed script)
     with TMDB metadata, ordered by popularity desc. Optionally filtered by
-    difficulty level (ELEMENTARY, INTERMEDIATE, ADVANCED, etc.).
+    CEFR level (A1..C2).
     """
     where_sql = "WHERE EXISTS (SELECT 1 FROM movie_scripts s WHERE s.movie_id = m.id AND s.is_preprocessed = true)"
     args: list = []
     if level:
-        where_sql += " AND m.difficulty_level::text = $1"
-        args.append(level.upper())
+        # #103: the level is a band of `difficulty_score`, so this filters on a
+        # range. Legacy enum names still resolve for older admin clients.
+        key = normalize_level(level)
+        if key is None:
+            raise HTTPException(status_code=400, detail=f"Invalid level: {level}")
+        lo, hi = CEFR_SCORE_RANGES[key]
+        where_sql += " AND m.difficulty_score >= $1 AND m.difficulty_score <= $2"
+        args.extend([lo, hi])
     args.append(min(max(limit, 1), 1000))
     limit_pos = len(args)
 
@@ -216,7 +234,6 @@ async def list_processed_movies(
                m.tmdb_id           AS tmdb_id,
                m.title             AS title,
                m.year              AS year,
-               m.difficulty_level::text AS difficulty_level,
                m.difficulty_score  AS difficulty_score,
                m.tmdb_popularity   AS popularity,
                m.tmdb_vote_average AS vote_average,
@@ -229,7 +246,7 @@ async def list_processed_movies(
         *args,
     )
     return {
-        "level": level,
+        "level": normalize_level(level) if level else None,
         "total": len(rows),
         "movies": [
             {
@@ -237,7 +254,7 @@ async def list_processed_movies(
                 "tmdb_id": r["tmdb_id"],
                 "title": r["title"],
                 "year": r["year"],
-                "difficulty_level": r["difficulty_level"],
+                "difficulty_level": cefr_from_score(r["difficulty_score"]),
                 "difficulty_score": r["difficulty_score"],
                 "popularity": r["popularity"],
                 "vote_average": r["vote_average"],
@@ -472,12 +489,14 @@ async def reprocess_script(
             skip_duplicates=True
         )
 
-    level, score, dist = compute_difficulty(statistics['level_distribution'])
+    # #103: only the score is stored. The level is banded off it on read, so
+    # there is nothing here that can fall out of step with what a learner sees.
+    score, dist = compute_difficulty(statistics['level_distribution'])
+    level = cefr_from_score(score)
 
     await db.movie.update(
         where={'id': script.movieId},
         data={
-            'difficultyLevel': level,
             'difficultyScore': score,
             'cefrDistribution': dist
         }
@@ -488,13 +507,13 @@ async def reprocess_script(
         data={'isPreprocessed': True}
     )
 
-    logger.info(f"✓ Reprocessed script {script_id}, difficulty: {level.value}, score: {score}")
+    logger.info(f"✓ Reprocessed script {script_id}, difficulty: {level}, score: {score}")
 
     return {
         "status": "success",
         "script_id": script_id,
         "movie_id": script.movieId,
-        "difficulty_level": level.value,
+        "difficulty_level": level,
         "difficulty_score": score,
         "distribution": dist
     }
@@ -568,13 +587,12 @@ async def reprocess_all_scripts(
                     skip_duplicates=True
                 )
 
-            # Update movie difficulty
-            level, score, dist = compute_difficulty(statistics['level_distribution'])
+            # Update movie difficulty. Score only — see #103.
+            score, dist = compute_difficulty(statistics['level_distribution'])
 
             await db.movie.update(
                 where={'id': script.movieId},
                 data={
-                    'difficultyLevel': level,
                     'difficultyScore': score,
                     'cefrDistribution': dist
                 }
@@ -586,7 +604,10 @@ async def reprocess_all_scripts(
             )
 
             processed += 1
-            logger.info(f"✓ Reprocessed script {script.id}, difficulty: {level.value}")
+            logger.info(
+                f"✓ Reprocessed script {script.id}, "
+                f"difficulty: {cefr_from_score(score)}, score: {score}"
+            )
 
         except Exception as e:
             logger.error(f"Error reprocessing script {script.id}: {e}")

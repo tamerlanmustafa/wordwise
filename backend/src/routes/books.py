@@ -26,10 +26,32 @@ from ..services.open_library_client import get_open_library_client
 from ..utils.rate_limit import rate_limit
 from .cefr import get_classifier, should_keep_word
 from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
+from ..services.movie_cefr import cefr_from_score
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/books", tags=["books"])
+
+
+# `books` is the last table still on the `difficultylevel` enum after #103 —
+# `movies` moved to deriving its level from the score, and `words` is vestigial
+# (#93). The table has 0 rows in prod, so converting the column is free whenever
+# books stop being a maybe; until then this keeps the write working without
+# reviving the collapsed six-value bucketing that #103 removed.
+def _book_difficulty_enum(score: Optional[int]):
+    """Band a book's score to CEFR, then back to the legacy storage enum."""
+    from prisma.enums import difficultylevel
+
+    mapping = {
+        "A1": difficultylevel.BEGINNER,
+        "A2": difficultylevel.ELEMENTARY,
+        "B1": difficultylevel.INTERMEDIATE,
+        "B2": difficultylevel.UPPER_INTERMEDIATE,
+        "C1": difficultylevel.ADVANCED,
+        "C2": difficultylevel.PROFICIENT,
+    }
+    level = cefr_from_score(score)
+    return mapping.get(level) if level else None
 
 # These stay public (anonymous browse + the EPUB reader loads by URL, so it
 # can't attach an Authorization header), but both relay upstream traffic —
@@ -604,7 +626,8 @@ async def analyze_book(
                 for cls in classifications
             ]
 
-            level, score, breakdown = compute_difficulty_advanced(word_data_list, genres=[])
+            score, breakdown = compute_difficulty_advanced(word_data_list, genres=[])
+            level = _book_difficulty_enum(score)
 
             await db.book.update(
                 where={'id': book_entry.id},

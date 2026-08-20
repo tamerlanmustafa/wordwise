@@ -33,6 +33,8 @@ import {
   type AdminViewMode,
 } from '../stores/entitlementsStore';
 import type { Entitlements } from '../types';
+import { CEFR_LEVELS } from '../types/constants';
+import { cefrColors } from '../theme/palette';
 import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
 import { ClientIpView } from './admin/ClientIpView';
 import { EventLoopView } from './admin/EventLoopView';
@@ -63,34 +65,13 @@ const STATUS_TABS: Array<ReportStatus | 'ALL'> = [
   'DISMISSED',
 ];
 
-// Difficulty buckets (Prisma `difficultylevel` enum). Ordered easiest → hardest
-// so the grid reads left-to-right the way a learner thinks about progression.
-const LEVEL_ORDER = [
-  'BEGINNER',
-  'ELEMENTARY',
-  'INTERMEDIATE',
-  'UPPER_INTERMEDIATE',
-  'ADVANCED',
-  'PROFICIENT',
-] as const;
-
-const LEVEL_LABELS: Record<string, string> = {
-  BEGINNER: 'Beginner',
-  ELEMENTARY: 'Elementary',
-  INTERMEDIATE: 'Intermediate',
-  UPPER_INTERMEDIATE: 'Upper int.',
-  ADVANCED: 'Advanced',
-  PROFICIENT: 'Proficient',
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  BEGINNER: '#4CAF50',
-  ELEMENTARY: '#8BC34A',
-  INTERMEDIATE: '#FFC107',
-  UPPER_INTERMEDIATE: '#FF9800',
-  ADVANCED: '#F44336',
-  PROFICIENT: '#9C27B0',
-};
+// Difficulty buckets. These were the six long `difficultylevel` enum names
+// until #103 retired that column — the backend now reports CEFR codes, banded
+// off `difficulty_score` the same way every learner-facing screen does, so the
+// admin counts can no longer disagree with the shelves. `CEFR_LEVELS` is
+// already ordered easiest → hardest, which is how the grid should read, and
+// `cefrColors` already carries these exact six colours.
+const LEVEL_ORDER = CEFR_LEVELS;
 
 export interface AdminScreenProps {
   onBack: () => void;
@@ -409,7 +390,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
   if (view === 'processed') {
     const headerLabel = processedFilter
-      ? `${LEVEL_LABELS[processedFilter] ?? processedFilter} movies`
+      ? `${processedFilter} movies`
       : 'Processed movies';
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -452,8 +433,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               {processedMovies.length} movie{processedMovies.length === 1 ? '' : 's'}, ordered by TMDB vote count (most-rated first).
             </Text>
             {processedMovies.map((m) => {
-              const lvColor = m.difficulty_level ? LEVEL_COLORS[m.difficulty_level] : COLORS.textTertiary;
-              const lvLabel = m.difficulty_level ? LEVEL_LABELS[m.difficulty_level] ?? m.difficulty_level : '—';
+              const lvColor = m.difficulty_level ? cefrColors[m.difficulty_level] : COLORS.textTertiary;
+              const lvLabel = m.difficulty_level ?? '—';
               return (
                 <View key={m.movie_id} style={[styles.deadCard, { borderStartColor: lvColor }]}>
                   <View style={styles.deadTopRow}>
@@ -899,9 +880,9 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               {LEVEL_ORDER.filter((lv) => (adminStats.movies_by_level[lv] ?? 0) > 0).map((lv) => (
                 <StatCard
                   key={lv}
-                  label={LEVEL_LABELS[lv]}
+                  label={lv}
                   value={`${adminStats.movies_by_level[lv] ?? 0}`}
-                  color={LEVEL_COLORS[lv]}
+                  color={cefrColors[lv]}
                   onPress={() => openProcessed(lv)}
                 />
               ))}
