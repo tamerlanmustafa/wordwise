@@ -39,6 +39,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backfill_script_idioms")
 
+# Prisma talks to its query engine over HTTP, so httpx logs two INFO lines per
+# script. Across a full run that is ~8.6k lines of noise around the 4.3k lines
+# of progress anyone monitoring the run actually needs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # Smallest scripts first: they are the cheapest to parse, so an interrupted run
 # still leaves the most movies fixed.
 PENDING_SQL = """
