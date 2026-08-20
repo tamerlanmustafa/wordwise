@@ -102,6 +102,42 @@ class DeepLClient:
         )
         return results[0]
 
+    async def get_usage(self) -> Dict[str, int]:
+        """Characters spent and allowed in the current billing period.
+
+        DeepL bills characters, and on the Free plan the allowance is a hard
+        monthly wall (500,000) shared with live traffic — not a bill that
+        grows. The offline cache warmer (#124) reads this before it starts so
+        it can stop at a real remaining figure instead of discovering the wall
+        as a 456 mid-run, which would leave a language half-warmed.
+
+        Returns {"character_count", "character_limit"}.
+        """
+        if not self.api_key:
+            raise DeepLError("DEEPL_API_KEY not set - cannot read usage")
+
+        url = f"{self.base_url}/usage"
+        headers = {"Authorization": f"DeepL-Auth-Key {self.api_key}"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as response:
+                    if response.status == 403:
+                        raise DeepLQuotaExceededError("Invalid DeepL API key")
+                    if response.status != 200:
+                        raise DeepLError(f"DeepL usage check failed: {response.status}")
+                    data = await response.json()
+        except aiohttp.ClientError as e:
+            raise DeepLError(f"Network error reading DeepL usage: {e}")
+
+        return {
+            "character_count": int(data.get("character_count", 0)),
+            "character_limit": int(data.get("character_limit", 0)),
+        }
+
     async def translate_many(
         self,
         texts: List[str],

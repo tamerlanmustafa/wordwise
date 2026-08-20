@@ -310,6 +310,10 @@ model TranslationCache {
   sourceLang String?  @map("source_lang") @db.VarChar(10)
   targetLang String   @map("target_lang") @db.VarChar(10)
   translated String   @db.VarChar
+  // Which service produced this row: "deepl" | "google" | null for the ~4.1k
+  // rows written before #124 added tracking. Nullable rather than defaulted,
+  // because their real provenance is unknown and guessing it would be fiction.
+  provider   String?  @db.VarChar(16)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

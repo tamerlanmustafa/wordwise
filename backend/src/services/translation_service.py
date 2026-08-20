@@ -25,7 +25,21 @@ from ..utils.google_translate_client import GoogleTranslateClient, GoogleTransla
 logger = logging.getLogger(__name__)
 
 
-# DeepL supported target languages (as of 2025)
+# DeepL supported target languages (reviewed 2026-08-20).
+#
+# This set is a routing table, not a capability guarantee: a code listed here
+# is *attempted* on DeepL, and anything else goes straight to Google. Getting
+# it wrong is not fatal in either direction — an unlisted-but-supported
+# language just never gets DeepL's better output, and a listed-but-unsupported
+# one raises DeepLInvalidLanguageError and falls through to Google anyway
+# (see get_translation). It does need reviewing when DeepL ships languages,
+# because a stale list silently routes a whole market to the weaker provider.
+#
+# VI/TH/HE were added 2026-08-20 after DeepL launched them. Caveat from that
+# launch: they are served only by Pro and next-generation API models, and Thai
+# is early access — so on the legacy Free key these three may still raise, and
+# they rely on the Google fallback actually being configured to be useful.
+#
 # NOTE: AZ (Azerbaijani) is NOT supported by DeepL - will use Google fallback
 DEEPL_SUPPORTED_TARGET_LANGS = {
     "EN", "DE", "FR", "ES", "IT",
@@ -35,8 +49,29 @@ DEEPL_SUPPORTED_TARGET_LANGS = {
     "BG", "CS", "EL", "ET",
     "HU", "LT", "LV", "RO",
     "SK", "SL", "UK", "ID",
-    "AR", "HI"
+    "AR", "HI",
+    "VI", "TH", "HE",
 }
+
+
+def normalize_cache_text(text: str) -> str:
+    """The cache key for a piece of source text.
+
+    Module-level because two different callers have to agree on it exactly:
+    the request path writes rows under this key, and the offline warmer
+    (#124) has to ask "is this already cached?" *before* spending DeepL
+    characters on it. A warmer that normalized even slightly differently
+    would re-translate the entire corpus and store it under keys the read
+    path never looks up — it would warm nothing while spending everything.
+
+    Note this is NOT the same as `deepl_client.normalize_text_for_cache`,
+    which only strips trailing punctuation from single words. That helper is
+    unused; this is the one the cache is actually keyed on.
+    """
+    normalized = text.lower().strip()
+    # Remove trailing punctuation for cache key consistency
+    normalized = re.sub(r'[.,!?;:]+$', '', normalized)
+    return normalized
 
 
 class TranslationService:
@@ -54,10 +89,7 @@ class TranslationService:
 
     def _normalize_text(self, text: str) -> str:
         """Normalize text for consistent cache lookups"""
-        normalized = text.lower().strip()
-        # Remove trailing punctuation for cache key consistency
-        normalized = re.sub(r'[.,!?;:]+$', '', normalized)
-        return normalized
+        return normalize_cache_text(text)
 
     async def _get_from_cache(
         self,
@@ -92,7 +124,8 @@ class TranslationService:
         source_text: str,
         target_lang: str,
         translated: str,
-        source_lang: Optional[str] = None
+        source_lang: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> None:
         """Save translation to cache"""
         # A translation identical to its source is almost always a provider
@@ -115,11 +148,13 @@ class TranslationService:
                         "sourceText": source_text,
                         "targetLang": target_lang,
                         "translated": translated,
-                        "sourceLang": source_lang
+                        "sourceLang": source_lang,
+                        "provider": provider,
                     },
                     "update": {
                         "translated": translated,
-                        "sourceLang": source_lang
+                        "sourceLang": source_lang,
+                        "provider": provider,
                     }
                 }
             )
@@ -139,6 +174,7 @@ class TranslationService:
         self,
         rows: List[Tuple[str, str, Optional[str]]],
         target_lang: str,
+        provider: Optional[str] = None,
     ) -> None:
         """Persist a whole batch of fresh translations in one statement.
 
@@ -158,6 +194,7 @@ class TranslationService:
                 "targetLang": target_lang,
                 "translated": translated,
                 "sourceLang": source_lang,
+                "provider": provider,
             }
             for source_text, translated, source_lang in rows
             if not self._is_passthrough(source_text, translated)
@@ -287,7 +324,8 @@ class TranslationService:
                         source_text=normalized_text,
                         target_lang=target_lang_upper,
                         translated=translated,
-                        source_lang=detected_lang
+                        source_lang=detected_lang,
+                        provider="deepl",
                     )
 
                 # Track user translation
@@ -345,7 +383,8 @@ class TranslationService:
                     source_text=normalized_text,
                     target_lang=target_lang_upper,
                     translated=translated,
-                    source_lang=detected_lang
+                    source_lang=detected_lang,
+                    provider="google",
                 )
 
             # Track user translation
@@ -380,7 +419,8 @@ class TranslationService:
         target_lang: str,
         source_lang: str = "auto",
         user_id: Optional[int] = None,
-        max_concurrent: int = 2
+        max_concurrent: int = 2,
+        force_provider: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Translate multiple texts efficiently with caching and rate-limited requests.
@@ -435,7 +475,12 @@ class TranslationService:
         misses = [t for t in unique_texts if t not in cache_hits]
 
         # ── 2. One DeepL request per 50 misses ───────────────────────────
-        if misses and target_lang_upper in DEEPL_SUPPORTED_TARGET_LANGS:
+        # `force_provider="google"` skips this step entirely. The offline
+        # warmer sets it once DeepL's monthly characters are spent: without
+        # it every batch would still open with a DeepL call, burn a round
+        # trip discovering the same quota wall, and only then reach Google.
+        use_deepl = force_provider != "google"
+        if misses and use_deepl and target_lang_upper in DEEPL_SUPPORTED_TARGET_LANGS:
             try:
                 translated = await self.deepl_client.translate_many(
                     texts=misses,
@@ -458,16 +503,51 @@ class TranslationService:
                 # cache is global, which is what makes the corpus a one-time
                 # cost rather than a per-user one. One statement for the whole
                 # batch — see `_save_many_to_cache`.
-                await self._save_many_to_cache(fresh, target_lang_upper)
+                await self._save_many_to_cache(fresh, target_lang_upper, provider="deepl")
                 misses = []
             except Exception as e:
                 # Fall through to the per-item path, which handles the Google
                 # fallback, quota errors and unsupported languages.
                 logger.warning(f"[batch_translate] batched DeepL failed, falling back: {e}")
 
-        # ── 3. Per-item fallback for whatever is still missing ───────────
-        # Unsupported target languages and DeepL failures land here, so the
-        # Google path and its error handling stay in exactly one place.
+        # ── 3a. Batched Google fallback ──────────────────────────────────
+        # Reached when the target is not a DeepL language (AZ) or DeepL just
+        # failed — most consequentially when it has hit its monthly character
+        # wall, which is precisely when live traffic is already degraded and
+        # least able to afford 20 sequential round trips. One request per 50
+        # keeps the fallback the same shape as the primary path.
+        if misses:
+            try:
+                translated = await self.google_client.translate_many(
+                    texts=misses,
+                    target_lang=target_lang_upper,
+                    source_lang=source_lang,
+                )
+                fresh_google: List[Tuple[str, str, Optional[str]]] = []
+                for source_text, result in zip(misses, translated):
+                    value = result.get("translated") or ""
+                    if not value:
+                        continue
+                    cache_hits[source_text] = {
+                        "translated": value,
+                        "source_lang": result.get("detected_source_lang"),
+                    }
+                    fresh_google.append(
+                        (source_text, value, result.get("detected_source_lang"))
+                    )
+                await self._save_many_to_cache(
+                    fresh_google, target_lang_upper, provider="google"
+                )
+                misses = [t for t in misses if t not in cache_hits]
+            except Exception as e:
+                # Google unconfigured or failing — fall to the per-item path,
+                # which is slower but keeps the single place that knows how to
+                # give up gracefully on one text without failing the page.
+                logger.warning(f"[batch_translate] batched Google failed, falling back: {e}")
+
+        # ── 3b. Per-item fallback for whatever is still missing ──────────
+        # Last resort, one text at a time, so a single bad string cannot take
+        # the whole page down with it.
         if misses:
             import asyncio
 

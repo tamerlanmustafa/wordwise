@@ -23,6 +23,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # Admin health reads are cheap but run several COUNT/EXISTS queries; throttle so
 # a stuck dashboard poll can't hammer them.
 _vocab_health_throttle = rate_limit(30, 60.0, scope="admin-vocab-health")
+_translation_health_throttle = rate_limit(30, 60.0, scope="admin-translation-health")
 # The latency read touches no database, but it does sort every route's sample
 # window under a lock — its own budget so it can't starve the vocab read.
 _latency_health_throttle = rate_limit(30, 60.0, scope="admin-latency-health")
@@ -99,6 +100,33 @@ async def vocab_coverage_health(
     recent daily snapshot written by the sentence worker. See
     src/services/vocab_coverage.py for the metric definitions and thresholds."""
     return await compute_vocab_coverage(db)
+
+
+@router.get("/health/translation-cache")
+async def translation_cache_health(
+    admin_user=Depends(get_admin_user),
+    _: None = Depends(_translation_health_throttle),
+    db: Prisma = Depends(get_db),
+):
+    """Translation-cache coverage and provider mix (issue #124).
+
+    Coverage is what decides whether a user's first Explore card is instant or
+    waits on a live provider round trip, and it moves only when the warm worker
+    runs — so a number that stops climbing means the worker is wedged, not that
+    the job is done. The provider metrics carry the other half: warming falls
+    back to Google once DeepL's monthly characters are spent, and Google is the
+    weaker translator on every language DeepL supports, so a high Google share
+    is quality debt to be re-warmed rather than an error.
+
+    Reads DeepL's live /usage; an unreachable provider degrades the report by
+    one metric instead of failing it."""
+    from ..services.translation_coverage import compute_translation_coverage
+    from ..utils.deepl_client import DeepLClient
+    from ..workers.translation_warm_worker import LANGS
+
+    return await compute_translation_coverage(
+        db, LANGS, deepl_client=DeepLClient()
+    )
 
 
 @router.get("/health/latency")

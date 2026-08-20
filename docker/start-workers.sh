@@ -12,6 +12,11 @@ python -m src.workers.worker &
 if [ "${SENTENCE_WORKER_ENABLED:-1}" = "1" ]; then
   python -m src.workers.sentence_worker &
 fi
+# Translation-cache warming (#124). Paced by DeepL's and Google's monthly free
+# allowances, so it spends most of its life asleep waiting for a reset.
+if [ "${TRANSLATION_WARM_WORKER_ENABLED:-1}" = "1" ]; then
+  python -m src.workers.translation_warm_worker &
+fi
 
 wait -n
 status=$?
