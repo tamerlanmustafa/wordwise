@@ -95,6 +95,18 @@ GOOGLE_FREE_CHARS_PER_MONTH = 500_000
 # large enough that the check is not the dominant cost.
 CYCLE_CHAR_BUDGET = 25_000
 
+# Below this, a provider's remaining allowance is not worth starting on, and
+# more importantly must not *block* the handover to the other provider.
+#
+# Found in prod on the first run with credentials: DeepL sat at exactly 2
+# spendable characters (500,000 limit - 449,998 used - 50,000 reserve). A
+# `remaining <= 0` handover treated that as "DeepL still has budget", so the
+# worker picked DeepL, could not fit even one word into 2 characters, warmed
+# nothing, and slept — repeating every cycle until the monthly reset while
+# Google sat unused with ~450,000 characters available. A provider is only
+# usable if it can carry a worthwhile batch, not if its counter is non-zero.
+MIN_USEFUL_CHARS = 1_000
+
 GOOGLE_SPEND_SQL = """
     SELECT COALESCE(SUM(LENGTH(source_text)), 0) AS chars
     FROM translation_cache
@@ -185,15 +197,24 @@ async def run_cycle(
     # up the same language once DeepL's month is spent; the provider column
     # records which produced each row so the Google ones can be re-warmed with
     # DeepL later if quality proves inadequate.
+    #
+    # The threshold is MIN_USEFUL_CHARS, not zero: a provider with a handful of
+    # characters left is exhausted in practice, and treating it as available
+    # strands the other provider's whole allowance behind it.
     provider = None
     remaining = await deepl_remaining(deepl_client, DEEPL_RESERVE)
-    if remaining <= 0:
-        provider = "google"
-        remaining = await google_remaining(
+    if remaining < MIN_USEFUL_CHARS:
+        google = await google_remaining(
             db, GOOGLE_RESERVE, client=getattr(service, "google_client", None)
         )
+        # Only hand over if Google is actually the better option — otherwise
+        # keep whatever DeepL has, so a nearly-empty DeepL still beats a fully
+        # empty Google.
+        if google > remaining:
+            provider = "google"
+            remaining = google
 
-    if remaining <= 0:
+    if remaining < MIN_USEFUL_CHARS:
         return CycleResult(outcome="cap", lang=lang)
 
     budget = CharBudget(limit=min(remaining, cycle_chars))

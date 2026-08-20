@@ -139,6 +139,38 @@ class TestCycle:
         # Must be forced, or every batch re-discovers the DeepL wall first.
         assert svc.calls[0][2] == "google"
 
+    def test_a_nearly_empty_deepl_does_not_strand_google(self):
+        # Regression, found in prod: DeepL sat at exactly 2 spendable chars
+        # (500,000 - 449,998 used - 50,000 reserve). A `<= 0` handover treated
+        # that as "still has budget", so the worker picked DeepL, fitted no
+        # word into 2 characters, warmed nothing, and slept — every cycle until
+        # the monthly reset, while Google had ~450,000 chars going unused.
+        db = _FakeDb(tier_texts={"pool_lemmas": ["alpha"], "pool_sentences": []},
+                     google_spent=0)
+        svc = _FakeService()
+        svc.google_client = SimpleNamespace(enabled=True)
+
+        result = asyncio.run(
+            tw.run_cycle(db, svc, _FakeDeepL(used=449_998), ["TR"], batch_sleep=0)
+        )
+
+        assert result.provider == "google"
+        assert result.warmed == 1
+        assert svc.calls[0][2] == "google"
+
+    def test_keeps_deepl_when_google_has_even_less(self):
+        # The handover is "whichever has more", not "always leave DeepL" — a
+        # nearly-empty DeepL still beats a completely empty Google.
+        db = _FakeDb(tier_texts={"pool_lemmas": ["alpha"], "pool_sentences": []},
+                     google_spent=GOOGLE_FREE_CHARS_PER_MONTH)
+        svc = _FakeService()
+        svc.google_client = SimpleNamespace(enabled=True)
+
+        result = asyncio.run(
+            tw.run_cycle(db, svc, _FakeDeepL(used=449_998), ["TR"], batch_sleep=0)
+        )
+        assert result.outcome == "cap"
+
     def test_reports_cap_when_both_providers_are_spent(self):
         db = _FakeDb(tier_texts={"pool_lemmas": ["alpha"], "pool_sentences": []},
                      google_spent=GOOGLE_FREE_CHARS_PER_MONTH)
