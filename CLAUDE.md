@@ -56,14 +56,14 @@
   - Ground it in something visible: the tap on a subtitle word, the quiz deck, a slow `/health` check, a Railway deploy. "What would a user or an on-call engineer actually have seen?" beats an abstract definition.
   - Subject matter is unchanged — architecture, data modelling, concurrency, failure modes, ops. Only the wording gets simpler. Still not language basics (what a string or a row is) and not framework trivia.
   - No tutorials, no code samples, no exhaustive lists — the user does their own research from the names. Prefer breadth over time; don't re-teach a concept unless it appears in a genuinely new way.
-  - **Repeat each explanation in Azerbaijani**, on its own line right under the English, prefixed `**AZ:**`. Same plain wording bar applies — the Azerbaijani is a translation of the *idea*, not a word-for-word calque, and it must not smuggle in jargon the English avoided.
-  - **Only the descriptions get translated.** The concept name stays in English so it stays searchable, and so do anything in backticks, product and tool names (Railway, Postgres, spaCy, WordWise), file paths, and issue numbers. Nothing else in the report is translated — the plain-language summary and the detail section stay English.
+  - **Restate every concept in the simplest English you can manage**, on its own line right under the explanation, prefixed `**Plainly:**`. One or two short sentences, everyday words, short clauses — the version you'd say out loud to someone who has never met the term. It restates the same idea; it must not add new jargon the sentence above avoided.
+  - **No metaphors, no analogies, no "think of it like…".** Comparisons to restaurants, highways, waiters, or plumbing are banned. Say literally what happens: what runs, what waits, what breaks, in what order.
   - Shape:
     ```
     - **fallback chain** — A resolution order where each rule is tried until one produces an
       answer. Today it decided which language the interface opens in.
-      **AZ:** Hər qaydanın bir cavab verənə qədər növbə ilə yoxlandığı həll sırası. Bu gün
-      interfeysin hansı dildə açılacağını məhz bu müəyyən etdi.
+      **Plainly:** You have a list of rules for picking the language. You try the first one;
+      if it gives no answer you try the next, and you stop at the first one that does.
     ```
 
 ## Deployment (Railway)
