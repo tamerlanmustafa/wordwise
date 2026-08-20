@@ -710,8 +710,11 @@ export interface EventLoopReport {
  *  so it must be read from a real device on the internet — asked from inside
  *  the platform, it answers about the platform. */
 export interface ClientIpObservation {
-  /** The address anonymous throttles would key this request on. */
+  /** The exact address this request resolved to. */
   client_ip: string;
+  /** The bucket it counts against: the same value for IPv4, the caller's /64
+   *  for IPv6 (a device rotates its IPv6 suffix, the subscriber prefix stays). */
+  rate_limit_key: string;
   /** Which rung produced it. Only 'trusted-header' is per-caller behind a CDN. */
   source: 'trusted-header' | 'forwarded-for' | 'socket-peer' | 'none';
   socket_peer: string | null;

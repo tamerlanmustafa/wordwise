@@ -31,6 +31,7 @@ from src.utils.rate_limit import (
     CLIENT_IP_HEADER_CANDIDATES,
     client_ip_observation,
     rate_limit,
+    rate_limit_key_for_ip,
     resolve_client_ip_with_source,
 )
 
@@ -156,6 +157,37 @@ def test_the_secret_header_is_matched_case_insensitively(cdn):
     assert ip == CALLER
 
 
+# --- which bucket an address counts against -------------------------------
+
+def test_ipv4_keys_on_the_whole_address():
+    assert rate_limit_key_for_ip("71.117.29.127") == "71.117.29.127"
+
+
+def test_ipv6_keys_on_the_subscriber_prefix_not_the_device():
+    """The defeat this closes: a phone's IPv6 suffix rotates (privacy
+    extensions), so keying on the full address hands the same caller a fresh
+    budget every time their device picks new low bits."""
+    assert (
+        rate_limit_key_for_ip("2600:4040:27ed:9700:a93d:371:696a:34dc")
+        == "2600:4040:27ed:9700::/64"
+    )
+
+
+def test_ipv4_mapped_addresses_are_not_collapsed():
+    """::ffff:1.2.3.4 is IPv4 in an IPv6 shape. Treating it as IPv6 would put
+    EVERY such caller in the single bucket ::/64 — a total loss of limiting."""
+    assert rate_limit_key_for_ip("::ffff:203.0.113.9") == "::ffff:203.0.113.9"
+    assert rate_limit_key_for_ip("::ffff:198.51.100.7") != rate_limit_key_for_ip(
+        "::ffff:203.0.113.9"
+    )
+
+
+def test_a_non_address_passes_through_rather_than_raising():
+    """`unknown` is a real value from `resolve_client_ip_with_source`; the
+    limiter must bucket it, not crash on it."""
+    assert rate_limit_key_for_ip("unknown") == "unknown"
+
+
 # --- what the throttles actually do with it -------------------------------
 
 def _app(limit: int) -> FastAPI:
@@ -184,6 +216,27 @@ def test_two_callers_behind_one_cdn_get_separate_budgets(cdn):
     # B never touched A's budget.
     assert client.get("/ping", headers=b).status_code == 200
     assert client.get("/ping", headers=b).status_code == 200
+
+
+def test_one_ipv6_caller_cannot_rotate_its_suffix_into_a_fresh_budget(cdn):
+    """The regression guard for the /64 collapse. Same subscriber, three
+    different device suffixes — one budget, not three."""
+    client = TestClient(_app(limit=2))
+    base = {SECRET_HEADER: SECRET}
+    same_sub = [
+        {**base, CF: "2600:4040:27ed:9700:a93d:371:696a:34dc"},
+        {**base, CF: "2600:4040:27ed:9700:26:51aa:90f4:e446"},
+        {**base, CF: "2600:4040:27ed:9700:dead:beef:1:2"},
+    ]
+
+    assert client.get("/ping", headers=same_sub[0]).status_code == 200
+    assert client.get("/ping", headers=same_sub[1]).status_code == 200
+    # Before the collapse this was a 200 — a third free request from rotation.
+    assert client.get("/ping", headers=same_sub[2]).status_code == 429
+
+    # A genuinely different subscriber still has its own budget.
+    other = {**base, CF: "2600:4040:27ed:9701:a93d:371:696a:34dc"}
+    assert client.get("/ping", headers=other).status_code == 200
 
 
 def test_unconfigured_callers_share_one_bucket_rather_than_minting_their_own(
@@ -237,7 +290,20 @@ def test_report_passes_once_the_secret_proves_the_cdn(cdn):
     assert by_key["throttles_bind_per_caller"]["value"] == "yes"
     assert by_key["origin_proof"]["status"] == "ok"
     assert report["observed"]["client_ip"] == CALLER
+    # IPv4: the address and the bucket it counts against are the same thing.
+    assert report["observed"]["rate_limit_key"] == CALLER
     assert report["next_step"].startswith("nothing")
+
+
+def test_report_shows_the_ipv6_bucket_alongside_the_exact_address(cdn):
+    """The log keeps the full address for forensics; the key is the /64. Both
+    are reported so the grouping isn't an invisible transform between them."""
+    report = build_report(
+        _observe({CF: "2600:4040:27ed:9700:a93d:371:696a:34dc", SECRET_HEADER: SECRET})
+    )
+
+    assert report["observed"]["client_ip"] == "2600:4040:27ed:9700:a93d:371:696a:34dc"
+    assert report["observed"]["rate_limit_key"] == "2600:4040:27ed:9700::/64"
 
 
 def test_report_flags_a_configured_header_whose_secret_did_not_match(cdn):

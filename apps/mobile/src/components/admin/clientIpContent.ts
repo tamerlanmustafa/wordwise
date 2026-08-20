@@ -76,7 +76,12 @@ export function traceRows(obs: ClientIpObservation): TraceRow[] {
 export function keySummary(obs: ClientIpObservation): string {
   switch (obs.source) {
     case 'trusted-header':
-      return `Counting attempts against ${obs.client_ip}, the caller’s own address.`;
+      return obs.rate_limit_key === obs.client_ip
+        ? `Counting attempts against ${obs.client_ip}, the caller’s own address.`
+        : `Counting attempts against ${obs.rate_limit_key} — the block this caller’s ` +
+          `internet provider gave them, rather than ${obs.client_ip} exactly. Phones ` +
+          `change the tail end of an IPv6 address on their own, so counting the exact ` +
+          `one would hand the same person a fresh allowance every few hours.`;
     case 'forwarded-for':
       return `Counting attempts against ${obs.client_ip}, taken from the forwarding header.`;
     case 'socket-peer':

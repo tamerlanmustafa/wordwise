@@ -218,6 +218,38 @@ def resolve_client_ip(get_header: HeaderGetter, peer: str | None) -> str:
     return resolve_client_ip_with_source(get_header, peer)[0]
 
 
+# How much of an IPv6 address identifies the subscriber rather than the device.
+# A /64 is the smallest block anyone is handed: carriers and ISPs delegate at
+# least that to a single customer, and the remaining 64 bits are chosen by the
+# customer's own equipment — privacy extensions rotate them by the hour. Keying
+# on the full address therefore gives one caller a fresh bucket whenever their
+# device picks a new suffix, which is the same defeat as having no limit.
+#
+# Widen (56, 48) if abuse is seen rotating across /64s within one allocation;
+# that also groups more unrelated subscribers into one bucket, so it is a
+# deliberate trade, not a free tightening.
+IPV6_KEY_PREFIX_BITS = 64
+
+
+def rate_limit_key_for_ip(ip: str) -> str:
+    """The bucket an address counts against.
+
+    IPv4 is one address per caller, so it keys on itself. IPv6 keys on the
+    caller's /64 — see `IPV6_KEY_PREFIX_BITS`. Anything that isn't an address
+    ("unknown", a unix socket path) passes through untouched so it still
+    shares one bucket rather than crashing the limiter.
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    # ::ffff:1.2.3.4 is an IPv4 address wearing an IPv6 shape. Collapsing it by
+    # prefix would drop every IPv4 caller into the single bucket "::/64".
+    if addr.version == 4 or getattr(addr, "ipv4_mapped", None) is not None:
+        return ip
+    return str(ipaddress.ip_network(f"{ip}/{IPV6_KEY_PREFIX_BITS}", strict=False))
+
+
 def _request_header_getter(request: Request) -> HeaderGetter:
     """Starlette's `Headers` mapping is already case-insensitive."""
     return request.headers.get
@@ -243,6 +275,11 @@ def client_ip_observation(request: Request) -> dict:
     header_name = settings.trusted_client_ip_header
     return {
         "client_ip": ip,
+        # The bucket the address actually counts against — the same thing for
+        # IPv4, the caller's /64 for IPv6. Reported separately so the grouping
+        # is visible rather than an invisible transform between the address in
+        # the logs and the budget being spent.
+        "rate_limit_key": rate_limit_key_for_ip(ip),
         "source": source,
         "socket_peer": peer,
         "forwarded_for": get_header("X-Forwarded-For"),
@@ -272,7 +309,7 @@ def _client_key(request: Request, token: str | None) -> str:
         _request_header_getter(request),
         client.host if client else None,
     )
-    return f"ip:{ip}"
+    return f"ip:{rate_limit_key_for_ip(ip)}"
 
 
 def rate_limit(limit: int, window_seconds: float, *, scope: str):
@@ -380,7 +417,7 @@ def _client_key_from_scope(scope, token: str | None) -> str:
     user = _user_key_from_token(token)
     if user:
         return user
-    return f"ip:{client_ip_from_scope(scope)}"
+    return f"ip:{rate_limit_key_for_ip(client_ip_from_scope(scope))}"
 
 
 class GlobalRateLimitMiddleware:

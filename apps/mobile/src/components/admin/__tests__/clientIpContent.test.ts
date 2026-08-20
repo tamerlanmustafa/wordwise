@@ -12,6 +12,7 @@ import type { ClientIpObservation, ClientIpReport, HealthMetric } from '../../..
 /** What prod actually sends today: Cloudflare names the caller, nothing uses it. */
 const broken = (over: Partial<ClientIpObservation> = {}): ClientIpObservation => ({
   client_ip: '100.64.0.4',
+  rate_limit_key: '100.64.0.4',
   source: 'socket-peer',
   socket_peer: '100.64.0.4',
   forwarded_for: '104.22.100.36, 152.233.47.66',
@@ -28,6 +29,7 @@ const broken = (over: Partial<ClientIpObservation> = {}): ClientIpObservation =>
 const working = (): ClientIpObservation =>
   broken({
     client_ip: '71.117.29.127',
+    rate_limit_key: '71.117.29.127',
     source: 'trusted-header',
     trusted_client_ip_header: 'CF-Connecting-IP',
     trusted_client_ip_header_value: '71.117.29.127',
@@ -72,9 +74,23 @@ describe('keySummary', () => {
   });
 
   it('handles a request with nothing to key on', () => {
-    expect(keySummary(broken({ source: 'none', client_ip: 'unknown' }))).toContain(
-      'no usable address'
+    expect(
+      keySummary(broken({ source: 'none', client_ip: 'unknown', rate_limit_key: 'unknown' }))
+    ).toContain('no usable address');
+  });
+
+  it('explains the IPv6 block when the bucket is wider than the address', () => {
+    // Otherwise the screen shows one address while the budget is spent by a
+    // different-looking one, and the grouping reads as a bug.
+    const text = keySummary(
+      broken({
+        source: 'trusted-header',
+        client_ip: '2600:4040:27ed:9700:a93d:371:696a:34dc',
+        rate_limit_key: '2600:4040:27ed:9700::/64',
+      })
     );
+    expect(text).toContain('2600:4040:27ed:9700::/64');
+    expect(text).toContain('internet provider');
   });
 });
 
