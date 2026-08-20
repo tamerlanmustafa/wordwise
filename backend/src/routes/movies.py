@@ -1,6 +1,6 @@
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from prisma import Prisma
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -18,6 +18,7 @@ from ..services.movie_cefr import (
 )
 from ..services.profanity_filter import is_profane_entry
 from ..services.script_idioms import get_script_idioms
+from ..utils.http_cache import public_cache
 from ..utils.nlp_executor import NLPOverloaded
 from ..utils.rate_limit import rate_limit
 
@@ -41,9 +42,26 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 _vocab_preview_throttle = rate_limit(5, 60.0, scope="movie-vocab-preview")
 MAX_PENDING_PREVIEW_PARSES = 4
 
+# Cache-Control for the reads below that are the same for every caller (#123).
+# The catalogue only changes when an ingestion or backfill worker rewrites a
+# row, so a repeat request should not have to reach this single-process API at
+# all. There is no purge hook, so freshness is bounded by the TTL: a backfill
+# is fully visible one TTL after it lands.
+#
+# Deliberately NOT applied to /by-cefr. It reads the same catalogue but
+# subtracts the caller's watched and not-interested movies, so `public` would
+# let a shared cache hand one learner's filtered feed to the next learner.
+_MOVIE_DETAIL_CACHE = public_cache(3600)
+# Listings gain rows when ingestion runs, so they age faster than a single row.
+_MOVIE_LIST_CACHE = public_cache(900)
+# The expensive one — see the throttle above. Recomputing it means re-reading
+# every word classification for the script, so it is the biggest win here.
+_VOCAB_PREVIEW_CACHE = public_cache(3600)
+
 
 @router.get("/", response_model=MovieListResponse)
 async def list_movies(
+    response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     difficulty: Optional[str] = Query(None, description="CEFR level: A1..C2"),
@@ -69,6 +87,7 @@ async def list_movies(
         take=limit
     )
 
+    response.headers["Cache-Control"] = _MOVIE_LIST_CACHE
     return {
         "movies": movies,
         "total": total,
@@ -79,6 +98,7 @@ async def list_movies(
 
 @router.get("/by-level")
 async def list_movies_by_level(
+    response: Response,
     level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
     limit: int = Query(50, ge=1, le=200),
     db: Prisma = Depends(get_db),
@@ -118,6 +138,7 @@ async def list_movies_by_level(
         limit,
     )
 
+    response.headers["Cache-Control"] = _MOVIE_LIST_CACHE
     return {
         "level": target,
         "movies": [
@@ -545,7 +566,7 @@ async def unhide_movie(
 
 
 @router.get("/{movie_id}", response_model=MovieResponse)
-async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
+async def get_movie(movie_id: int, response: Response, db: Prisma = Depends(get_db)):
     """Get a specific movie by ID"""
     movie = await db.movie.find_unique(where={"id": movie_id})
 
@@ -555,11 +576,12 @@ async def get_movie(movie_id: int, db: Prisma = Depends(get_db)):
             detail="Movie not found"
         )
 
+    response.headers["Cache-Control"] = _MOVIE_DETAIL_CACHE
     return movie
 
 
 @router.get("/{movie_id}/difficulty")
-async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
+async def get_movie_difficulty(movie_id: int, response: Response, db: Prisma = Depends(get_db)):
     import json
 
     movie = await db.movie.find_unique(where={"id": movie_id})
@@ -575,6 +597,7 @@ async def get_movie_difficulty(movie_id: int, db: Prisma = Depends(get_db)):
         else:
             breakdown = movie.cefrDistribution
 
+    response.headers["Cache-Control"] = _MOVIE_DETAIL_CACHE
     return {
         # #103: this used to bucket the score on its own boundaries, one band
         # off from the home feed, so the same film could read B1 on the shelf
@@ -612,6 +635,7 @@ async def create_movie(
 @router.get("/{movie_id}/vocabulary/preview")
 async def get_vocabulary_preview(
     movie_id: int,
+    response: Response,
     db: Prisma = Depends(get_db),
     _: None = Depends(_vocab_preview_throttle),
 ) -> Dict[str, Any]:
@@ -694,6 +718,13 @@ async def get_vocabulary_preview(
     except Exception:
         logger.exception("Error detecting idioms")
         idioms = []
+
+    # Only the complete answer is cacheable. When the NLP queue shed the parse
+    # above we served the word list without idioms on purpose — pinning that
+    # degraded body for an hour would turn a one-off shed into an hour of
+    # movies that look like they have no idioms at all.
+    if not idioms_unavailable:
+        response.headers["Cache-Control"] = _VOCAB_PREVIEW_CACHE
 
     return {
         "movie_id": movie_id,

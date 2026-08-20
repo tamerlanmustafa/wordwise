@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from .config import docs_kwargs, get_settings
 from .database import connect_db, disconnect_db
 from .logging_config import configure_logging
-from .middleware import RequestIDMiddleware
+from .middleware import HTTPCacheMiddleware, RequestIDMiddleware
 from .utils.rate_limit import GlobalRateLimitMiddleware
 from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router
 from .services import fetch_movie_script
@@ -105,6 +105,12 @@ if settings.rate_limit_enabled and settings.rate_limit_per_minute > 0:
         limit=settings.rate_limit_per_minute,
         window_seconds=60.0,
     )
+
+# Conditional GETs (issue #123). Added after the rate limit so it sits outside
+# it — a 429 is not a 200 and passes straight through — and before CORS so it
+# sits inside it, which means a 304 we synthesize still picks up the CORS and
+# X-Request-ID headers on the way out.
+app.add_middleware(HTTPCacheMiddleware)
 
 # CORS
 app.add_middleware(

@@ -30,7 +30,7 @@ Rules for whoever works this file:
 | 6 | `done` | #125 | Proxy + cache TMDB server-side; key gone from the client. **Rotate the TMDB key only after the new build is adopted** — old installs and `frontend/` still carry the old one. |
 | 7 | `done` | #103 | Converged all four movie CEFR derivations onto `difficulty_score`. ⏳ **Deploy is green as of 2026-08-20 (c07387c) and `/movies/by-level?level=A1` returns 200, so `prisma/manual/2026_08_20_converge_movie_cefr_issue_103.sql` is now unblocked and still UNAPPLIED.** Needs the user to run it; `movies.difficulty_level` + `ix_movies_difficulty` are still in prod. Safe to sit on — an unused column costs nothing. |
 | 8 | `done` | #94 | Translation-MCQ distractors must not be near-forms of the correct answer. |
-| 9 | `todo` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. Header change, not infrastructure. |
+| 9 | `done` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. ⏳ **Edge caching still needs a Cloudflare Cache Rule** (dashboard, user) — headers alone leave `cf-cache-status: DYNAMIC`. |
 | 10 | `user` | #101 | Native-speaker review of es/pt/tr/ru. Needs real speakers. Gate on *promoting* those locales. |
 
 ## Tier 3 — correctness and latency at any user count
@@ -79,6 +79,7 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 | Date | Item | Outcome |
 |------|------|---------|
+| 2026-08-20 | 9 (#123) | Five public movie reads now send `Cache-Control`; a new middleware adds a weak `ETag` to any 200 GET that declares a `max-age` and answers `If-None-Match` with 304. `/by-cefr` deliberately excluded — it subtracts the caller's watched/hidden films, so `public` would leak one learner's feed to the next. **The issue's premise was half wrong:** headers alone don't make Cloudflare cache. `/api/tmdb/trending` has sent `public, max-age=3600` since #125 and still returns `cf-cache-status: DYNAMIC` — the edge caches by file extension, so extensionless JSON needs a Cache Rule in the dashboard. Until then the win is device-side + 304s. |
 | 2026-08-20 | 8 (#94) | Distractors that contain (or sit inside) the correct translation are filtered out of the grid. Measured on the live TR cache: 0.28% of cards swap a distractor, 0 dropped at the standard 10-card deck; only a 4-word deck can starve, ~1 card in 1,000. Edit distance deliberately rejected — it would have killed fair pairs like `comer`/`correr`. |
 | 2026-08-20 | 7 (#103) | Four derivations, not two: only 61% of movies got the same level from all paths, and 418 read B1/B2/C1 at once. The enum was just the score re-bucketed lossily, so it's gone — level is derived from `difficulty_score` on read. Also fixed two silent bugs it was hiding: onboarding's first-film list 400'd for every new user, and the quiz treated every movie as B1. Column drop SQL is written but **must run after the deploy**. |
 | 2026-08-20 | 6 (#125) | TMDB moved behind `/api/tmdb/*` with a single-flight TTL cache; a 20-row page is 1 request, not 20, and no key ships in the bundle. Key still hard-coded in frozen `frontend/` — rotation would break those pages. |
