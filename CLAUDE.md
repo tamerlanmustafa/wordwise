@@ -23,6 +23,14 @@
 - Read the nearest existing example first and follow its patterns (naming, file layout, imports) instead of inventing new ones.
 - Keep changes scoped to the task. Don't reformat or refactor unrelated lines.
 
+## Backend concurrency: one user must never block another
+- The API is a **single uvicorn process, single replica** on purpose (each holds ~1GB of ML models). Any synchronous work inside an `async def` stalls **every** concurrent request, not just the caller's. Measured: one script parse pushed `/health` from 0.16s to 7.86s.
+- **The rule:** if it isn't `await`ed I/O and could exceed ~10ms, it goes through the offload helper (`run_nlp` for spaCy) — never inline. Batch first, then offload **once**; a per-item loop through the executor is worse than blocking.
+- Known offenders, with measured costs: password hashing (~173ms), spaCy (~0.6ms/word, 1.6–2.9s/script), PDF/EPUB extraction, and loading a whole table to filter it in Python (see `services/hidden_words.py` for the right shape).
+- **`BackgroundTasks` are not offloading.** FastAPI runs background tasks for `async def` functions *on the event loop* — they just run after the response is sent.
+- **Reviewing a function in isolation cannot reveal this.** Each piece is individually correct; the defect lives in the composition. When adding to a request path, ask "what else is waiting while this runs?"
+- Don't trust a green lint run here. Ruff's `ASYNC` rules only catch *known* blocking APIs (`open`, `time.sleep`, `requests`); they cannot know an ordinary function call is CPU-heavy.
+
 ## Testing (write tests as part of the feature, not after)
 - When you add or change a feature, add or extend a test that covers it in the same change. New behavior shouldn't land untested.
 - Put tests next to the code in a `__tests__/` folder and follow the nearest existing test's structure before inventing a new one. Jest/pytest auto-discover them.
@@ -37,10 +45,33 @@
 - Web build sanity check (when touching the web build): `cd frontend && npm run build`.
 - Show the command output as evidence rather than asserting it passed.
 
+## Reporting back (after every fix)
+- Lead with the plain-language version: what was broken and what changed, told in WordWise terms — a user tapping a word in a subtitle, the quiz deck, the sentence worker, a Railway deploy — not in function names. Two or three sentences with a concrete before/after (e.g. "a B2 word used to show up as A2 in Explore; now it sits in UNKNOWN until it's graded").
+- Then go deeper **only when the detail changes something**: a decision to make, a risk, a follow-up, or prod state that differs from the repo. Otherwise skip the code tour.
+- Finish with a short **Concepts** block so the user is learning from the session, not just accepting the diff:
+  - **3–5 items, hard cap** — fewer is fine. Skip the block entirely on trivial changes rather than padding it.
+  - Name each concept the way the industry names it (`connection pooling`, `idempotency`, `backpressure`, `query planning`) so it's searchable, then 2–3 sentences: what it is, and where it showed up in WordWise today.
+  - **The name is senior-level; the explanation is written for a junior-to-mid engineer.** Assume solid general programming ability but zero prior exposure to this concept *and* zero exposure to the vocabulary that usually surrounds it.
+  - **Never explain one piece of jargon with another.** If a supporting term is genuinely needed (`ASGI`, `TLS`, `edge`, `origin`, `inbound`, `event loop`, `middleware`), define it in the same breath in ordinary words — "ASGI (the plumbing that hands an incoming request from the web server to your Python function)" — or rewrite the sentence without it. A sentence the user has to go look up has taught them nothing.
+  - Ground it in something visible: the tap on a subtitle word, the quiz deck, a slow `/health` check, a Railway deploy. "What would a user or an on-call engineer actually have seen?" beats an abstract definition.
+  - Subject matter is unchanged — architecture, data modelling, concurrency, failure modes, ops. Only the wording gets simpler. Still not language basics (what a string or a row is) and not framework trivia.
+  - No tutorials, no code samples, no exhaustive lists — the user does their own research from the names. Prefer breadth over time; don't re-teach a concept unless it appears in a genuinely new way.
+  - **Repeat each explanation in Azerbaijani**, on its own line right under the English, prefixed `**AZ:**`. Same plain wording bar applies — the Azerbaijani is a translation of the *idea*, not a word-for-word calque, and it must not smuggle in jargon the English avoided.
+  - **Only the descriptions get translated.** The concept name stays in English so it stays searchable, and so do anything in backticks, product and tool names (Railway, Postgres, spaCy, WordWise), file paths, and issue numbers. Nothing else in the report is translated — the plain-language summary and the detail section stay English.
+  - Shape:
+    ```
+    - **fallback chain** — A resolution order where each rule is tried until one produces an
+      answer. Today it decided which language the interface opens in.
+      **AZ:** Hər qaydanın bir cavab verənə qədər növbə ilə yoxlandığı həll sırası. Bu gün
+      interfeysin hansı dildə açılacağını məhz bu müəyyən etdi.
+    ```
+
 ## Deployment (Railway)
 - The backend is deployed on **Railway** (`railway.json` → `docker/Dockerfile.backend`) and is live at `api.getwordwise.us`. `docker-compose.prod.yml` is not the deployed path.
 - **The Railway CLI is installed** (`brew install railway`). Use it to inspect prod instead of guessing: `railway variables` reads the deployed env, `railway status` shows the linked project, `railway logs` tails the service.
 - Prod config lives only in Railway's env — `DEBUG`, `JWT_SECRET_KEY`, `ALLOWED_ORIGINS`, and all API keys are **not** in the repo, so the tracked files can't tell you what prod is running.
+- **`railway.json` is shared by both services.** `wordwise` and `Worker` deploy from the same file and Dockerfile, so a `deploy` block added to it applies to **both** — and `Worker` binds no port, so a `healthcheckPath` there would fail every Worker deploy. Per-service deploy settings therefore live in the dashboard: `wordwise` has `healthcheckPath=/health` plus a `prisma migrate deploy` pre-deploy command, `Worker` has `startCommand=bash scripts/start-workers.sh`.
+- Railway healthchecks are **deploy-time only** — Railway polls the path until it returns 200, then stops. It never re-checks a live deployment, so a healthcheck cannot restart a wedged process; `/admin/health/event-loop` (#146) is what surfaces that.
 - Auth is per-machine: if `railway whoami` returns `Unauthorized`, ask the user to run `railway login` (it opens a browser) rather than trying to authenticate.
 - Read-only commands are fine unprompted. Never run `railway up`, `railway redeploy`, `railway variables --set`, or anything else that mutates the deployment without explicit approval.
 
