@@ -58,62 +58,72 @@ class GoogleTranslateClient:
 
     def _get_client(self):
         """Lazy initialization of Google Translate client"""
-        if self._client is None:
+        if self._client is not None:
+            return self._client
+
+        # ── 1. Resolve credentials, before importing the SDK ────────────
+        # The import used to come first, which meant a deployment with the
+        # env misconfigured was told "google-cloud-translate not installed"
+        # — true, but not the thing the operator needed to fix. Reading the
+        # config first means the error names the variable to correct. It
+        # also lets these branches be unit-tested without the Google SDK
+        # present, which is why CI can keep requirements-dev.txt lean.
+        info = None
+        if self.credentials_json:
+            # Inline JSON wins: it is the deployed form, and if both are
+            # present the file is almost certainly a stale local leftover.
+            import json
+
             try:
-                from google.cloud import translate_v2 as translate
+                info = json.loads(self.credentials_json)
+            except ValueError as e:
+                # Pasting a service-account key into a dashboard field
+                # mangles it easily (stripped newlines, added quotes).
+                # Say so plainly instead of surfacing a JSON position.
+                raise GoogleTranslateError(
+                    f"GOOGLE_CREDENTIALS_JSON is not valid JSON: {e}. "
+                    "Paste the service-account key file's full contents, "
+                    "including the surrounding braces."
+                )
+        elif self.credentials_path:
+            if not os.path.exists(self.credentials_path):
+                raise GoogleTranslateError(
+                    f"Google credentials file not found: {self.credentials_path}. "
+                    f"Please set GOOGLE_APPLICATION_CREDENTIALS to a valid path."
+                )
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
+            logger.info(f"Using Google credentials from: {self.credentials_path}")
+        else:
+            raise GoogleTranslateError(
+                "No Google credentials configured. Set GOOGLE_CREDENTIALS_JSON "
+                "to the service-account key's contents (the deployed form), or "
+                "GOOGLE_APPLICATION_CREDENTIALS to its file path (local dev)."
+            )
 
-                # Inline JSON wins: it is the deployed form, and if both are
-                # present the file is almost certainly a stale local leftover.
-                if self.credentials_json:
-                    import json
+        # ── 2. Build the client ─────────────────────────────────────────
+        try:
+            from google.cloud import translate_v2 as translate
 
-                    from google.oauth2 import service_account
+            if info is not None:
+                from google.oauth2 import service_account
 
-                    try:
-                        info = json.loads(self.credentials_json)
-                    except ValueError as e:
-                        # Pasting a service-account key into a dashboard field
-                        # mangles it easily (stripped newlines, added quotes).
-                        # Say so plainly instead of surfacing a JSON position.
-                        raise GoogleTranslateError(
-                            f"GOOGLE_CREDENTIALS_JSON is not valid JSON: {e}. "
-                            "Paste the service-account key file's full contents, "
-                            "including the surrounding braces."
-                        )
-                    creds = service_account.Credentials.from_service_account_info(info)
-                    self._client = translate.Client(credentials=creds)
-                    logger.info(
-                        "Google Translate client initialized from GOOGLE_CREDENTIALS_JSON "
-                        "(project=%s)", info.get("project_id", "unknown"),
-                    )
-                    return self._client
-
-                # Set credentials path if provided
-                if self.credentials_path:
-                    if not os.path.exists(self.credentials_path):
-                        raise GoogleTranslateError(
-                            f"Google credentials file not found: {self.credentials_path}. "
-                            f"Please set GOOGLE_APPLICATION_CREDENTIALS to a valid path."
-                        )
-                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
-                    logger.info(f"Using Google credentials from: {self.credentials_path}")
-                else:
-                    raise GoogleTranslateError(
-                        "No Google credentials configured. Set GOOGLE_CREDENTIALS_JSON "
-                        "to the service-account key's contents (the deployed form), or "
-                        "GOOGLE_APPLICATION_CREDENTIALS to its file path (local dev)."
-                    )
-
+                creds = service_account.Credentials.from_service_account_info(info)
+                self._client = translate.Client(credentials=creds)
+                logger.info(
+                    "Google Translate client initialized from GOOGLE_CREDENTIALS_JSON "
+                    "(project=%s)", info.get("project_id", "unknown"),
+                )
+            else:
                 self._client = translate.Client()
                 logger.info("Google Translate client initialized successfully")
-            except ImportError:
-                logger.error("google-cloud-translate not installed. Install with: pip install google-cloud-translate")
-                raise GoogleTranslateError("google-cloud-translate package not installed")
-            except GoogleTranslateError:
-                raise
-            except Exception as e:
-                logger.error(f"Failed to initialize Google Translate client: {e}")
-                raise GoogleTranslateError(f"Failed to initialize client: {str(e)}")
+        except ImportError:
+            logger.error("google-cloud-translate not installed. Install with: pip install google-cloud-translate")
+            raise GoogleTranslateError("google-cloud-translate package not installed")
+        except GoogleTranslateError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to initialize Google Translate client: {e}")
+            raise GoogleTranslateError(f"Failed to initialize client: {str(e)}")
 
         return self._client
 

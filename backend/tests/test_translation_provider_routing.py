@@ -85,6 +85,59 @@ class TestGoogleCredentialSources:
         assert "GOOGLE_CREDENTIALS_JSON" in message
         assert "GOOGLE_APPLICATION_CREDENTIALS" in message
 
+    def test_a_config_error_is_reported_even_without_the_sdk_installed(self, monkeypatch):
+        """
+        Credential checks must not sit behind the `google.cloud` import.
+
+        They used to: `_get_client` imported the SDK first, so an operator who
+        had misconfigured the env was told "google-cloud-translate package not
+        installed" — true on that box, but not the thing they had to fix. It
+        also made these tests unrunnable anywhere the SDK is absent, which is
+        every CI run (requirements-dev.txt deliberately stays lean), so CI sat
+        red. Simulated here by making the import fail even when it's present.
+        """
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_sdk(name, *args, **kwargs):
+            if name.startswith("google.cloud"):
+                raise ImportError("No module named 'google.cloud'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_sdk)
+        monkeypatch.setenv("GOOGLE_TRANSLATE_ENABLED", "true")
+        monkeypatch.delenv("GOOGLE_CREDENTIALS_JSON", raising=False)
+        monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+        GoogleTranslateClient._init_warning_logged = False
+
+        with pytest.raises(GoogleTranslateError) as exc:
+            GoogleTranslateClient()._get_client()
+
+        assert "GOOGLE_CREDENTIALS_JSON" in str(exc.value)
+
+    def test_a_missing_sdk_is_still_reported_when_the_config_is_fine(self, monkeypatch):
+        """The SDK error must survive — it's the right answer once env is OK."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_sdk(name, *args, **kwargs):
+            if name.startswith("google.cloud"):
+                raise ImportError("No module named 'google.cloud'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_sdk)
+        monkeypatch.setenv("GOOGLE_TRANSLATE_ENABLED", "true")
+        monkeypatch.delenv("GOOGLE_CREDENTIALS_JSON", raising=False)
+        monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", __file__)  # exists
+        GoogleTranslateClient._init_warning_logged = False
+
+        with pytest.raises(GoogleTranslateError) as exc:
+            GoogleTranslateClient()._get_client()
+
+        assert "not installed" in str(exc.value)
+
     def test_disabled_by_default(self, monkeypatch):
         # The fallback must stay off unless explicitly enabled — an accidental
         # enable with no key turns every DeepL miss into a slower failure.
