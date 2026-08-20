@@ -16,6 +16,52 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
 
+# ── Shared connection pool (issue #125) ─────────────────────────────────────
+# `TMDBClient` opens and closes a fresh AsyncClient per use, which is fine for
+# the one-shot worker/ingestion callers. The request-path proxy is different:
+# a new client per request means a new TCP + TLS handshake per request, which
+# is most of the latency of a small JSON call. These module-level helpers keep
+# one pool alive for the process instead.
+_shared_client: Optional[httpx.AsyncClient] = None
+
+
+def _client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(
+            base_url=TMDB_BASE_URL,
+            timeout=httpx.Timeout(8.0, connect=4.0),
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+        )
+    return _shared_client
+
+
+async def close_shared_client() -> None:
+    """Close the pooled client (app shutdown, and between tests)."""
+    global _shared_client
+    if _shared_client is not None and not _shared_client.is_closed:
+        await _shared_client.aclose()
+    _shared_client = None
+
+
+async def tmdb_get(path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    One authenticated GET against TMDB, over the shared pool.
+
+    Raises on transport errors and on non-2xx (including TMDB's own 429), so
+    callers can decide between failing and serving something stale. The API
+    key is added here and nowhere else, which is the point of the proxy: it
+    exists in the server env only, never in a shipped client bundle.
+    """
+    settings = get_settings()
+    if not settings.tmdb_api_key:
+        raise RuntimeError("TMDB_API_KEY is not configured")
+    merged = {"api_key": settings.tmdb_api_key, "language": "en-US", **(params or {})}
+    response = await _client().get(path, params=merged)
+    response.raise_for_status()
+    return response.json()
+
+
 class TMDBClient:
     """Client for fetching movie metadata from TMDB API"""
 

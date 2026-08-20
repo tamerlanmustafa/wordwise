@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { TMDB_API_KEY } from '../../config/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { MovieData } from '../../core/types';
 import {
@@ -177,9 +176,8 @@ export const HomeScreen = ({
   // Trending tab data. The level tab's feed is owned by useInfiniteCefrMovies.
   const loadTrending = useCallback(async () => {
     try {
-      const trendingRes = await fetch(`https://api.themoviedb.org/3/trending/movie/day?api_key=${TMDB_API_KEY}`);
-      const trendingData = await trendingRes.json();
-      setTrendingMovies(trendingData.results?.slice(0, 15) || []);
+      const trending = await tmdbApi.getTrending();
+      setTrendingMovies(trending.slice(0, 15));
     } catch (error) {
       console.error('Failed to fetch movies:', error);
     } finally {

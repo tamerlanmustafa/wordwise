@@ -16,7 +16,6 @@ import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
-import { TMDB_API_KEY } from '../../config/env';
 
 interface Props {
   query: string;
@@ -104,15 +103,14 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
       // For genre quick-start: top-rated within genre, restricted to widely
       // rated films (>=5k votes) and English originals only — WordWise can
       // only process English subtitles right now, so foreign titles would
-      // just dead-end at script fetch.
-      const url = isGenre
-        ? `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${encodeURIComponent(genreIds)}&with_original_language=en&sort_by=vote_average.desc&vote_count.gte=5000&include_adult=false&page=${pageNum}`
-        : `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(effectiveQuery)}&page=${pageNum}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      // just dead-end at script fetch. Those filters now live in the backend
+      // proxy (services/tmdb_proxy.discover_by_genre), not in this URL.
+      const data = isGenre
+        ? await tmdbApi.discoverByGenre(genreIds, pageNum)
+        : await tmdbApi.searchMoviesPaged(effectiveQuery, pageNum);
       return {
-        movies: data.results || [],
-        totalPages: data.total_pages || 1,
+        movies: data.results,
+        totalPages: data.total_pages,
       };
     } catch {
       return { movies: [], totalPages: 1 };

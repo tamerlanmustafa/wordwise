@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Image, ImageStyle, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { colors } from '../../theme/palette';
-import { TMDB_API_KEY } from '../../config/env';
+import { tmdbApi } from '../../services/api';
 
-// Module-level cache: same tmdbId fetched from several screens only hits TMDB once.
+// Module-level cache of the resolved image URL. `tmdbApi.getMovieDetails`
+// caches the metadata itself and coalesces the lookups a grid of posters
+// raises into one request, so this layer only saves rebuilding the URL.
 const tmdbPosterCache: Record<number, string | null> = {};
 
 interface Props {
@@ -25,11 +27,8 @@ export const TmdbPoster = ({ tmdbId, style }: Props) => {
     }
     (async () => {
       try {
-        const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`);
-        const data = await res.json();
-        const posterPath = data.poster_path
-          ? `https://image.tmdb.org/t/p/w185${data.poster_path}`
-          : null;
+        const movie = await tmdbApi.getMovieDetails(tmdbId);
+        const posterPath = tmdbApi.getPosterUrl(movie?.poster_path ?? null, 'w185');
         tmdbPosterCache[tmdbId] = posterPath;
         setUri(posterPath);
       } catch {

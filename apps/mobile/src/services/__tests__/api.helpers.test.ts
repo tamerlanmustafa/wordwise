@@ -1,5 +1,4 @@
 import {
-  enrichMoviesWithTmdb,
   tmdbApi,
   SrsPaywallError,
   REPORT_REASON_LABELS,
@@ -21,66 +20,8 @@ describe('tmdbApi.getPosterUrl', () => {
   });
 });
 
-describe('enrichMoviesWithTmdb', () => {
-  let fetchMock: jest.Mock;
-
-  beforeEach(() => {
-    fetchMock = jest.fn();
-    (globalThis as { fetch: unknown }).fetch = fetchMock;
-  });
-
-  it('merges TMDB poster/backdrop/overview/release_date onto each row', async () => {
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        overview: 'A heist drama.',
-        poster_path: '/poster.jpg',
-        backdrop_path: '/backdrop.jpg',
-        release_date: '1995-12-15',
-      }),
-    });
-
-    const [out] = await enrichMoviesWithTmdb([{ tmdb_id: 949, description: 'old', year: 1995 }]);
-
-    expect(out).toMatchObject({
-      overview: 'A heist drama.',
-      poster_path: '/poster.jpg',
-      backdrop_path: '/backdrop.jpg',
-      release_date: '1995-12-15',
-    });
-  });
-
-  it('leaves a row without a tmdb_id untouched and makes no request', async () => {
-    const input = [{ description: 'no tmdb id' }];
-    const [out] = await enrichMoviesWithTmdb(input);
-    expect(out).toBe(input[0]);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the original row when the TMDB lookup throws', async () => {
-    fetchMock.mockRejectedValue(new Error('TMDB down'));
-    const input = [{ tmdb_id: 1, description: 'keep me' }];
-    const [out] = await enrichMoviesWithTmdb(input);
-    expect(out).toEqual(input[0]);
-  });
-
-  it('synthesizes release_date from the row year when TMDB omits it', async () => {
-    fetchMock.mockResolvedValue({ json: async () => ({ overview: '', poster_path: null }) });
-    const [out] = await enrichMoviesWithTmdb([{ tmdb_id: 1, year: 2001 }]);
-    expect((out as unknown as { release_date: string }).release_date).toBe('2001-01-01');
-  });
-
-  it('enriches a whole page in parallel, isolating one failure from the rest', async () => {
-    fetchMock
-      .mockResolvedValueOnce({ json: async () => ({ overview: 'ok', poster_path: '/a.jpg' }) })
-      .mockRejectedValueOnce(new Error('boom'));
-    const out = await enrichMoviesWithTmdb([
-      { tmdb_id: 1, description: 'first' },
-      { tmdb_id: 2, description: 'second' },
-    ]);
-    expect((out[0] as unknown as { overview: string }).overview).toBe('ok');
-    expect(out[1]).toMatchObject({ description: 'second' }); // fell back
-  });
-});
+// enrichMoviesWithTmdb and the rest of the TMDB client moved behind our own
+// proxy in issue #125 — they're covered in tmdbProxy.test.ts.
 
 describe('SrsPaywallError', () => {
   it('defaults to the preview-exhausted kind', () => {

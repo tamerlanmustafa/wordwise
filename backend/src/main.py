@@ -79,6 +79,11 @@ async def lifespan(app: FastAPI):
     warmup.cancel()
     if watchdog is not None:
         watchdog.cancel()
+    # The TMDB proxy keeps one pooled HTTP client alive for the process
+    # (issue #125); release its sockets before the loop closes.
+    from .utils.tmdb_client import close_shared_client
+
+    await close_shared_client()
     await disconnect_db()
 
 app = FastAPI(

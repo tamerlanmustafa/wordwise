@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { config, TMDB_API_KEY } from '../config/env';
+import { config } from '../config/env';
 import { tokenStorage } from './auth/tokenStorage';
 import type {
   ListDetail,
@@ -15,7 +15,10 @@ import type {
 const API_BASE_URL = config.API_URL;
 
 // Types
-interface TMDBMovie {
+// The projected shape the backend proxy returns — same fields whether the row
+// came from search, discover, trending or a details lookup (services/
+// tmdb_proxy.py normalises `genres` to `genre_ids` so they match).
+export interface TMDBMovie {
   id: number;
   title: string;
   poster_path: string | null;
@@ -23,6 +26,9 @@ interface TMDBMovie {
   release_date: string;
   overview: string;
   vote_average: number;
+  vote_count: number;
+  popularity: number;
+  original_language: string;
   genre_ids: number[];
 }
 
@@ -204,37 +210,104 @@ export const authFetch = async (
   return res;
 };
 
-// TMDB API
+// ─── TMDB, via our own backend (issue #125) ─────────────────────────────
+// Nothing here talks to api.themoviedb.org any more. The device used to call
+// TMDB directly, once per movie per page, signed with an API key compiled into
+// the bundle — extractable by anyone who downloaded the app, and impossible to
+// rotate without shipping a release. The key now exists only in the server
+// env, and the backend caches these responses (they are identical for every
+// user), so the second phone to open the same page never reaches TMDB at all.
+//
+// Image URLs stay client-side: image.tmdb.org needs no key and is a CDN
+// already, so proxying pixels through Railway would only add a hop.
+const TMDB_PROXY = `${API_BASE_URL}/api/tmdb`;
+
+const tmdbGet = async (path: string): Promise<any> => {
+  const res = await fetch(`${TMDB_PROXY}${path}`);
+  if (!res.ok) throw new Error(`TMDB proxy ${res.status}`);
+  return res.json();
+};
+
+// ─── Per-movie lookups are coalesced into one request ───────────────────
+// A page of movie cards asks for details one id at a time, from whichever
+// component renders each row. Instead of issuing a request per row, ids
+// raised inside the same short window are collected and sent as a single
+// `/movies?ids=` call — the 20-round-trips-per-page problem in #125. Results
+// are memoised for the session, so scrolling back up costs nothing.
+const MAX_IDS_PER_REQUEST = 40; // must match MAX_BATCH_IDS in routes/tmdb.py
+const BATCH_WINDOW_MS = 20;
+
+const detailCache = new Map<number, TMDBMovie | null>();
+let pendingIds: number[] = [];
+let pendingFlush: Promise<void> | null = null;
+
+const fetchDetailBatch = async (ids: number[]): Promise<void> => {
+  for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
+    const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
+    const data = await tmdbGet(`/movies?ids=${chunk.join(',')}`);
+    const found = data?.movies ?? {};
+    // Ids TMDB doesn't recognise come back absent. Cache the negative too, or
+    // a dead id is re-requested on every render.
+    chunk.forEach((id) => detailCache.set(id, found[String(id)] ?? null));
+  }
+};
+
+const scheduleDetailFlush = (): Promise<void> => {
+  if (!pendingFlush) {
+    pendingFlush = new Promise<void>((resolve) => {
+      setTimeout(resolve, BATCH_WINDOW_MS);
+    }).then(() => {
+      const ids = pendingIds;
+      pendingIds = [];
+      // Cleared before the request goes out, so ids raised while it's in
+      // flight open the next window rather than joining a departed batch.
+      pendingFlush = null;
+      return fetchDetailBatch(ids);
+    });
+  }
+  return pendingFlush;
+};
+
 export const tmdbApi = {
   getTrending: async (): Promise<TMDBMovie[]> => {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/trending/movie/day?api_key=${TMDB_API_KEY}`
-    );
-    const data = await res.json();
-    return data.results || [];
-  },
-
-  getTopRated: async (): Promise<TMDBMovie[]> => {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/movie/top_rated?api_key=${TMDB_API_KEY}`
-    );
-    const data = await res.json();
+    const data = await tmdbGet('/trending');
     return data.results || [];
   },
 
   searchMovies: async (query: string): Promise<TMDBMovie[]> => {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`
-    );
-    const data = await res.json();
+    const data = await tmdbGet(`/search?q=${encodeURIComponent(query)}`);
     return data.results || [];
   },
 
-  getMovieDetails: async (tmdbId: number): Promise<TMDBMovie> => {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`
-    );
-    return res.json();
+  /** Paged title search — returns the paging fields the infinite list needs. */
+  searchMoviesPaged: async (
+    query: string,
+    page = 1,
+  ): Promise<{ results: TMDBMovie[]; total_pages: number }> => {
+    const data = await tmdbGet(`/search?q=${encodeURIComponent(query)}&page=${page}`);
+    return { results: data.results || [], total_pages: data.total_pages || 1 };
+  },
+
+  /** Top-rated, widely-rated, English-original films in a genre. */
+  discoverByGenre: async (
+    genreIds: string,
+    page = 1,
+  ): Promise<{ results: TMDBMovie[]; total_pages: number }> => {
+    const data = await tmdbGet(`/discover?genres=${encodeURIComponent(genreIds)}&page=${page}`);
+    return { results: data.results || [], total_pages: data.total_pages || 1 };
+  },
+
+  /**
+   * One movie's metadata. Resolves to null when TMDB has no such id; throws
+   * only when the request itself fails. Safe to call once per rendered row —
+   * calls made close together share a single network request.
+   */
+  getMovieDetails: async (tmdbId: number): Promise<TMDBMovie | null> => {
+    const cached = detailCache.get(tmdbId);
+    if (cached !== undefined) return cached;
+    if (!pendingIds.includes(tmdbId)) pendingIds.push(tmdbId);
+    await scheduleDetailFlush();
+    return detailCache.get(tmdbId) ?? null;
   },
 
   getPosterUrl: (posterPath: string | null, size: 'w185' | 'w300' | 'w500' = 'w300'): string | null => {
@@ -242,30 +315,20 @@ export const tmdbApi = {
     return `https://image.tmdb.org/t/p/${size}${posterPath}`;
   },
 
-  /** Returns all available images for a movie: backdrops, posters, logos. */
-  getMovieImages: async (tmdbId: number): Promise<{
-    backdrops: Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
-    posters:   Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
-    logos:     Array<{ file_path: string; width: number; height: number; vote_average: number; vote_count: number }>;
-  }> => {
-    const res = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}/images?api_key=${TMDB_API_KEY}`
-    );
-    const data = await res.json();
-    return {
-      backdrops: data.backdrops || [],
-      posters:   data.posters   || [],
-      logos:     data.logos     || [],
-    };
+  /** Test seam only — the detail cache lives for the life of the process. */
+  _resetTmdbCache: (): void => {
+    detailCache.clear();
+    pendingIds = [];
+    pendingFlush = null;
   },
 };
 
 /**
  * Enriches WordWise/CEFR movie rows (which only carry tmdb_id + poster_url)
  * with the poster_path / backdrop_path / overview / release_date the cards
- * render. Requests run in parallel and any failure falls back to the original
- * row, so one bad TMDB lookup never blocks a page. Call this per page as the
- * infinite list loads — never on the whole catalog at once.
+ * render. The whole page's ids go out as one request; any failure falls back
+ * to the original rows, so a TMDB outage never blocks a page. Call this per
+ * page as the infinite list loads — never on the whole catalog at once.
  */
 export async function enrichMoviesWithTmdb<
   T extends { tmdb_id?: number | null; description?: string | null; year?: number | null }
@@ -274,7 +337,8 @@ export async function enrichMoviesWithTmdb<
     movies.map(async (m) => {
       if (!m.tmdb_id) return m;
       try {
-        const t: any = await tmdbApi.getMovieDetails(m.tmdb_id);
+        const t = await tmdbApi.getMovieDetails(m.tmdb_id);
+        if (!t) return m;
         return {
           ...m,
           overview: t.overview || m.description || '',

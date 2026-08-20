@@ -7,13 +7,11 @@ export const GOOGLE_CLIENT_ID_IOS = '400446242104-a9laa57dook0og2k93g9amjgieqo2m
 // Without it, Android gets a null idToken and login 401s with "Invalid Google token".
 export const GOOGLE_CLIENT_ID_WEB = '400446242104-gvfqp0soikdji99132k59nlh88moucpt.apps.googleusercontent.com';
 
-// TMDB key — single source of truth (was hard-coded in 4 separate files; UX
-// audit F-037). NOTE: as a client key it's still shipped in the bundle. Fully
-// securing it needs a backend proxy for TMDB calls (ops follow-up) + key
-// rotation; centralizing it here is the prerequisite (one place to change).
-// (Deliberately a plain literal, not `process.env.EXPO_PUBLIC_*`: that form
-// makes babel-preset-expo pull in `expo/virtual/env`, which breaks Jest.)
-export const TMDB_API_KEY = '1870027496e94e64c86a36fbcb709320';
+// No TMDB key here any more (issue #125). Every TMDB call now goes through
+// `${API_URL}/api/tmdb/*`, which holds the key server-side, so it is no longer
+// extractable from the shipped bundle and can be rotated without a release.
+// Don't reintroduce a client key: `services/api.ts` → `tmdbApi` is the only
+// way the app should reach TMDB.
 
 const configs = {
   development: {
