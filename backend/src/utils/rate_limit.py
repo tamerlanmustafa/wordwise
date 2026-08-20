@@ -15,15 +15,28 @@ if you need accurate cross-instance limits.
 
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Deque, Dict
+from typing import Callable, Deque, Dict, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 
 from ..config import get_settings
 from ..utils.auth import verify_token
+
+# Case-insensitive lookup of one request header, whatever the request is
+# represented as. Both the FastAPI `Request` path and the raw ASGI middleware
+# path adapt to this so the resolution rules below exist exactly once.
+HeaderGetter = Callable[[str], Optional[str]]
+
+# Single-value headers a CDN may use to carry the caller's real address. These
+# are OBSERVED, never trusted: the access log records which of them arrived so
+# "does this header survive the platform's proxies?" can be answered against
+# real traffic before anything is keyed on it (issue #139, step one).
+CLIENT_IP_HEADER_CANDIDATES = ("cf-connecting-ip", "true-client-ip", "x-real-ip")
 
 
 class _SlidingWindow:
@@ -101,14 +114,152 @@ def _client_ip(
     default so that a misconfigured environment fails closed (everyone shares
     a bucket) rather than open (everyone gets a spoofable identity).
     """
-    if forwarded_for and trusted_hops > 0:
-        hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
-        if hops:
-            # Fewer entries than expected means the request did not traverse
-            # the full chain; the leftmost is then the closest to the client.
-            index = max(0, len(hops) - trusted_hops)
-            return hops[index]
-    return peer or "unknown"
+    return _forwarded_ip(forwarded_for, trusted_hops) or peer or "unknown"
+
+
+def _forwarded_ip(forwarded_for: str | None, trusted_hops: int) -> str | None:
+    """The entry `trusted_hops` from the right of X-Forwarded-For, if any.
+
+    Split out from `_client_ip` so callers can tell "the header supplied the
+    address" apart from "we fell back to the socket peer" — the two look
+    identical in the result but mean opposite things about whether the key is
+    per-caller. See `_client_ip` for why the count runs from the right.
+    """
+    if not forwarded_for or trusted_hops <= 0:
+        return None
+    hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
+    if not hops:
+        return None
+    # Fewer entries than expected means the request did not traverse the full
+    # chain; the leftmost is then the closest to the client.
+    return hops[max(0, len(hops) - trusted_hops)]
+
+
+def _parsed_ip(value: str | None) -> str | None:
+    """`value` if it is a bare IP address, else None.
+
+    A rate-limit key made from an unvalidated header is a rate limit that can
+    be dissolved by sending junk: every distinct malformed value is a fresh
+    bucket. Only something that parses as an address is allowed to become one.
+    """
+    if not value:
+        return None
+    candidate = value.strip()
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return None
+    return candidate
+
+
+def _origin_secret_matches(get_header: HeaderGetter, settings) -> bool:
+    """Whether this request carries the CDN's shared origin secret.
+
+    `trusted_client_ip_header` is only meaningful if the request provably came
+    through the CDN that sets it. The Railway origin still answers requests
+    that never touched Cloudflare, so without this proof anyone could pick
+    their own rate-limit identity by hitting the origin directly — which is
+    worse than the shared bucket it would replace.
+
+    Both settings unset (the default) returns False, which is what keeps the
+    whole feature off until it is deliberately configured at both ends.
+    Compared with `compare_digest` so a wrong secret can't be recovered a byte
+    at a time from response timing.
+    """
+    name = settings.trusted_client_ip_secret_header
+    expected = settings.trusted_client_ip_secret
+    if not name or not expected:
+        return False
+    presented = get_header(name)
+    if not presented:
+        return False
+    return hmac.compare_digest(presented.strip().encode("utf-8"), expected.encode("utf-8"))
+
+
+def resolve_client_ip_with_source(
+    get_header: HeaderGetter, peer: str | None
+) -> tuple[str, str]:
+    """The caller's address and which source produced it.
+
+    In precedence order:
+
+    1. ``trusted-header`` — `trusted_client_ip_header` (e.g. Cloudflare's
+       `CF-Connecting-IP`), but only when `_origin_secret_matches` proves the
+       CDN set it. On a CDN-fronted deployment this is the only per-caller
+       source: Railway rebuilds `X-Forwarded-For` and discards what Cloudflare
+       sent, so the caller appears at no index of it (issue #139).
+    2. ``forwarded-for`` — counted from the right by `trusted_proxy_hops`.
+    3. ``socket-peer`` — the connecting address, which behind any proxy is the
+       proxy, so all callers share one key.
+    4. ``none`` — nothing to key on at all.
+
+    Each step down degrades toward a *shared* key rather than a forgeable one,
+    so a half-configured deployment throttles callers collectively instead of
+    handing every caller a private budget. The source is what the admin report
+    surfaces: the address alone can't tell you which rung it came from, and
+    only the top rung means the limits actually bind per caller.
+    """
+    settings = get_settings()
+    header_name = settings.trusted_client_ip_header
+    if header_name and _origin_secret_matches(get_header, settings):
+        trusted = _parsed_ip(get_header(header_name))
+        if trusted:
+            return trusted, "trusted-header"
+    forwarded = _forwarded_ip(get_header("X-Forwarded-For"), settings.trusted_proxy_hops)
+    if forwarded:
+        return forwarded, "forwarded-for"
+    if peer:
+        return peer, "socket-peer"
+    return "unknown", "none"
+
+
+def resolve_client_ip(get_header: HeaderGetter, peer: str | None) -> str:
+    """`resolve_client_ip_with_source` when only the address is wanted."""
+    return resolve_client_ip_with_source(get_header, peer)[0]
+
+
+def _request_header_getter(request: Request) -> HeaderGetter:
+    """Starlette's `Headers` mapping is already case-insensitive."""
+    return request.headers.get
+
+
+def client_ip_observation(request: Request) -> dict:
+    """Everything this process can see about where one request came from.
+
+    The raw material for the /admin/health/client-ip report: the address that
+    would be used as a rate-limit key, the rung it came from, and the inputs
+    that decided it. Reported per-request rather than aggregated because the
+    question it answers — "does the CDN's header survive the platform's
+    proxies?" — is answered by a single real request from outside.
+
+    The origin secret's *value* is never included, only whether one is
+    configured and whether this request presented a matching one.
+    """
+    settings = get_settings()
+    get_header = _request_header_getter(request)
+    client = request.client
+    peer = client.host if client else None
+    ip, source = resolve_client_ip_with_source(get_header, peer)
+    header_name = settings.trusted_client_ip_header
+    return {
+        "client_ip": ip,
+        "source": source,
+        "socket_peer": peer,
+        "forwarded_for": get_header("X-Forwarded-For"),
+        "trusted_proxy_hops": settings.trusted_proxy_hops,
+        "candidate_headers": {
+            name: value
+            for name in CLIENT_IP_HEADER_CANDIDATES
+            if (value := get_header(name))
+        },
+        "trusted_client_ip_header": header_name or None,
+        "trusted_client_ip_header_value": get_header(header_name) if header_name else None,
+        "origin_secret_header": settings.trusted_client_ip_secret_header or None,
+        "origin_secret_configured": bool(
+            settings.trusted_client_ip_secret_header and settings.trusted_client_ip_secret
+        ),
+        "origin_secret_matched": _origin_secret_matches(get_header, settings),
+    }
 
 
 def _client_key(request: Request, token: str | None) -> str:
@@ -117,10 +268,9 @@ def _client_key(request: Request, token: str | None) -> str:
     if user:
         return user
     client = request.client
-    ip = _client_ip(
-        request.headers.get("X-Forwarded-For"),
+    ip = resolve_client_ip(
+        _request_header_getter(request),
         client.host if client else None,
-        get_settings().trusted_proxy_hops,
     )
     return f"ip:{ip}"
 
@@ -168,12 +318,46 @@ def _bearer_from_scope(scope) -> str | None:
     return None
 
 
+def _scope_header_getter(scope) -> HeaderGetter:
+    """Case-insensitive header lookup over a raw ASGI scope.
+
+    ASGI hands headers over as a list of lowercased byte pairs. First match
+    wins, matching Starlette, so a duplicated header cannot be appended to
+    shadow the value the CDN set.
+    """
+    headers = scope.get("headers", [])
+
+    def get(name: str) -> str | None:
+        wanted = name.lower().encode("latin-1")
+        for key, value in headers:
+            if key == wanted:
+                return value.decode("latin-1")
+        return None
+
+    return get
+
+
 def _forwarded_for_from_scope(scope) -> str | None:
     """X-Forwarded-For off a raw ASGI scope (headers are lowercased bytes)."""
-    for key, value in scope.get("headers", []):
-        if key == b"x-forwarded-for":
-            return value.decode("latin-1")
-    return None
+    return _scope_header_getter(scope)("X-Forwarded-For")
+
+
+def client_ip_headers_from_scope(scope) -> dict[str, str]:
+    """Which of the CDN client-IP headers actually arrived on this request.
+
+    Observational only — nothing here is trusted or keyed on. Recording it is
+    how the question issue #139 turns on gets answered: Railway rewrites
+    `X-Forwarded-For`, so whether it *also* passes `CF-Connecting-IP` through
+    to the app cannot be assumed and has to be seen in production traffic.
+    The values are addresses; the origin secret is deliberately not among them.
+    """
+    get = _scope_header_getter(scope)
+    found = {}
+    for name in CLIENT_IP_HEADER_CANDIDATES:
+        value = get(name)
+        if value:
+            found[name] = value
+    return found
 
 
 def client_ip_from_scope(scope) -> str:
@@ -185,10 +369,9 @@ def client_ip_from_scope(scope) -> str:
     place that question can be answered against real traffic.
     """
     client = scope.get("client")
-    return _client_ip(
-        _forwarded_for_from_scope(scope),
+    return resolve_client_ip(
+        _scope_header_getter(scope),
         client[0] if client else None,
-        get_settings().trusted_proxy_hops,
     )
 
 

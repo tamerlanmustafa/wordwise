@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from prisma import Prisma
 from datetime import datetime, timedelta, timezone
@@ -7,11 +7,12 @@ from src.database import get_db
 from src.middleware.auth import get_admin_user
 from src.services.cefr_classifier import HybridCEFRClassifier
 from src.services.cefr_registry import apply_registry_levels
+from src.services.client_ip_health import build_report as build_client_ip_report
 from src.services.difficulty_scorer import compute_difficulty
 from src.services.event_loop_lag import compute_event_loop_report
 from src.services.latency_stats import compute_latency_report
 from src.services.vocab_coverage import compute_vocab_coverage
-from src.utils.rate_limit import rate_limit
+from src.utils.rate_limit import client_ip_observation, rate_limit
 from src.utils.subscription import entitlements_payload
 from pathlib import Path
 import logging
@@ -27,6 +28,9 @@ _vocab_health_throttle = rate_limit(30, 60.0, scope="admin-vocab-health")
 _latency_health_throttle = rate_limit(30, 60.0, scope="admin-latency-health")
 # Same shape as the latency read: no database, one sort of the probe window.
 _event_loop_health_throttle = rate_limit(30, 60.0, scope="admin-event-loop-health")
+# Reads headers off the current request and nothing else, but it is the report
+# you hit repeatedly while wiring up a CDN rule, so it gets a wider budget.
+_client_ip_health_throttle = rate_limit(60, 60.0, scope="admin-client-ip-health")
 
 
 @router.get("/stats")
@@ -133,6 +137,29 @@ async def event_loop_health(
     looking for the #117 signature: one endpoint slow **and** every unrelated
     endpoint slow in the same window."""
     return compute_event_loop_report()
+
+
+@router.get("/health/client-ip")
+async def client_ip_health(
+    request: Request,
+    admin_user=Depends(get_admin_user),
+    _: None = Depends(_client_ip_health_throttle),
+):
+    """Whether IP-keyed rate limiting binds per caller (issue #139).
+
+    Anonymous throttles — login, registration, forgot/reset password, and the
+    app-wide ceiling — have nothing but the caller's address to key on. When
+    that address is really a proxy shared by everyone, the limits still return
+    429s and still look enforced while an attacker's brute-force budget is
+    multiplied across the addresses the platform rotates through.
+
+    Unlike the other health reports this one describes **the request that
+    called it**, because the question is about network topology and one real
+    request settles it. Call it from outside the network: from inside Railway
+    the answer describes Railway. Reports which CDN client-IP headers survived
+    to the app, whether the origin secret proved the CDN set them, and the next
+    step to take — never the secret's value."""
+    return build_client_ip_report(client_ip_observation(request))
 
 
 @router.get("/movies/processed")

@@ -18,6 +18,7 @@ import {
   REPORT_REASON_LABELS,
   REPORT_STATUS_LABELS,
   type AdminStats,
+  type ClientIpReport,
   type DeadJob,
   type EventLoopReport,
   type ProcessedMovie,
@@ -33,6 +34,7 @@ import {
 } from '../stores/entitlementsStore';
 import type { Entitlements } from '../types';
 import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
+import { ClientIpView } from './admin/ClientIpView';
 import { EventLoopView } from './admin/EventLoopView';
 import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
@@ -96,7 +98,14 @@ export interface AdminScreenProps {
   backLabel?: string;
 }
 
-type AdminView = 'main' | 'dead' | 'processed' | 'coverage' | 'latency' | 'eventLoop';
+type AdminView =
+  | 'main'
+  | 'dead'
+  | 'processed'
+  | 'coverage'
+  | 'latency'
+  | 'eventLoop'
+  | 'clientIp';
 
 export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [view, setView] = useState<AdminView>('main');
@@ -108,6 +117,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [latencyLoading, setLatencyLoading] = useState(false);
   const [eventLoop, setEventLoop] = useState<EventLoopReport | null>(null);
   const [eventLoopLoading, setEventLoopLoading] = useState(false);
+  const [clientIp, setClientIp] = useState<ClientIpReport | null>(null);
+  const [clientIpLoading, setClientIpLoading] = useState(false);
   const [processedMovies, setProcessedMovies] = useState<ProcessedMovie[] | null>(null);
   const [processedLoading, setProcessedLoading] = useState(false);
   const [processedFilter, setProcessedFilter] = useState<string | null>(null);
@@ -367,6 +378,23 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     setView('eventLoop');
     if (eventLoop === null) loadEventLoop();
   }, [eventLoop, loadEventLoop]);
+
+  const loadClientIp = useCallback(async () => {
+    setClientIpLoading(true);
+    try {
+      const report = await adminApi.clientIp();
+      setClientIp(report);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load attempt-limit health');
+    } finally {
+      setClientIpLoading(false);
+    }
+  }, []);
+
+  const openClientIp = useCallback(() => {
+    setView('clientIp');
+    if (clientIp === null) loadClientIp();
+  }, [clientIp, loadClientIp]);
 
   const tabCounts = useMemo(
     () => ({
@@ -646,6 +674,47 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     );
   }
 
+  if (view === 'clientIp') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setView('main')}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backText}>← Admin</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Attempt limits</Text>
+          <TouchableOpacity onPress={loadClientIp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        </View>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)}>
+              <Text style={styles.errorBannerClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {clientIpLoading && clientIp === null ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : !clientIp ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No data</Text>
+          </View>
+        ) : (
+          <ClientIpView report={clientIp} />
+        )}
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -714,6 +783,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             sublabel={eventLoop ? undefined : 'whether one request freezes the rest'}
             color={eventLoop ? STATUS_TOKENS[eventLoop.overall_status].mark : COLORS.primary}
             onPress={openEventLoop}
+          />
+          <StatCard
+            label="Attempt limits"
+            value={clientIp ? COVERAGE_STATUS_LABEL[clientIp.overall_status] : 'View →'}
+            sublabel={clientIp ? undefined : 'whether sign-in caps count per person'}
+            color={clientIp ? STATUS_TOKENS[clientIp.overall_status].mark : COLORS.primary}
+            onPress={openClientIp}
           />
         </View>
 

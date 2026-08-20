@@ -27,7 +27,11 @@ import uuid
 
 from ..logging_config import request_id_ctx
 from ..services.latency_stats import record_request
-from ..utils.rate_limit import _forwarded_for_from_scope, client_ip_from_scope
+from ..utils.rate_limit import (
+    _forwarded_for_from_scope,
+    client_ip_from_scope,
+    client_ip_headers_from_scope,
+)
 
 _DEFAULT_HEADER = "X-Request-ID"
 # Accept only ids that are safe to log and to write back into a header
@@ -125,6 +129,12 @@ class RequestIDMiddleware:
                     # real topology is to see both against live traffic.
                     "client_ip": client_ip_from_scope(scope),
                     "forwarded_for": _forwarded_for_from_scope(scope),
+                    # Which CDN client-IP headers reached the app at all
+                    # (issue #139). Railway rebuilds X-Forwarded-For, so
+                    # whether CF-Connecting-IP survives to here is a fact
+                    # about the platform that has to be observed, not
+                    # assumed, before anything is keyed on it. Untrusted.
+                    "client_ip_headers": client_ip_headers_from_scope(scope),
                 },
             )
             request_id_ctx.reset(token)

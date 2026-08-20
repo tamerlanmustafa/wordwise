@@ -47,6 +47,9 @@ const clampPct = (n: number): number => Math.max(0, Math.min(100, n));
 export function meterGeometry(metric: HealthMetric): MeterGeometry | null {
   const max = metric.max_value;
   if (max == null || max <= 0) return null;
+  // A metric whose value is a state ("trusted-header", "yes") has no position
+  // on a scale, so there is nothing to fill.
+  if (typeof metric.value !== 'number' && metric.value != null) return null;
   const toPct = (n: number | null): number | null =>
     n == null ? null : clampPct((n / max) * 100);
   return {
@@ -60,6 +63,8 @@ export function meterGeometry(metric: HealthMetric): MeterGeometry | null {
 export function formatMetricValue(metric: HealthMetric): string {
   const { value, unit } = metric;
   if (value == null) return '—';
+  // States are already written for a reader; only quantities get formatted.
+  if (typeof value === 'string') return value;
   const n = Number.isInteger(value)
     ? value.toLocaleString()
     : value.toLocaleString(undefined, { maximumFractionDigits: 2 });

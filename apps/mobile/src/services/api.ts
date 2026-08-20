@@ -616,7 +616,10 @@ export type VocabCoverageStatus = 'ok' | 'warn' | 'fail';
 export interface VocabCoverageMetric {
   key: string;
   label: string;
-  value: number | null;
+  /** Usually a quantity. Reports that measure a *state* rather than an amount
+   *  (client-IP resolution) send a string instead — it renders as-is and has
+   *  no meter. */
+  value: number | string | null;
   unit: string;
   status: VocabCoverageStatus;
   /** Human-readable band, e.g. "warn <90%, fail <80%". */
@@ -700,6 +703,36 @@ export interface EventLoopReport {
   metrics: HealthMetric[];
   /** Most recent stalls, newest first. Capped server-side. */
   recent_stalls: EventLoopStall[];
+}
+
+/** What the API could see about where one request came from (issue #139).
+ *  Unlike the other health reports this describes *the request that asked*,
+ *  so it must be read from a real device on the internet — asked from inside
+ *  the platform, it answers about the platform. */
+export interface ClientIpObservation {
+  /** The address anonymous throttles would key this request on. */
+  client_ip: string;
+  /** Which rung produced it. Only 'trusted-header' is per-caller behind a CDN. */
+  source: 'trusted-header' | 'forwarded-for' | 'socket-peer' | 'none';
+  socket_peer: string | null;
+  forwarded_for: string | null;
+  trusted_proxy_hops: number;
+  /** CDN client-IP headers that survived to the app, by lowercased name. */
+  candidate_headers: Record<string, string>;
+  trusted_client_ip_header: string | null;
+  trusted_client_ip_header_value: string | null;
+  origin_secret_header: string | null;
+  origin_secret_configured: boolean;
+  origin_secret_matched: boolean;
+}
+
+export interface ClientIpReport {
+  generated_at: string;
+  overall_status: HealthStatus;
+  metrics: HealthMetric[];
+  /** What to do next, in the order the steps are safe to take. */
+  next_step: string;
+  observed: ClientIpObservation;
 }
 
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
@@ -1330,6 +1363,19 @@ export const adminApi = {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/health/event-loop → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Whether IP-keyed rate limiting binds per caller. Describes THIS request,
+  // so calling it from the app on a real network is the measurement — the
+  // phone is the outside caller whose address either survives to the API or
+  // doesn't.
+  clientIp: async (): Promise<ClientIpReport> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/health/client-ip`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/health/client-ip → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
   },

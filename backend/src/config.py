@@ -53,10 +53,37 @@ class Settings(BaseSettings):
     # 0 (the default) ignores the header and keys on the socket peer — right
     # for a directly-exposed process, and a safe default because it fails
     # closed: callers share a bucket rather than each minting their own.
-    # Railway fronts the app with two appending hops (edge + internal router),
-    # so prod sets TRUSTED_PROXY_HOPS=2. Verify before changing: a value that
-    # is too high hands out spoofable identities.
+    #
+    # Prod deliberately leaves this UNSET (issue #139). Railway discards the
+    # X-Forwarded-For that Cloudflare sends and rebuilds its own, so the caller
+    # is at no index of the header there: 1 resolves to the Railway edge pool
+    # and 2 to a Cloudflare egress address, neither of which is per-caller.
+    # Setting it on Railway buys nothing and a value that is too high hands out
+    # spoofable identities. Use `trusted_client_ip_header` below instead.
     trusted_proxy_hops: int = 0
+
+    # Where the caller's address actually is on a CDN-fronted deployment
+    # (issue #139). A CDN that terminates the connection knows the real client
+    # and puts it in a single-value header of its own — Cloudflare uses
+    # `CF-Connecting-IP` — which survives Railway rewriting X-Forwarded-For.
+    #
+    # Empty (the default) ignores it and falls back to `trusted_proxy_hops`,
+    # so an environment with no CDN in front is unaffected.
+    trusted_client_ip_header: str = ""
+    # ...but a header is only as trustworthy as the guarantee that it came from
+    # the CDN. The Railway origin still answers requests that never went
+    # through Cloudflare, so trusting the header on its own would let anyone
+    # mint an identity by hitting the origin directly — strictly worse than
+    # sharing a bucket. The CDN therefore has to prove it is the CDN: a
+    # Cloudflare Transform Rule sets a secret header on every request to the
+    # origin, and `trusted_client_ip_header` is honoured ONLY when it matches.
+    #
+    # Both must be set for the client-IP header to be read at all. That is the
+    # fail-closed half of this feature and is enforced in utils/rate_limit.py —
+    # do not relax it without an origin lockdown (Cloudflare IP allowlist or
+    # authenticated origin pull) taking its place.
+    trusted_client_ip_secret_header: str = ""
+    trusted_client_ip_secret: str = ""
 
     # Sign in with Apple: identity tokens are verified against Apple's JWKS
     # with our bundle id as the required audience (utils/apple_auth.py).
