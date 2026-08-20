@@ -9,10 +9,12 @@
  *        `__tests__/locales.test.ts` enforces this and fails on pre-push.)
  *    2. Add the resource import + entry in `resources.ts`.
  *    3. Add one row to UI_LANGUAGES below. Set `rtl: true` for a right-to-left
- *       script — `rtl.ts` handles the mirroring off that flag alone.
+ *       script — `rtl.ts` handles the mirroring off that flag alone. Set
+ *       `preview: true` while the locale is still being verified: it ships and
+ *       is tested, but is not offered to users until the flag comes off.
  *
  *  No component, picker, or store needs touching: Settings and onboarding
- *  both render straight from this list.
+ *  both render straight from SELECTABLE_UI_LANGUAGES.
  *
  *  One thing translators own rather than the code: directional arrows baked
  *  into copy (`"Continue →"`). An RTL locale writes `←` in its own strings.
@@ -37,6 +39,12 @@ export interface UiLanguage {
   /** Right-to-left script. Read by `rtl.ts` to decide the native layout
    *  direction, which is why it is data here rather than a hardcoded list. */
   rtl?: boolean;
+  /** Translated and bundled, but not yet offered to users. A preview locale
+   *  stays in this list — so its files, its parity tests and (for Arabic) the
+   *  RTL mirroring guards all keep running — while being excluded from the
+   *  picker *and* from language resolution, so nobody lands in it by accident.
+   *  Un-gating is a one-word deletion once the locale has been verified. */
+  preview?: boolean;
 }
 
 export const UI_LANGUAGES: ReadonlyArray<UiLanguage> = [
@@ -45,13 +53,22 @@ export const UI_LANGUAGES: ReadonlyArray<UiLanguage> = [
   { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
   { code: 'tr', name: 'Turkish',    nativeName: 'Türkçe' },
   { code: 'ru', name: 'Russian',    nativeName: 'Русский' },
-  { code: 'ar', name: 'Arabic',     nativeName: 'العربية', rtl: true },
+  // Arabic is gated until RTL has been walked on a device (#104): two swipe
+  // gestures still read physical `dx`, and no one has ever seen this app
+  // mirrored. Drop `preview` to ship it.
+  { code: 'ar', name: 'Arabic',     nativeName: 'العربية', rtl: true, preview: true },
 ];
 
 /** The locale every other one falls back to, key-by-key. */
 export const FALLBACK_LANGUAGE = 'en';
 
-export const UI_LANGUAGE_CODES: ReadonlyArray<string> = UI_LANGUAGES.map((l) => l.code);
+/** The locales a user can actually end up in — pickers and resolution both read
+ *  this rather than UI_LANGUAGES, which also carries the gated `preview` ones. */
+export const SELECTABLE_UI_LANGUAGES: ReadonlyArray<UiLanguage> = UI_LANGUAGES.filter(
+  (l) => !l.preview,
+);
+
+export const UI_LANGUAGE_CODES: ReadonlyArray<string> = SELECTABLE_UI_LANGUAGES.map((l) => l.code);
 
 export function isUiLanguage(code: string | null | undefined): boolean {
   return !!code && UI_LANGUAGE_CODES.includes(code.toLowerCase());

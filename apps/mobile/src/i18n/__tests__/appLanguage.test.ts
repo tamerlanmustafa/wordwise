@@ -78,6 +78,18 @@ describe('resolveAppLanguage', () => {
     // strand a user on a language with no resources.
     expect(resolveAppLanguage({ stored: 'ja', translationLanguage: 'PT' })).toBe('pt');
   });
+
+  it('never resolves to a preview locale, from any of the three sources', () => {
+    // Arabic is bundled but gated until RTL is verified on a device (#104).
+    // Each rule is checked separately because each is a different way in: a
+    // stale pin, a translation language, and — the one a real user hits — an
+    // Arabic phone.
+    expect(resolveAppLanguage({ stored: 'ar' })).toBe('en');
+    expect(resolveAppLanguage({ translationLanguage: 'AR' })).toBe('en');
+    expect(resolveAppLanguage({ device: 'ar-EG' })).toBe('en');
+    // …and it falls through to the next rule rather than short-circuiting.
+    expect(resolveAppLanguage({ stored: 'ar', translationLanguage: 'ES' })).toBe('es');
+  });
 });
 
 describe('hydrateAppLanguage', () => {
@@ -119,6 +131,13 @@ describe('setAppLanguage', () => {
     await setAppLanguage('ja');
 
     expect(getAppLanguage()).toBe('en');
+  });
+
+  it('refuses a gated preview locale even when asked directly', async () => {
+    await setAppLanguage('ar');
+
+    expect(getAppLanguage()).toBe('en');
+    expect(await AsyncStorage.getItem(APP_LANGUAGE_KEY)).toBe('en');
   });
 });
 

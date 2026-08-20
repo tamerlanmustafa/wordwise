@@ -15,7 +15,12 @@ import fs from 'fs';
 import path from 'path';
 
 import { NAMESPACES } from '../resources';
-import { FALLBACK_LANGUAGE, UI_LANGUAGES, normalizeToUiLanguage } from '../languages';
+import {
+  FALLBACK_LANGUAGE,
+  SELECTABLE_UI_LANGUAGES,
+  UI_LANGUAGES,
+  normalizeToUiLanguage,
+} from '../languages';
 
 const LOCALES_DIR = path.join(__dirname, '..', 'locales');
 const CODES = UI_LANGUAGES.map((l) => l.code);
@@ -178,6 +183,33 @@ describe('right-to-left locales', () => {
     const rtl = UI_LANGUAGES.filter((l) => l.rtl).map((l) => l.code);
     expect(rtl).toContain('ar');
     expect(rtl).not.toContain('en');
+  });
+});
+
+describe('preview locales', () => {
+  // A preview locale is fully shipped but not offered: it keeps its files, its
+  // parity checks and (for Arabic) the mirroring guards above, while staying
+  // out of every path that could put a user in it. See #104.
+  it('keeps Arabic bundled but out of the picker until RTL is verified', () => {
+    const previewed = UI_LANGUAGES.filter((l) => l.preview).map((l) => l.code);
+    expect(previewed).toEqual(['ar']);
+
+    // Still in UI_LANGUAGES, so its locale dir and RTL flag stay under test…
+    expect(CODES).toContain('ar');
+    // …but nothing a user can choose.
+    expect(SELECTABLE_UI_LANGUAGES.map((l) => l.code)).not.toContain('ar');
+  });
+
+  it('excludes them from resolution, not just from the list', () => {
+    // The picker is only half the surface: a device set to Arabic would
+    // otherwise be handed an unverified RTL layout it never asked for, with no
+    // Arabic row in Settings to explain where it came from.
+    expect(normalizeToUiLanguage('ar')).toBeUndefined();
+    expect(normalizeToUiLanguage('ar-EG')).toBeUndefined();
+  });
+
+  it('leaves the five launch locales selectable', () => {
+    expect(SELECTABLE_UI_LANGUAGES.map((l) => l.code)).toEqual(['en', 'es', 'pt', 'tr', 'ru']);
   });
 });
 

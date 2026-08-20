@@ -31,7 +31,7 @@ import {
 import { makeSettingsStyles } from './settingsStyles';
 import { BACK_ARROW, FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
 import {
-  UI_LANGUAGES,
+  SELECTABLE_UI_LANGUAGES,
   clearExplicitAppLanguage,
   getAppLanguage,
   getUiLanguage,
@@ -245,7 +245,7 @@ export const SettingsScreen = ({
 
   const appLanguageItems = useMemo(
     () =>
-      UI_LANGUAGES.map((l) => ({
+      SELECTABLE_UI_LANGUAGES.map((l) => ({
         code: l.code,
         name: l.nativeName === l.name ? l.name : `${l.nativeName} · ${l.name}`,
       })),
