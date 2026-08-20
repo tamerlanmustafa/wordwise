@@ -37,8 +37,8 @@ Rules for whoever works this file:
 
 | # | Status | Issue | Work |
 |---|--------|-------|------|
-| 11 | `todo` | #143 | Enrichment slow path parses a whole script (1.6–2.9s) on the event loop. Highest value in tier. |
-| 12 | `todo` | #129 | Sentence-worker backlog query: `NOT IN` → `NOT EXISTS`, fix the `LOWER()` index defeat. |
+| 11 | `done` | #143 | Enrichment slow path parses a whole script (1.6–2.9s) on the event loop. Highest value in tier. |
+| 12 | `doing` | #129 | Sentence-worker backlog query: `NOT IN` → `NOT EXISTS`, fix the `LOWER()` index defeat. |
 | 13 | `todo` | #126b | Time-bound the LLM ledger `SUM()`. Split from #126. |
 | 14 | `todo` | #144 | SRS session start: batch spaCy via `nlp.pipe` + one `run_nlp` hop. Cheapest fix in the repo. |
 | 15 | `todo` | #145 | Lemma backfill pulls every script's full text into memory. Select two columns. |
@@ -79,6 +79,7 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 | Date | Item | Outcome |
 |------|------|---------|
+| 2026-08-20 | 11 (#143) | Four spaCy sites in `/sentences/{word}` moved onto the NLP worker; the two whole-script ones now take an `nlp_slot(3)` and shed as `sentences_unavailable` rather than queue. Prod says the slow path is live: 1,856 of 42,594 lemmas (4.4%) have no sentence link and 238 movies have no SentenceBank at all. The issue's per-sentence loop is already dead in prod — `matched_form IS NULL` is 0 of 7.78M links — batched via `nlp.pipe` anyway. |
 | 2026-08-20 | 9 (#123) | Five public movie reads now send `Cache-Control`; a new middleware adds a weak `ETag` to any 200 GET that declares a `max-age` and answers `If-None-Match` with 304. `/by-cefr` deliberately excluded — it subtracts the caller's watched/hidden films, so `public` would leak one learner's feed to the next. **The issue's premise was half wrong:** headers alone don't make Cloudflare cache. `/api/tmdb/trending` has sent `public, max-age=3600` since #125 and still returns `cf-cache-status: DYNAMIC` — the edge caches by file extension, so extensionless JSON needs a Cache Rule in the dashboard. Until then the win is device-side + 304s. |
 | 2026-08-20 | 8 (#94) | Distractors that contain (or sit inside) the correct translation are filtered out of the grid. Measured on the live TR cache: 0.28% of cards swap a distractor, 0 dropped at the standard 10-card deck; only a 4-word deck can starve, ~1 card in 1,000. Edit distance deliberately rejected — it would have killed fair pairs like `comer`/`correr`. |
 | 2026-08-20 | 7 (#103) | Four derivations, not two: only 61% of movies got the same level from all paths, and 418 read B1/B2/C1 at once. The enum was just the score re-bucketed lossily, so it's gone — level is derived from `difficulty_score` on read. Also fixed two silent bugs it was hiding: onboarding's first-film list 400'd for every new user, and the quiz treated every movie as B1. Column drop SQL is written but **must run after the deploy**. |

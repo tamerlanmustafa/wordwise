@@ -11,6 +11,7 @@ import logging
 
 from src.database import get_db
 from src.middleware.auth import get_current_active_user, get_admin_user
+from src.utils.nlp_executor import NLPOverloaded, nlp_slot, run_nlp
 from src.utils.rate_limit import rate_limit
 from prisma import Prisma
 from src.config import get_settings
@@ -57,6 +58,20 @@ router = APIRouter(prefix="/api/enrichment", tags=["Enrichment"])
 # burn budget/latency by fanning out misses, on top of the global limiter.
 _sentences_throttle = rate_limit(120, 60.0, scope="enrichment-sentences")
 _sentences_batch_throttle = rate_limit(30, 60.0, scope="enrichment-sentences-batch")
+
+# /sentences/{word} has a slow path that parses a whole script (1.6-2.9s) when
+# SentenceBank has nothing for the word. Since #143 that parse runs on the NLP
+# worker thread, so it no longer stalls the process — but one worker means the
+# queue is the thing that grows, and this endpoint is reached by tapping a word,
+# one tap per word, with the row already open and waiting.
+#
+# Hence a lower cap than /movies/{id}/vocabulary/preview's 4: at ~2.5s a parse,
+# three already in line means the last caller waits ~9s. Past that, answering
+# "no sentence" immediately beats answering correctly after the user has closed
+# the row. The cap is a priority, not a reservation — every caller decrements
+# the same counter, so a small number here also means this endpoint yields to
+# the cheaper, cached paths rather than crowding them out.
+MAX_PENDING_SENTENCE_PARSES = 3
 
 
 # Lazy singleton for the word-gloss aligner so we build the Anthropic client
@@ -657,12 +672,21 @@ async def get_word_sentences(
     Fast path: query pre-extracted SentenceBank (populated during enrichment).
     Slow path: parse script on-the-fly if SentenceBank has no data.
     If target_lang is provided, returns cached translation or translates on-demand and caches.
+
+    Every spaCy call below goes through `run_nlp` (issue #143). This is an
+    `async def`, so a parse called inline here runs on the event loop and stalls
+    every other request in the process for its duration — and the slow path is a
+    whole-script parse, 1.6-2.9s of it. The two whole-script paths additionally
+    take an `nlp_slot`, so a run of cold movies sheds instead of queueing.
     """
     try:
         from src.services.lemmatization_service import get_nlp
-        nlp = get_nlp()
 
         raw_sentences = []
+        # True only when a parse was shed at the door — distinguishes "the NLP
+        # queue was full" from "this word genuinely has no example sentence",
+        # which otherwise look identical (an empty list) in logs and to clients.
+        sentences_unavailable = False
         is_phrase = ' ' in word.strip()
 
         # Phrase path: skip lemma lookup, use phrase-aware extraction directly
@@ -675,12 +699,30 @@ async def get_word_sentences(
                 raise HTTPException(status_code=404, detail=f"Movie {movie_id} not found or has no script")
 
             sentence_service = SentenceExampleService()
-            sentences = sentence_service.extract_phrase_sentences(
-                movie.movieScripts[0].cleanedScriptText,
-                word,
-                nlp,
-                max_examples,
-            )
+            phrase_script_text = movie.movieScripts[0].cleanedScriptText
+
+            # A split phrasal verb ("give it up" for "give up") can only be
+            # found by the parser, so this walks the whole script — same cost
+            # as the slow path below, and the same queue slot.
+            def _extract_phrase():
+                return sentence_service.extract_phrase_sentences(
+                    phrase_script_text,
+                    word,
+                    get_nlp(),
+                    max_examples,
+                )
+
+            try:
+                with nlp_slot(MAX_PENDING_SENTENCE_PARSES):
+                    sentences = await run_nlp(_extract_phrase)
+            except NLPOverloaded:
+                logger.warning(
+                    "movie %s: NLP queue full, serving '%s' without sentences",
+                    movie_id, word,
+                )
+                sentences = []
+                sentences_unavailable = True
+
             for sent, pos, form in sentences:
                 raw_sentences.append({
                     "sentence": sent,
@@ -706,6 +748,7 @@ async def get_word_sentences(
                 "lemma": word.lower(),
                 "sentences": raw_sentences,
                 "total": len(raw_sentences),
+                "sentences_unavailable": sentences_unavailable,
             }
 
         surface = word.lower().strip()
@@ -724,8 +767,15 @@ async def get_word_sentences(
         if classification and classification.lemma:
             lemma_text = classification.lemma.lower()
         else:
-            doc = nlp(surface)
-            lemma_text = doc[0].lemma_ if doc else surface
+            # One word, ~0.6ms — but it still goes to the worker, because the
+            # first call after a restart is a ~1.8s model load and there is no
+            # way to tell from here which one this is. No queue slot: shedding
+            # sub-millisecond work would only cost the caller its lemma.
+            def _lemmatize_surface():
+                doc = get_nlp()(surface)
+                return doc[0].lemma_ if doc else surface
+
+            lemma_text = await run_nlp(_lemmatize_surface)
 
         # Fast path: check SentenceBank via lemma link
         lemma_record = await db.lemma.find_first(where={"lemma": lemma_text})
@@ -750,23 +800,41 @@ async def get_word_sentences(
             links = links[:max_examples]
 
             if links:
-                for link in links:
-                    sent = link.sentence.sentence
-                    # Use stored matched_form when present (populated at
-                    # indexing time). Fall back to a single spaCy parse only
-                    # for legacy rows where matched_form is NULL.
-                    matched_form = link.matchedForm
-                    if matched_form is None:
-                        sent_doc = nlp(sent)
-                        matched_form = word.lower()
-                        for token in sent_doc:
-                            if token.lemma_.lower() == lemma_text:
-                                matched_form = token.text
-                                break
+                # Use stored matched_form when present (populated at indexing
+                # time). Fall back to spaCy only for legacy rows where
+                # matched_form is NULL — and parse all of them in a single hop
+                # via nlp.pipe, not one hop per sentence: each trip to the
+                # worker costs a scheduling round-trip and a place in a queue
+                # only one thread drains, so N hops is worse than blocking
+                # (see utils/offload.py).
+                legacy = [i for i, link in enumerate(links) if link.matchedForm is None]
+                matched_by_index: Dict[int, str] = {}
+                if legacy:
+                    legacy_sentences = [links[i].sentence.sentence for i in legacy]
+
+                    def _match_forms():
+                        forms = []
+                        for parsed in get_nlp().pipe(legacy_sentences):
+                            form = word.lower()
+                            for token in parsed:
+                                if token.lemma_.lower() == lemma_text:
+                                    form = token.text
+                                    break
+                            forms.append(form)
+                        return forms
+
+                    forms = await run_nlp(_match_forms)
+                    matched_by_index = dict(zip(legacy, forms))
+
+                for i, link in enumerate(links):
                     raw_sentences.append({
-                        "sentence": sent,
+                        "sentence": link.sentence.sentence,
                         "word_position": link.wordPosition or 0,
-                        "matched_form": matched_form,
+                        "matched_form": (
+                            link.matchedForm
+                            if link.matchedForm is not None
+                            else matched_by_index.get(i, word.lower())
+                        ),
                     })
 
         # Slow path: parse script on-the-fly
@@ -785,24 +853,44 @@ async def get_word_sentences(
 
             sentence_service = SentenceExampleService()
             surface_form = word.lower().strip()
-            sentences = sentence_service.extract_word_sentences_by_lemma(
-                script.cleanedScriptText,
-                lemma_text,
-                nlp,
-                max_examples,
-                target_surface=surface_form,
-            )
-            # Fallback: if bare-word lemma disagrees with in-context lemma
-            # (e.g., spaCy gives "unimpaire" for "unimpaired" in isolation),
-            # retry treating the surface form itself as the lemma target.
-            if not sentences and surface_form != lemma_text:
-                sentences = sentence_service.extract_word_sentences_by_lemma(
-                    script.cleanedScriptText,
-                    surface_form,
+            script_text = script.cleanedScriptText
+
+            # Both passes live in one closure so the retry rides the same trip
+            # to the worker. Two hops would take two queue entries and let
+            # another caller's script parse interleave between them.
+            def _extract_by_lemma():
+                nlp = get_nlp()
+                found = sentence_service.extract_word_sentences_by_lemma(
+                    script_text,
+                    lemma_text,
                     nlp,
                     max_examples,
                     target_surface=surface_form,
                 )
+                # Fallback: if bare-word lemma disagrees with in-context lemma
+                # (e.g., spaCy gives "unimpaire" for "unimpaired" in isolation),
+                # retry treating the surface form itself as the lemma target.
+                if not found and surface_form != lemma_text:
+                    found = sentence_service.extract_word_sentences_by_lemma(
+                        script_text,
+                        surface_form,
+                        nlp,
+                        max_examples,
+                        target_surface=surface_form,
+                    )
+                return found
+
+            try:
+                with nlp_slot(MAX_PENDING_SENTENCE_PARSES):
+                    sentences = await run_nlp(_extract_by_lemma)
+            except NLPOverloaded:
+                logger.warning(
+                    "movie %s: NLP queue full, serving '%s' without sentences",
+                    movie_id, word,
+                )
+                sentences = []
+                sentences_unavailable = True
+
             for sent, pos, form in sentences:
                 raw_sentences.append({
                     "sentence": sent,
@@ -893,6 +981,7 @@ async def get_word_sentences(
             "lemma": lemma_text,
             "sentences": raw_sentences,
             "total": len(raw_sentences),
+            "sentences_unavailable": sentences_unavailable,
         }
 
     except HTTPException:
