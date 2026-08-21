@@ -28,6 +28,30 @@ _SCOPED_LOOKUP_SQL = (
 )
 
 
+def hidden_word_exclusion_sql(lemma_expr: str) -> str:
+    """
+    A WHERE-clause fragment reading "`lemma_expr` is not admin-hidden",
+    matched case-insensitively.
+
+    For callers that filter a *table* of candidates in SQL rather than a known
+    list of forms (get_hidden_word_set is for the latter). The correlated
+    NOT EXISTS is deliberate: `LOWER(x) NOT IN (SELECT LOWER(word) FROM
+    hidden_words)` has to materialise every one of the ~34k rows to build its
+    hash, so no index can help it — it is a full read of the table on every
+    execution. As a per-row probe of ix_hidden_words_word_lower the planner
+    instead applies it last, against the handful of rows that survived the
+    other filters (issue #129: 34,095 rows read per sentence-worker cycle → a
+    few hundred index lookups).
+
+    `lemma_expr` is a column expression written by the caller, never user
+    input — it is interpolated, not bound.
+    """
+    return (
+        "NOT EXISTS (SELECT 1 FROM hidden_words hw "
+        f"WHERE LOWER(hw.word) = LOWER({lemma_expr}))"
+    )
+
+
 class _SupportsQueryRaw(Protocol):
     async def query_raw(self, sql: str, *args): ...
 

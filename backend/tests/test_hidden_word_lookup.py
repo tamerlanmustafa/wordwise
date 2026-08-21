@@ -173,3 +173,47 @@ def test_lookup_predicate_matches_the_functional_index():
     sql = migration.read_text()
     assert "ix_hidden_words_word_lower" in sql
     assert "ON hidden_words (LOWER(word))" in sql
+
+
+# --- Issue #129: the in-SQL exclusion fragment -------------------------------
+
+
+def test_exclusion_fragment_is_case_insensitive_and_index_shaped():
+    """
+    Batch callers (sentence worker, vocab coverage) filter a whole table of
+    candidates, so they can't use get_hidden_word_set — they embed a
+    predicate. It must lowercase both sides (a hidden word stored with
+    capitals otherwise never matches) and stay a correlated probe of
+    ix_hidden_words_word_lower rather than a NOT IN that has to read all
+    ~34k rows to build its hash (#129).
+    """
+    from src.services.hidden_words import hidden_word_exclusion_sql
+
+    frag = hidden_word_exclusion_sql("l.lemma")
+
+    assert frag.startswith("NOT EXISTS (SELECT 1 FROM hidden_words hw")
+    assert "LOWER(hw.word) = LOWER(l.lemma)" in frag
+    assert "NOT IN" not in frag
+
+
+def test_batch_callers_share_the_exclusion_fragment():
+    """
+    Both batch sites read the same population; when the worker's definition
+    of "visible" changes, the coverage metric that reports on its backlog has
+    to change with it. Divergence would show as a snapshot counting lemmas
+    the worker will never generate.
+    """
+    src = Path(__file__).resolve().parents[1] / "src"
+    callers = [
+        src / "workers" / "sentence_worker.py",
+        src / "services" / "vocab_coverage.py",
+    ]
+
+    for path in callers:
+        text = path.read_text()
+        assert "hidden_word_exclusion_sql" in text, (
+            f"{path.name} filters hidden_words with its own inline SQL; use "
+            "services.hidden_words.hidden_word_exclusion_sql so the two "
+            "batch queries can't drift."
+        )
+        assert "NOT IN (SELECT LOWER(word) FROM hidden_words)" not in text

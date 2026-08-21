@@ -101,9 +101,36 @@ def test_backlog_sql_keeps_coverage_exclusion_uncorrelated():
     grew, wedging the worker in a retry loop (2026-07-22 outage).
     """
     sql = sw.build_backlog_sql(skip_ids=[], limit=100)
-    assert "NOT EXISTS" not in sql
     assert "l.id NOT IN (" in sql
     assert "SELECT sll.lemma_id" in sql
+    # The hidden_words check is correlated by design (see #129); this one
+    # must never be.
+    assert "NOT EXISTS (SELECT 1 FROM sentence_lemma_links" not in sql
+
+
+def test_backlog_sql_guards_the_not_in_subquery_against_nulls():
+    """
+    #129: a single NULL reaching a NOT IN subquery makes the whole predicate
+    return no rows, so the worker would go silently idle instead of erroring.
+    sentence_lemma_links.lemma_id is NOT NULL today; the guard makes that a
+    property of the query rather than an assumption about the schema.
+    """
+    sql = sw.build_backlog_sql(skip_ids=[], limit=100)
+    assert "sll.lemma_id IS NOT NULL" in sql
+
+
+def test_backlog_sql_probes_hidden_words_instead_of_reading_it_whole():
+    """
+    #129: `LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)` read
+    all 34,095 rows on every cycle to build its hash — no index can serve a
+    subquery that needs every row. The correlated form probes
+    ix_hidden_words_word_lower for the few hundred lemmas that survive the
+    other filters (prod: 41ms → 28ms, seq scan gone).
+    """
+    sql = sw.build_backlog_sql(skip_ids=[], limit=100)
+    assert "NOT IN (SELECT LOWER(word) FROM hidden_words)" not in sql
+    assert "NOT EXISTS (SELECT 1 FROM hidden_words hw" in sql
+    assert "LOWER(hw.word) = LOWER(l.lemma)" in sql
 
 
 def test_backlog_sql_reads_the_denormalized_flag_not_a_join():

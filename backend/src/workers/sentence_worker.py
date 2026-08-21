@@ -40,6 +40,7 @@ import sys
 from dataclasses import dataclass
 from typing import Iterable, List, Set
 
+from src.services.hidden_words import hidden_word_exclusion_sql
 from src.services.llm_sentence_service import CostCapExceeded, WordRequest
 
 logger = logging.getLogger("wordwise.sentence_worker")
@@ -71,13 +72,27 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
     this process). Highest priority_score first so the words users hit most
     get covered first.
 
+    The two exclusions use opposite idioms on purpose — the right one depends
+    on how big the excluded set is.
+
     The "no LLM sentence yet" exclusion must stay an uncorrelated
-    `l.id NOT IN (SELECT …)` — Postgres hashes that subplan once (like the
-    hidden_words one), keeping the query ~60ms. As a correlated NOT EXISTS
-    the planner picked a nested-loop anti-join that degraded past the
-    30s client timeout once coverage grew, deadlocking the worker in a
-    timeout/retry loop (2026-07-22 outage). NULL-safe because
-    sentence_lemma_links.lemma_id is NOT NULL.
+    `l.id NOT IN (SELECT …)`: Postgres hashes that subplan once, keeping the
+    query ~60ms. As a correlated NOT EXISTS the planner picked a nested-loop
+    anti-join over the 7.7M-row link table that degraded past the 30s client
+    timeout once coverage grew, deadlocking the worker in a timeout/retry loop
+    (2026-07-22 outage). The subquery carries an explicit `lemma_id IS NOT
+    NULL` because NOT IN returns *no rows at all* if one NULL reaches the
+    hash — the worker would silently go idle rather than fail. The column is
+    NOT NULL today, so this costs nothing (the subplan stays an index-only
+    scan) and removes the load-bearing schema assumption (#129).
+
+    The hidden_words exclusion goes the other way, via
+    hidden_word_exclusion_sql: `LOWER(l.lemma) NOT IN (SELECT LOWER(word) …)`
+    had to read all 34,095 rows on every cycle to build its hash — no index
+    can serve a subquery that needs every row. Correlated, it becomes a
+    per-row probe of ix_hidden_words_word_lower that the planner applies last,
+    against the few hundred lemmas that survived the other filters. Measured
+    in prod: 41ms → 28ms, and the seq scan is gone (#129).
 
     That subplan reads `sll.is_global` rather than joining to sentence_bank
     (#120). The join had to walk 48,537 sentences and probe a 7.7M-entry index
@@ -99,9 +114,9 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
         )
         AND l.id NOT IN (SELECT sll.lemma_id
             FROM sentence_lemma_links sll
-            WHERE sll.is_global
+            WHERE sll.is_global AND sll.lemma_id IS NOT NULL
         )
-        AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
+        AND {hidden_word_exclusion_sql("l.lemma")}
         AND l.cefr_level <> 'UNKNOWN'
         {skip_clause}
         ORDER BY l.priority_score DESC, l.id

@@ -35,6 +35,7 @@ from .health_metrics import (
     status_max as _status_max,
     status_min as _status_min,
 )
+from .hidden_words import hidden_word_exclusion_sql
 
 logger = logging.getLogger(__name__)
 
@@ -287,14 +288,15 @@ async def _gather_raw(db: Prisma) -> dict[str, Any]:
     raw["mlm_total"] = int(rows[0]["total"])
     raw["mlm_covered"] = int(rows[0]["covered"])
 
-    # Mirrors the sentence worker's "visible" filter (LOWER match against
-    # hidden_words) so this tracks the same population the worker drains.
+    # Mirrors the sentence worker's "visible" filter (case-insensitive match
+    # against hidden_words) so this tracks the same population the worker
+    # drains — same shared fragment, so the two can't drift (#129).
     rows = await db.query_raw(
-        """
+        f"""
         SELECT count(*) AS n FROM lemmas l
         WHERE EXISTS (SELECT 1 FROM movie_lemma_mappings mlm WHERE mlm.lemma_id = l.id)
           AND NOT EXISTS (SELECT 1 FROM sentence_lemma_links sll WHERE sll.lemma_id = l.id)
-          AND LOWER(l.lemma) NOT IN (SELECT LOWER(word) FROM hidden_words)
+          AND {hidden_word_exclusion_sql("l.lemma")}
         """
     )
     raw["uncovered_visible_lemmas"] = int(rows[0]["n"])

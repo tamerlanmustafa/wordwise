@@ -30,7 +30,7 @@ Rules for whoever works this file:
 | 6 | `done` | #125 | Proxy + cache TMDB server-side; key gone from the client. **Rotate the TMDB key only after the new build is adopted** — old installs and `frontend/` still carry the old one. |
 | 7 | `done` | #103 | Converged all four movie CEFR derivations onto `difficulty_score`. ⏳ **Deploy is green as of 2026-08-20 (c07387c) and `/movies/by-level?level=A1` returns 200, so `prisma/manual/2026_08_20_converge_movie_cefr_issue_103.sql` is now unblocked and still UNAPPLIED.** Needs the user to run it; `movies.difficulty_level` + `ix_movies_difficulty` are still in prod. Safe to sit on — an unused column costs nothing. |
 | 8 | `done` | #94 | Translation-MCQ distractors must not be near-forms of the correct answer. |
-| 9 | `done` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. ⏳ **Edge caching still needs a Cloudflare Cache Rule** (dashboard, user) — headers alone leave `cf-cache-status: DYNAMIC`. |
+| 9 | `done` | #123 | `Cache-Control` + `ETag` on public immutable endpoints. Cloudflare Cache Rule created 2026-08-20 and verified `HIT`. Its Edge TTL is **"use cache-control if present, bypass if not"** — that setting is what keeps `/by-cefr` and `/api/tmdb/autocomplete` out of the edge. Don't change it. |
 | 10 | `user` | #101 | Native-speaker review of es/pt/tr/ru. Needs real speakers. Gate on *promoting* those locales. |
 
 ## Tier 3 — correctness and latency at any user count
@@ -38,8 +38,8 @@ Rules for whoever works this file:
 | # | Status | Issue | Work |
 |---|--------|-------|------|
 | 11 | `done` | #143 | Enrichment slow path parses a whole script (1.6–2.9s) on the event loop. Highest value in tier. |
-| 12 | `doing` | #129 | Sentence-worker backlog query: `NOT IN` → `NOT EXISTS`, fix the `LOWER()` index defeat. |
-| 13 | `todo` | #126b | Time-bound the LLM ledger `SUM()`. Split from #126. |
+| 12 | `done` | #129 | Sentence-worker backlog query: `NOT IN` → `NOT EXISTS`, fix the `LOWER()` index defeat. |
+| 13 | `doing` | #126b | Time-bound the LLM ledger `SUM()`. Split from #126. |
 | 14 | `todo` | #144 | SRS session start: batch spaCy via `nlp.pipe` + one `run_nlp` hop. Cheapest fix in the repo. |
 | 15 | `todo` | #145 | Lemma backfill pulls every script's full text into memory. Select two columns. |
 | 16 | `todo` | #148 | Enable ruff `ASYNC`. **Sequence after 11–15** so it lands green. Note in the commit that ASYNC catches none of #141–#145. |
@@ -79,6 +79,7 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 | Date | Item | Outcome |
 |------|------|---------|
+| 2026-08-20 | 12 (#129) | Only one of the issue's three points was still live. The 2.6B-row scan died with #120 (subplan is now a 2,491-buffer index-only scan), and its "use NOT EXISTS" fix is the exact rewrite that wedged the worker on 2026-07-22 — that clause stays `NOT IN`, now with an explicit `lemma_id IS NOT NULL` so the silent-idle trap isn't just a schema assumption. The real win was hidden_words: `NOT IN (SELECT LOWER(word) …)` must read all 34,095 rows to build its hash, so no index can help it; correlated, it's ~404 probes of `ix_hidden_words_word_lower`. Prod: 32–40ms → 23ms, seq scan gone. Same fragment now shared with `vocab_coverage`. |
 | 2026-08-20 | 11 (#143) | Four spaCy sites in `/sentences/{word}` moved onto the NLP worker; the two whole-script ones now take an `nlp_slot(3)` and shed as `sentences_unavailable` rather than queue. Prod says the slow path is live: 1,856 of 42,594 lemmas (4.4%) have no sentence link and 238 movies have no SentenceBank at all. The issue's per-sentence loop is already dead in prod — `matched_form IS NULL` is 0 of 7.78M links — batched via `nlp.pipe` anyway. |
 | 2026-08-20 | 9 (#123) | Five public movie reads now send `Cache-Control`; a new middleware adds a weak `ETag` to any 200 GET that declares a `max-age` and answers `If-None-Match` with 304. `/by-cefr` deliberately excluded — it subtracts the caller's watched/hidden films, so `public` would leak one learner's feed to the next. **The issue's premise was half wrong:** headers alone don't make Cloudflare cache. `/api/tmdb/trending` has sent `public, max-age=3600` since #125 and still returns `cf-cache-status: DYNAMIC` — the edge caches by file extension, so extensionless JSON needs a Cache Rule in the dashboard. Until then the win is device-side + 304s. |
 | 2026-08-20 | 8 (#94) | Distractors that contain (or sit inside) the correct translation are filtered out of the grid. Measured on the live TR cache: 0.28% of cards swap a distractor, 0 dropped at the standard 10-card deck; only a 4-word deck can starve, ~1 card in 1,000. Edit distance deliberately rejected — it would have killed fair pairs like `comer`/`correr`. |
