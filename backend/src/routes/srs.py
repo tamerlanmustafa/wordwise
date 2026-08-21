@@ -50,6 +50,7 @@ from ..services.srs_engine import (
     next_due_after,
 )
 from ..services.translation_service import TranslationService
+from ..utils.nlp_executor import run_nlp
 from ..utils.subscription import is_premium
 
 # Friendly POS labels surfaced on the typing-card hint chip. Anything
@@ -65,31 +66,49 @@ _POS_FRIENDLY: dict[str, str] = {
 }
 
 
-def _lemmatize_one(word: str) -> tuple[str, Optional[str]]:
-    """Return `(lemma, friendly_pos)` for a single surface form via
-    spaCy (the same singleton the lemmatization service uses for full
-    scripts). Falls back to the input + None on any error so a flaky
-    spaCy load never breaks card composition.
+def _lemmatize_many(words: list[str]) -> dict[str, tuple[str, Optional[str]]]:
+    """Return `{surface_form: (lemma, friendly_pos)}` for a batch of surface
+    forms, in one spaCy pass over the whole batch (issue #144).
 
-    The lemma is lowercased so display + downstream lookups
-    (translation MCQ) all key on a canonical form."""
-    w = (word or "").strip()
-    if not w:
-        return word, None
+    Uses the same singleton the lemmatization service uses for full scripts,
+    driven through `nlp.pipe` — a session's ten words cost ~1.7ms batched
+    against ~6.4ms parsed one at a time, and more importantly they cost the
+    NLP worker *one* job instead of ten. Never call this from an `async def`
+    directly; it is CPU-bound, so it goes through `run_nlp`.
+
+    Falls back to the lowercased input on any error so a flaky spaCy load
+    never breaks card composition. The fallback is batch-wide because the
+    failure it guards against is model-level (an unloadable model), not
+    per-word.
+
+    The lemma is lowercased so display + downstream lookups (translation
+    MCQ) all key on a canonical form."""
+    out: dict[str, tuple[str, Optional[str]]] = {}
+    # dict.fromkeys dedupes while keeping order, so a form repeated across
+    # rows is parsed once and the pipe order still lines up with the input.
+    pending = [w for w in dict.fromkeys(words) if (w or "").strip()]
+    for word in words:
+        if not (word or "").strip():
+            out[word] = (word, None)
+    if not pending:
+        return out
+
     try:
         from ..services.lemmatization_service import get_nlp
         nlp = get_nlp()
-        doc = nlp(w)
-        if len(doc) == 0:
-            return w.lower(), None
-        tok = doc[0]
-        lemma = (tok.lemma_ or w).lower().strip()
-        if not lemma:
-            lemma = w.lower()
-        return lemma, _POS_FRIENDLY.get(tok.pos_)
+        for word, doc in zip(pending, nlp.pipe([w.strip() for w in pending])):
+            w = word.strip()
+            if len(doc) == 0:
+                out[word] = (w.lower(), None)
+                continue
+            tok = doc[0]
+            lemma = (tok.lemma_ or w).lower().strip() or w.lower()
+            out[word] = (lemma, _POS_FRIENDLY.get(tok.pos_))
     except Exception as e:
-        logger.warning(f"[srs.start] lemmatize failed for '{word}': {e}")
-        return w.lower(), None
+        logger.warning(f"[srs.start] lemmatize failed for {len(pending)} word(s): {e}")
+        for word in pending:
+            out.setdefault(word, (word.strip().lower(), None))
+    return out
 
 
 logger = logging.getLogger(__name__)
@@ -534,10 +553,19 @@ async def start_session(
     # exclusion so fresh reel lemmas can't reintroduce a collision — the
     # padding filter keyed on surface form, which let a freshly-padded
     # "run" slip past an already-saved "running".
+    #
+    # Every surface form in the queue is parsed in one hop to the NLP worker
+    # (#144). Composers cap at KIND_SESSION_SIZE, so this is ~10 words: cheap,
+    # but it used to be ~10 separate spaCy calls sitting on the event loop,
+    # which stalls every other request on a single-process API (#117).
+    lemma_pos_map: dict[str, tuple[str, Optional[str]]] = {}
+    if due_rows:
+        lemma_pos_map = await run_nlp(_lemmatize_many, [r.word for r in due_rows])
+
     session_rows: list = []
     seen_lemmas: set[str] = set()
     for r in due_rows:
-        lemma = _lemmatize_one(r.word)[0]
+        lemma = lemma_pos_map.get(r.word, (r.word.lower(), None))[0]
         if lemma in seen_lemmas:
             continue
         seen_lemmas.add(lemma)
@@ -570,10 +598,16 @@ async def start_session(
     # translation/CEFR lookups all key on the lemma so 'hated'
     # is studied as 'hate'. user_word_id keeps pointing at the original
     # row, so /srs/review still maps the correct DB record on submit.
-    lemma_pos_map: dict[str, tuple[str, Optional[str]]] = {
-        w: _lemmatize_one(w) for w in word_texts
-    }
-    unique_lemmas = list({lemma_pos_map[w][0] for w in word_texts})
+    #
+    # The due rows were parsed above, so this second hop covers only the
+    # forms padding just added — and is skipped entirely when nothing was
+    # padded, which is the common case for a user with a full queue.
+    fresh_words = [w for w in word_texts if w not in lemma_pos_map]
+    if fresh_words:
+        lemma_pos_map.update(await run_nlp(_lemmatize_many, fresh_words))
+    unique_lemmas = list({
+        lemma_pos_map.get(w, (w.lower(), None))[0] for w in word_texts
+    })
 
     def_map: dict[str, tuple] = {}
     pos_map: dict[str, Optional[str]] = {}
@@ -663,9 +697,10 @@ async def start_session(
     cards: list[ReviewCard] = []
     skipped: list[str] = []
     # Last-line guard against a duplicate *displayed* word reaching the
-    # client. session_rows is already deduped by lemma above, but the
-    # hydration lemma (lemma_pos_map) is recomputed here, so we re-check
-    # against the form actually shown to be safe against any drift.
+    # client. session_rows is already deduped by lemma above, and since
+    # #144 both passes read the same `lemma_pos_map` — but padding can
+    # still introduce a form that lemmatizes onto a kept one, so we
+    # re-check against the form actually shown.
     carded_lemmas: set[str] = set()
     # Fresh per-request RNG so choice ordering varies per session.
     rng = random.Random()
