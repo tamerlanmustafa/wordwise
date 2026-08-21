@@ -133,8 +133,11 @@ class Settings(BaseSettings):
     # tracking silently records $0.
     anthropic_sentence_model: str = "claude-haiku-4-5-20251001"
     # Hard ceiling on cumulative Anthropic spend (USD) recorded in
-    # llm_usage_ledger. Before each LLM call we sum the ledger and refuse
-    # to fire if we're already at or above this number. Set to 0 to disable.
+    # llm_usage_ledger. Before each LLM call we read total spend
+    # (services/llm_cost_ledger.py, which reads it without scanning the whole
+    # table) and refuse to fire at or above this number. 0 disables the cap.
+    # Prod sets this in Railway on BOTH `wordwise` and `Worker`; this default
+    # only applies where the env var is missing.
     llm_cost_cap_usd: float = 50.0
 
     class Config:

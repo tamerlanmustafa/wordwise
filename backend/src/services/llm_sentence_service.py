@@ -16,8 +16,10 @@ per-movie LLM rows (movieId NOT NULL) are left untouched and continue to
 serve in their original movies via the read path's OR clause.
 
 Every Anthropic call writes a row to llm_usage_ledger; before each call we
-sum the ledger and refuse to fire when cumulative spend reaches
-settings.llm_cost_cap_usd.
+read cumulative spend and refuse to fire once it reaches
+settings.llm_cost_cap_usd. That read goes through
+services/llm_cost_ledger.py, which answers it without scanning the whole
+ledger — see issue #126.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from prisma import Prisma
 
 from src.config import get_settings
+from src.services.llm_cost_ledger import LedgerSpendTracker, spend_tracker
 from src.services.sentence_bank_service import hash_sentence
 
 logger = logging.getLogger(__name__)
@@ -107,7 +110,13 @@ class WordRequest:
 class LLMSentenceService:
     """Thin wrapper around the Anthropic client for example-sentence generation."""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        *,
+        spend: Optional[LedgerSpendTracker] = None,
+    ):
         settings = get_settings()
         key = api_key or settings.anthropic_api_key
         if not key:
@@ -122,6 +131,10 @@ class LLMSentenceService:
         self._client = AsyncAnthropic(api_key=key)
         self._model = model or settings.anthropic_sentence_model
         self._cap_usd: float = settings.llm_cost_cap_usd
+        # Shared by default: the ledger is process-wide, and the batch endpoint
+        # builds a service per request, so a private tracker would be cold every
+        # time. Tests pass their own to stay isolated from each other.
+        self._spend: LedgerSpendTracker = spend or spend_tracker
 
     # ─── Public API ─────────────────────────────────────────────────────────
 
@@ -311,10 +324,7 @@ class LLMSentenceService:
         """Raise CostCapExceeded if cumulative ledger spend ≥ cap. Cap of 0 disables."""
         if not self._cap_usd or self._cap_usd <= 0:
             return
-        rows = await db.query_raw(
-            "SELECT COALESCE(SUM(estimated_cost_usd), 0)::float AS total FROM llm_usage_ledger"
-        )
-        total = float(rows[0]["total"]) if rows else 0.0
+        total = await self._spend.total_usd(db)
         if total >= self._cap_usd:
             raise CostCapExceeded(
                 f"LLM cost cap reached: spent ${total:.4f} ≥ cap ${self._cap_usd:.2f}"

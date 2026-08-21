@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.services.llm_cost_ledger import LedgerSpendTracker
 from src.services.llm_sentence_service import LLMSentenceService, CostCapExceeded
 
 
@@ -44,8 +45,16 @@ class _FakeDB:
         self._spend = spend
         self.llmusageledger = _FakeLedger()
 
-    async def query_raw(self, *args, **kwargs):
-        return [{"total": self._spend}]
+    async def query_raw(self, sql: str = "", *args, **kwargs):
+        # Mirrors the settled/tail split in services/llm_cost_ledger.py. The
+        # balance is already settled and no test here writes to the ledger, so
+        # the second statement — which asks only "what landed since the anchor?"
+        # — has to answer zero. Replaying the balance there would count the
+        # same spend again on every cap check after the first.
+        cutoff = "2026-01-01 00:00:00+00"
+        if "$1" in sql:
+            return [{"settled": 0.0, "tail": 0.0, "cutoff": cutoff}]
+        return [{"settled": self._spend, "tail": 0.0, "cutoff": cutoff}]
 
 
 def _service(reply_text, cap=0.0):
@@ -53,6 +62,8 @@ def _service(reply_text, cap=0.0):
     svc._client = _FakeClient(reply_text)
     svc._model = "claude-haiku-test"
     svc._cap_usd = cap
+    # Its own tracker, so a total memoised here can't leak into another test.
+    svc._spend = LedgerSpendTracker()
     return svc
 
 
@@ -98,6 +109,18 @@ async def test_align_raises_when_cost_cap_reached():
         )
     # Model was never called.
     assert svc._client.messages.calls == []
+
+
+async def test_repeated_calls_do_not_inflate_the_spend_read():
+    """Spend is memoised per process and topped up from the ledger, so asking
+    twice must not look like twice the money. If it did, the second card in a
+    session would fall back to an unaligned gloss for no reason."""
+    svc = _service('{"translation": "cesur"}', cap=1.0)
+    db = _FakeDB(spend=0.6)  # under the cap once, over it if counted twice
+    for _ in range(3):
+        assert await svc.align_word_translation(
+            db, "gallant", "The gallant man.", "Cesur adam.", "TR"
+        ) == "cesur"
 
 
 async def test_align_skips_blank_inputs():
