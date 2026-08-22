@@ -30,7 +30,7 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
-import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
+import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
   restoreDeck,
@@ -87,8 +87,11 @@ const liftStyle = (promote: Animated.Value, from: StackSlot, to: StackSlot) => (
 
 interface OutgoingCardProps {
   id: number;
+  /** Logical fly direction: +1 toward the trailing edge (next), -1 toward the
+   *  leading edge (learned). Converted to physical pixels below. */
   dir: 1 | -1;
-  /** Drag offset at release — the overlay picks up exactly where the finger let go. */
+  /** Logical drag offset at release — the overlay picks up exactly where the
+   *  finger let go. */
   startX: number;
   onDone: (id: number) => void;
   style: StyleProp<ViewStyle>;
@@ -123,18 +126,21 @@ const OutgoingCard = ({ id, dir, startX, onDone, style, children }: OutgoingCard
     ]).start(() => onDoneRef.current(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Physical direction of travel — the logical one mirrored under RTL, so the
+  // card flies out the same edge the finger pushed it toward.
+  const physicalDir = dir * directionSign;
   const transform = [
     {
       translateX: progress.interpolate({
         inputRange: [0, 1],
-        outputRange: [startX, dir * FLY_DISTANCE],
+        outputRange: [startX * directionSign, physicalDir * FLY_DISTANCE],
       }),
     },
     { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, FLY_DROP] }) },
     {
       rotate: progress.interpolate({
         inputRange: [0, 1],
-        outputRange: ['0deg', `${dir * FLY_ROTATE_DEG}deg`],
+        outputRange: ['0deg', `${physicalDir * FLY_ROTATE_DEG}deg`],
       }),
     },
   ];
@@ -171,18 +177,23 @@ const DashedRule = ({
   </View>
 );
 
-/** Same clip trick for the sentence-translation slot's dashed left border. */
-const DashedLeftBorder = ({ color, width = 2 }: { color: string; width?: number }) => (
+/**
+ * Same clip trick for the sentence-translation slot's dashed leading border.
+ * Both offsets are logical (`start`), so the dashed placeholder lands on the
+ * same edge as the solid `borderStartWidth` it cross-fades into — under RTL
+ * `left` would have put them on opposite sides of the card.
+ */
+const DashedStartBorder = ({ color, width = 2 }: { color: string; width?: number }) => (
   <View
     pointerEvents="none"
-    style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width, overflow: 'hidden' }}
+    style={{ position: 'absolute', top: 0, bottom: 0, start: 0, width, overflow: 'hidden' }}
   >
     <View
       style={{
         position: 'absolute',
         top: -width,
         bottom: -width,
-        left: 0,
+        start: 0,
         width: width * 4,
         borderWidth: width,
         borderColor: color,
@@ -351,7 +362,11 @@ export const WordCardDeck = ({
   const nextMountAnimRef = useRef<'step' | 'return' | null>(null);
   const animRef = useRef<{
     key: string;
-    translateX: Animated.Value;
+    /** Logical drag offset: positive = toward the trailing edge. */
+    translate: Animated.Value;
+    /** …the same value in physical pixels, built once per key so a re-render
+     *  mid-drag rebinds the same native node rather than a fresh one. */
+    translateX: Animated.AnimatedMultiplication<number>;
     focusOpacity: Animated.Value;
     arrive: Animated.Value;
     reveal: Animated.Value;
@@ -376,9 +391,12 @@ export const WordCardDeck = ({
             opacity: arrive.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
             transform: [
               {
+                // An undone card left toward the trailing edge, so it comes
+                // back from there — physically the right in LTR, the left
+                // under RTL.
                 translateX: arrive.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [FLY_DISTANCE, 0],
+                  outputRange: [FLY_DISTANCE * directionSign, 0],
                 }),
               },
               {
@@ -390,15 +408,17 @@ export const WordCardDeck = ({
               {
                 rotate: arrive.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [`${FLY_ROTATE_DEG}deg`, '0deg'],
+                  outputRange: [`${FLY_ROTATE_DEG * directionSign}deg`, '0deg'],
                 }),
               },
             ],
           }
         : liftStyle(arrive, STACK_SLOTS[mode === 'step' ? 1 : 0], STACK_SLOTS[0]);
+    const translate = new Animated.Value(0);
     animRef.current = {
       key: focusedKey,
-      translateX: new Animated.Value(0),
+      translate,
+      translateX: Animated.multiply(translate, directionSign),
       focusOpacity,
       arrive,
       reveal,
@@ -414,8 +434,15 @@ export const WordCardDeck = ({
       ),
     };
   }
-  const { translateX, focusOpacity, focusedArrive, focusedOpacity, revealHiddenOpacity, revealRise } =
-    animRef.current;
+  const {
+    translate,
+    translateX,
+    focusOpacity,
+    focusedArrive,
+    focusedOpacity,
+    revealHiddenOpacity,
+    revealRise,
+  } = animRef.current;
 
   // Play the enter choreography once per mounted key.
   useEffect(() => {
@@ -477,7 +504,7 @@ export const WordCardDeck = ({
     if (displayDeck.index < 0 || total === 0 || currentKey == null) return;
     if (total === 1) {
       // Only card in rotation: nothing to advance to — settle back.
-      Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
       return;
     }
     track('deck_advance', { method });
@@ -553,13 +580,16 @@ export const WordCardDeck = ({
         onDragStateChangeRef.current?.(true);
       },
       onPanResponderMove: (_, g) => {
-        const x = Math.max(-DRAG_CLAMP, Math.min(g.dx, DRAG_CLAMP));
+        // Logical offset in, physical pixels out (the `translateX` node above)
+        // — `dx` never mirrors, so a raw read would send an Arabic card the
+        // wrong way and commit the opposite action.
+        const x = Math.max(-DRAG_CLAMP, Math.min(g.dx * directionSign, DRAG_CLAMP));
         lastDragXRef.current = x;
-        animRef.current?.translateX.setValue(x);
+        animRef.current?.translate.setValue(x);
       },
       onPanResponderRelease: (_, g) => {
         onDragStateChangeRef.current?.(false);
-        const action = swipeDecision(g.dx);
+        const action = swipeDecision(g.dx * directionSign);
         if (action === 'next') {
           doAdvanceRef.current('swipe');
           return;
@@ -569,7 +599,7 @@ export const WordCardDeck = ({
           return;
         }
         if (animRef.current) {
-          Animated.spring(animRef.current.translateX, {
+          Animated.spring(animRef.current.translate, {
             toValue: 0,
             useNativeDriver: true,
             bounciness: 4,
@@ -579,7 +609,7 @@ export const WordCardDeck = ({
       onPanResponderTerminate: () => {
         onDragStateChangeRef.current?.(false);
         if (animRef.current) {
-          Animated.spring(animRef.current.translateX, {
+          Animated.spring(animRef.current.translate, {
             toValue: 0,
             useNativeDriver: true,
           }).start();
@@ -805,7 +835,7 @@ export const WordCardDeck = ({
         </View>
         <View style={s.sentenceTrSlot}>
           <View style={[s.slotLayer, s.sentenceTrHidden]}>
-            <DashedLeftBorder color={`${tc.gold}59`} />
+            <DashedStartBorder color={`${tc.gold}59`} />
             <View style={s.sentenceTrHiddenRules}>
               <DashedRule color={dashColorSoft} style={{ width: '88%' }} />
               <DashedRule color={dashColorSoft} style={{ width: '62%' }} />
@@ -832,9 +862,14 @@ export const WordCardDeck = ({
   const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
   const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
 
+  // The hint names screen sides, and the gesture is defined by reading
+  // direction — so the two words trade places under RTL rather than telling an
+  // Arabic reader to swipe the way that marks the card learned.
+  const nextSide = directionSign === 1 ? 'right' : 'left';
+  const learnSide = directionSign === 1 ? 'left' : 'right';
   const gestureHint = onMarkLearned
-    ? 'swipe left = know it · swipe right = next · tap card = translation'
-    : 'swipe right = next · tap card = translation';
+    ? `swipe ${learnSide} = know it · swipe ${nextSide} = next · tap card = translation`
+    : `swipe ${nextSide} = next · tap card = translation`;
 
   return (
     <View style={s.wrap}>
@@ -992,7 +1027,7 @@ export const WordCardDeck = ({
               <Animated.View
                 style={[s.slotLayer, s.sentenceTrHidden, { opacity: revealHiddenOpacity }]}
               >
-                <DashedLeftBorder color={`${tc.gold}59`} />
+                <DashedStartBorder color={`${tc.gold}59`} />
                 <View style={s.sentenceTrHiddenRules}>
                   <DashedRule color={dashColorSoft} style={{ width: '88%' }} />
                   <DashedRule color={dashColorSoft} style={{ width: '62%' }} />
@@ -1476,7 +1511,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     undoEdge: {
       position: 'absolute',
       top: UNDO_EDGE,
-      left: 0,
+      start: 0,
       width: UNDO_SIZE,
       height: UNDO_SIZE,
       borderRadius: UNDO_SIZE / 2,

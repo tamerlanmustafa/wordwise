@@ -1,11 +1,22 @@
 /**
  * SwipeableRow — horizontal swipe-to-act wrapper for a home-feed movie card.
  *
- * Swipe right reveals a green "Seen it" backdrop (→ Watched list); swipe left
- * reveals a red "Not interested" backdrop (→ hidden). Built on PanResponder +
- * Animated (no native gesture library) so it ships as an OTA update. The
- * responder only claims clearly-horizontal drags (shouldClaimHorizontal), so
- * vertical scrolls still reach the FlashList and taps still open the card.
+ * Swiping toward the trailing edge reveals a green "Seen it" backdrop
+ * (→ Watched list); toward the leading edge reveals a red "Not interested"
+ * backdrop (→ hidden). In LTR that reads as right/left; under RTL both the
+ * backdrops and the gesture flip, so it reads as left/right. Built on
+ * PanResponder + Animated (no native gesture library) so it ships as an OTA
+ * update. The responder only claims clearly-horizontal drags
+ * (shouldClaimHorizontal), so vertical scrolls still reach the FlashList and
+ * taps still open the card.
+ *
+ * Yoga mirrors the backdrops for free (they are `justifyContent` inside a
+ * `flexDirection: 'row'`), but `dx` and `translateX` are always physical
+ * pixels — so this component works in *logical* offsets (positive = dragged
+ * toward the trailing edge, whichever side that is) and converts back to
+ * physical only in the final transform. Without that the label and the action
+ * point opposite ways under RTL: the card you uncover is not the one you
+ * commit.
  *
  * The decision thresholds live in utils/swipeDecision (pure + unit-tested);
  * this component owns only the Animated wiring.
@@ -16,6 +27,7 @@ import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { directionSign } from '../../i18n/rtl';
 import {
   shouldClaimHorizontal,
   swipeActionOnRelease,
@@ -40,7 +52,13 @@ export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const translateX = useRef(new Animated.Value(0)).current;
+  // Logical drag offset: positive = toward the trailing edge, in both reading
+  // directions. Thresholds and backdrop opacities are all expressed here; only
+  // the transform at the bottom converts back to physical pixels.
+  const translate = useRef(new Animated.Value(0)).current;
+  // Memoized because every new multiply node re-attaches a native animated
+  // node, and these rows re-render as the feed scrolls.
+  const translateX = useMemo(() => Animated.multiply(translate, directionSign), [translate]);
 
   const pan = useMemo(
     () =>
@@ -54,34 +72,35 @@ export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
         // Once we're swiping, don't let the scroll view reclaim the gesture on
         // a bit of vertical jitter — keeps the slide smooth to release.
         onPanResponderTerminationRequest: () => false,
-        onPanResponderMove: (_e, g) => translateX.setValue(g.dx),
+        onPanResponderMove: (_e, g) => translate.setValue(g.dx * directionSign),
         onPanResponderRelease: (_e, g) => {
-          const action = swipeActionOnRelease(g.dx, g.vx);
+          const action = swipeActionOnRelease(g.dx * directionSign, g.vx * directionSign);
           if (!action) {
-            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+            Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
             return;
           }
-          Animated.timing(translateX, {
+          Animated.timing(translate, {
             toValue: action === 'watched' ? OFFSCREEN : -OFFSCREEN,
             duration: 200,
             useNativeDriver: true,
           }).start(() => onSwipe(action));
         },
         onPanResponderTerminate: () => {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+          Animated.spring(translate, { toValue: 0, useNativeDriver: true }).start();
         },
       }),
-    [disabled, onSwipe, translateX],
+    [disabled, onSwipe, translate],
   );
 
-  // Backdrops fade in with drag distance: right swipe → green (left edge),
-  // left swipe → red (right edge).
-  const watchedOpacity = translateX.interpolate({
+  // Backdrops fade in with drag distance: trailing-edge swipe → green,
+  // leading-edge swipe → red. Yoga puts each label on the side the card
+  // uncovers, so these read the same logical offset the action does.
+  const watchedOpacity = translate.interpolate({
     inputRange: [0, SWIPE_COMMIT_DX],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
-  const hiddenOpacity = translateX.interpolate({
+  const hiddenOpacity = translate.interpolate({
     inputRange: [-SWIPE_COMMIT_DX, 0],
     outputRange: [1, 0],
     extrapolate: 'clamp',

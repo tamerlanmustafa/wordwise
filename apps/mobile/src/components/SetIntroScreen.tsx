@@ -372,7 +372,7 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => StyleSheet.cre
   // the white icons remain readable.
   backBtn: {
     position: 'absolute',
-    left: 16,
+    start: 16,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -385,7 +385,7 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => StyleSheet.cre
   },
   setPill: {
     position: 'absolute',
-    right: 16,
+    end: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,

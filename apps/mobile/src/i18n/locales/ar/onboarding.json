@@ -56,13 +56,13 @@
     "cta": "ادخل إلى WordWise ←",
     "option": {
       "casualLabel": "خفيف",
-      "casualSub": "٣ دقائق · درس واحد يوميًا",
+      "casualSub": "3 دقائق · درس واحد يوميًا",
       "regularLabel": "منتظم",
-      "regularSub": "٦ دقائق · درسان يوميًا",
+      "regularSub": "6 دقائق · درسان يوميًا",
       "seriousLabel": "جاد",
-      "seriousSub": "١٢ دقيقة · ٤ دروس يوميًا",
+      "seriousSub": "12 دقيقة · 4 دروس يوميًا",
       "intenseLabel": "مكثّف",
-      "intenseSub": "٢٠ دقيقة · ٦ دروس أو أكثر يوميًا"
+      "intenseSub": "20 دقيقة · 6 دروس أو أكثر يوميًا"
     }
   },
   "setIntro": {
@@ -70,7 +70,7 @@
     "setReel": "المجموعة {{set}} · الشريط {{reel}}",
     "eyebrowReview": "مجموعة مراجعة",
     "eyebrowPreWatch": "مفردات ما قبل المشاهدة",
-    "headline": "تعلّم ٥ كلمات من هذا الفيلم",
+    "headline": "تعلّم 5 كلمات من هذا الفيلم",
     "subhead": "حتى إذا شاهدته لاحقًا بالترجمة، تتابع كل جملة فعلًا.",
     "duration": "~دقيقتان",
     "ctaReview": "مراجعة ←",

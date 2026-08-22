@@ -88,6 +88,22 @@ describe('locale files', () => {
     }
     expect({ locale, blank }).toEqual({ locale, blank: [] });
   });
+
+  it.each(CODES)('%s writes numbers in Western digits', (locale) => {
+    // The Arabic copy was first written with Arabic-Indic digits (U+0660-0669)
+    // while every `{{count}}` interpolation emits Western ones, so a single
+    // screen showed both systems (#104, section 4). One convention, picked as
+    // Western because that is what the hundreds of interpolated numbers
+    // already produce, and enforced here so it cannot drift back.
+    const NON_WESTERN_DIGITS = /[\u0660-\u0669\u06f0-\u06f9]/;
+    const offenders: string[] = [];
+    for (const ns of NAMESPACES) {
+      for (const [key, value] of Object.entries(flatten(readNs(locale, ns)))) {
+        if (NON_WESTERN_DIGITS.test(value)) offenders.push(`${ns}:${key}`);
+      }
+    }
+    expect({ locale, offenders }).toEqual({ locale, offenders: [] });
+  });
 });
 
 describe('key parity with the fallback locale', () => {

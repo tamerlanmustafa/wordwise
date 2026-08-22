@@ -1583,7 +1583,7 @@ const splashStyles = StyleSheet.create({
   },
   backBtn: {
     position: 'absolute',
-    left: 16,
+    start: 16,
     top: 56,
   },
   mark: {
@@ -1599,7 +1599,7 @@ const splashStyles = StyleSheet.create({
 const backBtnStyles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    left: 16,
+    start: 16,
     zIndex: 20,
   },
   // Cream circle per the Ledger header; bg/border colours come inline from
@@ -1763,9 +1763,10 @@ const ledgerStyles = StyleSheet.create({
 const quizPillStyles = StyleSheet.create({
   pillWrap: {
     // The screen container ends at the top of the global bottom bar, so
-    // bottom:16 floats the pill 16pt above the bar, pinned to the left.
+    // bottom:16 floats the pill 16pt above the bar, pinned to the
+    // leading edge.
     position: 'absolute',
-    left: 16,
+    start: 16,
     bottom: 16,
     alignItems: 'flex-start',
   },

@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   backBtn: {
     position: 'absolute',
     top: 12,
-    left: 16,
+    start: 16,
     zIndex: 10,
     padding: 8,
   },
