@@ -85,6 +85,11 @@ _SLUR_BASES = {
     "beaner", "redskin", "injun", "honky", "squaw", "jigaboo", "darkie",
     "golliwog", "tarbaby", "mulatto", "halfbreed", "heeb", "zipperhead",
     "negro", "negress",
+    # Truncations subtitles produce that the full forms above do not cover.
+    # Both sat in the UNKNOWN holding pen, so nothing surfaced them until
+    # #131 gave that bucket an exit path — "nig" in 7 movies, "goy" in 9,
+    # graded C1 and otherwise headed for a level deck.
+    "nig", "goy",
     # homophobic / transphobic
     "faggot", "fag", "dyke", "tranny", "shemale", "homo", "poof", "poofter",
     # ableist

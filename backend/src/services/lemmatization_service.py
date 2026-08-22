@@ -113,6 +113,48 @@ def registry_wordlist_known(form: str) -> bool:
     return is_wellformed(form).keep and is_curated_vocabulary(form)
 
 
+UNKNOWN_LEVEL = "UNKNOWN"
+
+
+def level_str(level) -> str:
+    """CEFR code as a plain string, whether it arrived as one or as an enum.
+
+    Prisma hands enum columns back as `str` on some client builds and as an
+    enum member on others, and the rest of the codebase spells this check
+    inline at nine call sites. Named here because the comparison below is
+    load-bearing: getting it wrong silently disables the UNKNOWN rule.
+    """
+    return level if isinstance(level, str) else getattr(level, "value", str(level))
+
+
+def _level_wins(
+    stored_level: str, stored_confidence: float, new_level: str, new_confidence: float
+) -> bool:
+    """Should `new_level` replace `stored_level` on an existing registry row?
+
+    UNKNOWN is the "classifier could not place this" holding pen, not a level
+    (#91), so it does not compete on confidence at all:
+
+      - any real level replaces UNKNOWN, however tentative it is;
+      - UNKNOWN never replaces a real level, however confident it is.
+
+    Between two real levels the old rule stands — higher confidence wins.
+
+    The asymmetry is the whole point. The proper-noun branch returns UNKNOWN
+    at confidence 0.9 while a real wordlist grade comes back at 0.85 or less,
+    so a plain `max()` let one capitalized script overwrite a level that
+    1,259 other scripts agreed on. That single comparison is where most of
+    the registry's 14,819-row UNKNOWN bucket came from (#131): prod holds
+    "angry" as UNKNOWN even though `word_classifications` grades it B1 in
+    1,259 scripts and UNKNOWN in 3.
+    """
+    stored_unknown = stored_level == UNKNOWN_LEVEL
+    new_unknown = new_level == UNKNOWN_LEVEL
+    if stored_unknown != new_unknown:
+        return stored_unknown
+    return new_confidence > stored_confidence
+
+
 def compute_priority_score(
     frequency_rank: Optional[int],
     total_lemmas: int,
@@ -319,13 +361,13 @@ async def populate_lemma_registry(
         if existing:
             # Update: increment movie count, keep higher confidence, update priority
             new_priority = max(existing.priorityScore, priority)
-            new_confidence = max(existing.confidence, confidence)
             update_data = {
                 "totalMovieCount": existing.totalMovieCount + 1,
                 "priorityScore": new_priority,
             }
-            if new_confidence > existing.confidence:
-                update_data["confidence"] = new_confidence
+            if _level_wins(level_str(existing.cefrLevel), existing.confidence,
+                           cefr_level, confidence):
+                update_data["confidence"] = confidence
                 update_data["source"] = source
                 update_data["cefrLevel"] = cefr_level
 

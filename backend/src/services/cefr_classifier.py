@@ -1373,6 +1373,24 @@ def is_valid_token(token: str) -> bool:
     return True
 
 
+def _case_rank(word: str) -> int:
+    """Rank a surface form by how much it argues the word is a proper noun.
+
+    0 = lowercase ("baby"), 1 = capitalized ("Baby"), 2 = ALL-CAPS ("BABY").
+    Lower wins in `classify_text`'s per-script map, so a script that ever
+    writes the word in lowercase never reaches the proper-noun branch.
+
+    ALL-CAPS ranks last because subtitles use it for shouting and on-screen
+    signs: it says nothing about whether the word is a name, and "Baby" is
+    the better form to store as the classification's surface word.
+    """
+    if word == word.lower():
+        return 0
+    if word == word.upper():
+        return 2
+    return 1
+
+
 def is_proper_noun_or_fantasy_word(word: str) -> bool:
     """
     Detect proper nouns and fantasy/constructed words.
@@ -2152,11 +2170,22 @@ class HybridCEFRClassifier:
         import re
         original_words = re.findall(r'\b[a-zA-Z]+(?:[-\'][a-zA-Z]+)*\b', text)
 
-        # Map lowercase → original form (for proper noun detection)
+        # Map lowercase → the least-capitalized form this script actually used.
+        #
+        # This used to keep the FIRST form seen, which turned the proper-noun
+        # branch below into a coin flip on line order: a single "Baby, I'm
+        # home." near the top of a subtitle file classified every "baby" in
+        # the script as a name. Prod recorded both halves of that mistake —
+        # "baby" is A2 in 2,596 scripts and UNKNOWN in 668, "angry" B1 in
+        # 1,259 and UNKNOWN in 3 (#131).
+        #
+        # A word the script ever writes in lowercase is not a proper noun in
+        # that script, so the lowercase form wins outright.
         original_case_map: Dict[str, str] = {}
         for word in original_words:
             lower = word.lower()
-            if lower not in original_case_map:
+            current = original_case_map.get(lower)
+            if current is None or _case_rank(word) < _case_rank(current):
                 original_case_map[lower] = word
 
         # Now do the aggressive cleaning for tokenization
