@@ -19,6 +19,8 @@ from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
 import nltk
 
+from .lemma_normalizer import correct_lemma
+
 logger = logging.getLogger(__name__)
 
 # Download NLTK data if needed
@@ -1642,7 +1644,13 @@ class HybridCEFRClassifier:
         for pos in ['v', 'n', 'a', 'r']:
             lemma = self.lemmatizer.lemmatize(word_lower, pos=pos)
             if lemma != word_lower:
-                return lemma
+                # This is what keys the CEFR wordlists, so an over-stripped
+                # lemma here hands the junk row the real word's grade and
+                # leaves the real word ungraded: "boss" (A2 in cefrj) was
+                # filed under "bos", which is why prod showed "bos" at A1 and
+                # "boss" at B1, and "pass" (A2) under "pas", leaving the real
+                # "pass" at UNKNOWN (#158).
+                return correct_lemma(word_lower, lemma)
         return word_lower
 
     def _get_all_lemmas(self, word: str) -> List[str]:
@@ -1661,6 +1669,18 @@ class HybridCEFRClassifier:
         if cached is not None:
             return cached
 
+        # NLTK's WordNet lemmatizer reads the final "s" of an -ss word as a
+        # plural marker, so "boss" comes back as "bos", "discuss" as "discus"
+        # and "pass" as "pas" — all real dictionary entries, which is why the
+        # purity guard never flagged them (#158). Correct once, here, so the
+        # value that lands in the cache and in word_classifications.lemma is
+        # already the right one.
+        lemma = correct_lemma(word, self._lemmatize_uncached(word))
+        _GLOBAL_LEMMA_CACHE.set(word, lemma)
+        return lemma
+
+    def _lemmatize_uncached(self, word: str) -> str:
+        """The raw NLTK lemma for `word`. Callers want `_get_lemma_fast`."""
         word_lower = word.lower()
 
         # ── Stage 1: Irregular forms that NLTK gets wrong ──
@@ -1692,9 +1712,7 @@ class HybridCEFRClassifier:
             'undies': 'undie', 'wedgies': 'wedgie',
         }
         if word_lower in irregular_overrides:
-            result = irregular_overrides[word_lower]
-            _GLOBAL_LEMMA_CACHE.set(word, result)
-            return result
+            return irregular_overrides[word_lower]
 
         # ── Stage 2: Try NLTK lemmatizer (noun first for plurals, then verb) ──
         # Changed order: try noun first to avoid "lives"→"live" (verb) instead of "life" (noun)
@@ -1737,7 +1755,6 @@ class HybridCEFRClassifier:
                 if modern in self.cefr_wordlist and result not in self.cefr_wordlist:
                     result = modern
 
-            _GLOBAL_LEMMA_CACHE.set(word, result)
             return result
 
         # ── Stage 4: Simple plural stripping fallback ──
@@ -1745,26 +1762,21 @@ class HybridCEFRClassifier:
         if word_lower.endswith('ies') and len(word_lower) > 4:
             candidate = word_lower[:-3] + 'y'
             if candidate in self.cefr_wordlist:
-                _GLOBAL_LEMMA_CACHE.set(word, candidate)
                 return candidate
         elif word_lower.endswith('es') and len(word_lower) > 3:
             # tries → try (already handled), boxes → box
             candidate = word_lower[:-2]
             if candidate in self.cefr_wordlist:
-                _GLOBAL_LEMMA_CACHE.set(word, candidate)
                 return candidate
             # Also try dropping just -s: houses → house
             candidate = word_lower[:-1]
             if candidate in self.cefr_wordlist:
-                _GLOBAL_LEMMA_CACHE.set(word, candidate)
                 return candidate
         elif word_lower.endswith('s') and len(word_lower) > 3:
             candidate = word_lower[:-1]
             if candidate in self.cefr_wordlist:
-                _GLOBAL_LEMMA_CACHE.set(word, candidate)
                 return candidate
 
-        _GLOBAL_LEMMA_CACHE.set(word, word_lower)
         return word_lower
 
     def _get_frequency_data(self, word: str, lang: str = 'en') -> Tuple[Optional[int], Optional[float]]:

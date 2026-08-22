@@ -68,10 +68,13 @@ Deliberately NOT done, each killed by a measurement rather than taste:
 The curated wordlists are the lever that actually works, which is why both
 callers now pass them.
 
-Out of scope here and tracked in #158: spaCy strips the final "s" off words
-ending in "ss", so "boss" reaches this guard as "bos" and "discuss" as
-"discus". Both are real dictionary entries, so the guard correctly keeps
-them — the defect is in lemmatization, not in this decision.
+Out of scope here and handled upstream by src/services/lemma_normalizer.py
+(#158): both lemmatizers over-strip some words, so "boss" would otherwise
+reach this guard as "bos", "pass" as "pas" and "cookies" as "cooky". Every
+stripped form is a real dictionary entry, so the guard correctly keeps them —
+the defect is in lemmatization, not in this decision, and the correction is
+applied before the token gets here. (The mechanism is mostly NLTK's WordNet
+lemmatizer rather than spaCy, which #158 originally attributed it to.)
 """
 
 from __future__ import annotations

@@ -23,6 +23,7 @@ from src.services.cefr_classifier import (
     is_curated_vocabulary,
 )
 from src.services.lemma_guard import evaluate_lemma, is_wellformed
+from src.services.lemma_normalizer import correct_lemma
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,13 @@ def lemmatize_script(text: str, doc=None) -> LemmaResult:
         # Skip if lemma is empty after normalization
         if not lemma:
             continue
+
+        # spaCy strips the final "s" off -ss words and folds -ies to the
+        # archaic -y, so "fiberglass" arrives as "fiberglas" and "cookies" as
+        # "cooky". Both are real dictionary words, so the guard below cannot
+        # see anything wrong with them (#158). Correct before the guard runs,
+        # and before the lemma is used as a dict key anywhere in this loop.
+        lemma = correct_lemma(token.text, lemma)
 
         # Purity guard: gibberish, typos, and foreign words never enter the
         # global Lemma registry.
