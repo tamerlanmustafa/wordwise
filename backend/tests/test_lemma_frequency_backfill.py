@@ -24,6 +24,8 @@ tests that must not depend on its data use an injected score.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import backfill_lemma_frequency_rank as backfill
 from src.utils import word_frequency
 from src.utils.word_frequency import (
@@ -52,16 +54,32 @@ class TestRankFromZipf:
 
 
 class TestSharedFormula:
-    def test_classifier_and_backfill_agree_on_the_same_word(self):
+    def test_classifier_and_backfill_agree_on_the_same_word(self, monkeypatch):
         from src.services.cefr_classifier import HybridCEFRClassifier
 
-        # Both go through utils.word_frequency; the point is that they cannot
-        # drift apart, so compare the values rather than the call sites.
+        # The corpus is stubbed: wordfreq ships in requirements.txt but CI
+        # installs requirements-dev.txt, so the real package is absent there
+        # and both sides would agree on None — a test that passes by finding
+        # nothing. Feeding a known Zipf score makes the agreement mean
+        # something in either environment.
+        #
+        # The word is unique to this test because the classifier memoizes
+        # frequency lookups in a process-global cache.
+        word = "sharedformulaprobe"
+        monkeypatch.setattr(word_frequency, "_import_attempted", True)
+        monkeypatch.setattr(
+            word_frequency,
+            "_wordfreq",
+            SimpleNamespace(zipf_frequency=lambda w, lang="en": 5.0),
+        )
+
+        util_rank = word_frequency.frequency_rank(word)
         classifier_rank = HybridCEFRClassifier._get_frequency_data(
-            _StubClassifier(), "house", "en"
+            _StubClassifier(), word, "en"
         )[0]
-        assert classifier_rank == word_frequency.frequency_rank("house")
-        assert classifier_rank is not None
+
+        assert util_rank == 100          # rank_from_zipf(5.0)
+        assert classifier_rank == util_rank
 
     def test_vocabulary_full_uses_the_same_helper(self):
         import inspect
