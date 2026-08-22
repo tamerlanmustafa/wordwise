@@ -93,3 +93,6 @@ google-services.json
 backend/google_service.json
 service-account.json
 *.secret.json
+
+# Regenerable prod dump for evaluate_lemma_guard.py (issue #96); labels CSV IS tracked
+backend/data/lemma_guard_population.csv
