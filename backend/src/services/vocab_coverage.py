@@ -26,6 +26,7 @@ from prisma import Json, Prisma
 
 from src.config import get_settings
 
+from .feed_pool import feed_pool_by_level
 from .health_metrics import (
     FAIL,
     OK,
@@ -43,6 +44,14 @@ logger = logging.getLogger(__name__)
 # sample is a rollout artifact, not a regression — don't hard-fail (and drag the
 # whole dashboard red) until there's a real sample to judge.
 _GLOSS_MIN_SAMPLE = 200
+
+# Explore deals a fresh shuffle per app launch, so the chance a 20-card session
+# repeats a word from the last one is roughly 20 x 20 / pool size: ~0.4 cards at
+# 1,000 (rare), ~1.3 at 300 (noticeable every session). Those are the bands.
+# Measured per level, because the mix panel lets a user weight any single level
+# to 100% — one starved level is enough to make the feed look broken (#116).
+_FEED_POOL_WARN = 1000
+_FEED_POOL_FAIL = 300
 
 
 # ── status classifiers (snapshot-relative; the absolute bands live in
@@ -152,6 +161,33 @@ def build_report(
         prev=prev.get("unknown_registry_share"),
         detail=f"{unknown:,} / {lemmas_total:,} lemmas unclassifiable",
         direction="max", max_value=100.0,
+    ))
+
+    # 3c. Explore feed pool depth — eligible lemmas at the shallowest CEFR level
+    # the mix can address. The whole pool is only as good as its thinnest level,
+    # so the shallowest is the number worth alarming on; the detail carries all
+    # of them. This is a stock level, not a rate: it should hold or climb as the
+    # sentence worker drains, and a fall means the feed is losing candidates
+    # (a level regraded away, a hidden_words backfill, sentence links deleted).
+    pool = raw.get("feed_pool_by_level") or {}
+    shallowest_level = min(pool, key=lambda lvl: pool[lvl]) if pool else None
+    shallowest = pool[shallowest_level] if shallowest_level else 0
+    if pool:
+        pool_detail = " · ".join(
+            f"{lvl} {pool[lvl]:,}" + (" (shallowest)" if lvl == shallowest_level else "")
+            for lvl in sorted(pool)
+        )
+    else:
+        pool_detail = "no levels measured"
+    metrics.append(_metric(
+        "feed_pool_min_level",
+        "Explore pool depth (shallowest level)",
+        shallowest, "lemmas",
+        _status_min(shallowest, warn=_FEED_POOL_WARN, fail=_FEED_POOL_FAIL),
+        f"warn <{_FEED_POOL_WARN:,}, fail <{_FEED_POOL_FAIL:,} (repeat rate, issue #116)",
+        prev=prev.get("feed_pool_min_level"),
+        detail=pool_detail,
+        warn_at=float(_FEED_POOL_WARN), fail_at=float(_FEED_POOL_FAIL), direction="min",
     ))
 
     # 4. Translation cache growth — rows created in the last 7d. >0 = MT caching
@@ -309,6 +345,10 @@ async def _gather_raw(db: Prisma) -> dict[str, Any]:
     raw["a2"] = int(rows[0]["a2"])
     raw["unknown"] = int(rows[0]["unknown"])
     raw["lemmas_total"] = int(rows[0]["total"])
+
+    # Same eligibility clause the Explore feed serves from, so this can't report
+    # depth the feed won't actually deal (#116).
+    raw["feed_pool_by_level"] = await feed_pool_by_level(db)
 
     rows = await db.query_raw(
         "SELECT count(*) AS n FROM translation_cache WHERE created_at > now() - interval '7 days'"

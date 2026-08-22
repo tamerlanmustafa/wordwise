@@ -228,9 +228,9 @@ class _RecordingDb:
 
 
 class TestEligibleCandidatesQuery:
-    def _run(self, **kwargs):
+    def _run(self, levels=("B1", "B2"), **kwargs):
         db = _RecordingDb()
-        asyncio.run(_eligible_lemma_candidates(db, ["B1", "B2"], **kwargs))
+        asyncio.run(_eligible_lemma_candidates(db, list(levels), **kwargs))
         return db
 
     def test_always_filters_hidden_words_and_requires_an_llm_sentence(self):
@@ -241,7 +241,8 @@ class TestEligibleCandidatesQuery:
         # global-LLM set on every feed request (145,783 of 150,441 buffers).
         assert "sll.is_global" in db.sql
         assert "sentence_bank" not in db.sql
-        # Real-word shape guard, shared with /today.
+        # Real-word shape guard, shared with /today and the coverage report
+        # (#116) — see tests/test_feed_pool.py for the fragment itself.
         assert "^[a-zA-Z]+$" in db.sql
 
     def test_scopes_to_the_requested_levels(self):
@@ -260,3 +261,43 @@ class TestEligibleCandidatesQuery:
         db = self._run()
         assert "user_words" not in db.sql
         assert db.args == ()
+
+
+class TestCandidateCapIsPerLevel:
+    """#116: the row cap must not be one global frequency-ordered LIMIT.
+
+    frequency_rank correlates with CEFR level, so a global cap hands every slot
+    to the easiest level in the band. Measured on prod: the feed's 4,000-row cap
+    over A2+B1+B2+C1 returned 1,499 A2 / 1,417 B1 / 1,084 B2 and zero of C1's
+    8,552 eligible lemmas, so the C1 bucket was empty and _page_plan quietly
+    redistributed the user's requested C1 share to easier levels.
+    """
+
+    def _run(self, levels, **kwargs):
+        db = _RecordingDb()
+        asyncio.run(_eligible_lemma_candidates(db, list(levels), **kwargs))
+        return db
+
+    def test_cap_is_partitioned_by_level(self):
+        sql = self._run(["A2", "B1", "B2", "C1"], limit=4000).sql
+        assert "PARTITION BY l.cefr_level" in sql
+        # A bare LIMIT would reintroduce the global cap this replaced.
+        assert "LIMIT" not in sql.upper()
+
+    def test_budget_is_split_evenly_across_the_requested_levels(self):
+        assert "rn <= 1000" in self._run(["A2", "B1", "B2", "C1"], limit=4000).sql
+        assert "rn <= 2000" in self._run(["B2", "C1"], limit=4000).sql
+        # /today's default budget over its two-level band.
+        assert "rn <= 1000" in self._run(["B1", "B2"], limit=2000).sql
+
+    def test_a_tiny_budget_still_asks_each_level_for_something(self):
+        # Integer division must not floor a level's allowance to zero, which
+        # would return an empty pool rather than a small one.
+        assert "rn <= 1" in self._run(["A2", "B1", "B2", "C1"], limit=2).sql
+
+    def test_order_is_deterministic_so_word_of_the_hour_holds_still(self):
+        # /today indexes into this list by a per-hour seed. frequency_rank has
+        # ties, so without the id tiebreak the same hour could return a
+        # different word on every call.
+        sql = self._run(["B1", "B2"]).sql
+        assert "ORDER BY frequency_rank ASC NULLS LAST, lemma_id" in sql

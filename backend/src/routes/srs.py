@@ -32,6 +32,7 @@ from prisma import Prisma
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.chest_service import award_session_chest
+from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.session_kinds import (
@@ -920,9 +921,10 @@ async def complete_session(
 
 _CEFR_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
-# Levels the Explore mix can address. A1 is deliberately out — the feed is a
-# stretch surface, and A1 lemmas are almost entirely function words.
-_FEED_MIX_LEVELS = ["A2", "B1", "B2", "C1"]
+# Levels the Explore mix can address — owned by services/feed_pool.py, which the
+# vocab-coverage report reads too, so "how deep is each level" is measured over
+# exactly the levels the feed can serve (#116).
+_FEED_MIX_LEVELS = FEED_MIX_LEVELS
 
 
 def _parse_mix(raw: str) -> dict[str, int]:
@@ -1103,15 +1105,18 @@ async def _eligible_lemma_candidates(
 ) -> list[dict]:
     """Lemmas eligible to be surfaced as a study card.
 
-    Shared by /today (Word of the Hour) and /feed (Explore). A candidate:
-      - sits at one of `levels`
-      - isn't curated away in hidden_words
-      - looks like a real English word (alphabetic, length >= 4)
-      - has at least one global LLM-authored example sentence, so the card
-        always has something to show
+    Shared by /today (Word of the Hour) and /feed (Explore). A candidate sits
+    at one of `levels` and satisfies `feed_eligibility_sql` — real-word shape,
+    not curated away in hidden_words, and guaranteed to have a global
+    LLM-authored example sentence so the card always has something to show.
+    That fragment is shared with the vocab-coverage report so the depth it
+    reports is the depth this query can actually serve (#116).
 
     Pass `exclude_user_id` to also drop anything already in that user's
     user_words — the feed never re-shows a word you saved or marked known.
+
+    `limit` is the total row budget, split evenly across `levels`: each level
+    contributes at most `limit // len(levels)` of its most frequent words.
     """
     # `levels` is always drawn from _CEFR_ORDER by the callers, never from
     # raw user input, so inlining it is safe. The user id is parameterised.
@@ -1124,13 +1129,22 @@ async def _eligible_lemma_candidates(
     # filters. Every level string here is a valid `proficiencylevel` label, so
     # the bare comparison is total.
     #
-    # The "has a sentence" test reads `sll.is_global` instead of joining to
-    # sentence_bank (#120). Joining made this query rebuild the global-LLM set
-    # from scratch every request: 48,537 B-tree descents into a 7.7M-entry
-    # index, 145,783 of its 150,441 buffers. `is_global` is that predicate
-    # denormalized onto the link (trigger-maintained), so the same test is a
-    # single probe into a 2 MB partial index.
+    # The cap is applied PER LEVEL (row_number partitioned by cefr_level), not
+    # as one global `ORDER BY frequency_rank LIMIT n` (#116). Rank correlates
+    # with level, so a global cap hands every slot to the easiest level in the
+    # band and starves the hard one entirely: measured on prod, the 4,000-row
+    # cap over A2+B1+B2+C1 returned 1,499 A2 / 1,417 B1 / 1,084 B2 and **zero**
+    # of C1's 8,552 eligible lemmas, and the 2,000-row cap over a B2 user's
+    # default B2+C1 band returned 2,000 B2 and zero C1. Their C1 bucket was
+    # empty, so _page_plan redistributed the C1 share away and the feed silently
+    # stopped stretching them.
+    #
+    # The outer ORDER BY only has to be deterministic — /feed reshuffles each
+    # bucket with the session seed anyway — but /today indexes into this list by
+    # a per-hour seed, so ties are broken on lemma_id to keep that pick stable
+    # within the hour.
     levels_sql = ",".join(f"'{lvl}'" for lvl in levels)
+    per_level = max(1, int(limit) // max(1, len(levels)))
     exclude_sql = ""
     args: list = []
     if exclude_user_id is not None:
@@ -1144,28 +1158,25 @@ async def _eligible_lemma_candidates(
 
     return await db.query_raw(
         f"""
-        SELECT
-            l.id              AS lemma_id,
-            l.lemma           AS word,
-            l.pos             AS pos,
-            l.cefr_level::text AS cefr_level,
-            l.frequency_rank
-        FROM lemmas l
-        WHERE l.cefr_level IN ({levels_sql})
-          AND l.lemma ~ '^[a-zA-Z]+$'
-          AND length(l.lemma) >= 4
-          AND NOT EXISTS (
-              SELECT 1 FROM hidden_words hw WHERE hw.word = l.lemma
-          )
-          AND EXISTS (
-              SELECT 1
-              FROM sentence_lemma_links sll
-              WHERE sll.lemma_id = l.id
-                AND sll.is_global
-          )
-          {exclude_sql}
-        ORDER BY l.frequency_rank ASC NULLS LAST
-        LIMIT {int(limit)}
+        SELECT lemma_id, word, pos, cefr_level, frequency_rank
+        FROM (
+            SELECT
+                l.id              AS lemma_id,
+                l.lemma           AS word,
+                l.pos             AS pos,
+                l.cefr_level::text AS cefr_level,
+                l.frequency_rank,
+                row_number() OVER (
+                    PARTITION BY l.cefr_level
+                    ORDER BY l.frequency_rank ASC NULLS LAST, l.id
+                ) AS rn
+            FROM lemmas l
+            WHERE l.cefr_level IN ({levels_sql})
+              AND {feed_eligibility_sql("l")}
+              {exclude_sql}
+        ) ranked
+        WHERE rn <= {per_level}
+        ORDER BY frequency_rank ASC NULLS LAST, lemma_id
         """,
         *args,
     )

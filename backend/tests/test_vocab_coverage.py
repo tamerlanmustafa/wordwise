@@ -42,6 +42,8 @@ def _report(raw_overrides: dict, previous=None, cap_usd: float = 50.0) -> dict[s
         "orphan_sentences": 0,
         "dead_end_movies": 170,
         "llm_cost_24h": 0.0,
+        # Every level deeper than the warn band → ok.
+        "feed_pool_by_level": {"A2": 6000, "B1": 2000, "B2": 5000, "C1": 8000},
     }
     raw.update(raw_overrides)
     return _by_key(vc.build_report(raw, previous, cap_usd))
@@ -113,6 +115,38 @@ def test_unknown_share_is_observation_only():
     assert huge["status"] == vc.OK
     assert huge["value"] == pytest.approx(90.0)
     assert (huge["warn_at"], huge["fail_at"]) == (None, None)
+
+
+def test_feed_pool_depth_bands():
+    """#116: the pool is only as good as its thinnest level, because the mix
+    panel lets a user weight any single level to 100%."""
+    deep = {"A2": 6000, "B1": 2000, "B2": 5000, "C1": 8000}
+    assert _report({"feed_pool_by_level": deep})["feed_pool_min_level"]["status"] == vc.OK
+    # One shallow level drags the metric even while the others are healthy.
+    thin = dict(deep, C1=800)
+    m = _report({"feed_pool_by_level": thin})["feed_pool_min_level"]
+    assert m["status"] == vc.WARN
+    assert m["value"] == 800
+    assert _report({"feed_pool_by_level": dict(deep, C1=250)})["feed_pool_min_level"]["status"] == vc.FAIL
+
+
+def test_feed_pool_detail_names_the_shallowest_level():
+    m = _report({"feed_pool_by_level": {"A2": 6000, "B1": 800}})["feed_pool_min_level"]
+    assert "B1 800 (shallowest)" in m["detail"]
+    assert "A2 6,000" in m["detail"]
+
+
+def test_feed_pool_with_no_levels_fails_loudly():
+    # An empty pool means Explore has nothing to deal. Reporting ok would hide
+    # exactly the outage this metric is for.
+    m = _report({"feed_pool_by_level": {}})["feed_pool_min_level"]
+    assert m["value"] == 0
+    assert m["status"] == vc.FAIL
+
+
+def test_feed_pool_is_a_stat_tile_not_a_meter():
+    # Unbounded count: there is no natural 100% for "lemmas in stock".
+    assert _report({})["feed_pool_min_level"]["max_value"] is None
 
 
 def test_translation_cache_growth_stall():
@@ -261,6 +295,13 @@ class _FakeDb:
         s = " ".join(sql.split())
         if "AS covered" in s:
             return [{"total": self._raw["mlm_total"], "covered": self._raw["mlm_covered"]}]
+        # Ahead of the hidden_words branch: the feed-pool query filters
+        # hidden_words too, and would otherwise be answered by it.
+        if "AS level" in s:
+            return [
+                {"level": lvl, "n": n}
+                for lvl, n in self._raw["feed_pool_by_level"].items()
+            ]
         if "hidden_words" in s:
             return [{"n": self._raw["uncovered_visible_lemmas"]}]
         if "cefr_level = 'A2'" in s:
@@ -298,6 +339,7 @@ _BASELINE_RAW = {
     "orphan_sentences": 0,
     "dead_end_movies": 170,
     "llm_cost_24h": 0.0,
+    "feed_pool_by_level": {"A2": 6489, "B1": 2323, "B2": 5124, "C1": 8552},
 }
 
 
