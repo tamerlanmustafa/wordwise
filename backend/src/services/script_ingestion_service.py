@@ -12,6 +12,7 @@ from datetime import datetime
 from prisma import Prisma
 from prisma.enums import scriptsource
 
+from ..utils.offload import Overloaded
 from ..utils.pdf_extractor import PDFExtractor, PDFExtractionError
 from ..utils.subtitle_parser import SubtitleParser, SubtitleParsingError
 from ..utils.stands4_client import STANDS4Client, STANDS4Error
@@ -534,6 +535,11 @@ class ScriptIngestionService:
                 }
             }
 
+        except Overloaded:
+            # Returning None here would say "no provider had this movie", which
+            # is how a job gets parked dead. We never reached a provider — let
+            # it out so `get_or_fetch_script` records it as transient.
+            raise
         except SubtitleParsingError as e:
             logger.warning(f"[Subtitle] Parsing error: {str(e)}")
             return None

@@ -7,7 +7,16 @@ extend-exclude = ["prisma", "logs", "data", "__pycache__"]
 # style findings; bulk-fixing them belongs in its own PR. Graduate rule
 # families one at a time, each time CI is green.
 [lint]
-select = ["F"]
+# ASYNC is a backstop, NOT coverage. It flags calls it recognises by name —
+# `open`, `time.sleep`, `requests`, `subprocess` — inside an `async def`. It
+# cannot tell that `verify_password` costs 173ms or that `nlp(text)` costs
+# seconds, because those are ordinary function calls with nothing in their
+# signature to give them away. It therefore found *none* of #141-#145, the
+# five real event-loop stalls this service has shipped. Do not read a green
+# run here as "no blocking bugs": the layer that catches the rest is the
+# runtime watchdog at /admin/health/event-loop (#146) and the review question
+# in CLAUDE.md — "what else is waiting while this runs?"
+select = ["F", "ASYNC"]
 ignore = [
     "F401",  # unused import — too noisy in `__init__.py` barrels; revisit
     "F403",  # star imports — used deliberately in routes/__init__.py
@@ -19,3 +28,17 @@ ignore = [
              # tables; legitimate smell (later entries silently win) but
              # needs its own audit PR, not a CI gate.
 ]
+
+[lint.per-file-ignores]
+# The offload regression guards (#117, #143, #144, #146) deliberately call
+# `time.sleep` inside an `async def` — that blocking sleep *is* the test: it
+# stands in for spaCy or bcrypt while an unrelated coroutine has to keep
+# ticking. Flagging it would mean writing `# noqa` on every future one.
+#
+# Both spellings are needed, and neither is redundant: CI runs
+# `ruff check src tests` from `backend/`, so the path is `tests/…`, while
+# lint-staged runs from the repo root with `--config backend/ruff.toml`, so it
+# is `backend/tests/…`. Globs match the path as invoked, not as resolved
+# against the config file's directory.
+"tests/**" = ["ASYNC251"]
+"**/tests/**" = ["ASYNC251"]
