@@ -53,7 +53,7 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 | # | Status | Issue | Work |
 |---|--------|-------|------|
-| 18 | `done` | #96 | Recalibrate the lemma purity guard. Upstream of everything below. **#96 left OPEN — fix is uncommitted.** Spun off **#158** (spaCy `-ss` over-stripping), which must land **before 19**. |
+| 18 | `done` | #96 | Recalibrate the lemma purity guard. Upstream of everything below. Pushed 2026-08-22 (`4f5de8e` fix + `93c26cb` eval set) — **#96 is now eligible to close**; the next sweep closes it. Spun off **#158** (spaCy `-ss` over-stripping), which must land **before 19**. |
 | 19 | `todo` | #131 | Give the UNKNOWN bucket (14,754 lemmas, 34.7%) an exit path. **Data pass first.** |
 | 20 | `todo` | #116 | Measure then precompute the Explore candidate pool. |
 | 21 | `todo` | #127 | Normalize `word_classifications` (58× duplication). **After 19**, so correct values get normalized. |
@@ -81,7 +81,7 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 
 #94 · #123 · #126 · #129 · #133 · #134 · #135 · #137 · #138 · #143 · #144 · #145 · #148 — each closed with its Log line as the comment.
 
-Left open on purpose: **#103** (column-drop SQL unapplied) · **#125** (TMDB key rotation pending) · **#104** (#104b still `todo`) · **#96** (fix uncommitted). From here `/next-ticket` closes rows itself — step 1 sweeps, step 5 closes.
+Left open on purpose: **#103** (column-drop SQL unapplied) · **#125** (TMDB key rotation pending) · **#104** (#104b still `todo`). **#96** was on this list while its fix was uncommitted; both halves are pushed as of 2026-08-22, so it is eligible to close on the next sweep. From here `/next-ticket` closes rows itself — step 1 sweeps, step 5 closes.
 
 ## Log
 
