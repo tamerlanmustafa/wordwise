@@ -6,10 +6,11 @@ Populates the global Lemma registry and MovieLemmaMapping table.
 Works alongside the existing CEFR classifier (dual-write).
 """
 
+import json
 import logging
 import hashlib
 import threading
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -400,121 +401,193 @@ async def populate_lemma_registry(
     return lemma_id_map
 
 
+# --- Lemma registry backfill (issue #145) -----------------------------------
+#
+# This runs as a background task on the API's event loop (see
+# routes/cefr.py::backfill_lemmas), so nothing in it may hold the loop or the
+# process's memory for long. The original version did both: it read every
+# word_classifications row (4.83M in prod, 471 MB on disk) into Prisma model
+# objects to group them in Python, then read every movie_scripts row —
+# including cleaned_script_text, ~178 MB of it — only to build an int->int map,
+# then issued two queries per classification row (~9.6M round trips) to write
+# the mappings. All three are set operations Postgres can do itself, so the API
+# process now never holds more than the ~35.6k aggregated rows.
+
+# One row per distinct lemma: its highest-confidence classification. DISTINCT
+# ON is Postgres' "keep the first row of each group", and the ORDER BY decides
+# which row that is — the same rule as the old `if confidence > best` loop.
+_BEST_CLASSIFICATION_SQL = """
+    SELECT DISTINCT ON (LOWER(BTRIM(lemma)))
+           LOWER(BTRIM(lemma)) AS lemma,
+           pos,
+           cefr_level::text AS cefr_level,
+           confidence,
+           source::text AS source,
+           frequency_rank
+    FROM word_classifications
+    WHERE BTRIM(lemma) <> ''
+    ORDER BY LOWER(BTRIM(lemma)), confidence DESC
+"""
+
+# movie_scripts.movie_id is UNIQUE, so distinct script_id is distinct movie —
+# the same number the old code got from a set of script ids per lemma.
+_LEMMA_MOVIE_COUNT_SQL = """
+    SELECT LOWER(BTRIM(lemma)) AS lemma,
+           COUNT(DISTINCT script_id)::int AS movie_count
+    FROM word_classifications
+    WHERE BTRIM(lemma) <> ''
+    GROUP BY 1
+"""
+
+# Rows arrive as one jsonb parameter rather than one placeholder per column per
+# row: 8 columns x 1,000 rows would be 8,000 bind parameters, past what a
+# single statement can carry. jsonb also carries SQL NULL for a missing pos or
+# frequency_rank without a per-column type dance.
+#
+# DO UPDATE deliberately touches only the two derived columns. pos, cefr_level,
+# confidence and source are left alone on a lemma that already exists, because
+# the registry is also written by register_lemmas_for_movie and by the admin
+# re-grading paths — a migration re-run must not roll those back. This is the
+# same split the old find_unique/update/create branch made.
+_LEMMA_UPSERT_SQL = """
+    INSERT INTO lemmas (
+        lemma, pos, cefr_level, confidence, source, frequency_rank,
+        word_forms, is_multi_word, priority_score, total_movie_count,
+        updated_at
+    )
+    SELECT r.lemma,
+           r.pos,
+           r.cefr_level::proficiencylevel,
+           r.confidence,
+           r.source::classificationsource,
+           r.frequency_rank,
+           TO_JSONB(ARRAY[r.lemma]),
+           POSITION(' ' IN r.lemma) > 0,
+           r.priority_score,
+           r.movie_count,
+           NOW()
+    FROM JSONB_TO_RECORDSET($1::jsonb) AS r(
+        lemma text,
+        pos text,
+        cefr_level text,
+        confidence double precision,
+        source text,
+        frequency_rank int,
+        priority_score double precision,
+        movie_count int
+    )
+    ON CONFLICT (lemma) DO UPDATE
+    SET total_movie_count = EXCLUDED.total_movie_count,
+        priority_score = EXCLUDED.priority_score,
+        updated_at = NOW()
+"""
+
+# The script -> movie dict the old code built in Python is this JOIN. As a join
+# Postgres reads only movie_scripts' id and movie_id; cleaned_script_text sits
+# in TOAST storage and is never decompressed, let alone shipped to the API.
+_MAPPING_INSERT_SQL = """
+    INSERT INTO movie_lemma_mappings (movie_id, lemma_id, frequency_in_movie)
+    SELECT DISTINCT ms.movie_id, l.id, 1
+    FROM word_classifications wc
+    JOIN movie_scripts ms ON ms.id = wc.script_id
+    JOIN lemmas l ON l.lemma = LOWER(BTRIM(wc.lemma))
+    WHERE wc.script_id = ANY($1::int[])
+    ON CONFLICT (movie_id, lemma_id) DO NOTHING
+"""
+
+_SCRIPT_IDS_SQL = "SELECT id FROM movie_scripts ORDER BY id"
+
+# Lemmas per upsert statement: 35.6k lemmas is ~36 statements of ~180 KB of
+# JSON each.
+LEMMA_UPSERT_CHUNK = 1000
+
+# Scripts per mapping statement. Prod averages ~1,100 classifications per
+# script, so 100 scripts is ~110k candidate pairs — bounded work and a bounded
+# transaction, rather than one INSERT spanning all 4.83M rows.
+MAPPING_SCRIPT_CHUNK = 100
+
+
+def _build_lemma_upsert_payloads(
+    best_rows: List[Dict[str, Any]],
+    count_rows: List[Dict[str, Any]],
+    chunk_size: int = LEMMA_UPSERT_CHUNK,
+) -> List[Tuple[str, int]]:
+    """
+    Join the two aggregates, score every lemma, and serialize the upsert chunks.
+
+    Pure CPU and no I/O, which is why the caller hands it to `run_cpu` instead
+    of running it inline: scoring 35.6k lemmas measures ~17ms and serializing
+    them ~33ms, both past the ~10ms the event loop can absorb. One hop for the
+    whole batch, never one per lemma — see utils/offload.
+
+    Returns (json payload, rows in it) per chunk.
+    """
+    movie_counts = {r["lemma"]: r["movie_count"] for r in count_rows}
+    total = len(best_rows)
+
+    scored = [
+        {
+            "lemma": r["lemma"],
+            "pos": r["pos"],
+            "cefr_level": r["cefr_level"],
+            "confidence": r["confidence"],
+            "source": r["source"],
+            "frequency_rank": r["frequency_rank"],
+            "movie_count": movie_counts.get(r["lemma"], 0),
+            "priority_score": compute_priority_score(
+                frequency_rank=r["frequency_rank"],
+                total_lemmas=total,
+                cefr_level=r["cefr_level"],
+            ),
+        }
+        for r in best_rows
+    ]
+
+    chunks = [scored[i : i + chunk_size] for i in range(0, len(scored), chunk_size)]
+    return [(json.dumps(chunk), len(chunk)) for chunk in chunks]
+
+
 async def backfill_lemmas_from_classifications(db: Prisma) -> int:
     """
     Migration script: Backfill Lemma table from existing WordClassification entries.
     Run ONCE after Phase 1 deployment.
 
-    Returns number of lemmas created.
+    Returns number of lemmas upserted.
     """
+    from src.utils.offload import run_cpu
+
     logger.info("Starting Lemma backfill from WordClassification...")
 
-    # Get all unique (lemma, cefrLevel) combos with highest confidence
-    all_classifications = await db.wordclassification.find_many(
-        order={"confidence": "desc"}
-    )
+    best_rows = await db.query_raw(_BEST_CLASSIFICATION_SQL)
+    count_rows = await db.query_raw(_LEMMA_MOVIE_COUNT_SQL)
 
-    # Group by lemma, keep highest confidence
-    best_by_lemma: Dict[str, Dict] = {}
-    lemma_movie_map: Dict[str, set] = {}  # lemma -> set of script_ids
-
-    for cls in all_classifications:
-        lemma = cls.lemma.lower().strip()
-        if not lemma:
-            continue
-
-        if lemma not in best_by_lemma or cls.confidence > best_by_lemma[lemma]["confidence"]:
-            cefr = cls.cefrLevel if isinstance(cls.cefrLevel, str) else cls.cefrLevel.value
-            source = cls.source if isinstance(cls.source, str) else cls.source.value
-            best_by_lemma[lemma] = {
-                "lemma": lemma,
-                "pos": cls.pos,
-                "cefr_level": cefr,
-                "confidence": cls.confidence,
-                "source": source,
-                "frequency_rank": cls.frequencyRank,
-            }
-
-        if lemma not in lemma_movie_map:
-            lemma_movie_map[lemma] = set()
-        lemma_movie_map[lemma].add(cls.scriptId)
+    # No cpu_slot around the hop: there is exactly one caller, it is admin-only,
+    # and shedding it would abort a migration rather than protect anything.
+    chunks = await run_cpu(_build_lemma_upsert_payloads, best_rows, count_rows)
+    total = sum(rows for _, rows in chunks)
 
     created_count = 0
-    total = len(best_by_lemma)
-
-    for i, (lemma_str, data) in enumerate(best_by_lemma.items()):
-        movie_count = len(lemma_movie_map.get(lemma_str, set()))
-        priority = compute_priority_score(
-            frequency_rank=data["frequency_rank"],
-            total_lemmas=total,
-            cefr_level=data["cefr_level"],
-        )
-
+    for chunk_no, (payload, rows) in enumerate(chunks, start=1):
         try:
-            existing = await db.lemma.find_unique(where={"lemma": lemma_str})
-            if existing:
-                await db.lemma.update(
-                    where={"id": existing.id},
-                    data={
-                        "totalMovieCount": movie_count,
-                        "priorityScore": priority,
-                    },
-                )
-            else:
-                await db.lemma.create(
-                    data={
-                        "lemma": lemma_str,
-                        "pos": data["pos"],
-                        "cefrLevel": data["cefr_level"],
-                        "confidence": data["confidence"],
-                        "source": data["source"],
-                        "frequencyRank": data["frequency_rank"],
-                        "wordForms": Json([lemma_str]),
-                        "isMultiWord": " " in lemma_str,
-                        "priorityScore": priority,
-                        "totalMovieCount": movie_count,
-                    }
-                )
-            created_count += 1
+            await db.execute_raw(_LEMMA_UPSERT_SQL, payload)
         except Exception as e:
-            logger.warning(f"Failed to upsert lemma '{lemma_str}': {e}")
+            logger.warning(f"Failed to upsert lemma chunk {chunk_no}: {e}")
+            continue
+        created_count += rows
+        logger.info(f"Backfill progress: {created_count}/{total}")
 
-        if (i + 1) % 500 == 0:
-            logger.info(f"Backfill progress: {i + 1}/{total}")
-
-    # Now backfill MovieLemmaMapping
-    # Get script -> movie mapping
-    scripts = await db.moviescript.find_many()
-    script_to_movie = {s.id: s.movieId for s in scripts}
+    # Now backfill MovieLemmaMapping. Only the script ids come back here; the
+    # script -> movie resolution happens inside _MAPPING_INSERT_SQL's JOIN.
+    script_rows = await db.query_raw(_SCRIPT_IDS_SQL)
+    script_ids = [r["id"] for r in script_rows]
 
     mapping_count = 0
-    for cls in all_classifications:
-        lemma = cls.lemma.lower().strip()
-        if not lemma:
-            continue
-
-        movie_id = script_to_movie.get(cls.scriptId)
-        if not movie_id:
-            continue
-
-        lemma_record = await db.lemma.find_unique(where={"lemma": lemma})
-        if not lemma_record:
-            continue
-
-        try:
-            await db.movielemmamapping.create(
-                data={
-                    "movieId": movie_id,
-                    "lemmaId": lemma_record.id,
-                    "frequencyInMovie": 1,
-                }
-            )
-            mapping_count += 1
-        except Exception:
-            pass  # Duplicate, skip
+    for i in range(0, len(script_ids), MAPPING_SCRIPT_CHUNK):
+        chunk = script_ids[i : i + MAPPING_SCRIPT_CHUNK]
+        mapping_count += await db.execute_raw(_MAPPING_INSERT_SQL, chunk)
 
     logger.info(
-        f"Backfill complete: {created_count} lemmas created, "
+        f"Backfill complete: {created_count} lemmas upserted, "
         f"{mapping_count} movie-lemma mappings created"
     )
     return created_count
