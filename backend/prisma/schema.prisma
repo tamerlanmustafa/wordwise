@@ -103,11 +103,10 @@ model Movie {
   // nowhere. Filtering by level is a range over `difficultyScore`.
   difficultyScore  Int?                  @map("difficulty_score")
   cefrDistribution Json?                 @map("cefr_distribution")
-  // Vestigial (#93): legacy large-text column on the hottest table,
-  // duplicating movie_scripts.cleanedScriptText. Only POST /movies still
-  // writes it; every read path goes through movie_scripts. Dropping it is a
-  // destructive migration, so it waits until that endpoint stops writing it.
-  script_text      String?
+  // #102: `script_text` is gone. It was a legacy large-text column on the
+  // hottest table duplicating movie_scripts.cleanedScriptText, populated on
+  // 0 of 4,583 rows; POST /movies was the only writer and no longer accepts
+  // one. Dropped by prisma/manual/2026_08_22_drop_movies_script_text_issue_102.sql.
   wordCount        Int?                  @map("word_count")
   description      String?
   poster_url       String?               @db.VarChar

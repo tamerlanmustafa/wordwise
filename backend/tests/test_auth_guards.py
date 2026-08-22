@@ -173,6 +173,15 @@ class TestRouteGuards:
         calls = _dependency_calls(router, "/admin/reprocess-all-scripts", "POST")
         assert get_admin_user in calls
 
+    def test_create_movie_requires_admin(self):
+        """#102: POST /movies shipped with a docstring saying "admin only" over
+        a TODO and a plain active-user check, so any signed-in account could
+        insert a movie row."""
+        from src.routes.movies import router
+
+        calls = _dependency_calls(router, "/movies/", "POST")
+        assert get_admin_user in calls
+
     def test_tmdb_autocomplete_throttled(self):
         from src.routes.tmdb import router
 

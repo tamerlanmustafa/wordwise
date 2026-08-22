@@ -7,7 +7,9 @@ class MovieCreate(BaseModel):
     title: str
     year: int
     genre: Optional[str] = None
-    script_text: Optional[str] = None
+    # #102: no `script_text`. The column it wrote to is gone; script text
+    # lives in movie_scripts.cleanedScriptText, written by the ingestion
+    # path, never by a request body.
     description: Optional[str] = None
     poster_url: Optional[str] = None
 

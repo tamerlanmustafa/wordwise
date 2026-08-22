@@ -6,7 +6,11 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from ..database import get_db
 from ..schemas.movie import MovieCreate, MovieResponse, MovieListResponse
-from ..middleware.auth import get_current_active_user, get_current_user_optional
+from ..middleware.auth import (
+    get_admin_user,
+    get_current_active_user,
+    get_current_user_optional,
+)
 from ..services.hidden_words import get_hidden_word_set
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
@@ -611,19 +615,22 @@ async def get_movie_difficulty(movie_id: int, response: Response, db: Prisma = D
 @router.post("/", response_model=MovieResponse, status_code=status.HTTP_201_CREATED)
 async def create_movie(
     movie_data: MovieCreate,
-    current_user = Depends(get_current_active_user),
+    current_user = Depends(get_admin_user),
     db: Prisma = Depends(get_db)
 ):
-    """Create a new movie (admin only for now)"""
-    # Check if user is admin (for now, allow all authenticated users)
-    # TODO: Add proper admin check
+    """Create a new movie (admin only).
 
+    #102: the docstring used to say "admin only for now" over a TODO and a
+    plain `get_current_active_user`, so any signed-in account could write a
+    row — and, through the old `script_text` field, arbitrary-length text
+    into the movies table. Both are fixed here: the guard is real, and the
+    field is gone.
+    """
     new_movie = await db.movie.create(
         data={
             "title": movie_data.title,
             "year": movie_data.year,
             "genre": movie_data.genre,
-            "script_text": movie_data.script_text,
             "description": movie_data.description,
             "poster_url": movie_data.poster_url
         }
