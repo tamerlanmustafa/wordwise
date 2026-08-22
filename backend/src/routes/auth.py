@@ -17,6 +17,7 @@ from ..config import get_settings
 from ..middleware.auth import get_current_user
 from ..utils.offload import CPUOverloaded
 from ..utils.rate_limit import rate_limit
+from ..utils.ui_languages import normalize_ui_language
 from ..services import email_service
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,10 @@ async def register(
     # Email after the response is sent — signup latency and success never
     # depend on the email provider (email_service never raises).
     background_tasks.add_task(
-        email_service.send_welcome_email, new_user.email, new_user.username
+        email_service.send_welcome_email,
+        new_user.email,
+        new_user.username,
+        new_user.languagePreference,
     )
 
     return {
@@ -259,7 +263,18 @@ async def update_user_profile(
         update_data["username"] = user_update.username
 
     if user_update.language_preference is not None:
-        update_data["languagePreference"] = user_update.language_preference
+        # "" clears the pin so the app falls back to deriving the UI language
+        # (translation language → device → English) on every install again.
+        if user_update.language_preference == "":
+            update_data["languagePreference"] = None
+        else:
+            app_language = normalize_ui_language(user_update.language_preference)
+            if app_language is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported app language: {user_update.language_preference}"
+                )
+            update_data["languagePreference"] = app_language
 
     if user_update.native_language is not None:
         if user_update.native_language not in SUPPORTED_LANGUAGES:
@@ -289,14 +304,20 @@ async def update_user_profile(
         update_data["defaultTab"] = user_update.default_tab
 
     if not update_data:
-        return current_user
+        return UserResponse.model_validate(current_user)
 
     updated_user = await db.user.update(
         where={"id": current_user.id},
         data=update_data
     )
 
-    return updated_user
+    # Same explicit validate as GET /me, and for the same reason: returning the
+    # Prisma object lets FastAPI's serializer read snake_case attributes that
+    # don't exist on it, so every camelCase-mapped field (nativeLanguage,
+    # proficiencyLevel, profilePictureUrl, languagePreference…) came back null
+    # and the client silently kept its pre-edit value. Entitlements were missing
+    # from the payload for the same reason.
+    return UserResponse.model_validate(updated_user)
 
 
 # ── Password reset ───────────────────────────────────────────────────────────
@@ -369,7 +390,11 @@ async def forgot_password(
         token = create_password_reset_token(user.id, user.email, user.passwordHash)
         reset_url = f"{settings.api_public_url}/auth/reset-password?token={token}"
         background_tasks.add_task(
-            email_service.send_password_reset_email, user.email, user.username, reset_url
+            email_service.send_password_reset_email,
+            user.email,
+            user.username,
+            reset_url,
+            user.languagePreference,
         )
         logger.info("Password reset requested for user id=%s", user.id)
     return {"status": "sent"}

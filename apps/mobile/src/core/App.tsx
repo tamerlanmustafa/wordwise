@@ -183,9 +183,14 @@ export default function App() {
   // explicitly chose a UI language keeps it when they change translations.
   // Gated on targetLanguageLoaded so we derive from the *restored* value rather
   // than the 'ES' initial state.
+  //
+  // `language_preference` is the account-level copy of that pin (#98), which is
+  // what makes a new install come up in the right language. It is a dependency
+  // because it arrives *after* first paint: initialize() shows the cached user
+  // immediately and refreshes /auth/me in the background.
   useEffect(() => {
     if (!targetLanguageLoaded) return;
-    void hydrateAppLanguage(targetLanguage).then((resolved) => {
+    void hydrateAppLanguage(targetLanguage, user?.language_preference).then((resolved) => {
       // Layout direction is native state fixed when the bridge boots, so a
       // language that disagrees with it only takes effect after a reload. Doing
       // it here, silently, is safe: this runs during startup, before there is
@@ -193,7 +198,7 @@ export default function App() {
       // Settings is prompted for instead.
       if (syncRtlLayout(resolved)) void reloadForRtl();
     });
-  }, [targetLanguage, targetLanguageLoaded]);
+  }, [targetLanguage, targetLanguageLoaded, user?.language_preference]);
 
   // Warm the Explore feed during boot instead of on the first tab tap. The
   // tab is lazily mounted (KeepAlive), so without this its first request
@@ -773,6 +778,15 @@ export default function App() {
         updatedUser.is_admin ??
         updatedUser.isAdmin ??
         current.is_admin,
+      // `?? current` is wrong for this one: clearing the app-language pin
+      // legitimately sets it to null, and falling back to the old value would
+      // put the pin straight back on the next hydrate. PATCH /auth/me now
+      // answers with a real UserResponse, so an absent key means "this caller
+      // didn't send a user object at all", not "the server had nothing".
+      language_preference:
+        updatedUser.language_preference !== undefined
+          ? updatedUser.language_preference
+          : current.language_preference ?? null,
     };
     useAuthStore.getState().setUser(merged);
   };

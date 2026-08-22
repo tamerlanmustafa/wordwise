@@ -17,6 +17,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { showToast } from '../../stores/toastStore';
 import { formatAppleFullName } from '../../utils/appleName';
+import { getAppLanguage } from '../../i18n';
 
 interface Props {
   onLogin: (user: any, token: string, refreshToken: string) => void;
@@ -91,6 +92,10 @@ export const LoginScreen = ({ onLogin }: Props) => {
           name,
           picture: photo,
           google_id: googleId,
+          // Only read on first sign-in (see _create_or_update_user): it seeds
+          // the account's language so the welcome email isn't English by
+          // default. Ignored for an account that already has one.
+          app_language: getAppLanguage(),
         }),
       });
 
@@ -158,6 +163,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
         body: JSON.stringify({
           identity_token: credential.identityToken,
           full_name: fullName,
+          app_language: getAppLanguage(),
         }),
       });
 
@@ -204,7 +210,16 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
       const body = isLoginMode
         ? { email: email.trim(), password }
-        : { email: email.trim(), password, username: username.trim(), language_preference: 'en' };
+        : {
+            email: email.trim(),
+            password,
+            username: username.trim(),
+            // The language this screen is currently rendered in — not a
+            // hard-coded 'en'. It is the only chance to get the welcome email
+            // right: that mail is sent from the register handler, long before
+            // the user could open Settings.
+            language_preference: getAppLanguage(),
+          };
 
       const authResponse = await fetch(`${config.API_URL}${endpoint}`, {
         method: 'POST',

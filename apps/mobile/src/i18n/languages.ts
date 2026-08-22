@@ -12,6 +12,11 @@
  *       script — `rtl.ts` handles the mirroring off that flag alone. Set
  *       `preview: true` while the locale is still being verified: it ships and
  *       is tested, but is not offered to users until the flag comes off.
+ *    4. Un-gating a locale (dropping `preview`) also means the *server* has to
+ *       know it: add the code to `backend/src/utils/ui_languages.py` and a copy
+ *       block to `backend/src/services/email_i18n.py`, or that user gets a
+ *       translated app and an English welcome email. `locales.test.ts` fails
+ *       when the two lists disagree.
  *
  *  No component, picker, or store needs touching: Settings and onboarding
  *  both render straight from SELECTABLE_UI_LANGUAGES.

@@ -13,14 +13,21 @@
  * Resolution order for appLanguage, highest priority first:
  *
  *   1. an explicit choice the user made in Settings   (AsyncStorage)
- *   2. their translation language, if we ship a UI locale for it
- *   3. the device locale                              (expo-localization)
- *   4. 'en'
+ *   2. the same choice stored on their account        (users.language_preference)
+ *   3. their translation language, if we ship a UI locale for it
+ *   4. the device locale                              (expo-localization)
+ *   5. 'en'
  *
- * Rule 2 is what makes this feel automatic: someone who picks Spanish
+ * Rule 3 is what makes this feel automatic: someone who picks Spanish
  * translations during onboarding gets a Spanish interface without being asked
  * a second language question. Rule 1 exists for the mismatch case — a Turkish
  * speaker studying via Spanish translations who still wants a Turkish UI.
+ *
+ * Rules 1 and 2 hold the *same* fact — Settings writes both — and differ only
+ * in where. Local wins because it is the choice made on this device and needs
+ * no network; the account copy is what a fresh install inherits before the
+ * user has touched Settings on it, and what decides which language their
+ * welcome and password-reset emails are written in (#98).
  *
  * Because `t` is also needed outside React (Zustand stores, services, the
  * notification builders), prefer the exported `t` here over the `useTranslation`
@@ -64,22 +71,26 @@ export function getDeviceLanguage(): string | undefined {
 }
 
 export interface ResolveInput {
-  /** Explicit Settings choice. */
+  /** Explicit Settings choice made on this device. */
   stored?: string | null;
+  /** The same choice as stored on the account (`user.language_preference`). */
+  server?: string | null;
   /** The user's translation language (`targetLanguage`, e.g. 'ES'). */
   translationLanguage?: string | null;
   /** Device locale, already normalized. Injectable for tests. */
   device?: string | null;
 }
 
-/** Pure resolution of the four-step order documented above. */
+/** Pure resolution of the five-step order documented above. */
 export function resolveAppLanguage({
   stored,
+  server,
   translationLanguage,
   device,
 }: ResolveInput): string {
   return (
     normalizeToUiLanguage(stored) ??
+    normalizeToUiLanguage(server) ??
     normalizeToUiLanguage(translationLanguage) ??
     normalizeToUiLanguage(device) ??
     FALLBACK_LANGUAGE
@@ -116,10 +127,17 @@ export function initI18n(initialLanguage: string = FALLBACK_LANGUAGE): I18nInsta
 /**
  * Hydrate from storage and switch to the resolved language.
  *
- * `translationLanguage` is passed in rather than read from a store to keep this
- * module free of app-state imports (the auth/onboarding stores import *this*).
+ * `translationLanguage` and `serverLanguage` are passed in rather than read
+ * from a store to keep this module free of app-state imports (the
+ * auth/onboarding stores import *this*). `serverLanguage` is
+ * `user.language_preference`; it is legitimately undefined on a logged-out
+ * boot, and arrives late on a cold start (the cached user is refreshed from
+ * /auth/me in the background), so callers re-run this when it changes.
  */
-export async function hydrateAppLanguage(translationLanguage?: string | null): Promise<string> {
+export async function hydrateAppLanguage(
+  translationLanguage?: string | null,
+  serverLanguage?: string | null,
+): Promise<string> {
   let stored: string | null = null;
   try {
     stored = await AsyncStorage.getItem(APP_LANGUAGE_KEY);
@@ -128,6 +146,7 @@ export async function hydrateAppLanguage(translationLanguage?: string | null): P
   }
   const resolved = resolveAppLanguage({
     stored,
+    server: serverLanguage,
     translationLanguage,
     device: getDeviceLanguage(),
   });
@@ -171,14 +190,21 @@ export async function hasExplicitAppLanguage(): Promise<boolean> {
   }
 }
 
-/** Clear the explicit choice so the UI follows the translation language again. */
+/**
+ * Clear the explicit choice so the UI follows the translation language again.
+ *
+ * No `serverLanguage` argument on purpose: the account copy holds the *same*
+ * pin, so re-reading it here would instantly restore the language the user
+ * just cleared. Settings clears both — it PATCHes `language_preference: ''`
+ * alongside this call.
+ */
 export async function clearExplicitAppLanguage(translationLanguage?: string | null): Promise<void> {
   try {
     await AsyncStorage.removeItem(APP_LANGUAGE_KEY);
   } catch {
     // ignore
   }
-  await hydrateAppLanguage(translationLanguage);
+  await hydrateAppLanguage(translationLanguage, null);
 }
 
 /** Currently active UI language. */

@@ -77,7 +77,8 @@ async def _create_or_update_user(
     db: Prisma,
     allow_new: bool = True,
     native_language: str | None = None,
-    learning_language: str | None = None
+    learning_language: str | None = None,
+    app_language: str | None = None,
 ):
     """Create or update user based on Google info using Prisma."""
     google_id = google_user_info['google_id']
@@ -107,6 +108,8 @@ async def _create_or_update_user(
                 update_data["nativeLanguage"] = native_language
             if learning_language and not user.learningLanguage:
                 update_data["learningLanguage"] = learning_language
+            if app_language and not user.languagePreference:
+                update_data["languagePreference"] = app_language
 
             user = await db.user.update(
                 where={"id": user.id},
@@ -143,6 +146,8 @@ async def _create_or_update_user(
                 user_data["nativeLanguage"] = native_language
             if learning_language:
                 user_data["learningLanguage"] = learning_language
+            if app_language:
+                user_data["languagePreference"] = app_language
 
             user = await db.user.create(data=user_data)
             is_new_user = True
@@ -156,6 +161,8 @@ async def _create_or_update_user(
             update_data["nativeLanguage"] = native_language
         if learning_language and not user.learningLanguage:
             update_data["learningLanguage"] = learning_language
+        if app_language and not user.languagePreference:
+            update_data["languagePreference"] = app_language
 
         if update_data:
             user = await db.user.update(
@@ -200,13 +207,19 @@ async def google_login(
             db,
             allow_new=True,
             native_language=request.native_language,
-            learning_language=request.learning_language
+            learning_language=request.learning_language,
+            app_language=request.app_language,
         )
 
         # OAuth addresses are pre-verified, so new users get only the
         # welcome email — no verification link.
         if is_new_user:
-            background_tasks.add_task(email_service.send_welcome_email, user.email, user.username)
+            background_tasks.add_task(
+                email_service.send_welcome_email,
+                user.email,
+                user.username,
+                user.languagePreference,
+            )
 
         # Generate JWT token pair
         token_payload = {"sub": str(user.id), "email": user.email}
@@ -249,6 +262,7 @@ async def _create_or_update_apple_user(
     full_name: str | None = None,
     native_language: str | None = None,
     learning_language: str | None = None,
+    app_language: str | None = None,
 ):
     """Find-or-create a user from verified Apple info (mirror of the Google
     helper). Linking rule: match by appleId first; else by verified email
@@ -274,6 +288,8 @@ async def _create_or_update_apple_user(
                 update_data["nativeLanguage"] = native_language
             if learning_language and not user.learningLanguage:
                 update_data["learningLanguage"] = learning_language
+            if app_language and not user.languagePreference:
+                update_data["languagePreference"] = app_language
             user = await db.user.update(where={"id": user.id}, data=update_data)
 
     if not user:
@@ -316,6 +332,8 @@ async def _create_or_update_apple_user(
             user_data["nativeLanguage"] = native_language
         if learning_language:
             user_data["learningLanguage"] = learning_language
+        if app_language:
+            user_data["languagePreference"] = app_language
 
         user = await db.user.create(data=user_data)
         is_new_user = True
@@ -325,6 +343,8 @@ async def _create_or_update_apple_user(
             update_data["nativeLanguage"] = native_language
         if learning_language and not user.learningLanguage:
             update_data["learningLanguage"] = learning_language
+        if app_language and not user.languagePreference:
+            update_data["languagePreference"] = app_language
         if update_data:
             user = await db.user.update(where={"id": user.id}, data=update_data)
 
@@ -356,11 +376,17 @@ async def apple_login(
             full_name=request.full_name,
             native_language=request.native_language,
             learning_language=request.learning_language,
+            app_language=request.app_language,
         )
 
         # Same as the Google flow: welcome email only, address pre-verified.
         if is_new_user:
-            background_tasks.add_task(email_service.send_welcome_email, user.email, user.username)
+            background_tasks.add_task(
+                email_service.send_welcome_email,
+                user.email,
+                user.username,
+                user.languagePreference,
+            )
 
         token_payload = {"sub": str(user.id), "email": user.email}
         access_token = create_access_token(

@@ -2,8 +2,20 @@
 OAuth authentication schemas for request/response validation.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+
+from ..utils.ui_languages import normalize_ui_language
+
+
+def _narrow_app_language(v: Optional[str]) -> Optional[str]:
+    """Drop an app language we don't ship instead of rejecting it.
+
+    Same rule as `UserCreate`: signing in must never fail over a preference
+    field. The unknown value simply doesn't get stored, and the account falls
+    back to English mail until Settings sets one.
+    """
+    return normalize_ui_language(v)
 
 
 class GoogleLoginRequest(BaseModel):
@@ -11,13 +23,21 @@ class GoogleLoginRequest(BaseModel):
     id_token: str = Field(..., description="Google ID token from client")
     native_language: Optional[str] = Field(None, description="User's native language code")
     learning_language: Optional[str] = Field(None, description="Language user is learning")
+    app_language: Optional[str] = Field(
+        None,
+        description="App UI language, stored on users.language_preference. "
+                    "An OAuth signup gets its welcome email in this language.",
+    )
+
+    _normalize_app_language = field_validator("app_language")(_narrow_app_language)
 
     class Config:
         json_schema_extra = {
             "example": {
                 "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjI3...",
                 "native_language": "es",
-                "learning_language": "en"
+                "learning_language": "en",
+                "app_language": "es"
             }
         }
 
@@ -108,6 +128,11 @@ class AppleLoginRequest(BaseModel):
     full_name: Optional[str] = Field(None, description="User's name — only present on first Apple authorization")
     native_language: Optional[str] = Field(None, description="User's native language code")
     learning_language: Optional[str] = Field(None, description="Language user is learning")
+    app_language: Optional[str] = Field(
+        None, description="App UI language, stored on users.language_preference."
+    )
+
+    _normalize_app_language = field_validator("app_language")(_narrow_app_language)
 
     class Config:
         json_schema_extra = {
@@ -115,6 +140,7 @@ class AppleLoginRequest(BaseModel):
                 "identity_token": "eyJraWQiOiJXNldjT0tCIiwiYWxnIjoiUlMyNTYifQ...",
                 "full_name": "Jane Appleseed",
                 "native_language": "es",
-                "learning_language": "en"
+                "learning_language": "en",
+                "app_language": "es"
             }
         }

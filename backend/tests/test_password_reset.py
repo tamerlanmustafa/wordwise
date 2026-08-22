@@ -41,6 +41,8 @@ def _user(**overrides) -> SimpleNamespace:
         passwordHash=HASH,
         isActive=True,
         isAdmin=False,
+        # App UI language (#98) — the reset mail is written in it.
+        languagePreference=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -212,8 +214,8 @@ async def test_submit_rejects_stale_email_claim():
 async def test_forgot_password_email_payload(monkeypatch):
     sent: list[tuple] = []
 
-    async def _fake_send(to, username, url):
-        sent.append((to, username, url))
+    async def _fake_send(to, username, url, language=None):
+        sent.append((to, username, url, language))
         return True
 
     monkeypatch.setattr(auth_routes.email_service, "send_password_reset_email", _fake_send)
@@ -222,14 +224,17 @@ async def test_forgot_password_email_payload(monkeypatch):
     await forgot_password(
         body=ForgotPasswordRequest(email="movielover@example.com"),
         background_tasks=tasks,
-        db=_FakeDb(_user()),
+        db=_FakeDb(_user(languagePreference="tr")),
         _=None,
     )
     for task in tasks.tasks:
         await task()
 
     assert len(sent) == 1
-    to, username, url = sent[0]
+    to, username, url, language = sent[0]
     assert to == "movielover@example.com"
     assert username == "movielover"
     assert "/auth/reset-password?token=" in url
+    # The account's app language reaches the builder (#98) — otherwise every
+    # reset mail is English no matter what the app is set to.
+    assert language == "tr"

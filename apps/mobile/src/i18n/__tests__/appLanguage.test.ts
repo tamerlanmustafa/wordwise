@@ -79,16 +79,45 @@ describe('resolveAppLanguage', () => {
     expect(resolveAppLanguage({ stored: 'ja', translationLanguage: 'PT' })).toBe('pt');
   });
 
-  it('never resolves to a preview locale, from any of the three sources', () => {
+  it('never resolves to a preview locale, from any of the four sources', () => {
     // Arabic is bundled but gated until RTL is verified on a device (#104).
     // Each rule is checked separately because each is a different way in: a
-    // stale pin, a translation language, and — the one a real user hits — an
-    // Arabic phone.
+    // stale pin, an account pinned before the gate, a translation language,
+    // and — the one a real user hits — an Arabic phone.
     expect(resolveAppLanguage({ stored: 'ar' })).toBe('en');
+    expect(resolveAppLanguage({ server: 'ar' })).toBe('en');
     expect(resolveAppLanguage({ translationLanguage: 'AR' })).toBe('en');
     expect(resolveAppLanguage({ device: 'ar-EG' })).toBe('en');
     // …and it falls through to the next rule rather than short-circuiting.
     expect(resolveAppLanguage({ stored: 'ar', translationLanguage: 'ES' })).toBe('es');
+  });
+
+  // ── The account copy (#98) ────────────────────────────────────────────────
+  // It sits *between* the local pin and the derived rules: it is the same
+  // explicit choice, just made on a different device.
+
+  it('uses the account language on a device that has no pin of its own', () => {
+    // The headline case for #98: reinstall, or a second phone. Without this
+    // the user is back to the derived default.
+    expect(
+      resolveAppLanguage({ stored: null, server: 'tr', translationLanguage: 'ES', device: 'ru' }),
+    ).toBe('tr');
+  });
+
+  it('lets this device override the account', () => {
+    // The pin made here is the more recent, more local statement of intent —
+    // and it needs no network to read.
+    expect(resolveAppLanguage({ stored: 'ru', server: 'tr' })).toBe('ru');
+  });
+
+  it('falls past the account value when it is empty or unshipped', () => {
+    // null: an account that predates the field, or one whose pin was cleared.
+    expect(resolveAppLanguage({ server: null, translationLanguage: 'PT' })).toBe('pt');
+    expect(resolveAppLanguage({ server: 'ja', translationLanguage: 'PT' })).toBe('pt');
+  });
+
+  it('normalizes a region tag stored on the account', () => {
+    expect(resolveAppLanguage({ server: 'pt-BR' })).toBe('pt');
   });
 });
 
@@ -109,6 +138,23 @@ describe('hydrateAppLanguage', () => {
 
     expect(getAppLanguage()).toBe('tr');
     expect(await hasExplicitAppLanguage()).toBe(true);
+  });
+
+  it('applies the account language on a fresh install without pinning it here', async () => {
+    await hydrateAppLanguage('ES', 'tr');
+
+    expect(getAppLanguage()).toBe('tr');
+    // Still not an explicit local choice: clearing it on the account has to
+    // put this device back on the derived language.
+    expect(await AsyncStorage.getItem(APP_LANGUAGE_KEY)).toBeNull();
+  });
+
+  it('keeps the local pin when the account disagrees', async () => {
+    await AsyncStorage.setItem(APP_LANGUAGE_KEY, 'ru');
+
+    await hydrateAppLanguage('ES', 'tr');
+
+    expect(getAppLanguage()).toBe('ru');
   });
 });
 

@@ -25,6 +25,8 @@ export interface User {
   proficiency_level: string | null;
   default_tab: 'movies' | 'books';
   is_admin: boolean;
+  /** App UI locale pinned in Settings, mirrored to the account (#98). */
+  language_preference?: string | null;
   entitlements?: Entitlements | null;
 }
 

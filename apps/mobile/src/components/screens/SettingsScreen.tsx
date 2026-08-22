@@ -20,7 +20,7 @@ import { DAILY_GOAL_OPTIONS } from '../onboarding/placement';
 import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, authApi } from '../../services/api';
 import {
   scheduleWordReminder,
   scheduleReviewReminder,
@@ -131,10 +131,28 @@ export const SettingsScreen = ({
     );
   };
 
+  /**
+   * Mirror the pin onto the account, so a new install comes up in the same
+   * language and transactional email is written in it (#98). `''` clears it.
+   *
+   * Fire-and-forget on purpose: the language has already changed on screen and
+   * must not un-change because the network is down. A signed-out user has no
+   * account to mirror to, and the next explicit change syncs whatever the
+   * server missed.
+   */
+  const syncAppLanguageToAccount = (value: string) => {
+    if (!user) return;
+    authApi
+      .updateProfile({ language_preference: value })
+      .then(onUserUpdated)
+      .catch(() => {});
+  };
+
   const handleSelectAppLanguage = async (code: string) => {
     await setAppLanguage(code);
     setAppLanguageState(code);
     setAppLanguagePinned(true);
+    syncAppLanguageToAccount(code);
     confirmRtlRestart(code);
   };
 
@@ -144,6 +162,8 @@ export const SettingsScreen = ({
     const resolved = getAppLanguage();
     setAppLanguageState(resolved);
     setAppLanguagePinned(false);
+    // Clear the account copy too, or the next hydrate reads it back as a pin.
+    syncAppLanguageToAccount('');
     confirmRtlRestart(resolved);
   };
 

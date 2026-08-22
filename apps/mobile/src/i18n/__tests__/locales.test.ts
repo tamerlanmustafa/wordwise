@@ -248,3 +248,33 @@ describe('normalizeToUiLanguage', () => {
     expect(normalizeToUiLanguage(undefined)).toBeUndefined();
   });
 });
+
+describe('backend parity (#98)', () => {
+  // The server decides which language a welcome / password-reset email is
+  // written in, so it keeps its own copy of this list — Python can't import a
+  // .ts module. These two tests are what stop the copies drifting: un-gate a
+  // locale here without touching the backend and a user gets a translated app
+  // with English mail, which nobody notices until they read their inbox.
+  const BACKEND_DIR = path.join(__dirname, '..', '..', '..', '..', '..', 'backend', 'src');
+
+  function pyStringList(source: string, constant: string): string[] {
+    const block = new RegExp(`${constant}[^=]*=\\s*\\(([^)]*)\\)`).exec(source);
+    if (!block) throw new Error(`${constant} not found — did the backend file move?`);
+    return [...block[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+  }
+
+  it('ships the same selectable locales as backend/src/utils/ui_languages.py', () => {
+    const source = fs.readFileSync(path.join(BACKEND_DIR, 'utils', 'ui_languages.py'), 'utf8');
+    expect(pyStringList(source, 'UI_LANGUAGE_CODES')).toEqual(
+      SELECTABLE_UI_LANGUAGES.map((l) => l.code),
+    );
+  });
+
+  it('has an email copy block for every selectable locale', () => {
+    const source = fs.readFileSync(path.join(BACKEND_DIR, 'services', 'email_i18n.py'), 'utf8');
+    const dict = /EMAIL_COPY: dict\[str, dict\[str, str\]\] = \{([^}]*)\}/.exec(source);
+    expect(dict).not.toBeNull();
+    const codes = [...dict![1].matchAll(/"([a-z-]+)":/g)].map((m) => m[1]);
+    expect(codes.sort()).toEqual(SELECTABLE_UI_LANGUAGES.map((l) => l.code).sort());
+  });
+});

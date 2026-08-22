@@ -14,9 +14,12 @@ model User {
   email                   String                   @unique(map: "ix_users_email") @db.VarChar
   username                String                   @unique(map: "ix_users_username") @db.VarChar
   passwordHash            String?                  @map("password_hash") @db.VarChar
-  // Vestigial (#93): superseded by nativeLanguage/learningLanguage. Still
-  // written by POST /auth/register and PATCH /auth/me for old clients;
-  // nothing reads it for behavior. Retire once no shipped client sends it.
+  // The user's **app UI language** — the locale the interface renders in and
+  // the language of their transactional email. Repurposed in #98 from the
+  // vestigial "translation target" it never was (that is nativeLanguage): the
+  // column was inert, so reusing it cost no migration. Values are the codes in
+  // utils/ui_languages.py; NULL means "no explicit choice", and the client
+  // derives one from translation language → device locale → English.
   languagePreference      String?                  @map("language_preference") @db.VarChar
   nativeLanguage          String?                  @default("en") @map("native_language") @db.VarChar(10)
   learningLanguage        String?                  @default("en") @map("learning_language") @db.VarChar(10)

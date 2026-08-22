@@ -22,6 +22,10 @@ export interface User {
   proficiency_level: string | null;
   default_tab: 'movies' | 'books';
   is_admin: boolean;
+  /** App UI locale pinned in Settings, mirrored to the account so a new
+   *  install inherits it and emails go out in it. Optional because the user
+   *  objects the login screens assemble by hand don't carry it. */
+  language_preference?: string | null;
   entitlements?: Entitlements | null;
 }
 

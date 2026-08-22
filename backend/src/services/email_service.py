@@ -11,16 +11,24 @@ Design (MVP, deliberately small):
     block or fail a signup. `send_email` therefore swallows transport
     errors after logging them.
 
+Language: the two user-facing templates are localized. Every builder takes the
+recipient's app language (`users.language_preference`); the sentences come from
+`email_i18n.py`, the markup below is shared. An unknown or missing language
+falls back to English, so a caller that has nothing to pass can pass nothing.
+Admin/ops mail stays English.
+
 Ops: set RESEND_API_KEY and EMAIL_FROM in Railway (the FROM domain must be
 verified in the Resend dashboard, e.g. getwordwise.us) to turn sending on.
 """
 from __future__ import annotations
 
+import html
 import logging
 
 import httpx
 
 from ..config import get_settings
+from .email_i18n import email_copy
 
 logger = logging.getLogger(__name__)
 
@@ -39,63 +47,87 @@ _LAYOUT = """\
       {body}
     </div>
     <div style="padding:16px 28px;border-top:1px solid #e5dcc9;color:#8a8272;font-size:12px;">
-      You're receiving this because an account was created on WordWise with this address.
+      {footer}
     </div>
   </div>
 </div>
 """
 
+_EN_FOOTER = (
+    "You're receiving this because an account was created on WordWise with this address."
+)
 
-def build_welcome_email(username: str) -> tuple[str, str, str]:
-    """(subject, html, text) for the post-signup welcome email."""
-    subject = "Welcome to WordWise 🎬"
+
+def build_welcome_email(username: str, language: str | None = None) -> tuple[str, str, str]:
+    """(subject, html, text) for the post-signup welcome email.
+
+    `language` is the recipient's app language; anything we don't ship renders
+    English. The username is HTML-escaped: it is the only user-controlled string
+    that reaches the markup, and a `<` in a display name would otherwise break
+    the layout out of its card.
+    """
+    c = email_copy(language)
+    safe_name = html.escape(username)
+    greeting_html = c["welcome.greeting"].format(username=safe_name)
+    greeting_text = c["welcome.greeting"].format(username=username)
     body = (
-        f"<p style=\"margin:0 0 14px;\">Hi {username},</p>"
-        "<p style=\"margin:0 0 14px;\">Welcome to <strong>WordWise</strong> — you now learn "
-        "English from the movies you actually want to watch.</p>"
-        "<p style=\"margin:0 0 6px;\">Three ways to get going:</p>"
+        f"<p style=\"margin:0 0 14px;\">{greeting_html}</p>"
+        f"<p style=\"margin:0 0 14px;\">{c['welcome.intro'].format(app='<strong>WordWise</strong>')}</p>"
+        f"<p style=\"margin:0 0 6px;\">{c['welcome.ways_intro']}</p>"
         "<ul style=\"margin:0 0 14px;padding-left:20px;\">"
-        "<li>Add a film you love and explore its vocabulary</li>"
-        "<li>Save words as you read — they go straight to your review deck</li>"
-        "<li>Do one short review a day to build your streak</li>"
+        f"<li>{c['welcome.way_add']}</li>"
+        f"<li>{c['welcome.way_save']}</li>"
+        f"<li>{c['welcome.way_review']}</li>"
         "</ul>"
-        "<p style=\"margin:0;\">See you in the app,<br/>The WordWise team</p>"
+        f"<p style=\"margin:0;\">{c['welcome.signoff']}<br/>{c['welcome.team']}</p>"
     )
     text = (
-        f"Hi {username},\n\n"
-        "Welcome to WordWise — you now learn English from the movies you actually want to watch.\n\n"
-        "Three ways to get going:\n"
-        "  - Add a film you love and explore its vocabulary\n"
-        "  - Save words as you read — they go straight to your review deck\n"
-        "  - Do one short review a day to build your streak\n\n"
-        "See you in the app,\nThe WordWise team\n"
+        f"{greeting_text}\n\n"
+        f"{c['welcome.intro'].format(app='WordWise')}\n\n"
+        f"{c['welcome.ways_intro']}\n"
+        f"  - {c['welcome.way_add']}\n"
+        f"  - {c['welcome.way_save']}\n"
+        f"  - {c['welcome.way_review']}\n\n"
+        f"{c['welcome.signoff']}\n{c['welcome.team']}\n"
     )
-    return subject, _LAYOUT.format(body=body), text
+    return (
+        c["welcome.subject"],
+        _LAYOUT.format(body=body, footer=c["layout.footer"]),
+        text,
+    )
 
 
-def build_password_reset_email(username: str, reset_url: str) -> tuple[str, str, str]:
+def build_password_reset_email(
+    username: str, reset_url: str, language: str | None = None
+) -> tuple[str, str, str]:
     """(subject, html, text) for the forgot-password email."""
-    subject = "Reset your WordWise password"
+    c = email_copy(language)
+    safe_name = html.escape(username)
+    greeting_html = c["reset.greeting"].format(username=safe_name)
+    greeting_text = c["reset.greeting"].format(username=username)
     body = (
-        f"<p style=\"margin:0 0 14px;\">Hi {username},</p>"
-        "<p style=\"margin:0 0 18px;\">Tap the button below to choose a new password. "
-        "The link is valid for 30 minutes and can be used once.</p>"
+        f"<p style=\"margin:0 0 14px;\">{greeting_html}</p>"
+        f"<p style=\"margin:0 0 18px;\">{c['reset.intro']}</p>"
         f"<p style=\"margin:0 0 18px;\"><a href=\"{reset_url}\" "
         "style=\"display:inline-block;background:#d4af37;color:#1c1a17;text-decoration:none;"
-        "font-weight:bold;padding:12px 22px;border-radius:8px;\">Reset password</a></p>"
-        "<p style=\"margin:0 0 14px;color:#8a8272;font-size:13px;\">Or paste this link into your browser:<br/>"
+        f"font-weight:bold;padding:12px 22px;border-radius:8px;\">{c['reset.button']}</a></p>"
+        f"<p style=\"margin:0 0 14px;color:#8a8272;font-size:13px;\">{c['reset.paste_intro']}<br/>"
         f"<a href=\"{reset_url}\" style=\"color:#8a8272;word-break:break-all;\">{reset_url}</a></p>"
-        "<p style=\"margin:0;color:#8a8272;font-size:13px;\">Didn't request this? "
-        "You can safely ignore this email — your password stays unchanged.</p>"
+        f"<p style=\"margin:0;color:#8a8272;font-size:13px;\">{c['reset.ignore']}</p>"
     )
+    # Not `reset.intro`: that one says "tap the button below", and the
+    # plain-text body has no button — just the bare link.
     text = (
-        f"Hi {username},\n\n"
-        "Choose a new WordWise password by opening the link below "
-        "(valid for 30 minutes, single use):\n\n"
+        f"{greeting_text}\n\n"
+        f"{c['reset.intro_text']}\n\n"
         f"{reset_url}\n\n"
-        "Didn't request this? You can safely ignore this email — your password stays unchanged.\n"
+        f"{c['reset.ignore']}\n"
     )
-    return subject, _LAYOUT.format(body=body), text
+    return (
+        c["reset.subject"],
+        _LAYOUT.format(body=body, footer=c["layout.footer"]),
+        text,
+    )
 
 
 def build_worker_alert_email(worker: str, event: str, detail: str) -> tuple[str, str, str]:
@@ -120,7 +152,7 @@ def build_worker_alert_email(worker: str, event: str, detail: str) -> tuple[str,
         "Automated alert from the WordWise background workers. "
         "Check the Railway worker logs for the full traceback.\n"
     )
-    return subject, _LAYOUT.format(body=body), text
+    return subject, _LAYOUT.format(body=body, footer=_EN_FOOTER), text
 
 
 async def send_email(to: str, subject: str, html: str, text: str) -> bool:
@@ -159,11 +191,13 @@ async def send_email(to: str, subject: str, html: str, text: str) -> bool:
         return False
 
 
-async def send_welcome_email(to: str, username: str) -> bool:
-    subject, html, text = build_welcome_email(username)
-    return await send_email(to, subject, html, text)
+async def send_welcome_email(to: str, username: str, language: str | None = None) -> bool:
+    subject, body_html, text = build_welcome_email(username, language)
+    return await send_email(to, subject, body_html, text)
 
 
-async def send_password_reset_email(to: str, username: str, reset_url: str) -> bool:
-    subject, html, text = build_password_reset_email(username, reset_url)
-    return await send_email(to, subject, html, text)
+async def send_password_reset_email(
+    to: str, username: str, reset_url: str, language: str | None = None
+) -> bool:
+    subject, body_html, text = build_password_reset_email(username, reset_url, language)
+    return await send_email(to, subject, body_html, text)

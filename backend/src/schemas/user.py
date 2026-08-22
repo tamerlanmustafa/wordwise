@@ -3,16 +3,30 @@ from typing import Optional
 from datetime import datetime
 from prisma.enums import proficiencylevel
 from ..utils.subscription import entitlements_payload
+from ..utils.ui_languages import normalize_ui_language
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
     password: str
-    language_preference: Optional[str] = "en"  # Translation target language
+    # The **app UI language** — the language of buttons and labels, and the one
+    # transactional email we send this account. Not a translation target: words
+    # are translated into `native_language`. Captured at signup because the
+    # welcome email goes out before the user can ever open Settings.
+    language_preference: Optional[str] = None
     native_language: Optional[str] = "en"  # User's native language (ISO 639-1 code)
     learning_language: Optional[str] = "en"  # Language user is learning (ISO 639-1 code)
     proficiency_level: Optional[proficiencylevel] = proficiencylevel.A1
+
+    @field_validator("language_preference")
+    @classmethod
+    def normalize_language_preference(cls, v: Optional[str]) -> Optional[str]:
+        # Drop rather than reject. Signup must never 400 over a preference
+        # field — a client one release ahead of the server would otherwise be
+        # unable to create accounts at all. `PATCH /auth/me` rejects instead,
+        # which is where a client finds out it sent something we don't ship.
+        return normalize_ui_language(v)
 
     @field_validator("password")
     @classmethod
@@ -92,6 +106,9 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for updating user profile"""
     username: Optional[str] = None
+    # App UI language, as in UserCreate. An empty string means "clear it" —
+    # Settings' "follow my translation language" reset needs a way to say
+    # *unset*, and `None` already means "this PATCH doesn't touch the field".
     language_preference: Optional[str] = None
     native_language: Optional[str] = None
     learning_language: Optional[str] = None
