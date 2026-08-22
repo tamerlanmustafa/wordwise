@@ -54,11 +54,11 @@ Sequence is load-bearing: what counts as a word → what level it is → the fee
 | # | Status | Issue | Work |
 |---|--------|-------|------|
 | 18 | `done` | #96 | Recalibrate the lemma purity guard. Upstream of everything below. Pushed 2026-08-22 (`4f5de8e` fix + `93c26cb` eval set). Closed 2026-08-22. Spun off **#158** (over-stripped lemmas), which had to land **before 19**. |
-| 18.5 | `done` | #158 | Over-stripped lemmas merged. Prod data **APPLIED** 2026-08-22. Code fix uncommitted — the next sweep closes #158. |
+| 18.5 | `done` | #158 | Over-stripped lemmas merged. Prod data **APPLIED** 2026-08-22. Pushed as `8db65aa` + `8e9676e`; #158 closed 2026-08-22. |
 | 19 | `done` | #131 | UNKNOWN bucket given an exit path. Prod data **APPLIED** 2026-08-22 (34.8% → 25.2%). Pushed as `687fc57`; #131 closed 2026-08-22. |
 | 20 | `done` | #116 | Explore pool measured + tracked; Stage 2 declined on the numbers. Pushed as `b7467d7`, deployed and green on `wordwise`; #116 closed 2026-08-22. |
-| 21 | `done` | #127 | Reads converged on the `lemmas` registry; schema normalization **declined** with evidence (see Log). Code fix uncommitted — the next sweep closes #127. |
-| 22 | `todo` | #104b | Finish and verify RTL. The project half of #104. |
+| 21 | `done` | #127 | Reads converged on the `lemmas` registry; schema normalization **declined** with evidence (see Log). Pushed as `1b7233f`; #127 closed 2026-08-22. |
+| 22 | `doing` | #104b | Finish and verify RTL. The project half of #104. |
 | 23 | `todo` | #98 | Persist app language server-side + localize transactional emails. |
 | 24 | `todo` | #102 | Drop `movies.script_text` (0 of 4,577 populated) and gate `POST /movies`. |
 
