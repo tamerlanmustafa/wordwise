@@ -1785,17 +1785,11 @@ class HybridCEFRClassifier:
             return cached
 
         try:
-            import wordfreq
-            zipf = wordfreq.zipf_frequency(word, lang)
+            # Shared with the offline backfill and /vocabulary/full so all three
+            # store and display the same number for the same word (#137).
+            from ..utils.word_frequency import frequency_data
 
-            # Convert Zipf to approximate rank
-            # Zipf 7 ≈ rank 1, Zipf 6 ≈ rank 10, Zipf 5 ≈ rank 100, etc.
-            if zipf > 0:
-                rank = int(10 ** (7 - zipf))
-            else:
-                rank = 100000  # Very rare / not found
-
-            result = (rank, zipf)
+            result = frequency_data(word, lang)
             _GLOBAL_FREQUENCY_CACHE.set(cache_key, result)
             return result
         except Exception:

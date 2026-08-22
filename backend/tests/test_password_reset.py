@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import BackgroundTasks, HTTPException
 
+from .conftest import fake_request
 from src.middleware.auth import get_current_user
 from src.routes import auth as auth_routes
 from src.routes.auth import (
@@ -86,7 +87,7 @@ async def test_reset_token_rejected_as_bearer():
     """A leaked reset link must never authenticate API requests."""
     user = _user()
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(token=_token_for(user), db=_FakeDb(user))
+        await get_current_user(fake_request(), token=_token_for(user), db=_FakeDb(user))
     assert exc.value.status_code == 401
 
 

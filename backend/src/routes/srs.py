@@ -259,6 +259,43 @@ class StatsResponse(BaseModel):
     retention_pct: int
 
 
+#: One row per Leitner box, with the two due-window counts computed in the same
+#: pass. `FILTER` is a per-aggregate WHERE, so all three counts come off a
+#: single scan of the user's rows instead of one query each (issue #134).
+_STATS_ROLLUP_SQL = """
+    SELECT srs_box,
+           COUNT(*)                                  AS in_box,
+           COUNT(*) FILTER (WHERE srs_due_at <= $2)  AS due_now,
+           COUNT(*) FILTER (WHERE srs_due_at <= $3)  AS due_today
+    FROM user_words
+    WHERE user_id = $1
+    GROUP BY srs_box
+"""
+
+
+def _assemble_box_stats(rows) -> tuple[int, int, int, dict[int, int]]:
+    """Fold the per-box rollup rows into the totals `/srs/stats` returns.
+
+    Boxes 1..MAX_BOX are always present in `by_box` — a user with nothing in
+    box 4 must still see `4: 0`, which the GROUP BY cannot emit on its own.
+    Rows outside that range (a box written by an older engine) still count
+    toward `total_saved` so the totals can't silently disagree with the table.
+    """
+    by_box: dict[int, int] = {b: 0 for b in range(1, MAX_BOX + 1)}
+    total_saved = due_now = due_today = 0
+
+    for row in rows:
+        in_box = int(row["in_box"] or 0)
+        total_saved += in_box
+        due_now += int(row["due_now"] or 0)
+        due_today += int(row["due_today"] or 0)
+        box = row["srs_box"]
+        if box is not None and int(box) in by_box:
+            by_box[int(box)] = in_box
+
+    return total_saved, due_now, due_today, by_box
+
+
 @router.get("/stats", response_model=StatsResponse)
 async def srs_stats(
     current_user=Depends(get_current_active_user),
@@ -268,19 +305,8 @@ async def srs_stats(
     now = datetime.now(timezone.utc)
     end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
-    total_saved = await db.userword.count(where={"userId": current_user.id})
-    due_now = await db.userword.count(
-        where={"userId": current_user.id, "srsDueAt": {"lte": now}}
-    )
-    due_today = await db.userword.count(
-        where={"userId": current_user.id, "srsDueAt": {"lte": end_of_day}}
-    )
-
-    by_box: dict[int, int] = {}
-    for b in range(1, MAX_BOX + 1):
-        by_box[b] = await db.userword.count(
-            where={"userId": current_user.id, "srsBox": b}
-        )
+    rows = await db.query_raw(_STATS_ROLLUP_SQL, current_user.id, now, end_of_day)
+    total_saved, due_now, due_today, by_box = _assemble_box_stats(rows)
 
     premium = is_premium(current_user)
     # Under the new daily-cap model: 1 free session/day, premium unlimited.

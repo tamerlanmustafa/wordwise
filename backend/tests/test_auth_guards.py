@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from .conftest import fake_request
 from src.middleware.auth import (
     get_admin_user,
     get_current_active_user,
@@ -75,14 +76,14 @@ class _FakeDb:
 
 async def test_access_token_accepted(test_user):
     token = create_access_token({"sub": str(test_user.id), "email": test_user.email})
-    result = await get_current_user(token=token, db=_FakeDb(test_user))
+    result = await get_current_user(fake_request(), token=token, db=_FakeDb(test_user))
     assert result is test_user
 
 
 async def test_refresh_token_rejected_as_bearer(test_user):
     token = create_refresh_token({"sub": str(test_user.id), "email": test_user.email})
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=_FakeDb(test_user))
+        await get_current_user(fake_request(), token=token, db=_FakeDb(test_user))
     assert exc.value.status_code == 401
 
 
@@ -99,13 +100,13 @@ async def test_legacy_untyped_token_still_accepted(test_user):
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    result = await get_current_user(token=legacy, db=_FakeDb(test_user))
+    result = await get_current_user(fake_request(), token=legacy, db=_FakeDb(test_user))
     assert result is test_user
 
 
 async def test_garbage_token_rejected(test_user):
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(token="not-a-jwt", db=_FakeDb(test_user))
+        await get_current_user(fake_request(), token="not-a-jwt", db=_FakeDb(test_user))
     assert exc.value.status_code == 401
 
 

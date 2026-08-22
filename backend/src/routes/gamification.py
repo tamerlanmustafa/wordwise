@@ -8,6 +8,7 @@ to display the badge screen.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -61,8 +62,12 @@ async def my_achievements(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
-    all_defs = await db.query_raw(
-        "SELECT key, title, description, icon, category, threshold FROM achievements ORDER BY category, threshold"
+    # Same memoized reference data `check_and_unlock` uses. Ordering moves to
+    # Python because 18 static rows do not need a round trip to be sorted, and
+    # the badge screen calls /check and /me back to back.
+    defs_by_key = await _load_achievement_defs(db)
+    all_defs = sorted(
+        defs_by_key.values(), key=lambda d: (d["category"] or "", d["threshold"] or 0)
     )
     user_progress = await db.query_raw(
         "SELECT achievement_key, progress, unlocked, unlocked_at FROM user_achievements WHERE user_id = $1",
@@ -96,6 +101,78 @@ async def my_achievements(
     )
 
 
+#: Achievement definitions are static reference data — 18 rows that only change
+#: when someone ships a migration — so they are read once per process rather
+#: than once per key per call (issue #135). `reset_achievement_defs_cache()`
+#: exists for tests and for a future admin-side edit; nothing in a request path
+#: invalidates it.
+_DEFS_CACHE: Optional[dict[str, dict]] = None
+
+_DEFS_SQL = (
+    "SELECT key, title, description, icon, category, threshold FROM achievements"
+)
+
+
+def reset_achievement_defs_cache() -> None:
+    """Drop the memoized achievement definitions (tests, admin edits)."""
+    global _DEFS_CACHE
+    _DEFS_CACHE = None
+
+
+async def _load_achievement_defs(db: Prisma) -> dict[str, dict]:
+    global _DEFS_CACHE
+    if _DEFS_CACHE is None:
+        rows = await db.query_raw(_DEFS_SQL)
+        _DEFS_CACHE = {r["key"]: dict(r) for r in rows}
+    return _DEFS_CACHE
+
+
+#: One statement for the whole check. JSONB_TO_RECORDSET turns the payload into
+#: rows so ~18 upserts travel as a single round trip, same shape as the lemma
+#: backfill (#145). The DO UPDATE deliberately never clears an existing unlock:
+#: progress can go down (a word is deleted), an earned badge cannot.
+_UPSERT_SQL = """
+    INSERT INTO user_achievements (user_id, achievement_key, progress, unlocked, unlocked_at)
+    SELECT $1, r.key, r.progress, r.unlocked,
+           CASE WHEN r.unlocked THEN $3::timestamptz ELSE NULL END
+    FROM JSONB_TO_RECORDSET($2::jsonb) AS r(key text, progress int, unlocked boolean)
+    ON CONFLICT (user_id, achievement_key)
+    DO UPDATE SET progress = EXCLUDED.progress,
+                  unlocked = user_achievements.unlocked OR EXCLUDED.unlocked,
+                  unlocked_at = CASE
+                      WHEN user_achievements.unlocked THEN user_achievements.unlocked_at
+                      ELSE EXCLUDED.unlocked_at
+                  END
+"""
+
+
+def _plan_unlocks(
+    defs: dict[str, dict],
+    already_unlocked: set[str],
+    checks: dict[str, int],
+) -> tuple[list[dict], list[NewlyUnlocked]]:
+    """Split the requested progress values into (rows to write, newly unlocked).
+
+    "Newly" is decided against the state read a moment ago, not against how
+    recently `unlocked_at` was stamped. The old code re-read each row after
+    writing it and called it new if the timestamp was within two seconds of
+    now, which reported the same badge twice whenever two checks overlapped.
+    """
+    rows: list[dict] = []
+    newly: list[NewlyUnlocked] = []
+
+    for key, progress in checks.items():
+        d = defs.get(key)
+        if d is None:
+            continue
+        unlocked = progress >= d["threshold"]
+        rows.append({"key": key, "progress": progress, "unlocked": unlocked})
+        if unlocked and key not in already_unlocked:
+            newly.append(NewlyUnlocked(key=key, title=d["title"], icon=d["icon"]))
+
+    return rows, newly
+
+
 async def check_and_unlock(
     db: Prisma, user_id: int, checks: dict[str, int]
 ) -> list[NewlyUnlocked]:
@@ -103,36 +180,30 @@ async def check_and_unlock(
     Check multiple achievement keys against new progress values.
     Call this after events (word save, review, streak update).
     Returns list of newly unlocked achievements.
+
+    Two round trips (three on the first call in a process): read what the user
+    has already unlocked, then write every key in one statement. It used to be
+    a SELECT + an INSERT + a re-read SELECT *per key* — up to 54 serialized
+    round trips for the 18 keys `/achievements/check` sends.
     """
-    newly = []
-    for key, progress in checks.items():
-        defs = await db.query_raw(
-            "SELECT title, icon, threshold FROM achievements WHERE key = $1", key
-        )
-        if not defs:
-            continue
-        d = defs[0]
-        now = datetime.now(timezone.utc)
-        unlocked = progress >= d["threshold"]
+    defs = await _load_achievement_defs(db)
 
+    keys = [k for k in checks if k in defs]
+    if not keys:
+        return []
+
+    existing = await db.query_raw(
+        "SELECT achievement_key FROM user_achievements "
+        "WHERE user_id = $1 AND unlocked AND achievement_key = ANY($2::text[])",
+        user_id, keys,
+    )
+    already_unlocked = {r["achievement_key"] for r in existing}
+
+    rows, newly = _plan_unlocks(defs, already_unlocked, checks)
+    if rows:
         await db.execute_raw(
-            """INSERT INTO user_achievements (user_id, achievement_key, progress, unlocked, unlocked_at)
-               VALUES ($1, $2, $3, $4, $5)
-               ON CONFLICT (user_id, achievement_key)
-               DO UPDATE SET progress = $3, unlocked = CASE WHEN user_achievements.unlocked THEN true ELSE $4 END,
-                             unlocked_at = CASE WHEN user_achievements.unlocked THEN user_achievements.unlocked_at ELSE $5 END""",
-            user_id, key, progress, unlocked, now if unlocked else None,
+            _UPSERT_SQL, user_id, json.dumps(rows), datetime.now(timezone.utc)
         )
-
-        if unlocked:
-            was = await db.query_raw(
-                "SELECT unlocked, unlocked_at FROM user_achievements WHERE user_id = $1 AND achievement_key = $2",
-                user_id, key,
-            )
-            if was and was[0].get("unlocked"):
-                prev_at = was[0].get("unlocked_at")
-                if prev_at and abs((now - prev_at).total_seconds()) < 2:
-                    newly.append(NewlyUnlocked(key=key, title=d["title"], icon=d["icon"]))
 
     return newly
 

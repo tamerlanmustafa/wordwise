@@ -1,9 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from prisma import Prisma
 from typing import Optional
 from ..database import get_db
-from ..utils.auth import verify_token
+from ..utils.auth import verify_token_once
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 # auto_error=False: no token → the dependency receives None instead of a 401,
@@ -12,6 +12,7 @@ oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=
 
 
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Prisma = Depends(get_db)
 ):
@@ -25,7 +26,10 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = verify_token(token)
+    # `verify_token_once`, not `verify_token`: the global rate-limit middleware
+    # already decoded this exact token before routing, to key its counter per
+    # user. Signature verification is the same work twice otherwise (#138).
+    payload = verify_token_once(token, request.scope.setdefault("state", {}))
     if payload is None:
         logger.error("[AUTH] Token verification failed")
         raise credentials_exception
@@ -60,6 +64,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme_optional),
     db: Prisma = Depends(get_db),
 ):
@@ -70,7 +75,7 @@ async def get_current_user_optional(
     """
     if not token:
         return None
-    payload = verify_token(token)
+    payload = verify_token_once(token, request.scope.setdefault("state", {}))
     # Same guards as get_current_user, but every failure degrades to
     # "anonymous" rather than 401 so a stale/malformed token never breaks
     # the public feed.

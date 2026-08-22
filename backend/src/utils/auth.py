@@ -164,3 +164,39 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
+#: Where the once-per-request decode is parked. ASGI gives every request its own
+#: `scope["state"]` dict; Starlette hands the same dict to route handlers as
+#: `request.state`, so the middleware and the auth dependency can share it.
+_TOKEN_STATE_KEY = "_jwt_payload"
+
+
+def verify_token_once(token: str, state: Optional[dict]) -> Optional[dict]:
+    """`verify_token`, reusing a payload already decoded for this request.
+
+    The global rate-limit middleware must decode the bearer token before
+    routing, to key its counter per user rather than per IP. The auth
+    dependency then decoded the identical string a second time on every
+    authenticated request (issue #138). This memoizes the result for the life
+    of one request.
+
+    Cached under the exact token string, so a request carrying a different
+    credential than the one the middleware saw is verified afresh rather than
+    inheriting someone else's payload. A rejected token caches its `None` too —
+    re-running a signature check that just failed cannot succeed.
+
+    `state` may be None (an ASGI server or test harness that provides no state
+    dict); then this is exactly `verify_token`.
+    """
+    if state is not None:
+        cached = state.get(_TOKEN_STATE_KEY)
+        if cached is not None and cached[0] == token:
+            return cached[1]
+
+    payload = verify_token(token)
+
+    if state is not None:
+        state[_TOKEN_STATE_KEY] = (token, payload)
+
+    return payload
+
+

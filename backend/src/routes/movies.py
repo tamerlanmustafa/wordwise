@@ -782,29 +782,21 @@ async def get_vocabulary_full(
     top_words_by_level: Dict[str, List[Dict[str, Any]]] = {}
     level_distribution: Dict[str, int] = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0, "C2": 0}
 
-    # Lazy-load wordfreq for on-the-fly rank backfill. Only 7% of stored
-    # classifications have frequency_rank populated, so without this the
-    # client-side common/rare sort is a no-op for most words.
-    try:
-        import wordfreq as _wordfreq
-    except Exception:
-        _wordfreq = None
+    # On-the-fly rank fill for classifications stored before ranks were kept
+    # (6.2% of `word_classifications` have one); without it the client-side
+    # common/rare sort is a no-op for most words. Measured at 0.005ms a word —
+    # ~3ms for the largest script — which is cheaper than the round trip a
+    # lookup table would cost, so #137's backfill went to `lemmas` (which the
+    # SRS and quiz orderings read) and this stayed. Same formula either way.
+    from ..utils.word_frequency import frequency_rank
 
     _rank_cache: Dict[str, Optional[int]] = {}
 
     def _compute_rank(token: str) -> Optional[int]:
-        if _wordfreq is None:
-            return None
         key = token.lower()
-        if key in _rank_cache:
-            return _rank_cache[key]
-        try:
-            zipf = _wordfreq.zipf_frequency(key, 'en')
-            rank = int(10 ** (7 - zipf)) if zipf > 0 else 100000
-        except Exception:
-            rank = None
-        _rank_cache[key] = rank
-        return rank
+        if key not in _rank_cache:
+            _rank_cache[key] = frequency_rank(key)
+        return _rank_cache[key]
 
     for word in cefr_words:
         if word.word.lower() in hidden or (word.lemma or "").lower() in hidden:

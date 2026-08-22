@@ -25,7 +25,7 @@ from typing import Callable, Deque, Dict, Optional
 from fastapi import Depends, HTTPException, Request, status
 
 from ..config import get_settings
-from ..utils.auth import verify_token
+from ..utils.auth import verify_token_once
 
 # Case-insensitive lookup of one request header, whatever the request is
 # represented as. Both the FastAPI `Request` path and the raw ASGI middleware
@@ -70,14 +70,17 @@ class _SlidingWindow:
             del self._hits[k]
 
 
-def _user_key_from_token(token: str | None) -> str | None:
+def _user_key_from_token(token: str | None, state: dict | None = None) -> str | None:
     """Stable per-user key from a bearer token, or None if unauthenticated.
 
     Keying authenticated callers by user id stops one user behind a shared
     NAT/proxy from exhausting everyone else's budget.
+
+    `state` is the request's ASGI state dict. Passing it lets the auth
+    dependency downstream reuse this decode instead of repeating it (#138).
     """
     if token:
-        payload = verify_token(token)
+        payload = verify_token_once(token, state)
         if payload and payload.get("sub"):
             return f"user:{payload['sub']}"
     return None
@@ -301,7 +304,7 @@ def client_ip_observation(request: Request) -> dict:
 
 def _client_key(request: Request, token: str | None) -> str:
     """Prefer a stable user id from the bearer token; fall back to IP."""
-    user = _user_key_from_token(token)
+    user = _user_key_from_token(token, request.scope.setdefault("state", {}))
     if user:
         return user
     client = request.client
@@ -414,7 +417,7 @@ def client_ip_from_scope(scope) -> str:
 
 def _client_key_from_scope(scope, token: str | None) -> str:
     """Scope-based twin of `_client_key` for the ASGI middleware."""
-    user = _user_key_from_token(token)
+    user = _user_key_from_token(token, scope.setdefault("state", {}))
     if user:
         return user
     return f"ip:{rate_limit_key_for_ip(client_ip_from_scope(scope))}"

@@ -38,6 +38,18 @@ def test_user() -> SimpleNamespace:
     )
 
 
+def fake_request(**scope) -> SimpleNamespace:
+    """Stand-in for the `Request` the auth dependencies now take (issue #138).
+
+    They read `request.scope["state"]` to reuse the JWT the rate-limit
+    middleware already decoded for this request. A test calling the dependency
+    directly has no ASGI server underneath it, so it supplies the scope dict
+    the server would have made.
+    """
+    scope.setdefault("state", {})
+    return SimpleNamespace(scope=scope)
+
+
 @pytest.fixture
 def admin_user() -> SimpleNamespace:
     """An admin user — use in tests that verify admin-gated routes."""
