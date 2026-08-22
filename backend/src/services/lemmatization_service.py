@@ -17,8 +17,12 @@ from functools import lru_cache
 from prisma import Prisma
 from prisma import Json
 
-from src.services.cefr_classifier import PHRASAL_VERBS, COMMON_IDIOMS
-from src.services.lemma_guard import evaluate_lemma
+from src.services.cefr_classifier import (
+    PHRASAL_VERBS,
+    COMMON_IDIOMS,
+    is_curated_vocabulary,
+)
+from src.services.lemma_guard import evaluate_lemma, is_wellformed
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +89,27 @@ USAGE_WEIGHT = 0.2
 
 # Threshold for eager vs lazy translation
 EAGER_THRESHOLD = 0.4
+
+
+def registry_wordlist_known(form: str) -> bool:
+    """Curated-list rescue for the registry, minus the orthographic override.
+
+    evaluate_lemma lets a wordlist hit short-circuit *every* other check. That
+    is right for word_classifications, which is keyed by the surface word and
+    wants entries like "hmm" and "tv". The `lemmas` registry stores canonical
+    vocabulary, and the curated lists carry 176 forms that are not vocabulary:
+    contractions ("'s", "'m", "'re"), abbreviations ("mr.", "etc.", "no."),
+    ordinals and decades ("3rd", "1970s"), unit symbols ("km", "kg", "mph"),
+    and British/American slash pairs ("paralyze/paralyse"). spaCy emits several
+    of those as lemmas on every script, and they are precisely the debris
+    purge_impure_lemmas.py had to clean back out.
+
+    So here the rescue applies to the dictionary/frequency gate only —
+    well-formedness still has the last word. The cost is that "hmm" and "tv"
+    (rejected as no_vowel) no longer register, which is the trade the guard's
+    stated operating point asks for: prefer dropping to teaching junk.
+    """
+    return is_wellformed(form).keep and is_curated_vocabulary(form)
 
 
 def compute_priority_score(
@@ -159,9 +184,17 @@ def lemmatize_script(text: str, doc=None) -> LemmaResult:
 
         # Purity guard: gibberish, typos, and foreign words never enter the
         # global Lemma registry.
+        #
+        # The curated wordlists are passed in for the same reason classify_text
+        # passes them (#96): a hand-graded CEFR entry is teachable vocabulary by
+        # definition, and without them the registry drops 559 forms the
+        # classifier happily stores. Only the lemma is offered, not the surface
+        # form - classify_text checks both because word_classifications is keyed
+        # by surface word, whereas this table stores the lemma, and checking one
+        # form keeps the memo cache keyed by one thing.
         keep = guard_cache.get(lemma)
         if keep is None:
-            keep = evaluate_lemma(lemma).keep
+            keep = evaluate_lemma(lemma, is_wordlist_known=registry_wordlist_known).keep
             guard_cache[lemma] = keep
         if not keep:
             guard_dropped += 1

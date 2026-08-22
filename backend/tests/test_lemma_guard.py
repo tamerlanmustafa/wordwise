@@ -32,6 +32,11 @@ _FREQ = {
     ("troppo", "it"): 1e-4,
     ("obscurish", "en"): 1e-7,
     ("good", "en"): 1e-3,
+    # Real vocabulary the 1934 dictionary predates and the frequency floor
+    # rejects — the exact shape of the 876 curated entries the registry used
+    # to lose (#96). "gibberage" is the control: same band, not curated.
+    ("stopwatch", "en"): 1e-7,
+    ("gibberage", "en"): 1e-7,
 }
 
 _DICTIONARY = {"stakeholder", "garnishment", "good", "wife"}
@@ -210,3 +215,146 @@ def test_capitalized_unknown_word_still_hits_proper_noun_branch():
     # UNKNOWN since #91 — this branch used to say A2, which taught names.
     assert result.cefr_level == CEFRLevel.UNKNOWN
     assert result.confidence == 0.9
+
+
+# ---------------------------------------------------------------------------
+# 7. Write-path parity (#96): the two callers must agree
+#
+# classify_text (word_classifications) always passed the curated wordlists;
+# lemmatize_script (the V2 `lemmas` registry) passed nothing, so 876 curated
+# forms were classified but never registered. These tests pin the wiring, not
+# the wordlist contents — the curated set is injected.
+# ---------------------------------------------------------------------------
+
+class _FakeToken:
+    """Only the attributes lemmatize_script reads off a spaCy token.
+
+    spaCy is not installed in CI, and lemmatize_script takes a pre-parsed
+    `doc` (#140), so the parse is supplied rather than run.
+    """
+
+    def __init__(self, text: str, lemma: str, pos: str = "NOUN"):
+        self.text = text
+        self.lemma_ = lemma
+        self.pos_ = pos
+        self.is_punct = False
+        self.is_space = False
+        self.like_num = False
+
+
+@pytest.fixture
+def curated(monkeypatch):
+    """Inject the curated vocabulary set, bypassing the wordlist files.
+
+    "mr." and "1970s" stand in for the 176 real entries that are curated but
+    are not vocabulary — the shipped lists really do contain "'s", "etc.",
+    "3rd", "km" and "paralyze/paralyse".
+    """
+    from src.services import cefr_classifier as cc
+
+    monkeypatch.setattr(cc, "_curated_forms", frozenset({"stopwatch", "mr.", "1970s"}))
+    yield
+
+
+def test_curated_lemma_rescued_in_registry_path(guard, curated):
+    from src.services.cefr_classifier import is_curated_vocabulary
+    from src.services.lemmatization_service import lemmatize_script
+
+    doc = [
+        _FakeToken("stopwatch", "stopwatch"),
+        _FakeToken("gibberage", "gibberage"),
+    ]
+    result = lemmatize_script("a stopwatch and a gibberage", doc=doc)
+
+    # The curated word now reaches the registry...
+    assert "stopwatch" in result.unique_lemmas
+    # ...and the uncurated one in the same frequency band still does not.
+    assert "gibberage" not in result.unique_lemmas
+
+    # Mutation check: drop the wordlist argument, as the code did before #96,
+    # and "stopwatch" is rejected — so the assertion above is load-bearing.
+    assert not evaluate_lemma("stopwatch").keep
+    assert evaluate_lemma("stopwatch", is_wordlist_known=is_curated_vocabulary).keep
+
+
+def test_wordlist_rescue_does_not_override_orthography_in_registry(guard, curated):
+    """Curated != vocabulary: debris must not ride the rescue into `lemmas`.
+
+    evaluate_lemma's wordlist short-circuit outranks well-formedness, so
+    handing it the raw curated set would admit "'s", "mr.", "etc." and "1970s"
+    — exactly what purge_impure_lemmas.py had to delete. The registry's
+    predicate applies the rescue to the dictionary/frequency gate only.
+    """
+    from src.services.cefr_classifier import is_curated_vocabulary
+    from src.services.lemmatization_service import lemmatize_script, registry_wordlist_known
+
+    doc = [
+        _FakeToken("Mr.", "mr.", pos="PROPN"),
+        _FakeToken("1970s", "1970s"),
+        _FakeToken("stopwatch", "stopwatch"),
+    ]
+    result = lemmatize_script("Mr. Smith in the 1970s with a stopwatch", doc=doc)
+
+    assert "mr." not in result.unique_lemmas
+    assert "1970s" not in result.unique_lemmas
+    assert "stopwatch" in result.unique_lemmas
+
+    # The raw predicate would have let both through — the wrapper is the fix,
+    # not the wordlist contents.
+    assert evaluate_lemma("mr.", is_wordlist_known=is_curated_vocabulary).keep
+    assert not evaluate_lemma("mr.", is_wordlist_known=registry_wordlist_known).keep
+
+
+def test_both_write_paths_agree_on_the_same_lemma(guard, curated):
+    """classify_text's closure and the registry's predicate give one answer."""
+    from src.services.cefr_classifier import (
+        KIDS_SIMPLE_VOCAB,
+        INFORMAL_SIMPLE_VOCAB,
+        is_curated_vocabulary,
+    )
+
+    classifier_side = _fake_classifier(wordlist={"stopwatch": None}, lemma_map={})
+
+    def classify_text_closure(w: str) -> bool:
+        # Verbatim shape of the closure in cefr_classifier.classify_text.
+        return (
+            w in classifier_side.cefr_wordlist
+            or w in classifier_side.multi_word_expressions
+            or w in KIDS_SIMPLE_VOCAB
+            or w in INFORMAL_SIMPLE_VOCAB
+        )
+
+    for lemma in ("stopwatch", "gibberage"):
+        assert (
+            evaluate_lemma(lemma, is_wordlist_known=classify_text_closure).keep
+            == evaluate_lemma(lemma, is_wordlist_known=is_curated_vocabulary).keep
+        )
+
+
+def test_missing_wordlists_fall_back_to_pre_96_behaviour(guard, monkeypatch):
+    """A failed wordlist load must not change any decision, or crash a parse."""
+    from src.services import cefr_classifier as cc
+
+    monkeypatch.setattr(cc, "_curated_forms", None)
+    monkeypatch.setattr(
+        cc, "get_shared_classifier", lambda: (_ for _ in ()).throw(OSError("no data dir"))
+    )
+
+    assert cc.is_curated_vocabulary("stopwatch") is False
+    assert not evaluate_lemma("stopwatch", is_wordlist_known=cc.is_curated_vocabulary).keep
+    assert evaluate_lemma("good", is_wordlist_known=cc.is_curated_vocabulary).keep
+
+
+def test_routes_share_one_classifier_instance(monkeypatch):
+    """#96 collapsed two route-local singletons onto one shared instance."""
+    from src.routes import admin as admin_routes
+    from src.routes import cefr as cefr_routes
+    from src.services import cefr_classifier as cc
+
+    sentinel = object()
+    monkeypatch.setattr(cc, "get_shared_classifier", lambda: sentinel)
+    monkeypatch.setattr(cefr_routes, "get_shared_classifier", lambda: sentinel)
+    monkeypatch.setattr(admin_routes, "get_shared_classifier", lambda: sentinel)
+
+    assert cefr_routes.get_classifier() is sentinel
+    assert admin_routes.get_classifier() is sentinel

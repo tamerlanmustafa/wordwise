@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from src.database import get_db
 from src.middleware.auth import get_admin_user
-from src.services.cefr_classifier import HybridCEFRClassifier
+from src.services.cefr_classifier import get_shared_classifier
 from src.services.cefr_registry import apply_registry_levels
 from src.services.client_ip_health import build_report as build_client_ip_report
 from src.services.difficulty_scorer import compute_difficulty
@@ -415,16 +415,10 @@ async def revoke_premium(
     return _serialize_sub_user(updated)
 
 
-_classifier = None
-
-
 def get_classifier():
-    global _classifier
-    if _classifier is None:
-        backend_dir = Path(__file__).parent.parent.parent
-        data_dir = backend_dir / "data" / "cefr"
-        _classifier = HybridCEFRClassifier(data_dir=data_dir, use_embedding_classifier=False)
-    return _classifier
+    # Same process-wide instance the classification routes and the purity
+    # guard's wordlist lookup use (#96) - this used to be a second copy.
+    return get_shared_classifier()
 
 
 @router.post("/reprocess-script/{script_id}")

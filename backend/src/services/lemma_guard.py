@@ -41,6 +41,37 @@ Dependency policy: wordfreq and the NLTK words corpus are both optional
 (CI installs neither wordfreq nor the corpus). With neither available the
 dictionary gate FAILS OPEN — only well-formedness is enforced — so a
 missing dep can never wipe a movie's vocabulary.
+
+Operating point (issue #96): PRECISION OVER RECALL. Teaching a learner a
+junk word costs more than silently omitting a real one — a bad card is
+visible and erodes trust, an absent word is not observable at all. So when
+the two errors trade off, this guard prefers to drop. Measured on a
+40-movie sample re-parsed through lemmatize_script's own token filter, the
+cost of that choice is 1,257 rejected lemma types = 3,197 of 329,018 tokens
+(0.97%), and a random sample of them is dominated by proper nouns
+("robotnik", "neeson", "saigon"), g-dropping ("livin", "eatin", "sittin"),
+subtitle typos ("foward", "everthing", "leav"), and inflected forms spaCy
+failed to reduce ("uglier", "drooling", "freshest") — which would enter as
+duplicate registry rows, not as new vocabulary. Genuine teachable losses
+are a minority of that already-small set.
+
+Deliberately NOT done, each killed by a measurement rather than taste:
+  - lowering MIN_FREQ_NOT_IN_DICT: typos of common words outrank rare real
+    words on frequency, so no threshold separates them ("thi" is 8x more
+    frequent than "miniaturization").
+  - a proper-noun filter on lemmas.pos: subtitles are title-cased and
+    ALL-CAPS, so spaCy over-predicts PROPN. Prod tags "staircase",
+    "blacksmith", "prevention", "repellent" and "superheroes" PROPN across
+    8,145 visible rows — the filter would delete real vocabulary at scale.
+  - swapping the NLTK corpus for /usr/share/dict/words: same web2 list
+    (234,456 vs 234,377 entries), same gaps, same junk.
+The curated wordlists are the lever that actually works, which is why both
+callers now pass them.
+
+Out of scope here and tracked in #158: spaCy strips the final "s" off words
+ending in "ss", so "boss" reaches this guard as "bos" and "discuss" as
+"discus". Both are real dictionary entries, so the guard correctly keeps
+them — the defect is in lemmatization, not in this decision.
 """
 
 from __future__ import annotations

@@ -17,6 +17,7 @@ from src.services.cefr_classifier import (
     CEFRLevel,
     ClassificationSource,
     WordClassification,
+    get_shared_classifier,
 )
 from src.services.lemmatization_service import (
     lemmatize_script_async,
@@ -46,9 +47,6 @@ router = APIRouter(prefix="/api/cefr", tags=["CEFR Classification"])
 # still gets in. A drop costs nothing — the next classification of the movie
 # starts it again (issue #142).
 MAX_PENDING_BANK_PARSES = 2
-
-# Global classifier instance (initialized on startup)
-_classifier: Optional[HybridCEFRClassifier] = None
 
 # Master exclusion list - ultra-common A1 words that all learners know
 # These are filtered out to show only meaningful vocabulary
@@ -140,21 +138,12 @@ def should_keep_word(word: str, lemma: str, cefr_level: str) -> bool:
 
 
 def get_classifier() -> HybridCEFRClassifier:
-    """Get or initialize the CEFR classifier"""
-    global _classifier
+    """Get or initialize the CEFR classifier.
 
-    if _classifier is None:
-        backend_dir = Path(__file__).parent.parent.parent
-        data_dir = backend_dir / "data" / "cefr"
-
-        logger.info("Initializing CEFR classifier...")
-        _classifier = HybridCEFRClassifier(
-            data_dir=data_dir,
-            use_embedding_classifier=False
-        )
-        logger.info("CEFR classifier initialized")
-
-    return _classifier
+    Delegates to the process-wide instance (#96) so the classifier that grades
+    words is the same one whose wordlists the purity guard consults.
+    """
+    return get_shared_classifier()
 
 
 # === Request/Response Models ===

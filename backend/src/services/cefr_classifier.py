@@ -7,6 +7,7 @@ Aggressive pre-cleaning before tokenization
 """
 
 import logging
+import threading
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -2412,3 +2413,84 @@ class HybridCEFRClassifier:
     def update_frequency_thresholds(self, thresholds: Dict[CEFRLevel, Tuple[int, int]]):
         self.frequency_thresholds.update(thresholds)
         logger.info(f"Updated frequency thresholds")
+
+
+# ---------------------------------------------------------------------------
+# Shared curated-vocabulary access (issue #96)
+# ---------------------------------------------------------------------------
+#
+# Two write paths ask the purity guard the same question and they have to give
+# the same answer. classify_text (which fills word_classifications) builds a
+# closure over its own wordlists, so a curated entry always survives. But
+# lemmatize_script (which fills the V2 `lemmas` registry) called the guard with
+# no wordlist at all, leaving a 1934-vintage dictionary plus a frequency floor
+# to decide alone. Measured against the shipped lists, 876 curated entries lose
+# that argument - "binoculars", "stopwatch", "hideout", "fjord", "zap",
+# "boutique", "streetlight", "pullover" - so every new script classified a
+# larger vocabulary than it registered.
+#
+# One process-wide embedding-free instance now backs the lookup. routes/cefr
+# and routes/admin each used to build their own, so this is one classifier in
+# the process where there were two.
+
+_shared_classifier: Optional["HybridCEFRClassifier"] = None
+_shared_classifier_lock = threading.Lock()
+_curated_forms: Optional[frozenset] = None
+
+
+def get_shared_classifier() -> "HybridCEFRClassifier":
+    """Process-wide wordlist-only classifier (embeddings off).
+
+    The first caller pays the load: a handful of JSON/CSV wordlists plus
+    NLTK's lemmatizer, order ~1s. That cost is not new - both route singletons
+    already built lazily inside whichever request arrived first - and the lock
+    means at most one build happens now instead of two.
+    """
+    global _shared_classifier
+    if _shared_classifier is None:
+        with _shared_classifier_lock:
+            if _shared_classifier is None:
+                data_dir = Path(__file__).parent.parent.parent / "data" / "cefr"
+                logger.info("Initializing shared CEFR classifier...")
+                _shared_classifier = HybridCEFRClassifier(
+                    data_dir=data_dir, use_embedding_classifier=False
+                )
+                logger.info("Shared CEFR classifier initialized")
+    return _shared_classifier
+
+
+def _get_curated_forms() -> frozenset:
+    """Every form in the curated lists, merged once.
+
+    A failed load caches the empty set on purpose: the wordlist files either
+    ship or they do not, so retrying the ~1s load per token would buy nothing.
+    Empty reproduces the pre-#96 behaviour exactly - no rescue, dictionary and
+    frequency decide - which is the fail-open direction the guard already
+    documents for its own optional deps.
+    """
+    global _curated_forms
+    if _curated_forms is None:
+        try:
+            classifier = get_shared_classifier()
+        except Exception as e:  # noqa: BLE001 - never let this break a parse
+            logger.warning(f"Curated wordlists unavailable ({e}) - wordlist rescue disabled")
+            _curated_forms = frozenset()
+        else:
+            _curated_forms = (
+                frozenset(classifier.cefr_wordlist)
+                | frozenset(classifier.multi_word_expressions)
+                | frozenset(KIDS_SIMPLE_VOCAB)
+                | frozenset(INFORMAL_SIMPLE_VOCAB)
+            )
+            logger.info(f"Curated vocabulary loaded ({len(_curated_forms)} forms)")
+    return _curated_forms
+
+
+def is_curated_vocabulary(form: str) -> bool:
+    """True when `form` appears in any curated wordlist.
+
+    Same membership test classify_text applies, exposed so the guard's other
+    caller can apply it too. Named to match its sibling filters (is_profane,
+    is_internationalism) since it feeds the same decision.
+    """
+    return form in _get_curated_forms()
