@@ -94,8 +94,11 @@ def test_band_placeholders_cast_the_parameter_not_the_column():
 
 
 def test_journey_query_casts_the_level_parameter():
+    # Aliased since #127 moved the deck off word_classifications onto the
+    # `lemmas` registry; the invariant is unchanged — cast the parameter, so
+    # the column stays a bare enum the index can seek on.
     source = (SRC / "routes" / "quiz.py").read_text()
-    assert "WHERE cefr_level = $1::proficiencylevel" in source
+    assert "WHERE l.cefr_level = $1::proficiencylevel" in source
 
 
 def test_feed_candidate_query_compares_the_bare_enum_column():

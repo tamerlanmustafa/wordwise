@@ -24,6 +24,8 @@ from pydantic import BaseModel, Field
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from .cefr import EXCLUDED_A1_WORDS, should_keep_word
+from ..services.cefr_registry import trusted_registry_sql
 from ..services.hidden_words import get_hidden_word_set
 from ..services.quiz_service import (
     CARDS_PER_SESSION,
@@ -826,37 +828,70 @@ async def get_my_rank(
 async def _get_journey_words_at_level(
     db: Prisma, level: str, offset: int, limit: int
 ) -> List[str]:
-    """Return `limit` unique words at `level`, sorted easiest-first by
-    global frequency rank (lower rank = more common in the language =
-    easier to learn). Words with no rank data go to the end.
+    """Return `limit` lemmas at `level`, sorted easiest-first by global
+    frequency rank (lower rank = more common in the language = easier to
+    learn). Lemmas with no rank data go to the end.
 
-    Deduplication is done across all movies: the same word can be
-    classified in many scripts, so we pick the single occurrence with
-    the best (lowest) frequencyRank and sort by that.
+    Reads the `lemmas` registry, not word_classifications (#127). That table
+    is keyed by (script, *surface form*), which made this deck disagree with
+    itself twice over. It taught inflections as separate cards — prod's A1
+    deck carried `hands`, `months`, `passed`, `understands`, `buttoning` and
+    `prettiest` alongside their base forms, 3,293 of its 5,664 entries having
+    no registry row at all — and because 13,156 words carry conflicting
+    levels across scripts, the same word appeared in up to four different
+    level decks. The sibling path `_movie_specific_words` already reads
+    `lemmas`, so the two halves of one journey session were sourced
+    differently.
 
     `level` is cast to the enum rather than `cefr_level` being cast to text:
-    on this table (4.8M rows) the text cast cost an Index Cond, so the scan
-    read the whole 5,512-buffer index instead of seeking 414 buffers.
+    a text cast on the column costs the Index Cond and reads the whole index
+    (#118).
+
+    `l.lemma ASC` is a stable tiebreaker. frequency_rank is not unique, and
+    without it two tiles paging by OFFSET can skip or repeat a word.
+
+    Single alphabetic words only, the same predicate the Explore feed uses.
+    `lemmas` also holds idioms and phrasal verbs, which word_classifications
+    never did — and their frequency_rank puts them at the very front, so
+    without this every tile 0 came back as `get in, in time, get on, on time`
+    (A2) or `on and on, go on, first of all` (B1). They are 1,776 of 26,266
+    trusted rows but would have been most of what a learner actually saw.
+    Keeping them out preserves what this deck has always taught; surfacing
+    idioms deliberately is a product decision, not a side effect of #127.
+
+    EXCLUDED_A1_WORDS is applied in SQL rather than after the fetch, because
+    it is the one filter big enough to empty a page. Ordering honestly by
+    frequency puts the function words first — prod's A1 tile 0 is `a, and,
+    for, in, of, that, the, to, are, at` — so a post-fetch filter would drop
+    all ten and 404 the session. Excluding them before OFFSET keeps tile N
+    meaning the Nth window. The rest of should_keep_word (profanity,
+    internationalisms) stays a post-filter: those are prefix/compound rules,
+    not set membership, and they trim single rows rather than whole pages.
     """
     rows = await db.query_raw(
-        """
-        SELECT word, best_rank
-        FROM (
-            SELECT LOWER(word) AS word,
-                   MIN(frequency_rank) AS best_rank
-            FROM word_classifications
-            WHERE cefr_level = $1::proficiencylevel
-              AND word IS NOT NULL
-              AND TRIM(word) <> ''
-            GROUP BY LOWER(word)
-        ) sub
-        ORDER BY best_rank ASC NULLS LAST
+        f"""
+        SELECT l.lemma AS word, l.frequency_rank AS best_rank
+        FROM lemmas l
+        WHERE l.cefr_level = $1::proficiencylevel
+          AND {trusted_registry_sql("l")}
+          AND l.lemma ~ '^[a-zA-Z]+$'
+          AND NOT (l.lemma = ANY($4::text[]))
+        ORDER BY l.frequency_rank ASC NULLS LAST, l.lemma ASC
         OFFSET $2 LIMIT $3
         """,
         level, offset, limit,
+        # Mirrors should_keep_word, which applies the stoplist at A1 only.
+        # An empty array is a no-op predicate, so other levels are unfiltered.
+        sorted(EXCLUDED_A1_WORDS) if level == "A1" else [],
     )
     hidden = await get_hidden_word_set(db, (r["word"] for r in rows))
-    return [r["word"] for r in rows if r["word"].lower() not in hidden]
+    return [
+        r["word"]
+        for r in rows
+        if r["word"].lower() not in hidden
+        # Rows are lemmas, so surface form and lemma are the same word.
+        and should_keep_word(r["word"], r["word"], level)
+    ]
 
 
 _LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]

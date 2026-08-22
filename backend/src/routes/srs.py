@@ -31,6 +31,7 @@ from prisma import Prisma
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.cefr_registry import registry_levels
 from ..services.chest_service import award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
@@ -677,24 +678,19 @@ async def start_session(
         for m in movies:
             movie_map[m.id] = m.title
 
-    # Look up CEFR levels from word classifications. We probe both
-    # surface form and lemma so 'hated' (rare in classifications) still
-    # picks up CEFR through 'hate'.
+    # CEFR levels come from the `lemmas` registry, not word_classifications
+    # (#127). That table holds one row per (script, word), so the old
+    # `DISTINCT ON (word) ... ORDER BY id DESC` badged the card with whichever
+    # movie happened to be ingested last — 7,262 words disagreed with the
+    # level Explore showed for the same word. The registry is the aggregate,
+    # and it already drops UNKNOWN and the #91 A2-default rows, so a word it
+    # cannot place gets no badge rather than an "UNKNOWN" one.
+    #
+    # We still probe both the surface form and the lemma: the registry is
+    # lemma-keyed, so 'hated' misses and picks CEFR up through 'hate'.
     cefr_map: dict[str, str] = {}
     if word_texts:
-        cefr_rows = await db.query_raw(
-            """SELECT DISTINCT ON (wc.word) wc.word, wc.cefr_level
-               FROM word_classifications wc
-               WHERE wc.word = ANY($1::text[])
-               ORDER BY wc.word, wc.id DESC""",
-            list(set(word_texts + unique_lemmas)),
-        )
-        for r in cefr_rows:
-            # UNKNOWN is a "could not classify" marker, not a level (#91).
-            # cefr_level is Optional, so leave it unset rather than render a
-            # word the user saved with an "UNKNOWN" badge.
-            if r["cefr_level"] != "UNKNOWN":
-                cefr_map[r["word"]] = r["cefr_level"]
+        cefr_map = await registry_levels(db, word_texts + unique_lemmas)
 
     # v0.7 §7 — batch-translate the LEMMAS (not surface forms) so the
     # translation MCQ matches the canonical word the user is studying.
@@ -738,7 +734,9 @@ async def start_session(
         carded_lemmas.add(lemma)
         # Prefer CEFR / definitions keyed on the lemma; fall back to
         # the surface form when the canonical row isn't classified yet.
-        cefr = cefr_map.get(lemma) or cefr_map.get(r.word)
+        # cefr_map is registry-keyed, so lowercase — `r.word` is the surface
+        # form the user saved and may be capitalised.
+        cefr = cefr_map.get(lemma) or cefr_map.get(r.word.lower())
         def_entry = def_map.get(lemma) or def_map.get(r.word)
         pos_label = spacy_pos or pos_map.get(lemma) or pos_map.get(r.word)
         # Example sentence: global LLM sentence_bank rows only (lemma-
