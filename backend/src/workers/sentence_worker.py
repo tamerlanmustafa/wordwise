@@ -15,10 +15,14 @@ keeps running: newly ingested movies push new lemmas into the backlog and
 the worker picks them up on its next cycle.
 
 Runs as the third process in the background-worker container (see
-docker/start-workers.sh); disable with SENTENCE_WORKER_ENABLED=0. Lemmas
-whose generation fails (LLM returned null / validation rejected) are
-skipped for the life of the process so the loop never burns spend retrying
-the same bad word; a restart retries them.
+docker/start-workers.sh); disable with SENTENCE_WORKER_ENABLED=0.
+
+A lemma the model declines (returned null / validation rejected) is recorded
+on the row itself — lemmas.sentence_skip_at / sentence_skip_version — so the
+loop never burns spend retrying the same bad word, and never re-learns it
+after a restart (#153). Only a *completed* call can record a refusal: if the
+API itself is unreachable the cycle ends as "unavailable" and writes nothing,
+because an outage is not a fact about the word.
 
     python -m src.workers.sentence_worker
 
@@ -28,6 +32,7 @@ Tunables (env):
     SENTENCE_WORKER_BATCH_SLEEP  seconds between LLM calls     (default 2)
     SENTENCE_WORKER_IDLE_SLEEP   seconds when backlog is empty (default 900)
     SENTENCE_WORKER_CAP_SLEEP    seconds after cost-cap hit    (default 3600)
+    SENTENCE_WORKER_UNAVAIL_SLEEP seconds after an LLM outage  (default 300)
 """
 
 from __future__ import annotations
@@ -38,10 +43,14 @@ import os
 import signal
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Set
+from typing import Iterable, List
 
 from src.services.hidden_words import hidden_word_exclusion_sql
-from src.services.llm_sentence_service import CostCapExceeded, WordRequest
+from src.services.llm_sentence_service import (
+    CostCapExceeded,
+    ModelCallFailed,
+    WordRequest,
+)
 
 logger = logging.getLogger("wordwise.sentence_worker")
 
@@ -50,27 +59,42 @@ PAGE_SIZE = int(os.environ.get("SENTENCE_WORKER_PAGE_SIZE", "150"))
 BATCH_SLEEP = float(os.environ.get("SENTENCE_WORKER_BATCH_SLEEP", "2"))
 IDLE_SLEEP = float(os.environ.get("SENTENCE_WORKER_IDLE_SLEEP", "900"))
 CAP_SLEEP = float(os.environ.get("SENTENCE_WORKER_CAP_SLEEP", "3600"))
+# Long enough that a dead API key or an empty credit balance is not retried
+# every half minute for hours, short enough that a 5xx blip costs one page of
+# progress. Five consecutive waits (~25 min) trips the admin alert.
+UNAVAILABLE_SLEEP = float(os.environ.get("SENTENCE_WORKER_UNAVAIL_SLEEP", "300"))
 ERROR_SLEEP = 30.0
 
-# Failed lemmas are only skipped in memory; once the set grows past this we
-# drop it and give everything another chance rather than growing unbounded.
-# Must exceed the lemma table (~158k) so it never trips mid-run: the fetch
-# is priority-ordered, so clearing would immediately re-attempt the *most*
-# failure-prone words (top of the backlog is the proper-noun residue the
-# backfill already declined — first prod cycle skipped 121 of 150). A
-# restart is the intended retry point.
-MAX_SKIP_IDS = 250_000
 
-
-def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
+def build_backlog_sql(limit: int) -> str:
     """
     Lemmas that appear in at least one movie's vocabulary but have no global
     LLM sentence yet. Excludes admin-hidden words (never displayed, so not
     worth spend), UNKNOWN-level words (#91 — the classifier could not place
     them, so they are never displayed either, and they are exactly the
-    proper-noun residue the LLM keeps declining) and `skip_ids` (failed in
-    this process). Highest priority_score first so the words users hit most
-    get covered first.
+    proper-noun residue the LLM keeps declining) and lemmas the running model
+    has already declined. Highest priority_score first so the words users hit
+    most get covered first.
+
+    The refusal exclusion is `sentence_skip_version IS DISTINCT FROM $1`
+    (#153). It replaces a process-local `Set[int]` that was empty at boot, so
+    every Railway deploy — several a day, since the Worker redeploys on every
+    push to main — restarted the re-buy of the same ~2,000 refusals from the
+    top of the backlog. Three properties are load-bearing:
+
+      * `IS DISTINCT FROM`, never `<>`. `NULL <> 'x'` evaluates to NULL, not
+        true, so `<>` would filter out every lemma that has never been
+        refused — the whole backlog — and the worker would go silently idle.
+      * The parameter is the *running* signature, not a boolean. A lemma is
+        skipped only while the model and prompt that declined it are still the
+        ones in use, so changing either revokes every skip it produced without
+        a cleanup pass. See LLMSentenceService.skip_version.
+      * It is a predicate on `lemmas` itself, not a join or a subquery, so it
+        rides the existing backward walk of ix_lemmas_priority_score and adds
+        no scan. Measured on prod 2026-08-23: 24.8 ms / 9,554 buffers with
+        nothing skipped, 46.6 ms / 19,047 buffers with the whole 2,072-lemma
+        residue skipped (a full index walk returning zero rows, once per
+        900 s idle cycle). No index; see the manual migration for why.
 
     The two exclusions use opposite idioms on purpose — the right one depends
     on how big the excluded set is.
@@ -101,11 +125,10 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
     denormalized onto the link and kept true by trigger, so the subplan is now
     an index-only scan of a 2 MB partial index.
 
-    skip_ids/limit are server-side integers, safe to inline — and inlining
-    keeps the query compatible with prisma's query_raw (no array params).
+    `limit` is a server-side integer, safe to inline. The skip signature is
+    bound as $1 rather than interpolated: it is the only value here that is a
+    string, and a parameter means there is no quoting rule to get wrong.
     """
-    skip = sorted({int(i) for i in skip_ids})
-    skip_clause = f"AND l.id NOT IN ({', '.join(map(str, skip))})" if skip else ""
     return f"""
         SELECT l.id AS lemma_id, l.lemma AS lemma, l.cefr_level AS cefr_level
         FROM lemmas l
@@ -118,27 +141,53 @@ def build_backlog_sql(skip_ids: Iterable[int], limit: int) -> str:
         )
         AND {hidden_word_exclusion_sql("l.lemma")}
         AND l.cefr_level <> 'UNKNOWN'
-        {skip_clause}
+        AND l.sentence_skip_version IS DISTINCT FROM $1::varchar
         ORDER BY l.priority_score DESC, l.id
         LIMIT {int(limit)}
     """
 
 
-async def fetch_backlog(db, skip_ids: Iterable[int], limit: int) -> List[dict]:
-    return await db.query_raw(build_backlog_sql(skip_ids, limit))
+async def fetch_backlog(db, skip_version: str, limit: int) -> List[dict]:
+    return await db.query_raw(build_backlog_sql(limit), skip_version)
+
+
+async def mark_refusals(db, lemma_ids: Iterable[int], skip_version: str) -> int:
+    """
+    Record that the running model declined these lemmas, so no future cycle —
+    or future process — pays for them again (#153).
+
+    Called once per LLM chunk rather than once per cycle on purpose: a cycle
+    can end early at the cost cap, and what was already learned should survive
+    that. Ids are server-side integers from the row we just fetched and there
+    are at most `batch_size` of them, so inlining costs nothing and keeps the
+    statement free of array parameters.
+
+    Callers must only reach here for a call that actually completed. A failed
+    call yields the same empty result as a total refusal, and writing that
+    would bury the whole backlog permanently — see ModelCallFailed.
+    """
+    ids = sorted({int(i) for i in lemma_ids})
+    if not ids:
+        return 0
+    await db.execute_raw(
+        "UPDATE lemmas SET sentence_skip_at = NOW(), sentence_skip_version = $1 "
+        f"WHERE id IN ({', '.join(map(str, ids))})",
+        skip_version,
+    )
+    return len(ids)
 
 
 @dataclass
 class CycleResult:
-    outcome: str  # "generated" | "idle" | "cap"
+    outcome: str  # "generated" | "idle" | "cap" | "unavailable"
     fetched: int = 0
     stored: int = 0
+    refused: int = 0
 
 
 async def run_cycle(
     db,
     llm,
-    skip_ids: Set[int],
     *,
     page_size: int = PAGE_SIZE,
     batch_size: int = BATCH_SIZE,
@@ -146,16 +195,23 @@ async def run_cycle(
 ) -> CycleResult:
     """
     One pass: fetch a page of uncovered lemmas and generate sentences for
-    them in batch_size chunks. Lemmas the LLM couldn't produce a valid
-    sentence for are added to skip_ids so the next cycle moves past them.
-    Returns "cap" as soon as the cost cap interrupts a chunk (partial work
-    is kept — generate_and_store persists per sentence).
+    them in batch_size chunks. Lemmas the model declined are written to
+    `lemmas.sentence_skip_*` so neither the next cycle nor the next process
+    pays for them again.
+
+    Returns "cap" as soon as the cost cap interrupts a chunk, and
+    "unavailable" as soon as a call fails to reach the model. Both keep the
+    partial work already done — generate_and_store persists per sentence, and
+    mark_refusals runs per chunk — but "unavailable" records no refusals at
+    all, for that chunk or any later one: the model never saw those words.
     """
-    rows = await fetch_backlog(db, skip_ids, page_size)
+    skip_version = llm.skip_version
+    rows = await fetch_backlog(db, skip_version, page_size)
     if not rows:
         return CycleResult(outcome="idle")
 
     stored_total = 0
+    refused_total = 0
     for i in range(0, len(rows), batch_size):
         chunk = rows[i : i + batch_size]
         lemma_id_map = {r["lemma"].lower(): r["lemma_id"] for r in chunk}
@@ -176,26 +232,42 @@ async def run_cycle(
             )
         except CostCapExceeded as cap_err:
             logger.warning("[sentence-worker] %s", cap_err)
-            return CycleResult(outcome="cap", fetched=len(rows), stored=stored_total)
+            return CycleResult(
+                outcome="cap",
+                fetched=len(rows),
+                stored=stored_total,
+                refused=refused_total,
+            )
+        except ModelCallFailed as call_err:
+            logger.warning(
+                "[sentence-worker] model unreachable (%s); recording no "
+                "refusals for this chunk",
+                call_err,
+            )
+            return CycleResult(
+                outcome="unavailable",
+                fetched=len(rows),
+                stored=stored_total,
+                refused=refused_total,
+            )
 
         stored_lemmas = {w.lower() for w in results}
         stored_total += len(stored_lemmas)
-        for r in chunk:
-            if r["lemma"].lower() not in stored_lemmas:
-                skip_ids.add(r["lemma_id"])
-
-        if len(skip_ids) > MAX_SKIP_IDS:
-            logger.info(
-                "[sentence-worker] skip set exceeded %d entries; clearing "
-                "to retry previously failed lemmas",
-                MAX_SKIP_IDS,
-            )
-            skip_ids.clear()
+        refused_total += await mark_refusals(
+            db,
+            (r["lemma_id"] for r in chunk if r["lemma"].lower() not in stored_lemmas),
+            skip_version,
+        )
 
         if batch_sleep > 0 and i + batch_size < len(rows):
             await asyncio.sleep(batch_sleep)
 
-    return CycleResult(outcome="generated", fetched=len(rows), stored=stored_total)
+    return CycleResult(
+        outcome="generated",
+        fetched=len(rows),
+        stored=stored_total,
+        refused=refused_total,
+    )
 
 
 async def write_coverage_snapshot_if_due(db) -> bool:
@@ -258,7 +330,6 @@ async def run_forever() -> None:
     alerter = ConsecutiveFailureAlerter("sentence-worker", fetch_rows=db.query_raw)
 
     llm = None
-    skip_ids: Set[int] = set()
     try:
         while not stop.is_set():
             # Once-daily vocab-coverage snapshot. Runs before the LLM check so
@@ -284,28 +355,44 @@ async def run_forever() -> None:
                     continue
 
             try:
-                result = await run_cycle(db, llm, skip_ids)
+                result = await run_cycle(db, llm)
             except Exception as exc:
                 logger.exception("[sentence-worker] cycle failed: %s", exc)
                 await alerter.record_failure(exc)
                 await _sleep(ERROR_SLEEP)
                 continue
 
-            # Any completed cycle (generated/cap/idle) means the loop is
-            # healthy — cap and idle are expected states, not failures.
-            await alerter.record_success()
+            # An unreachable model is a failure even though the cycle returned
+            # cleanly: nothing is being generated and nothing is being learned,
+            # so it must count toward the alert rather than resetting it. On
+            # 2026-08-22 the Anthropic credit balance ran out and the worker
+            # churned for 35 hours without anyone hearing about it.
+            if result.outcome == "unavailable":
+                await alerter.record_failure(
+                    ModelCallFailed("sentence generation API unreachable")
+                )
+            else:
+                # Any other completed cycle (generated/cap/idle) means the loop
+                # is healthy — cap and idle are expected states, not failures.
+                await alerter.record_success()
 
             if result.outcome == "generated":
                 logger.info(
-                    "[sentence-worker] cycle done fetched=%d stored=%d skip=%d",
+                    "[sentence-worker] cycle done fetched=%d stored=%d refused=%d",
                     result.fetched,
                     result.stored,
-                    len(skip_ids),
+                    result.refused,
                 )
                 # If nothing in the page stored we're spinning on hopeless
-                # lemmas (all newly skipped) — back off instead of re-paging.
+                # lemmas (all newly refused) — back off instead of re-paging.
                 if result.stored == 0:
                     await _sleep(ERROR_SLEEP)
+            elif result.outcome == "unavailable":
+                logger.warning(
+                    "[sentence-worker] model unreachable; sleeping %.0fs",
+                    UNAVAILABLE_SLEEP,
+                )
+                await _sleep(UNAVAILABLE_SLEEP)
             elif result.outcome == "cap":
                 logger.warning(
                     "[sentence-worker] cost cap reached; sleeping %.0fs", CAP_SLEEP

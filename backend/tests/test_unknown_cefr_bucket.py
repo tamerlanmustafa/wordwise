@@ -121,7 +121,7 @@ def test_should_keep_word_keeps_real_levels(level):
 def test_backlog_sql_excludes_unknown():
     from src.workers.sentence_worker import build_backlog_sql
 
-    sql = build_backlog_sql([], 50)
+    sql = build_backlog_sql(50)
 
     assert "l.cefr_level <> 'UNKNOWN'" in sql
     # still the uncorrelated NOT IN that the 2026-07-22 outage fix requires

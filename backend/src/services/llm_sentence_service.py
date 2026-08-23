@@ -43,6 +43,13 @@ MIN_WORDS = 6
 MAX_WORDS = 22
 MAX_CHARS = 140
 
+# Bump whenever SYSTEM_PROMPT or the _validate rules change in a way that could
+# make the model succeed on a word it previously declined. The sentence worker
+# stores "<model>|<this>" on every refusal (#153) and only skips a lemma while
+# that string matches its own; changing either half re-admits the whole backlog
+# without a cleanup pass.
+SENTENCE_PROMPT_VERSION = "1"
+
 # Anthropic pricing (USD per million tokens) for the models we may call.
 # Update when Anthropic adjusts pricing or when we point at a new model.
 _PRICING: Dict[str, Dict[str, float]] = {
@@ -99,6 +106,24 @@ class CostCapExceeded(RuntimeError):
     """Raised when cumulative ledger spend has reached the configured cap."""
 
 
+class ModelCallFailed(RuntimeError):
+    """The Anthropic call did not complete — network, timeout, 4xx or 5xx.
+
+    Deliberately distinct from the model *declining* a word. Nothing came back
+    and nothing was billed, so every word in the batch is still unanswered;
+    a caller must not record any of them as a durable fact about the word.
+
+    Before #153 this was swallowed here and returned as an all-None result,
+    which is indistinguishable from "the model looked at these words and had
+    nothing for any of them". That was harmless while the sentence worker's
+    skip list lived in memory and died with the process. It stopped being
+    harmless the moment the skip list moved onto `lemmas`: on 2026-08-22 the
+    Anthropic credit balance ran out and every call started returning 400, so
+    the old shape would have written the entire 2,072-lemma backlog off as
+    permanently refused inside about fourteen cycles.
+    """
+
+
 @dataclass(frozen=True)
 class WordRequest:
     """One word to generate a sentence for."""
@@ -138,6 +163,16 @@ class LLMSentenceService:
 
     # ─── Public API ─────────────────────────────────────────────────────────
 
+    @property
+    def skip_version(self) -> str:
+        """Signature for "what would decline a word right now" (#153).
+
+        The sentence worker stores this on a refused lemma and excludes the
+        lemma only while the stored value still equals this one, so changing
+        the model or the prompt is itself the revocation.
+        """
+        return f"{self._model}|{SENTENCE_PROMPT_VERSION}"
+
     async def generate_sentences(
         self,
         db: Prisma,
@@ -147,6 +182,11 @@ class LLMSentenceService:
         """
         Generate one sentence per input word. Returns a dict keyed by the
         word's lemma (lowercased). Missing/invalid entries map to None.
+
+        A None here means "the model answered and had nothing usable for this
+        word" — a fact about the word. If the call itself fails we raise
+        ModelCallFailed instead of returning all-None, so a caller can never
+        mistake an outage for 15 refusals (#153).
 
         Raises CostCapExceeded BEFORE making the API call if the cumulative
         spend already meets or exceeds the configured cap. Caller should
@@ -162,7 +202,7 @@ class LLMSentenceService:
             raw_text, usage = await self._call_model(user_payload)
         except Exception as e:
             logger.warning(f"[llm-sentence] model call failed: {e}")
-            return {w.lemma.lower(): None for w in words}
+            raise ModelCallFailed(str(e)) from e
 
         # Persist usage even when parsing fails — we still paid for it.
         await self._record_usage(db, usage, context=context)
@@ -196,7 +236,9 @@ class LLMSentenceService:
 
         `lemma_id_map` maps lemma_str -> Lemma.id. Lemmas missing from the
         map are skipped (we can't link them). Raises CostCapExceeded if the
-        spend cap has been reached.
+        spend cap has been reached, and ModelCallFailed if the API call itself
+        did not complete — a word absent from the result is only a refusal
+        when this returns normally.
         """
         if not words:
             return {}

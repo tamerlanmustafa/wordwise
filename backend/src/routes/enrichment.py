@@ -1143,6 +1143,7 @@ async def get_word_sentences_batch(
                 from src.services.llm_sentence_service import (
                     CostCapExceeded,
                     LLMSentenceService,
+                    ModelCallFailed,
                     WordRequest,
                 )
 
@@ -1171,6 +1172,16 @@ async def get_word_sentences_batch(
                     except CostCapExceeded as cap_err:
                         logger.warning(f"[batch-sentences] {cap_err}")
                         slow_path_state = "skipped(cost-cap)"
+                    except ModelCallFailed as call_err:
+                        # #153 split this out of the all-None return below.
+                        # Same outcome for the caller — no sentences, no
+                        # error — but the log line now says the API was
+                        # unreachable rather than claiming the slow path
+                        # "fired" and found nothing.
+                        logger.warning(
+                            f"[batch-sentences] llm unavailable: {call_err}"
+                        )
+                        slow_path_state = "skipped(llm-unavailable)"
             except Exception as fallback_err:
                 logger.warning(
                     f"[batch-sentences] llm slow-path failed: {fallback_err}",

@@ -588,6 +588,14 @@ model Lemma {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  // #153 — the sentence worker asked the LLM for an example sentence and it
+  // declined. Written ONLY when the call itself succeeded; an API failure is
+  // not a fact about the word. `sentenceSkipVersion` is "<model>|<prompt
+  // version>", so pointing at a different model or editing the prompt
+  // re-admits every word the old one refused, with no cleanup pass.
+  sentenceSkipAt      DateTime? @map("sentence_skip_at") @db.Timestamptz(6)
+  sentenceSkipVersion String?   @map("sentence_skip_version") @db.VarChar(96)
+
   movieMappings MovieLemmaMapping[]
   sentenceLinks SentenceLemmaLink[]
   listWords     UserListWord[]
