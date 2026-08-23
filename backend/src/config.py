@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 600
 
+    # How many characters one account may submit to the translate endpoints
+    # per UTC day (issue #152). Providers bill per character, so this is the
+    # limit that bounds *cost*; the per-minute throttles above only bound
+    # request count, which is meaningless while request size is unbounded.
+    #
+    # Configurable rather than a constant because the shipping app's sentence
+    # translations (TodayWordCard) have no usage history to size against yet —
+    # if a real user is ever cut off, this can be raised in Railway without a
+    # deploy. See routes/translation.py for how the default was chosen.
+    translation_daily_char_budget: int = 50_000
+
     # Event-loop lag watchdog (issue #146): a background probe that measures
     # how late `asyncio.sleep` comes back, which is exactly how long the loop
     # spent blocked and unavailable to every other request. Feeds

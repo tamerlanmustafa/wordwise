@@ -5,13 +5,15 @@ Provides endpoints for text translation using DeepL API with caching.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, StringConstraints, validator
+from typing import Annotated, Optional, List, Dict, Any
 import logging
 
 from prisma import Prisma
+from ..config import get_settings
 from ..database import get_db
 from ..middleware.auth import get_current_active_user, get_admin_user
+from ..utils.char_budget import DailyCharBudget
 from ..utils.rate_limit import rate_limit
 from ..services.translation_service import TranslationService
 from ..utils.deepl_client import (
@@ -35,11 +37,75 @@ router = APIRouter(prefix="/translate", tags=["translation"])
 _translate_throttle = rate_limit(120, 60.0, scope="translate")
 _translate_batch_throttle = rate_limit(30, 60.0, scope="translate-batch")
 
+# ── Request size limits (issue #152) ────────────────────────────────────────
+#
+# Providers bill per character, so the request-rate limits above cannot bound
+# cost on their own — they count requests, and a request's *size* was
+# unbounded. The batch endpoint accepted 2,000 texts of any length, 30 times a
+# minute: roughly 3,000,000 characters/minute against DeepL's 500,000/MONTH
+# free allowance, i.e. one signed-in account could exhaust the shared monthly
+# quota in under ten seconds and drop everyone else onto Google's paid tier.
+# Issue #157 is the empirical proof that this shape of bug is not theoretical:
+# an unbounded translation loop spent ~$219 of Google in ~13 hours.
+#
+# Every number below is enforced by the request model, so it rejects before
+# any provider client is constructed (TranslationService builds a DeepL and a
+# Google client in __init__).
+
+# Matches the single-text endpoint's `max_length`. Prod's longest cached
+# source text ever recorded is 453 characters (translation_cache, 24,145 rows,
+# 2026-08-22), so this is a ceiling on abuse, not on use.
+MAX_TEXT_CHARS = 5000
+
+# The number this endpoint's docstring has always documented. The only caller
+# in the repo — frozen `frontend/`'s useTranslationQueue — already chunks at
+# exactly 100 (MAX_BATCH_SIZE), so nothing legitimate is starting to 422.
+MAX_BATCH_ITEMS = 100
+
+# The cap that actually maps to money: 100 items averaging 200 characters.
+# The real caller sends single words (prod average 24 characters), so a full
+# 100-item batch measures ~2,400 characters — roughly 8x of headroom.
+MAX_BATCH_CHARS = 20_000
+
+# Per-request caps alone still leave 20,000 x 30/min = 600,000 characters a
+# minute for one account, which is more than the monthly allowance. This is
+# what bounds a caller over time — including a slow one who stays under every
+# per-request limit.
+#
+# Sizing the default (settings.translation_daily_char_budget, so it can be
+# raised in Railway without a deploy):
+#
+#   * The heaviest day any prod account has had through these endpoints is
+#     113 lookups / 701 characters in the last 90 days (1,157 rows lifetime,
+#     longest ever 20 characters — user_translation_history, 2026-08-23).
+#   * That history covers WORDS only. `TodayWordCard` also sends whole example
+#     SENTENCES here, and none have been recorded yet, so the word figures
+#     understate a heavy mobile day. At ~110 characters per card (word plus
+#     sentence), 50,000 still covers ~450 card openings in a day.
+#   * It holds one account to at most 10% of DeepL's monthly free allowance
+#     per day.
+#
+# It meters the characters a caller *submits*, not the ones that miss the
+# cache: the route cannot tell the two apart (batch_translate reports every
+# resolved text as `cached`), and metering the submission is the half that has
+# to be checked before the money is spent anyway. The `sentence` context hint
+# is deliberately NOT metered — DeepL does not bill for `context`, and the
+# card deck sends one on every lookup.
+DAILY_TRANSLATION_CHARS = get_settings().translation_daily_char_budget
+
+# Shared by both endpoints on purpose. Metering only /translate/batch would
+# leave /translate as the cheaper way to spend the same quota — 120 requests a
+# minute at 5,000 characters is a higher rate than the capped batch endpoint,
+# and the mobile app's word taps go through the single-text one.
+_translation_char_budget = DailyCharBudget(
+    DAILY_TRANSLATION_CHARS, scope="translate-chars"
+)
+
 
 # Request/Response Models
 class TranslationRequest(BaseModel):
     """Request model for single translation"""
-    text: str = Field(..., description="Text to translate", max_length=5000)
+    text: str = Field(..., description="Text to translate", max_length=MAX_TEXT_CHARS)
     target_lang: str = Field(..., description="Target language code (e.g., 'DE', 'FR', 'ES')")
     source_lang: str = Field(default="auto", description="Source language or 'auto' for detection")
     user_id: Optional[int] = Field(None, description="User ID for tracking translation attempts")
@@ -63,7 +129,15 @@ class TranslationRequest(BaseModel):
 
 class BatchTranslationRequest(BaseModel):
     """Request model for batch translation"""
-    texts: List[str] = Field(..., description="List of texts to translate", max_items=2000)
+    # Both caps are field constraints rather than checks in the validator
+    # below, so an oversized payload is rejected while pydantic is still
+    # parsing it — before the handler body runs and before any provider client
+    # exists. See the MAX_* constants for why each number is what it is.
+    texts: List[Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]] = Field(
+        ...,
+        description="List of texts to translate",
+        max_length=MAX_BATCH_ITEMS,
+    )
     target_lang: str = Field(..., description="Target language code")
     source_lang: str = Field(default="auto", description="Source language or 'auto'")
     user_id: Optional[int] = Field(None, description="User ID for tracking translation attempts")
@@ -72,8 +146,6 @@ class BatchTranslationRequest(BaseModel):
     def validate_texts(cls, v):
         if not v:
             raise ValueError("Texts list cannot be empty")
-        if len(v) > 2000:
-            raise ValueError("Maximum 2000 texts per batch request")
 
         # Ensure all items are strings
         if not all(isinstance(text, str) for text in v):
@@ -84,6 +156,16 @@ class BatchTranslationRequest(BaseModel):
         # Verify we still have texts after filtering
         if not cleaned:
             raise ValueError("Texts list cannot contain only empty strings")
+
+        # The cap that maps to provider cost. Measured on the cleaned list
+        # because that is what gets sent — whitespace-only items are dropped
+        # above and are never billed.
+        total_chars = sum(len(text) for text in cleaned)
+        if total_chars > MAX_BATCH_CHARS:
+            raise ValueError(
+                f"Batch too large: {total_chars} characters "
+                f"(maximum {MAX_BATCH_CHARS} per request)"
+            )
         return cleaned
 
 
@@ -154,10 +236,17 @@ async def translate_text(
     **Rate Limits:**
     - Free tier: 500,000 characters/month
     - Check DeepL documentation for latest limits
+    - Max 5000 characters per request
+    - A per-user daily character budget, shared with /translate/batch
+      (settings.translation_daily_char_budget)
     """
     # Attribution comes from the verified token, not the client-supplied
     # body — otherwise a caller could write attempts to any user's history.
     request.user_id = current_user.id
+    # Before the service exists: constructing it builds a DeepL and a Google
+    # client, and a cap that rejects after the round trip has been paid for is
+    # not a cap. Shares one budget with /translate/batch (see the constant).
+    _translation_char_budget.charge(f"user:{current_user.id}", len(request.text))
     try:
         # Pass the clicked sentence as a DeepL `context` hint so an ambiguous
         # word ("run") resolves to the sense it carries in that sentence,
@@ -227,11 +316,18 @@ async def translate_batch(
     - Returns results in same order as input
     - Max 100 texts per request
     - Each text max 5000 characters
+    - Max 20,000 characters per request
+    - A per-user daily character budget, shared with POST /translate
+      (settings.translation_daily_char_budget)
     """
     # Attribution comes from the verified token, not the client body.
     request.user_id = current_user.id
     logger.info(f"[BATCH TRANSLATE] Received {len(request.texts)} texts, target={request.target_lang}")
     logger.debug(f"[BATCH TRANSLATE] First 5 texts: {request.texts[:5]}")
+    # Before the service exists — see the note on the single-text endpoint.
+    _translation_char_budget.charge(
+        f"user:{current_user.id}", sum(len(t) for t in request.texts)
+    )
     try:
         service = TranslationService(db)
         results = await service.batch_translate(
