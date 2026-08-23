@@ -86,6 +86,13 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET shared_buffers = '6GB';
 
 -- >>> Requires: railway redeploy --service Postgres  (or a dashboard restart)
+--
+-- NOTE: that restart zeroes every counter in pg_stat_user_tables — PG15+ keeps
+-- cumulative stats in shared memory and only persists them on a clean shutdown.
+-- Afterwards last_analyze/last_autoanalyze/last_autovacuum read NULL, and
+-- n_live_tup reads near zero, on tables that were analyzed minutes earlier.
+-- This is what #155 mistook for "these tables have never been analyzed".
+-- See "Reading Postgres statistics" in README.md before acting on those fields.
 
 
 -- ---------------------------------------------------------------------------

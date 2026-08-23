@@ -46,3 +46,37 @@ worker tables live only there.
 
 Skipping the replay yields a database that passes `prisma validate` and
 silently permits duplicates prod rejects.
+
+## Reading Postgres statistics
+
+`pg_stat_user_tables` holds **cumulative counters**, which PG15+ keeps in shared
+memory and persists only on a clean shutdown. Section 3 of
+`2026_08_18_postgres_tuning_issue_118.sql` requires a Postgres restart, and that
+restart zeroed every counter in this database.
+
+So here a NULL `last_analyze` / `last_autoanalyze` / `last_autovacuum` means
+**"not since the last restart"**, not "never". The same reset makes `n_live_tup`
+and `n_tup_ins` meaningless until the next (auto)analyze: after the 2026-08-18
+restart `word_classifications` reported 13,122 lifetime inserts against 4.8M
+rows.
+
+Misreading this cost a P1 issue — #155 read `n_live_tup` as "the planner
+estimate", concluded `movie_lemma_mappings` and `sentence_bank` were estimated
+368x low, and was closed 2026-08-22 when `pg_class.reltuples` turned out to be
+within 0.3% of the real counts. Before concluding the planner's numbers are
+stale, check the catalog rather than the counters:
+
+| Question | Where the answer is | Survives a restart? |
+|---|---|---|
+| What row count does the planner use? | `pg_class.reltuples` (+ `relpages`) | yes — catalog |
+| Are per-column histograms/MCVs present? | `pg_stats` | yes — catalog |
+| Did the `CREATE STATISTICS` objects get populated? | `pg_statistic_ext_data` — only `ANALYZE` ever writes these | yes — catalog |
+| When did analyze/vacuum last run? | `pg_stat_user_tables` | **no** |
+
+`EXPLAIN` settles it outright: the estimated `rows=` on a scan node is what the
+planner believes, and on a parallel plan that figure is **per worker**.
+
+A quiet autovacuum is also not a broken one. The thresholds are computed from
+`pg_class.reltuples`, so with §4's per-table `autovacuum_analyze_scale_factor =
+0.02` a 5M-row table needs ~101k modifications before autoanalyze fires — months
+of ordinary traffic on an insert-mostly table, and correct.
