@@ -8,6 +8,8 @@
  * the reducer reconciles in the 'sync' action.
  */
 
+import { SWIPE_COMMIT_VELOCITY } from '../../utils/swipeDecision';
+
 // ── View mode ─────────────────────────────────────────────────────────────
 
 export type VocabViewMode = 'rows' | 'cards';
@@ -29,20 +31,56 @@ export function parseViewMode(
 /** Same 90pt threshold as BookmarkRowWrapper's row swipes. */
 export const SWIPE_THRESHOLD = 90;
 
+/**
+ * …or a flick faster than this commits on its own, however short the drag —
+ * without it a quick thumb flick travels ~60pt, falls inside SWIPE_THRESHOLD
+ * and springs back, which is what "the card barely responds" was (#110).
+ * Deliberately the home feed's constant, not a second number: the same finger
+ * movement should commit on a movie row and on a word card alike.
+ */
+export const SWIPE_VELOCITY_THRESHOLD = SWIPE_COMMIT_VELOCITY;
+
 export type SwipeAction = 'learn' | 'next' | null;
 
 /**
- * Gesture release → action. Left past the threshold = "I know this",
- * right = next card. Anything inside the threshold is a no-op (spring back).
+ * Gesture release → action. Toward the leading edge = "I know this", toward
+ * the trailing edge = next card. Commits once the card has travelled past
+ * `threshold` OR been flicked faster than SWIPE_VELOCITY_THRESHOLD; anything
+ * slower and shorter is a no-op (spring back).
+ *
+ * `dx` and `vx` are both LOGICAL — positive means toward the trailing edge in
+ * either reading direction. `vx` is a physical value like `dx`, so the caller
+ * multiplies both by `directionSign`; forgetting it on `vx` alone would make
+ * an Arabic flick commit the opposite action to an Arabic drag.
+ *
+ * Direction resolution mirrors swipeActionOnRelease exactly (prefer the drag,
+ * fall back to the flick only when the card released at dx 0). A second, more
+ * clever tie-break here would recreate the two-answers-to-one-question split
+ * this change exists to remove.
  */
-export function swipeDecision(dx: number, threshold: number = SWIPE_THRESHOLD): SwipeAction {
-  if (dx <= -threshold) return 'learn';
-  if (dx >= threshold) return 'next';
-  return null;
+export function swipeDecision(
+  dx: number,
+  vx: number = 0,
+  threshold: number = SWIPE_THRESHOLD,
+): SwipeAction {
+  const committed = Math.abs(dx) >= threshold || Math.abs(vx) > SWIPE_VELOCITY_THRESHOLD;
+  if (!committed) return null;
+  const dir = dx !== 0 ? dx : vx;
+  if (dir === 0) return null;
+  return dir > 0 ? 'next' : 'learn';
 }
 
-/** The drag must be this many times more horizontal than vertical to claim. */
-export const HORIZONTAL_BIAS = 1.5;
+/**
+ * The drag must be this many times more horizontal than vertical to claim.
+ * 1.0 is "more horizontal than vertical" — a 45° cone, widened from the 34°
+ * one at 1.5, which rejected the diagonal arc a real thumb traces. It stops
+ * short of the home feed's 0.65 (57°, which accepts drags whose *vertical*
+ * travel is the larger of the two) because the deck's mis-claim is the more
+ * expensive one: on grant it disables the entire MovieDetail ScrollView
+ * (handleDeckDragStateChange) and then refuses termination, so a gesture
+ * claimed by mistake freezes the screen's scrolling until the finger lifts.
+ */
+export const HORIZONTAL_BIAS = 1.0;
 /** Minimum horizontal travel before the deck claims the gesture. */
 export const CLAIM_DISTANCE = 10;
 

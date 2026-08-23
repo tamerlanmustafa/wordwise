@@ -589,7 +589,10 @@ export const WordCardDeck = ({
       },
       onPanResponderRelease: (_, g) => {
         onDragStateChangeRef.current?.(false);
-        const action = swipeDecision(g.dx * directionSign);
+        // `vx` is physical for the same reason `dx` is — it mirrors nowhere —
+        // so it converts on the way in too, or a flick would commit the
+        // opposite action to the drag it ended.
+        const action = swipeDecision(g.dx * directionSign, g.vx * directionSign);
         if (action === 'next') {
           doAdvanceRef.current('swipe');
           return;

@@ -8,12 +8,15 @@ import {
   pickDefaultLevel,
   resolveBookmarkLevel,
   SWIPE_THRESHOLD,
+  SWIPE_VELOCITY_THRESHOLD,
+  HORIZONTAL_BIAS,
   CLAIM_DISTANCE,
   STACK_SLOTS,
   VIEW_MODE_KEY,
   type DeckState,
   type VocabViewMode,
 } from '../deckLogic';
+import { SWIPE_COMMIT_VELOCITY, SWIPE_H_BIAS } from '../../../utils/swipeDecision';
 
 const KEYS = ['hollow', 'brittle', 'run out of', 'grim'];
 
@@ -145,6 +148,36 @@ describe('swipeDecision', () => {
   it('matches BookmarkRowWrapper: 90pt', () => {
     expect(SWIPE_THRESHOLD).toBe(90);
   });
+
+  // #110: the deck used to read distance only, so the flick below — the
+  // gesture users actually make — travelled 60pt and did nothing.
+  it('commits a short fast flick that never reaches the distance threshold', () => {
+    expect(swipeDecision(60, SWIPE_VELOCITY_THRESHOLD + 0.3)).toBe('next');
+    expect(swipeDecision(-60, -(SWIPE_VELOCITY_THRESHOLD + 0.3))).toBe('learn');
+  });
+
+  it('still springs back on a short SLOW drag — the distance rule is intact', () => {
+    expect(swipeDecision(60, 0.1)).toBeNull();
+    expect(swipeDecision(-60, -0.1)).toBeNull();
+    expect(swipeDecision(89, SWIPE_VELOCITY_THRESHOLD)).toBeNull();
+  });
+
+  it('behaves exactly as before when no velocity is supplied', () => {
+    for (const dx of [0, -89, 89, -SWIPE_THRESHOLD, SWIPE_THRESHOLD, -91, 91, -300, 300]) {
+      expect(swipeDecision(dx, 0)).toBe(swipeDecision(dx));
+    }
+    expect(swipeDecision(89, 0)).toBeNull();
+    expect(swipeDecision(-91, 0)).toBe('learn');
+  });
+
+  it('takes the direction from a pure flick with no travel at all', () => {
+    expect(swipeDecision(0, 0.9)).toBe('next');
+    expect(swipeDecision(0, -0.9)).toBe('learn');
+  });
+
+  it('reuses the home feed flick speed rather than a second constant', () => {
+    expect(SWIPE_VELOCITY_THRESHOLD).toBe(SWIPE_COMMIT_VELOCITY);
+  });
 });
 
 describe('shouldClaimHorizontalDrag (deck vs. vertical scroll)', () => {
@@ -158,9 +191,25 @@ describe('shouldClaimHorizontalDrag (deck vs. vertical scroll)', () => {
     expect(shouldClaimHorizontalDrag(0, -12)).toBe(false);
   });
 
-  it('leaves ambiguous diagonals to the ScrollView', () => {
-    // 15 is not > 12 * 1.5, so the scroll keeps the gesture.
-    expect(shouldClaimHorizontalDrag(15, 12)).toBe(false);
+  // #110: at the old 1.5 this exact drag fell through to the scroll, which is
+  // half of why a real thumb swipe read as unresponsive.
+  it('claims the diagonal arc a real thumb traces', () => {
+    expect(shouldClaimHorizontalDrag(15, 12)).toBe(true);
+    expect(shouldClaimHorizontalDrag(-15, 12)).toBe(true);
+  });
+
+  it('still leaves a vertically-dominant drag to the ScrollView', () => {
+    // 12 is not > 15, so the screen scrolls. The home feed's 0.65 would claim
+    // this one; the deck deliberately does not — it kills the whole screen's
+    // scroll for the gesture and cannot hand it back.
+    expect(shouldClaimHorizontalDrag(12, 15)).toBe(false);
+    expect(shouldClaimHorizontalDrag(20, 26)).toBe(false);
+  });
+
+  it('stays stricter than the home feed, on purpose', () => {
+    expect(HORIZONTAL_BIAS).toBeGreaterThan(SWIPE_H_BIAS);
+    // …but no longer stricter than "more horizontal than vertical".
+    expect(HORIZONTAL_BIAS).toBeLessThanOrEqual(1);
   });
 
   it('ignores sub-threshold horizontal jitter', () => {

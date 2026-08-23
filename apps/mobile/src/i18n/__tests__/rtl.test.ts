@@ -161,6 +161,20 @@ describe('swipe actions follow the reading direction', () => {
     expect(swipeDecision(FAR_RIGHT * rtl)).toBe('learn');
   });
 
+  it('mirrors a deck FLICK too — velocity is as physical as distance', () => {
+    // A flick short enough that only the velocity term commits it (#110). Both
+    // components have to be converted at the call site: mirroring `dx` alone
+    // and leaving `vx` raw is silent under LTR and gives an Arabic reader the
+    // opposite action, which is the whole trap this guard exists for.
+    const SHORT = 40;
+    const FLICK = 0.9;
+    expect(swipeDecision(SHORT * ltr, FLICK * ltr)).toBe('next');
+    expect(swipeDecision(-SHORT * ltr, -FLICK * ltr)).toBe('learn');
+    // The same physical finger movement, mirrored, means the opposite action.
+    expect(swipeDecision(SHORT * rtl, FLICK * rtl)).toBe('learn');
+    expect(swipeDecision(-SHORT * rtl, -FLICK * rtl)).toBe('next');
+  });
+
   it('leaves the claim test direction-blind — it only measures steepness', () => {
     expect(shouldClaimHorizontal(40, 5)).toBe(shouldClaimHorizontal(-40, 5));
     expect(shouldClaimHorizontalDrag(40, 5)).toBe(shouldClaimHorizontalDrag(-40, 5));
@@ -289,6 +303,32 @@ describe('gestures are written in logical direction', () => {
       return GESTURE_AXIS.test(code) && !code.includes('directionSign');
     }).map((file) => path.relative(SRC, file));
 
+    expect(offenders).toEqual([]);
+  });
+
+  // The rule above is per FILE, which is one grain too coarse for velocity:
+  // a handler that already mirrors `dx` satisfies it while passing a raw `vx`
+  // beside it, and that reads as correct in every LTR test (#110). Unlike
+  // `dx` — which the direction-blind claim tests read on purpose — `vx` has
+  // no legitimate unmirrored consumer, so it can be pinned line by line.
+  // Matches the conversion attached to the `vx` read itself, either way round.
+  // Deliberately not "the line mentions directionSign somewhere": every real
+  // call site mirrors `dx` on that same line, so the loose form is satisfied by
+  // the neighbour and lets the raw `vx` through — which is the bug verbatim.
+  const VX_READ = /\.\s*vx\b/;
+  const VX_CONVERTED =
+    /(?:\.\s*vx\s*\*\s*directionSign|directionSign\s*\*\s*[A-Za-z_$][\w$]*\.\s*vx\b)/;
+
+  it('never reads a gesture vx without converting that read', () => {
+    const offenders: string[] = [];
+    for (const file of FILES) {
+      readLines(file).forEach((line, i) => {
+        if (isComment(line)) return;
+        if (VX_READ.test(line) && !VX_CONVERTED.test(line)) {
+          offenders.push(`${path.relative(SRC, file)}:${i + 1}  ${line.trim().slice(0, 80)}`);
+        }
+      });
+    }
     expect(offenders).toEqual([]);
   });
 });
