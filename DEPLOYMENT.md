@@ -72,9 +72,9 @@ The paywall/billing surface exists (`billing.py`: apple/google verify, restore, 
 
 ### 2.5 Public privacy-policy, terms & deletion URLs (store forms require them)
 Both stores require **public URLs** for privacy policy and terms; Play also needs the account-deletion request URL from 2.1. These do **not** require deploying the web app — you only need **three static pages** reachable at a public URL.
-- [ ] **[You]** Set up email at your domain: Cloudflare → Email Routing (free) → forward `support@getwordwise.us` + `privacy@getwordwise.us` → your Gmail. ~5 min. (The existing policy pages list dead `@wordwise.app` addresses.)
+- [ ] **[You]** Set up email at your domain: Cloudflare → Email Routing (free) → forward `support@getwordwise.us` + `privacy@getwordwise.us` → your Gmail. ~5 min. **Still the blocker as of 2026-08-23** — `getwordwise.us` has **no MX record**, so both addresses bounce today. Resend's records (`send.getwordwise.us` SPF + `resend._domainkey`) are *send-only* and do not create a mailbox. The policy pages now print these addresses (#100b), so a GDPR deletion request sent to one is currently undeliverable.
 - [ ] **[You]** Host `privacy`, `terms`, and a `delete-account` request page at a public URL — simplest is a **Cloudflare Pages** project on the existing domain (you're already on Cloudflare), or any static host. No backend needed.
-- [ ] **[Claude]** Update the mobile Terms/Privacy screens + the static pages to the new `@getwordwise.us` addresses, and link them from the app.
+- [x] **[Claude]** Update the mobile Terms/Privacy screens + the static pages to the new `@getwordwise.us` addresses, and link them from the app. **Done 2026-08-23** (#100b): `PrivacyScreen.tsx`, `PrivacyPage.tsx`, `TermsPage.tsx`; guarded by `apps/mobile/src/components/__tests__/legalCopy.test.ts`.
 - [ ] Result: `https://<host>/privacy`, `/terms`, `/delete-account` become the URLs you paste into both store forms.
 
 ---

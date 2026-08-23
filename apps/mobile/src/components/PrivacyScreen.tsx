@@ -40,7 +40,7 @@ export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
 function PrivacyContent() {
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: April 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: August 23, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Information We Collect</Text>
       <Text style={styles.body}>
@@ -77,12 +77,15 @@ function PrivacyContent() {
 
       <Text style={styles.sectionTitle}>7. Your Rights</Text>
       <Text style={styles.body}>
-        You have the right to access, correct, or delete your personal data. You may also opt out of personalized advertising. To exercise these rights, contact us at privacy@wordwise.app.
+        You have the right to access, correct, or delete your personal data. You may also opt out of personalized advertising. To exercise these rights, contact us at privacy@getwordwise.us.
       </Text>
 
       <Text style={styles.sectionTitle}>8. Contact</Text>
       <Text style={styles.body}>
-        For privacy-related questions, contact privacy@wordwise.app.
+        For privacy-related questions, contact privacy@getwordwise.us.
+      </Text>
+      <Text style={styles.body}>
+        This Privacy Policy is published in English. Any translation is provided for convenience only; the English version is authoritative.
       </Text>
     </>
   );
@@ -91,7 +94,7 @@ function PrivacyContent() {
 function TermsContent() {
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: April 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: August 23, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
       <Text style={styles.body}>
@@ -140,7 +143,10 @@ function TermsContent() {
 
       <Text style={styles.sectionTitle}>10. Contact</Text>
       <Text style={styles.body}>
-        For questions about these terms, contact support@wordwise.app.
+        For questions about these terms, contact support@getwordwise.us.
+      </Text>
+      <Text style={styles.body}>
+        These Terms are published in English. Any translation is provided for convenience only; the English version is authoritative.
       </Text>
     </>
   );

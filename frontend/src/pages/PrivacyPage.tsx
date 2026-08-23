@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last updated: April 2026
+        Last updated: August 23, 2026
       </Typography>
 
       <Section title="1. Information We Collect">
@@ -49,11 +49,13 @@ export default function PrivacyPage() {
 
       <Section title="7. Your Rights">
         You have the right to access, correct, or delete your personal data. You may also opt out
-        of personalized advertising. To exercise these rights, contact us at privacy@wordwise.app.
+        of personalized advertising. To exercise these rights, contact us at privacy@getwordwise.us.
       </Section>
 
       <Section title="8. Contact">
-        For privacy-related questions, contact privacy@wordwise.app.
+        For privacy-related questions, contact privacy@getwordwise.us. This Privacy Policy is
+        published in English. Any translation is provided for convenience only; the English
+        version is authoritative.
       </Section>
     </Container>
   );

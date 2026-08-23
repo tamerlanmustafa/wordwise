@@ -7,7 +7,7 @@ export default function TermsPage() {
         Terms of Service
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last updated: April 2026
+        Last updated: August 23, 2026
       </Typography>
 
       <Section title="1. Acceptance of Terms">
@@ -61,7 +61,9 @@ export default function TermsPage() {
       </Section>
 
       <Section title="10. Contact">
-        For questions about these terms, contact support@wordwise.app.
+        For questions about these terms, contact support@getwordwise.us. These Terms are
+        published in English. Any translation is provided for convenience only; the English
+        version is authoritative.
       </Section>
     </Container>
   );
