@@ -44,6 +44,7 @@ def _report(raw_overrides: dict, previous=None, cap_usd: float = 50.0) -> dict[s
         "llm_cost_24h": 0.0,
         # Every level deeper than the warn band → ok.
         "feed_pool_by_level": {"A2": 6000, "B1": 2000, "B2": 5000, "C1": 8000},
+        "snapshot_age_hours": 24.0,   # written yesterday → ok
     }
     raw.update(raw_overrides)
     return _by_key(vc.build_report(raw, previous, cap_usd))
@@ -147,6 +148,40 @@ def test_feed_pool_with_no_levels_fails_loudly():
 def test_feed_pool_is_a_stat_tile_not_a_meter():
     # Unbounded count: there is no natural 100% for "lemmas in stock".
     assert _report({})["feed_pool_min_level"]["max_value"] is None
+
+
+def test_snapshot_age_bands():
+    """#154: the daily writer died on 2026-08-18 and the only signal was a WARN
+    log. These bands are what turns that into a red card — one missed day warns,
+    three days fails."""
+    assert _report({"snapshot_age_hours": 24.0})["vocab_snapshot_age"]["status"] == vc.OK
+    # Exactly on a bound is still the better side — _status_max is strict >.
+    assert _report({"snapshot_age_hours": 36.0})["vocab_snapshot_age"]["status"] == vc.OK
+    assert _report({"snapshot_age_hours": 40.0})["vocab_snapshot_age"]["status"] == vc.WARN
+    assert _report({"snapshot_age_hours": 72.0})["vocab_snapshot_age"]["status"] == vc.WARN
+    # The real prod hole on the day this was fixed: 5 days 8h.
+    m = _report({"snapshot_age_hours": 128.45})["vocab_snapshot_age"]
+    assert m["status"] == vc.FAIL
+    assert m["value"] == pytest.approx(128.45)
+    assert (m["warn_at"], m["fail_at"], m["direction"]) == (36.0, 72.0, "max")
+
+
+def test_snapshot_age_with_no_snapshot_warns_but_cannot_fail():
+    """A never-written snapshot and a fresh database are indistinguishable from
+    here, so an empty table must not paint the dashboard red on day one."""
+    m = _report({"snapshot_age_hours": None})["vocab_snapshot_age"]
+    assert m["value"] is None
+    assert m["status"] == vc.WARN
+    assert "has ever been written" in m["detail"]
+
+
+def test_stale_snapshot_alone_fails_the_whole_report():
+    """The point of the metric: with every vocabulary number healthy, a dead
+    writer still turns the card red instead of reading ok."""
+    healthy = _report({})
+    assert vc._overall_status(list(healthy.values())) == vc.OK
+    stale = _report({"snapshot_age_hours": 128.0})
+    assert vc._overall_status(list(stale.values())) == vc.FAIL
 
 
 def test_translation_cache_growth_stall():
@@ -283,6 +318,23 @@ class _FakeSnapshotTable:
         return SimpleNamespace(id=len(self.created))
 
 
+class _FakeTx:
+    """Stands in for Prisma's interactive-transaction context manager, recording
+    the timeout it was opened with so the test can pin it."""
+
+    def __init__(self, db, timeout):
+        self._db = db
+        self._db.tx_timeouts.append(timeout)
+
+    async def __aenter__(self):
+        self._db.tx_depth += 1
+        return self._db
+
+    async def __aexit__(self, *exc):
+        self._db.tx_depth -= 1
+        return False
+
+
 class _FakeDb:
     """Routes vocab_coverage's raw queries to canned counts by a distinctive
     substring of each SQL statement — no Postgres, no Prisma engine."""
@@ -290,8 +342,24 @@ class _FakeDb:
     def __init__(self, raw: dict, snapshot=None):
         self._raw = raw
         self.vocabcoveragesnapshot = _FakeSnapshotTable(snapshot)
+        self.executed: list[str] = []
+        self.tx_timeouts: list = []
+        self.tx_depth = 0
+        # Ordered log of ("set"|"query", inside_a_transaction) — the ordering
+        # matters as much as the setting, see test_gather_disables_parallelism.
+        self.events: list[tuple[str, bool]] = []
+
+    def tx(self, *, timeout=None, **_kwargs):
+        return _FakeTx(self, timeout)
+
+    async def execute_raw(self, sql: str, *args):
+        assert self.tx_depth > 0, "SET LOCAL outside a transaction is a no-op"
+        self.executed.append(" ".join(sql.split()))
+        self.events.append(("set", True))
+        return 0
 
     async def query_raw(self, sql: str, *args):
+        self.events.append(("query", self.tx_depth > 0))
         s = " ".join(sql.split())
         if "AS covered" in s:
             return [{"total": self._raw["mlm_total"], "covered": self._raw["mlm_covered"]}]
@@ -343,6 +411,39 @@ _BASELINE_RAW = {
 }
 
 
+async def test_gather_disables_parallelism_for_every_count(monkeypatch):
+    """#154: the orphan-sentences count asks Postgres for an 8 MB shared memory
+    segment it cannot get on Railway, so the whole gather runs serially.
+
+    Three things are pinned here, and prod proved each one matters:
+    - the setting is SET LOCAL, so it reverts at COMMIT rather than sticking to
+      a pooled connection and de-parallelising request-path queries later;
+    - it is issued *before* the first count, because Prisma caches the prepared
+      statement per connection and Postgres fixes the plan at that first
+      preparation — set it afterwards and the parallel plan is already pinned;
+    - *every* count runs inside that transaction, not just the one that happens
+      to fail today, for the same reason: one execution outside it poisons the
+      connection's cached plan for the life of the process.
+    """
+    monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+    db = _FakeDb(_BASELINE_RAW)
+    await vc.compute_vocab_coverage(db)
+
+    assert db.executed == ["SET LOCAL max_parallel_workers_per_gather = 0"]
+    assert db.tx_timeouts == [vc._GATHER_TX_TIMEOUT]
+
+    assert db.events[0] == ("set", True), "parallelism must be off before the first count"
+    assert len(db.events) > 1, "no counts ran inside the transaction"
+    assert all(inside for _kind, inside in db.events), "a count escaped the transaction"
+
+
+async def test_gather_timeout_outlasts_the_measured_gather():
+    """Prisma's default transaction budget is 5s and the gather measures ~3.2s
+    of server time on prod. Pin the override so a future edit back to the
+    default doesn't quietly reinstate the outage as a timeout instead."""
+    assert vc._GATHER_TX_TIMEOUT > timedelta(seconds=30)
+
+
 async def test_compute_vocab_coverage_cold(monkeypatch):
     monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
     db = _FakeDb(_BASELINE_RAW)
@@ -369,6 +470,31 @@ async def test_compute_vocab_coverage_detects_noop_increase(monkeypatch):
     assert by_key["noop_translations"]["delta"] == 7
     assert report["overall_status"] == vc.FAIL
     assert report["previous_snapshot_at"] is not None
+
+
+async def test_snapshot_age_is_measured_from_the_stored_row(monkeypatch):
+    """End-to-end: the age comes off the newest row's captured_at, not a
+    hand-fed number. Driven by moving that timestamp, not by waiting."""
+    monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+
+    def _report_with_snapshot_age(hours: float) -> dict:
+        snapshot = SimpleNamespace(
+            capturedAt=datetime.now(timezone.utc) - timedelta(hours=hours),
+            metrics={"metrics": []},
+        )
+        return _FakeDb(_BASELINE_RAW, snapshot=snapshot)
+
+    fresh = _by_key((await vc.compute_vocab_coverage(_report_with_snapshot_age(20)))["metrics"])
+    assert fresh["vocab_snapshot_age"]["status"] == vc.OK
+    assert fresh["vocab_snapshot_age"]["value"] == pytest.approx(20.0, abs=0.01)
+
+    missed = _by_key((await vc.compute_vocab_coverage(_report_with_snapshot_age(48)))["metrics"])
+    assert missed["vocab_snapshot_age"]["status"] == vc.WARN
+
+    # The prod condition on the day this shipped.
+    dead = await vc.compute_vocab_coverage(_report_with_snapshot_age(128))
+    assert _by_key(dead["metrics"])["vocab_snapshot_age"]["status"] == vc.FAIL
+    assert dead["overall_status"] == vc.FAIL
 
 
 async def test_maybe_write_daily_snapshot_respects_interval(monkeypatch):

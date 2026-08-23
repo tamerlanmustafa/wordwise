@@ -56,6 +56,20 @@ describe('groupMetricsByCategory', () => {
   it('returns nothing for an empty metric list', () => {
     expect(groupMetricsByCategory([])).toEqual([]);
   });
+
+  it('shows snapshot age first, not buried in Other (#154)', () => {
+    // The daily snapshot writer died silently for five days. Its age metric is
+    // the only thing on this screen that says so, and every trend arrow in the
+    // other tabs is measured against that snapshot — so it leads, and it must
+    // not fall through to the unnamed "Other" bucket.
+    const sections = groupMetricsByCategory([
+      metric({ key: 'llm_cost_last_24h' }),
+      metric({ key: 'vocab_snapshot_age', unit: 'hours', status: 'fail' }),
+    ]);
+    expect(sections[0].category.id).toBe('pipeline');
+    expect(sections[0].metrics.map((m) => m.key)).toEqual(['vocab_snapshot_age']);
+    expect(sections.some((s) => s.category.id === 'other')).toBe(false);
+  });
 });
 
 describe('category + explanation copy', () => {

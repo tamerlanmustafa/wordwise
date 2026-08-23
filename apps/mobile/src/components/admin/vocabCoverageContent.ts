@@ -11,7 +11,13 @@
 
 import type { VocabCoverageMetric } from '../../services/api';
 
-export type CoverageCategoryId = 'coverage' | 'quality' | 'caches' | 'cost' | 'other';
+export type CoverageCategoryId =
+  | 'pipeline'
+  | 'coverage'
+  | 'quality'
+  | 'caches'
+  | 'cost'
+  | 'other';
 
 export interface CoverageCategory {
   id: CoverageCategoryId;
@@ -24,6 +30,15 @@ export interface CoverageCategory {
 }
 
 export const COVERAGE_CATEGORIES: readonly CoverageCategory[] = [
+  // First tab on purpose: every trend line in the others is measured against
+  // the last snapshot, so if the writer has stopped they are all comparing
+  // today against whenever it died (#154).
+  {
+    id: 'pipeline',
+    label: 'Reporting',
+    blurb: 'Is this report itself still being collected?',
+    keys: ['vocab_snapshot_age'],
+  },
   {
     id: 'coverage',
     label: 'Coverage',
@@ -56,6 +71,8 @@ export const COVERAGE_CATEGORIES: readonly CoverageCategory[] = [
 
 /** High-level, jargon-free: what does this number actually tell me? */
 export const METRIC_EXPLANATIONS: Readonly<Record<string, string>> = {
+  vocab_snapshot_age:
+    'How long ago the sentence worker last saved a copy of these numbers. It should do that once a day, and every “since last snapshot” arrow on this page is measured against that copy — so if this climbs past a day or two, the writer has stopped and the trends below are comparing today against stale numbers rather than yesterday.',
   usage_weighted_sentence_coverage:
     'Of all the words people actually meet in movies, the share that have at least one example sentence ready to show. Weighted by how often each word appears, so common words count more than rare ones. This is the headline "is the product ready" number.',
   uncovered_visible_lemmas:

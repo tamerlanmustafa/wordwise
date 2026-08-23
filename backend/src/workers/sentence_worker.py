@@ -198,6 +198,28 @@ async def run_cycle(
     return CycleResult(outcome="generated", fetched=len(rows), stored=stored_total)
 
 
+async def write_coverage_snapshot_if_due(db) -> bool:
+    """Write the daily vocab-coverage snapshot, swallowing anything it raises.
+
+    The isolation is deliberate: a snapshot is observability, and observability
+    failing must never stop the worker generating sentences. Returns True when a
+    row was actually written.
+
+    Swallowing it is also how the failure stayed invisible for five days
+    (#154) — a WARN in the logs is not a signal anyone receives. The visible
+    half now lives on the report itself: `vocab_snapshot_age` turns
+    /admin/health/vocab-coverage red once no row has landed for three days, so
+    this handler can keep being quiet without the outage being quiet too.
+    """
+    try:
+        from src.services.vocab_coverage import maybe_write_daily_snapshot
+
+        return await maybe_write_daily_snapshot(db)
+    except Exception as exc:
+        logger.warning("[sentence-worker] coverage snapshot skipped: %s", exc)
+        return False
+
+
 async def run_forever() -> None:
     """Process entrypoint: connect, then loop cycles until SIGINT/SIGTERM."""
     from prisma import Prisma
@@ -242,13 +264,7 @@ async def run_forever() -> None:
             # Once-daily vocab-coverage snapshot. Runs before the LLM check so
             # it still fires when the LLM is unavailable; short-circuits on a
             # single indexed lookup when a recent snapshot already exists.
-            # Isolated so a snapshot failure never disturbs sentence generation.
-            try:
-                from src.services.vocab_coverage import maybe_write_daily_snapshot
-
-                await maybe_write_daily_snapshot(db)
-            except Exception as exc:
-                logger.warning("[sentence-worker] coverage snapshot skipped: %s", exc)
+            await write_coverage_snapshot_if_due(db)
 
             if llm is None:
                 try:

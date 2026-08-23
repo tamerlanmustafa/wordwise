@@ -228,3 +228,37 @@ async def test_cycle_passes_cefr_and_lemma_ids_to_the_llm():
     assert by_word["wistful"].cefr == "C1"
     assert by_word["wistful"].lemma == "wistful"
     assert by_word["plain"].cefr is None
+
+
+# ── daily coverage snapshot isolation (#154) ─────────────────────────────────
+
+async def test_snapshot_failure_never_reaches_the_worker_cycle(monkeypatch, caplog):
+    """The whole reason #154 stayed invisible for five days: this call swallows
+    everything, on purpose, because a failed metric must not stop sentence
+    generation. Pin that — a raising snapshot returns False and logs, it does
+    not propagate. The visibility half is vocab_snapshot_age on the report."""
+    import src.services.vocab_coverage as vc
+
+    async def _boom(db, *a, **k):
+        raise RuntimeError(
+            'could not resize shared memory segment "/PostgreSQL.1" to 8388608 '
+            "bytes: No space left on device"
+        )
+
+    monkeypatch.setattr(vc, "maybe_write_daily_snapshot", _boom)
+
+    with caplog.at_level("WARNING"):
+        wrote = await sw.write_coverage_snapshot_if_due(_FakeDb(pages=[]))
+
+    assert wrote is False
+    assert "coverage snapshot skipped" in caplog.text
+
+
+async def test_snapshot_success_is_reported(monkeypatch):
+    import src.services.vocab_coverage as vc
+
+    async def _wrote(db, *a, **k):
+        return True
+
+    monkeypatch.setattr(vc, "maybe_write_daily_snapshot", _wrote)
+    assert await sw.write_coverage_snapshot_if_due(_FakeDb(pages=[])) is True

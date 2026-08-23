@@ -15,11 +15,15 @@ Splitting rule: `build_report` is pure (raw counts + previous values -> metric
 dicts) so thresholds are unit-testable without a database; the `_gather_raw`
 and snapshot helpers own all DB I/O. The metric shape and the ok/warn/fail
 bands are shared with the other /admin/health/* reports — see health_metrics.
+
+The report also watches itself: `vocab_snapshot_age` reports how long ago the
+worker last persisted a snapshot, because the writer failed silently for five
+days and only a WARN log said so (#154).
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from prisma import Json, Prisma
@@ -52,6 +56,19 @@ _GLOSS_MIN_SAMPLE = 200
 # to 100% — one starved level is enough to make the feed look broken (#116).
 _FEED_POOL_WARN = 1000
 _FEED_POOL_FAIL = 300
+
+# The snapshot writer runs once a day, so 36h means one day was missed and 72h
+# means it has been dead long enough that every trend metric below is diffing
+# against fossil numbers. These bands exist because the worker's own failure
+# path is a WARN log nobody reads — it went unnoticed for five days (#154).
+_SNAPSHOT_AGE_WARN_HOURS = 36.0
+_SNAPSHOT_AGE_FAIL_HOURS = 72.0
+
+# Ceiling for the read transaction _gather_raw runs in. Prisma's default is 5s
+# and the gather measures ~3.2s of server time on prod (2026-08-23), which is
+# close enough to trip on a cold cache. It is a once-daily admin read, so a
+# generous bound costs nothing and a tight one would resurrect the outage.
+_GATHER_TX_TIMEOUT = timedelta(minutes=2)
 
 
 # ── status classifiers (snapshot-relative; the absolute bands live in
@@ -98,6 +115,36 @@ def build_report(
     """
     prev = previous_values or {}
     metrics: list[dict] = []
+
+    # 0. Age of the newest snapshot — a metric about this report's own plumbing
+    # rather than about vocabulary, and first because it says whether anything
+    # below can be trusted: every trend metric here diffs against that snapshot,
+    # so once the writer stops they all quietly compare today against last week.
+    # It is also the only outward sign that the daily job died at all (#154).
+    # None means no snapshot has ever been written, which a fresh database and a
+    # writer that never once ran both look like — so it warns rather than fails.
+    age_hours = raw.get("snapshot_age_hours")
+    if age_hours is None:
+        age_value: Optional[float] = None
+        age_status = WARN
+        age_detail = "no coverage snapshot has ever been written"
+    else:
+        age_value = round(float(age_hours), 2)
+        age_status = _status_max(
+            age_value, warn=_SNAPSHOT_AGE_WARN_HOURS, fail=_SNAPSHOT_AGE_FAIL_HOURS
+        )
+        age_detail = "since the sentence worker last wrote a coverage snapshot"
+    metrics.append(_metric(
+        "vocab_snapshot_age",
+        "Coverage snapshot age",
+        age_value, "hours",
+        age_status,
+        f"warn >{_SNAPSHOT_AGE_WARN_HOURS:g}h, fail >{_SNAPSHOT_AGE_FAIL_HOURS:g}h "
+        "(written daily, issue #154)",
+        detail=age_detail,
+        warn_at=_SNAPSHOT_AGE_WARN_HOURS, fail_at=_SNAPSHOT_AGE_FAIL_HOURS,
+        direction="max",
+    ))
 
     # 1. Usage-weighted sentence coverage — % of movie↔lemma mappings whose
     # lemma has ≥1 sentence link (weighted by usage: a lemma in many movies
@@ -308,8 +355,47 @@ def build_report(
 # ── DB I/O ──────────────────────────────────────────────────────────────────
 
 async def _gather_raw(db: Prisma) -> dict[str, Any]:
-    """Run the efficient COUNT/EXISTS queries. Sequential is fine — this is an
-    admin-only / once-daily path, not a hot request."""
+    """Run the efficient COUNT/EXISTS queries with Postgres parallelism off.
+
+    Several of these counts span whole multi-million-row tables, and the planner
+    answers them by splitting the work across helper processes. Those helpers
+    share their working data through a *dynamic shared memory segment* — scratch
+    space Postgres carves out of `/dev/shm` inside its own container. On Railway
+    that filesystem is small, and since 2026-08-18 the orphan-sentences count's
+    request for an 8 MB segment has failed outright, taking the whole daily
+    snapshot down with it (#154). A serial plan asks for no segment at all, and
+    measured on prod 2026-08-23 the full gather is ~3.2s that way — free on a
+    once-a-day admin path.
+
+    Two things about the mechanics, both verified against prod, both load-bearing:
+
+    1. `SET LOCAL` is why this needs a transaction. It reverts at COMMIT, so the
+       setting cannot outlive the gather. A plain `SET` would stick to whichever
+       pooled connection ran it and silently de-parallelise request-path queries
+       that borrow that connection later.
+
+    2. **Every one of these statements must be issued from inside this
+       transaction, and never anywhere else.** Prisma's query engine runs raw SQL
+       as a prepared statement and caches it per connection, keyed on the exact
+       SQL text; Postgres plans it once, at that first preparation, and does not
+       re-plan it when a planner setting changes afterwards. So a single
+       execution of the same text outside this transaction pins the parallel
+       plan onto that connection for the rest of the process's life, and
+       `SET LOCAL` here becomes a no-op against it. Measured: with the parallel
+       plan cached, the identical text still fails while a byte-different text
+       returns in the same transaction — and conversely, once prepared serially
+       in here it stays serial even when later run outside. `_gather_counts` is
+       private and has exactly one caller for that reason.
+    """
+    async with db.tx(timeout=_GATHER_TX_TIMEOUT) as tx:
+        await tx.execute_raw("SET LOCAL max_parallel_workers_per_gather = 0")
+        return await _gather_counts(tx)
+
+
+async def _gather_counts(db: Prisma) -> dict[str, Any]:
+    """The counts themselves. Sequential is fine — this is an admin-only /
+    once-daily path, not a hot request. Split from `_gather_raw` so the
+    transaction/parallelism setup is one readable step above the queries."""
     raw: dict[str, Any] = {}
 
     rows = await db.query_raw(
@@ -412,6 +498,11 @@ async def compute_vocab_coverage(db: Prisma) -> dict:
     """Live report: gather counts, diff against the last snapshot, classify."""
     raw = await _gather_raw(db)
     prev = await _latest_snapshot(db)
+    if prev is not None:
+        age = datetime.now(timezone.utc) - prev["captured_at"]
+        raw["snapshot_age_hours"] = age.total_seconds() / 3600.0
+    else:
+        raw["snapshot_age_hours"] = None
     cap = get_settings().llm_cost_cap_usd
     metrics = build_report(raw, prev["values"] if prev else None, cap)
     return {
