@@ -27,7 +27,10 @@
     "scriptTooShort": "Komut dosyası çok kısa ya da bulunamadı",
     "sortCommon": "En yaygın olanı ⇅",
     "sortRarest": "En nadir olan ilk ⇅",
-    "undo": "GERİ AL"
+    "undo": "GERİ AL",
+    "exampleSentenceLabel": "ÖRNEK CÜMLE",
+    "wordsOfDialogue": "{{formatted}} DİYALOG KELİMESİ",
+    "viewPoster": "Afişi görüntüle"
   },
   "journey": {
     "chestAdded": "“Reveal” koleksiyonunuza eklendi.",

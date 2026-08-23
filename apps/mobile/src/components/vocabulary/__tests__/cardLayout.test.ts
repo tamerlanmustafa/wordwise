@@ -2,12 +2,16 @@ import {
   CARD_HEIGHT,
   DECK_ZONE_HEIGHT,
   STACK_HEADROOM,
+  WORD_SLOT_HEIGHT,
+  SENTENCE_LABEL_HEIGHT,
   wordTier,
   wordTranslationTier,
   sentenceTier,
   sentenceTranslationTier,
+  movieTitleTier,
   WORD_TIER_MAX_CHARS,
   SENTENCE_TIER_MAX_CHARS,
+  MOVIE_TITLE_TIER_MAX_CHARS,
 } from '../cardLayout';
 
 // Stress strings from the approved mockup (1a "Ledger reveal").
@@ -27,6 +31,46 @@ describe('CARD_HEIGHT (the fixed-card contract)', () => {
 
   it('deck zone = headroom for the ghost stack + the card', () => {
     expect(DECK_ZONE_HEIGHT).toBe(STACK_HEADROOM + CARD_HEIGHT);
+  });
+
+  it('paid for the EXAMPLE SENTENCE eyebrow out of the word slot', () => {
+    // The eyebrow replaced a 1pt divider, so 9pt had to come from somewhere;
+    // it came from the word slot (64 → 56) and the gap above it (6 → 5). If a
+    // future slot change forgets to rebalance, the assertion above fails and
+    // the card stops being the constant height the reveal depends on.
+    expect(SENTENCE_LABEL_HEIGHT).toBe(10);
+    expect(WORD_SLOT_HEIGHT).toBe(56);
+  });
+
+  it('the 56pt word slot still seats both word tiers', () => {
+    for (const word of ['hollow', LONG_IDIOM]) {
+      const tier = wordTier(word);
+      expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(WORD_SLOT_HEIGHT);
+    }
+  });
+});
+
+describe('movieTitleTier', () => {
+  it('short title keeps the display size', () => {
+    expect(movieTitleTier('Inception')).toEqual({ fontSize: 26, lineHeight: 29, lines: 2 });
+  });
+
+  it('long title steps down one tier rather than shrinking the hero', () => {
+    const long = 'The Lord of the Rings: The Fellowship of the Ring';
+    expect(long.length).toBeGreaterThan(MOVIE_TITLE_TIER_MAX_CHARS);
+    expect(movieTitleTier(long)).toEqual({ fontSize: 22, lineHeight: 25, lines: 2 });
+  });
+
+  it('both tiers fit two lines inside the 119pt hero plate', () => {
+    for (const title of ['Inception', 'The Lord of the Rings: The Fellowship of the Ring']) {
+      const tier = movieTitleTier(title);
+      expect(tier.lines * tier.lineHeight).toBeLessThan(119);
+    }
+  });
+
+  it('boundary: exactly 26 chars stays on the display tier', () => {
+    expect(movieTitleTier('a'.repeat(MOVIE_TITLE_TIER_MAX_CHARS)).fontSize).toBe(26);
+    expect(movieTitleTier('a'.repeat(MOVIE_TITLE_TIER_MAX_CHARS + 1)).fontSize).toBe(22);
   });
 });
 

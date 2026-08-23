@@ -2,15 +2,6 @@
   "screenTitle": "المفردات",
   "learnedWords": "الكلمات المتعلَّمة",
   "savedWords": "الكلمات المحفوظة",
-  "deckExplainer": {
-    "eyebrowForYou": "مختارة لمستواك",
-    "eyebrowLevel": "المستوى — {{level}} · {{label}}",
-    "bodyForYou": "<0>{{count}} كلمة هي الأهم</0> في هذا الفيلم — مطابقة لمستواك، ومرتّبة بحسب مقدار الحوار الذي تفتحه لك.",
-    "bodyLevel": "كل <0>{{count}} كلمة من مستوى {{level}}</0> وردت في هذا النص — القائمة كاملة، بلا ترتيب ذكي.",
-    "coverage": "≈{{percent}}% تغطية الترجمة",
-    "sortRarest": "الأندر أولًا ⇅",
-    "sortCommon": "الأكثر شيوعًا"
-  },
   "row": {
     "noExamples": "لا تتوفر جمل توضيحية",
     "alsoAppearsIn": "تظهر أيضًا في:",

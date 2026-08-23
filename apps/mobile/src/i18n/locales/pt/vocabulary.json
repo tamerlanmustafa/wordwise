@@ -13,15 +13,6 @@
     "tapToHide": "TOQUE PARA OCULTAR",
     "tapToReveal": "TOQUE PARA VER"
   },
-  "deckExplainer": {
-    "bodyForYou": "As <0>{{count}} palavras mais importantes</0> deste filme — adaptadas ao seu nível e classificadas de acordo com a quantidade de diálogos que elas desbloqueiam.",
-    "bodyLevel": "Todas as <0>{{count}} {{level}} palavras</0> encontradas neste roteiro — a lista completa, sem truques de classificação.",
-    "coverage": "≈{{percent}}% DE COBERTURA DE LEGENDAS",
-    "eyebrowForYou": "ESCOLHIDO DE ACORDO COM O SEU NÍVEL",
-    "eyebrowLevel": "NÍVEL — {{level}} · {{label}}",
-    "sortCommon": "Mais comum",
-    "sortRarest": "O mais raro primeiro ⇅"
-  },
   "learned": {
     "empty": "Ainda não há palavras aprendidas. Deslize para a esquerda sobre uma palavra em qualquer filme para marcá-la como conhecida.",
     "emptyShort": "Ainda não aprendeu nenhuma palavra",

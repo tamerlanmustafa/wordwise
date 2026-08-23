@@ -13,15 +13,6 @@
     "tapToHide": "GİZLEMEK İÇİN DOKUN",
     "tapToReveal": "GÖSTERMEK İÇİN DOKUN"
   },
-  "deckExplainer": {
-    "bodyForYou": "Bu filmde <0>{{count}} en önemli kelime</0> — seviyenize uygun olarak seçilmiş ve diyalogların ne kadarını açtıklarına göre sıralanmış.",
-    "bodyLevel": "Bu senaryoda bulunan tüm <0>{{count}} {{level}} kelime</0> — tam liste, sıralama hilesi yok.",
-    "coverage": "≈{{percent}}% ALTYAZI KAPSAMI",
-    "eyebrowForYou": "SEVİYENİZE UYGUN SEÇİLMİŞ",
-    "eyebrowLevel": "SEVİYE — {{level}} · {{label}}",
-    "sortCommon": "En yaygın",
-    "sortRarest": "En nadir olan ilk ⇅"
-  },
   "learned": {
     "empty": "Henüz öğrenilen kelime yok. Herhangi bir videodaki bir kelimeye sola kaydırarak onu “biliniyor” olarak işaretleyebilirsin.",
     "emptyShort": "Henüz öğrenilmiş kelime yok",

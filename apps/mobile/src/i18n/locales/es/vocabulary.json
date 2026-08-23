@@ -13,15 +13,6 @@
     "tapToHide": "TOCA PARA OCULTAR",
     "tapToReveal": "TOCA PARA VER"
   },
-  "deckExplainer": {
-    "bodyForYou": "Las <0>{{count}} palabras más importantes</0> de esta película —adaptadas a tu nivel y ordenadas según la cantidad de diálogo que desbloquean—.",
-    "bodyLevel": "Se han encontrado un total de <0>{{count}} {{level}} palabras</0> en este guion: la lista completa, sin trucos de clasificación.",
-    "coverage": "≈{{percent}} % DE COBERTURA DE LOS SUBTÍTULOS",
-    "eyebrowForYou": "SELECCIONADO PARA TU NIVEL",
-    "eyebrowLevel": "NIVEL — {{level}} · {{label}}",
-    "sortCommon": "Los más comunes",
-    "sortRarest": "Lo más raro primero ⇅"
-  },
   "learned": {
     "empty": "Aún no hay palabras aprendidas. Desliza el dedo hacia la izquierda sobre una palabra de cualquier película para marcarla como conocida.",
     "emptyShort": "Aún no he aprendido ninguna palabra",

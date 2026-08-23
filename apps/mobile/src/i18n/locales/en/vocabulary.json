@@ -2,15 +2,6 @@
   "screenTitle": "Vocabulary",
   "learnedWords": "Learned Words",
   "savedWords": "Saved Words",
-  "deckExplainer": {
-    "eyebrowForYou": "PICKED FOR YOUR LEVEL",
-    "eyebrowLevel": "LEVEL — {{level}} · {{label}}",
-    "bodyForYou": "The <0>{{count}} words that matter most</0> in this movie — matched to your level, ranked by how much dialogue they unlock.",
-    "bodyLevel": "All <0>{{count}} {{level}} words</0> found in this script — the full list, no ranking magic.",
-    "coverage": "≈{{percent}}% SUBTITLE COVERAGE",
-    "sortRarest": "Rarest first ⇅",
-    "sortCommon": "Most common"
-  },
   "row": {
     "noExamples": "No sentence examples available",
     "alsoAppearsIn": "Also appears in:",

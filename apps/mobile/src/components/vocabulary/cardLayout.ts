@@ -17,13 +17,18 @@ export const CARD_PADDING = 20;
 /** 1. Meta row: card number · CEFR pill · idiom badge · save star. */
 export const META_ROW_HEIGHT = 24;
 export const WORD_SLOT_TOP = 8;
-/** 2. Word slot — bottom-aligned serif headword. */
-export const WORD_SLOT_HEIGHT = 64;
-export const WORD_TR_SLOT_TOP = 6;
+/** 2. Word slot — bottom-aligned serif headword. 56 still seats both tiers
+ *  exactly: the long tier is 2 × 28 lineHeight, the short tier one 38pt line
+ *  sitting on the slot's floor. */
+export const WORD_SLOT_HEIGHT = 56;
+export const WORD_TR_SLOT_TOP = 5;
 /** 3. Word-translation slot — dashed rule while hidden. */
 export const WORD_TR_SLOT_HEIGHT = 26;
-export const DIVIDER_TOP = 12;
-export const DIVIDER_HEIGHT = 1;
+/** 4. `EXAMPLE SENTENCE` eyebrow + hairline. Replaced the bare 1pt divider;
+ *  the 9pt it gained came out of the word slot and the gap above it, so
+ *  CARD_HEIGHT is unchanged. */
+export const SENTENCE_LABEL_TOP = 12;
+export const SENTENCE_LABEL_HEIGHT = 10;
 export const SENTENCE_SLOT_TOP = 12;
 /** 5. Sentence-in-context slot. */
 export const SENTENCE_SLOT_HEIGHT = 88;
@@ -42,8 +47,8 @@ export const CARD_HEIGHT =
   WORD_SLOT_HEIGHT +
   WORD_TR_SLOT_TOP +
   WORD_TR_SLOT_HEIGHT +
-  DIVIDER_TOP +
-  DIVIDER_HEIGHT +
+  SENTENCE_LABEL_TOP +
+  SENTENCE_LABEL_HEIGHT +
   SENTENCE_SLOT_TOP +
   SENTENCE_SLOT_HEIGHT +
   SENTENCE_TR_SLOT_TOP +
@@ -98,6 +103,16 @@ export function sentenceTier(sentence: string): TypeTier {
   return sentence.length <= SENTENCE_TIER_MAX_CHARS
     ? { fontSize: 17, lineHeight: 26, lines: 3 }
     : { fontSize: 14.5, lineHeight: 22, lines: 4 };
+}
+
+export const MOVIE_TITLE_TIER_MAX_CHARS = 26;
+/** Movie-detail hero title. Same step-down rule as the card's slots — a long
+ *  title drops one tier and wraps to a second line rather than shrinking to
+ *  fit, so the 119pt hero plate is the same height for every film. */
+export function movieTitleTier(title: string): TypeTier {
+  return title.length <= MOVIE_TITLE_TIER_MAX_CHARS
+    ? { fontSize: 26, lineHeight: 29, lines: 2 }
+    : { fontSize: 22, lineHeight: 25, lines: 2 };
 }
 
 export const SENTENCE_TR_TIER_MAX_CHARS = 85;

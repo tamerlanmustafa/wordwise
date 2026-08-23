@@ -27,7 +27,10 @@
     "scriptTooShort": "El script es demasiado corto o no se ha encontrado",
     "sortCommon": "Nombre más común ⇅",
     "sortRarest": "Lo más raro primero ⇅",
-    "undo": "DESHACER"
+    "undo": "DESHACER",
+    "exampleSentenceLabel": "FRASE DE EJEMPLO",
+    "wordsOfDialogue": "{{formatted}} PALABRAS DE DIÁLOGO",
+    "viewPoster": "Ver póster"
   },
   "journey": {
     "chestAdded": "Se ha añadido a tu colección de revelaciones.",

@@ -821,33 +821,6 @@ export const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 20,
   },
-  heroBackdrop: {
-    position: 'relative',
-    height: 216,
-    overflow: 'hidden',
-    backgroundColor: '#0A0810',
-  },
-  heroBackdropImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroTopFade: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-  },
-  heroBottomGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  // Title block sits inside the backdrop, right of where the poster tail
-  // overlaps (16 + 92 poster + 14 gap = 122).
-  heroTitleBlock: {
-    position: 'absolute',
-    start: 122,
-    end: 16,
-    bottom: 12,
-  },
   heroTitle: {
     fontSize: 23,
     fontWeight: '800',
@@ -857,58 +830,6 @@ export const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 12,
-  },
-  heroMetaLine: {
-    marginTop: 5,
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.72)',
-  },
-  heroMetaStar: {
-    color: '#FFD166',
-    fontWeight: '700',
-  },
-  heroMetaRating: {
-    color: 'rgba(255,255,255,0.92)',
-    fontWeight: '700',
-  },
-  heroMetaSep: {
-    color: 'rgba(255,255,255,0.45)',
-  },
-  // Bridge row — the poster tail hangs out of the backdrop; stats fill the strip.
-  bridgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 38,
-  },
-  bridgePoster: {
-    width: 92,
-    height: 138,
-    marginTop: -100,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    backgroundColor: '#0A0810',
-    zIndex: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
-  bridgePosterImage: {
-    width: '100%',
-    height: '100%',
-  },
-  statsStrip: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingStart: 14,
   },
   cefrChip: {
     flexDirection: 'row',
@@ -1011,20 +932,6 @@ export const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#fff',
-  },
-  // Overview — quiet text on the app background, no paper box or border.
-  overviewBlock: {
-    paddingTop: 10,
-    paddingHorizontal: 16,
-  },
-  overviewText: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  overviewToggle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 5,
   },
   scriptErrorBox: {
     margin: 16,

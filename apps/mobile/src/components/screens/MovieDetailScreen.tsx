@@ -23,7 +23,6 @@ import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, cefrColors, cefrColorsDark } from '../../theme/palette';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
-import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 
@@ -42,15 +41,19 @@ const isIdiom = (item: RowItem): item is IdiomInfo => 'phrase' in item;
 import { useAuthStore } from '../../stores/authStore';
 import { fetchMovieVocabulary } from '../../services/movieVocabulary';
 import { offlineCache } from '../../services/offlineCache';
-import { stickySpacerRange } from './stickyHeaderSpacer';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
 import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
 import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
-import { DeckExplainerBand } from '../vocabulary/DeckExplainerBand';
 import { FilmEdgeBackdrop } from '../ui/FilmEdgeBackdrop';
+import { MovieDetailHero } from './MovieDetailHero';
+import {
+  FILTER_BAR,
+  DECK_HEADER_ROW,
+  PROGRESS_BAR,
+} from '../vocabulary/deckMetrics';
 import {
   parseViewMode,
   pickDefaultLevel,
@@ -61,7 +64,7 @@ import {
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
 import { track } from '../../services/analytics';
-import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
+import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
@@ -69,8 +72,6 @@ import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 // restore the rows/cards segmented toggle with rows as the persisted default.
 const ROWS_MODE_ENABLED: boolean = false;
 
-// Hide the hero poster/backdrop + overview for now; show only title + vocab stats.
-const SHOW_HERO_SECTION: boolean = false;
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
 
@@ -167,36 +168,12 @@ export const MovieDetailScreen = ({
 
   const bookmarkKey = `movie_bookmark_${movie.id}`;
 
-  const [overviewExpanded, setOverviewExpanded] = useState(false);
-  // Detect whether the overview actually spills past 2 lines so we can hide the
-  // More/Less toggle when it doesn't. Measured unclamped on first layout, then
-  // clamped — see the overview block below.
-  const [overviewLineCount, setOverviewLineCount] = useState<number | null>(null);
-  const overviewTruncated = overviewLineCount != null && overviewLineCount > 2;
   const prevLevelRef = useRef<string>(activeLevel);
   // True = the next [wordsView, activeLevel, wordSortOrder] change is not a
   // user tab switch, so the switch-skeleton must not run. Starts true to
   // cover the effect's mount run; applyVocabulary re-arms it for the
   // load-time level restore.
   const skipSwitchSkeletonRef = useRef(true);
-
-  // Scroll-driven headroom for the sticky tabs header: 0 at rest (tabs sit
-  // flush under the overview), growing to insets.top just as the header pins
-  // so it clears the status bar / dynamic island. See stickySpacerRange.
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const [stickyHeaderY, setStickyHeaderY] = useState(0);
-  const spacerRange = stickySpacerRange(insets.top, stickyHeaderY);
-  const stickySpacerHeight = spacerRange
-    ? scrollY.interpolate({ ...spacerRange, extrapolate: 'clamp' })
-    : 0;
-
-  // The floating back button fades out over the same scroll range: once the
-  // tabs bar docks it would sit on top of the ★ For You tab (both live at
-  // the screen's left edge), so it yields — scrolling back up restores it.
-  const backBtnOpacity = spacerRange
-    ? scrollY.interpolate({ ...spacerRange, outputRange: [1, 0], extrapolate: 'clamp' })
-    : 1;
-  const [headerDocked, setHeaderDocked] = useState(false);
 
   // Splash "WW" pulse — the loading indicator: the wordmark breathes
   // (scales up and down) until the vocabulary arrives.
@@ -557,11 +534,10 @@ export const MovieDetailScreen = ({
 
   const idioms = vocabulary?.idioms || [];
 
-  // Hero stats-strip corpus size: total classified vocab across levels + idioms.
+  // The hero's "N WORDS OF DIALOGUE" line: total classified vocab across levels.
   const totalWordCount = vocabulary
     ? Object.values(vocabulary.level_distribution).reduce((a, b) => a + (b || 0), 0)
     : 0;
-  const idiomCount = idioms.length;
 
   // Idioms have their own CEFR level, so we group them the same way words are
   // grouped — by exact CEFR match. They render inline with the level's words.
@@ -821,16 +797,6 @@ export const MovieDetailScreen = ({
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 
   // Explainer-band inputs. Mix label = the user's level ±1, matching how the
-  // For You pool is built. Coverage: the backend's wordlist_coverage is a
-  // 0–1 fraction and 0.0 on the cached paths — treat 0 as "unavailable" and
-  // hide the meter row rather than show a made-up number.
-  const proficiencyIdx = LEVEL_ORDER.indexOf(userProficiency);
-  const forYouMixLabel =
-    proficiencyIdx >= 0 && proficiencyIdx + 1 < LEVEL_ORDER.length
-      ? `${userProficiency}+${LEVEL_ORDER[proficiencyIdx + 1]} MIX`
-      : `${userProficiency} MIX`;
-  const subtitleCoveragePct =
-    vocabulary && vocabulary.wordlist_coverage > 0 ? vocabulary.wordlist_coverage * 100 : null;
 
   const levelColorFor = useCallback(
     (level: string) => cefrColors[level] || colors.primary,
@@ -849,14 +815,8 @@ export const MovieDetailScreen = ({
 
   const handleDeckCursorChange = useCallback((n: number) => setDeckCardNumber(n), []);
 
-  // While a card is being dragged the outer ScrollView must not pan
-  // vertically, or the slide and the scroll fight over the same finger.
-  // Imperative on purpose: a setState here commits a re-render between the
-  // deck's fly-out animation and its card remount, which strands the next
-  // card off-screen (the native Animated values race the commit).
-  const handleDeckDragStateChange = useCallback((dragging: boolean) => {
-    scrollViewRef.current?.setNativeProps({ scrollEnabled: !dragging });
-  }, []);
+  // Nothing scrolls in cards mode any more, so the deck's drag has no
+  // ScrollView to fight over the finger and needs no lock.
 
   const handleViewModeChange = (mode: VocabViewMode) => {
     if (mode === viewMode) return;
@@ -870,492 +830,239 @@ export const MovieDetailScreen = ({
     // below this screen already pads for the home indicator, so a bottom
     // inset here would double up as dead space above the bar.
     <View style={[styles.container, { backgroundColor: tc.background }]}>
-      {/* With the hero hidden there is no dark backdrop behind the status
-          bar, so the icon style has to follow the theme instead. */}
-      <StatusBar
-        barStyle={SHOW_HERO_SECTION || scheme === 'dark' ? 'light-content' : 'dark-content'}
-      />
+      {/* The backdrop is only a wash over the screen's own background now, so
+          there is no dark slab behind the status bar and the icon style
+          follows the theme rather than the artwork. */}
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
 
       {/* Film-edge decoration: warm top glow + sprocket-dot strips. */}
       <FilmEdgeBackdrop topOffset={insets.top + 52} />
 
+      {/* One fixed viewport: the column below never scrolls, so the movie's
+          identity stays put and the deck's controls stay in the thumb zone.
+          MovieDetailHero is a direct child because its backdrop wash is a
+          SIBLING of its content — a 232pt bleed that Android would clip if it
+          were nested. */}
       <View style={{ flex: 1 }}>
-        <ScrollView
-          ref={scrollViewRef}
-          showsVerticalScrollIndicator={false}
-          style={{ flex: 1 }}
-          scrollEventThrottle={16}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            scrollY.setValue(y);
-            // Docked = tabs bar pinned to the top; disables the (fully
-            // faded) back button so it can't steal taps from the tabs.
-            setHeaderDocked(stickyHeaderY > 0 && y >= stickyHeaderY);
-          }}
-          stickyHeaderIndices={[1]}
-        >
-          {/* 0: Hero — backdrop, poster, overview. Hidden when SHOW_HERO_SECTION
-              is false (cards-focused design). The onLayout is always called to
-              set the sticky header position, but the visual content conditionally
-              renders. */}
-          <View onLayout={(e) => setStickyHeaderY(e.nativeEvent.layout.height)}>
-            {SHOW_HERO_SECTION ? (
-              <>
-                <View style={[styles.heroBackdrop, { height: 216 + insets.top }]}>
-                  {movie.backdrop_path ? (
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` }}
-                      style={styles.heroBackdropImage}
-                      resizeMode="cover"
-                    />
-                  ) : null}
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={['rgba(0,0,0,0.5)', 'transparent']}
-                    style={[styles.heroTopFade, { height: 80 + insets.top }]}
-                  />
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={['rgba(8,6,12,0)', 'rgba(8,6,12,0.45)', 'rgba(8,6,12,0.90)']}
-                    locations={[0.34, 0.64, 1]}
-                    style={styles.heroBottomGradient}
-                  />
-                  {/* Title block — sits right of the poster tail, above the backdrop base */}
-                  <View style={styles.heroTitleBlock}>
-                    <Text style={styles.heroTitle} numberOfLines={2}>{movie.title}</Text>
-                    <Text style={styles.heroMetaLine} numberOfLines={1}>
-                      {movie.release_date ? movie.release_date.slice(0, 4) : null}
-                      {movie.release_date && movie.vote_average != null ? (
-                        <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
-                      ) : null}
-                      {movie.vote_average != null ? (
-                        <Text>
-                          <Text style={styles.heroMetaStar}>★</Text>
-                          <Text style={styles.heroMetaRating}> {movie.vote_average.toFixed(1)}</Text>
-                        </Text>
-                      ) : null}
-                      {(movie.release_date || movie.vote_average != null) && movie.genre_ids && movie.genre_ids.length > 0 ? (
-                        <Text style={styles.heroMetaSep}>{'   ·   '}</Text>
-                      ) : null}
-                      {movie.genre_ids && movie.genre_ids.length > 0
-                        ? movie.genre_ids.slice(0, 3).map((id) => t(`genre.${id}`, { defaultValue: '' })).filter(Boolean).join(' · ')
-                        : null}
-                    </Text>
-                  </View>
-                </View>
+        <MovieDetailHero
+          backdropPath={movie.backdrop_path}
+          posterPath={movie.poster_path}
+          title={movie.title}
+          rating={movie.vote_average}
+          level={difficulty?.level ?? null}
+          matchPct={difficulty ? difficulty.score : null}
+          wordCount={vocabulary ? totalWordCount : null}
+          onBack={onBack}
+          onPosterPress={movie.poster_path ? () => setPosterZoomOpen(true) : undefined}
+          style={{ paddingTop: insets.top }}
+        />
 
-                {/* Bridge — the poster tail hangs 38pt below the backdrop; the stats
-                    strip (CEFR match chip + corpus size) fills the space beside it. */}
-                <View style={styles.bridgeRow}>
-                  <Pressable onPress={() => setPosterZoomOpen(true)} style={styles.bridgePoster}>
-                    <Image
-                      source={{ uri: `https://image.tmdb.org/t/p/w185${movie.poster_path}` }}
-                      style={styles.bridgePosterImage}
-                      resizeMode="cover"
-                    />
-                  </Pressable>
-                  <View style={styles.statsStrip}>
-                    {difficulty ? (
-                      <View
-                        style={[
-                          styles.cefrChip,
-                          {
-                            backgroundColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '26' : '1C'}`,
-                            borderColor: `${cefrColors[difficulty.level] || colors.primary}${scheme === 'dark' ? '55' : '40'}`,
-                          },
-                        ]}
-                      >
-                        <View style={[styles.cefrChipDot, { backgroundColor: cefrColors[difficulty.level] || colors.primary }]} />
-                        <Text style={[styles.cefrChipText, { color: tc.text }]}>
-                          {difficulty.level} · {difficulty.score}% match
-                        </Text>
-                      </View>
-                    ) : null}
-                    {totalWordCount > 0 ? (
-                      <Text style={[styles.corpusText, { color: tc.textSecondary }]} numberOfLines={1}>
-                        {totalWordCount} words{idiomCount > 0 ? ` · ${idiomCount} idioms` : ''}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                {/* Overview — quiet text on the app background, no box */}
-                {movie.overview ? (
-                  <Pressable
-                    onPress={() => setOverviewExpanded((v) => !v)}
-                    style={styles.overviewBlock}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <Text
-                      style={[styles.overviewText, { color: tc.textSecondary }]}
-                      numberOfLines={overviewExpanded ? undefined : overviewLineCount == null ? undefined : 2}
-                      onTextLayout={(e) => {
-                        if (overviewLineCount == null) setOverviewLineCount(e.nativeEvent.lines.length);
-                      }}
-                    >
-                      {movie.overview}
-                    </Text>
-                    {overviewTruncated ? (
-                      <Text style={[styles.overviewToggle, { color: tc.primaryOnSurface }]}>
-                        {overviewExpanded ? t('movies:detail.less') : t('movies:detail.more')}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ) : null}
-              </>
-            ) : (
-              /* Compact header (hero hidden): safe-area padding so nothing
-                 renders under the dynamic island / status bar, plus the movie
-                 title centered clear of the floating back button. Because this
-                 gives the hero slot real height, stickySpacerRange keeps the
-                 tabs clear of the island when they pin, exactly as with the
-                 full hero. */
-              <View style={[deckHeaderStyles.compactHeader, { paddingTop: insets.top + 8 }]}>
-                {/* The floating back button renders over this slot. */}
-                <View style={deckHeaderStyles.compactHeaderSide} />
-                <Text
-                  style={[deckHeaderStyles.compactHeaderTitle, { color: tc.text }]}
-                  numberOfLines={1}
-                >
-                  {movie.title}
-                </Text>
-                {difficulty ? (
-                  <View
+        {/* Level filter, deck counter and progress. Nothing sticks any more
+            — there is no scroll for it to stick against. */}
+        {vocabulary ? (
+          <View>
+            {/* Ledger filter bar: ✦ For You, a divider, then the six CEFR
+                chips sharing the remaining width equally — no horizontal
+                scroll, selection tinted per CEFR colour. */}
+            <View style={[ledgerStyles.filterBar, { backgroundColor: tc.chipBg }]}>
+              {(() => {
+                const foryouActive = wordsView === 'foryou';
+                return (
+                  <TouchableOpacity
                     style={[
-                      deckHeaderStyles.matchPill,
-                      {
-                        backgroundColor: `${cefrColors[difficulty.level] || colors.primary}1F`,
-                        borderColor: `${cefrColors[difficulty.level] || colors.primary}59`,
+                      ledgerStyles.forYouChip,
+                      foryouActive && {
+                        backgroundColor: `${tc.gold}29`,
+                        borderColor: `${tc.gold}73`,
                       },
                     ]}
+                    onPress={() => {
+                      startTransition(() => setWordsView('foryou'));
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: foryouActive }}
                   >
-                    <View
+                    <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
+                    <Text
                       style={[
-                        deckHeaderStyles.matchPillDot,
-                        { backgroundColor: cefrColors[difficulty.level] || colors.primary },
-                      ]}
-                    />
-                    <Text style={[deckHeaderStyles.matchPillText, { color: tc.text }]}>
-                      {difficulty.level} · {Math.round(difficulty.score)}%
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={deckHeaderStyles.compactHeaderSide} />
-                )}
-              </View>
-            )}
-          </View>
-
-          {/* 1: Sticky tabs — sit below the hero, stick to the top of the
-              viewport once scrolled past. The animated spacer expands to
-              insets.top only as the header pins, so the tabs clear the
-              dynamic island when stuck without leaving a gap under the
-              overview at rest. The floating back button fades out on the
-              same range so it never overlaps the ★ For You tab when the
-              bar is docked. */}
-          <View style={{ backgroundColor: tc.background }}>
-            <Animated.View style={{ height: stickySpacerHeight }} />
-            {vocabulary ? (
-              <View style={[styles.stickyVocabHeader, { backgroundColor: tc.background }]}>
-                {/* Ledger filter bar: ✦ For You, a divider, then the six CEFR
-                    chips sharing the remaining width equally — no horizontal
-                    scroll, selection tinted per CEFR colour. */}
-                <View style={[ledgerStyles.filterBar, { backgroundColor: tc.chipBg }]}>
-                  {(() => {
-                    const foryouActive = wordsView === 'foryou';
-                    return (
-                      <TouchableOpacity
-                        style={[
-                          ledgerStyles.forYouChip,
-                          foryouActive && {
-                            backgroundColor: `${tc.gold}29`,
-                            borderColor: `${tc.gold}73`,
-                          },
-                        ]}
-                        onPress={() => {
-                          startTransition(() => setWordsView('foryou'));
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: foryouActive }}
-                      >
-                        <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
-                        <Text
-                          style={[
-                            ledgerStyles.forYouLabel,
-                            {
-                              color: foryouActive
-                                ? scheme === 'dark'
-                                  ? tc.goldOnSurface
-                                  : '#6B4A00'
-                                : tc.textFaint,
-                            },
-                          ]}
-                        >
-                          {t('movies:detail.forYou')}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-                  <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
-                  {wordLevels.map((lvl) => {
-                    const active = wordsView === 'all' && activeLevel === lvl.level;
-                    const c = cefrColors[lvl.level] || colors.primary;
-                    const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
-                    return (
-                      <TouchableOpacity
-                        key={lvl.level}
-                        style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
-                        onPress={() => {
-                          startTransition(() => setWordsView('all'));
-                          setActiveLevel(lvl.level);
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                      >
-                        <Text
-                          style={[
-                            ledgerStyles.levelChipText,
-                            { color: active ? selectedColor : tc.textFaint },
-                            active && ledgerStyles.levelChipTextActive,
-                          ]}
-                        >
-                          {lvl.level}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {/* Explainer band — fixed height, variant swaps with the
-                    selected filter so the deck below never moves. */}
-                <View style={ledgerStyles.bandWrap}>
-                  {wordsView === 'foryou' ? (
-                    <DeckExplainerBand
-                      variant="foryou"
-                      deckSize={deckTotal}
-                      mixLabel={forYouMixLabel}
-                      coveragePct={subtitleCoveragePct}
-                    />
-                  ) : (
-                    <DeckExplainerBand
-                      variant="level"
-                      level={activeLevel}
-                      count={(activeData?.count ?? 0) + allActiveIdioms.length}
-                      sortOrder={wordSortOrder}
-                      onSortChange={setWordSortOrder}
-                    />
-                  )}
-                </View>
-                {wordsView === 'foryou' && suggestedWords.length === 0 ? (
-                  <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
-                ) : viewMode === 'cards' ? (
-                  /* Deck header row: CARD n / total on the left, the deck's
-                     identity tag on the right (sorting lives in the band). */
-                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
-                    <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
-                      CARD {deckCardClamped} / {deckTotal}
-                    </Text>
-                    <Text style={[deckHeaderStyles.deckTag, { color: tc.textFaint }]}>
-                      {wordsView === 'foryou' ? 'FOR YOU' : activeLevel} DECK
-                    </Text>
-                  </View>
-                ) : wordsView === 'all' ? (
-                  <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
-                    <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
-                      <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
-                        {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
-                      </Text>
-                      {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
-                    </Text>
-                    <View style={deckHeaderStyles.sortCluster}>
-                      <TouchableOpacity
-                        onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
-                        activeOpacity={0.6}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
-                          {wordSortOrder === 'rare' ? t('movies:detail.sortRarest') : t('movies:detail.sortCommon')}
-                        </Text>
-                      </TouchableOpacity>
-                      {ROWS_MODE_ENABLED ? (
-                        <View style={[deckHeaderStyles.togglePill, { backgroundColor: tc.chipBg }]}>
-                          {(['rows', 'cards'] as const).map((m) => (
-                            <TouchableOpacity
-                              key={m}
-                              onPress={() => handleViewModeChange(m)}
-                              style={[
-                                deckHeaderStyles.toggleSeg,
-                                viewMode === m && [
-                                  deckHeaderStyles.toggleSegActive,
-                                  { backgroundColor: tc.paper },
-                                ],
-                              ]}
-                              accessibilityRole="button"
-                              accessibilityLabel={m === 'rows' ? t('movies:detail.rowsView') : t('movies:detail.cardsView')}
-                            >
-                              <Ionicons
-                                name={m === 'rows' ? 'list' : 'albums-outline'}
-                                size={14}
-                                color={viewMode === m ? tc.text : tc.textFaint}
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-                {viewMode === 'cards' && deckTotal > 0 ? (
-                  <View style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}>
-                    <View
-                      style={[
-                        deckHeaderStyles.progressFill,
+                        ledgerStyles.forYouLabel,
                         {
-                          backgroundColor: tc.gold,
-                          width: `${Math.round((deckCardClamped / deckTotal) * 100)}%`,
+                          color: foryouActive
+                            ? scheme === 'dark'
+                              ? tc.goldOnSurface
+                              : '#6B4A00'
+                            : tc.textFaint,
                         },
                       ]}
-                    />
-                  </View>
-                ) : null}
+                    >
+                      {t('movies:detail.forYou')}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
+              <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
+              {wordLevels.map((lvl) => {
+                const active = wordsView === 'all' && activeLevel === lvl.level;
+                const c = cefrColors[lvl.level] || colors.primary;
+                const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
+                return (
+                  <TouchableOpacity
+                    key={lvl.level}
+                    style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
+                    onPress={() => {
+                      startTransition(() => setWordsView('all'));
+                      setActiveLevel(lvl.level);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text
+                      style={[
+                        ledgerStyles.levelChipText,
+                        { color: active ? selectedColor : tc.textFaint },
+                        active && ledgerStyles.levelChipTextActive,
+                      ]}
+                    >
+                      {lvl.level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {/* TODO: sort control needs a new home. The rare/common pills
+                lived in the explainer band; `wordSortOrder` still sorts
+                the deck at its 'rare' default, there is just nothing on
+                screen to change it with. */}
+            {wordsView === 'foryou' && suggestedWords.length === 0 ? (
+              <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
+            ) : viewMode === 'cards' ? (
+              /* Deck header row: CARD n / total on the left, the deck's
+                 identity tag on the right. */
+              <View style={[styles.countSortRow, deckHeaderStyles.deckCountRow]}>
+                <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
+                  CARD {deckCardClamped} / {deckTotal}
+                </Text>
+                <Text style={[deckHeaderStyles.deckTag, { color: tc.textFaint }]}>
+                  {wordsView === 'foryou' ? 'FOR YOU' : activeLevel} DECK
+                </Text>
+              </View>
+            ) : wordsView === 'all' ? (
+              <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
+                <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
+                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                  </Text>
+                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
+                </Text>
+                <View style={deckHeaderStyles.sortCluster}>
+                  <TouchableOpacity
+                    onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
+                      {wordSortOrder === 'rare' ? t('movies:detail.sortRarest') : t('movies:detail.sortCommon')}
+                    </Text>
+                  </TouchableOpacity>
+                  {ROWS_MODE_ENABLED ? (
+                    <View style={[deckHeaderStyles.togglePill, { backgroundColor: tc.chipBg }]}>
+                      {(['rows', 'cards'] as const).map((m) => (
+                        <TouchableOpacity
+                          key={m}
+                          onPress={() => handleViewModeChange(m)}
+                          style={[
+                            deckHeaderStyles.toggleSeg,
+                            viewMode === m && [
+                              deckHeaderStyles.toggleSegActive,
+                              { backgroundColor: tc.paper },
+                            ],
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={m === 'rows' ? t('movies:detail.rowsView') : t('movies:detail.cardsView')}
+                        >
+                          <Ionicons
+                            name={m === 'rows' ? 'list' : 'albums-outline'}
+                            size={14}
+                            color={viewMode === m ? tc.text : tc.textFaint}
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+            {viewMode === 'cards' && deckTotal > 0 ? (
+              <View style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}>
+                <View
+                  style={[
+                    deckHeaderStyles.progressFill,
+                    {
+                      backgroundColor: tc.gold,
+                      width: `${Math.round((deckCardClamped / deckTotal) * 100)}%`,
+                    },
+                  ]}
+                />
               </View>
             ) : null}
           </View>
+        ) : null}
 
-          {/* 2: Body (error / word list) — while loading, the poster splash
-              overlay is the loading view, so the body renders nothing. */}
-          <View>
-          {loading ? null : error ? (
-            <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-              <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
-                <Text style={styles.retryButtonText}>{t('action.retry')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+        {/* Body (error / word list). `flex: 1` all the way down to the deck:
+            it is the only elastic block in the column, and it scales its
+            card into whatever this leaves. While loading, the poster splash
+            overlay is the loading view, so the body renders nothing. */}
+        <View style={{ flex: 1 }}>
+        {loading ? null : error ? (
+          <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
+            <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
+              <Text style={styles.retryButtonText}>{t('action.retry')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
-          {vocabulary ? (
-          <View
-            onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
-          >
-            {viewMode === 'cards' && !isSwitching ? (
-              // Card-deck view (mockup 2a). Remounts per tab/sort so each list
-              // starts from its own bookmark restore, exactly like the rows'
-              // scroll restore. Translations stay tap-on-demand inside the deck.
-              <WordCardDeck
-                key={`deck-${wordsView}-${activeLevel}-${wordSortOrder}`}
-                items={deckItems}
-                activeLevel={activeLevel}
-                levelColorFor={levelColorFor}
-                movieId={movieId}
-                movieTitle={movie.title}
-                targetLang={targetLang}
-                isAuthenticated={isAuthenticated}
-                savedWords={savedWords}
-                onSave={handleSaveWord}
-                onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                onAdvanceBookmark={recordAdvanceBookmark}
-                initialWord={deckStartWord}
-                sentencePreviews={sentencePreviews}
-                onCursorChange={handleDeckCursorChange}
-                onDragStateChange={handleDeckDragStateChange}
-              />
-            ) : (
-            <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
-              {isSwitching ? (
-                Array.from({ length: INITIAL_ROWS }).map((_, i) => (
-                  <View key={`skel-${i}`} style={styles.wordSkeletonRow}>
-                    <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarPrimary]} />
-                    <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarSecondary]} />
-                  </View>
-                ))
-              ) : deferredWordsView === 'foryou' ? (
-                <>
-                  {deferredSuggestedVisible
-                    .slice(0, renderLimit)
-                    .filter((item) => {
-                      if (isIdiom(item)) return true;
-                      const entry = sentencePreviews[item.word];
-                      if (!entry) return true; // still loading → keep skeleton
-                      return !!entry.sentence; // confirmed miss → hide
-                    })
-                    .map((item, index) => {
-                    if (isIdiom(item)) {
-                      const key = item.phrase;
-                      return (
-                        <BookmarkRowWrapper
-                          key={`idiom-${key}`}
-                          wordKey={key}
-                          onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
-                          onBookmark={recordBookmark}
-                          onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                          isCurrentBookmark={currentBookmarkWord === key}
-                        >
-                          <IdiomRow
-                            idiom={item}
-                            index={index}
-                            rowNumber={index + 1}
-                            groupColor={cefrColors[item.cefr_level] || colors.primary}
-                            movieId={movieId}
-                            targetLang={targetLang}
-                            isSaved={savedWords.has(key)}
-                            onSave={handleSaveWord}
-                            isAuthenticated={isAuthenticated}
-                            bookmarkHighlight={currentBookmarkWord === key}
-                            accordionMode={accordionMode}
-                            lastOpenedKey={lastOpenedKey}
-                            onExpand={setLastOpenedKey}
-                          />
-                        </BookmarkRowWrapper>
-                      );
-                    }
-                    const key = item.word;
-                    return (
-                      <React.Fragment key={key}>
-                        <BookmarkRowWrapper
-                          wordKey={key}
-                          onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
-                          onBookmark={recordBookmark}
-                          onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
-                          isCurrentBookmark={currentBookmarkWord === key}
-                        >
-                          <ForYouWordRow
-                            word={item}
-                            rowNumber={index + 1}
-                            level={item.cefr_level}
-                            movieId={movieId}
-                            targetLang={targetLang}
-                            isSaved={savedWords.has(key)}
-                            onSave={handleSaveWord}
-                            isAuthenticated={isAuthenticated}
-                            bookmarkHighlight={currentBookmarkWord === key}
-                            isRead={readWords?.has(key)}
-                            accordionMode={accordionMode}
-                            lastOpenedKey={lastOpenedKey}
-                            onExpand={setLastOpenedKey}
-                            preloadedSentence={sentencePreviews[key]}
-                          />
-                        </BookmarkRowWrapper>
-                        {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
-                      </React.Fragment>
-                    );
-                  })}
-                  {suggestedHidden > 0 && (
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() => startTransition(() => setWordsView('all'))}
-                      style={[styles.foryouMoreLink, { backgroundColor: tc.paper, borderColor: tc.border }]}
-                    >
-                      <Text style={[styles.foryouMoreLinkText, { color: tc.text }]}>
-                        + {suggestedHidden} more words across all levels
-                      </Text>
-                      <Text style={[styles.foryouMoreLinkArrow, { color: tc.primaryOnSurface }]}>{FORWARD_ARROW}</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                deferredActiveItems
+        {vocabulary ? (
+        <View
+          style={{ flex: 1 }}
+          onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
+        >
+          {viewMode === 'cards' && !isSwitching ? (
+            // Card-deck view (mockup 2a). Remounts per tab/sort so each list
+            // starts from its own bookmark restore, exactly like the rows'
+            // scroll restore. Translations stay tap-on-demand inside the deck.
+            <WordCardDeck
+              key={`deck-${wordsView}-${activeLevel}-${wordSortOrder}`}
+              items={deckItems}
+              activeLevel={activeLevel}
+              levelColorFor={levelColorFor}
+              movieId={movieId}
+              movieTitle={movie.title}
+              targetLang={targetLang}
+              isAuthenticated={isAuthenticated}
+              savedWords={savedWords}
+              onSave={handleSaveWord}
+              onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+              onAdvanceBookmark={recordAdvanceBookmark}
+              initialWord={deckStartWord}
+              sentencePreviews={sentencePreviews}
+              onCursorChange={handleDeckCursorChange}
+            />
+          ) : (
+          <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false}>
+          <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
+            {isSwitching ? (
+              Array.from({ length: INITIAL_ROWS }).map((_, i) => (
+                <View key={`skel-${i}`} style={styles.wordSkeletonRow}>
+                  <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarPrimary]} />
+                  <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarSecondary]} />
+                </View>
+              ))
+            ) : deferredWordsView === 'foryou' ? (
+              <>
+                {deferredSuggestedVisible
                   .slice(0, renderLimit)
                   .filter((item) => {
                     if (isIdiom(item)) return true;
@@ -1379,7 +1086,7 @@ export const MovieDetailScreen = ({
                           idiom={item}
                           index={index}
                           rowNumber={index + 1}
-                          groupColor={cefrColors[activeLevel] || colors.primary}
+                          groupColor={cefrColors[item.cefr_level] || colors.primary}
                           movieId={movieId}
                           targetLang={targetLang}
                           isSaved={savedWords.has(key)}
@@ -1403,38 +1110,122 @@ export const MovieDetailScreen = ({
                         onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
                         isCurrentBookmark={currentBookmarkWord === key}
                       >
-                        <WordRow
+                        <ForYouWordRow
                           word={item}
-                          index={index}
                           rowNumber={index + 1}
-                          groupColor={cefrColors[activeLevel] || colors.primary}
+                          level={item.cefr_level}
                           movieId={movieId}
-                          movieTitle={movie.title}
                           targetLang={targetLang}
                           isSaved={savedWords.has(key)}
                           onSave={handleSaveWord}
                           isAuthenticated={isAuthenticated}
                           bookmarkHighlight={currentBookmarkWord === key}
+                          isRead={readWords?.has(key)}
                           accordionMode={accordionMode}
                           lastOpenedKey={lastOpenedKey}
                           onExpand={setLastOpenedKey}
-                          freqFill={freqFillMap.get(key)}
-                          isRead={readWords?.has(key)}
-                          onHide={authUser?.is_admin ? handleHideWord : undefined}
                           preloadedSentence={sentencePreviews[key]}
                         />
                       </BookmarkRowWrapper>
                       {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
                     </React.Fragment>
                   );
+                })}
+                {suggestedHidden > 0 && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => startTransition(() => setWordsView('all'))}
+                    style={[styles.foryouMoreLink, { backgroundColor: tc.paper, borderColor: tc.border }]}
+                  >
+                    <Text style={[styles.foryouMoreLinkText, { color: tc.text }]}>
+                      + {suggestedHidden} more words across all levels
+                    </Text>
+                    <Text style={[styles.foryouMoreLinkArrow, { color: tc.primaryOnSurface }]}>{FORWARD_ARROW}</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              deferredActiveItems
+                .slice(0, renderLimit)
+                .filter((item) => {
+                  if (isIdiom(item)) return true;
+                  const entry = sentencePreviews[item.word];
+                  if (!entry) return true; // still loading → keep skeleton
+                  return !!entry.sentence; // confirmed miss → hide
                 })
-              )}
-            </View>
+                .map((item, index) => {
+                if (isIdiom(item)) {
+                  const key = item.phrase;
+                  return (
+                    <BookmarkRowWrapper
+                      key={`idiom-${key}`}
+                      wordKey={key}
+                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                      onBookmark={recordBookmark}
+                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                      isCurrentBookmark={currentBookmarkWord === key}
+                    >
+                      <IdiomRow
+                        idiom={item}
+                        index={index}
+                        rowNumber={index + 1}
+                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        movieId={movieId}
+                        targetLang={targetLang}
+                        isSaved={savedWords.has(key)}
+                        onSave={handleSaveWord}
+                        isAuthenticated={isAuthenticated}
+                        bookmarkHighlight={currentBookmarkWord === key}
+                        accordionMode={accordionMode}
+                        lastOpenedKey={lastOpenedKey}
+                        onExpand={setLastOpenedKey}
+                      />
+                    </BookmarkRowWrapper>
+                  );
+                }
+                const key = item.word;
+                return (
+                  <React.Fragment key={key}>
+                    <BookmarkRowWrapper
+                      wordKey={key}
+                      onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
+                      onBookmark={recordBookmark}
+                      onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                      isCurrentBookmark={currentBookmarkWord === key}
+                    >
+                      <WordRow
+                        word={item}
+                        index={index}
+                        rowNumber={index + 1}
+                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        movieId={movieId}
+                        movieTitle={movie.title}
+                        targetLang={targetLang}
+                        isSaved={savedWords.has(key)}
+                        onSave={handleSaveWord}
+                        isAuthenticated={isAuthenticated}
+                        bookmarkHighlight={currentBookmarkWord === key}
+                        accordionMode={accordionMode}
+                        lastOpenedKey={lastOpenedKey}
+                        onExpand={setLastOpenedKey}
+                        freqFill={freqFillMap.get(key)}
+                        isRead={readWords?.has(key)}
+                        onHide={authUser?.is_admin ? handleHideWord : undefined}
+                        preloadedSentence={sentencePreviews[key]}
+                      />
+                    </BookmarkRowWrapper>
+                    {sceneStripMap.has(key) && <SceneStrip {...sceneStripMap.get(key)!} />}
+                  </React.Fragment>
+                );
+              })
             )}
           </View>
-          ) : null}
-          </View>
-        </ScrollView>
+          </ScrollView>
+          )}
+        </View>
+        ) : null}
+        </View>
+        </View>
       <Modal
         visible={posterZoomOpen}
         transparent
@@ -1477,7 +1268,6 @@ export const MovieDetailScreen = ({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-      </View>
 
       {pendingLearned && (
         <View style={styles.undoToast} pointerEvents="box-none">
@@ -1492,23 +1282,8 @@ export const MovieDetailScreen = ({
         </View>
       )}
 
-      <Animated.View
-        style={[backBtnStyles.wrap, { top: insets.top + 8, opacity: backBtnOpacity }]}
-        pointerEvents={headerDocked ? 'none' : 'auto'}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('action.back')}
-          onPress={onBack}
-          style={({ pressed }) => [
-            backBtnStyles.backBtn,
-            { backgroundColor: tc.chipBg, borderColor: tc.border, opacity: pressed ? 0.7 : 1 },
-          ]}
-          hitSlop={8}
-        >
-          <Ionicons name={directionalIcon('chevron-back')} size={19} color={tc.textSecondary} />
-        </Pressable>
-      </Animated.View>
+      {/* The back button is no longer floating: with nothing to scroll it has
+          nothing to fade against, so it is a normal row inside the hero. */}
 
       {/* Sticky "Quiz me" pill — fixed at the bottom-left corner, just
           above the global bottom bar. Only shown when SHOW_QUIZ_PILL is true. */}
@@ -1596,14 +1371,9 @@ const splashStyles = StyleSheet.create({
   },
 });
 
+// The screen's back button lives in MovieDetailHero now; this is the loading
+// splash's own copy, which renders before the hero exists.
 const backBtnStyles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    start: 16,
-    zIndex: 20,
-  },
-  // Cream circle per the Ledger header; bg/border colours come inline from
-  // tc.* so the chip follows the theme.
   backBtn: {
     width: 36,
     height: 36,
@@ -1618,44 +1388,6 @@ const backBtnStyles = StyleSheet.create({
 // progress bar under the count row, and the (currently disabled) rows/cards
 // segmented toggle. Colors are applied inline from tc.*.
 const deckHeaderStyles = StyleSheet.create({
-  // Hero-hidden top bar (Ledger header): back-button slot · serif title ·
-  // level-match pill. The floating back button renders over the left slot.
-  compactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  compactHeaderSide: {
-    width: 36,
-  },
-  compactHeaderTitle: {
-    flex: 1,
-    fontFamily: SERIF_FAMILY,
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 32,
-    textAlign: 'center',
-  },
-  matchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  matchPillDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  matchPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
   cardCount: {
     fontFamily: MONO_FAMILY,
     fontSize: 10.5,
@@ -1692,10 +1424,19 @@ const deckHeaderStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
+  // The deck counter and its rule are fixed blocks in the column budget, so
+  // their heights and the gaps above them come from deckMetrics rather than
+  // from `countSortRow`'s generic list padding.
+  deckCountRow: {
+    height: DECK_HEADER_ROW.height,
+    marginTop: DECK_HEADER_ROW.gap,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   progressTrack: {
-    height: 3,
+    height: PROGRESS_BAR.height,
+    marginTop: PROGRESS_BAR.gap,
     marginHorizontal: 16,
-    marginBottom: 6,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1708,12 +1449,13 @@ const deckHeaderStyles = StyleSheet.create({
 // Ledger filter bar + explainer band chrome (mockup 1a). Backgrounds and
 // text colours are applied inline from tc.* / the CEFR maps.
 const ledgerStyles = StyleSheet.create({
+  // 4 + 36 chip + 4 = FILTER_BAR.height; the gaps below it belong to the
+  // blocks that follow, so the column's budget lives in one place.
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: FILTER_BAR.gap,
     borderRadius: 16,
     padding: 4,
     gap: 2,
@@ -1753,10 +1495,6 @@ const ledgerStyles = StyleSheet.create({
   },
   levelChipTextActive: {
     fontWeight: '800',
-  },
-  bandWrap: {
-    marginHorizontal: 16,
-    marginBottom: 2,
   },
 });
 

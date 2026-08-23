@@ -22,7 +22,10 @@
     "hideWordUnknownError": "خطأ غير معروف",
     "posterSavedBody": "حُفظ الملصق في صورك.",
     "permissionDeniedBody": "اسمح بالوصول إلى الصور لحفظ الملصق.",
-    "downloadFailedBody": "تعذّر حفظ الملصق."
+    "downloadFailedBody": "تعذّر حفظ الملصق.",
+    "exampleSentenceLabel": "جملة مثال",
+    "wordsOfDialogue": "{{formatted}} كلمة من الحوار",
+    "viewPoster": "عرض الملصق"
   },
   "preview": {
     "inYourReel": "في قائمتك",

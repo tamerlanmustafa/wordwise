@@ -27,7 +27,10 @@
     "scriptTooShort": "Скрипт слишком короткий или не найден",
     "sortCommon": "Общее первое ⇅",
     "sortRarest": "Сначала самые редкие ⇅",
-    "undo": "ОТМЕНИТЬ"
+    "undo": "ОТМЕНИТЬ",
+    "exampleSentenceLabel": "ПРИМЕР ПРЕДЛОЖЕНИЯ",
+    "wordsOfDialogue": "{{formatted}} СЛОВ ДИАЛОГА",
+    "viewPoster": "Посмотреть постер"
   },
   "journey": {
     "chestAdded": "Добавлено в вашу коллекцию «Reveal».",

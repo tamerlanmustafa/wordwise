@@ -22,7 +22,10 @@
     "hideWordUnknownError": "Unknown error",
     "posterSavedBody": "Poster saved to your Photos.",
     "permissionDeniedBody": "Allow photo access to save the poster.",
-    "downloadFailedBody": "Could not save poster."
+    "downloadFailedBody": "Could not save poster.",
+    "exampleSentenceLabel": "EXAMPLE SENTENCE",
+    "wordsOfDialogue": "{{formatted}} WORDS OF DIALOGUE",
+    "viewPoster": "View poster"
   },
   "preview": {
     "inYourReel": "IN YOUR REEL",

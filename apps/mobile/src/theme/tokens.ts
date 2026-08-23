@@ -136,6 +136,16 @@ export interface ThemeColors {
   reelLeakCool:       string;  // cool light leak rgba
   reelScratch:        string;  // emulsion scratch rgba
   reelGrainBlendMode: 'overlay' | 'multiply';
+
+  // v0.8 Movie-detail hero — a poster "print" on paper under a warm wash.
+  // `metaMono` is deliberately absent: the hero's gold mono line is exactly
+  // `goldOnSurface` in both modes, and a second name for the same colour is
+  // a second thing to keep in step.
+  printPaper:         string;  // the print's paper margin around the poster
+  printEdge:          string;  // the print's 1pt cut edge
+  washTint:           string;  // gold multiply over the backdrop haze
+  metaMonoFaint:      string;  // quieter of the two mono meta lines
+  labelFaint:         string;  // EXAMPLE SENTENCE eyebrow on the card
 }
 
 // ── Light theme ───────────────────────────────────────────────────────────
@@ -234,6 +244,13 @@ const light: ThemeColors = {
   reelLeakCool:       'rgba(255,200,90,0.18)',
   reelScratch:        'rgba(80,55,15,0.10)',
   reelGrainBlendMode: 'multiply',
+
+  // v0.8 Movie-detail hero
+  printPaper:         '#FCF8ED',
+  printEdge:          '#E7DCC2',
+  washTint:           'rgba(197,139,27,0.20)',
+  metaMonoFaint:      '#A2947A',
+  labelFaint:         '#C2B492',
 };
 
 // ── Dark theme ────────────────────────────────────────────────────────────
@@ -327,6 +344,14 @@ const dark: ThemeColors = {
   reelLeakCool:       'rgba(255,200,90,0.28)',
   reelScratch:        'rgba(0,0,0,0.18)',
   reelGrainBlendMode: 'overlay',
+
+  // v0.8 Movie-detail hero — the print darkens; the wash is the same image
+  // at lower opacity, so its gold tint eases off with it.
+  printPaper:         '#211C15',
+  printEdge:          '#3A3228',
+  washTint:           'rgba(197,139,27,0.16)',
+  metaMonoFaint:      'rgba(255,255,255,0.40)',
+  labelFaint:         'rgba(255,255,255,0.40)',
 };
 
 export const themes: Record<'light' | 'dark', ThemeColors> = { light, dark };

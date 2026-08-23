@@ -50,8 +50,8 @@ import {
   WORD_SLOT_HEIGHT,
   WORD_TR_SLOT_TOP,
   WORD_TR_SLOT_HEIGHT,
-  DIVIDER_TOP,
-  DIVIDER_HEIGHT,
+  SENTENCE_LABEL_TOP,
+  SENTENCE_LABEL_HEIGHT,
   SENTENCE_SLOT_TOP,
   SENTENCE_SLOT_HEIGHT,
   SENTENCE_TR_SLOT_TOP,
@@ -67,6 +67,18 @@ import {
   sentenceTier,
   sentenceTranslationTier,
 } from './cardLayout';
+import {
+  deckMetrics,
+  ACTIONS_ROW_HEIGHT,
+  ACTIONS_GAP,
+  DECK_GAP_TOP,
+  PILL_WIDTH,
+  PILL_HEIGHT,
+  PILL_EDGE,
+  PILL_EDGE_PRESSED_DROP,
+  UNDO_SIZE,
+  UNDO_EDGE,
+} from './deckMetrics';
 
 /**
  * Interpolated style that slides the incoming focused card from the near-
@@ -203,6 +215,26 @@ const DashedStartBorder = ({ color, width = 2 }: { color: string; width?: number
   </View>
 );
 
+/**
+ * `EXAMPLE SENTENCE` eyebrow: a hairline with a name on it, not a heading —
+ * quiet on purpose, so it never competes with the sentence beneath it. The
+ * rule is `flex: 1` after a `gap`, so RTL mirrors it with no offset of ours.
+ */
+const SentenceLabel = ({
+  s,
+  label,
+}: {
+  s: ReturnType<typeof makeDeckStyles>;
+  label: string;
+}) => (
+  <View style={s.sentenceLabelRow}>
+    <Text style={s.sentenceLabelText} numberOfLines={1}>
+      {label}
+    </Text>
+    <View style={s.sentenceLabelRule} />
+  </View>
+);
+
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
 const keyOf = (item: DeckItem) => (isIdiomItem(item) ? item.phrase : item.word);
@@ -251,15 +283,6 @@ const ARRIVE_DURATION = 250;
 const DRAG_CLAMP = 160;
 const UNDO_STACK_MAX = 20;
 
-// Tactile action buttons (Ledger mockup): a hard-edged "3D" shadow drawn as
-// an offset edge layer; pressing translates the face down onto it.
-const PILL_WIDTH = 136;
-const PILL_HEIGHT = 52;
-const PILL_EDGE = 4;
-const PILL_EDGE_PRESSED_DROP = 3;
-const UNDO_SIZE = 46;
-const UNDO_EDGE = 3;
-
 /**
  * Card-deck view mode for the movie vocabulary screen — the "Ledger Reveal"
  * design (mockup 1a): one fixed-height focused card over two ghost cards,
@@ -306,6 +329,17 @@ export const WordCardDeck = ({
   const restoredRef = useRef(keys.length > 0);
   const [resumedAt, setResumedAt] = useState<number | null>(() =>
     initialWord && keys.includes(initialWord) ? keys.indexOf(initialWord) + 1 : null,
+  );
+
+  // The screen does not scroll, so the deck block takes whatever the fixed
+  // column leaves it and the deck zone scales to fit. Measured rather than
+  // computed: `available` then already accounts for the bottom bar, the
+  // safe-area insets and every block above. Hooks run before the empty-deck
+  // return below, so this is computed unconditionally.
+  const [available, setAvailable] = useState(0);
+  const metrics = useMemo(
+    () => deckMetrics({ available, resumeChip: resumedAt != null }),
+    [available, resumedAt],
   );
 
   // Keep the committed state in step with the parent's item list (learned
@@ -794,8 +828,8 @@ export const WordCardDeck = ({
           ) : null}
           <View style={s.flexSpacer} />
           {isAuthenticated ? (
-            <Text style={[s.star, savedWords.has(term) && s.starActive]}>
-              {savedWords.has(term) ? '★' : '☆'}
+            <Text style={[s.save, savedWords.has(term) && s.saveActive]}>
+              {savedWords.has(term) ? '♥' : '♡'}
             </Text>
           ) : null}
         </View>
@@ -815,7 +849,7 @@ export const WordCardDeck = ({
             <DashedRule color={dashColor} style={s.flexSpacer} />
           </View>
         </View>
-        <View style={s.cardDivider} />
+        <SentenceLabel s={s} label={t('movies:detail.exampleSentenceLabel')} />
         <View style={s.sentenceSlot}>
           {staticSentence && sTier ? (
             renderHighlighted(
@@ -865,24 +899,25 @@ export const WordCardDeck = ({
   const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
   const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
 
-  // The hint names screen sides, and the gesture is defined by reading
-  // direction — so the two words trade places under RTL rather than telling an
-  // Arabic reader to swipe the way that marks the card learned.
-  const nextSide = directionSign === 1 ? 'right' : 'left';
-  const learnSide = directionSign === 1 ? 'left' : 'right';
-  const gestureHint = onMarkLearned
-    ? `swipe ${learnSide} = know it · swipe ${nextSide} = next · tap card = translation`
-    : `swipe ${nextSide} = next · tap card = translation`;
-
   return (
-    <View style={s.wrap}>
+    <View style={s.wrap} onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}>
       {resumedAt != null ? (
         <View style={s.resumeChip}>
           <Text style={s.resumeChipText}>⚑ Resumed at your bookmark · card {resumedAt}</Text>
         </View>
       ) : null}
 
-      <View style={s.deckWrap}>
+      {/* The zone's LAID-OUT height shrinks (`zoneHeight`) while its contents
+          keep their design geometry and are scaled about the top edge. A
+          transform alone would not free the space below, and editing the
+          card's slot constants would make it a different card. */}
+      <View style={{ height: metrics.zoneHeight, overflow: 'hidden' }}>
+      {/* `top center`, not the default centre: the zone's box is only
+          `zoneHeight` tall while its contents keep the full 407, so scaling
+          about the middle would push the card down out of its own box. */}
+      <View
+        style={[s.deckWrap, { transform: [{ scale: metrics.scale }], transformOrigin: 'top center' }]}
+      >
         {/* Ghost cards — pure styling; the incoming card's arrive animation
             starts from the near ghost's slot so the deck reads as stepping
             one card forward. */}
@@ -948,7 +983,7 @@ export const WordCardDeck = ({
                   accessibilityRole="button"
                   accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
                 >
-                  <Text style={[s.star, isSaved && s.starActive]}>{isSaved ? '★' : '☆'}</Text>
+                  <Text style={[s.save, isSaved && s.saveActive]}>{isSaved ? '♥' : '♡'}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -998,8 +1033,8 @@ export const WordCardDeck = ({
               </Animated.View>
             </View>
 
-            {/* 4 · divider */}
-            <View style={s.cardDivider} />
+            {/* 4 · EXAMPLE SENTENCE eyebrow + hairline */}
+            <SentenceLabel s={s} label={t('movies:detail.exampleSentenceLabel')} />
 
             {/* 5 · sentence slot — highlighted target word; long sentences
                 step down a tier and gain a 4th line */}
@@ -1100,6 +1135,7 @@ export const WordCardDeck = ({
           </OutgoingCard>
         ))}
       </View>
+      </View>
 
       {/* actions under the deck — labeled tactile buttons with press-down
           physics (edge layer + face drop); they fully cover the gestures */}
@@ -1162,8 +1198,6 @@ export const WordCardDeck = ({
         </Pressable>
       </View>
 
-      <Text style={s.gestureHint}>{gestureHint}</Text>
-
       <ReportDialog
         visible={reportOpen}
         onClose={() => setReportOpen(false)}
@@ -1178,9 +1212,11 @@ export const WordCardDeck = ({
 const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
   const light = scheme === 'light';
   return StyleSheet.create({
+    // Claims what the fixed column leaves, and reports it back through
+    // onLayout so the deck zone can scale into it.
     wrap: {
-      paddingTop: 4,
-      paddingBottom: 110,
+      flex: 1,
+      paddingTop: DECK_GAP_TOP,
     },
     resumeChip: {
       alignSelf: 'center',
@@ -1194,6 +1230,9 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     resumeChipText: {
       fontSize: 11,
+      // Pinned, not left to the platform's font metrics: RESUME_CHIP_BLOCK
+      // counts on this line being 14pt on iOS and Android alike.
+      lineHeight: 14,
       fontWeight: '700',
       letterSpacing: 0.2,
       color: tc.goldOnSurface,
@@ -1289,12 +1328,14 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     flexSpacer: {
       flex: 1,
     },
-    star: {
-      fontSize: 22,
+    // The heart glyph draws about a point smaller than the star it replaced,
+    // so 23 keeps it the same optical size inside the 24pt meta row.
+    save: {
+      fontSize: 23,
       lineHeight: 24,
       color: light ? '#C9BB9C' : tc.textFaint,
     },
-    starActive: {
+    saveActive: {
       color: tc.gold,
     },
     wordSlot: {
@@ -1356,9 +1397,24 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       letterSpacing: 0.7,
       color: tc.textSecondary,
     },
-    cardDivider: {
-      marginTop: DIVIDER_TOP,
-      height: DIVIDER_HEIGHT,
+    sentenceLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: SENTENCE_LABEL_TOP,
+      height: SENTENCE_LABEL_HEIGHT,
+    },
+    sentenceLabelText: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 8.5,
+      lineHeight: SENTENCE_LABEL_HEIGHT,
+      fontWeight: '700',
+      letterSpacing: 1.19,
+      color: tc.labelFaint,
+    },
+    sentenceLabelRule: {
+      flex: 1,
+      height: 1,
       backgroundColor: tc.divider,
     },
     sentenceSlot: {
@@ -1440,11 +1496,14 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       letterSpacing: 0.9,
       color: light ? '#C0A66B' : 'rgba(255,209,102,0.55)',
     },
+    // `space-between` inside a `row` — Yoga mirrors it under RTL on its own,
+    // and nothing here is positioned with an absolute left/right.
     actionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: 14,
+      height: ACTIONS_ROW_HEIGHT,
+      marginTop: ACTIONS_GAP,
       marginHorizontal: 18,
     },
     // Edge + face "3D" button: the face translates down onto its edge while
@@ -1535,12 +1594,6 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     undoDisabled: {
       opacity: 0.35,
-    },
-    gestureHint: {
-      marginTop: 10,
-      textAlign: 'center',
-      fontSize: 10.5,
-      color: light ? '#A79878' : tc.textFaint,
     },
     emptyWrap: {
       marginHorizontal: 18,
