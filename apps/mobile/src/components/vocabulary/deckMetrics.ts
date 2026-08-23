@@ -77,11 +77,6 @@ export const DECK_GAP_TOP = 14;
 /** Gap between the deck zone and the actions row. */
 export const ACTIONS_GAP = 18;
 
-/** "Resumed at your bookmark" chip: padding 6×2 + border 1×2 + a 14pt line,
- *  plus its 10pt margin. Shown only until the first advance, so it is an
- *  input — it comes out of the deck's share, not the controls' position. */
-export const RESUME_CHIP_BLOCK = 38;
-
 /** Legibility backstop, not a fit constraint. iPhone SE lands at ~0.577 of
  *  its own accord and renders below this only on a screen smaller than any
  *  we ship to — where `zoneHeight` clips the card rather than let the buttons
@@ -90,10 +85,14 @@ export const MIN_SCALE = 0.55;
 
 export interface DeckMetricsInput {
   /** Measured height of the deck block: what `flex: 1` left it after the
-   *  column above and the bottom bar below. 0 before the first layout pass. */
+   *  column above and the bottom bar below. 0 before the first layout pass.
+   *
+   *  Nothing else belongs in here. The resume chip used to be a second input
+   *  because it claimed a 38pt block above the deck, and on a fixed screen
+   *  that came straight out of the card: it cropped the card on an iPhone SE
+   *  and made the 16 Pro's card jump 9.3% larger the moment it vanished. It
+   *  floats over the deck now and costs the budget nothing. */
   available: number;
-  /** Whether the resume chip is currently occupying its slot above the deck. */
-  resumeChip: boolean;
 }
 
 export interface DeckMetrics {
@@ -111,16 +110,9 @@ export interface DeckMetrics {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
-export function deckMetrics({ available, resumeChip }: DeckMetricsInput): DeckMetrics {
+export function deckMetrics({ available }: DeckMetricsInput): DeckMetrics {
   // What is left for the zone once the block's own fixed parts are paid for.
-  const forZone = Math.max(
-    0,
-    available -
-      DECK_GAP_TOP -
-      (resumeChip ? RESUME_CHIP_BLOCK : 0) -
-      ACTIONS_GAP -
-      ACTIONS_ROW_HEIGHT,
-  );
+  const forZone = Math.max(0, available - DECK_GAP_TOP - ACTIONS_GAP - ACTIONS_ROW_HEIGHT);
 
   const scale = clamp(forZone / DECK_ZONE_HEIGHT, MIN_SCALE, 1);
   const wanted = Math.round(DECK_ZONE_HEIGHT * scale);

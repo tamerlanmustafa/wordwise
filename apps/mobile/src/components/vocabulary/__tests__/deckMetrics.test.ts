@@ -16,7 +16,6 @@ import {
   ACTIONS_ROW_HEIGHT,
   ACTIONS_GAP,
   DECK_GAP_TOP,
-  RESUME_CHIP_BLOCK,
   COLUMN_ABOVE_DECK,
   MIN_SCALE,
 } from '../deckMetrics';
@@ -47,15 +46,10 @@ const DEVICES = [
 ] as const;
 
 /** What the deck block ends up laying out, as the component does it. */
-const layout = (device: (typeof DEVICES)[number][1], resumeChip = false) => {
+const layout = (device: (typeof DEVICES)[number][1]) => {
   const available = deckBlockHeightFor(device);
-  const m = deckMetrics({ available, resumeChip });
-  const used =
-    DECK_GAP_TOP +
-    (resumeChip ? RESUME_CHIP_BLOCK : 0) +
-    m.zoneHeight +
-    ACTIONS_GAP +
-    ACTIONS_ROW_HEIGHT;
+  const m = deckMetrics({ available });
+  const used = DECK_GAP_TOP + m.zoneHeight + ACTIONS_GAP + ACTIONS_ROW_HEIGHT;
   return { ...m, available, used };
 };
 
@@ -65,21 +59,24 @@ describe('the fixed screen — the buttons must never leave the viewport', () =>
     expect(used).toBeLessThanOrEqual(available);
   });
 
-  it.each(DEVICES)('still fits on %s while the resume chip is showing', (_name, device) => {
-    const { used, available } = layout(device, true);
-    expect(used).toBeLessThanOrEqual(available);
+  it.each(DEVICES)('never crops the card on %s', (_name, device) => {
+    // The weaker "the buttons still fit" assertion above passes even when the
+    // zone cap is eating the card's bottom edge, which is exactly how the
+    // resume chip cropped the iPhone SE unnoticed. This is the one that
+    // catches it.
+    expect(layout(device).cropped).toBe(false);
   });
 
   it('caps the zone rather than overflowing, even on a viewport we do not ship to', () => {
     // Below the scale floor the card is cropped; the buttons still render.
-    const m = deckMetrics({ available: 200, resumeChip: false });
+    const m = deckMetrics({ available: 200 });
     const used = DECK_GAP_TOP + m.zoneHeight + ACTIONS_GAP + ACTIONS_ROW_HEIGHT;
     expect(used).toBeLessThanOrEqual(200);
     expect(m.cropped).toBe(true);
   });
 
   it('degrades safely before the first layout pass', () => {
-    const m = deckMetrics({ available: 0, resumeChip: false });
+    const m = deckMetrics({ available: 0 });
     expect(m.zoneHeight).toBe(0);
     expect(m.zoneHeight).not.toBeLessThan(0);
   });
@@ -87,7 +84,7 @@ describe('the fixed screen — the buttons must never leave the viewport', () =>
 
 describe('the card is scaled, never re-cut', () => {
   it('never scales above the mockup, however tall the phone', () => {
-    const m = deckMetrics({ available: 2000, resumeChip: false });
+    const m = deckMetrics({ available: 2000 });
     expect(m.scale).toBe(1);
     expect(m.zoneHeight).toBe(DECK_ZONE_HEIGHT);
     expect(m.scaled).toBe(false);
@@ -127,15 +124,17 @@ describe('the card is scaled, never re-cut', () => {
 });
 
 describe('invariants', () => {
-  it('charges the resume chip to the deck, not to the buttons', () => {
-    // The chip sits above the zone and vanishes on the first advance. It must
-    // come out of the card's share; the controls do not move.
-    const withChip = layout(IPHONE_16_PRO, true);
-    const without = layout(IPHONE_16_PRO);
-    expect(without.zoneHeight - withChip.zoneHeight).toBeGreaterThanOrEqual(
-      RESUME_CHIP_BLOCK - 1,
-    );
-    expect(withChip.available).toBe(without.available);
+  it('pins the scale each shipping device gets', () => {
+    // Deliberately brittle. The measured height is now the ONLY input to the
+    // card's size — the resume note used to be a second one, and while it was
+    // up the 16 Pro rendered at 0.857 and jumped to 0.951 the instant it went,
+    // while the SE was cropped outright. If a block is added to the column, a
+    // number here moves and someone has to decide which device pays for it
+    // rather than finding out on hardware.
+    expect(layout(IPHONE_16_PRO).scale).toBeCloseTo(0.951, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.577, 3);
+    expect(layout(PIXEL_8).scale).toBe(1);
+    expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });
 
   it('gives a deeper navigation inset back to the bar, not to the card', () => {
@@ -148,7 +147,7 @@ describe('invariants', () => {
   });
 
   it('rounds the zone to whole pixels — onLayout reports fractions', () => {
-    const m = deckMetrics({ available: 476.6667, resumeChip: false });
+    const m = deckMetrics({ available: 476.6667 });
     expect(Number.isInteger(m.zoneHeight)).toBe(true);
   });
 

@@ -282,6 +282,8 @@ const FLY_ROTATE_DEG = 7;
 const ARRIVE_DURATION = 250;
 const DRAG_CLAMP = 160;
 const UNDO_STACK_MAX = 20;
+/** How long the resume note stays up before fading itself out. */
+const RESUME_CHIP_MS = 3200;
 
 /**
  * Card-deck view mode for the movie vocabulary screen — the "Ledger Reveal"
@@ -337,10 +339,8 @@ export const WordCardDeck = ({
   // safe-area insets and every block above. Hooks run before the empty-deck
   // return below, so this is computed unconditionally.
   const [available, setAvailable] = useState(0);
-  const metrics = useMemo(
-    () => deckMetrics({ available, resumeChip: resumedAt != null }),
-    [available, resumedAt],
-  );
+  const metrics = useMemo(() => deckMetrics({ available }), [available]);
+  const resumeFade = useRef(new Animated.Value(1)).current;
 
   // Keep the committed state in step with the parent's item list (learned
   // words leaving, undo re-adding, previews resolving). `displayDeck` applies
@@ -382,6 +382,28 @@ export const WordCardDeck = ({
   }, []);
   const reduceMotionRef = useRef(reduceMotion);
   reduceMotionRef.current = reduceMotion;
+
+  // The resume note shows itself out. It also clears on the first advance,
+  // learn or undo, so this is only the path where the user reads it and does
+  // nothing — leaving it up forever would put a permanent label over a deck
+  // the user has already understood.
+  useEffect(() => {
+    if (resumedAt == null) return;
+    resumeFade.setValue(1);
+    if (reduceMotionRef.current) {
+      const id = setTimeout(() => setResumedAt(null), RESUME_CHIP_MS);
+      return () => clearTimeout(id);
+    }
+    const anim = Animated.sequence([
+      Animated.delay(RESUME_CHIP_MS),
+      Animated.timing(resumeFade, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]);
+    anim.start(({ finished }) => {
+      if (finished) setResumedAt(null);
+    });
+    return () => anim.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumedAt]);
 
   // Advances commit IMMEDIATELY on release — the outgoing card keeps flying
   // as a detached overlay (OutgoingCard, fresh values per overlay) while the
@@ -901,12 +923,6 @@ export const WordCardDeck = ({
 
   return (
     <View style={s.wrap} onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}>
-      {resumedAt != null ? (
-        <View style={s.resumeChip}>
-          <Text style={s.resumeChipText}>⚑ Resumed at your bookmark · card {resumedAt}</Text>
-        </View>
-      ) : null}
-
       {/* The zone's LAID-OUT height shrinks (`zoneHeight`) while its contents
           keep their design geometry and are scaled about the top edge. A
           transform alone would not free the space below, and editing the
@@ -1135,6 +1151,21 @@ export const WordCardDeck = ({
           </OutgoingCard>
         ))}
       </View>
+
+      {/* Resume note — absolute, so it costs the budget nothing and the card
+          renders at the same scale whether it is up or not. It sits over the
+          ghost stack's headroom, above the focused card's meta row, and is
+          never touchable: a swipe that starts on it must still reach the
+          card underneath. */}
+      {resumedAt != null ? (
+        <Animated.View pointerEvents="none" style={[s.resumeLayer, { opacity: resumeFade }]}>
+          <View style={s.resumeChip}>
+            <Text style={s.resumeChipText} numberOfLines={1}>
+              ⚑ {t('vocabulary:deck.resumedAt', { card: resumedAt })}
+            </Text>
+          </View>
+        </Animated.View>
+      ) : null}
       </View>
 
       {/* actions under the deck — labeled tactile buttons with press-down
@@ -1218,20 +1249,33 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       flex: 1,
       paddingTop: DECK_GAP_TOP,
     },
+    resumeLayer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 5,
+    },
     resumeChip: {
-      alignSelf: 'center',
       backgroundColor: `${tc.gold}1F`,
       borderWidth: 1,
       borderColor: `${tc.gold}66`,
       borderRadius: 999,
       paddingVertical: 6,
       paddingHorizontal: 14,
-      marginBottom: 10,
+      // Reads as floating rather than as part of the card behind it.
+      shadowColor: light ? '#2D2418' : '#000',
+      shadowOpacity: 0.14,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 4,
     },
     resumeChipText: {
       fontSize: 11,
-      // Pinned, not left to the platform's font metrics: RESUME_CHIP_BLOCK
-      // counts on this line being 14pt on iOS and Android alike.
+      // Pinned so the chip is the same height on iOS and Android — it
+      // overlays the deck, and a taller line on one platform would reach
+      // further down over the card.
       lineHeight: 14,
       fontWeight: '700',
       letterSpacing: 0.2,

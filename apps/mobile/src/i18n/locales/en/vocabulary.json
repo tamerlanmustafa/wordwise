@@ -22,7 +22,8 @@
     "previousCard": "Bring back the previous card",
     "nextCard": "Next card",
     "hideTranslation": "Hide translation",
-    "showTranslation": "Show translation"
+    "showTranslation": "Show translation",
+    "resumedAt": "Resumed at your bookmark · card {{card}}"
   },
   "learned": {
     "empty": "No learned words yet. Swipe left on a word in any movie to mark it as known.",
