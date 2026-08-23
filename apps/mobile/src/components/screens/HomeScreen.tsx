@@ -31,6 +31,7 @@ import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
+import { MOVIE_TYPE_OPTIONS, type MovieType } from '../home/filterOptions';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
 
@@ -81,6 +82,10 @@ export const HomeScreen = ({
   const [levelSort, setLevelSort] = useState<LevelSort>('rating');
   const [levelSortAsc, setLevelSortAsc] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
+  // Animation vs live action (#114). In-memory like the level and sort above —
+  // none of the three persist across a remount, and a filter that outlives the
+  // session would be a separate decision for all of them, not just this one.
+  const [movieType, setMovieType] = useState<MovieType>('all');
 
   // Server-sorted, paginated CEFR feed for the ranked list. The backend does
   // the ordering, so each sort/level reflects the full catalog (not a reshuffle
@@ -93,7 +98,12 @@ export const HomeScreen = ({
     loadMore: loadMoreLevel,
     removeMovie: removeLevelMovie,
     insertMovie: insertLevelMovie,
-  } = useInfiniteCefrMovies(selectedLevel, levelSort, levelSortAsc ? 'asc' : 'desc');
+  } = useInfiniteCefrMovies(
+    selectedLevel,
+    levelSort,
+    levelSortAsc ? 'asc' : 'desc',
+    movieType,
+  );
   const [loading, setLoading] = useState(true);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
@@ -129,7 +139,7 @@ export const HomeScreen = ({
   useEffect(() => {
     collapseStateRef.current = initialCollapseState;
     wordCollapse.setValue(0);
-  }, [selectedLevel, levelSort, levelSortAsc, wordCollapse]);
+  }, [selectedLevel, levelSort, levelSortAsc, movieType, wordCollapse]);
 
   useEffect(() => {
     (async () => {
@@ -435,6 +445,8 @@ export const HomeScreen = ({
           sort={levelSort}
           sortAsc={levelSortAsc}
           onSortPress={handleSortPress}
+          movieType={movieType}
+          onMovieTypeChange={setMovieType}
         />
       </View>
 
@@ -457,6 +469,15 @@ export const HomeScreen = ({
             onSwipeAction={handleSwipeAction}
             fillHeight
             onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
+            emptyMessage={
+              movieType === 'all'
+                ? undefined
+                : t('home:rankedList.emptyFiltered', {
+                    type: t(
+                      MOVIE_TYPE_OPTIONS.find((o) => o.value === movieType)!.labelKey,
+                    ),
+                  })
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

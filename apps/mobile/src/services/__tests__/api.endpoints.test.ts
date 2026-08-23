@@ -356,6 +356,26 @@ describe('API endpoint wrappers', () => {
       expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/movies/by-cefr?level=B1&limit=10&offset=20&sort=rating&order=desc`);
     });
 
+    it('getMoviesByCefr omits `animated` unless the filter is on (#114)', async () => {
+      fetchMock.mockResolvedValue(ok({ level: 'B1', total: 0, offset: 0, has_more: false, movies: [] }));
+      await wordwiseApi.getMoviesByCefr('B1', 10, { offset: 0, sort: 'rating', order: 'desc' });
+      expect(urlOf(fetchMock)).not.toContain('animated');
+    });
+
+    it('getMoviesByCefr sends animated=false for the live-action filter', async () => {
+      // The bug this pins: a truthiness check would swallow `false` and quietly
+      // serve the unfiltered feed while the chip claimed "Live action".
+      fetchMock.mockResolvedValue(ok({ level: 'B1', total: 0, offset: 0, has_more: false, movies: [] }));
+      await wordwiseApi.getMoviesByCefr('B1', 10, { offset: 0, sort: 'rating', order: 'desc', animated: false });
+      expect(urlOf(fetchMock)).toContain('&animated=false');
+    });
+
+    it('getMoviesByCefr sends animated=true for the animation filter', async () => {
+      fetchMock.mockResolvedValue(ok({ level: 'A1', total: 0, offset: 0, has_more: false, movies: [] }));
+      await wordwiseApi.getMoviesByCefr('A1', 10, { animated: true });
+      expect(urlOf(fetchMock)).toContain('&animated=true');
+    });
+
     it('getMoviesByLevel sends the learner CEFR band onboarding actually holds', async () => {
       // #103: onboarding's "pick your first film" passes startingLevel, a CEFR
       // code. The endpoint used to validate against the retired long-name enum

@@ -4,7 +4,8 @@
   "rankedList": {
     "empty": "Bu seviye için henüz sınıflandırılmış film bulunamadı.",
     "endOfLevel": "Bu seviyedeki konular bu kadar",
-    "tapToClose": "Kapatmak için dokunun"
+    "tapToClose": "Kapatmak için dokunun",
+    "emptyFiltered": "Bu seviyede henüz {{type}} filmi yok."
   },
   "search": {
     "placeholder": "Filmleri, kelimeleri veya oyuncuları ara…",
@@ -19,5 +20,13 @@
     "eyebrow": "GÜNÜN KELİMESİ",
     "save": "Bu kelimeyi kaydet",
     "saved": "Kelimelerinize kaydedildi"
+  },
+  "filters": {
+    "type": {
+      "all": "Tüm filmler",
+      "animation": "Animasyon",
+      "live": "Gerçek çekim",
+      "a11y": "Film türü: {{value}}. Değiştirmek için dokunun."
+    }
   }
 }

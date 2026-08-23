@@ -449,6 +449,9 @@ export const wordwiseApi = {
       offset?: number;
       sort?: 'rating' | 'popularity' | 'level';
       order?: 'asc' | 'desc';
+      /** Animation filter: true = animated only, false = live action only.
+       *  Leave undefined for the unfiltered feed — see `animatedParam`. */
+      animated?: boolean;
     }
   ): Promise<{
     level: string;
@@ -471,6 +474,9 @@ export const wordwiseApi = {
     if (opts?.offset != null) query += `&offset=${opts.offset}`;
     if (opts?.sort) query += `&sort=${opts.sort}`;
     if (opts?.order) query += `&order=${opts.order}`;
+    // `!= null` on purpose: `animated=false` is the live-action filter and has
+    // to be sent, so a truthiness check would silently swallow it.
+    if (opts?.animated != null) query += `&animated=${opts.animated}`;
     // authFetch (not plain fetch): /movies/by-cefr personalizes when a token
     // is present — it excludes the user's watched / not-interested movies, so
     // swiped-away cards don't reappear when a filter/sort refetches the feed.

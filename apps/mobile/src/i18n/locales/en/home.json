@@ -8,7 +8,8 @@
   "rankedList": {
     "endOfLevel": "That's everything at this level",
     "empty": "No classified movies found for this level yet.",
-    "tapToClose": "Tap to close"
+    "tapToClose": "Tap to close",
+    "emptyFiltered": "No {{type}} films at this level yet."
   },
   "swipe": {
     "seenIt": "Seen it",
@@ -19,5 +20,13 @@
     "doubleTapToFlip": "Double tap to flip",
     "saved": "Saved to your words",
     "save": "Save this word"
+  },
+  "filters": {
+    "type": {
+      "all": "All films",
+      "animation": "Animation",
+      "live": "Live action",
+      "a11y": "Film type: {{value}}. Tap to change."
+    }
   }
 }

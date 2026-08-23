@@ -188,10 +188,94 @@ def _exclude_seen_sql(p: str) -> str:
     """
 
 
+# `movies.genre` holds a JSON array serialized into a VarChar, e.g.
+# '["Animation", "Comedy", "Family"]'. A film carries several genres, so the
+# test has to be *contains*, never equality — `genre = 'Animation'` would match
+# only the handful of single-genre films.
+#
+# Measured on prod 2026-08-23: 379 of 4,585 films match, and every one matches
+# via a real "Animation" array element — no genre name in the catalogue has
+# "animation" as a substring, so this ILIKE has no false positives today.
+_ANIMATION_MATCH = "m.genre ILIKE '%Animation%'"
+
+
+def _animation_filter_sql(animated: Optional[bool]) -> str:
+    """SQL fragment narrowing /by-cefr to animation (True) or live action
+    (False). `None` means "no filter" and returns an empty string, so the
+    default feed is byte-identical to what it was before this filter existed.
+
+    The 171 films with **no genre** are excluded from *both* sides. They are
+    not known to be animated and not known to be live action, and silently
+    handing them to one side would be a guess. `m.genre IS NOT NULL` is
+    strictly redundant — `NOT (NULL ILIKE ...)` is NULL and would drop them
+    anyway — but it is written out so the choice is visible at the call site
+    rather than buried in three-valued-logic. In practice it changes nothing on
+    this endpoint: all 171 also have a NULL `difficulty_score` (prod,
+    2026-08-23), so the level predicate already drops them one line above.
+
+    The genre literal is a constant; `animated` only selects which of two
+    fixed fragments is returned, so nothing caller-controlled reaches the SQL.
+    """
+    if animated is None:
+        return ""
+    if animated:
+        return f"\n              AND {_ANIMATION_MATCH}"
+    return (
+        "\n              AND m.genre IS NOT NULL"
+        f"\n              AND NOT ({_ANIMATION_MATCH})"
+    )
+
+
+# The projection + the predicates every /by-cefr variant shares. Filters are
+# appended as fragments (see `_animation_filter_sql`, `_exclude_seen_sql`)
+# rather than by copying the whole statement per combination: `genre` and
+# `animated` are independent, so branching would mean four near-identical
+# 45-line queries drifting apart.
+_BY_CEFR_SELECT = """
+            SELECT m.id                AS movie_id,
+                   m.title             AS title,
+                   m.year              AS year,
+                   m.poster_url        AS poster_url,
+                   m.description       AS description,
+                   m.difficulty_score  AS difficulty_score,
+                   m.tmdb_id           AS tmdb_id,
+                   m.tmdb_vote_average AS vote_average,
+                   m.tmdb_vote_count   AS vote_count,
+                   (
+                     SELECT COUNT(DISTINCT wc.lemma)
+                     FROM movie_scripts ms
+                     JOIN word_classifications wc ON wc.script_id = ms.id
+                     WHERE ms.movie_id = m.id
+                   )                   AS unique_words,
+                   (
+                     SELECT jsonb_object_agg(level, cnt)
+                     FROM (
+                       SELECT wc.cefr_level::text AS level,
+                              COUNT(*) AS cnt
+                       FROM movie_scripts ms
+                       JOIN word_classifications wc ON wc.script_id = ms.id
+                       WHERE ms.movie_id = m.id
+                       GROUP BY wc.cefr_level
+                     ) sub
+                   )                   AS cefr_distribution
+            FROM movies m
+            WHERE m.difficulty_score >= $1
+              AND m.difficulty_score <= $2
+              AND COALESCE(m.tmdb_vote_count, 0) >= 50"""
+
+
 @router.get("/by-cefr")
 async def list_movies_by_cefr(
     level: str = Query(..., description="CEFR level: A1, A2, B1, B2, C1, C2"),
     genre: Optional[str] = Query(None, description="Genre name to filter by (e.g. Drama, Comedy)"),
+    animated: Optional[bool] = Query(
+        None,
+        description=(
+            "Animation filter: true = animated films only, false = live action "
+            "only, omitted = both (the default feed). Films with no genre "
+            "recorded are excluded from both filtered views."
+        ),
+    ),
     limit: int = Query(15, ge=1, le=100),
     offset: int = Query(0, ge=0, description="Pagination offset for infinite scroll"),
     sort: str = Query("rating", description="Sort key: rating | popularity | level"),
@@ -203,6 +287,9 @@ async def list_movies_by_cefr(
 
     Paginated for infinite scroll: pass `offset` to fetch the next page. The
     response includes `has_more` so the client knows whether to keep loading.
+    Filtering happens here rather than in the client because the feed is
+    paginated: narrowing a fetched page in JS would return short pages and miss
+    every match past the page boundary.
 
     Optional auth: when a valid token is supplied, movies the user has marked
     "watched" or "not interested" (swipe actions on the home feed) are excluded
@@ -231,99 +318,36 @@ async def list_movies_by_cefr(
     # no-op in that case ($p::int IS NULL), so the same SQL serves both.
     user_id = current_user.id if current_user else None
 
+    # Positional placeholders are numbered as the params list grows, so an
+    # optional filter can be dropped in without renumbering everything after
+    # it — which is what made the old two-branch copy hard to extend.
+    params: List[Any] = [lo, hi]
+    filters = ""
+
     if genre:
-        rows = await db.query_raw(
-            """
-            SELECT m.id                AS movie_id,
-                   m.title             AS title,
-                   m.year              AS year,
-                   m.poster_url        AS poster_url,
-                   m.description       AS description,
-                   m.difficulty_score  AS difficulty_score,
-                   m.tmdb_id           AS tmdb_id,
-                   m.tmdb_vote_average AS vote_average,
-                   m.tmdb_vote_count   AS vote_count,
-                   (
-                     SELECT COUNT(DISTINCT wc.lemma)
-                     FROM movie_scripts ms
-                     JOIN word_classifications wc ON wc.script_id = ms.id
-                     WHERE ms.movie_id = m.id
-                   )                   AS unique_words,
-                   (
-                     SELECT jsonb_object_agg(level, cnt)
-                     FROM (
-                       SELECT wc.cefr_level::text AS level,
-                              COUNT(*) AS cnt
-                       FROM movie_scripts ms
-                       JOIN word_classifications wc ON wc.script_id = ms.id
-                       WHERE ms.movie_id = m.id
-                       GROUP BY wc.cefr_level
-                     ) sub
-                   )                   AS cefr_distribution
-            FROM movies m
-            WHERE m.difficulty_score >= $1
-              AND m.difficulty_score <= $2
-              AND m.genre IS NOT NULL
-              AND m.genre ILIKE '%' || $3 || '%'
-              AND COALESCE(m.tmdb_vote_count, 0) >= 50
-            """
-            + _exclude_seen_sql("$6")
-            + order_by
-            + """
-            LIMIT $4 OFFSET $5
-            """,
-            lo,
-            hi,
-            genre,
-            fetch_limit,
-            offset,
-            user_id,
+        params.append(genre)
+        filters += (
+            "\n              AND m.genre IS NOT NULL"
+            f"\n              AND m.genre ILIKE '%' || ${len(params)} || '%'"
         )
-    else:
-        rows = await db.query_raw(
-            """
-            SELECT m.id                AS movie_id,
-                   m.title             AS title,
-                   m.year              AS year,
-                   m.poster_url        AS poster_url,
-                   m.description       AS description,
-                   m.difficulty_score  AS difficulty_score,
-                   m.tmdb_id           AS tmdb_id,
-                   m.tmdb_vote_average AS vote_average,
-                   m.tmdb_vote_count   AS vote_count,
-                   (
-                     SELECT COUNT(DISTINCT wc.lemma)
-                     FROM movie_scripts ms
-                     JOIN word_classifications wc ON wc.script_id = ms.id
-                     WHERE ms.movie_id = m.id
-                   )                   AS unique_words,
-                   (
-                     SELECT jsonb_object_agg(level, cnt)
-                     FROM (
-                       SELECT wc.cefr_level::text AS level,
-                              COUNT(*) AS cnt
-                       FROM movie_scripts ms
-                       JOIN word_classifications wc ON wc.script_id = ms.id
-                       WHERE ms.movie_id = m.id
-                       GROUP BY wc.cefr_level
-                     ) sub
-                   )                   AS cefr_distribution
-            FROM movies m
-            WHERE m.difficulty_score >= $1
-              AND m.difficulty_score <= $2
-              AND COALESCE(m.tmdb_vote_count, 0) >= 50
-            """
-            + _exclude_seen_sql("$5")
-            + order_by
-            + """
-            LIMIT $3 OFFSET $4
-            """,
-            lo,
-            hi,
-            fetch_limit,
-            offset,
-            user_id,
-        )
+
+    filters += _animation_filter_sql(animated)
+
+    params.append(fetch_limit)
+    limit_ph = f"${len(params)}"
+    params.append(offset)
+    offset_ph = f"${len(params)}"
+    params.append(user_id)
+    user_ph = f"${len(params)}"
+
+    rows = await db.query_raw(
+        _BY_CEFR_SELECT
+        + filters
+        + _exclude_seen_sql(user_ph)
+        + order_by
+        + f"\n            LIMIT {limit_ph} OFFSET {offset_ph}\n",
+        *params,
+    )
 
     has_more = len(rows) > limit
     rows = rows[:limit]

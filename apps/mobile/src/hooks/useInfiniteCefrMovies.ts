@@ -7,12 +7,13 @@
  * client-side reshuffle of a fixed page. Each page is enriched with TMDB
  * poster/backdrop data as it arrives (never the whole catalog up front).
  *
- * Changing `level`, `sort`, or `order` resets the feed to page 0. A request-id
- * guard discards responses from a superseded filter so a slow in-flight page
- * can't clobber a newer one.
+ * Changing `level`, `sort`, `order`, or `movieType` resets the feed to page 0.
+ * A request-id guard discards responses from a superseded filter so a slow
+ * in-flight page can't clobber a newer one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../services/api';
+import { animatedParam, type MovieType } from '../components/home/filterOptions';
 
 export type MovieSort = 'rating' | 'popularity' | 'level';
 export type SortOrder = 'asc' | 'desc';
@@ -23,6 +24,10 @@ export function useInfiniteCefrMovies(
   level: string,
   sort: MovieSort,
   order: SortOrder,
+  /** Animation vs live action (#114). Filtered server-side: the feed is
+   *  paginated, so narrowing a page here would return short pages and skip
+   *  every match past the page boundary. */
+  movieType: MovieType = 'all',
 ) {
   const [movies, setMovies] = useState<any[]>([]);
   // Mirror of `movies` for synchronous reads (removeMovie needs the current
@@ -62,6 +67,7 @@ export function useInfiniteCefrMovies(
           offset: offsetRef.current,
           sort,
           order,
+          animated: animatedParam(movieType),
         });
         const raw = (res.movies || []).map((m: any) => ({
           ...m,
@@ -90,7 +96,7 @@ export function useInfiniteCefrMovies(
         }
       }
     },
-    [level, sort, order],
+    [level, sort, order, movieType],
   );
 
   // Reset to page 0 whenever the filter or sort changes.

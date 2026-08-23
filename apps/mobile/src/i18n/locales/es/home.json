@@ -4,7 +4,8 @@
   "rankedList": {
     "empty": "Aún no se han encontrado películas clasificadas para este nivel.",
     "endOfLevel": "Esto es todo en este nivel",
-    "tapToClose": "Toca para cerrar"
+    "tapToClose": "Toca para cerrar",
+    "emptyFiltered": "Aún no hay películas de {{type}} en este nivel."
   },
   "search": {
     "placeholder": "Busca películas, palabras o actores…",
@@ -19,5 +20,13 @@
     "eyebrow": "LA PALABRA DE LA HORA",
     "save": "Guarda esta palabra",
     "saved": "Guardada en tus palabras"
+  },
+  "filters": {
+    "type": {
+      "all": "Todas las películas",
+      "animation": "Animación",
+      "live": "Imagen real",
+      "a11y": "Tipo de película: {{value}}. Toca para cambiar."
+    }
   }
 }

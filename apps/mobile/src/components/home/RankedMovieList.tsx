@@ -153,6 +153,11 @@ interface Props {
   /** Home-feed swipe: right → "Seen it" (Watched), left → "Not interested".
    *  When omitted, cards aren't swipeable. */
   onSwipeAction?: (action: SwipeAction, movie: any) => void;
+  /** Overrides the empty-state copy. The default blames the level, which is
+   *  wrong once a filter is on: there are no animated films above B1 at all
+   *  (prod, 2026-08-23), so "none at this level yet" would read as a data gap
+   *  rather than as the filter the user just applied. */
+  emptyMessage?: string;
 }
 
 // ── Add-to-reel glyph ───────────────────────────────────────────────────────
@@ -434,7 +439,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction }: Props) => {
+export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction, emptyMessage }: Props) => {
   const { t } = useTranslation();
   // The lightbox machinery is intact but currently has no trigger: the card
   // that used to open it no longer carries a poster. Kept rather than removed
@@ -454,7 +459,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
     return (
       <View style={fillHeight ? s.fill : undefined}>
         <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 13, paddingVertical: 16 }}>
-          {t('home:rankedList.empty')}
+          {emptyMessage ?? t('home:rankedList.empty')}
         </Text>
       </View>
     );

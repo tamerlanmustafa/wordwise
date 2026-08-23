@@ -4,7 +4,8 @@
   "rankedList": {
     "empty": "Ainda não foram encontrados filmes classificados para este nível.",
     "endOfLevel": "Isso é tudo neste nível",
-    "tapToClose": "Toque para fechar"
+    "tapToClose": "Toque para fechar",
+    "emptyFiltered": "Ainda não há filmes de {{type}} neste nível."
   },
   "search": {
     "placeholder": "Pesquise filmes, palavras ou atores…",
@@ -19,5 +20,13 @@
     "eyebrow": "PALAVRA DA HORA",
     "save": "Salve esta palavra",
     "saved": "Salva nas suas palavras"
+  },
+  "filters": {
+    "type": {
+      "all": "Todos os filmes",
+      "animation": "Animação",
+      "live": "Live-action",
+      "a11y": "Tipo de filme: {{value}}. Toque para alterar."
+    }
   }
 }
