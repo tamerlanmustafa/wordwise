@@ -4,53 +4,14 @@
   "expo": {
     "name": "WordWise",
     "slug": "wordwise-mobile",
-    "entryPoint": "./index.js",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
-    "scheme": "wordwise",
     "runtimeVersion": "1.0.1",
     "updates": {
       "url": "https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f"
     },
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0e0d10"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
-    "plugins": [
-      "expo-apple-authentication",
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "iosUrlScheme": "com.googleusercontent.apps.400446242104-a9laa57dook0og2k93g9amjgieqo2mj7"
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "WordWise uses this to save movie posters to your Photos.",
-          "savePhotosPermission": "WordWise uses this to save movie posters to your Photos.",
-          "isAccessMediaLocationEnabled": false
-        }
-      ],
-      "expo-localization"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.wordwise.mobile"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0e0d10"
-      },
-      "package": "com.wordwise.mobile"
-    },
     "extra": {
       "eas": {
         "projectId": "672b17ee-a16a-4162-8666-f93b98681c5f"

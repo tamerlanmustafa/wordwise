@@ -106,6 +106,62 @@ development: {
 },
 ```
 
+## Native configuration — this is a **bare** project
+
+`android/` and `ios/` are committed to git, and **they are the source of truth for
+all native configuration.** Decided 2026-08-23 in issue #160.
+
+### What this means day to day
+
+When the native folders exist, EAS Build ignores these `app.json` properties and
+reads the native code instead — **silently, with no warning in the build output**:
+
+> `orientation`, `icon`, `userInterfaceStyle`, `scheme`, `splash`, `plugins`, `ios`, `android`
+
+So they have been removed from `app.json`. To change one, edit the native file:
+
+| To change | Android | iOS |
+|---|---|---|
+| App name | `android/app/src/main/res/values/strings.xml` | `ios/WordWise/Info.plist` (`CFBundleDisplayName`) |
+| Bundle id | `applicationId` in `android/app/build.gradle` | `PRODUCT_BUNDLE_IDENTIFIER` in the Xcode project |
+| Orientation | `android:screenOrientation` in `AndroidManifest.xml` | `UISupportedInterfaceOrientations` in `Info.plist` |
+| Deep-link scheme | `<data android:scheme="…"/>` in `AndroidManifest.xml` | `CFBundleURLSchemes` in `Info.plist` |
+| Permissions | `AndroidManifest.xml` | the `NS…UsageDescription` keys in `Info.plist` |
+| App icon | `android/app/src/main/res/mipmap-*` | `ios/WordWise/Images.xcassets/AppIcon.appiconset` |
+| Splash colour | `splashscreen_background` in `res/values/colors.xml` | `SplashScreenBackground.colorset` |
+
+`app.json` still owns the things EAS **does** read: `slug`, `version`,
+`runtimeVersion`, `updates.url`, `assetBundlePatterns`, `extra.eas.projectId`,
+`owner`.
+
+### ⚠️ Two ways to break this by accident
+
+**1. `npx expo prebuild` is now destructive.** It regenerates `android/` and
+`ios/` from `app.json` — which no longer declares the config plugins — so it
+would wipe out Sign in with Apple, Google sign-in and the Photos permission
+strings. Do not run it unless you are deliberately converting the project to CNG.
+
+**2. `npx expo install --fix` re-adds a `plugins` array.** It did exactly this
+during the #160 change. A config plugin listed in `app.json` does nothing here,
+so if the command adds one, delete it again.
+
+Adding a native module is `npx expo install <pkg>` plus a **new build** — Gradle
+and CocoaPods autolink it, and EAS runs `pod install` for bare iOS projects. Only
+modules that need a *config plugin* are a problem; those require the native
+change to be made by hand.
+
+`src/__tests__/nativeConfig.test.ts` enforces all of the above on every push: it
+fails if `app.json` re-grows an ignored property, and it fails if a setting that
+was deleted from `app.json` goes missing from the native folders.
+
+### Build upload size
+
+`.easignore` at the **repo root** controls what `eas build` uploads. Note that it
+**replaces** `.gitignore` rather than adding to it, so every exclusion has to be
+listed there — including `**/node_modules/` and `**/Pods/`. It mainly exists to
+keep `backend/` out of the archive; that directory holds ~103 MB of ML model
+files no mobile build reads.
+
 ## Project Structure
 
 ```

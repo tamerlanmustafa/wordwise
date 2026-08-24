@@ -41,6 +41,13 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Expo
+#
+# Local CLI state only: device history, dev-server settings, build logs. Nothing
+# here is shared. The root .gitignore's `*.log` already caught the build logs,
+# which is why nothing ever leaked, but it does not cover the JSON state files.
+.expo/
+
 # fastlane
 #
 # It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the

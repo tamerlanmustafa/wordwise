@@ -1,0 +1,83 @@
+# .easignore — controls what `eas build` uploads as the project archive.
+#
+# ⚠️  THIS FILE REPLACES .gitignore FOR THE UPLOAD. It does not add to it.
+#     When a .easignore exists, EAS CLI stops consulting .gitignore entirely, so
+#     every path that must stay out of the archive has to be listed *here* — even
+#     the obvious ones like node_modules/ and ios/Pods/. Deleting a line below
+#     puts that path back into every future build upload; dropping the file
+#     without replacing these rules would upload ~1.4 GB from apps/mobile alone.
+#
+# Baseline: Android build a6f69563 (2026-08-23) uploaded a 194 MB archive with no
+# .easignore present. The bulk is backend/data/cefr — an 87 MB sentence-transformer
+# checkpoint plus a 16 MB embeddings array (103 MB of the 114 MB of tracked content
+# at the repo root) that no mobile build reads.
+
+# --- The other projects in this repo. A mobile build needs none of them. ---
+# Leading "/" anchors each to the archive root, so a future apps/mobile/src/home/
+# or .../web/ directory is not silently dropped from the bundle.
+/backend/
+/frontend/
+/web/
+/docker/
+/home/
+/quizDesign/
+/.github/
+/.husky/
+
+# packages/ is deliberately NOT ignored: apps/mobile/tsconfig.json maps
+# @wordwise/types at ../../packages/types/src. Only a test imports it today, but
+# it is 16 KB and excluding it would trade a real breakage risk for nothing.
+
+# --- Root-level docs, planning files and mockups (root only: apps/mobile/README.md
+#     and the in-tree docs stay) ---
+/*.md
+/mockup-*.png
+/docker-compose.prod.yml
+
+# --- Dependencies and build output (was .gitignore's job; now ours) ---
+# A leading "**/" matches at every level *including* the root, so these single
+# rules cover both /node_modules and apps/mobile/node_modules. Do not add a bare
+# `node_modules/` alongside them — it is redundant, and a redundant rule makes a
+# guard test pass after the real rule has been deleted.
+**/node_modules/
+**/Pods/
+**/build/
+**/.gradle/
+**/.cxx/
+**/DerivedData/
+**/*.keystore
+!**/debug.keystore
+**/*.jsbundle
+**/*.ipa
+**/*.apk
+**/*.aab
+
+# --- Local tool + editor state ---
+**/.expo/
+**/.metro-health-check*
+**/xcuserdata/
+**/*.xcuserstate
+**/.xcode.env.local
+.vscode/
+.idea/
+.claude/
+**/.DS_Store
+
+# --- Python (backend/ is already excluded; these catch strays) ---
+**/__pycache__/
+**/*.py[cod]
+**/.venv*/
+**/venv/
+.pytest_cache/
+.ruff_cache/
+**/.coverage
+**/htmlcov/
+
+# --- Secrets and logs. Never upload these. ---
+.env
+.env.*
+!*.env.example
+**/*.log
+
+# --- Test output ---
+**/coverage/
