@@ -228,6 +228,35 @@ class ScriptIngestionService:
             logger.warning("[DB] Idiom precompute failed — leaving column NULL", exc_info=True)
             return None
 
+    async def _store_backdrop_corner_rgb(self, movie_id: int, tmdb_id: int) -> None:
+        """
+        Sample and store the colour under the home card's add glyph (#115).
+
+        Best-effort, in the same sense as `_precompute_idioms`: a movie with no
+        backdrop, a TMDB blip, or an undecodable still leaves the column NULL,
+        and the card renders the gold + halo fallback it renders today. Nothing
+        here may fail an ingestion — the script is the product, the glyph colour
+        is polish.
+
+        The image decode inside `compute_corner_rgb` goes through `run_cpu`, so
+        this is safe even when ingestion is driven from a request rather than
+        the worker.
+        """
+        try:
+            from .backdrop_ink import compute_corner_rgb
+
+            packed = await compute_corner_rgb(tmdb_id)
+            if packed is None:
+                logger.info(f"[DB] No usable backdrop for tmdb_id={tmdb_id} — leaving corner rgb NULL")
+                return
+            await self.db.movie.update(
+                where={"id": movie_id},
+                data={"backdropCornerRgb": packed},
+            )
+            logger.info(f"[DB] Stored backdrop corner rgb for movie_id={movie_id}")
+        except Exception:
+            logger.warning("[DB] Backdrop corner sample failed — leaving column NULL", exc_info=True)
+
     async def _get_from_database(
         self,
         movie_title: str,
@@ -323,6 +352,14 @@ class ScriptIngestionService:
 
                 movie = await self.db.movie.create(data=create_data)
                 movie_id = movie.id
+
+                # #115: sample the backdrop's glyph corner now, while we are
+                # already the only writer of this row. Doing it here is what
+                # stops the catalogue drifting back to "no card in the feed has
+                # a colour" one ingestion at a time. Best-effort by design —
+                # see _store_backdrop_corner_rgb.
+                if tmdb_id:
+                    await self._store_backdrop_corner_rgb(movie_id, tmdb_id)
 
             logger.info(f"[DB] Saving script for movie_id={movie_id}, source={source_used}")
 

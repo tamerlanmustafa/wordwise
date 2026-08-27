@@ -42,6 +42,14 @@ export interface Movie {
   difficulty_level: string | null;
   difficulty_score: number | null;
   word_count: number | null;
+  /**
+   * Average colour of the backdrop's top-right patch, as `[r, g, b]` (#115).
+   * The home card picks its add-glyph ink by WCAG contrast against this.
+   * Stored packed server-side; the API unpacks it before it reaches a client.
+   * Null when the movie has no usable backdrop — the card then falls back to
+   * gold + a halo.
+   */
+  backdrop_corner_rgb?: [number, number, number] | null;
 }
 
 export interface MovieSearchResult {

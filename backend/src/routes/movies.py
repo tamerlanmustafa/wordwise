@@ -11,6 +11,7 @@ from ..middleware.auth import (
     get_current_active_user,
     get_current_user_optional,
 )
+from ..services.backdrop_ink import unpack_rgb
 from ..services.hidden_words import get_hidden_word_set
 from ..services.internationalism_filter import is_internationalism_entry
 from ..services.lemma_guard import display_form
@@ -237,6 +238,7 @@ _BY_CEFR_SELECT = """
                    m.year              AS year,
                    m.poster_url        AS poster_url,
                    m.description       AS description,
+                   m.backdrop_corner_rgb AS backdrop_corner_rgb,
                    m.difficulty_score  AS difficulty_score,
                    m.tmdb_id           AS tmdb_id,
                    m.tmdb_vote_average AS vote_average,
@@ -362,6 +364,12 @@ async def list_movies_by_cefr(
                 "year": r["year"],
                 "poster_url": r["poster_url"],
                 "description": r["description"],
+                # #115: the colour under the card's add glyph, as [r, g, b].
+                # Stored packed (see services/backdrop_ink.py); null for a movie
+                # with no usable backdrop, which the card already renders as
+                # gold + halo. Only this feed carries it — /by-level is
+                # onboarding's "pick your first film" list and draws no card.
+                "backdrop_corner_rgb": unpack_rgb(r.get("backdrop_corner_rgb")),
                 "difficulty_score": r["difficulty_score"],
                 "vote_average": r["vote_average"],
                 "vote_count": r["vote_count"],

@@ -116,5 +116,12 @@ export interface MovieData {
   vote_average?: number;
   original_language?: string;
   tmdb_id?: number;
+  /**
+   * Average colour of the backdrop's top-right patch, `[r, g, b]` (#115).
+   * Supplied by /movies/by-cefr, not by TMDB, so it is present only on rows
+   * that came from our own feed. The home card reads it via
+   * `cardVisuals.cornerForGlyph` to pick legible ink for the add glyph.
+   */
+  backdrop_corner_rgb?: [number, number, number] | null;
 }
 

@@ -66,9 +66,9 @@ import {
   RING_STROKE,
   buildEdgeFade,
   buildScrim,
+  cornerForGlyph,
   formatRank,
   hexToRgb,
-  parseCornerRgb,
   pickPlusInk,
   plusHalo,
   ringDashOffset,
@@ -338,10 +338,11 @@ const MovieCard = React.memo(({
 
   // The glyph sits over the trailing top of the backdrop, which is exactly
   // where the image is least covered by the scrim, so a fixed gold vanishes on
-  // roughly a third of real backdrops. The corner average comes from ingest;
-  // until that field exists the halo alone carries it.
+  // roughly a third of real backdrops. The corner average comes from ingest
+  // (#115); where it is absent — no backdrop, or a mirrored RTL layout the
+  // sample does not describe — the halo alone carries it.
   const plusInk = useMemo(() => {
-    const corner = parseCornerRgb(movie.backdrop_corner_rgb ?? movie.backdropCornerRgb);
+    const corner = cornerForGlyph(movie.backdrop_corner_rgb ?? movie.backdropCornerRgb, isRTL());
     if (!backdropUri || !corner) return tc.cardMeta;
     return pickPlusInk(corner, CARD_STOCK_RGB[scheme]);
   }, [movie.backdrop_corner_rgb, movie.backdropCornerRgb, backdropUri, tc.cardMeta, scheme]);

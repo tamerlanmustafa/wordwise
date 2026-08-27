@@ -14,6 +14,7 @@ import {
   buildScrim,
   compositeOver,
   contrastRatio,
+  cornerForGlyph,
   formatRank,
   hexToRgb,
   parseCornerRgb,
@@ -225,6 +226,33 @@ describe('parseCornerRgb', () => {
     expect(parseCornerRgb([1, 2, 300])).toBeNull();
     expect(parseCornerRgb([1, 2, -4])).toBeNull();
     expect(parseCornerRgb([1, 2, 'x'])).toBeNull();
+  });
+});
+
+describe('cornerForGlyph', () => {
+  it('uses the stored average in a left-to-right layout', () => {
+    expect(cornerForGlyph([12, 200, 255], false)).toEqual([12, 200, 255]);
+  });
+
+  it('declines the average under RTL', () => {
+    // Ingest samples the still's top-RIGHT patch. Under RTL the card mirrors
+    // (`end:` becomes the left edge) but the image's pixels do not, so the
+    // glyph lands over a corner nothing measured. Null keeps the gold + halo
+    // fallback, which is what every card renders today.
+    expect(cornerForGlyph([12, 200, 255], true)).toBeNull();
+  });
+
+  it('still rejects a malformed value in either direction', () => {
+    expect(cornerForGlyph('12,200,255', false)).toBeNull();
+    expect(cornerForGlyph(undefined, true)).toBeNull();
+  });
+
+  it('keeps a legitimately black corner', () => {
+    // [0,0,0] is a real night-scene average, not a missing value — a falsy
+    // check anywhere on this path would drop exactly the backdrops the
+    // feature exists for.
+    expect(cornerForGlyph([0, 0, 0], false)).toEqual([0, 0, 0]);
+    expect(pickPlusInk([0, 0, 0], DARK_STOCK)).toBe('rgb(255,250,240)');
   });
 });
 

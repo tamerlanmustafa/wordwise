@@ -35,6 +35,12 @@ email-validator==2.3.0
 pdfplumber==0.11.0
 pypdf==4.0.1
 
+# Image sampling (#115) — decodes one TMDB backdrop to average the patch the
+# home card's add glyph sits over. Only ever called through run_cpu; the
+# arithmetic itself (services/backdrop_ink.average_rgb) is Pillow-free so the
+# unit tests do not depend on it.
+Pillow==12.1.1
+
 # EPUB Processing
 ebooklib==0.18
 

@@ -185,6 +185,21 @@ export function parseCornerRgb(value: unknown): Rgb | null {
   return rgb as Rgb;
 }
 
+/**
+ * The corner average to colour the glyph from — or null to keep the gold +
+ * halo fallback.
+ *
+ * Ingest samples the still's top-**right** patch (#115). The card places both
+ * the backdrop and the glyph with `end:`, so under RTL they mirror to the left
+ * while the image's own pixels do not: the glyph then sits over a corner
+ * nothing measured. Colouring from the opposite corner is worse than not
+ * colouring at all — it is confidently wrong, where the fallback is merely
+ * unoptimised and is what every card renders today.
+ */
+export function cornerForGlyph(value: unknown, isRtl: boolean): Rgb | null {
+  return isRtl ? null : parseCornerRgb(value);
+}
+
 // ── Level ring ─────────────────────────────────────────────────────────────
 // One 44pt ring, gold arc drawn to the comprehension percentage, CEFR band and
 // percent stacked inside. r=20 with a 4pt stroke spans 18–22, so the hole is
