@@ -1284,6 +1284,39 @@ export const premiumApi = {
   exportAnkiUrl: (): string => `${API_BASE_URL}/premium/export/anki`,
 };
 
+// Self-reported survey answers (issue #108). Persisted server-side, not
+// locally: the whole point is joining them to behavioural cohorts later, and
+// analytics.track() is still a no-op in release builds.
+export const surveyApi = {
+  /**
+   * Post one survey's answers. Never rejects: this fires from an onboarding
+   * screen that has already moved on, so there is no UI left to show an error
+   * in, and blocking or retrying a research write would trade a first-run
+   * user's activation for a data point. Retries are safe on the server side —
+   * the unique index makes a duplicate submission a no-op — but a lost one is
+   * simply lost, which is the right trade here.
+   */
+  submit: async (
+    surveyKey: string,
+    version: number,
+    responses: Array<{ question_key: string; answer_key: string }>,
+  ): Promise<boolean> => {
+    try {
+      const res = await authFetch(
+        `${API_BASE_URL}/user/surveys/${encodeURIComponent(surveyKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version, responses }),
+        },
+      );
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+};
+
 // Auth API — just the pieces the stores need to refresh on cold-start.
 export const authApi = {
   // Fetch the current user (including entitlements). Returns null on

@@ -86,6 +86,7 @@ model User {
   familyMemberships       FamilyMember[]
   studentVerifications    StudentVerification[]
   lists                   UserList[]
+  surveyResponses         UserSurveyResponse[]
 
   @@map("users")
 }
@@ -1106,4 +1107,24 @@ model StudentVerification {
   // environments where the old request-time CREATE TABLE ran.
   @@unique([userId, method], map: "student_verifications_user_id_method_key")
   @@map("student_verifications")
+}
+
+model UserSurveyResponse {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  surveyKey     String   @map("survey_key") @db.VarChar(40)
+  surveyVersion Int      @map("survey_version")
+  questionKey   String   @map("question_key") @db.VarChar(40)
+  answerKey     String   @map("answer_key") @db.VarChar(40)
+  answeredAt    DateTime @default(now()) @map("answered_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Backs the ON CONFLICT DO NOTHING in POST /user/surveys/{key}: one row per
+  // user per question per survey version, so a retried submission cannot
+  // double-count an answer. It is also the only index — the analysis reads
+  // (GROUP BY question_key, answer_key) scan a table with at most one row per
+  // user per question, and a second index would cost more than the scan.
+  @@unique([userId, surveyKey, surveyVersion, questionKey], map: "user_survey_responses_answer_key")
+  @@map("user_survey_responses")
 }

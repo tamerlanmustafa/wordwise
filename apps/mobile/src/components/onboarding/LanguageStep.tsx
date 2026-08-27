@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { AVAILABLE_LANGUAGES, filterLanguages } from '../../types';
-import { StepHeader } from './StepHeader';
+import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 import { directionalIcon } from '../../i18n/rtl';
 
@@ -35,8 +35,8 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <StepHeader
-        step={2}
-        total={6}
+        step={3}
+        total={ONBOARDING_TOTAL_STEPS}
         eyebrow={t('onboarding:languageStep.eyebrow', { step: 2, total: 6 })}
         title={t('onboarding:languageStep.title')}
         onBack={onBack}

@@ -40,7 +40,7 @@ export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
 function PrivacyContent() {
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: August 23, 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Information We Collect</Text>
       <Text style={styles.body}>
@@ -48,6 +48,9 @@ function PrivacyContent() {
       </Text>
       <Text style={styles.body}>
         As you use the app, we collect data about which words you save, review outcomes (correct/incorrect), and interaction events (e.g., tapping a word, viewing a translation). This data is used to power the spaced-repetition system and personalize your vocabulary recommendations.
+      </Text>
+      <Text style={styles.body}>
+        When you first set up the app, we may also ask a few optional questions about your learning goals and what you find difficult. Every question can be skipped, and the answers are recorded as fixed multiple-choice options — never free text.
       </Text>
 
       <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
@@ -94,7 +97,7 @@ function PrivacyContent() {
 function TermsContent() {
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: August 23, 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
       <Text style={styles.body}>

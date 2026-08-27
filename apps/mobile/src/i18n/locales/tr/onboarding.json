@@ -69,6 +69,52 @@
     "subhead": "Böylece daha sonra altyazılı olarak izlediğinizde, her repliği gerçekten anlayabileceksiniz."
   },
   "stepOf": "{{total}} adımın {{step}}'inci adımı",
+  "surveyStep": {
+    "eyebrow": "Birkaç kısa soru · {{index}} / {{total}}",
+    "sub": "Bu, WordWise'ın sana ne göstereceğini belirler. Yanlış cevap yok.",
+    "skip": "Bu soruları atla",
+    "question": {
+      "vocab_pain": {
+        "title": "Kelime öğrenirken en zor gelen ne?",
+        "option": {
+          "remembering": "Uzun vadede hatırlamak",
+          "context": "Bağlam içinde anlamak",
+          "pronunciation": "Telaffuz etmek",
+          "which_words": "Hangi kelimelerin önemli olduğunu bilmek",
+          "consistency": "Düzenli devam etmek"
+        }
+      },
+      "subtitle_pain": {
+        "title": "Altyazılı film izlemek nasıl geliyor?",
+        "option": {
+          "too_fast": "Takip edemeyecek kadar hızlı",
+          "constant_pausing": "Kelime aramak için sürekli duraklatıyorum",
+          "fine_want_vocab": "İyi — sadece daha çok kelime istiyorum",
+          "not_yet": "Henüz altyazıyla izlemiyorum"
+        }
+      },
+      "frustration": {
+        "title": "Öğrenirken ne sıklıkla bunalıyorsun?",
+        "option": {
+          "every_session": "Neredeyse her çalıştığımda",
+          "sometimes": "Bazen",
+          "rarely": "Nadiren",
+          "never": "Hiç"
+        }
+      },
+      "motivation": {
+        "title": "Ne için öğreniyorsun?",
+        "option": {
+          "travel": "Seyahat",
+          "career": "İş veya kariyer",
+          "films_tv": "Altyazısız film ve diziler",
+          "exam": "Sınav veya okul",
+          "people": "İnsanlarla bağ kurmak",
+          "fun": "Sadece keyif için"
+        }
+      }
+    }
+  },
   "usernameStep": {
     "placeholder": "Kullanıcı adı",
     "saveFailed": "Kullanıcı adı kaydedilemedi. Lütfen tekrar deneyin.",

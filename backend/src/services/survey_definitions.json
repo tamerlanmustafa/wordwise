@@ -1,0 +1,33 @@
+{
+  "welcome": {
+    "1": {
+      "vocab_pain": [
+        "remembering",
+        "context",
+        "pronunciation",
+        "which_words",
+        "consistency"
+      ],
+      "subtitle_pain": [
+        "too_fast",
+        "constant_pausing",
+        "fine_want_vocab",
+        "not_yet"
+      ],
+      "frustration": [
+        "every_session",
+        "sometimes",
+        "rarely",
+        "never"
+      ],
+      "motivation": [
+        "travel",
+        "career",
+        "films_tv",
+        "exam",
+        "people",
+        "fun"
+      ]
+    }
+  }
+}

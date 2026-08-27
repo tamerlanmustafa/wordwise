@@ -17,7 +17,7 @@ import { SERIF_FAMILY } from '../../theme/fonts';
 import { tmdbApi, wordwiseApi } from '../../services/api';
 import type { CefrLevel } from '../../types';
 import { TmdbPoster } from '../movies/TmdbPoster';
-import { StepHeader } from './StepHeader';
+import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 
 export interface FirstFilm {
@@ -124,9 +124,9 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
         style={s.kav}
       >
       <StepHeader
-        step={5}
-        total={6}
-        eyebrow={t('onboarding:stepOf', { step: 5, total: 6 })}
+        step={6}
+        total={ONBOARDING_TOTAL_STEPS}
+        eyebrow={t('onboarding:stepOf', { step: 6, total: ONBOARDING_TOTAL_STEPS })}
         title={t('onboarding:filmStep.title')}
         onBack={onBack}
       />

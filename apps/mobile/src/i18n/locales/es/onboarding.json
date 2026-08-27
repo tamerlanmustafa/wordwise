@@ -69,6 +69,52 @@
     "subhead": "Así, cuando lo veas más tarde con subtítulos, podrás seguir realmente cada frase."
   },
   "stepOf": "Paso {{step}} de {{total}}",
+  "surveyStep": {
+    "eyebrow": "Unas preguntas rápidas · {{index}} de {{total}}",
+    "sub": "Esto define lo que WordWise te muestra. No hay respuestas incorrectas.",
+    "skip": "Saltar estas preguntas",
+    "question": {
+      "vocab_pain": {
+        "title": "¿Qué es lo más difícil al aprender palabras?",
+        "option": {
+          "remembering": "Recordarlas a largo plazo",
+          "context": "Entenderlas en contexto",
+          "pronunciation": "Pronunciarlas",
+          "which_words": "Saber qué palabras importan",
+          "consistency": "Mantener la constancia"
+        }
+      },
+      "subtitle_pain": {
+        "title": "Ver películas con subtítulos se siente…",
+        "option": {
+          "too_fast": "Demasiado rápido para seguirlo",
+          "constant_pausing": "Pauso constantemente para buscar palabras",
+          "fine_want_vocab": "Bien, solo quiero más vocabulario",
+          "not_yet": "Todavía no veo nada con subtítulos"
+        }
+      },
+      "frustration": {
+        "title": "¿Con qué frecuencia te frustras?",
+        "option": {
+          "every_session": "Casi cada vez que estudio",
+          "sometimes": "A veces",
+          "rarely": "Rara vez",
+          "never": "Nunca"
+        }
+      },
+      "motivation": {
+        "title": "¿Para qué estás aprendiendo?",
+        "option": {
+          "travel": "Viajar",
+          "career": "Trabajo o carrera",
+          "films_tv": "Películas y series sin subtítulos",
+          "exam": "Un examen o los estudios",
+          "people": "Conectar con personas",
+          "fun": "Solo por diversión"
+        }
+      }
+    }
+  },
   "usernameStep": {
     "placeholder": "Nombre de usuario",
     "saveFailed": "No se ha podido guardar el nombre de usuario. Inténtalo de nuevo.",

@@ -28,8 +28,21 @@ import { PlacementStep } from './PlacementStep';
 import { LevelResultStep } from './LevelResultStep';
 import { PickFirstFilmStep, type FirstFilm } from './PickFirstFilmStep';
 import { GoalStep } from './GoalStep';
+import { SurveyStep } from './SurveyStep';
+import { surveyApi } from '../../services/api';
+import {
+  answerSurveyQuestion,
+  buildSurveyResponses,
+  INITIAL_SURVEY_PROGRESS,
+  unanswerSurveyQuestion,
+  WELCOME_SURVEY_KEY,
+  WELCOME_SURVEY_QUESTIONS,
+  WELCOME_SURVEY_VERSION,
+  type SurveyAnswers,
+  type SurveyProgress,
+} from './survey';
 
-type Step = 'welcome' | 'username' | 'language' | 'placement' | 'level' | 'film' | 'goal' | 'analyzing' | 'ready';
+type Step = 'welcome' | 'survey' | 'username' | 'language' | 'placement' | 'level' | 'film' | 'goal' | 'analyzing' | 'ready';
 
 export interface OnboardingFlowProps {
   /** Current target language, used to pre-select the language step. */
@@ -43,6 +56,7 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
   const addToReel = useReelStore((s) => s.add);
 
   const [step, setStep] = useState<Step>('welcome');
+  const [survey, setSurvey] = useState<SurveyProgress>(INITIAL_SURVEY_PROGRESS);
   const [language, setLanguage] = useState<string | null>(initialLanguage ?? null);
   const [answers, setAnswers] = useState<PlacementAnswer[]>([]);
   const [wordIdx, setWordIdx] = useState(0);
@@ -55,6 +69,47 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
   // holds on its last step until this is set (brief §B: "hold on the last
   // active step until the response lands").
   const addResolved = useRef(false);
+  // The survey posts once, on the way out of the step. Going back into it and
+  // out again must not post a second time — the server dedupes, but the second
+  // request buys a round trip and can never change the stored answers.
+  const surveySubmitted = useRef(false);
+
+  // ── Welcome survey (issue #108) ────────────────────────────────────
+  // Submitted on leaving the step rather than at `finish()`, so a user who
+  // abandons onboarding halfway still leaves their answers behind — the
+  // abandoners are the cohort this data exists to explain. Fire-and-forget:
+  // by the time it resolves the user is already on the next screen, and a
+  // research write must never sit in front of a first-run user.
+  const submitSurvey = (collected: SurveyAnswers) => {
+    if (surveySubmitted.current) return;
+    surveySubmitted.current = true;
+    void surveyApi.submit(WELCOME_SURVEY_KEY, WELCOME_SURVEY_VERSION, buildSurveyResponses(collected));
+  };
+
+  const recordSurveyAnswer = (answerKey: string) => {
+    const next = answerSurveyQuestion(survey, answerKey);
+    setSurvey({ index: next.index, answers: next.answers });
+    if (next.done) {
+      submitSurvey(next.answers);
+      setStep('username');
+    }
+  };
+
+  // Skipping still submits: every unanswered question is stored as `skipped`,
+  // which is a different fact from never having been shown the survey.
+  const skipSurvey = () => {
+    submitSurvey(survey.answers);
+    setStep('username');
+  };
+
+  const backFromSurvey = () => {
+    const prev = unanswerSurveyQuestion(survey);
+    if (prev.exited) {
+      setStep('welcome');
+      return;
+    }
+    setSurvey({ index: prev.index, answers: prev.answers });
+  };
 
   // ── Placement helpers ──────────────────────────────────────────────
   const recordRating = (rating: PlacementRating) => {
@@ -137,16 +192,36 @@ export function OnboardingFlow({ initialLanguage, onLanguageChange }: Onboarding
     void complete({ targetLanguage: language, startingLevel: level, dailyGoalMinutes: goalMins });
   };
 
+  // Back skips the survey and lands on the welcome screen — unchanged from
+  // before #108. The answers are posted on the way out of the survey, so
+  // re-showing the questions would offer an edit the server won't take (first
+  // answer wins, by the unique index).
+  const usernameStep = (
+    <UsernameStep onBack={() => setStep('welcome')} onContinue={() => setStep('language')} />
+  );
+
   switch (step) {
     case 'welcome':
-      return <WelcomeScreen onGetStarted={() => setStep('username')} />;
-    case 'username':
+      return <WelcomeScreen onGetStarted={() => setStep('survey')} />;
+    case 'survey': {
+      const question = WELCOME_SURVEY_QUESTIONS[survey.index];
+      // The fallback is only reachable if the index ever outran the catalogue.
+      // Moving on beats rendering `undefined.answers` — a research question is
+      // not worth a crash on the second screen of a first run.
+      if (!question) return usernameStep;
       return (
-        <UsernameStep
-          onBack={() => setStep('welcome')}
-          onContinue={() => setStep('language')}
+        <SurveyStep
+          question={question}
+          index={survey.index}
+          total={WELCOME_SURVEY_QUESTIONS.length}
+          onAnswer={recordSurveyAnswer}
+          onSkip={skipSurvey}
+          onBack={backFromSurvey}
         />
       );
+    }
+    case 'username':
+      return usernameStep;
     case 'language':
       return (
         <LanguageStep

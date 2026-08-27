@@ -26,5 +26,6 @@ from .reel import router as reel_router
 from .daily import router as daily_router
 from .consumables import router as consumables_router
 from .lists import router as lists_router
+from .surveys import router as surveys_router
 
-__all__ = ["auth_router", "movies_router", "oauth_router", "apple_oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "family_router", "gamification_router", "social_router", "student_discount_router", "quiz_router", "reel_router", "daily_router", "consumables_router", "lists_router"]
+__all__ = ["auth_router", "movies_router", "oauth_router", "apple_oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "family_router", "gamification_router", "social_router", "student_discount_router", "quiz_router", "reel_router", "daily_router", "consumables_router", "lists_router", "surveys_router"]

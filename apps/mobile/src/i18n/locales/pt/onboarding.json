@@ -69,6 +69,52 @@
     "subhead": "Assim, quando você assistir com legendas mais tarde, vai conseguir acompanhar cada fala."
   },
   "stepOf": "Etapa {{step}} de {{total}}",
+  "surveyStep": {
+    "eyebrow": "Algumas perguntas rápidas · {{index}} de {{total}}",
+    "sub": "Isto molda o que o WordWise te mostra. Não há respostas erradas.",
+    "skip": "Pular estas perguntas",
+    "question": {
+      "vocab_pain": {
+        "title": "O que é mais difícil ao aprender palavras?",
+        "option": {
+          "remembering": "Lembrar delas a longo prazo",
+          "context": "Entendê-las no contexto",
+          "pronunciation": "Pronunciá-las",
+          "which_words": "Saber quais palavras importam",
+          "consistency": "Manter a constância"
+        }
+      },
+      "subtitle_pain": {
+        "title": "Ver filmes com legendas parece…",
+        "option": {
+          "too_fast": "Rápido demais para acompanhar",
+          "constant_pausing": "Pauso o tempo todo para consultar palavras",
+          "fine_want_vocab": "Tranquilo — só quero mais vocabulário",
+          "not_yet": "Ainda não assisto com legendas"
+        }
+      },
+      "frustration": {
+        "title": "Com que frequência você se frustra?",
+        "option": {
+          "every_session": "Quase toda vez que estudo",
+          "sometimes": "Às vezes",
+          "rarely": "Raramente",
+          "never": "Nunca"
+        }
+      },
+      "motivation": {
+        "title": "Para que você está aprendendo?",
+        "option": {
+          "travel": "Viagens",
+          "career": "Trabalho ou carreira",
+          "films_tv": "Filmes e séries sem legendas",
+          "exam": "Uma prova ou a escola",
+          "people": "Conectar-se com pessoas",
+          "fun": "Só por diversão"
+        }
+      }
+    }
+  },
   "usernameStep": {
     "placeholder": "Nome de usuário",
     "saveFailed": "Não foi possível salvar o nome de usuário. Tente novamente.",

@@ -18,7 +18,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useAuthStore } from '../../stores/authStore';
 import { authApi } from '../../services/api';
 import { usernameProblem, USERNAME_MAX } from '../../utils/username';
-import { StepHeader } from './StepHeader';
+import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 
 export interface UsernameStepProps {
@@ -68,9 +68,9 @@ export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <StepHeader
-          step={1}
-          total={6}
-          eyebrow={t('onboarding:stepOf', { step: 1, total: 6 })}
+          step={2}
+          total={ONBOARDING_TOTAL_STEPS}
+          eyebrow={t('onboarding:stepOf', { step: 2, total: ONBOARDING_TOTAL_STEPS })}
           title={t('onboarding:usernameStep.title')}
           onBack={onBack}
         />

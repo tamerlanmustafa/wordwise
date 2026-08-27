@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last updated: August 23, 2026
+        Last updated: August 26, 2026
       </Typography>
 
       <Section title="1. Information We Collect">
@@ -16,6 +16,9 @@ export default function PrivacyPage() {
         and proficiency level to personalize your experience. As you use the app, we collect data
         about which words you save, review outcomes, and interaction events to power the
         spaced-repetition system and personalize vocabulary recommendations.
+        {' '}When you first set up the app, we may also ask a few optional questions about your
+        learning goals and what you find difficult. Every question can be skipped, and the answers
+        are recorded as fixed multiple-choice options — never free text.
       </Section>
 
       <Section title="2. How We Use Your Information">

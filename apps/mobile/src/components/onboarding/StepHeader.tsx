@@ -12,6 +12,15 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon } from '../../i18n/rtl';
 
+/**
+ * Steps in the first-run flow, in order: survey, username, language,
+ * placement, level, film, goal. Lives here because every step renders the
+ * progress bar from it — before #108 the count was `total={6}` copy-pasted
+ * into six components, so inserting a step meant six chances to leave a
+ * progress bar claiming the wrong length.
+ */
+export const ONBOARDING_TOTAL_STEPS = 7;
+
 export interface StepHeaderProps {
   /** 1-based index of the current step — segments `< step` render gold. */
   step: number;

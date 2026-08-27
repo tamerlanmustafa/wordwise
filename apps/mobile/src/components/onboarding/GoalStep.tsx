@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { DAILY_GOAL_OPTIONS } from './placement';
-import { StepHeader } from './StepHeader';
+import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 
 export interface GoalStepProps {
@@ -31,9 +31,9 @@ export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: Go
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <StepHeader
-        step={6}
-        total={6}
-        eyebrow={t('onboarding:stepOf', { step: 6, total: 6 })}
+        step={7}
+        total={ONBOARDING_TOTAL_STEPS}
+        eyebrow={t('onboarding:stepOf', { step: 7, total: ONBOARDING_TOTAL_STEPS })}
         title={t('onboarding:goalStep.title')}
         onBack={onBack}
       />

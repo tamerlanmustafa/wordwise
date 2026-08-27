@@ -7,7 +7,7 @@ export default function TermsPage() {
         Terms of Service
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last updated: August 23, 2026
+        Last updated: August 26, 2026
       </Typography>
 
       <Section title="1. Acceptance of Terms">

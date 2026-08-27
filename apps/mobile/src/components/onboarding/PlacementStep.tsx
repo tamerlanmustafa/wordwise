@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
-import { StepHeader } from './StepHeader';
+import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import type { PlacementWord, PlacementRating } from './placement';
 
 export interface PlacementStepProps {
@@ -37,8 +37,8 @@ export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: Pl
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <StepHeader
-        step={3}
-        total={6}
+        step={4}
+        total={ONBOARDING_TOTAL_STEPS}
         eyebrow={t('onboarding:placementStep.eyebrow', { index: index + 1, total })}
         title={t('onboarding:placementStep.title')}
         onBack={onBack}

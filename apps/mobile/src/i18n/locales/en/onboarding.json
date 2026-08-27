@@ -5,6 +5,52 @@
     "copy": "WordWise turns any film's script into a vocabulary list — learn the key words before you watch, in the language you're studying.",
     "cta": "Get started"
   },
+  "surveyStep": {
+    "eyebrow": "A few quick questions · {{index}} of {{total}}",
+    "sub": "This shapes what WordWise shows you. There are no wrong answers.",
+    "skip": "Skip these questions",
+    "question": {
+      "vocab_pain": {
+        "title": "What's hardest about learning words?",
+        "option": {
+          "remembering": "Remembering them long-term",
+          "context": "Understanding them in context",
+          "pronunciation": "Pronouncing them",
+          "which_words": "Knowing which words matter",
+          "consistency": "Staying consistent"
+        }
+      },
+      "subtitle_pain": {
+        "title": "Watching films with subtitles feels…",
+        "option": {
+          "too_fast": "Too fast to follow",
+          "constant_pausing": "I pause constantly to look words up",
+          "fine_want_vocab": "Fine — I just want more vocabulary",
+          "not_yet": "I don't watch with subtitles yet"
+        }
+      },
+      "frustration": {
+        "title": "How often do you get frustrated?",
+        "option": {
+          "every_session": "Almost every time I study",
+          "sometimes": "Sometimes",
+          "rarely": "Rarely",
+          "never": "Never"
+        }
+      },
+      "motivation": {
+        "title": "What are you learning for?",
+        "option": {
+          "travel": "Travel",
+          "career": "Work or career",
+          "films_tv": "Films and TV without subtitles",
+          "exam": "An exam or school",
+          "people": "Connecting with people",
+          "fun": "Just for fun"
+        }
+      }
+    }
+  },
   "usernameStep": {
     "title": "What should we call you?",
     "sub": "Your username shows up on leaderboards and in your family plan. You can change it any time in Settings.",
