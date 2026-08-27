@@ -92,47 +92,47 @@ model User {
 }
 
 model Movie {
-  id               Int                   @id @default(autoincrement())
-  title            String                @db.VarChar
-  actualTitle      String?               @map("actual_title") @db.VarChar
-  year             Int
-  genre            String?               @db.VarChar
+  id                Int                   @id @default(autoincrement())
+  title             String                @db.VarChar
+  actualTitle       String?               @map("actual_title") @db.VarChar
+  year              Int
+  genre             String?               @db.VarChar
   // #103: `difficulty_level` is gone. It was a six-value enum that the scorer
   // filled by bucketing `difficultyScore`, but collapsing two CEFR bands onto
   // each label — so it contradicted its own source on 1,006 of 4,406 films.
   // The level is now derived on read by `services/movie_cefr.py` and stored
   // nowhere. Filtering by level is a range over `difficultyScore`.
-  difficultyScore  Int?                  @map("difficulty_score")
-  cefrDistribution Json?                 @map("cefr_distribution")
+  difficultyScore   Int?                  @map("difficulty_score")
+  cefrDistribution  Json?                 @map("cefr_distribution")
   // #102: `script_text` is gone. It was a legacy large-text column on the
   // hottest table duplicating movie_scripts.cleanedScriptText, populated on
   // 0 of 4,583 rows; POST /movies was the only writer and no longer accepts
   // one. Dropped by prisma/manual/2026_08_22_drop_movies_script_text_issue_102.sql.
-  wordCount        Int?                  @map("word_count")
-  description      String?
-  poster_url       String?               @db.VarChar
+  wordCount         Int?                  @map("word_count")
+  description       String?
+  poster_url        String?               @db.VarChar
   // #115: average colour of the TMDB backdrop's top 26% x trailing 20% patch,
   // packed as r<<16 | g<<8 | b, so the home card's add glyph can pick legible
   // ink instead of a fixed gold. NULL = no usable backdrop; the card falls back
   // to gold + halo. Packed rather than Int[] because /movies/by-cefr reads it
   // through query_raw — see services/backdrop_ink.py.
-  backdropCornerRgb Int?                 @map("backdrop_corner_rgb")
-  tmdbId           Int?                  @unique @map("tmdb_id")
-  tmdbPopularity   Float?                @map("tmdb_popularity")
-  tmdbVoteAverage  Float?                @map("tmdb_vote_average")
-  tmdbVoteCount    Int?                  @map("tmdb_vote_count")
-  createdAt        DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime?             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  backdropCornerRgb Int?                  @map("backdrop_corner_rgb")
+  tmdbId            Int?                  @unique @map("tmdb_id")
+  tmdbPopularity    Float?                @map("tmdb_popularity")
+  tmdbVoteAverage   Float?                @map("tmdb_vote_average")
+  tmdbVoteCount     Int?                  @map("tmdb_vote_count")
+  createdAt         DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime?             @updatedAt @map("updated_at") @db.Timestamptz(6)
   // Relations
-  words            Word[]
-  movieScripts     MovieScript[]
-  aliases          MovieAlias[]
-  userWords        UserWord[]
-  wordReports      WordReport[]
-  lemmaMappings    MovieLemmaMapping[]
-  sentences        SentenceBank[]
-  wordInteractions UserWordInteraction[]
-  userProgress     UserMovieProgress[]
+  words             Word[]
+  movieScripts      MovieScript[]
+  aliases           MovieAlias[]
+  userWords         UserWord[]
+  wordReports       WordReport[]
+  lemmaMappings     MovieLemmaMapping[]
+  sentences         SentenceBank[]
+  wordInteractions  UserWordInteraction[]
+  userProgress      UserMovieProgress[]
 
   @@index([title], map: "ix_movies_title")
   // Replaces ix_movies_difficulty (#103): every level filter is now a range
