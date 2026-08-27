@@ -48,24 +48,42 @@
 ## Reporting back (after every fix)
 - Lead with the plain-language version: what was broken and what changed, told in WordWise terms — a user tapping a word in a subtitle, the quiz deck, the sentence worker, a Railway deploy — not in function names. Two or three sentences with a concrete before/after (e.g. "a B2 word used to show up as A2 in Explore; now it sits in UNKNOWN until it's graded").
 - Then go deeper **only when the detail changes something**: a decision to make, a risk, a follow-up, or prod state that differs from the repo. Otherwise skip the code tour.
-- Finish with a short **Concepts** block so the user is learning **software engineering** from the session, not just accepting the diff:
-  - **3–5 items, hard cap** — fewer is fine. Skip the block entirely on trivial changes rather than padding it.
-  - Name each concept the way the industry names it (`connection pooling`, `idempotency`, `backpressure`, `query planning`) so it's searchable, then 2–3 sentences: what it is, and where it showed up in WordWise today.
-  - **The name is senior-level; the explanation is written for a junior-to-mid engineer.** Assume solid general programming ability but zero prior exposure to this concept *and* zero exposure to the vocabulary that usually surrounds it.
-  - **Never explain one piece of jargon with another.** If a supporting term is genuinely needed (`ASGI`, `TLS`, `edge`, `origin`, `inbound`, `event loop`, `middleware`), define it in the same breath in ordinary words — "ASGI (the plumbing that hands an incoming request from the web server to your Python function)" — or rewrite the sentence without it. A sentence the user has to go look up has taught them nothing.
-  - Ground it in something visible: the tap on a subtitle word, the quiz deck, a slow `/health` check, a Railway deploy. "What would a user or an on-call engineer actually have seen?" beats an abstract definition.
-  - **Software engineering only — every concept is about how the system is built and run**: architecture, concurrency, API and schema *design*, caching, indexing, failure modes, migrations, testing, ops and deploys. Not linguistics, not CEFR theory, not statistics, and never a finding about the data itself ("67% of lemmas are junk" is a result, not a concept).
-  - **When the work was about data, teach the engineering underneath it.** A backfill is `idempotent backfill` or `batch processing`, a slow aggregate is `index selectivity` or `query planning`, a wrong CEFR distribution is `single source of truth` or `write path vs read path` — say what the code, the query, and the deploy actually do, not what the vocabulary numbers mean.
-  - Only the wording gets simpler, never the subject. Still not language basics (what a string or a row is) and not framework trivia.
-  - No tutorials, no code samples, no exhaustive lists — the user does their own research from the names. Prefer breadth over time; don't re-teach a concept unless it appears in a genuinely new way.
-  - **Restate every concept in the simplest English you can manage**, on its own line right under the explanation, prefixed `**Plainly:**`. One or two short sentences, everyday words, short clauses — the version you'd say out loud to someone who has never met the term. It restates the same idea; it must not add new jargon the sentence above avoided.
-  - **No metaphors, no analogies, no "think of it like…".** Comparisons to restaurants, highways, waiters, or plumbing are banned. Say literally what happens: what runs, what waits, what breaks, in what order.
+- Finish with a **Concept** block so the user is learning **software engineering** from the session, not just accepting the diff:
+  - **Exactly one concept. One, not three.** Pick the single most transferable thing this session taught. Skip the block entirely on trivial changes rather than padding it — one real lesson beats five labels.
+  - **Aim it at a mid-level engineer trying to become senior.** Not "what this function does" but the judgement behind it: the tradeoff that was weighed, the failure mode avoided, why one design won over the obvious alternative, what a senior engineer would have asked before writing any code. Assume solid general programming ability and zero prior exposure to this particular idea.
+  - Name it the way the industry names it (`idempotency`, `backpressure`, `blast radius`, `cache invalidation`, `feature flag`, `graceful degradation`) so it is searchable, then explain it in **one or two full paragraphs**. With only one concept there is room to actually teach it — use it.
+  - **Go broader than the diff.** The WordWise instance is the illustration, not the lesson. Say where it showed up — a tap on a subtitle word, the quiz deck, a slow `/health` check, a Railway deploy — then generalise: where else this shows up, what it costs when ignored, how to recognise it in the next codebase. If the paragraph only makes sense to someone who has read today's diff, it is too narrow.
+  - **Software engineering only**: architecture, concurrency, API and schema design, caching, indexing, failure modes, migrations, testing, ops, deploys, and the judgement around them. Not linguistics, not CEFR theory, not statistics, and never a finding about the data itself ("67% of lemmas are junk" is a result, not a concept). When the work was about data, teach the engineering underneath it — a backfill is `idempotent backfill`, a slow aggregate is `query planning`.
+  - Add one `**Plainly:**` line under the paragraphs — everyday words, short clauses, the version you would say out loud to someone who has never met the term. Same idea, no new jargon.
+  - Then a **Terms** list at the very end, covering **every** piece of jargon the explanation used — including the words that feel obvious to you (`payload`, `cold start`, `race condition`, `rollback`, `p99`, `event loop`, `origin`). For each term: one or two sentences of plain definition, then a concrete example from a **real, popular app or website the user already uses**.
+    - Real products doing the real thing: Instagram, Netflix, Spotify, WhatsApp, Gmail, YouTube, Uber, Amazon, Google Maps. "Instagram's heart fills in the instant you tap it, before the server has confirmed anything" teaches `optimistic update`.
+    - **Still no metaphors or analogies.** A real-app example is software genuinely doing the thing; a waiter, a highway, a filing cabinet or a restaurant kitchen is a comparison to something that is not software. The first is required, the second is banned.
+    - If a term has no plausible real-app example, it is probably the wrong word — rewrite the sentence without it.
+  - No tutorials, no code samples, no exhaustive lists. The user does their own research from the names.
   - Shape:
     ```
-    - **fallback chain** — A resolution order where each rule is tried until one produces an
-      answer. Today it decided which language the interface opens in.
-      **Plainly:** You have a list of rules for picking the language. You try the first one;
-      if it gives no answer you try the next, and you stop at the first one that does.
+    ## Concept
+
+    **blast radius** — How much of the system one change can break if it turns out to be
+    wrong. It is the question a senior engineer asks before the question "is this correct?",
+    because correctness is a guess and blast radius is a budget: a change that can only break
+    the quiz deck ships on a Tuesday afternoon, and a change that can break every logged-in
+    request does not. Today it decided the order of operations — the column drop ran *after*
+    the deploy, because doing it first would have broken every client still selecting it.
+
+    Recognising it in a new codebase is mostly about asking who reads this and when. Shared
+    tables, shared config files, and anything on the login path have a large blast radius no
+    matter how small the diff looks; a new screen nobody navigates to yet has almost none.
+
+    **Plainly:** Before changing something, ask how much breaks if you are wrong. Small
+    answer, just do it. Big answer, be careful and go in an order that keeps things working.
+
+    **Terms**
+    - **deploy** — Putting a new version of the server code into production so real users hit
+      it. When WhatsApp suddenly has a feature you did not ask for, someone deployed.
+    - **client** — Any program calling your server, usually the app on someone's phone. The
+      Spotify app on an old phone that has not updated in a year is still a client, and your
+      server still has to answer it.
     ```
 
 ## Deployment (Railway)
