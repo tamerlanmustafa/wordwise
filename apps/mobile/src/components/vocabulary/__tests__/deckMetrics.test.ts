@@ -18,6 +18,7 @@ import {
   DECK_GAP_TOP,
   COLUMN_ABOVE_DECK,
   MIN_SCALE,
+  SHOW_LEVEL_FILTER_BAR,
 } from '../deckMetrics';
 import { CARD_HEIGHT, DECK_ZONE_HEIGHT } from '../cardLayout';
 
@@ -100,11 +101,22 @@ describe('the card is scaled, never re-cut', () => {
 
   it('leaves the reference device essentially unscaled', () => {
     // 874 minus the bottom bar is not the 874 the mockup was drawn at, so the
-    // 16 Pro pays a few percent. Anything worse than this means a block above
-    // the deck has grown and the budget needs re-cutting, not a smaller card.
+    // 16 Pro used to pay a few percent; with the filter bar hidden it seats the
+    // design whole. Anything worse than this means a block above the deck has
+    // grown and the budget needs re-cutting, not a smaller card.
     const m = layout(IPHONE_16_PRO);
     expect(m.scale).toBeGreaterThan(0.93);
     expect(m.scale).toBeLessThanOrEqual(1);
+  });
+
+  it('seats the mockup whole on the reference device with the filter bar hidden', () => {
+    // The 58pt the level chips used to occupy is the difference between the
+    // 16 Pro scaling to 0.951 and seating DECK_ZONE_HEIGHT at full size. This
+    // is the assertion that fails first if a block is added back to the column
+    // — before the pinned numbers below, and with a clearer reason.
+    expect(SHOW_LEVEL_FILTER_BAR).toBe(false);
+    const forZone = layout(IPHONE_16_PRO).available - DECK_GAP_TOP - ACTIONS_GAP - ACTIONS_ROW_HEIGHT;
+    expect(forZone).toBeGreaterThanOrEqual(DECK_ZONE_HEIGHT);
   });
 
   it('gives Pixel 8 the design at full size', () => {
@@ -119,7 +131,7 @@ describe('the card is scaled, never re-cut', () => {
     expect(m.scaled).toBe(true);
     expect(m.cropped).toBe(false);
     expect(m.scale).toBeGreaterThan(MIN_SCALE);
-    expect(m.scale).toBeLessThan(0.7);
+    expect(m.scale).toBeLessThan(0.75);
   });
 });
 
@@ -131,8 +143,12 @@ describe('invariants', () => {
     // while the SE was cropped outright. If a block is added to the column, a
     // number here moves and someone has to decide which device pays for it
     // rather than finding out on hardware.
-    expect(layout(IPHONE_16_PRO).scale).toBeCloseTo(0.951, 3);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.577, 3);
+    //
+    // Hiding the level chips (SHOW_LEVEL_FILTER_BAR) took 58pt back out of the
+    // column, which is why the 16 Pro is now unscaled and the SE moved 0.577 →
+    // 0.720. Flipping the flag on restores the old numbers.
+    expect(layout(IPHONE_16_PRO).scale).toBe(1);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.72, 3);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });

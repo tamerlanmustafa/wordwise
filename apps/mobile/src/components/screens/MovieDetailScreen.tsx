@@ -53,6 +53,7 @@ import {
   FILTER_BAR,
   DECK_HEADER_ROW,
   PROGRESS_BAR,
+  SHOW_LEVEL_FILTER_BAR,
 } from '../vocabulary/deckMetrics';
 import {
   parseViewMode,
@@ -863,74 +864,80 @@ export const MovieDetailScreen = ({
           <View>
             {/* Ledger filter bar: ✦ For You, a divider, then the six CEFR
                 chips sharing the remaining width equally — no horizontal
-                scroll, selection tinted per CEFR colour. */}
-            <View style={[ledgerStyles.filterBar, { backgroundColor: tc.chipBg }]}>
-              {(() => {
-                const foryouActive = wordsView === 'foryou';
-                return (
-                  <TouchableOpacity
-                    style={[
-                      ledgerStyles.forYouChip,
-                      foryouActive && {
-                        backgroundColor: `${tc.gold}29`,
-                        borderColor: `${tc.gold}73`,
-                      },
-                    ]}
-                    onPress={() => {
-                      startTransition(() => setWordsView('foryou'));
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: foryouActive }}
-                  >
-                    <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
-                    <Text
+                scroll, selection tinted per CEFR colour.
+                Hidden (SHOW_LEVEL_FILTER_BAR): the screen is For You only, so
+                the whole bar goes rather than leaving one chip that cannot be
+                deselected. `wordsView` therefore never leaves 'foryou' — the
+                'all' branches below stay for when the bar comes back. */}
+            {SHOW_LEVEL_FILTER_BAR ? (
+              <View style={[ledgerStyles.filterBar, { backgroundColor: tc.chipBg }]}>
+                {(() => {
+                  const foryouActive = wordsView === 'foryou';
+                  return (
+                    <TouchableOpacity
                       style={[
-                        ledgerStyles.forYouLabel,
-                        {
-                          color: foryouActive
-                            ? scheme === 'dark'
-                              ? tc.goldOnSurface
-                              : '#6B4A00'
-                            : tc.textFaint,
+                        ledgerStyles.forYouChip,
+                        foryouActive && {
+                          backgroundColor: `${tc.gold}29`,
+                          borderColor: `${tc.gold}73`,
                         },
                       ]}
+                      onPress={() => {
+                        startTransition(() => setWordsView('foryou'));
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: foryouActive }}
                     >
-                      {t('movies:detail.forYou')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })()}
-              <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
-              {wordLevels.map((lvl) => {
-                const active = wordsView === 'all' && activeLevel === lvl.level;
-                const c = cefrColors[lvl.level] || colors.primary;
-                const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
-                return (
-                  <TouchableOpacity
-                    key={lvl.level}
-                    style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
-                    onPress={() => {
-                      startTransition(() => setWordsView('all'));
-                      setActiveLevel(lvl.level);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text
-                      style={[
-                        ledgerStyles.levelChipText,
-                        { color: active ? selectedColor : tc.textFaint },
-                        active && ledgerStyles.levelChipTextActive,
-                      ]}
+                      <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
+                      <Text
+                        style={[
+                          ledgerStyles.forYouLabel,
+                          {
+                            color: foryouActive
+                              ? scheme === 'dark'
+                                ? tc.goldOnSurface
+                                : '#6B4A00'
+                              : tc.textFaint,
+                          },
+                        ]}
+                      >
+                        {t('movies:detail.forYou')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+                <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
+                {wordLevels.map((lvl) => {
+                  const active = wordsView === 'all' && activeLevel === lvl.level;
+                  const c = cefrColors[lvl.level] || colors.primary;
+                  const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
+                  return (
+                    <TouchableOpacity
+                      key={lvl.level}
+                      style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
+                      onPress={() => {
+                        startTransition(() => setWordsView('all'));
+                        setActiveLevel(lvl.level);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
                     >
-                      {lvl.level}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                      <Text
+                        style={[
+                          ledgerStyles.levelChipText,
+                          { color: active ? selectedColor : tc.textFaint },
+                          active && ledgerStyles.levelChipTextActive,
+                        ]}
+                      >
+                        {lvl.level}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
             {/* TODO: sort control needs a new home. The rare/common pills
                 lived in the explainer band; `wordSortOrder` still sorts
                 the deck at its 'rare' default, there is just nothing on

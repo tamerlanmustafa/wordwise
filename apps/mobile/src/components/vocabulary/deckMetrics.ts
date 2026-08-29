@@ -51,6 +51,13 @@ export const BACK_ROW = { gap: 1, height: 34 };
 export const HERO_PLATE = { gap: 12, height: 119 };
 /** ✦ For You + six CEFR chips. */
 export const FILTER_BAR = { gap: 14, height: 44 };
+/** The screen is For You only, so the level chips have nothing to switch
+ *  between and the bar is hidden — code kept, flip to true to bring it back.
+ *  It is declared here rather than in the screen because the bar is a block in
+ *  the column budget: hiding it hands its 58pt to the card, and the budget
+ *  below has to agree with what is actually rendered or `deckBlockHeightFor`
+ *  starts describing a screen that does not exist. */
+export const SHOW_LEVEL_FILTER_BAR: boolean = false;
 /** `CARD 23 / 60` · `B2 DECK`. */
 export const DECK_HEADER_ROW = { gap: 12, height: 13 };
 /** Thin progress rule under the deck header. */
@@ -63,8 +70,7 @@ export const COLUMN_ABOVE_DECK =
   BACK_ROW.height +
   HERO_PLATE.gap +
   HERO_PLATE.height +
-  FILTER_BAR.gap +
-  FILTER_BAR.height +
+  (SHOW_LEVEL_FILTER_BAR ? FILTER_BAR.gap + FILTER_BAR.height : 0) +
   DECK_HEADER_ROW.gap +
   DECK_HEADER_ROW.height +
   PROGRESS_BAR.gap +
