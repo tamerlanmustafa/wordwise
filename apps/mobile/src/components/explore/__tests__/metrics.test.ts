@@ -6,7 +6,21 @@
  * crowded the word off the card. Everything below is really one assertion —
  * the chrome must leave the word room on every device we ship to.
  */
-import { exploreMetrics, type ExploreMetrics } from '../metrics';
+import { exploreMetrics, RAIL_ITEM_WIDTH, type ExploreMetrics } from '../metrics';
+import { SIDE_MARGIN, TAB_COUNT } from '../../navBarMetrics';
+
+/**
+ * Where the rail's button column is centred, as a distance from the logical
+ * end edge — the number that has to match the last tab of the bar below.
+ */
+function railCentreFromEnd(m: ExploreMetrics): number {
+  return m.railEnd + RAIL_ITEM_WIDTH / 2;
+}
+
+/** The same thing for the bar: the centre of its last cell. */
+function tabCentreFromEnd(width: number, sideMargin: number): number {
+  return sideMargin + (width - sideMargin * 2) / TAB_COUNT / 2;
+}
 
 /**
  * Room between the card's top edge and the rail's top edge — where the word
@@ -36,14 +50,18 @@ describe('exploreMetrics — reference device', () => {
     expect(m.toastStrip).toBe(46);
     expect(m.railHeight).toBe(285);
     expect(m.cardLift).toBe(150);
-    expect(m.railEnd).toBe(10);
   });
 
   it('never exceeds the design on an even larger screen', () => {
     const m = exploreMetrics({ viewport: 1000, width: 500, topInset: 59 });
     expect(m.railHeight).toBe(285);
     expect(m.cardLift).toBe(150);
-    expect(m.railLane).toBeLessThanOrEqual(84);
+    // The lane's 84pt design figure is a floor, not a ceiling. A wider screen
+    // spreads the tab grid, which pushes the rail inboard, and the lane has to
+    // follow it or the sentence runs under the glyphs — so what is pinned here
+    // is that it clears the rail without eating the card.
+    expect(m.railLane).toBeGreaterThan(m.railEnd + RAIL_ITEM_WIDTH);
+    expect(m.railLane / 500).toBeLessThan(0.25);
   });
 });
 
@@ -82,6 +100,66 @@ describe('exploreMetrics — the rail sits on the bottom bar', () => {
   });
 });
 
+describe('exploreMetrics — the rail is centred on the last tab', () => {
+  // The rail and the Profile tab read as one vertical column, so being a few
+  // points out looks like a bug rather than a choice. The rail used to sit at
+  // a flat 10pt from the edge, which put its centre 13pt outboard of the tab's
+  // on a 6.7" phone — visible, and the reason this alignment is derived now.
+  const DEVICES = [
+    { width: 402, name: '6.3"' },
+    { width: 430, name: '6.7"' },
+    { width: 393, name: '6.1"' },
+    { width: 375, name: '4.7"' },
+    { width: 320, name: 'SE 1st gen' },
+  ];
+
+  it('lands the button column dead centre on the tab, floating bar', () => {
+    for (const d of DEVICES) {
+      const m = exploreMetrics({ viewport: 900, width: d.width, topInset: 59, barSideMargin: SIDE_MARGIN });
+      // Within half a point: `railEnd` is rounded to a whole pixel so the
+      // glyphs stay crisp, and the tab grid can land on a half.
+      expect(Math.abs(railCentreFromEnd(m) - tabCentreFromEnd(d.width, SIDE_MARGIN)))
+        .toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('lands it dead centre on the pinned bar too, which has no side inset', () => {
+    for (const d of DEVICES) {
+      const m = exploreMetrics({ viewport: 900, width: d.width, topInset: 20, barSideMargin: 0 });
+      expect(Math.abs(railCentreFromEnd(m) - tabCentreFromEnd(d.width, 0)))
+        .toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('moves the rail inboard when the bar is inset from the edge', () => {
+    // The floating capsule's cells sit further in than the pinned bar's, so
+    // the rail must follow it rather than staying put.
+    const floating = exploreMetrics({ viewport: 900, width: 402, topInset: 59, barSideMargin: SIDE_MARGIN });
+    const pinned = exploreMetrics({ viewport: 900, width: 402, topInset: 59, barSideMargin: 0 });
+    expect(floating.railEnd).toBeGreaterThan(pinned.railEnd);
+  });
+
+  it('keeps the rail on screen on the narrowest phone we ship to', () => {
+    for (const sideMargin of [0, SIDE_MARGIN]) {
+      const m = exploreMetrics({ viewport: 500, width: 320, topInset: 20, barSideMargin: sideMargin });
+      expect(m.railEnd).toBeGreaterThanOrEqual(0);
+      expect(m.railEnd + RAIL_ITEM_WIDTH).toBeLessThan(320);
+    }
+  });
+
+  it('always reserves a lane wide enough to clear the rail wherever it lands', () => {
+    // The lane is the card's end padding. If the rail moves inboard of it the
+    // sentence runs under the glyphs — so the lane is derived from the rail,
+    // not from a share of the width that happens to be big enough today.
+    for (const d of DEVICES) {
+      for (const sideMargin of [0, SIDE_MARGIN]) {
+        const m = exploreMetrics({ viewport: 900, width: d.width, topInset: 59, barSideMargin: sideMargin });
+        expect(m.railLane).toBeGreaterThan(m.railEnd + RAIL_ITEM_WIDTH);
+      }
+    }
+  });
+});
+
 describe('exploreMetrics — the small-screen bug this exists to prevent', () => {
   it('leaves the word real room above the rail on a 4.7" phone', () => {
     const m = exploreMetrics(SMALL);
@@ -103,7 +181,6 @@ describe('exploreMetrics — the small-screen bug this exists to prevent', () =>
     const m = exploreMetrics(SMALL);
     expect(m.topSpacer).toBe(44);
     expect(m.toastStrip).toBe(38);
-    expect(m.railEnd).toBe(6);
   });
 });
 

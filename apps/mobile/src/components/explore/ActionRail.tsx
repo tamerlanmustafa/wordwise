@@ -21,6 +21,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { RailIcon, type RailGlyph } from './ExploreIcons';
+import { RAIL_ITEM_WIDTH } from './metrics';
 
 interface Props {
   /** Geometry from `exploreMetrics` — the rail scales with the card area
@@ -156,7 +157,9 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
     },
     item: {
-      width: 56,
+      // Shared with explore/metrics, which centres this column on the last
+      // tab and sizes the card's lane around it.
+      width: RAIL_ITEM_WIDTH,
       alignItems: 'center',
       gap: 5,
     },

@@ -13,11 +13,14 @@ import {
   LENS_INSET_H,
   LENS_INSET_V,
   SIDE_MARGIN,
+  TAB_COUNT,
   TOP_GAP,
   bottomMarginFor,
+  lastTabCentreFromEnd,
   lensGeometry,
   navBarMetrics,
 } from '../navBarMetrics';
+import { TABS } from '../GlobalBottomBar';
 
 /** Bottom safe-area insets across the range we ship on. */
 const INSET_HOME_INDICATOR = 34; // most modern iPhones
@@ -110,7 +113,6 @@ describe('reserved height is stable', () => {
 });
 
 describe('lensGeometry', () => {
-  const TAB_COUNT = 5;
   const ROW = 320 - SIDE_MARGIN * 2; // iPhone SE, the narrowest we support
   const CELL = ROW / TAB_COUNT;
 
@@ -182,5 +184,43 @@ describe('lensGeometry', () => {
   it('fits inside the capsule vertically', () => {
     expect(LENS_INSET_V * 2).toBeLessThan(CAPSULE_HEIGHT);
     expect(LENS_INSET_H).toBeGreaterThan(0);
+  });
+});
+
+describe('lastTabCentreFromEnd', () => {
+  // Explore's action rail is centred on the last tab using this. It is
+  // arithmetic rather than a measured frame because the cells are `flex: 1`
+  // and therefore exactly equal — and because a distance from the *end* edge
+  // is the one form that survives RTL, where the row reverses and the last
+  // tab is drawn on the left.
+  it('agrees with the cell grid the row actually lays out', () => {
+    for (const width of [320, 375, 393, 402, 430]) {
+      for (const sideMargin of [0, SIDE_MARGIN]) {
+        const cell = (width - sideMargin * 2) / TAB_COUNT;
+        // Distance from the end edge to the last cell's centre = the margin
+        // plus half a cell.
+        expect(lastTabCentreFromEnd(width, sideMargin)).toBeCloseTo(sideMargin + cell / 2, 5);
+      }
+    }
+  });
+
+  it('matches the number of tabs actually rendered', () => {
+    // The grid maths is only right while these agree; adding a sixth tab
+    // without updating TAB_COUNT would silently misalign the rail.
+    expect(TABS).toHaveLength(TAB_COUNT);
+  });
+
+  it('sits inside the bar, never past its edge or its centre', () => {
+    for (const width of [320, 430]) {
+      for (const sideMargin of [0, SIDE_MARGIN]) {
+        const d = lastTabCentreFromEnd(width, sideMargin);
+        expect(d).toBeGreaterThan(sideMargin);
+        expect(d).toBeLessThan(width / 2);
+      }
+    }
+  });
+
+  it('degrades to a non-negative number before layout reports a width', () => {
+    expect(lastTabCentreFromEnd(0, SIDE_MARGIN)).toBeGreaterThanOrEqual(0);
   });
 });

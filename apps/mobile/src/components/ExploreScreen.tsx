@@ -43,6 +43,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useGlassAvailable } from '../hooks/useGlassAvailable';
+import { navBarMetrics } from './navBarMetrics';
 import { useWordFeedStore, PREFETCH_THRESHOLD, logFeedFlip } from '../stores/wordFeedStore';
 import { dominantLevel } from '../utils/levelMix';
 import type { FeedItem, LevelMix } from '../services/api';
@@ -78,6 +80,14 @@ export function ExploreScreen({
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+
+  // The action rail is aligned to the last tab of the bar, so it needs the
+  // bar's side inset. Recomputed here from the same pure function and the same
+  // two inputs the bar itself uses, rather than plumbed down through App: it
+  // cannot disagree, and a second prop threaded through four screens to carry
+  // one number would be worse than the call.
+  const glass = useGlassAvailable();
+  const barSideMargin = navBarMetrics(insets.bottom, glass).sideMargin;
 
   const items = useWordFeedStore((st) => st.items);
   const mix = useWordFeedStore((st) => st.mix);
@@ -130,8 +140,9 @@ export function ExploreScreen({
         width,
         topInset: insets.top,
         bottomOffset,
+        barSideMargin,
       }),
-    [available, bottomOffset, width, insets.top],
+    [available, bottomOffset, width, insets.top, barSideMargin],
   );
   const cardHeight = m.cardHeight;
 

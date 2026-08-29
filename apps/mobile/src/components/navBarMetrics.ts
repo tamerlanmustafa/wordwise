@@ -110,6 +110,29 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
   };
 }
 
+/** How many cells the bar has. Must match `TABS` in GlobalBottomBar — a test
+ *  pins the two together. */
+export const TAB_COUNT = 5;
+
+/**
+ * Distance from the bar's **logical end edge** to the centre of the last tab
+ * cell — Profile, or its mirror image under RTL.
+ *
+ * Anything that wants to line up with a tab column needs this, and the answer
+ * is arithmetic rather than measurement: the cells are `flex: 1` inside a row
+ * inset by `sideMargin`, so they are exactly equal and their centres fall on a
+ * known grid. Expressed as a distance from the *end* edge, not an absolute x,
+ * so it holds in both reading directions — the row reverses under RTL, which
+ * puts the last tab at the logical end either way, and callers position with
+ * the logical `end` property rather than `left`.
+ *
+ * The Explore action rail is the caller today (see explore/metrics).
+ */
+export function lastTabCentreFromEnd(width: number, sideMargin: number): number {
+  const cellWidth = Math.max(0, width - sideMargin * 2) / TAB_COUNT;
+  return sideMargin + cellWidth / 2;
+}
+
 /** Vertical inset of the active lens inside the capsule. */
 export const LENS_INSET_V = 6;
 /** Horizontal inset of the active lens inside its cell. */
