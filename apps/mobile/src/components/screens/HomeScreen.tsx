@@ -35,6 +35,11 @@ import { MOVIE_TYPE_OPTIONS, type MovieType } from '../home/filterOptions';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
 
+// The Word-of-the-Hour card is HIDDEN on Home but kept intact so we can bring
+// it back: flip this to true to restore the card, its hourly re-fetch and the
+// scroll-collapse animation. Everything below stays wired to this one flag.
+const SHOW_WORD_OF_THE_HOUR: boolean = false;
+
 // Full laid-out height of the Word-of-the-Hour block: the card's own
 // marginTop (4) + CARD_HEIGHT (152) + marginBottom (16). Collapsing this to 0
 // lets the feed below slide up to fill the reclaimed space.
@@ -118,6 +123,8 @@ export const HomeScreen = ({
   const collapseStateRef = useRef<CollapseState>(initialCollapseState);
   const handleFeedScroll = useCallback(
     (offsetY: number) => {
+      // Nothing to collapse while the card is hidden.
+      if (!SHOW_WORD_OF_THE_HOUR) return;
       const prev = collapseStateRef.current;
       const next = reduceCollapse(prev, offsetY);
       collapseStateRef.current = next;
@@ -173,6 +180,8 @@ export const HomeScreen = ({
   // re-fetches at the top of each (UTC) hour so the card rotates even while the
   // screen stays mounted.
   useEffect(() => {
+    // The card is hidden, so don't spend a request (or an hourly timer) on it.
+    if (!SHOW_WORD_OF_THE_HOUR) return;
     let timeout: ReturnType<typeof setTimeout>;
     const load = () => {
       srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {});
@@ -207,7 +216,9 @@ export const HomeScreen = ({
     try {
       await Promise.all([
         loadTrending(),
-        srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {}),
+        SHOW_WORD_OF_THE_HOUR
+          ? srsApi.todaysWord(0, targetLanguage).then(setTodaysWord).catch(() => {})
+          : Promise.resolve(),
       ]);
     } finally {
       setRefreshing(false);
@@ -397,47 +408,50 @@ export const HomeScreen = ({
         {/* Word of the Hour — between the ad slot and the level controls.
             Rotates hourly via the srsApi.todaysWord timer in this screen.
             Collapses up out of view (height → 0 + fade + slide) as the movie
-            feed is scrolled, and springs back at the top of the feed. */}
-        <Animated.View
-          style={{
-            overflow: 'hidden',
-            height: wordCollapse.interpolate({
-              inputRange: [0, 1],
-              outputRange: [WORD_BLOCK_H, 0],
-            }),
-            opacity: wordCollapse.interpolate({
-              inputRange: [0, 0.7, 1],
-              outputRange: [1, 0, 0],
-            }),
-          }}
-        >
+            feed is scrolled, and springs back at the top of the feed.
+            Currently hidden — see SHOW_WORD_OF_THE_HOUR at the top of the file. */}
+        {SHOW_WORD_OF_THE_HOUR ? (
           <Animated.View
             style={{
-              transform: [
-                {
-                  translateY: wordCollapse.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -48],
-                  }),
-                },
-              ],
+              overflow: 'hidden',
+              height: wordCollapse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [WORD_BLOCK_H, 0],
+              }),
+              opacity: wordCollapse.interpolate({
+                inputRange: [0, 0.7, 1],
+                outputRange: [1, 0, 0],
+              }),
             }}
           >
-            {todaysWord ? (
-              // key by the word so the hourly rotation remounts the card. Its
-              // translation/flip state is seeded from the `word` prop on mount
-              // only; without a fresh mount the front face shows the new word
-              // while the back face keeps the previous hour's translation.
-              <TodayWordCard
-                key={todaysWord.word}
-                word={todaysWord}
-                targetLanguage={targetLanguage}
-              />
-            ) : (
-              <TodayWordCardSkeleton />
-            )}
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    translateY: wordCollapse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -48],
+                    }),
+                  },
+                ],
+              }}
+            >
+              {todaysWord ? (
+                // key by the word so the hourly rotation remounts the card. Its
+                // translation/flip state is seeded from the `word` prop on mount
+                // only; without a fresh mount the front face shows the new word
+                // while the back face keeps the previous hour's translation.
+                <TodayWordCard
+                  key={todaysWord.word}
+                  word={todaysWord}
+                  targetLanguage={targetLanguage}
+                />
+              ) : (
+                <TodayWordCardSkeleton />
+              )}
+            </Animated.View>
           </Animated.View>
-        </Animated.View>
+        ) : null}
 
         <LevelSortControls
           level={selectedLevel}
