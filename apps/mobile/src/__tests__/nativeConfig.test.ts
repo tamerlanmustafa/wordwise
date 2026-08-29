@@ -81,10 +81,26 @@ describe('the project is bare, and app.json knows it', () => {
 
   it('keeps the fields the build and EAS Update DO read', () => {
     expect(appJson.expo.slug).toBe('wordwise-mobile');
-    expect(appJson.expo.runtimeVersion).toBe('1.0.1');
+    expect(appJson.expo.runtimeVersion).toMatch(/^\d+\.\d+\.\d+$/);
     expect(appJson.expo.updates).toEqual({
       url: 'https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f',
     });
+  });
+
+  it('declares the same runtimeVersion as both native builds', () => {
+    // The one that bites. `runtimeVersion` is a hardcoded string here, not a
+    // policy, so adding a native module does NOT bump it — an OTA update then
+    // gets *delivered* to binaries that lack the module and crashes them on
+    // launch, instead of being withheld as incompatible. Bumping it is the
+    // manual step that makes old installs ineligible, and bumping it in one
+    // of the three files and not the others is the same bug with extra steps.
+    const declared = appJson.expo.runtimeVersion;
+    expect(readMobile('ios', 'WordWise', 'Supporting', 'Expo.plist')).toContain(
+      `<key>EXUpdatesRuntimeVersion</key>\n    <string>${declared}</string>`,
+    );
+    expect(
+      readMobile('android', 'app', 'src', 'main', 'res', 'values', 'strings.xml'),
+    ).toContain(`<string name="expo_runtime_version">${declared}</string>`);
   });
 });
 

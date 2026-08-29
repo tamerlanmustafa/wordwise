@@ -5,7 +5,7 @@
     "name": "WordWise",
     "slug": "wordwise-mobile",
     "version": "1.0.0",
-    "runtimeVersion": "1.0.1",
+    "runtimeVersion": "1.0.2",
     "updates": {
       "url": "https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f"
     },
