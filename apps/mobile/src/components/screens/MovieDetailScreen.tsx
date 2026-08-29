@@ -65,6 +65,11 @@ import {
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
 import { hasRenderableSentence, isTopItemReady, itemKey } from '../vocabulary/sentencePreviews';
+import {
+  isSplashUp,
+  SENTENCE_WARMUP_MAX_MS,
+  SPLASH_MIN_MS,
+} from './splashGate';
 import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
@@ -76,13 +81,6 @@ const ROWS_MODE_ENABLED: boolean = false;
 
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
-
-/**
- * Longest the loading splash will wait on the first card's example sentence
- * after the vocabulary itself has arrived. Typical batches land in ~200ms; the
- * cap exists for the one that falls through to LLM generation.
- */
-const SENTENCE_WARMUP_MAX_MS = 2500;
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -121,11 +119,17 @@ export const MovieDetailScreen = ({
   const insets = useSafeAreaInsets();
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
-  // Second half of the splash gate — see the warm-up effect below. The splash
-  // covers BOTH the vocabulary fetch and the sentence batch it starts, so the
-  // first card is finished rather than merely mounted when the wordmark lifts.
+  // The other two splash holds — see splashGate.ts and the effects below. The
+  // wordmark covers BOTH the vocabulary fetch and the sentence batch it starts
+  // (so the first card is finished, not merely mounted, when it lifts) and
+  // stays up for SPLASH_MIN_MS regardless, so a cache hit doesn't flash it.
   const [sentencesWarm, setSentencesWarm] = useState(false);
-  const splashVisible = loading || !sentencesWarm;
+  const [splashFloorElapsed, setSplashFloorElapsed] = useState(false);
+  const splashVisible = isSplashUp({
+    loading,
+    sentencesWarm,
+    floorElapsed: splashFloorElapsed,
+  });
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
@@ -188,6 +192,14 @@ export const MovieDetailScreen = ({
   // cover the effect's mount run; applyVocabulary re-arms it for the
   // load-time level restore.
   const skipSwitchSkeletonRef = useRef(true);
+
+  // Minimum splash time, counted from mount so it overlaps the real work
+  // rather than adding to it: a cold open never notices this, and a cached
+  // one stops flashing the wordmark for a handful of frames.
+  useEffect(() => {
+    const id = setTimeout(() => setSplashFloorElapsed(true), SPLASH_MIN_MS);
+    return () => clearTimeout(id);
+  }, []);
 
   // Splash "WW" pulse — the loading indicator: the wordmark breathes
   // (scales up and down) until the first card is ready to read.
