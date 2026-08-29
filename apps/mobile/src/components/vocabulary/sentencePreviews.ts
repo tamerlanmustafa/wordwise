@@ -33,3 +33,31 @@ export function hasRenderableSentence(key: string, previews: SentencePreviewMap)
   const entry = previews[key];
   return entry === undefined ? true : entry.sentence.length > 0;
 }
+
+/**
+ * Has the batch answered for the top of an ALREADY-FILTERED list — i.e. is the
+ * first thing the reader will see finished, rather than still a skeleton?
+ *
+ * A different question from `hasRenderableSentence`, and the loading splash
+ * needs this one. "Not fetched yet" and "fetched, no sentence" both keep an
+ * item in the list, but only the first is still pending. Because the caller
+ * filters before calling, a confirmed miss has already dropped out and this
+ * naturally moves on to the item that really will be on top.
+ *
+ * Note the asymmetry with `hasRenderableSentence`, which lets idioms through
+ * precisely BECAUSE they are absent from the map. Here absence means the
+ * opposite, so idioms have to be named explicitly: no batch request is coming
+ * for one, and reading its missing entry as "pending" would hold the splash
+ * up until the deadline every time a level led with an idiom.
+ *
+ * An empty list is ready too: there is nothing left to wait for.
+ */
+export function isTopItemReady(
+  items: ({ word: string } | { phrase: string })[],
+  previews: SentencePreviewMap,
+): boolean {
+  const first = items[0];
+  if (first === undefined) return true;
+  if ('phrase' in first) return true;
+  return previews[first.word] !== undefined;
+}

@@ -64,7 +64,7 @@ import {
   type StoredMovieBookmark,
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
-import { hasRenderableSentence, itemKey } from '../vocabulary/sentencePreviews';
+import { hasRenderableSentence, isTopItemReady, itemKey } from '../vocabulary/sentencePreviews';
 import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
@@ -76,6 +76,13 @@ const ROWS_MODE_ENABLED: boolean = false;
 
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
+
+/**
+ * Longest the loading splash will wait on the first card's example sentence
+ * after the vocabulary itself has arrived. Typical batches land in ~200ms; the
+ * cap exists for the one that falls through to LLM generation.
+ */
+const SENTENCE_WARMUP_MAX_MS = 2500;
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -114,6 +121,11 @@ export const MovieDetailScreen = ({
   const insets = useSafeAreaInsets();
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
+  // Second half of the splash gate — see the warm-up effect below. The splash
+  // covers BOTH the vocabulary fetch and the sentence batch it starts, so the
+  // first card is finished rather than merely mounted when the wordmark lifts.
+  const [sentencesWarm, setSentencesWarm] = useState(false);
+  const splashVisible = loading || !sentencesWarm;
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
@@ -178,10 +190,10 @@ export const MovieDetailScreen = ({
   const skipSwitchSkeletonRef = useRef(true);
 
   // Splash "WW" pulse — the loading indicator: the wordmark breathes
-  // (scales up and down) until the vocabulary arrives.
+  // (scales up and down) until the first card is ready to read.
   const splashPulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!loading) return;
+    if (!splashVisible) return;
     splashPulse.setValue(0);
     const anim = Animated.loop(
       Animated.sequence([
@@ -201,7 +213,7 @@ export const MovieDetailScreen = ({
     );
     anim.start();
     return () => anim.stop();
-  }, [loading, splashPulse]);
+  }, [splashVisible, splashPulse]);
   const splashScale = splashPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.88, 1.1],
@@ -801,6 +813,36 @@ export const MovieDetailScreen = ({
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 
+  // ── Splash hold: the first card must be READY, not merely mounted ────────
+  // Vocabulary is what *starts* the sentence batch — the batch effect can't
+  // run until there are words to ask about — so dropping the splash the moment
+  // vocabulary landed put that round trip on screen as a skeleton in the
+  // card's sentence slot. The splash is meant to be the window where this work
+  // happens, so it now waits for it: the body still mounts behind the wordmark
+  // (that is what gets the deck measured and the batch fired), and only the
+  // wordmark itself stays up.
+  //
+  // The gate is the FIRST card the deck will actually show — not the whole
+  // list. Chunks are 12 wide, so that one card's request brings the next
+  // eleven with it, and a confirmed miss drops its word from deckItems, which
+  // moves this key along to the card that really will be on top.
+  const firstCardReady = isTopItemReady(deckItems, sentencePreviews);
+  useEffect(() => {
+    // Latched: once the splash has lifted, a later level switch or a resolving
+    // retry must never put it back up.
+    if (loading || sentencesWarm) return;
+    if (firstCardReady) {
+      setSentencesWarm(true);
+      return;
+    }
+    // Deadline. A word that misses SentenceBank falls through to the LLM slow
+    // path, which can take seconds; nobody waits behind the wordmark for a
+    // card they may swipe straight past. The skeleton is the fallback, not
+    // the default.
+    const id = setTimeout(() => setSentencesWarm(true), SENTENCE_WARMUP_MAX_MS);
+    return () => clearTimeout(id);
+  }, [loading, firstCardReady, sentencesWarm]);
+
   // Explainer-band inputs. Mix label = the user's level ±1, matching how the
 
   const levelColorFor = useCallback(
@@ -1307,7 +1349,7 @@ export const MovieDetailScreen = ({
           default app background. Stacked offset text layers fake the 3D
           extrusion; a perspective/rotateX tilt sells the depth. Sits above
           everything; onBack stays reachable via the chip. */}
-      {loading ? (
+      {splashVisible ? (
         <View style={[splashStyles.wrap, { backgroundColor: tc.background }]} pointerEvents="auto">
           <Pressable
             onPress={onBack}
