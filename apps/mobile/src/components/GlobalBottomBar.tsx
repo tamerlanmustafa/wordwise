@@ -113,12 +113,15 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
     onHeightChange?.(m.reservedHeight);
   }, [m.reservedHeight, onHeightChange]);
 
-  // ── Retract on scroll ────────────────────────────────────────────────────
-  // Transform + opacity only, so this runs on the native driver and never
+  // ── Minimize on scroll ───────────────────────────────────────────────────
+  // The bar shrinks rather than leaving — iOS 26's `tabBarMinimizeBehavior`.
+  // Every tab stays on screen and stays tappable while minimized, so a user
+  // who wants to navigate mid-scroll never has to scroll back up to find the
+  // bar first. Transform only, so this runs on the native driver and never
   // triggers a layout pass — which is what keeps `reservedHeight` honest.
-  const slide = useRef(new Animated.Value(0)).current;
+  const minimize = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.spring(slide, {
+    Animated.spring(minimize, {
       toValue: collapsed ? 1 : 0,
       useNativeDriver: true,
       damping: 22,
@@ -129,13 +132,29 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
       // saved poster flies to the bar's old position.
       if (finished) measureListsTab();
     });
-  }, [collapsed, slide, measureListsTab]);
+  }, [collapsed, minimize, measureListsTab]);
 
-  const translateY = slide.interpolate({
+  const scale = minimize.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, m.hiddenTranslateY],
+    outputRange: [1, m.minimizedScale],
   });
-  const opacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const translateY = minimize.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, m.minimizedTranslateY],
+  });
+
+  // Touching any tab restores full size as well as navigating. The store is
+  // the one place `collapsed` lives, so expanding here and expanding from a
+  // scroll are the same operation — see `useNavBarCollapse`, which re-reads
+  // this value rather than trusting its own copy.
+  const expand = useNavBarStore((st) => st.reset);
+  const handlePress = useCallback(
+    (tab: BottomTab) => {
+      expand();
+      onTabPress(tab);
+    },
+    [expand, onTabPress],
+  );
 
   // ── Active-tab lens ──────────────────────────────────────────────────────
   // Cell frames come from each button's own onLayout rather than from
@@ -180,8 +199,9 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
         {
           paddingHorizontal: m.sideMargin,
           paddingBottom: m.bottomMargin,
-          transform: [{ translateY }],
-          opacity,
+          // translateY before scale: the nudge is expressed in unscaled points
+          // and is meant to move the finished capsule, not be shrunk with it.
+          transform: [{ translateY }, { scale }],
         },
       ]}
     >
@@ -241,7 +261,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
               icon={tab.icon}
               label={t(`nav.${tab.labelKey}`)}
               isActive={active === tab.id}
-              onPress={() => onTabPress(tab.id)}
+              onPress={() => handlePress(tab.id)}
               onCellLayout={handleCellLayout}
               tc={tc}
               s={s}

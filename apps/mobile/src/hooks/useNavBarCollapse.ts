@@ -1,6 +1,6 @@
 /**
  * useNavBarCollapse — wire a scroller to the Liquid Glass bottom bar so the
- * bar retracts on a downward browse and returns on an upward one.
+ * bar minimizes on a downward browse and returns to full size on an upward one.
  *
  * Spread the result onto any ScrollView / FlatList:
  *
@@ -28,21 +28,33 @@ import { useNavBarStore } from '../stores/navBarStore';
 /**
  * @param active Whether the calling screen is the visible tab. Screens are
  *   kept mounted by KeepAlive, so a hidden screen can still receive layout
- *   driven scroll events; without this gate a background tab could retract
+ *   driven scroll events; without this gate a background tab could minimize
  *   the bar out from under the foreground one.
  */
 export function useNavBarCollapse(active = true) {
   const state = useRef<CollapseState>(initialCollapseState);
-  const setCollapsed = useNavBarStore((s) => s.setCollapsed);
   const reset = useNavBarStore((s) => s.reset);
 
   const onScrollOffset = useCallback(
     (y: number) => {
       if (!active) return;
-      state.current = reduceNavBarCollapse(state.current, y);
-      setCollapsed(state.current.collapsed);
+      const store = useNavBarStore.getState();
+      // The store owns `collapsed`, not this ref. Tapping a tab expands the
+      // bar without this hook hearing about it, so adopt the store's value
+      // before folding in the new offset — otherwise the very next scroll
+      // event would push our stale `true` straight back and the bar would
+      // snap shut again under the user's finger. `run` resets alongside it:
+      // travel accumulated before the tap argued for a state the user has
+      // since overridden, and letting it carry over would re-trigger instantly.
+      const prev =
+        state.current.collapsed === store.collapsed
+          ? state.current
+          : { ...state.current, collapsed: store.collapsed, run: 0 };
+
+      state.current = reduceNavBarCollapse(prev, y);
+      store.setCollapsed(state.current.collapsed);
     },
-    [active, setCollapsed],
+    [active],
   );
 
   const onScroll = useCallback(
@@ -53,8 +65,8 @@ export function useNavBarCollapse(active = true) {
   );
 
   // Leaving the screen (or hiding it behind another tab) must hand the bar
-  // back. Otherwise a screen abandoned mid-scroll leaves the next one with no
-  // navigation until the user happens to scroll up.
+  // back at full size. Otherwise a screen abandoned mid-scroll leaves the next
+  // one with a shrunken bar it never asked for.
   useEffect(() => {
     if (!active) {
       state.current = initialCollapseState;

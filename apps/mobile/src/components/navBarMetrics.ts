@@ -40,6 +40,17 @@ export const SIDE_MARGIN = 14;
 /** Clear space between the capsule and the content above it. */
 export const TOP_GAP = 8;
 
+/**
+ * How much the capsule shrinks when the user browses downward. It minimizes
+ * rather than leaving, the way iOS 26's own `tabBarMinimizeBehavior` does:
+ * every tab stays on screen and stays tappable, so the user never loses sight
+ * of where they are or has to fish the bar back to navigate. Anything much
+ * below this starts to hurt the 10px labels, which are only rendered at
+ * `0.85 × 10 = 8.5px` at rest here — crisp, because this is a transform on an
+ * already-rendered view rather than a smaller font, but genuinely small.
+ */
+export const MINIMIZED_SCALE = 0.85;
+
 /** The pinned bar's top padding — unchanged from the original bar. */
 const PINNED_PAD_TOP = 8;
 /** The pinned bar's minimum bottom padding — unchanged from the original. */
@@ -71,8 +82,14 @@ export interface NavBarMetrics {
    * clears the bar. Constant regardless of collapse state — see the note above.
    */
   reservedHeight: number;
-  /** How far to slide the bar down to take it fully off screen. */
-  hiddenTranslateY: number;
+  /** Scale applied while minimized. 1 when the bar never minimizes (pinned). */
+  minimizedScale: number;
+  /**
+   * Nudge down that keeps the capsule's *bottom edge* planted while it scales
+   * about its centre. Without it the bar would appear to drift upward off the
+   * screen edge as it shrank, which reads as leaving rather than tucking away.
+   */
+  minimizedTranslateY: number;
   /** Corner radius. A true pill when floating, square when pinned. */
   radius: number;
   /** Padding inside the bar body, above the icons. */
@@ -91,7 +108,10 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
       bottomMargin: 0,
       sideMargin: 0,
       reservedHeight: barHeight,
-      hiddenTranslateY: barHeight,
+      // Android and iOS < 26 keep the bar they have always had: it does not
+      // minimize at all, so there is nothing to scale or nudge.
+      minimizedScale: 1,
+      minimizedTranslateY: 0,
       radius: 0,
       padTop: PINNED_PAD_TOP,
       padBottom,
@@ -105,8 +125,10 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
     bottomMargin,
     sideMargin: SIDE_MARGIN,
     reservedHeight: CAPSULE_HEIGHT + bottomMargin + TOP_GAP,
-    // A little past its own footprint so the shadow clears the screen too.
-    hiddenTranslateY: CAPSULE_HEIGHT + bottomMargin + 12,
+    minimizedScale: MINIMIZED_SCALE,
+    // Half the height the scale takes off, pushing the capsule back down so
+    // its bottom edge lands where it already was.
+    minimizedTranslateY: (CAPSULE_HEIGHT * (1 - MINIMIZED_SCALE)) / 2,
     radius: CAPSULE_HEIGHT / 2,
     padTop: CAPSULE_PAD_V,
     padBottom: CAPSULE_PAD_V,
