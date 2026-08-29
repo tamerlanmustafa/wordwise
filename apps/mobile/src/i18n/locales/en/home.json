@@ -27,6 +27,24 @@
       "animation": "Animation",
       "live": "Live action",
       "a11y": "Film type: {{value}}. Tap to change."
+    },
+    "title": "Filter films",
+    "reset": "Reset",
+    "done": "Done",
+    "sortLabel": "Sort by",
+    "typeLabel": "Show",
+    "a11y": "Filters",
+    "a11yActive": "Filters, {{count}} active",
+    "sort": {
+      "rating": "Rating",
+      "popularity": "Popularity",
+      "level": "Level match",
+      "tapToFlip": "Tap again to reverse the order"
     }
+  },
+  "level": {
+    "title": "Your level",
+    "subtitle": "Films are graded and ranked for this level.",
+    "a11y": "Level {{value}}. Tap to change."
   }
 }

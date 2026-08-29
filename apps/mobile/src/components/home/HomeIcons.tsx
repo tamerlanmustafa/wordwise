@@ -20,7 +20,8 @@ export type HomeIconName =
   | 'bookmark'
   | 'check'
   | 'star'
-  | 'bell';
+  | 'bell'
+  | 'filter';
 
 interface Props {
   name: HomeIconName;
@@ -97,6 +98,17 @@ export function HomeIcon({ name, size = 18, color = '#000', sw = 2 }: Props) {
       return (
         <Svg {...stroke}>
           <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0" />
+        </Svg>
+      );
+    // Sliders, not a funnel: the sheet behind it sets *values* (which sort,
+    // which film type) rather than narrowing a list down, and the knobs read
+    // as adjustable at 18px where a funnel reads as a solid blob.
+    case 'filter':
+      return (
+        <Svg {...stroke}>
+          <Path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+          <Circle cx={16} cy={7} r={2.2} />
+          <Circle cx={8} cy={17} r={2.2} />
         </Svg>
       );
     default:

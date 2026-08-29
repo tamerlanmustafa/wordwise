@@ -21,7 +21,7 @@ import {
   type TodaysWord,
 } from '../../services/api';
 import { showToast } from '../../stores/toastStore';
-import { useNotificationsStore, selectHasUnread } from '../../stores/notificationsStore';
+import { useNotificationsStore } from '../../stores/notificationsStore';
 import type { SwipeAction } from '../../utils/swipeDecision';
 import { useShowAds } from '../../stores/entitlementsStore';
 import { RankedMovieList } from '../home/RankedMovieList';
@@ -30,10 +30,19 @@ import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
-import { LevelSortControls, type LevelSort } from '../home/LevelSortControls';
-import { MOVIE_TYPE_OPTIONS, type MovieType } from '../home/filterOptions';
+import { FeedFilterSheet } from '../home/FeedFilterSheet';
+import { LevelSheet } from '../home/LevelSheet';
+import {
+  DEFAULT_FEED_FILTERS,
+  MOVIE_TYPE_OPTIONS,
+  activeFilterCount,
+  type LevelSort,
+  type MovieType,
+} from '../home/filterOptions';
+import { useFeedLevel } from '../../hooks/useFeedLevel';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
+import { useNavBarCollapse } from '../../hooks/useNavBarCollapse';
 
 // The Word-of-the-Hour card is HIDDEN on Home but kept intact so we can bring
 // it back: flip this to true to restore the card, its hourly re-fetch and the
@@ -50,8 +59,12 @@ interface Props {
   onSearch: (query: string) => void;
   user: any;
   targetLanguage: string;
-  /** Opens the NotificationsSheet (App.tsx owns it, like UserMenuSheet). */
-  onOpenNotifications?: () => void;
+  /** True while Home is the visible tab. KeepAlive keeps it mounted, so a
+   *  background Home must not drive the shared bottom bar. */
+  active?: boolean;
+  /** Height the floating bottom bar reserves, so the feed's last row can
+   *  scroll clear of the glass. */
+  bottomOffset?: number;
 }
 
 // Deep-screen navigation (Stats, Lists, Settings, Leaderboard, …) now lives in
@@ -63,13 +76,15 @@ export const HomeScreen = ({
   onSearch,
   user,
   targetLanguage,
-  onOpenNotifications,
+  active = true,
+  bottomOffset = 0,
 }: Props) => {
+  const navScroll = useNavBarCollapse(active);
   const { t } = useTranslation();
   const tc = useThemeColors();
-  // Real unread state for the bell dot; refresh once on mount so the dot is
-  // meaningful before the sheet is ever opened.
-  const notifUnread = useNotificationsStore(selectHasUnread);
+  // The bell moved to the Profile sheet, but its unread state is still primed
+  // from here: Home is the first screen mounted, so refreshing on its mount is
+  // what makes the dot meaningful before the menu is ever opened.
   useEffect(() => {
     void useNotificationsStore.getState().refresh();
   }, []);
@@ -84,13 +99,17 @@ export const HomeScreen = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
-  const [levelSort, setLevelSort] = useState<LevelSort>('rating');
-  const [levelSortAsc, setLevelSortAsc] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState(user?.proficiency_level || 'B1');
-  // Animation vs live action (#114). In-memory like the level and sort above —
-  // none of the three persist across a remount, and a filter that outlives the
-  // session would be a separate decision for all of them, not just this one.
-  const [movieType, setMovieType] = useState<MovieType>('all');
+  const [levelSort, setLevelSort] = useState<LevelSort>(DEFAULT_FEED_FILTERS.sort);
+  const [levelSortAsc, setLevelSortAsc] = useState(DEFAULT_FEED_FILTERS.sortAsc);
+  // Animation vs live action (#114). In-memory like the sort above — neither
+  // persists across a remount, and a filter that outlives the session would be
+  // a separate decision for both of them, not just this one.
+  const [movieType, setMovieType] = useState<MovieType>(DEFAULT_FEED_FILTERS.movieType);
+  // The level is not in that group: it's owned by the profile, so it re-syncs
+  // when `proficiency_level` changes instead of freezing at its mount value.
+  const [selectedLevel, setSelectedLevel] = useFeedLevel(user?.proficiency_level);
+  // Which sheet is up, if any — they share the screen, so only one at a time.
+  const [openSheet, setOpenSheet] = useState<'none' | 'filters' | 'level'>('none');
 
   // Server-sorted, paginated CEFR feed for the ranked list. The backend does
   // the ordering, so each sort/level reflects the full catalog (not a reshuffle
@@ -123,6 +142,11 @@ export const HomeScreen = ({
   const collapseStateRef = useRef<CollapseState>(initialCollapseState);
   const handleFeedScroll = useCallback(
     (offsetY: number) => {
+      // The feed already reports its offset for the word card, so the bottom
+      // bar rides the same signal rather than attaching a second scroll
+      // listener to the same list. Above the word-card guard on purpose: the
+      // bar retracts whether or not the card is being shown.
+      navScroll.onScrollOffset(offsetY);
       // Nothing to collapse while the card is hidden.
       if (!SHOW_WORD_OF_THE_HOUR) return;
       const prev = collapseStateRef.current;
@@ -137,7 +161,7 @@ export const HomeScreen = ({
         useNativeDriver: false,
       }).start();
     },
-    [wordCollapse],
+    [wordCollapse, navScroll],
   );
 
   // A new level/sort re-queries the feed and snaps it back to the top, but the
@@ -363,8 +387,8 @@ export const HomeScreen = ({
       />
 
       <HomeHeader
-        hasUnread={notifUnread}
-        onNotificationsPress={onOpenNotifications}
+        level={selectedLevel}
+        onLevelPress={() => setOpenSheet('level')}
       />
 
       {/* The header stack (search + ad + collapsible word card + filters) is
@@ -394,6 +418,12 @@ export const HomeScreen = ({
             recentlyViewed={recentlyViewed}
             onMoviePress={onSearchMoviePress}
             onSeeAll={submitSearch}
+            onFilterPress={() => setOpenSheet('filters')}
+            activeFilters={activeFilterCount({
+              sort: levelSort,
+              sortAsc: levelSortAsc,
+              movieType,
+            })}
           />
         </View>
 
@@ -453,15 +483,6 @@ export const HomeScreen = ({
           </Animated.View>
         ) : null}
 
-        <LevelSortControls
-          level={selectedLevel}
-          onLevelChange={setSelectedLevel}
-          sort={levelSort}
-          sortAsc={levelSortAsc}
-          onSortPress={handleSortPress}
-          movieType={movieType}
-          onMovieTypeChange={setMovieType}
-        />
       </View>
 
       {/* Ranked feed — the sole full-height scroller. It owns pull-to-refresh
@@ -475,12 +496,12 @@ export const HomeScreen = ({
           <RankedMovieList
             movies={levelMovies}
             onMoviePress={handleMoviePress}
-            userLevel={selectedLevel}
             onEndReached={loadMoreLevel}
             loadingMore={levelLoadingMore}
             hasMore={levelHasMore}
             onScrollOffset={handleFeedScroll}
             onSwipeAction={handleSwipeAction}
+            bottomInset={bottomOffset + 12}
             fillHeight
             onScrollBeginDrag={() => { Keyboard.dismiss(); setSearchFocused(false); }}
             emptyMessage={
@@ -508,6 +529,33 @@ export const HomeScreen = ({
           />
         )}
       </View>
+
+      {/* Both sheets render here, at the screen root, rather than inside the
+          controls that open them: BottomSheet is an absolute overlay, so from
+          inside the 46pt header row or the search block it would be clipped to
+          that row instead of covering the screen. */}
+      <LevelSheet
+        visible={openSheet === 'level'}
+        onClose={() => setOpenSheet('none')}
+        bottomOffset={bottomOffset}
+        level={selectedLevel}
+        onLevelChange={setSelectedLevel}
+      />
+      <FeedFilterSheet
+        visible={openSheet === 'filters'}
+        onClose={() => setOpenSheet('none')}
+        bottomOffset={bottomOffset}
+        sort={levelSort}
+        sortAsc={levelSortAsc}
+        onSortPress={handleSortPress}
+        movieType={movieType}
+        onMovieTypeChange={setMovieType}
+        onReset={() => {
+          setLevelSort(DEFAULT_FEED_FILTERS.sort);
+          setLevelSortAsc(DEFAULT_FEED_FILTERS.sortAsc);
+          setMovieType(DEFAULT_FEED_FILTERS.movieType);
+        }}
+      />
     </SafeAreaView>
   );
 };

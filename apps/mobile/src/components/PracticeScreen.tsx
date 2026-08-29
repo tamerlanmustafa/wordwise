@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useNavBarCollapse } from '../hooks/useNavBarCollapse';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
 import { useReelStore } from '../stores/reelStore';
@@ -56,12 +57,17 @@ export interface PracticeScreenProps {
    *  review — instead of relying on a one-time mount fetch. Defaults to
    *  true so standalone usage keeps working. */
   active?: boolean;
+  /** Height the floating bottom bar reserves, so the tile path can scroll
+   *  clear of it instead of ending underneath the glass. */
+  bottomOffset?: number;
 }
 
 export function PracticeScreen({
   onStartDailyReview,
   active = true,
+  bottomOffset = 0,
 }: PracticeScreenProps) {
+  const navScroll = useNavBarCollapse(active);
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -224,8 +230,9 @@ export function PracticeScreen({
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={s.scrollPad}
+        contentContainerStyle={[s.scrollPad, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
+        {...navScroll}
       >
         {/* The tile chain — endless cycle of the 4 kinds. The active
             tile is at the cursor; the rest are completed (past) or
@@ -323,7 +330,9 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 0.6,
     },
     scrollPad: {
-      paddingBottom: 64,
+      // paddingBottom is applied inline from `bottomOffset` — the floating
+      // bar's height isn't known until it reports it.
+      paddingBottom: 0,
     },
     pathWrap: {
       paddingHorizontal: 18,

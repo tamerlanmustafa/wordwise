@@ -13,6 +13,14 @@
  *     Each row = 40×60 poster + serif title + year. Footer
  *     `SEE ALL {n} RESULTS` in goldOnSurface.
  *   • Recently-viewed dropdown reuses the same row treatment.
+ *   • A 48pt square filter button on the trailing edge, opening
+ *     `FeedFilterSheet` — the same "wide control + square button" pairing the
+ *     Lists tab uses for its sort sheet. Neutral at defaults, gold with a
+ *     count once something is filtered, so hidden state stays visible.
+ *
+ * The field shrinks to make room for the button, but the dropdown stays
+ * anchored to the full-width wrapper — narrowing it by 56pt would crop the
+ * poster rows for no reason.
  */
 
 import { useMemo } from 'react';
@@ -46,6 +54,10 @@ interface Props {
   recentlyViewed: any[];
   onMoviePress: (movie: any) => void;
   onSeeAll: () => void;
+  /** Opens FeedFilterSheet. Omit to hide the button entirely. */
+  onFilterPress?: () => void;
+  /** How many filter groups are off-default — badge count, and gold when > 0. */
+  activeFilters?: number;
 }
 
 function Row({
@@ -91,6 +103,8 @@ export function HomeSearchBar({
   recentlyViewed,
   onMoviePress,
   onSeeAll,
+  onFilterPress,
+  activeFilters = 0,
 }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -98,27 +112,56 @@ export function HomeSearchBar({
 
   const showAutocomplete = showSuggestions && suggestions.length > 0;
   const showRecent = focused && !query && recentlyViewed.length > 0;
+  const filtered = activeFilters > 0;
 
   return (
     <View style={s.wrap}>
       <View style={s.fieldWrap}>
-        <View style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}>
-          <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
-          <TextInput
-            style={s.input}
-            placeholder={t('home:search.placeholder')}
-            placeholderTextColor={tc.textFaint}
-            value={query}
-            onChangeText={onChangeText}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            onSubmitEditing={onSubmit}
-            returnKeyType="search"
-            selectionColor={tc.gold}
-          />
-          {query.length > 0 ? (
-            <TouchableOpacity onPress={onClear} hitSlop={8} style={s.clearBtn}>
-              <HomeIcon name="close" size={16} color={tc.textFaint} sw={2.4} />
+        <View style={s.fieldRow}>
+          <View style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}>
+            <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
+            <TextInput
+              style={s.input}
+              placeholder={t('home:search.placeholder')}
+              placeholderTextColor={tc.textFaint}
+              value={query}
+              onChangeText={onChangeText}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              onSubmitEditing={onSubmit}
+              returnKeyType="search"
+              selectionColor={tc.gold}
+            />
+            {query.length > 0 ? (
+              <TouchableOpacity onPress={onClear} hitSlop={8} style={s.clearBtn}>
+                <HomeIcon name="close" size={16} color={tc.textFaint} sw={2.4} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {onFilterPress ? (
+            <TouchableOpacity
+              style={[s.filterBtn, filtered && s.filterBtnOn]}
+              onPress={onFilterPress}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                filtered
+                  ? t('home:filters.a11yActive', { count: activeFilters })
+                  : t('home:filters.a11y')
+              }
+            >
+              <HomeIcon
+                name="filter"
+                size={19}
+                color={filtered ? tc.goldDeep : tc.textSecondary}
+                sw={2.1}
+              />
+              {filtered ? (
+                <View style={s.badge}>
+                  <Text style={s.badgeText}>{activeFilters}</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           ) : null}
         </View>
@@ -169,7 +212,14 @@ const makeStyles = (tc: ThemeColors) =>
       position: 'relative',
       zIndex: 100,
     },
+    fieldRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
     field: {
+      flex: 1,
+      minWidth: 0,
       height: 48,
       borderRadius: 12,
       borderWidth: 1,
@@ -192,6 +242,44 @@ const makeStyles = (tc: ThemeColors) =>
     },
     clearBtn: {
       padding: 2,
+    },
+    // Square, same 48pt height as the field so the two read as one control
+    // pair — the treatment ListDetailScreen uses for its sort button.
+    filterBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: tc.border,
+      backgroundColor: tc.paper,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+    filterBtnOn: {
+      backgroundColor: tc.gold,
+      borderColor: tc.gold,
+    },
+    badge: {
+      position: 'absolute',
+      top: 5,
+      end: 5,
+      minWidth: 15,
+      height: 15,
+      borderRadius: 8,
+      paddingHorizontal: 3,
+      backgroundColor: tc.goldDeep,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeText: {
+      fontSize: 9.5,
+      fontWeight: '900',
+      color: tc.gold,
     },
     dropdown: {
       position: 'absolute',

@@ -1,4 +1,11 @@
-import { LEVEL_OPTIONS, MOVIE_TYPE_OPTIONS, animatedParam } from '../filterOptions';
+import {
+  DEFAULT_FEED_FILTERS,
+  LEVEL_OPTIONS,
+  MOVIE_TYPE_OPTIONS,
+  SORT_OPTIONS,
+  activeFilterCount,
+  animatedParam,
+} from '../filterOptions';
 
 describe('LEVEL_OPTIONS (CEFR level picker)', () => {
   it('lists exactly the six CEFR levels in ascending order', () => {
@@ -50,5 +57,65 @@ describe('animatedParam (chip state → /movies/by-cefr query)', () => {
   it('maps the two filtered states onto the boolean the API expects', () => {
     expect(animatedParam('animation')).toBe(true);
     expect(animatedParam('live')).toBe(false);
+  });
+});
+
+describe('SORT_OPTIONS (feed ordering)', () => {
+  it('offers the three server-side sorts, rating first', () => {
+    expect(SORT_OPTIONS.map((o) => o.value)).toEqual(['rating', 'popularity', 'level']);
+  });
+
+  it('carries i18n keys, not literal labels', () => {
+    // These were hardcoded English in the old chip row, which left them
+    // untranslated in all five other locales.
+    SORT_OPTIONS.forEach((o) => {
+      expect(o.labelKey).toMatch(/^home:filters\.sort\./);
+    });
+  });
+
+  it('starts on a sort that exists', () => {
+    expect(SORT_OPTIONS.some((o) => o.value === DEFAULT_FEED_FILTERS.sort)).toBe(true);
+  });
+});
+
+describe('activeFilterCount (the filter button badge)', () => {
+  it('is 0 for the untouched feed, so the button stays neutral', () => {
+    expect(activeFilterCount(DEFAULT_FEED_FILTERS)).toBe(0);
+  });
+
+  it('counts a changed sort key', () => {
+    expect(activeFilterCount({ ...DEFAULT_FEED_FILTERS, sort: 'popularity' })).toBe(1);
+  });
+
+  it('counts a flipped direction even when the sort key is the default', () => {
+    // Rating ascending is "worst films first" — very much a filtered view, and
+    // the badge is the only thing that says so once the chips are hidden.
+    expect(activeFilterCount({ ...DEFAULT_FEED_FILTERS, sortAsc: true })).toBe(1);
+  });
+
+  it('counts key and direction together as one group, not two', () => {
+    expect(
+      activeFilterCount({ ...DEFAULT_FEED_FILTERS, sort: 'level', sortAsc: true }),
+    ).toBe(1);
+  });
+
+  it('counts the film type separately', () => {
+    expect(activeFilterCount({ ...DEFAULT_FEED_FILTERS, movieType: 'animation' })).toBe(1);
+    expect(
+      activeFilterCount({ ...DEFAULT_FEED_FILTERS, movieType: 'live', sort: 'popularity' }),
+    ).toBe(2);
+  });
+
+  it('derives from the shared defaults rather than a hardcoded pair', () => {
+    // The badge and the query must read the same constants: a second copy of
+    // "what counts as default" is how a button says "1 active" over an
+    // unfiltered feed.
+    expect(
+      activeFilterCount({
+        sort: DEFAULT_FEED_FILTERS.sort,
+        sortAsc: DEFAULT_FEED_FILTERS.sortAsc,
+        movieType: DEFAULT_FEED_FILTERS.movieType,
+      }),
+    ).toBe(0);
   });
 });

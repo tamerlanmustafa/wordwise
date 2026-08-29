@@ -27,6 +27,24 @@
       "animation": "Animación",
       "live": "Imagen real",
       "a11y": "Tipo de película: {{value}}. Toca para cambiar."
+    },
+    "title": "Filtrar películas",
+    "reset": "Restablecer",
+    "done": "Listo",
+    "sortLabel": "Ordenar por",
+    "typeLabel": "Mostrar",
+    "a11y": "Filtros",
+    "a11yActive": "Filtros, {{count}} activos",
+    "sort": {
+      "rating": "Valoración",
+      "popularity": "Popularidad",
+      "level": "Coincidencia de nivel",
+      "tapToFlip": "Toca de nuevo para invertir el orden"
     }
+  },
+  "level": {
+    "title": "Tu nivel",
+    "subtitle": "Las películas se clasifican para este nivel.",
+    "a11y": "Nivel {{value}}. Toca para cambiar."
   }
 }

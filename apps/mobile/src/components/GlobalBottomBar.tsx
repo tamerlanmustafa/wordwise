@@ -1,37 +1,58 @@
 /**
- * GlobalBottomBar — v0.8 5-tab persistent nav.
+ * GlobalBottomBar — v0.9 5-tab persistent nav, Liquid Glass on iOS 26.
  *
  *   Home · Explore · Practice · Lists · Profile
  *
- * Lists joins the bar as the fourth tab: the one place a user finds
- * everything they have kept, films and words alike. It also gives the reel
- * back a home of its own — the reel had been demoted to the Profile sheet
- * when the Explore word feed took position 2, and `Saved from Home` inside
- * the Lists tab is now where it lives.
+ * On iOS 26 this is a floating Liquid Glass capsule: inset from all three
+ * edges, refracting the content that scrolls underneath it, with a gold lens
+ * sliding between cells to mark the active tab, and retracting on a downward
+ * browse. Everywhere else — Android, and every iOS below 26 — it is exactly
+ * the bar it has always been: full width, pinned, opaque, content stopping
+ * above it. That split is deliberate; see `useGlassAvailable` for the three
+ * separate conditions and `navBarMetrics` for the two geometries.
+ *
+ * The bar is an absolute overlay now, not a flex child, so it no longer takes
+ * space from its siblings. It reports `reservedHeight` via `onHeightChange`
+ * and every scroller underneath pads by that instead. The reported number is
+ * computed, not measured, and stays constant while the bar retracts — a
+ * measured height would shrink on retract and make all that content jump.
  *
  * Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon` translated to
  * `react-native-svg` (stroke 1.9, 22px, rounded caps).
  *
- * Light/dark: surface + active accent flip via tokens. Active = gold stroke
- * + full-contrast label; inactive = textFaint for both.
- *
- * The reel-flight landing target is live again on this tab. v0.7 dropped it
- * — nothing reported `reelTabRect`, so `PosterFlight` silently discarded
- * every flight — and it is restored here because the reel now has a visible
- * destination in the bar to fly to. Only the Lists cell reports its rect.
+ * The reel-flight landing target is reported from the Lists cell. Because the
+ * bar can now be off screen, the rect is re-measured after every retract so a
+ * poster never flies to where the bar used to be.
  *
  * Width: five cells in the same bar leaves ~66px each at 320pt (SE). Labels
  * are 10px/800 and must not wrap — `__tests__/globalBottomBar.test.ts`
  * pins the label lengths that fit.
  */
 
-import { useCallback, useMemo, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type View as RNView } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type View as RNView,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { GlassView } from 'expo-glass-effect';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { useFlightStore } from '../stores/flightStore';
+import { useNavBarStore } from '../stores/navBarStore';
+import { useGlassAvailable } from '../hooks/useGlassAvailable';
+import {
+  lensGeometry,
+  navBarMetrics,
+  LENS_INSET_V,
+  type CellFrame,
+  type NavBarMetrics,
+} from './navBarMetrics';
 
 export type BottomTab = 'home' | 'explore' | 'practice' | 'lists' | 'profile';
 
@@ -40,7 +61,10 @@ interface Props {
       doesn't belong to a single tab (e.g. movie detail). */
   active: BottomTab | null;
   onTabPress: (tab: BottomTab) => void;
-  onLayout?: (height: number) => void;
+  /** Reports the vertical space scrollers must reserve. Fires on mount and
+   *  whenever the safe-area inset or the glass/pinned shape changes — not on
+   *  every layout pass, and never while retracting. */
+  onHeightChange?: (height: number) => void;
 }
 
 interface TabItem {
@@ -62,12 +86,18 @@ export const TABS: TabItem[] = [
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },
 ];
 
-export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
+export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
+  const scheme = useColorScheme();
+  const glass = useGlassAvailable();
+  const m = useMemo(() => navBarMetrics(insets.bottom, glass), [insets.bottom, glass]);
   const s = useMemo(() => makeStyles(tc), [tc]);
   const setReelTabRect = useFlightStore((st) => st.setReelTabRect);
+  // Only the floating capsule retracts. The pinned bar stays put so nothing
+  // about Android's behaviour changes.
+  const collapsed = useNavBarStore((st) => st.collapsed) && m.floating;
 
   // The reel lives in Lists, so that cell is where a saved poster flies.
   // measureInWindow (not onLayout's local rect) because PosterFlight is an
@@ -79,51 +109,170 @@ export function GlobalBottomBar({ active, onTabPress, onLayout }: Props) {
     });
   }, [setReelTabRect]);
 
+  useEffect(() => {
+    onHeightChange?.(m.reservedHeight);
+  }, [m.reservedHeight, onHeightChange]);
+
+  // ── Retract on scroll ────────────────────────────────────────────────────
+  // Transform + opacity only, so this runs on the native driver and never
+  // triggers a layout pass — which is what keeps `reservedHeight` honest.
+  const slide = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(slide, {
+      toValue: collapsed ? 1 : 0,
+      useNativeDriver: true,
+      damping: 22,
+      stiffness: 240,
+      mass: 0.9,
+    }).start(({ finished }) => {
+      // The Lists cell has moved; PosterFlight's target must follow it or a
+      // saved poster flies to the bar's old position.
+      if (finished) measureListsTab();
+    });
+  }, [collapsed, slide, measureListsTab]);
+
+  const translateY = slide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, m.hiddenTranslateY],
+  });
+  const opacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
+  // ── Active-tab lens ──────────────────────────────────────────────────────
+  // Cell frames come from each button's own onLayout rather than from
+  // `index * cellWidth`. RTL reverses the row for us, so index arithmetic
+  // would light up the mirrored tab; measurement is correct either way.
+  const [cells, setCells] = useState<Record<string, CellFrame>>({});
+  const handleCellLayout = useCallback((id: BottomTab, frame: CellFrame) => {
+    setCells((prev) => {
+      const seen = prev[id];
+      if (seen && seen.x === frame.x && seen.width === frame.width) return prev;
+      return { ...prev, [id]: frame };
+    });
+  }, []);
+  const lens = lensGeometry(active ? cells[active] : null);
+  const lensX = useRef(new Animated.Value(0)).current;
+  // First placement must be a jump, not a slide — otherwise the lens flies in
+  // from the left edge on cold start.
+  const lensPlaced = useRef(false);
+  useEffect(() => {
+    if (!lens) return;
+    if (!lensPlaced.current) {
+      lensPlaced.current = true;
+      lensX.setValue(lens.x);
+      return;
+    }
+    Animated.spring(lensX, {
+      toValue: lens.x,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 260,
+      mass: 0.8,
+    }).start();
+  }, [lens, lensX]);
+
   return (
-    <View
+    <Animated.View
+      // box-none so the inset margins around the capsule stay tappable by the
+      // content underneath rather than swallowing touches into dead space.
+      pointerEvents="box-none"
       style={[
-        s.bar,
+        s.host,
         {
-          // Per CLAUDE_PROMPT.md §1: height 78, paddingBottom 18. Honor
-          // the safe-area inset when larger (notched devices).
-          paddingBottom: Math.max(18, insets.bottom),
-          backgroundColor: tc.tabBg,
-          borderTopColor: tc.tabBorder,
+          paddingHorizontal: m.sideMargin,
+          paddingBottom: m.bottomMargin,
+          transform: [{ translateY }],
+          opacity,
         },
       ]}
-      onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
     >
-      {TABS.map((tab) => (
-        <TabBtn
-          key={tab.id}
-          icon={tab.icon}
-          label={t(`nav.${tab.labelKey}`)}
-          isActive={active === tab.id}
-          onPress={() => onTabPress(tab.id)}
-          tc={tc}
-          s={s}
-          viewRef={tab.id === 'lists' ? listsRef : undefined}
-          onMeasure={tab.id === 'lists' ? measureListsTab : undefined}
-        />
-      ))}
-    </View>
+      <View
+        style={[
+          s.body,
+          {
+            height: m.barHeight,
+            borderRadius: m.radius,
+            paddingTop: m.padTop,
+            paddingBottom: m.padBottom,
+          },
+        ]}
+      >
+        {m.floating ? (
+          <GlassView
+            style={[StyleSheet.absoluteFill, { borderRadius: m.radius }]}
+            glassEffectStyle="regular"
+            // The app has its own light/dark toggle that can disagree with the
+            // system's, so 'auto' would give dark glass under a light UI.
+            colorScheme={scheme}
+            isInteractive
+          />
+        ) : (
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              s.pinnedFill,
+              { backgroundColor: tc.tabBg, borderTopColor: tc.tabBorder },
+            ]}
+          />
+        )}
+
+        {m.floating && lens ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              s.lens,
+              {
+                width: lens.width,
+                top: LENS_INSET_V,
+                bottom: LENS_INSET_V,
+                borderRadius: (m.barHeight - LENS_INSET_V * 2) / 2,
+                backgroundColor: tc.goldWash,
+                borderColor: tc.goldLine,
+                transform: [{ translateX: lensX }],
+              },
+            ]}
+          />
+        ) : null}
+
+        <View style={s.row}>
+          {TABS.map((tab) => (
+            <TabBtn
+              key={tab.id}
+              id={tab.id}
+              icon={tab.icon}
+              label={t(`nav.${tab.labelKey}`)}
+              isActive={active === tab.id}
+              onPress={() => onTabPress(tab.id)}
+              onCellLayout={handleCellLayout}
+              tc={tc}
+              s={s}
+              viewRef={tab.id === 'lists' ? listsRef : undefined}
+              onMeasure={tab.id === 'lists' ? measureListsTab : undefined}
+            />
+          ))}
+        </View>
+      </View>
+    </Animated.View>
   );
 }
 
 function TabBtn({
+  id,
   icon,
   label,
   isActive,
   onPress,
+  onCellLayout,
   tc,
   s,
   viewRef,
   onMeasure,
 }: {
+  id: BottomTab;
   icon: NavIconKind;
   label: string;
   isActive: boolean;
   onPress: () => void;
+  onCellLayout: (id: BottomTab, frame: CellFrame) => void;
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
   viewRef?: React.MutableRefObject<RNView | null>;
@@ -137,7 +286,11 @@ function TabBtn({
       style={s.btn}
       onPress={onPress}
       activeOpacity={0.7}
-      onLayout={onMeasure}
+      onLayout={(e) => {
+        const { x, width } = e.nativeEvent.layout;
+        onCellLayout(id, { x, width });
+        onMeasure?.();
+      }}
     >
       <NavIcon kind={icon} stroke={strokeColor} fillActive={isActive ? tc.gold : undefined} />
       <Text
@@ -222,14 +375,29 @@ function NavIcon({
 }
 
 const makeStyles = (_tc: ThemeColors) => StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
+  host: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  body: {
+    // `hidden` clips the glass to the pill; without it the effect paints
+    // square corners behind the rounded content.
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  pinnedFill: {
     borderTopWidth: 1,
-    paddingTop: 8,
-    // height is implicit (content + paddingTop + paddingBottom).
-    // Per spec: 8 + 22 (icon) + 4 (gap) + ~12 (label) + 18 ≈ 64,
-    // bumped to 78 effective on devices with home-bar inset.
-    alignItems: 'flex-start',
+  },
+  lens: {
+    position: 'absolute',
+    left: 0,
+    borderWidth: 1,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
   },
   btn: {
@@ -245,3 +413,5 @@ const makeStyles = (_tc: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.4,
   },
 });
+
+export type { NavBarMetrics };

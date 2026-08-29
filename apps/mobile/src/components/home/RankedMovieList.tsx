@@ -132,7 +132,6 @@ function prefetchMovieImages(movie: any) {
 interface Props {
   movies: any[];
   onMoviePress: (movie: any) => void;
-  userLevel?: string;
   /** Called when the user scrolls near the bottom — load the next page. */
   onEndReached?: () => void;
   /** True while the next page is being fetched (drives the footer spinner). */
@@ -150,6 +149,9 @@ interface Props {
   refreshControl?: React.ReactElement<RefreshControlProps>;
   /** Fires when the user starts dragging (e.g. to dismiss the keyboard). */
   onScrollBeginDrag?: () => void;
+  /** Space to leave below the last card so it clears the floating bottom bar
+   *  the feed now scrolls underneath. */
+  bottomInset?: number;
   /** Home-feed swipe: right → "Seen it" (Watched), left → "Not interested".
    *  When omitted, cards aren't swipeable. */
   onSwipeAction?: (action: SwipeAction, movie: any) => void;
@@ -440,7 +442,7 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction, emptyMessage }: Props) => {
+export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction, emptyMessage, bottomInset = 0 }: Props) => {
   const { t } = useTranslation();
   // The lightbox machinery is intact but currently has no trigger: the card
   // that used to open it no longer carries a poster. Kept rather than removed
@@ -500,6 +502,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
           }}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
+          contentContainerStyle={{ paddingBottom: bottomInset }}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={onScrollBeginDrag}
           refreshControl={refreshControl}

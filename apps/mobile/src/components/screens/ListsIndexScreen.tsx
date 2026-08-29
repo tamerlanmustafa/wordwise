@@ -16,6 +16,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useNavBarCollapse } from '../../hooks/useNavBarCollapse';
 import { Skeleton } from '../ui/Skeleton';
 import { SegmentedControl } from '../lists/SegmentedControl';
 import { ListRow } from '../lists/ListRow';
@@ -35,6 +36,7 @@ interface Props {
 }
 
 export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
+  const navScroll = useNavBarCollapse(active);
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -117,6 +119,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
+        {...navScroll}
       >
         {/* A failed refresh never blanks kept content — the retry line sits
             above whatever is already on screen. */}

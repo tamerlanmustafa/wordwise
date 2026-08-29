@@ -51,9 +51,24 @@ interface Props {
   active: boolean;
   proficiencyLevel?: string | null;
   targetLanguage?: string | null;
+  /**
+   * Height the floating bottom bar reserves. Explore is a snap pager — one
+   * card fills the viewport exactly — so unlike the scrolling tabs it does
+   * *not* let content run under the glass: a card that extended behind the bar
+   * would put its action rail underneath it, and there is no scrolling further
+   * to bring it out. The bar's height comes off the viewport instead, and the
+   * bar never retracts here (every swipe is a full page, so a direction-based
+   * retract would fire on each one).
+   */
+  bottomOffset?: number;
 }
 
-export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Props) {
+export function ExploreScreen({
+  active,
+  proficiencyLevel,
+  targetLanguage,
+  bottomOffset = 0,
+}: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
@@ -100,8 +115,16 @@ export function ExploreScreen({ active, proficiencyLevel, targetLanguage }: Prop
   // measured viewport, so a 4.7" phone gets a proportionally smaller rail
   // and lift instead of one tuned for a 6.7" screen.
   const m = useMemo(
-    () => exploreMetrics({ viewport: available, width, topInset: insets.top }),
-    [available, width, insets.top],
+    // The root View now spans the full screen (the bar floats over it), so
+    // the bar's reserved height has to come off the viewport by hand — it is
+    // no longer subtracted for us by the flex layout.
+    () =>
+      exploreMetrics({
+        viewport: Math.max(0, available - bottomOffset),
+        width,
+        topInset: insets.top,
+      }),
+    [available, bottomOffset, width, insets.top],
   );
   const cardHeight = m.cardHeight;
 

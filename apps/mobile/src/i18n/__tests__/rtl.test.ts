@@ -339,11 +339,21 @@ describe('absolute positioning uses logical offsets', () => {
   // to the same thing. So the rule flags a *lone* offset — the shape that pins
   // a back button to the same screen side in both reading directions.
   //
-  // These five place things by geometry rather than by reading order: a
-  // rotated diamond, drifting confetti, a poster in flight. Mirroring their
+  // These place things by geometry rather than by reading order: a rotated
+  // diamond, drifting confetti, a poster in flight. Mirroring their
   // coordinates would break the transforms rather than fix them, so they are
   // excluded deliberately (#104), not because the rule is noisy there.
+  //
+  // GlobalBottomBar joins them for the same reason: the active-tab lens is
+  // anchored at `left: 0` and driven entirely by an animated translateX built
+  // from the active cell's *measured* frame. React Native's layout
+  // coordinates are physical (left-origin) in both reading directions, and
+  // transforms are not mirrored, so a physical anchor is what makes the lens
+  // land on the right cell under RTL — `start` would anchor it to the opposite
+  // edge and send the translate the wrong way. See `lensGeometry`, which
+  // exists precisely so this is measured rather than derived from tab index.
   const GEOMETRIC = [
+    'components/GlobalBottomBar.tsx',
     'components/PosterFlight.tsx',
     'components/journey/JourneyNode.tsx',
     'components/practice/PracticeBackdrop.tsx',

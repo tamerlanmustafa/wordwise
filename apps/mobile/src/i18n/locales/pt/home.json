@@ -27,6 +27,24 @@
       "animation": "Animação",
       "live": "Live-action",
       "a11y": "Tipo de filme: {{value}}. Toque para alterar."
+    },
+    "title": "Filtrar filmes",
+    "reset": "Redefinir",
+    "done": "Concluído",
+    "sortLabel": "Ordenar por",
+    "typeLabel": "Mostrar",
+    "a11y": "Filtros",
+    "a11yActive": "Filtros, {{count}} ativos",
+    "sort": {
+      "rating": "Avaliação",
+      "popularity": "Popularidade",
+      "level": "Correspondência de nível",
+      "tapToFlip": "Toque novamente para inverter a ordem"
     }
+  },
+  "level": {
+    "title": "Seu nível",
+    "subtitle": "Os filmes são classificados para este nível.",
+    "a11y": "Nível {{value}}. Toque para alterar."
   }
 }

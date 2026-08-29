@@ -27,6 +27,24 @@
       "animation": "Animasyon",
       "live": "Gerçek çekim",
       "a11y": "Film türü: {{value}}. Değiştirmek için dokunun."
+    },
+    "title": "Filmleri filtrele",
+    "reset": "Sıfırla",
+    "done": "Tamam",
+    "sortLabel": "Sıralama",
+    "typeLabel": "Göster",
+    "a11y": "Filtreler",
+    "a11yActive": "Filtreler, {{count}} etkin",
+    "sort": {
+      "rating": "Puan",
+      "popularity": "Popülerlik",
+      "level": "Seviye uyumu",
+      "tapToFlip": "Sırayı ters çevirmek için tekrar dokunun"
     }
+  },
+  "level": {
+    "title": "Seviyeniz",
+    "subtitle": "Filmler bu seviyeye göre sıralanır.",
+    "a11y": "Seviye {{value}}. Değiştirmek için dokunun."
   }
 }

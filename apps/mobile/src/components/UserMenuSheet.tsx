@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
+import { useNotificationsStore, selectHasUnread } from '../stores/notificationsStore';
 import { showConfirm } from '../stores/confirmStore';
 import {
   Alert,
@@ -44,6 +45,9 @@ interface Props {
   onNavigateToStats: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
+  /** Opens NotificationsSheet. This menu is the only entry point since the
+   *  bell left the Home header. */
+  onNavigateToNotifications: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
   /** Height of GlobalBottomBar — sheet and scrim stop above it. */
@@ -63,11 +67,13 @@ export function UserMenuSheet({
   onNavigateToStats,
   onNavigateToAchievements,
   onNavigateToLeaderboard,
+  onNavigateToNotifications,
   onLogout,
   isAdmin,
   bottomOffset,
 }: Props) {
   const { t } = useTranslation();
+  const hasUnread = useNotificationsStore(selectHasUnread);
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
   // Start hidden well off-screen; the real distance is set once we measure the
@@ -101,7 +107,22 @@ export function UserMenuSheet({
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
-  const navItems: { icon: MenuIconName; label: string; action: () => void }[] = [
+  const navItems: {
+    icon: MenuIconName;
+    label: string;
+    action: () => void;
+    /** Gold dot on the icon chip — currently only unread notifications. */
+    dot?: boolean;
+  }[] = [
+    // First row: this menu is the only way to notifications now that the Home
+    // header's bell is gone, so it sits where the eye lands, carrying the same
+    // unread dot the bell used to.
+    {
+      icon: 'bell',
+      label: t('home:notifications'),
+      action: wrap(onNavigateToNotifications),
+      dot: hasUnread,
+    },
     { icon: 'progress', label: t('settings:menu.myProgress'), action: wrap(onNavigateToStats) },
     { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
     { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
@@ -164,10 +185,11 @@ export function UserMenuSheet({
 
         <View style={styles.divider} />
 
-        {navItems.map(({ icon, label, action }) => (
+        {navItems.map(({ icon, label, action, dot }) => (
           <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.6}>
             <View style={styles.iconChip}>
               <MenuIcon name={icon} size={18} color={tc.textSecondary} />
+              {dot ? <View style={styles.unreadDot} /> : null}
             </View>
             <Text style={styles.rowLabel}>{label}</Text>
             <MenuIcon name="chevron" size={16} color={tc.textFaint} />
@@ -259,6 +281,7 @@ export function UserMenuSheet({
 // ── Stroked icon set (no emoji) — mirrors the cinema system used across
 //    Home / My Movies / the bottom bar. ─────────────────────────────────
 type MenuIconName =
+  | 'bell'
   | 'progress'
   | 'badge'
   | 'leaderboard'
@@ -286,6 +309,14 @@ function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; siz
     strokeLinejoin: 'round' as const,
   };
   switch (name) {
+    // Same glyph the Home header used, so the bell is recognisable in its
+    // new home rather than reading as a different feature.
+    case 'bell':
+      return (
+        <Svg {...p}>
+          <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0" />
+        </Svg>
+      );
     case 'progress':
       return (
         <Svg {...p}>
@@ -482,6 +513,18 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   iconChipDanger: {
     backgroundColor: tc.errorTint,
     borderColor: tc.errorBorder,
+  },
+  // Carried over from the Home bell, sized to the 38pt chip it now sits on.
+  unreadDot: {
+    position: 'absolute',
+    top: 6,
+    end: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: tc.gold,
+    borderWidth: 1.5,
+    borderColor: tc.paper,
   },
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: tc.text },
   themeChips: { flexDirection: 'row', gap: 8 },

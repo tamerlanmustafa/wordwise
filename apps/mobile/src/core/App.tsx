@@ -865,7 +865,7 @@ export default function App() {
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
         <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} onOpenNotifications={() => setShowNotifSheet(true)} />
+          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} active={currentScreen === 'home'} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Explore keeps its place in KeepAlive so the feed doesn't lose
             its scroll position when the user dips into Profile. */}
@@ -874,10 +874,11 @@ export default function App() {
             active={currentScreen === 'explore'}
             proficiencyLevel={user?.proficiency_level}
             targetLanguage={targetLanguage}
+            bottomOffset={barHeight}
           />
         </KeepAlive>
         <KeepAlive visible={currentScreen === 'practice'}>
-          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} />
+          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Lists keeps its place in KeepAlive so the selected segment and
             scroll position survive a tab switch, same as Home and Explore. */}
@@ -1050,6 +1051,7 @@ export default function App() {
           onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
           onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
           onNavigateToLeaderboard={() => { setShowUserSheet(false); navigateToLeaderboard(); }}
+          onNavigateToNotifications={() => { setShowUserSheet(false); setShowNotifSheet(true); }}
           onLogout={handleLogout}
           isAdmin={!!user?.is_admin}
           bottomOffset={barHeight}
@@ -1060,7 +1062,7 @@ export default function App() {
           onNavigate={handleNotificationNavigate}
           bottomOffset={barHeight}
         />
-        <GlobalBottomBar active={activeTab} onTabPress={handleTabPress} onLayout={(h) => setBarHeight(h)} />
+        <GlobalBottomBar active={activeTab} onTabPress={handleTabPress} onHeightChange={setBarHeight} />
         </View>
       ) : (
         <LoginScreen onLogin={handleLogin} />

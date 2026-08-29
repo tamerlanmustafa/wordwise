@@ -29,6 +29,23 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// expo-glass-effect — ships untranspiled ESM, which the react-native preset
+// does not transform, so importing GlobalBottomBar would throw on the `export`
+// keyword. Mocking it also states the truth about the environment: there is no
+// iOS 26 under jest, so the availability checks are false and GlassView is a
+// plain View — exactly what the package's own non-iOS build does. Tests
+// therefore exercise the pinned-bar fallback, and anything asserting the glass
+// path has to say so explicitly.
+jest.mock('expo-glass-effect', () => {
+  const { View } = require('react-native');
+  return {
+    GlassView: View,
+    GlassContainer: View,
+    isLiquidGlassAvailable: () => false,
+    isGlassEffectAPIAvailable: () => false,
+  };
+});
+
 // Silence the intentional console.warn noise from optional-native-module
 // fallbacks (billing / notifications require()-guard their imports) so test
 // output stays readable. Runs at setup time (before the test framework is
