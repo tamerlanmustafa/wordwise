@@ -3,9 +3,9 @@
  *
  * The design was measured on one tall phone (~770pt of usable height above
  * the tab bar), and the original implementation hard-coded those pixels: a
- * 285pt rail sitting 132pt up, a 150pt card lift, a 76pt rail lane. On a
- * 4.7" phone that block claims ~420pt of a ~477pt card, leaving almost
- * nothing for the word, and the lift can push it off the top of the screen.
+ * 285pt rail, a 150pt card lift, a 76pt rail lane. On a 4.7" phone that block
+ * claims ~420pt of a ~477pt card, leaving almost nothing for the word, and the
+ * lift can push it off the top of the screen.
  *
  * So the numbers become ratios of the measured card area, clamped so they
  * never exceed the design on a large screen or collapse on a small one.
@@ -31,9 +31,20 @@ const COMPACT_VIEWPORT = 620;
  *  reference device. */
 const RAIL_HEIGHT_RATIO = 0.43;
 
-/** Share of the card area between the rail's bottom and the card's.
- *  132/662 on the reference device. */
-const RAIL_BOTTOM_RATIO = 0.2;
+/**
+ * Clear space between the rail's bottom edge (the Share label) and the top of
+ * the bottom bar's strip.
+ *
+ * The rail used to float at a *share of the card* — 132pt up on the reference
+ * phone — which left it stranded in the middle of nowhere once the bar became a
+ * floating capsule. It is now anchored to the bar, so this is a plain gap
+ * rather than a ratio: the rail and the bar are two pieces of chrome stacked at
+ * the bottom edge, and the distance between them should read the same on every
+ * screen instead of growing with the phone.
+ */
+const RAIL_GAP = 12;
+/** The same gap, trimmed on a compact screen — matches `railEnd`. */
+const RAIL_GAP_COMPACT = 8;
 
 /** How far the lifting group rises, as a share of the rail's height —
  *  the rail and the panel are the same height, so tying the lift to it
@@ -81,6 +92,12 @@ export interface ExploreMetrics {
   /** One card = one viewport. */
   cardHeight: number;
   railHeight: number;
+  /**
+   * The rail's bottom edge, measured from the bottom of the *whole screen* —
+   * not from the card, which stops a toast strip short of it. The rail and the
+   * panels are overlays on the root for exactly this reason: they are pinned to
+   * the bottom bar, so they must share its frame of reference.
+   */
   railBottom: number;
   railEnd: number;
   /** Card's end padding and the panel's end inset — the rail's lane. */
@@ -115,11 +132,10 @@ export function exploreMetrics({
   const toastStrip = compact ? 38 : 46;
   const cardHeight = Math.max(0, usable - topSpacer - toastStrip);
 
-  // The rail must fit inside the card area with room left for the word, so
-  // both its height and its offset are clamped against the card, not just
-  // against absolute pixels.
+  // The rail's height still scales with the card — it must leave the word
+  // room — but its position is the bar's, not the card's.
   const railHeight = scale(cardHeight * RAIL_HEIGHT_RATIO, 190, 285);
-  const railBottom = scale(cardHeight * RAIL_BOTTOM_RATIO, 88, 132);
+  const railBottom = barSpacer + (compact ? RAIL_GAP_COMPACT : RAIL_GAP);
   const cardLift = scale(railHeight * LIFT_RATIO, 96, 150);
   const railLane = scale(width * RAIL_LANE_RATIO, 66, 84);
 

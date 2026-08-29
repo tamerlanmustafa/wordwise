@@ -6,7 +6,21 @@
  * crowded the word off the card. Everything below is really one assertion —
  * the chrome must leave the word room on every device we ship to.
  */
-import { exploreMetrics } from '../metrics';
+import { exploreMetrics, type ExploreMetrics } from '../metrics';
+
+/**
+ * Room between the card's top edge and the rail's top edge — where the word
+ * and its sentence have to fit.
+ *
+ * `railBottom` is measured from the bottom of the screen and `topSpacer` from
+ * the top, so this is the one place the two frames of reference are reconciled.
+ * Deliberately a helper rather than repeated inline: the rail moved frames once
+ * already (it used to be positioned off the card), and a copy of this sum in
+ * five tests is five places to get it wrong next time.
+ */
+function wordRoom(m: ExploreMetrics, viewport: number): number {
+  return viewport - m.topSpacer - (m.railBottom + m.railHeight);
+}
 
 /** ~6.7" phone: the device the design was measured on. */
 const LARGE = { viewport: 770, width: 430, topInset: 59 };
@@ -21,7 +35,6 @@ describe('exploreMetrics — reference device', () => {
     expect(m.topSpacer).toBe(62);
     expect(m.toastStrip).toBe(46);
     expect(m.railHeight).toBe(285);
-    expect(m.railBottom).toBe(132);
     expect(m.cardLift).toBe(150);
     expect(m.railEnd).toBe(10);
   });
@@ -29,25 +42,60 @@ describe('exploreMetrics — reference device', () => {
   it('never exceeds the design on an even larger screen', () => {
     const m = exploreMetrics({ viewport: 1000, width: 500, topInset: 59 });
     expect(m.railHeight).toBe(285);
-    expect(m.railBottom).toBe(132);
     expect(m.cardLift).toBe(150);
     expect(m.railLane).toBeLessThanOrEqual(84);
+  });
+});
+
+describe('exploreMetrics — the rail sits on the bottom bar', () => {
+  // The rail is chrome stacked at the bottom edge, not a feature of the card.
+  // Its distance to the bar must not grow with the screen, and the panels
+  // inherit the same bottom edge, so this pins all three at once.
+  it('leaves the same small gap over the bar on every screen', () => {
+    for (const bar of [0, 61, 91, 103]) {
+      const m = exploreMetrics({ viewport: 932, width: 430, topInset: 59, bottomOffset: bar });
+      expect(m.railBottom - bar).toBe(12);
+    }
+  });
+
+  it('trims the gap on a compact screen, like the other chrome', () => {
+    const m = exploreMetrics({ ...SMALL, bottomOffset: 65 });
+    expect(m.railBottom - 65).toBe(8);
+  });
+
+  it('clears the bar rather than sitting under it', () => {
+    for (const d of [LARGE, SMALL, TINY]) {
+      for (const bar of [0, 65, 91]) {
+        const m = exploreMetrics({ ...d, bottomOffset: bar });
+        expect(m.railBottom).toBeGreaterThan(m.barSpacer);
+      }
+    }
+  });
+
+  it('does not drift up when the phone gets taller', () => {
+    // The old ratio put the rail 132pt up on a 6.7" phone and 88pt up on an
+    // SE, so the same design sat in a visibly different place on each. Anchored
+    // to the bar, only the bar's own height moves it.
+    const tall = exploreMetrics({ viewport: 932, width: 430, topInset: 59, bottomOffset: 91 });
+    const short = exploreMetrics({ viewport: 667, width: 375, topInset: 20, bottomOffset: 91 });
+    expect(tall.railBottom - short.railBottom).toBeLessThanOrEqual(4);
   });
 });
 
 describe('exploreMetrics — the small-screen bug this exists to prevent', () => {
   it('leaves the word real room above the rail on a 4.7" phone', () => {
     const m = exploreMetrics(SMALL);
-    const aboveRail = m.cardHeight - (m.railBottom + m.railHeight);
     // With the old hard-coded 285 + 132 this was ~60pt — not enough for a
     // 46pt word plus its sentence.
-    expect(aboveRail).toBeGreaterThan(120);
+    expect(wordRoom(m, SMALL.viewport)).toBeGreaterThan(120);
   });
 
-  it('keeps the rail block inside the card on every device', () => {
+  it('keeps the rail block on screen on every device, bar or no bar', () => {
     for (const device of [LARGE, SMALL, TINY]) {
-      const m = exploreMetrics(device);
-      expect(m.railBottom + m.railHeight).toBeLessThan(m.cardHeight);
+      for (const bar of [0, 65, 91]) {
+        const m = exploreMetrics({ ...device, bottomOffset: bar });
+        expect(wordRoom(m, device.viewport)).toBeGreaterThan(120);
+      }
     }
   });
 

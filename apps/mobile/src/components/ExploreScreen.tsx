@@ -15,12 +15,14 @@
  * The FlatList takes what is left over, so a band that is subtracted but not
  * rendered turns straight into a sliver of the next card.
  *
- * The action rail floats over the list on the right. Two panels — the level
+ * The action rail floats over the list on the right, sitting just above the
+ * bottom bar — the Share glyph is the bar's neighbour. Two panels — the level
  * mix and add-to-list — slide in from the left into the same lane, stopping
- * one rail-lane short so the rail stays visible; only one is ever open. All
- * of that geometry scales with the measured viewport (see explore/metrics).
- * While a panel is open a scrim makes the card and the rail inert, and any
- * tap on it closes the panel.
+ * one rail-lane short so the rail stays visible; only one is ever open. They
+ * take the rail's height and bottom edge verbatim, so the three stay aligned
+ * by construction. All of that geometry scales with the measured viewport
+ * (see explore/metrics). While a panel is open a scrim makes the card inert
+ * (the rail stays live on purpose) and any tap on it closes the panel.
  *
  * Known deviation: the scrim covers this screen only, so the tab bar stays
  * live while a panel is open (the bar is App-owned and renders below this
@@ -346,56 +348,6 @@ export function ExploreScreen({
             }
           />
         ) : null}
-
-        {/* Scrim — above the card and the rail, below the panel. Any tap
-            closes the panel and does nothing else. */}
-        {anyPanelOpen ? (
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setOpenPanel(null)}
-            accessibilityLabel="Close word mix"
-          />
-        ) : null}
-
-        <ActionRail
-          height={m.railHeight}
-          bottom={m.railBottom}
-          end={m.railEnd}
-          mixLabel={dominantLevel(mix)}
-          mixOpen={mixOpen}
-          saved={current ? saved.has(current.lemma_id) : false}
-          listCount={memberOf.length}
-          listOpen={listOpen}
-          onToggleMix={() => setOpenPanel(mixOpen ? null : 'mix')}
-          onToggleList={() => setOpenPanel(listOpen ? null : 'list')}
-          onFavourite={() => current && favourite(current)}
-          onShare={handleShare}
-        />
-
-        <MixPanel
-          draft={draftMix}
-          onChange={setDraftMix}
-          onDone={handleDone}
-          progress={panelAnim}
-          visible={mixOpen}
-          height={m.railHeight}
-          bottom={m.railBottom}
-          lane={m.railLane}
-        />
-
-        <ListPanel
-          word={current?.word ?? ''}
-          lists={wordLists}
-          memberOf={memberOf}
-          onToggle={(listId) => current && toggleList(current, listId)}
-          onCreate={handleCreateList}
-          loading={listsLoading}
-          progress={listAnim}
-          visible={listOpen}
-          height={m.railHeight}
-          bottom={m.railBottom}
-          lane={m.railLane}
-        />
       </View>
 
       <View style={[s.toastStrip, { height: m.toastStrip }]} pointerEvents="none">
@@ -427,6 +379,59 @@ export function ExploreScreen({
           inside the pager as a window onto the next word. It also puts the
           toast above the glass instead of behind it. */}
       <View style={{ height: m.barSpacer }} />
+
+      {/* Overlays, siblings of the whole column rather than children of the
+          list. They are pinned to the bottom bar — `railBottom` is measured
+          from the screen's bottom edge — and the card's frame stops a toast
+          strip short of that, so anchoring them inside `listArea` would park
+          them a strip too high and make the gap depend on the toast's size. */}
+      {anyPanelOpen ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setOpenPanel(null)}
+          accessibilityLabel="Close word mix"
+        />
+      ) : null}
+
+      <ActionRail
+        height={m.railHeight}
+        bottom={m.railBottom}
+        end={m.railEnd}
+        mixLabel={dominantLevel(mix)}
+        mixOpen={mixOpen}
+        saved={current ? saved.has(current.lemma_id) : false}
+        listCount={memberOf.length}
+        listOpen={listOpen}
+        onToggleMix={() => setOpenPanel(mixOpen ? null : 'mix')}
+        onToggleList={() => setOpenPanel(listOpen ? null : 'list')}
+        onFavourite={() => current && favourite(current)}
+        onShare={handleShare}
+      />
+
+      <MixPanel
+        draft={draftMix}
+        onChange={setDraftMix}
+        onDone={handleDone}
+        progress={panelAnim}
+        visible={mixOpen}
+        height={m.railHeight}
+        bottom={m.railBottom}
+        lane={m.railLane}
+      />
+
+      <ListPanel
+        word={current?.word ?? ''}
+        lists={wordLists}
+        memberOf={memberOf}
+        onToggle={(listId) => current && toggleList(current, listId)}
+        onCreate={handleCreateList}
+        loading={listsLoading}
+        progress={listAnim}
+        visible={listOpen}
+        height={m.railHeight}
+        bottom={m.railBottom}
+        lane={m.railLane}
+      />
     </View>
   );
 }
