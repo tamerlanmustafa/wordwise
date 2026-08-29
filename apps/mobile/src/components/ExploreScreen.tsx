@@ -8,7 +8,12 @@
  *   top spacer (Dynamic Island / status bar)
  *   FlatList — one WordCard per viewport, snapped
  *   toast strip (share failures only)
- *   [GlobalBottomBar is rendered by App.tsx below this]
+ *   bar spacer (the floating bottom bar's strip)
+ *   [GlobalBottomBar is rendered by App.tsx, floating over that last band]
+ *
+ * Those four bands tile the measured container exactly — see explore/metrics.
+ * The FlatList takes what is left over, so a band that is subtracted but not
+ * rendered turns straight into a sliver of the next card.
  *
  * The action rail floats over the list on the right. Two panels — the level
  * mix and add-to-list — slide in from the left into the same lane, stopping
@@ -122,14 +127,16 @@ export function ExploreScreen({
   // measured viewport, so a 4.7" phone gets a proportionally smaller rail
   // and lift instead of one tuned for a 6.7" screen.
   const m = useMemo(
-    // The root View now spans the full screen (the bar floats over it), so
-    // the bar's reserved height has to come off the viewport by hand — it is
-    // no longer subtracted for us by the flex layout.
+    // The root View spans the full screen (the bar floats over it), so the
+    // bar's strip is handed to the metrics as `bottomOffset` and comes back as
+    // `barSpacer`, a band this screen actually renders. Subtracting it here and
+    // *not* rendering it is what let the list window grow taller than a card.
     () =>
       exploreMetrics({
-        viewport: Math.max(0, available - bottomOffset),
+        viewport: available,
         width,
         topInset: insets.top,
+        bottomOffset,
       }),
     [available, bottomOffset, width, insets.top],
   );
@@ -413,6 +420,13 @@ export function ExploreScreen({
           </Animated.View>
         ) : null}
       </View>
+
+      {/* The bar's own strip. It has to be a real band in this column, not a
+          number subtracted from the card: `listArea` is flex:1 and takes
+          whatever the column has left, so anything not rendered here ends up
+          inside the pager as a window onto the next word. It also puts the
+          toast above the glass instead of behind it. */}
+      <View style={{ height: m.barSpacer }} />
     </View>
   );
 }

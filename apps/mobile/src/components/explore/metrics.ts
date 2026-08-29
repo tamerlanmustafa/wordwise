@@ -15,6 +15,12 @@
  *
  * Pure on purpose — the layout is a function of the viewport, so it can be
  * tested without rendering anything.
+ *
+ * The load-bearing property is that the bands it returns *tile* the container
+ * the screen measured: topSpacer + cardHeight + toastStrip + barSpacer is the
+ * viewport, exactly. One card is one card-height, so any slack left in that sum
+ * becomes a window onto the next card, and the feed stops being one word per
+ * screen.
  */
 
 /** Below this usable height a phone is "compact" (roughly 4.7"/5.5" class),
@@ -39,12 +45,29 @@ const LIFT_RATIO = 0.53;
 const RAIL_LANE_RATIO = 0.2;
 
 export interface ExploreMetricsInput {
-  /** Measured height available to the screen, i.e. above the tab bar. */
+  /**
+   * Measured height of the screen's own container — the whole thing, including
+   * the strip the floating bottom bar hovers over.
+   *
+   * This is deliberately the *container*, not some pre-trimmed number the
+   * caller worked out itself. When the bar became a floating overlay the caller
+   * subtracted the bar's height here and then laid the parts back into the full
+   * container, so the parts summed to less than the box they filled — and a
+   * FlatList given a window taller than its item shows the top of the next one.
+   * Feeding the raw container in and letting `barSpacer` come back out keeps
+   * that subtraction in one place, where the test can assert it.
+   */
   viewport: number;
   /** Screen width, for the rail lane. */
   width: number;
   /** Safe-area top inset. */
   topInset: number;
+  /**
+   * Height the floating bottom bar reserves. Explore is a snap pager, so the
+   * card stops above the bar rather than running under it (see ExploreScreen).
+   * Zero on the pinned bar, and before the bar has reported its height.
+   */
+  bottomOffset?: number;
 }
 
 export interface ExploreMetrics {
@@ -52,6 +75,9 @@ export interface ExploreMetrics {
   topSpacer: number;
   /** Reserved so the surface never reflows when a toast comes and goes. */
   toastStrip: number;
+  /** Clears the floating bottom bar. Mirrors `topSpacer` at the other end, so
+   *  the four bands laid out by the screen add up to the container exactly. */
+  barSpacer: number;
   /** One card = one viewport. */
   cardHeight: number;
   railHeight: number;
@@ -74,14 +100,20 @@ export function exploreMetrics({
   viewport,
   width,
   topInset,
+  bottomOffset = 0,
 }: ExploreMetricsInput): ExploreMetrics {
-  const compact = viewport < COMPACT_VIEWPORT;
+  // The bar's strip is spoken for before anything else is sized, so a phone
+  // whose *usable* height is compact gets the compact chrome even though its
+  // screen is not.
+  const barSpacer = Math.max(0, Math.min(bottomOffset, viewport));
+  const usable = viewport - barSpacer;
+  const compact = usable < COMPACT_VIEWPORT;
 
   // A device reporting a deeper inset (Dynamic Island) always wins over the
   // design floor — clearing the hardware matters more than the mockup.
   const topSpacer = Math.max(topInset, compact ? 44 : 62);
   const toastStrip = compact ? 38 : 46;
-  const cardHeight = Math.max(0, viewport - topSpacer - toastStrip);
+  const cardHeight = Math.max(0, usable - topSpacer - toastStrip);
 
   // The rail must fit inside the card area with room left for the word, so
   // both its height and its offset are clamped against the card, not just
@@ -94,6 +126,7 @@ export function exploreMetrics({
   return {
     topSpacer,
     toastStrip,
+    barSpacer,
     cardHeight,
     railHeight,
     railBottom,

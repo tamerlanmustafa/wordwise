@@ -86,8 +86,46 @@ describe('exploreMetrics — invariants across every device', () => {
   it('card height plus chrome always reconstructs the viewport', () => {
     for (const d of devices) {
       const m = exploreMetrics(d);
-      expect(m.cardHeight + m.topSpacer + m.toastStrip).toBe(d.viewport);
+      expect(m.cardHeight + m.topSpacer + m.toastStrip + m.barSpacer).toBe(d.viewport);
     }
+  });
+
+  it('still tiles the container once the floating bar reserves a strip', () => {
+    // The bug this pins: the bar's height used to be subtracted by the caller
+    // and then never rendered, so the four bands summed to 91pt less than the
+    // container they filled. The FlatList absorbed the slack and showed the
+    // top of the next word — its CEFR badge and part of speech — under the
+    // current one. Every band must come back out for the screen to render.
+    for (const d of devices) {
+      for (const bar of [0, 61, 91, 103]) {
+        const m = exploreMetrics({ ...d, bottomOffset: bar });
+        expect(m.barSpacer).toBe(bar);
+        expect(m.cardHeight + m.topSpacer + m.toastStrip + m.barSpacer).toBe(d.viewport);
+      }
+    }
+  });
+
+  it('gives one card the whole screen, never a sliver of the next', () => {
+    // A card is one card-height and the list window is whatever the column has
+    // left. They must be the same number, or the leftover is a peek-through.
+    const LARGE_PHONE = { viewport: 932, width: 430, topInset: 59 };
+    const m = exploreMetrics({ ...LARGE_PHONE, bottomOffset: 91 });
+    const listWindow = LARGE_PHONE.viewport - m.topSpacer - m.toastStrip - m.barSpacer;
+    expect(m.cardHeight).toBe(listWindow);
+  });
+
+  it('trims the chrome when the bar is what makes a phone compact', () => {
+    // 640pt of screen is roomy; 640 minus a 91pt bar is not. Compactness has
+    // to be judged on what is left after the bar, not on the raw screen.
+    const m = exploreMetrics({ viewport: 640, width: 375, topInset: 20, bottomOffset: 91 });
+    expect(m.topSpacer).toBe(44);
+    expect(m.toastStrip).toBe(38);
+  });
+
+  it('degrades safely if the bar reports more height than the screen', () => {
+    const m = exploreMetrics({ viewport: 60, width: 375, topInset: 20, bottomOffset: 91 });
+    expect(m.cardHeight).toBe(0);
+    expect(m.barSpacer).toBe(60);
   });
 
   it('honours a deep safe-area inset over the design floor', () => {
