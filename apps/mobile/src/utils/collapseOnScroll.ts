@@ -2,11 +2,11 @@
  * collapseOnScroll — direction-aware gate for anything that hides while the
  * user browses downward and comes back when they scroll up.
  *
- * Two things use it: the Home "Word of the Hour" card, and the Liquid Glass
- * bottom bar. Both want the same shape — collapse on a sustained downward
- * run, reveal on a sustained upward one, absorb momentum jitter in between,
- * and always show at the very top — but with different appetites for how much
- * travel commits each flip, so the thresholds are a parameter.
+ * One thing uses it today: the Home "Word of the Hour" card. It collapses on a
+ * sustained downward run, reveals on a sustained upward one, absorbs momentum
+ * jitter in between, and always shows at the very top. The bottom bar was the
+ * second caller until its shrink-on-scroll was removed — which is why the
+ * thresholds are still a parameter rather than inlined constants.
  *
  * Note the shape of the API: `makeCollapseReducer(thresholds)` returns a
  * *two-argument* reducer rather than `reduceCollapse` taking thresholds as a
@@ -44,22 +44,6 @@ export const WORD_CARD_THRESHOLDS: CollapseThresholds = {
   collapseRun: WORD_CARD_COLLAPSE_RUN,
   revealRun: WORD_CARD_REVEAL_RUN,
   topY: WORD_CARD_TOP_Y,
-};
-
-/**
- * The bottom bar retracts less eagerly than the word card and comes back far
- * more eagerly. Hiding navigation is more disruptive than hiding a card, so it
- * takes more downward intent to commit (40 vs 30); but an upward scroll is the
- * gesture people make when they are about to go somewhere else, so the bar is
- * back after ~a third of the card's travel (45 vs 120) rather than making them
- * fish for it. `minCollapseY` clears the first screenful so short lists never
- * hide the bar at all.
- */
-export const NAV_BAR_THRESHOLDS: CollapseThresholds = {
-  minCollapseY: 60,
-  collapseRun: 40,
-  revealRun: 45,
-  topY: 8,
 };
 
 export interface CollapseState {
@@ -104,6 +88,3 @@ export function makeCollapseReducer(t: CollapseThresholds) {
 
 /** The Home "Word of the Hour" card's gate. */
 export const reduceCollapse = makeCollapseReducer(WORD_CARD_THRESHOLDS);
-
-/** The Liquid Glass bottom bar's gate. */
-export const reduceNavBarCollapse = makeCollapseReducer(NAV_BAR_THRESHOLDS);

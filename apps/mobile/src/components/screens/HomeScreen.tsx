@@ -42,7 +42,6 @@ import {
 import { useFeedLevel } from '../../hooks/useFeedLevel';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
-import { useNavBarCollapse } from '../../hooks/useNavBarCollapse';
 
 // The Word-of-the-Hour card is HIDDEN on Home but kept intact so we can bring
 // it back: flip this to true to restore the card, its hourly re-fetch and the
@@ -59,9 +58,6 @@ interface Props {
   onSearch: (query: string) => void;
   user: any;
   targetLanguage: string;
-  /** True while Home is the visible tab. KeepAlive keeps it mounted, so a
-   *  background Home must not drive the shared bottom bar. */
-  active?: boolean;
   /** Height the floating bottom bar reserves, so the feed's last row can
    *  scroll clear of the glass. */
   bottomOffset?: number;
@@ -76,10 +72,8 @@ export const HomeScreen = ({
   onSearch,
   user,
   targetLanguage,
-  active = true,
   bottomOffset = 0,
 }: Props) => {
-  const navScroll = useNavBarCollapse(active);
   const { t } = useTranslation();
   const tc = useThemeColors();
   // The bell moved to the Profile sheet, but its unread state is still primed
@@ -142,11 +136,6 @@ export const HomeScreen = ({
   const collapseStateRef = useRef<CollapseState>(initialCollapseState);
   const handleFeedScroll = useCallback(
     (offsetY: number) => {
-      // The feed already reports its offset for the word card, so the bottom
-      // bar rides the same signal rather than attaching a second scroll
-      // listener to the same list. Above the word-card guard on purpose: the
-      // bar retracts whether or not the card is being shown.
-      navScroll.onScrollOffset(offsetY);
       // Nothing to collapse while the card is hidden.
       if (!SHOW_WORD_OF_THE_HOUR) return;
       const prev = collapseStateRef.current;
@@ -161,7 +150,7 @@ export const HomeScreen = ({
         useNativeDriver: false,
       }).start();
     },
-    [wordCollapse, navScroll],
+    [wordCollapse],
   );
 
   // A new level/sort re-queries the feed and snaps it back to the top, but the

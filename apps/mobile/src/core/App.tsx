@@ -865,7 +865,7 @@ export default function App() {
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
         <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} active={currentScreen === 'home'} bottomOffset={barHeight} />
+          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Explore keeps its place in KeepAlive so the feed doesn't lose
             its scroll position when the user dips into Profile. */}

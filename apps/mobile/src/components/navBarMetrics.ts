@@ -5,12 +5,14 @@
  * The old bar was a flex child: it took whatever height its content needed and
  * reported that upward via `onLayout`. It is now an absolute overlay, which
  * changes who needs to know its size — every scroller underneath has to
- * reserve room for it, and it has to reserve the *same* amount whether the bar
- * is shown or retracted. A measured height cannot do that: while retracted it
- * would measure as retracted, every screen would reflow its padding, and the
- * content would visibly jump each time the user scrolled down. So the reserved
- * height is computed and stays constant, and the retract is a pure transform
- * that does not touch layout at all.
+ * reserve room for it. The reserved height is arithmetic rather than a measured
+ * `onLayout` value, so it is known on the first frame instead of one pass late:
+ * a measured height arrives as 0, then jumps, and every screen reflows its
+ * bottom padding in front of the user.
+ *
+ * The bar is a fixed size. An earlier version shrank it on a downward scroll
+ * and this file carried a `minimizedScale`/`minimizedTranslateY` pair for that;
+ * both are gone, along with the store and scroll hook that drove them.
  *
  * Two shapes, because only iOS 26 gets the glass treatment:
  *
@@ -40,17 +42,6 @@ export const SIDE_MARGIN = 14;
 /** Clear space between the capsule and the content above it. */
 export const TOP_GAP = 8;
 
-/**
- * How much the capsule shrinks when the user browses downward. It minimizes
- * rather than leaving, the way iOS 26's own `tabBarMinimizeBehavior` does:
- * every tab stays on screen and stays tappable, so the user never loses sight
- * of where they are or has to fish the bar back to navigate. Anything much
- * below this starts to hurt the 10px labels, which are only rendered at
- * `0.85 × 10 = 8.5px` at rest here — crisp, because this is a transform on an
- * already-rendered view rather than a smaller font, but genuinely small.
- */
-export const MINIMIZED_SCALE = 0.85;
-
 /** The pinned bar's top padding — unchanged from the original bar. */
 const PINNED_PAD_TOP = 8;
 /** The pinned bar's minimum bottom padding — unchanged from the original. */
@@ -79,17 +70,9 @@ export interface NavBarMetrics {
   sideMargin: number;
   /**
    * Vertical space a scroller must leave free at its bottom so its last row
-   * clears the bar. Constant regardless of collapse state — see the note above.
+   * clears the bar.
    */
   reservedHeight: number;
-  /** Scale applied while minimized. 1 when the bar never minimizes (pinned). */
-  minimizedScale: number;
-  /**
-   * Nudge down that keeps the capsule's *bottom edge* planted while it scales
-   * about its centre. Without it the bar would appear to drift upward off the
-   * screen edge as it shrank, which reads as leaving rather than tucking away.
-   */
-  minimizedTranslateY: number;
   /** Corner radius. A true pill when floating, square when pinned. */
   radius: number;
   /** Padding inside the bar body, above the icons. */
@@ -108,10 +91,6 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
       bottomMargin: 0,
       sideMargin: 0,
       reservedHeight: barHeight,
-      // Android and iOS < 26 keep the bar they have always had: it does not
-      // minimize at all, so there is nothing to scale or nudge.
-      minimizedScale: 1,
-      minimizedTranslateY: 0,
       radius: 0,
       padTop: PINNED_PAD_TOP,
       padBottom,
@@ -125,10 +104,6 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
     bottomMargin,
     sideMargin: SIDE_MARGIN,
     reservedHeight: CAPSULE_HEIGHT + bottomMargin + TOP_GAP,
-    minimizedScale: MINIMIZED_SCALE,
-    // Half the height the scale takes off, pushing the capsule back down so
-    // its bottom edge lands where it already was.
-    minimizedTranslateY: (CAPSULE_HEIGHT * (1 - MINIMIZED_SCALE)) / 2,
     radius: CAPSULE_HEIGHT / 2,
     padTop: CAPSULE_PAD_V,
     padBottom: CAPSULE_PAD_V,

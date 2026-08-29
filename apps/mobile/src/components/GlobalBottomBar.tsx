@@ -5,24 +5,28 @@
  *
  * On iOS 26 this is a floating Liquid Glass capsule: inset from all three
  * edges, refracting the content that scrolls underneath it, with a gold lens
- * sliding between cells to mark the active tab, and retracting on a downward
- * browse. Everywhere else — Android, and every iOS below 26 — it is exactly
- * the bar it has always been: full width, pinned, opaque, content stopping
- * above it. That split is deliberate; see `useGlassAvailable` for the three
- * separate conditions and `navBarMetrics` for the two geometries.
+ * sliding between cells to mark the active tab. Everywhere else — Android, and
+ * every iOS below 26 — it is exactly the bar it has always been: full width,
+ * pinned, opaque, content stopping above it. That split is deliberate; see
+ * `useGlassAvailable` for the three separate conditions and `navBarMetrics`
+ * for the two geometries.
+ *
+ * The bar has a **fixed size** and never retracts or shrinks. It briefly
+ * minimized on a downward scroll (iOS 26's `tabBarMinimizeBehavior`); that was
+ * removed by request — navigation that changes size while you read is noise,
+ * and it cost a scroll listener on every tab to drive.
  *
  * The bar is an absolute overlay now, not a flex child, so it no longer takes
  * space from its siblings. It reports `reservedHeight` via `onHeightChange`
  * and every scroller underneath pads by that instead. The reported number is
- * computed, not measured, and stays constant while the bar retracts — a
- * measured height would shrink on retract and make all that content jump.
+ * computed, not measured — the two agree now that the bar is fixed, but the
+ * screens depend on it being stable, so keep it arithmetic.
  *
  * Icons follow the SVG paths in `tabs/my-movies.jsx → NavIcon` translated to
  * `react-native-svg` (stroke 1.9, 22px, rounded caps).
  *
- * The reel-flight landing target is reported from the Lists cell. Because the
- * bar can now be off screen, the rect is re-measured after every retract so a
- * poster never flies to where the bar used to be.
+ * The reel-flight landing target is reported from the Lists cell, measured
+ * from that cell's own layout.
  *
  * Width: five cells in the same bar leaves ~66px each at 320pt (SE). Labels
  * are 10px/800 and must not wrap — `__tests__/globalBottomBar.test.ts`
@@ -44,7 +48,6 @@ import { GlassView } from 'expo-glass-effect';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { useFlightStore } from '../stores/flightStore';
-import { useNavBarStore } from '../stores/navBarStore';
 import { useGlassAvailable } from '../hooks/useGlassAvailable';
 import {
   lensGeometry,
@@ -95,9 +98,6 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
   const m = useMemo(() => navBarMetrics(insets.bottom, glass), [insets.bottom, glass]);
   const s = useMemo(() => makeStyles(tc), [tc]);
   const setReelTabRect = useFlightStore((st) => st.setReelTabRect);
-  // Only the floating capsule retracts. The pinned bar stays put so nothing
-  // about Android's behaviour changes.
-  const collapsed = useNavBarStore((st) => st.collapsed) && m.floating;
 
   // The reel lives in Lists, so that cell is where a saved poster flies.
   // measureInWindow (not onLayout's local rect) because PosterFlight is an
@@ -112,49 +112,6 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
   useEffect(() => {
     onHeightChange?.(m.reservedHeight);
   }, [m.reservedHeight, onHeightChange]);
-
-  // ── Minimize on scroll ───────────────────────────────────────────────────
-  // The bar shrinks rather than leaving — iOS 26's `tabBarMinimizeBehavior`.
-  // Every tab stays on screen and stays tappable while minimized, so a user
-  // who wants to navigate mid-scroll never has to scroll back up to find the
-  // bar first. Transform only, so this runs on the native driver and never
-  // triggers a layout pass — which is what keeps `reservedHeight` honest.
-  const minimize = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(minimize, {
-      toValue: collapsed ? 1 : 0,
-      useNativeDriver: true,
-      damping: 22,
-      stiffness: 240,
-      mass: 0.9,
-    }).start(({ finished }) => {
-      // The Lists cell has moved; PosterFlight's target must follow it or a
-      // saved poster flies to the bar's old position.
-      if (finished) measureListsTab();
-    });
-  }, [collapsed, minimize, measureListsTab]);
-
-  const scale = minimize.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, m.minimizedScale],
-  });
-  const translateY = minimize.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, m.minimizedTranslateY],
-  });
-
-  // Touching any tab restores full size as well as navigating. The store is
-  // the one place `collapsed` lives, so expanding here and expanding from a
-  // scroll are the same operation — see `useNavBarCollapse`, which re-reads
-  // this value rather than trusting its own copy.
-  const expand = useNavBarStore((st) => st.reset);
-  const handlePress = useCallback(
-    (tab: BottomTab) => {
-      expand();
-      onTabPress(tab);
-    },
-    [expand, onTabPress],
-  );
 
   // ── Active-tab lens ──────────────────────────────────────────────────────
   // Cell frames come from each button's own onLayout rather than from
@@ -190,7 +147,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
   }, [lens, lensX]);
 
   return (
-    <Animated.View
+    <View
       // box-none so the inset margins around the capsule stay tappable by the
       // content underneath rather than swallowing touches into dead space.
       pointerEvents="box-none"
@@ -199,9 +156,6 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
         {
           paddingHorizontal: m.sideMargin,
           paddingBottom: m.bottomMargin,
-          // translateY before scale: the nudge is expressed in unscaled points
-          // and is meant to move the finished capsule, not be shrunk with it.
-          transform: [{ translateY }, { scale }],
         },
       ]}
     >
@@ -261,7 +215,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
               icon={tab.icon}
               label={t(`nav.${tab.labelKey}`)}
               isActive={active === tab.id}
-              onPress={() => handlePress(tab.id)}
+              onPress={() => onTabPress(tab.id)}
               onCellLayout={handleCellLayout}
               tc={tc}
               s={s}
@@ -271,7 +225,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
           ))}
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

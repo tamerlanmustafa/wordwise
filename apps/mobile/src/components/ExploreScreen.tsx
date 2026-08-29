@@ -43,7 +43,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
-import { useNavBarCollapse } from '../hooks/useNavBarCollapse';
 import { useWordFeedStore, PREFETCH_THRESHOLD, logFeedFlip } from '../stores/wordFeedStore';
 import { dominantLevel } from '../utils/levelMix';
 import type { FeedItem, LevelMix } from '../services/api';
@@ -65,13 +64,6 @@ interface Props {
    * *not* let content run under the glass: a card that extended behind the bar
    * would put its action rail underneath it, and there is no scrolling further
    * to bring it out. The bar's height comes off the viewport instead.
-   *
-   * The bar still minimizes on scroll here, on the same hook and thresholds as
-   * every other tab. It reveals nothing — the card is already sized to end
-   * above the bar — so this is consistency for its own sake, by choice: a bar
-   * that behaves differently on one tab reads as a bug to the user, and
-   * "correct but inconsistent" loses that argument. Expect it to pulse once
-   * per card, since a pager jumps a whole viewport per swipe.
    */
   bottomOffset?: number;
 }
@@ -82,7 +74,6 @@ export function ExploreScreen({
   targetLanguage,
   bottomOffset = 0,
 }: Props) {
-  const navScroll = useNavBarCollapse(active);
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
@@ -337,7 +328,6 @@ export function ExploreScreen({
             // The panel's scrim already blocks touches, but stopping the
             // list outright avoids a half-scrolled card behind it.
             scrollEnabled={!anyPanelOpen}
-            {...navScroll}
             ListEmptyComponent={
               loading ? <CardSkeleton height={cardHeight} s={s} /> : null
             }

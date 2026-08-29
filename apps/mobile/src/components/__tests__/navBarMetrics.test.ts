@@ -58,36 +58,6 @@ describe('navBarMetrics — floating (iOS 26 glass)', () => {
       expect(bottomMarginFor(inset)).toBeGreaterThanOrEqual(10);
     }
   });
-
-  it('shrinks rather than leaving — the bar stays on screen when minimized', () => {
-    const m = navBarMetrics(INSET_HOME_INDICATOR, true);
-    expect(m.minimizedScale).toBeLessThan(1);
-    expect(m.minimizedScale).toBeGreaterThan(0.5);
-    // The nudge is a few points, not a full bar-height slide off screen.
-    expect(m.minimizedTranslateY).toBeLessThan(m.barHeight / 2);
-  });
-
-  it('keeps every tab tappable while minimized', () => {
-    // The whole point of minimizing instead of hiding: a user mid-scroll can
-    // still navigate. Apple's 44pt minimum has to survive the scale.
-    const m = navBarMetrics(INSET_HOME_INDICATOR, true);
-    expect(m.barHeight * m.minimizedScale).toBeGreaterThanOrEqual(44);
-  });
-
-  it('plants the bottom edge so shrinking reads as tucking, not floating up', () => {
-    // Scaling happens about the centre, so the capsule would otherwise lift
-    // off the screen edge by half the height it loses. The nudge cancels it.
-    const m = navBarMetrics(INSET_HOME_INDICATOR, true);
-    const heightLost = m.barHeight * (1 - m.minimizedScale);
-    expect(m.minimizedTranslateY).toBeCloseTo(heightLost / 2, 5);
-  });
-
-  it('keeps the minimized capsule inside its side margins', () => {
-    // Scaling narrows it too, so it can only move further from the edges.
-    const m = navBarMetrics(INSET_HOME_INDICATOR, true);
-    expect(m.minimizedScale).toBeLessThanOrEqual(1);
-    expect(m.sideMargin).toBeGreaterThan(0);
-  });
 });
 
 describe('navBarMetrics — pinned (Android / iOS < 26)', () => {
@@ -97,14 +67,6 @@ describe('navBarMetrics — pinned (Android / iOS < 26)', () => {
     expect(m.bottomMargin).toBe(0);
     expect(m.sideMargin).toBe(0);
     expect(m.radius).toBe(0);
-  });
-
-  it('never minimizes — Android behaviour is unchanged from before the glass', () => {
-    for (const inset of [INSET_FLAT, INSET_ANDROID_GESTURE, INSET_HOME_INDICATOR]) {
-      const m = navBarMetrics(inset, false);
-      expect(m.minimizedScale).toBe(1);
-      expect(m.minimizedTranslateY).toBe(0);
-    }
   });
 
   it('keeps the original bar geometry — 8 top, >=18 bottom, honouring the inset', () => {

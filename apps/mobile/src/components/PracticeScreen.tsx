@@ -26,7 +26,6 @@ import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
-import { useNavBarCollapse } from '../hooks/useNavBarCollapse';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
 import { useReelStore } from '../stores/reelStore';
@@ -67,7 +66,6 @@ export function PracticeScreen({
   active = true,
   bottomOffset = 0,
 }: PracticeScreenProps) {
-  const navScroll = useNavBarCollapse(active);
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -232,7 +230,6 @@ export function PracticeScreen({
         style={{ flex: 1 }}
         contentContainerStyle={[s.scrollPad, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
-        {...navScroll}
       >
         {/* The tile chain — endless cycle of the 4 kinds. The active
             tile is at the cursor; the rest are completed (past) or
