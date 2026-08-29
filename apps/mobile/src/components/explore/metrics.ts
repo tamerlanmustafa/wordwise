@@ -22,12 +22,10 @@
  * becomes a window onto the next card, and the feed stops being one word per
  * screen.
  *
- * The rail's horizontal position is likewise not a free choice: it is centred
- * on the last tab of the bottom bar, so `railEnd` is derived from the bar's
- * cell grid (`lastTabCentreFromEnd`) rather than being a taste-based inset.
+ * The rail sits at a flat inset from the end edge, by choice: it was briefly
+ * centred on the bar's last tab, and the tighter alignment was not the look
+ * that was wanted. Keep it hugging the edge.
  */
-
-import { lastTabCentreFromEnd } from '../navBarMetrics';
 
 /** Below this usable height a phone is "compact" (roughly 4.7"/5.5" class),
  *  and the fixed chrome gets trimmed rather than eating the card. */
@@ -48,9 +46,9 @@ const RAIL_HEIGHT_RATIO = 0.43;
  * the bottom edge, and the distance between them should read the same on every
  * screen instead of growing with the phone.
  */
-const RAIL_GAP = 12;
-/** The same gap, trimmed on a compact screen — matches `railEnd`. */
-const RAIL_GAP_COMPACT = 8;
+const RAIL_GAP = 22;
+/** The same gap, trimmed on a compact screen, where there is less to spend. */
+const RAIL_GAP_COMPACT = 16;
 
 /** How far the lifting group rises, as a share of the rail's height —
  *  the rail and the panel are the same height, so tying the lift to it
@@ -93,12 +91,6 @@ export interface ExploreMetricsInput {
    * Zero on the pinned bar, and before the bar has reported its height.
    */
   bottomOffset?: number;
-  /**
-   * The bottom bar's own side inset — `SIDE_MARGIN` for the floating capsule,
-   * 0 for the pinned bar. Needed because the rail is aligned to the last tab,
-   * and where that tab sits depends on how far the bar is inset from the edge.
-   */
-  barSideMargin?: number;
 }
 
 export interface ExploreMetrics {
@@ -119,11 +111,8 @@ export interface ExploreMetrics {
    * the bottom bar, so they must share its frame of reference.
    */
   railBottom: number;
-  /**
-   * The rail's inset from the logical end edge, chosen so its 56pt button
-   * column is centred on the last tab of the bar below it. The rail and that
-   * tab read as one vertical column, so a few points out looks like a mistake.
-   */
+  /** The rail's inset from the logical end edge — it hugs the edge rather
+   *  than lining up with the bar's last tab. */
   railEnd: number;
   /** Card's end padding and the panel's end inset — the rail's lane. */
   railLane: number;
@@ -143,7 +132,6 @@ export function exploreMetrics({
   width,
   topInset,
   bottomOffset = 0,
-  barSideMargin = 0,
 }: ExploreMetricsInput): ExploreMetrics {
   // The bar's strip is spoken for before anything else is sized, so a phone
   // whose *usable* height is compact gets the compact chrome even though its
@@ -164,17 +152,13 @@ export function exploreMetrics({
   const railBottom = barSpacer + (compact ? RAIL_GAP_COMPACT : RAIL_GAP);
   const cardLift = scale(railHeight * LIFT_RATIO, 96, 150);
 
-  // Centre the button column on the last tab. Floored at 0 so a freakishly
-  // narrow screen pulls the rail flush to the edge rather than off it.
-  const railEnd = Math.max(
-    0,
-    Math.round(lastTabCentreFromEnd(width, barSideMargin) - RAIL_ITEM_WIDTH / 2),
-  );
+  const railEnd = compact ? 6 : 10;
 
-  // The lane has to clear the rail wherever the alignment puts it, so the
-  // ratio is only a floor. Deriving it from `railEnd` rather than hoping a
-  // 20%-of-width guess still covers the column keeps the two from drifting
-  // apart the next time either moves.
+  // The lane has to clear the rail wherever it sits, so the ratio is only a
+  // floor. Deriving it from `railEnd` rather than hoping a 20%-of-width guess
+  // still covers the column keeps the two from drifting apart the next time
+  // either moves — which is exactly what happened when the rail was briefly
+  // pulled inboard and the lane, left on the ratio, had 0.6pt of slack.
   const railLane = Math.max(
     scale(width * RAIL_LANE_RATIO, 66, 84),
     railEnd + RAIL_ITEM_WIDTH + RAIL_LANE_GUTTER,
