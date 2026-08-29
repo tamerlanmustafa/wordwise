@@ -169,6 +169,27 @@ export function peekNextIndex(state: DeckState): number {
 }
 
 /**
+ * The cards the deck keeps warm — fetched before anyone taps them — in the
+ * order the reader will reach them: the focused card, then the one behind it.
+ *
+ * Two, not one: warming only the focused card leaves every advance waiting on
+ * a request, and warming further ahead buys nothing a reader can reach before
+ * the next window is computed. At two, the incoming card after an advance is
+ * always already warm, so the steady-state cost is one fetch per advance —
+ * exactly what a tap used to cost, moved earlier.
+ *
+ * Deduped: a one-card deck warms one card, and on the last card of a deck the
+ * wrap-around target is the already-warm first card.
+ */
+export function warmWindowKeys(state: DeckState): string[] {
+  if (state.index < 0 || state.keys.length === 0) return [];
+  const focused = state.keys[state.index];
+  const nextIndex = peekNextIndex(state);
+  const next = nextIndex >= 0 ? state.keys[nextIndex] : null;
+  return next != null && next !== focused ? [focused, next] : [focused];
+}
+
+/**
  * The card that gets focus after `removedKey` is marked learned — used to
  * write the implicit resume bookmark before the parent's item list catches up.
  */

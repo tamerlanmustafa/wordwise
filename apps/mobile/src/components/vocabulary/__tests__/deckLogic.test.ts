@@ -2,6 +2,7 @@ import {
   deckReducer,
   restoreDeck,
   promotedKeyAfterRemoval,
+  warmWindowKeys,
   swipeDecision,
   shouldClaimHorizontalDrag,
   parseViewMode,
@@ -125,6 +126,42 @@ describe('promotedKeyAfterRemoval', () => {
 
   it('returns null when the removal empties the deck', () => {
     expect(promotedKeyAfterRemoval({ keys: ['hollow'], index: 0 }, 'hollow')).toBeNull();
+  });
+});
+
+describe('warmWindowKeys (prefetch one card ahead)', () => {
+  it('warms the focused card and the one behind it, in reading order', () => {
+    expect(warmWindowKeys({ keys: KEYS, index: 1 })).toEqual(['brittle', 'run out of']);
+  });
+
+  it('wraps the window to the first card when the last one is focused', () => {
+    expect(warmWindowKeys({ keys: KEYS, index: 3 })).toEqual(['grim', 'hollow']);
+  });
+
+  it('warms one card in a one-card deck rather than warming it twice', () => {
+    expect(warmWindowKeys({ keys: ['hollow'], index: 0 })).toEqual(['hollow']);
+  });
+
+  it('warms nothing in an empty deck', () => {
+    expect(warmWindowKeys({ keys: [], index: -1 })).toEqual([]);
+  });
+
+  // The cost argument for warming two: every advance's incoming card was
+  // already in the previous window, so only ONE key per advance is new.
+  it('introduces exactly one new key per advance', () => {
+    let state: DeckState = { keys: KEYS, index: 0 };
+    const warmed = new Set(warmWindowKeys(state));
+    expect(warmed.size).toBe(2);
+    for (let i = 0; i < KEYS.length * 2; i++) {
+      state = deckReducer(state, { type: 'advance' });
+      const fresh = warmWindowKeys(state).filter((k) => !warmed.has(k));
+      expect(fresh.length).toBeLessThanOrEqual(1);
+      // The card that just took focus is never one of the fresh ones — it was
+      // warmed as "next" before the advance, which is why the tap is instant.
+      expect(fresh).not.toContain(state.keys[state.index]);
+      fresh.forEach((k) => warmed.add(k));
+    }
+    expect(warmed.size).toBe(KEYS.length);
   });
 });
 

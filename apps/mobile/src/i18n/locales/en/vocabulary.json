@@ -12,7 +12,7 @@
   },
   "deck": {
     "empty": "No words in this deck yet.",
-    "noExampleInScript": "No example in this script",
+    "noExample": "No example sentence yet",
     "noTranslation": "No translation available",
     "tapToReveal": "TAP TO REVEAL",
     "tapToHide": "TAP TO HIDE",

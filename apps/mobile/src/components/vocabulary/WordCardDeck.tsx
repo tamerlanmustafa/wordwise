@@ -37,6 +37,7 @@ import {
   swipeDecision,
   shouldClaimHorizontalDrag,
   promotedKeyAfterRemoval,
+  warmWindowKeys,
   STACK_SLOTS,
   type StackSlot,
 } from './deckLogic';
@@ -282,6 +283,12 @@ const FLY_ROTATE_DEG = 7;
 const ARRIVE_DURATION = 250;
 const DRAG_CLAMP = 160;
 const UNDO_STACK_MAX = 20;
+/**
+ * How long a card must hold focus before the deck warms it and the one behind
+ * it. Every focus change re-arms the timer, so flicking through twenty cards
+ * costs nothing — only a card the reader actually stopped on is fetched.
+ */
+const WARM_SETTLE_MS = 600;
 /** How long the resume note stays up before fading itself out. */
 const RESUME_CHIP_MS = 3200;
 
@@ -540,6 +547,19 @@ export const WordCardDeck = ({
   const [reportOpen, setReportOpen] = useState(false);
   const [playingAudio, setPlayingAudio] = useState(false);
 
+  // Read from inside timers and callbacks without making the cache a
+  // dependency that would re-arm the warm timer on every fetch that lands.
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  /** Terms with a request already out. The tap, the warm window and a
+   *  double-tap all funnel through loadContent, and only one may fire. */
+  const inFlightRef = useRef<Set<string>>(new Set());
+  /** Cards the reader has actually tapped. A warmed card holds its batch
+   *  preview sentence until then, so warming stays invisible: the text on a
+   *  card sitting still never changes under the reader, and the fly-away
+   *  overlay (which renders from the previews alone) still matches it. */
+  const revealedRef = useRef<Set<string>>(new Set());
+
   /** Detach the focused card into a fly-away overlay (skipped under Reduce
    *  Motion, where the swap is instant). */
   const pushOutgoing = (dir: 1 | -1, startX: number) => {
@@ -677,27 +697,31 @@ export const WordCardDeck = ({
     }),
   ).current;
 
-  // Tap → reveal BOTH translations together, in place. The sentence endpoint
-  // returns the sentence, its translation, AND the word gloss aligned to that
-  // translation (word_translation) — so the gloss matches the sentence and,
-  // once cached server-side, the reveal costs nothing to repeat. We only fall
-  // back to a standalone translate() call when no aligned gloss is available
-  // (idioms, words with no example, or alignment unavailable). Gated behind
-  // the per-word cache; never prefetches the rest of the deck.
-  const handleCardPress = () => {
-    if (currentKey == null || currentItem == null) return;
-    const term = currentKey;
-    if (expandedKey === term) {
-      setExpandedKey(null);
-      return;
-    }
-    setExpandedKey(term);
-    if (isAuthenticated) {
-      wordwiseApi.logInteraction(term, 'ROW_CLICK', movieId);
-    }
-    if (content[term]) return;
+  /**
+   * Fetch a card's reveal payload into the per-word cache — BOTH translations
+   * together, so the tap can cross-fade them in one motion. The sentence
+   * endpoint returns the sentence, its translation, AND the word gloss aligned
+   * to that translation (word_translation), so the gloss matches the sentence
+   * and, once cached server-side, the reveal costs nothing to repeat. We only
+   * fall back to a standalone translate() call when no aligned gloss is
+   * available (idioms, words with no example, or alignment unavailable).
+   *
+   * Safe to call for a card nobody has tapped: it is the exact request the tap
+   * would have made, so warming a card the reader goes on to reveal is free,
+   * and warming one they swipe past costs what revealing it would have.
+   * Idempotent — a card already cached or already in flight is a no-op.
+   *
+   * `warm` marks a speculative call. It changes exactly one thing: a warm fetch
+   * that comes back with NOTHING (offline, dropped request) leaves the cache
+   * empty so the reader's eventual tap retries, where a tap's own failure is
+   * cached and shown as "Translation failed". Without that split, one dead
+   * request would poison a card the reader has not even reached yet.
+   */
+  const loadContent = (term: string, item: DeckItem, warm = false) => {
+    if (contentRef.current[term] || inFlightRef.current.has(term)) return;
+    inFlightRef.current.add(term);
 
-    const isIdiom = isIdiomItem(currentItem);
+    const isIdiom = isIdiomItem(item);
     // Context for the fallback translate(): the example sentence shown on the
     // card, so even the fallback biases toward the in-sentence sense.
     const contextSentence = !isIdiom
@@ -705,40 +729,68 @@ export const WordCardDeck = ({
       : undefined;
 
     (async () => {
-      let enrichment: SentenceExample | null = null;
-      if (movieId) {
-        const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
-        try {
-          const res = await authFetch(
-            `${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(term)}?max_examples=1${langParam}`,
-          );
-          const data = await res.json();
-          if (data.sentences && Array.isArray(data.sentences) && data.sentences.length > 0) {
-            enrichment = data.sentences[0];
-          }
-        } catch {}
-      }
-
-      // Prefer the aligned gloss; only pay for a standalone translation when
-      // the server couldn't provide one.
-      let translation: string | null = enrichment?.word_translation ?? null;
-      if (!translation) {
-        try {
-          const result = await wordwiseApi.translate(
-            term,
-            targetLang || 'ES',
-            undefined,
-            movieId,
-            contextSentence,
-          );
-          translation = result.translated;
-        } catch {
-          translation = 'Translation failed';
+      try {
+        let enrichment: SentenceExample | null = null;
+        if (movieId) {
+          const langParam = targetLang ? `&target_lang=${encodeURIComponent(targetLang)}` : '';
+          try {
+            const res = await authFetch(
+              `${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/${encodeURIComponent(term)}?max_examples=1${langParam}`,
+            );
+            const data = await res.json();
+            if (data.sentences && Array.isArray(data.sentences) && data.sentences.length > 0) {
+              enrichment = data.sentences[0];
+            }
+          } catch {}
         }
-      }
 
-      setContent((prev) => ({ ...prev, [term]: { translation, enrichment, loaded: true } }));
+        // Prefer the aligned gloss; only pay for a standalone translation when
+        // the server couldn't provide one.
+        let translation: string | null = enrichment?.word_translation ?? null;
+        let failed = false;
+        if (!translation) {
+          try {
+            const result = await wordwiseApi.translate(
+              term,
+              targetLang || 'ES',
+              undefined,
+              movieId,
+              contextSentence,
+            );
+            translation = result.translated;
+          } catch {
+            translation = 'Translation failed';
+            failed = true;
+          }
+        }
+
+        if (warm && failed && enrichment == null) return;
+        setContent((prev) => ({ ...prev, [term]: { translation, enrichment, loaded: true } }));
+      } finally {
+        // Failure clears the flag too, so the next tap can retry rather than
+        // leaving the card permanently stuck on its dashed placeholders.
+        inFlightRef.current.delete(term);
+      }
     })();
+  };
+  const loadContentRef = useRef(loadContent);
+  loadContentRef.current = loadContent;
+
+  // Tap → reveal in place. Usually the fetch already finished (the warm window
+  // below), so the cross-fade runs on the same frame as the tap.
+  const handleCardPress = () => {
+    if (currentKey == null || currentItem == null) return;
+    const term = currentKey;
+    if (expandedKey === term) {
+      setExpandedKey(null);
+      return;
+    }
+    revealedRef.current.add(term);
+    setExpandedKey(term);
+    if (isAuthenticated) {
+      wordwiseApi.logInteraction(term, 'ROW_CLICK', movieId);
+    }
+    loadContent(term, currentItem);
   };
 
   const cardContent = currentKey != null ? content[currentKey] : undefined;
@@ -762,6 +814,38 @@ export const WordCardDeck = ({
       useNativeDriver: true,
     }).start();
   }, [revealOn, focusedKey]);
+
+  // ── Warm window: the focused card + the one behind it ────────────────────
+  // Explore feels instant because /srs/feed batch-translates a whole page and
+  // ships the translations inside the page, so a tap there costs no network.
+  // The deck can't batch that way — each card is its own movie-scoped
+  // enrichment call — so it moves the work earlier instead: by the time a
+  // thumb lands, the request is already done.
+  //
+  // Warming TWO cards rather than one is what bounds the cost. After the first
+  // advance the incoming card is always already warm, so steady state is ONE
+  // request per advance — the same request the tap used to make, just earlier.
+  // The ceiling for a reader who swipes past everything without revealing is
+  // therefore the same as for one who reveals every card.
+  const warmKeys = warmWindowKeys(displayDeck);
+  const warmKeysRef = useRef(warmKeys);
+  warmKeysRef.current = warmKeys;
+  const itemByKeyRef = useRef(itemByKey);
+  itemByKeyRef.current = itemByKey;
+  // Depend on the window's contents, not the array's identity: the parent
+  // rebuilds `items` every time a batch of sentence previews resolves, and
+  // re-arming this timer on each of those would push the fetch out behind them.
+  const [warmFocus = '', warmNext = ''] = warmKeys;
+  useEffect(() => {
+    if (!warmFocus) return;
+    const id = setTimeout(() => {
+      for (const key of warmKeysRef.current) {
+        const item = itemByKeyRef.current.get(key);
+        if (item) loadContentRef.current(key, item, true);
+      }
+    }, WARM_SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [warmFocus, warmNext]);
 
   const handlePronounce = async () => {
     if (playingAudio || currentKey == null) return;
@@ -804,9 +888,18 @@ export const WordCardDeck = ({
 
   // Same source-of-truth swap as VocabRow: batch preview while hidden,
   // enrichment sentence once it has loaded. Idioms only get the enrichment.
+  //
+  // The swap waits for the reader's first tap, not merely for the fetch: since
+  // the warm window loads cards nobody has touched, keying it off contentLoaded
+  // alone would let a card's sentence change while it sits still on screen —
+  // and would desync it from the fly-away overlay, which renders from the batch
+  // previews. Both endpoints rank SentenceBank with the same key, so this is a
+  // guard against them ever drifting, not a papered-over difference.
   const preview = !idiom ? sentencePreviews[currentKey] : undefined;
   const collapsedSentence = preview && preview.sentence ? preview : null;
-  const visibleSentence = contentLoaded && enrichment ? enrichment : collapsedSentence;
+  const revealedOnce = revealedRef.current.has(currentKey);
+  const visibleSentence =
+    contentLoaded && enrichment && revealedOnce ? enrichment : collapsedSentence;
   const previewLoading = !idiom && preview === undefined;
   const sentenceTranslation = contentLoaded ? enrichment?.translation || null : null;
 
@@ -889,7 +982,7 @@ export const WordCardDeck = ({
               <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
             </View>
           ) : (
-            <Text style={s.noExamples}>{t('vocabulary:deck.noExampleInScript')}</Text>
+            <Text style={s.noExamples}>{t('vocabulary:deck.noExample')}</Text>
           )}
         </View>
         <View style={s.sentenceTrSlot}>
@@ -1071,7 +1164,7 @@ export const WordCardDeck = ({
                   <View style={[s.skelBar, { width: '64%', marginTop: 7 }]} />
                 </View>
               ) : (
-                <Text style={s.noExamples}>{t('vocabulary:deck.noExampleInScript')}</Text>
+                <Text style={s.noExamples}>{t('vocabulary:deck.noExample')}</Text>
               )}
             </View>
 

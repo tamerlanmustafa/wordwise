@@ -12,7 +12,7 @@
   },
   "deck": {
     "empty": "لا توجد كلمات في هذه المجموعة بعد.",
-    "noExampleInScript": "لا يوجد مثال في هذا النص",
+    "noExample": "لا توجد جملة مثال بعد",
     "noTranslation": "لا تتوفر ترجمة",
     "tapToReveal": "اضغط للكشف",
     "tapToHide": "اضغط للإخفاء",

@@ -64,6 +64,7 @@ import {
   type StoredMovieBookmark,
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
+import { hasRenderableSentence, itemKey } from '../vocabulary/sentencePreviews';
 import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
@@ -781,18 +782,21 @@ export const MovieDetailScreen = ({
 
   // ── Card-deck view mode (Ledger Reveal, mockup 1a) ───────────────────────
   // The deck is fed the active tab's items after the level filter, sort, and
-  // learned removal — and NOTHING else: the fixed-slot card steps long
-  // content down a type tier instead of filtering it out, and words whose
-  // example sentence is missing show an in-card placeholder. Unlike the rows
-  // (~100 mounts, hence the deferred inputs) the deck renders a couple of
-  // cards, so it reads the urgent values — with the deferred ones, the frame
-  // that lifts the loading splash showed an empty deck until the
-  // low-priority render caught up.
+  // learned removal, then the same renderable-sentence filter the rows apply:
+  // long content steps down a type tier rather than being dropped, but a word
+  // with no AI-authored example has an empty sentence slot and no card worth
+  // showing. Unlike the rows (~100 mounts, hence the deferred inputs) the deck
+  // renders a couple of cards, so it reads the urgent values — with the
+  // deferred ones, the frame that lifts the loading splash showed an empty
+  // deck until the low-priority render caught up.
   const deckItems = useMemo<RowItem[]>(
-    () => (wordsView === 'foryou' ? suggestedVisible : activeItems),
+    () =>
+      (wordsView === 'foryou' ? suggestedVisible : activeItems).filter((item) =>
+        hasRenderableSentence(itemKey(item), sentencePreviews),
+      ),
     // suggestedVisible is an unmemoized slice; depend on its memoized source.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wordsView, suggestedWords, activeItems],
+    [wordsView, suggestedWords, activeItems, sentencePreviews],
   );
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
@@ -1071,12 +1075,7 @@ export const MovieDetailScreen = ({
               <>
                 {deferredSuggestedVisible
                   .slice(0, renderLimit)
-                  .filter((item) => {
-                    if (isIdiom(item)) return true;
-                    const entry = sentencePreviews[item.word];
-                    if (!entry) return true; // still loading → keep skeleton
-                    return !!entry.sentence; // confirmed miss → hide
-                  })
+                  .filter((item) => hasRenderableSentence(itemKey(item), sentencePreviews))
                   .map((item, index) => {
                   if (isIdiom(item)) {
                     const key = item.phrase;
@@ -1154,12 +1153,7 @@ export const MovieDetailScreen = ({
             ) : (
               deferredActiveItems
                 .slice(0, renderLimit)
-                .filter((item) => {
-                  if (isIdiom(item)) return true;
-                  const entry = sentencePreviews[item.word];
-                  if (!entry) return true; // still loading → keep skeleton
-                  return !!entry.sentence; // confirmed miss → hide
-                })
+                .filter((item) => hasRenderableSentence(itemKey(item), sentencePreviews))
                 .map((item, index) => {
                 if (isIdiom(item)) {
                   const key = item.phrase;
