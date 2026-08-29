@@ -1,5 +1,6 @@
 import React, { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   Animated,
   Easing,
@@ -13,6 +14,7 @@ import {
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,9 +68,11 @@ import {
 } from '../vocabulary/deckLogic';
 import { hasRenderableSentence, isTopItemReady, itemKey } from '../vocabulary/sentencePreviews';
 import {
+  doorGeometry,
   isSplashUp,
+  DOOR_OPEN_MS,
   SENTENCE_WARMUP_MAX_MS,
-  SPLASH_MIN_MS,
+  SPLASH_HOLD_MS,
 } from './splashGate';
 import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
@@ -121,15 +125,18 @@ export const MovieDetailScreen = ({
   const [loading, setLoading] = useState(true);
   // The other two splash holds — see splashGate.ts and the effects below. The
   // wordmark covers BOTH the vocabulary fetch and the sentence batch it starts
-  // (so the first card is finished, not merely mounted, when it lifts) and
-  // stays up for SPLASH_MIN_MS regardless, so a cache hit doesn't flash it.
+  // (so the first card is finished, not merely mounted, when it parts) and
+  // holds for SPLASH_HOLD_MS regardless, so a cache hit doesn't flash it.
   const [sentencesWarm, setSentencesWarm] = useState(false);
   const [splashFloorElapsed, setSplashFloorElapsed] = useState(false);
-  const splashVisible = isSplashUp({
+  const splashHolding = isSplashUp({
     loading,
     sentencesWarm,
     floorElapsed: splashFloorElapsed,
   });
+  // …and `splashMounted` outlives that by the length of the doors' slide: the
+  // gate says when to START opening, not when the splash is gone.
+  const [splashMounted, setSplashMounted] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
@@ -197,15 +204,47 @@ export const MovieDetailScreen = ({
   // rather than adding to it: a cold open never notices this, and a cached
   // one stops flashing the wordmark for a handful of frames.
   useEffect(() => {
-    const id = setTimeout(() => setSplashFloorElapsed(true), SPLASH_MIN_MS);
+    const id = setTimeout(() => setSplashFloorElapsed(true), SPLASH_HOLD_MS);
     return () => clearTimeout(id);
   }, []);
 
-  // Splash "WW" pulse — the loading indicator: the wordmark breathes
-  // (scales up and down) until the first card is ready to read.
+  // Reduce Motion swaps the doors' slide for a fade — two full-screen panels
+  // travelling in opposite directions is exactly the motion the setting is for.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => mounted && setReduceMotion(v));
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Sliding-doors reveal. One value drives both halves so they can never drift
+  // apart by a frame; the doors are the last DOOR_OPEN_MS of the minimum
+  // second, not an extra slice after it.
+  const splashExit = useRef(new Animated.Value(0)).current;
+  const doorsStartedRef = useRef(false);
+  useEffect(() => {
+    if (splashHolding || doorsStartedRef.current) return;
+    doorsStartedRef.current = true;
+    Animated.timing(splashExit, {
+      toValue: 1,
+      duration: reduceMotion ? DOOR_OPEN_MS / 2 : DOOR_OPEN_MS,
+      // Material's accelerate curve: an exit is not watched to a stop, so it
+      // leaves gently and gathers speed off-screen.
+      easing: Easing.bezier(0.4, 0, 1, 1),
+      useNativeDriver: true,
+    // Unmount even on an interrupted run — a stranded splash is worse than a
+    // clipped animation.
+    }).start(() => setSplashMounted(false));
+  }, [splashHolding, reduceMotion, splashExit]);
+
+  // Splash "WW" pulse — the loading indicator: the wordmark breathes (scales
+  // up and down). It keeps breathing through the split rather than freezing
+  // the instant the gate clears, so the two halves leave alive.
   const splashPulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!splashVisible) return;
+    if (!splashMounted) return;
     splashPulse.setValue(0);
     const anim = Animated.loop(
       Animated.sequence([
@@ -225,11 +264,58 @@ export const MovieDetailScreen = ({
     );
     anim.start();
     return () => anim.stop();
-  }, [splashVisible, splashPulse]);
-  const splashScale = splashPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.88, 1.1],
-  });
+  }, [splashMounted, splashPulse]);
+  // One interpolation per door. Both read the same `splashPulse`, so the two
+  // halves of the wordmark breathe identically — but an animated node is
+  // attached to a single view, so they cannot be the same node.
+  const splashScaleFor = () =>
+    splashPulse.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.1] });
+
+  // Door geometry — see splashGate.doorGeometry. Each door renders the SAME
+  // full-screen face and clips it to its own half, so the two halves of the
+  // wordmark line up because there is only one layout, and the "WW" comes
+  // apart cleanly because the seam falls between the two letters.
+  const { width: screenW } = useWindowDimensions();
+  const doors = doorGeometry(screenW);
+  const doorExit = (to: number) =>
+    splashExit.interpolate({ inputRange: [0, 1], outputRange: [0, to] });
+  const doorFade = () => splashExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const doorMotion = (travel: number) =>
+    reduceMotion ? { opacity: doorFade() } : { transform: [{ translateX: doorExit(travel) }] };
+
+  /** The splash's full-screen face, drawn once per door behind its clip. */
+  const renderSplashFace = (scale: Animated.AnimatedInterpolation<number>) => (
+    <>
+      <Pressable
+        onPress={onBack}
+        style={[
+          backBtnStyles.backBtn,
+          splashStyles.backBtn,
+          { backgroundColor: tc.chipBg, borderColor: tc.border },
+        ]}
+        hitSlop={8}
+      >
+        <Ionicons name={directionalIcon('chevron-back')} size={19} color={tc.textSecondary} />
+      </Pressable>
+      <Animated.View
+        style={{ transform: [{ perspective: 600 }, { rotateX: '16deg' }, { scale }] }}
+      >
+        {WW_EXTRUDE_DEPTHS.map((depth) => (
+          <Text
+            key={depth}
+            style={[
+              splashStyles.mark,
+              splashStyles.markLayer,
+              { color: tc.goldDeep, top: depth, left: depth },
+            ]}
+          >
+            WW
+          </Text>
+        ))}
+        <Text style={[splashStyles.mark, { color: tc.gold }]}>WW</Text>
+      </Animated.View>
+    </>
+  );
 
   useEffect(() => {
     if (prevLevelRef.current !== activeLevel) {
@@ -1359,40 +1445,32 @@ export const MovieDetailScreen = ({
 
       {/* Loading splash — a pulsing extruded "WW" wordmark centered on the
           default app background. Stacked offset text layers fake the 3D
-          extrusion; a perspective/rotateX tilt sells the depth. Sits above
-          everything; onBack stays reachable via the chip. */}
-      {splashVisible ? (
-        <View style={[splashStyles.wrap, { backgroundColor: tc.background }]} pointerEvents="auto">
-          <Pressable
-            onPress={onBack}
-            style={[
-              backBtnStyles.backBtn,
-              splashStyles.backBtn,
-              { backgroundColor: tc.chipBg, borderColor: tc.border },
-            ]}
-            hitSlop={8}
-          >
-            <Ionicons name={directionalIcon('chevron-back')} size={19} color={tc.textSecondary} />
-          </Pressable>
-          <Animated.View
-            style={{
-              transform: [{ perspective: 600 }, { rotateX: '16deg' }, { scale: splashScale }],
-            }}
-          >
-            {WW_EXTRUDE_DEPTHS.map((depth) => (
-              <Text
-                key={depth}
+          extrusion; a perspective/rotateX tilt sells the depth.
+          Two doors that part down the middle to uncover the movie screen,
+          which has been mounted and laid out behind them the whole time.
+          Interaction passes through the moment they start opening; onBack
+          stays reachable via the chip until then. */}
+      {splashMounted ? (
+        <View style={splashStyles.wrap} pointerEvents={splashHolding ? 'auto' : 'none'}>
+          {[doors.left, doors.right].map((half, i) => (
+            <Animated.View
+              key={i}
+              style={[
+                splashStyles.door,
+                { left: half.left, width: half.width },
+                doorMotion(half.travel),
+              ]}
+            >
+              <View
                 style={[
-                  splashStyles.mark,
-                  splashStyles.markLayer,
-                  { color: tc.goldDeep, top: depth, left: depth },
+                  splashStyles.doorFace,
+                  { left: half.faceLeft, width: screenW, backgroundColor: tc.background },
                 ]}
               >
-                WW
-              </Text>
-            ))}
-            <Text style={[splashStyles.mark, { color: tc.gold }]}>WW</Text>
-          </Animated.View>
+                {renderSplashFace(splashScaleFor())}
+              </View>
+            </Animated.View>
+          ))}
         </View>
       ) : null}
 
@@ -1405,9 +1483,25 @@ export const MovieDetailScreen = ({
 const WW_EXTRUDE_DEPTHS = [7, 6, 5, 4, 3, 2, 1];
 
 const splashStyles = StyleSheet.create({
+  // Transparent: the doors carry the background, so whatever they uncover is
+  // the real screen and not another opaque layer.
   wrap: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
+  },
+  /** Half the screen, clipping its face to that half. */
+  door: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  /** Full-screen face inside a door, offset so it sits where it would if the
+   *  splash were one undivided view. Centering lives here, not on `wrap`. */
+  doorFace: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -352,7 +352,15 @@ describe('absolute positioning uses logical offsets', () => {
   // land on the right cell under RTL — `start` would anchor it to the opposite
   // edge and send the translate the wrong way. See `lensGeometry`, which
   // exists precisely so this is measured rather than derived from tab index.
+  // splashGate joins for the same reason, one step further removed: its
+  // `left` is not a style at all but a field on a geometry record, fed to a
+  // physical `translateX`. The splash splits down the CENTRE, so the layout is
+  // mirror-symmetric — flipping it under RTL produces the identical picture —
+  // and `start`/`end` would imply a reading-order meaning the doors do not
+  // have. See `doorGeometry`, which exists so this arithmetic is tested rather
+  // than eyeballed.
   const GEOMETRIC = [
+    'components/screens/splashGate.ts',
     'components/GlobalBottomBar.tsx',
     'components/PosterFlight.tsx',
     'components/journey/JourneyNode.tsx',
