@@ -8,6 +8,10 @@
  * surfaces, gold accents, serif identity name, and stroked SVG icons in
  * circular chips — matching HomeHeader / My Movies / the bottom bar (which
  * uses gold for its active tab). No emoji.
+ *
+ * Most navigation rows are hidden for now — see `userMenuRows.ts`. They are
+ * hidden, not removed: the props, handlers and screens behind them are all
+ * still wired, so restoring one means editing that list, nothing here.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -29,6 +33,7 @@ import {
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { visibleMenuRows, type MenuRowKey } from './userMenuRows';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -45,8 +50,8 @@ interface Props {
   onNavigateToStats: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToLeaderboard: () => void;
-  /** Opens NotificationsSheet. This menu is the only entry point since the
-   *  bell left the Home header. */
+  /** Opens NotificationsSheet. Wired but currently unreachable — the row is
+   *  in HIDDEN_MENU_ROWS, and the Home header's bell is already gone. */
   onNavigateToNotifications: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
@@ -107,38 +112,43 @@ export function UserMenuSheet({
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
 
-  const navItems: {
+  // Every row this sheet knows how to draw, whether or not it is currently
+  // shown. `visibleMenuRows` (userMenuRows.ts) decides what actually renders —
+  // most of these are hidden for now, and stay defined here so that restoring
+  // one is a change to that list alone.
+  const rows: Record<MenuRowKey, {
     icon: MenuIconName;
     label: string;
     action: () => void;
     /** Gold dot on the icon chip — currently only unread notifications. */
     dot?: boolean;
-  }[] = [
-    // First row: this menu is the only way to notifications now that the Home
-    // header's bell is gone, so it sits where the eye lands, carrying the same
-    // unread dot the bell used to.
-    {
+  }> = {
+    // The bell left the Home header, so this row is notifications' only entry
+    // point — it carries the unread dot the bell used to.
+    notifications: {
       icon: 'bell',
       label: t('home:notifications'),
       action: wrap(onNavigateToNotifications),
       dot: hasUnread,
     },
-    { icon: 'progress', label: t('settings:menu.myProgress'), action: wrap(onNavigateToStats) },
-    { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
-    { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
+    progress: { icon: 'progress', label: t('settings:menu.myProgress'), action: wrap(onNavigateToStats) },
+    badges: { icon: 'badge', label: 'Badges', action: wrap(onNavigateToAchievements) },
+    leaderboard: { icon: 'leaderboard', label: 'Leaderboard', action: wrap(onNavigateToLeaderboard) },
     // "My Lists" was a hub screen whose job the Lists *tab* now does. Its two
     // genuinely distinct children are linked directly instead: Saved Words
     // groups per-movie saves by film, which is a different view from the
     // tab's flat Favourites set, and Watched is a films-seen log rather than
     // a study list.
-    { icon: 'lists', label: t('vocabulary:savedWords'), action: wrap(onNavigateToNotebook) },
-    { icon: 'film', label: t('vocabulary:lists.watchedFilms'), action: wrap(onNavigateToWatched) },
+    savedWords: { icon: 'lists', label: t('vocabulary:savedWords'), action: wrap(onNavigateToNotebook) },
+    watchedFilms: { icon: 'film', label: t('vocabulary:lists.watchedFilms'), action: wrap(onNavigateToWatched) },
     // The saved reel's home since Explore took its place in the tab bar.
-    { icon: 'film', label: t('movies:myMovies.title'), action: wrap(onNavigateToSavedMovies) },
-    { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
-    { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
-    ...(isAdmin ? [{ icon: 'admin' as MenuIconName, label: t('settings:menu.adminPanel'), action: wrap(onNavigateToAdmin) }] : []),
-  ];
+    myMovies: { icon: 'film', label: t('movies:myMovies.title'), action: wrap(onNavigateToSavedMovies) },
+    vocabulary: { icon: 'book', label: 'Vocabulary', action: wrap(onNavigateToVocabulary) },
+    settings: { icon: 'settings', label: 'Settings', action: wrap(onNavigateToSettings) },
+    admin: { icon: 'admin', label: t('settings:menu.adminPanel'), action: wrap(onNavigateToAdmin) },
+  };
+
+  const navItems = visibleMenuRows(!!isAdmin).map((key) => ({ key, ...rows[key] }));
 
   const themeOpts: { key: ThemePreference; label: string; icon: MenuIconName }[] = [
     { key: 'light',  label: 'Light',  icon: 'sun' },
@@ -185,8 +195,8 @@ export function UserMenuSheet({
 
         <View style={styles.divider} />
 
-        {navItems.map(({ icon, label, action, dot }) => (
-          <TouchableOpacity key={label} style={styles.row} onPress={action} activeOpacity={0.6}>
+        {navItems.map(({ key, icon, label, action, dot }) => (
+          <TouchableOpacity key={key} style={styles.row} onPress={action} activeOpacity={0.6}>
             <View style={styles.iconChip}>
               <MenuIcon name={icon} size={18} color={tc.textSecondary} />
               {dot ? <View style={styles.unreadDot} /> : null}
