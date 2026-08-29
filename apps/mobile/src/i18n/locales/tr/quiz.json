@@ -42,8 +42,8 @@
   },
   "review": {
     "backHome": "Ana sayfaya dön",
-    "caughtUpBody": "Kaydettiğiniz tüm kelimeler daha sonra tekrar edilmek üzere planlandı. Yarın tekrar uğrayın — ya da yeni bir filmden kelime kaydedin.",
-    "caughtUpTitle": "Artık her şeyi yakaladınız",
+    "caughtUpBody": "Kaydettiğin tüm kelimeler daha sonra tekrar edilmek üzere planlandı. Yarın tekrar uğra — ya da yeni bir filmden kelime kaydet.",
+    "caughtUpTitle": "Her şeyi tamamladın",
     "dailyReview": "Günlük tekrar",
     "errorTitle": "Bir sorun oluştu",
     "niceWork": "Aferin",
@@ -52,7 +52,7 @@
     "streakExtended": "Seri devam ediyor — {{streak}}. gün",
     "streakExtendedGoal": "Seri devam ediyor — {{streak}}. gün!",
     "tipBody": "Araştırmalar, bir kelimeyi ilk kez gördükten 3–6 gün sonra tekrar etmenin, hafızada kalıcılık sağlamada en etkili yöntem olduğunu gösteriyor — tek bir günde yoğun bir şekilde ezberlemeye kıyasla çok daha etkili. Sen de bu kelimeyi tam da bu ritimle tekrar görüyorsun.",
-    "tipEyebrow": "Biliyor muydunuz?",
+    "tipEyebrow": "Biliyor muydun?",
     "tipTitle": "İşte bu, aralık etkisinin işleyiş şekli",
     "todaysDone": "Bugünkü iş bitti",
     "upgradeBody": "Yarın tekrar gelin — ya da sınırsız tekrar için yükseltin."

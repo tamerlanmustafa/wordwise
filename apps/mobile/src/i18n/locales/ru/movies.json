@@ -1,7 +1,7 @@
 {
   "analyzing": {
     "buildingFor": "Составление списка слов для <0>{{title}}</0>",
-    "reelReady": "Готов к съемке",
+    "reelReady": "Reel готов",
     "title": "Анализ сценария…"
   },
   "detail": {
@@ -37,11 +37,11 @@
     "collect": "Собрать",
     "dailyChest": "Ежедневный сундук",
     "milestone": {
-      "box_office_flavor": "Тридцать дней подряд. Теперь ты официально считаешься постоянным посетителем.",
+      "box_office_flavor": "Тридцать дней подряд. Теперь вы официально завсегдатай.",
       "box_office_name": "Касса",
       "criterion_collection_flavor": "Целый год, без перерыва. Включено в канон.",
       "criterion_collection_name": "Коллекция «Criterion»",
-      "cult_classic_flavor": "Сто дней. Теперь это часть тебя.",
+      "cult_classic_flavor": "Сто дней. Теперь это часть вас.",
       "cult_classic_name": "Культовая классика",
       "dayMilestone": "{{days}}-дневный этап",
       "opening_weekend_flavor": "Целая неделя, каждый день. Самый сложный этап уже позади.",
@@ -53,9 +53,9 @@
   },
   "myMovies": {
     "addFirstFilm": "Добавьте свой первый фильм",
-    "empty": "Ваша корзина пуста",
+    "empty": "Ваш reel пуст",
     "emptyBody": "Добавьте свой первый фильм, и мы включим его ключевые слова в вашу ежедневную практику.",
-    "eyebrow": "ВАШ РОЛИК",
+    "eyebrow": "ВАШ REEL",
     "noMatch": "Соответствующих фильмов нет",
     "showAll": "Показать все фильмы",
     "sortBy": "Сортировка",
@@ -66,14 +66,14 @@
     "title": "Мои фильмы"
   },
   "preview": {
-    "inYourReel": "В ВАШЕМ РОЛИКЕ",
+    "inYourReel": "В ВАШЕМ REEL",
     "prepForFilm": "Подготовка к этому фильму",
     "quizMe": "Проверь мои знания · {{count}} слов →",
     "quizMeOn": "Проверь мои знания по {{count}} словам",
     "remove": "Удалить",
-    "removeFromReel": "Убрать из ролика",
-    "removeFromReelBody": "«{{title}}» будет удалено из вашего ролика. Вы можете добавить его обратно на вкладке «Главная».",
-    "removeFromReelTitle": "Убрать из ролика?",
+    "removeFromReel": "Убрать из reel",
+    "removeFromReelBody": "«{{title}}» больше не будет в вашем reel. Вы можете добавить фильм обратно на вкладке «Главная».",
+    "removeFromReelTitle": "Убрать из reel?",
     "removeSubtitle": "Удалите этот фильм из своей очереди",
     "removing": "Удаление…",
     "study": "Учить →",

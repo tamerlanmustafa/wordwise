@@ -66,7 +66,7 @@
     "lists": "Listas"
   },
   "offline": {
-    "downloadsWork": "Os seus vídeos baixados ainda funcionam",
+    "downloadsWork": "Os reels que você baixou ainda funcionam",
     "pending_one": "{{count}} alteração aguardando sincronização",
     "pending_other": "{{count}} alterações aguardando sincronização",
     "syncing": "Sincronizando…",

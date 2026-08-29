@@ -4,7 +4,7 @@
   "dayLabel_one": "ДЕНЬ",
   "dayLabel_other": "ДНЯ",
   "emptyReelBody": "Добавьте фильм из раздела «Главная», чтобы у Deep-Dive было что изучить.",
-  "emptyReelTitle": "Ваша корзина пуста",
+  "emptyReelTitle": "Ваш reel пуст",
   "eyebrow": "ЕЖЕДНЕВНАЯ ПРАКТИКА",
   "freeze_few": "ЗАМОРОЗКИ",
   "freeze_many": "ЗАМОРОЗОК",
@@ -12,7 +12,7 @@
   "freeze_other": "ЗАМОРОЗКИ",
   "lesson": "УРОК {{number}}",
   "loadFailed": "У нас возникли проблемы с доступом к вашим фильмам. Проверьте подключение и попробуйте ещё раз.",
-  "loadFailedTitle": "Не удалось загрузить ваш ролик",
+  "loadFailedTitle": "Не удалось загрузить ваш reel",
   "moviePicker": {
     "eyebrow": "ВЫБЕРИТЕ ФИЛЬМ",
     "title": "Подробный анализ фильма"

@@ -30,11 +30,11 @@
   "levelResult": {
     "cta": "Parece certo →",
     "explanation": {
-      "A1": "Você está apenas começando. Vamos iniciar seus vídeos com as palavras A1–A2 de maior frequência e partir daí.",
-      "A2": "Você já conhece o básico do dia a dia. Vamos começar seus vídeos com vocabulário dos níveis A2 a B1 e ir adaptando à medida que você for avançando.",
-      "B1": "Você reconhece palavras comuns, mas não percebe as nuances. Vamos começar seus vídeos com vocabulário dos níveis B1–B2 e ir adaptando à medida que você for avançando.",
-      "B2": "Você consegue acompanhar a maior parte do diálogo. Vamos começar seus vídeos com vocabulário dos níveis B2–C1 para que você continue sendo desafiado.",
-      "C1": "Você é fluente no dia a dia. Vamos concentrar seus vídeos em palavras dos níveis C1–C2 — aquelas mais raras e precisas.",
+      "A1": "Você está apenas começando. Vamos iniciar seus reels com as palavras A1–A2 de maior frequência e seguir a partir daí.",
+      "A2": "Você já conhece o básico do dia a dia. Vamos começar seus reels com vocabulário de nível A2–B1 e adaptar conforme você avança.",
+      "B1": "Você reconhece as palavras comuns, mas perde as nuances. Vamos começar seus reels com vocabulário de nível B1–B2 e adaptar conforme você avança.",
+      "B2": "Você acompanha a maior parte dos diálogos. Vamos começar seus reels com vocabulário de nível B2–C1 para você continuar sendo desafiado.",
+      "C1": "Você é fluente no dia a dia. Vamos concentrar seus reels em palavras de nível C1–C2 — as raras e precisas.",
       "C2": "Você está quase no nível de um falante nativo. Vamos destacar o vocabulário e as expressões idiomáticas mais raras do nível C2 que os filmes apresentam a você."
     },
     "eyebrow": "Seu nível inicial"
@@ -64,7 +64,7 @@
     "lettersWithRank": "{{letters}} · classificação {{rank}}",
     "letters_one": "{{count}} letra",
     "letters_other": "{{count}} letras",
-    "setReel": "CONJUNTO {{set}} · CARRETEL {{reel}}",
+    "setReel": "CONJUNTO {{set}} · REEL {{reel}}",
     "sourceFilm": "FILME ORIGINAL",
     "subhead": "Assim, quando você assistir com legendas mais tarde, vai conseguir acompanhar cada fala."
   },

@@ -1,8 +1,8 @@
 {
   "reminder": {
-    "reviewBody": "Tekrar edilmeyi bekleyen kelimeleriniz var. Kısa bir çalışma onları hafızanızda tutar!",
+    "reviewBody": "Tekrar edilmeyi bekleyen kelimelerin var. Kısa bir çalışma onları hafızanda tutar!",
     "reviewTitle": "Tekrar edilmesi gereken kelimeler",
-    "wordBody": "WordWise'da öğrenebileceğiniz yeni bir kelime var. Dokunarak göz atın!",
+    "wordBody": "WordWise'da öğrenebileceğin yeni bir kelime var. Dokunup göz at!",
     "wordTitle": "\"Saatin Kelimesi\" hazır"
   },
   "reviewsDue": {
@@ -12,17 +12,17 @@
   },
   "sheet": {
     "emptyBody": "Tekrar hatırlatmaları ve seri bildirimleri burada görünecek.",
-    "emptyTitle": "Artık her şeyi yakaladınız",
+    "emptyTitle": "Her şeyi tamamladın",
     "markAllRead": "Hepsini okundu olarak işaretle",
     "markAllReadA11y": "Tüm bildirimleri okundu olarak işaretle",
     "title": "BİLDİRİMLER"
   },
   "streakRisk": {
-    "body": "Serinizi sürdürmek için bugünün tekrarını tamamlayın.",
+    "body": "Serini sürdürmek için bugünün tekrarını tamamla.",
     "title": "{{count}} günlük serini bozma"
   },
   "welcome": {
-    "body": "Sevdiğiniz filmlerden kelimeleri kaydedin — tekrarlarınız ve seriniz hakkındaki güncellemeler burada görünür.",
-    "title": "WordWise’a hoş geldiniz"
+    "body": "Sevdiğin filmlerden kelimeleri kaydet — tekrarların ve serin hakkındaki güncellemeler burada görünür.",
+    "title": "WordWise'a hoş geldin"
   }
 }

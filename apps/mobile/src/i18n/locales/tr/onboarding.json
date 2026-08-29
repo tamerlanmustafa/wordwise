@@ -2,7 +2,7 @@
   "filmStep": {
     "cta": "Öğrenmeye başla →",
     "searchPlaceholder": "Başka bir film ara",
-    "sub": "Yazısından bir kelime listesi oluşturacağız — anlamayı çok istediğiniz bir kelimeyle başlayın.",
+    "sub": "Senaryosundan bir kelime listesi oluşturacağız — anlamayı çok istediğin bir filmle başla.",
     "title": "İlk filmini seç"
   },
   "goalStep": {
@@ -18,8 +18,8 @@
       "seriousLabel": "Ciddi",
       "seriousSub": "12 dakika · Günde 4 ders"
     },
-    "sub": "Bunu istediğiniz zaman değiştirebilirsiniz. Düzenlilik, yoğunluktan daha önemlidir.",
-    "title": "Günlük hedefinizi belirleyin"
+    "sub": "Bunu istediğin zaman değiştirebilirsin. Düzenlilik, yoğunluktan daha önemlidir.",
+    "title": "Günlük hedefini belirle"
   },
   "languageStep": {
     "continue": "Devam et →",
@@ -30,11 +30,11 @@
   "levelResult": {
     "cta": "Doğru gibi görünüyor →",
     "explanation": {
-      "A1": "Henüz başlangıç aşamasındasın. Ses kayıtlarını en sık kullanılan A1–A2 kelimeleriyle başlatıp, oradan devam edeceğiz.",
-      "A2": "Günlük hayattaki temel kelimeleri biliyorsunuz. Reels videolarınızı A2–B1 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe içeriği buna göre uyarlayacağız.",
-      "B1": "Yaygın kelimeleri tanıyorsunuz ancak ince anlam farklılıklarını kaçırıyorsunuz. Reels videolarınızı B1–B2 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe içeriği buna göre uyarlayacağız.",
-      "B2": "Diyalogların çoğunu anlayabiliyorsun. Zorlanmaya devam etmen için videolarını B2–C1 seviyesi kelime dağarcığıyla başlatacağız.",
-      "C1": "Günlük dilde akıcı konuşuyorsunuz. Reels videolarınızı C1–C2 seviyesindeki kelimelere, yani nadir ve kesin anlamlı kelimelere odaklayacağız.",
+      "A1": "Henüz başlangıç aşamasındasın. Reel'lerini en sık kullanılan A1–A2 kelimeleriyle başlatıp oradan devam edeceğiz.",
+      "A2": "Günlük hayattaki temel kelimeleri biliyorsun. Reel'lerini A2–B1 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe uyarlayacağız.",
+      "B1": "Yaygın kelimeleri tanıyorsun ama ince anlam farklarını kaçırıyorsun. Reel'lerini B1–B2 seviyesindeki kelime dağarcığıyla başlatacağız ve ilerledikçe uyarlayacağız.",
+      "B2": "Diyalogların çoğunu anlayabiliyorsun. Zorlanmaya devam etmen için reel'lerini B2–C1 seviyesindeki kelime dağarcığıyla başlatacağız.",
+      "C1": "Günlük dilde akıcı konuşuyorsun. Reel'lerini C1–C2 seviyesindeki kelimelere, yani nadir ve kesin anlamlı olanlara odaklayacağız.",
       "C2": "Neredeyse ana dil seviyesindesin. Filmlerde karşına çıkan en nadir C2 seviyesi kelimeleri ve deyimleri ortaya çıkaracağız."
     },
     "eyebrow": "Başlangıç seviyeniz"
@@ -50,7 +50,7 @@
       "unknownSub": "Benim için yeni"
     },
     "skip": "Atla — Ben yeni başlayanım",
-    "title": "Bunu ne kadar iyi biliyorsunuz…"
+    "title": "Bunu ne kadar iyi biliyorsun…"
   },
   "setIntro": {
     "a11yReview": "Seti tekrar et",
@@ -66,7 +66,7 @@
     "letters_other": "{{count}} harf",
     "setReel": "SET {{set}} · REEL {{reel}}",
     "sourceFilm": "KAYNAK FİLM",
-    "subhead": "Böylece daha sonra altyazılı olarak izlediğinizde, her repliği gerçekten anlayabileceksiniz."
+    "subhead": "Böylece daha sonra altyazılı izlediğinde her repliği gerçekten anlayacaksın."
   },
   "stepOf": "{{total}} adımın {{step}}'inci adımı",
   "surveyStep": {
@@ -119,11 +119,11 @@
     "placeholder": "Kullanıcı adı",
     "saveFailed": "Kullanıcı adı kaydedilemedi. Lütfen tekrar deneyin.",
     "saving": "Kaydediliyor…",
-    "sub": "Kullanıcı adınız, liderlik tablolarında ve aile planınızda görünür. Bunu Ayarlar bölümünden istediğiniz zaman değiştirebilirsiniz.",
+    "sub": "Kullanıcı adın liderlik tablolarında ve aile planında görünür. Bunu Ayarlar'dan istediğin zaman değiştirebilirsin.",
     "title": "Size nasıl hitap edelim?"
   },
   "welcome": {
-    "copy": "WordWise, herhangi bir filmin senaryosunu bir kelime listesine dönüştürür — izlemeden önce, öğrenmekte olduğunuz dilde anahtar kelimeleri öğrenin.",
+    "copy": "WordWise, herhangi bir filmin senaryosunu bir kelime listesine dönüştürür — izlemeden önce, öğrendiğin dilde anahtar kelimeleri öğren.",
     "cta": "Başlayın",
     "headline": "Her satırı iyice anlayın."
   }

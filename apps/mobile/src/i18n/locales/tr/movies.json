@@ -1,7 +1,7 @@
 {
   "analyzing": {
     "buildingFor": "<0>{{title}}</0> için kelime listenizi oluşturma",
-    "reelReady": "Çekime hazır",
+    "reelReady": "Reel hazır",
     "title": "Senaryoyu inceliyorum…"
   },
   "detail": {
@@ -10,7 +10,7 @@
     "downloadFailedBody": "Poster kaydedilemedi.",
     "forYou": "Sana",
     "hide": "Gizle",
-    "hideWordBody": "\"{{word}}\" tüm kullanıcıların film ve kitap kelime listelerinden kaldırılacaktır. Bu işlemi yönetici panelinden geri alabilirsiniz.",
+    "hideWordBody": "\"{{word}}\" tüm kullanıcıların film ve kitap kelime listelerinden kaldırılacak. Bu işlemi yönetici panelinden geri alabilirsin.",
     "hideWordFailed": "\"word\" kelimesi gizlenemedi",
     "hideWordTitle": "Kelimeyi genel olarak gizlemek mi?",
     "hideWordUnknownError": "Bilinmeyen hata",
@@ -33,7 +33,7 @@
     "viewPoster": "Afişi görüntüle"
   },
   "journey": {
-    "chestAdded": "“Reveal” koleksiyonunuza eklendi.",
+    "chestAdded": "“Reveal” koleksiyonuna eklendi.",
     "collect": "Topla",
     "dailyChest": "Günlük sandık",
     "milestone": {
@@ -48,14 +48,14 @@
       "opening_weekend_name": "Açılış Hafta Sonu"
     },
     "newUnlock": "Yeni kilit açma",
-    "readyToWatch": "İzlemeye hazır mısınız?",
+    "readyToWatch": "İzlemeye hazır",
     "takeABow": "Selam verin"
   },
   "myMovies": {
     "addFirstFilm": "İlk filmini ekle",
-    "empty": "Makaranız boş",
-    "emptyBody": "İlk filminizi ekleyin, biz de o filmin anahtar kelimelerini günlük alıştırmalarınıza dahil edelim.",
-    "eyebrow": "SİZİN REEL'İNİZ",
+    "empty": "Reel'in boş",
+    "emptyBody": "İlk filmini ekle, biz de o filmin anahtar kelimelerini günlük alıştırmalarına dahil edelim.",
+    "eyebrow": "SENİN REEL'İN",
     "noMatch": "Eşleşen film yok",
     "showAll": "Tüm filmleri göster",
     "sortBy": "Sırala",
@@ -64,19 +64,19 @@
     "title": "Filmlerim"
   },
   "preview": {
-    "inYourReel": "REEL'İNİZDE",
+    "inYourReel": "REEL'İNDE",
     "prepForFilm": "Bu filme hazırlanın",
     "quizMe": "Bana soru sor · {{count}} kelime →",
     "quizMeOn": "Bana {{count}} kelimelik bir test yap",
     "remove": "Kaldır",
     "removeFromReel": "Reel'den çıkar",
-    "removeFromReelBody": "\"{{title}}\" reel'inizden kaldırılacaktır. Bunu \"Ana Sayfa\" sekmesinden tekrar ekleyebilirsiniz.",
+    "removeFromReelBody": "\"{{title}}\" reel'inden kaldırılacak. Bunu \"Ana Sayfa\" sekmesinden tekrar ekleyebilirsin.",
     "removeFromReelTitle": "Reel'den çıkarılsın mı?",
     "removeSubtitle": "Bu filmi izleme listenden çıkar",
     "removing": "Kaldırılıyor…",
     "study": "Çalış →",
     "studyAllWords": "Tüm kelimeleri çalışın",
-    "studyAllWordsSub": "Tüm kelime listesine göz atın ve öğrendiğiniz kelimeleri işaretleyin",
+    "studyAllWordsSub": "Tüm kelime listesine göz at ve öğrendiğin kelimeleri işaretle",
     "studyWords": "Kelime çalışması",
     "whatsNext": "SIRADA NE VAR?"
   },

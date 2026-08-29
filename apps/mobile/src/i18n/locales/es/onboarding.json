@@ -30,11 +30,11 @@
   "levelResult": {
     "cta": "Me parece bien →",
     "explanation": {
-      "A1": "Acabas de empezar. Comenzaremos tus grabaciones con las palabras A1–A2 más frecuentes y iremos avanzando a partir de ahí.",
-      "A2": "Ya conoces los conceptos básicos del día a día. Empezaremos tus vídeos con vocabulario de los niveles A2–B1 y lo iremos adaptando sobre la marcha.",
-      "B1": "Reconoces las palabras más comunes, pero se te escapan los matices. Empezaremos tus «reels» con vocabulario de nivel B1-B2 y lo iremos adaptando a medida que avances.",
-      "B2": "Entiendes la mayor parte de los diálogos. Empezaremos tus vídeos con vocabulario de nivel B2–C1 para que sigas enfrentándote a retos.",
-      "C1": "Dominas el lenguaje cotidiano. Centraremos tus vídeos en palabras de nivel C1-C2: aquellas poco comunes y precisas.",
+      "A1": "Acabas de empezar. Comenzaremos tus reels con las palabras A1–A2 más frecuentes y avanzaremos a partir de ahí.",
+      "A2": "Ya conoces lo básico del día a día. Empezaremos tus reels con vocabulario de nivel A2–B1 y lo adaptaremos sobre la marcha.",
+      "B1": "Reconoces las palabras comunes, pero se te escapan los matices. Empezaremos tus reels con vocabulario de nivel B1–B2 y lo adaptaremos sobre la marcha.",
+      "B2": "Entiendes la mayor parte de los diálogos. Empezaremos tus reels con vocabulario de nivel B2–C1 para que sigas teniendo retos.",
+      "C1": "Dominas el lenguaje cotidiano. Centraremos tus reels en palabras de nivel C1–C2: las raras y precisas.",
       "C2": "Tu nivel es casi nativo. Te enseñaremos el vocabulario y las expresiones idiomáticas de nivel C2 más poco comunes que te encontrarás en las películas."
     },
     "eyebrow": "Tu nivel inicial"
@@ -64,7 +64,7 @@
     "lettersWithRank": "{{letters}} · rango {{rank}}",
     "letters_one": "{{count}} letra",
     "letters_other": "{{count}} letras",
-    "setReel": "CONJUNTO {{set}} · CARRETE {{reel}}",
+    "setReel": "CONJUNTO {{set}} · REEL {{reel}}",
     "sourceFilm": "PELÍCULA ORIGINAL",
     "subhead": "Así, cuando lo veas más tarde con subtítulos, podrás seguir realmente cada frase."
   },

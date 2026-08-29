@@ -186,6 +186,90 @@ describe('plural completeness', () => {
   });
 });
 
+/**
+ * Locales the #101 copy pass covers. Arabic is excluded on purpose: it is
+ * `preview: true` pending the native review in #104, and what it should call a
+ * reel is a translation decision that review has not made yet.
+ */
+const REVIEWED_LOCALES = TRANSLATIONS.filter((c) => c !== 'ar');
+
+describe('product glossary (#101)', () => {
+  // "reel" is our own noun for a user's film queue, and translating each string
+  // in isolation had no way to know that: across sixteen keys it shipped as
+  // корзина (a shopping cart), makara (a film spool), аудиозаписи (audio
+  // recordings), portfólio, and Reels (the Instagram feature). The decision was
+  // to keep the English loanword in every locale — enforceable precisely
+  // because it is the one rendering with no dictionary sense to drift into.
+  const stripPlaceholders = (s: string) => s.replace(/\{\{[^}]*\}\}/g, '');
+  const MENTIONS_REEL = /\breels?\b/i;
+
+  function englishReelKeys(): string[] {
+    return NAMESPACES.flatMap((ns) =>
+      Object.entries(flatten(readNs(FALLBACK_LANGUAGE, ns)))
+        .filter(([, value]) => MENTIONS_REEL.test(value))
+        .map(([key]) => `${ns}:${key}`),
+    );
+  }
+
+  it('English still uses the term the glossary is written against', () => {
+    // Without this, renaming the feature in English would silently reduce the
+    // check below to zero assertions and it would keep passing forever.
+    expect(englishReelKeys().length).toBeGreaterThan(10);
+  });
+
+  it.each(REVIEWED_LOCALES)('%s calls a reel a reel', (locale) => {
+    const offenders: string[] = [];
+    for (const ns of NAMESPACES) {
+      const en = flatten(readNs(FALLBACK_LANGUAGE, ns));
+      const other = flatten(readNs(locale, ns));
+      for (const [key, value] of Object.entries(en)) {
+        if (!MENTIONS_REEL.test(value)) continue;
+        // Placeholders are stripped first: `{{reel}}` in `setIntro.setReel`
+        // would otherwise satisfy the check with no visible word on screen.
+        if (!stripPlaceholders(other[key] ?? '').toLowerCase().includes('reel')) {
+          offenders.push(`${ns}:${key}`);
+        }
+      }
+    }
+    expect({ locale, offenders }).toEqual({ locale, offenders: [] });
+  });
+});
+
+describe('register consistency (#101)', () => {
+  // Turkish, Russian and Portuguese each offer a choice the source English does
+  // not encode, so a per-string pipeline answered it per string: Turkish
+  // onboarding asked "Ne öğreniyorsun?" (informal) two screens before the level
+  // result said "biliyorsunuz" (formal). Each language is committed to one
+  // register here; the patterns below are the *rejected* one.
+  //
+  // Matched as bare substrings rather than with `\b`, because JavaScript word
+  // boundaries are ASCII-only — `/iniz\b/` fails on "adresinizi", which is
+  // exactly the formal possessive-plus-case-ending this needs to catch.
+  const REJECTED: Record<string, { register: string; pattern: RegExp }> = {
+    // Formal 2nd-person-plural verb and possessive endings.
+    tr: { register: 'informal sen', pattern: /sınız|siniz|sunuz|sünüz|ınız|iniz|unuz|ünüz/ },
+    // Informal pronouns. Cyrillic needs explicit letter lookarounds for the
+    // same ASCII-`\b` reason; `тво[йяеиёу]` keeps "творог" out.
+    ru: { register: 'formal вы', pattern: /(?<!\p{L})(?:ты|тебя|тебе|тобой|тво[йяеиёу]\p{L}*)(?!\p{L})/iu },
+    // European Portuguese forms in an otherwise Brazilian file.
+    pt: {
+      register: 'Brazilian',
+      pattern: /(?<!\p{L})(?:estás|podes|tens|ecrã|telemóvel|utilizador|descarreg\p{L}*)(?!\p{L})/iu,
+    },
+  };
+
+  it.each(Object.keys(REJECTED))('%s keeps one register throughout', (locale) => {
+    const { register, pattern } = REJECTED[locale];
+    const offenders: string[] = [];
+    for (const ns of NAMESPACES) {
+      for (const [key, value] of Object.entries(flatten(readNs(locale, ns)))) {
+        if (pattern.test(value)) offenders.push(`${ns}:${key}`);
+      }
+    }
+    expect({ locale, register, offenders }).toEqual({ locale, register, offenders: [] });
+  });
+});
+
 describe('right-to-left locales', () => {
   // This used to assert the *opposite* — that no RTL locale existed — because
   // the layout could not mirror. Now that it can (see `i18n/rtl.ts`), the

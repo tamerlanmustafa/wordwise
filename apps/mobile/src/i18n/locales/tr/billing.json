@@ -7,27 +7,27 @@
     "invite": "Üye davet et",
     "inviteFailed": "Üye davet edilemedi",
     "leave": "Aile Planından Çık",
-    "leaveBody": "Premium erişiminizi kaybedeceksiniz. Devam etmek istiyor musunuz?",
+    "leaveBody": "Premium erişimini kaybedeceksin. Devam etmek istiyor musun?",
     "leaveTitle": "Aile planından çık",
     "members": "Üyeler",
     "owner": "Sahibi",
     "ownersPlan": "{{email}}'in Planı",
     "remove": "Kaldır",
     "removeMember": "Üyeyi kaldır",
-    "removeMemberBody": "{{email}}'i aile planınızdan çıkarmak ister misiniz?",
+    "removeMemberBody": "{{email}} adresini aile planından çıkarmak ister misin?",
     "requiresPlus": "Etkin bir WordWise Plus aboneliği gerektirir.",
     "title": "Aile Paketi",
-    "yourPlan": "Aile Planınız"
+    "yourPlan": "Aile Planın"
   },
   "paywall": {
-    "alreadyPlus": "WordWise Plus'ta bulunuyorsunuz — tüm özellikler kullanıma açık. Teşekkür ederiz!",
+    "alreadyPlus": "WordWise Plus'tasın — tüm özellikler açık. Teşekkürler!",
     "notFoundTitle": "Bulunamadı",
     "restore": "Satın alımları geri yükle",
     "restoredTitle": "Geri yüklendi!",
     "startTrial": "7 günlük ücretsiz denemeyi başlatın",
     "starting": "Başlıyoruz…",
     "title": "WordWise Plus",
-    "welcomeBody": "Aboneliğiniz artık aktif hale geldi.",
-    "welcomeTitle": "Plus’a hoş geldiniz!"
+    "welcomeBody": "Aboneliğin artık aktif.",
+    "welcomeTitle": "Plus'a hoş geldin!"
   }
 }

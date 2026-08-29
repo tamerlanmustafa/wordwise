@@ -15,10 +15,10 @@
   "dayStreak": "Günlük seri",
   "emptyBody": "Filmlerden kelimeleri kaydederek ilerlemenizi buradan takip etmeye başlayın.",
   "emptyTitle": "Henüz kaydedilmiş kelime yok",
-  "exportSub": "Anki veya diğer uygulamalarda kullanmak üzere kaydettiğiniz kelimeleri indirin",
-  "exportTitle": "Yazılarınızı dışa aktarın",
+  "exportSub": "Anki veya diğer uygulamalarda kullanmak üzere kaydettiğin kelimeleri indir",
+  "exportTitle": "Kelimelerini dışa aktar",
   "howItWorks": "Nasıl çalışır?",
-  "howItWorksBody": "Yeni kelimeler 1. Kutuda başlar (her gün tekrar edilir). Bir kelimeyi her hatırladığınızda, o kelime daha uzun bir aralıkla bir sonraki kutuya geçer. Unutursanız, kelime tekrar 1. Kutuya geri döner. 5. Kutudaki kelimeler ayda bir kez tekrar edilir — bunlar artık uzun süreli hafızanızda yer almaktadır.",
+  "howItWorksBody": "Yeni kelimeler 1. Kutu'da başlar (her gün tekrar edilir). Bir kelimeyi her hatırladığında, o kelime daha uzun aralıklı bir sonraki kutuya geçer. Unutursan kelime 1. Kutu'ya geri döner. 5. Kutu'daki kelimeler ayda bir tekrar edilir — bunlar artık uzun süreli hafızanda.",
   "leaderboard": {
     "back": "← Geri",
     "emptyQuiz": "Henüz test puanı yok. Bir üniteyi tamamlayarak puan tablosuna girin!",
@@ -27,11 +27,11 @@
     "reviews": "Toplam Tekrar",
     "screenTitle": "Sıralama Tablosu",
     "stars": "Toplam Yıldız Sayısı",
-    "streak": "En Uzun Galibiyet Serisi",
+    "streak": "En Uzun Seri",
     "words": "Kaydedilen Kelimeler",
     "xp": "XP",
     "you": "{{username}} (sen)",
-    "yourRank": "Sıralamanız: #{{rank}} ({{score}}{{suffix}})"
+    "yourRank": "Sıralaman: #{{rank}} ({{score}}{{suffix}})"
   },
   "reviewCta_one": "{{count}} kelimeyi tekrar et",
   "reviewCta_other": "{{count}} kelimeyi tekrar et",

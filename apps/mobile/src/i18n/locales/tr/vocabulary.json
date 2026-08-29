@@ -12,7 +12,7 @@
     "showTranslation": "Çeviriyi göster",
     "tapToHide": "GİZLEMEK İÇİN DOKUN",
     "tapToReveal": "GÖSTERMEK İÇİN DOKUN",
-    "resumedAt": "Yer iminizden devam edildi · kart {{card}}"
+    "resumedAt": "Yer iminden devam edildi · kart {{card}}"
   },
   "learned": {
     "empty": "Henüz öğrenilen kelime yok. Herhangi bir videodaki bir kelimeye sola kaydırarak onu “biliniyor” olarak işaretleyebilirsin.",
@@ -31,7 +31,7 @@
   "lists": {
     "title": "Listelerim",
     "watchedFilms": "İzlediğim Filmler",
-    "watchedFilmsSub": "\"İzlendi\" olarak işaretlediğiniz filmler"
+    "watchedFilmsSub": "\"İzlendi\" olarak işaretlediğin filmler"
   },
   "notebook": {
     "all": "Tümü",
@@ -49,5 +49,5 @@
   },
   "savedWords": "Kaydedilen Kelimeler",
   "screenTitle": "Kelime Dağarcığı",
-  "wordsYouKnow": "Zaten bildiğiniz kelimeler"
+  "wordsYouKnow": "Zaten bildiğin kelimeler"
 }

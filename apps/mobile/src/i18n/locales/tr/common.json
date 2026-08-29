@@ -66,11 +66,11 @@
     "lists": "Listeler"
   },
   "offline": {
-    "downloadsWork": "İndirdiğiniz Reels’ler hâlâ çalışıyor",
+    "downloadsWork": "İndirdiğin reel'ler hâlâ çalışıyor",
     "pending_one": "{{count}} değişiklik eşitlenmeyi bekliyor",
     "pending_other": "{{count}} değişiklik eşitlenmeyi bekliyor",
     "syncing": "Senkronize ediliyor…",
-    "title": "Çevrimdışı durumdasınız"
+    "title": "Çevrimdışısın"
   },
   "report": {
     "additionalDetails": "Ek bilgiler",

@@ -27,7 +27,7 @@
     "placeholderWords": "Palavras do noticiário",
     "submit": "Criar lista",
     "errorEmpty": "Dê um nome à sua lista.",
-    "errorDuplicate": "Já tens uma lista com esse nome."
+    "errorDuplicate": "Você já tem uma lista com esse nome."
   },
   "practice": {
     "films": "Praticar palavras destes filmes",

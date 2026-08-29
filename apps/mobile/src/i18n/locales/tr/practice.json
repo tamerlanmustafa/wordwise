@@ -2,13 +2,13 @@
   "dayLabel_one": "GÜN",
   "dayLabel_other": "GÜN",
   "emptyReelBody": "“Home”dan bir film ekleyin ki Deep-Dive’ın dalabileceği bir şey olsun.",
-  "emptyReelTitle": "Makaranız boş",
+  "emptyReelTitle": "Reel'in boş",
   "eyebrow": "GÜNLÜK PRATİK",
   "freeze_one": "DONDURMA",
   "freeze_other": "DONDURMA",
   "lesson": "DERS {{number}}",
-  "loadFailed": "Filmlerinize erişirken sorun yaşadık. İnternet bağlantınızı kontrol edip lütfen tekrar deneyin.",
-  "loadFailedTitle": "Reel'inizi yükleyemedi",
+  "loadFailed": "Filmlerine erişirken sorun yaşadık. İnternet bağlantını kontrol edip tekrar dene.",
+  "loadFailedTitle": "Reel'in yüklenemedi",
   "moviePicker": {
     "eyebrow": "BİR FİLM SEÇİN",
     "title": "Bir filmi derinlemesine incelemek"

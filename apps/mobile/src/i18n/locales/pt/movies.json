@@ -1,7 +1,7 @@
 {
   "analyzing": {
     "buildingFor": "Criando sua lista de palavras para <0>{{title}}</0>",
-    "reelReady": "Pronto para filmar",
+    "reelReady": "Reel pronto",
     "title": "Analisando o roteiro…"
   },
   "detail": {
@@ -53,7 +53,7 @@
   },
   "myMovies": {
     "addFirstFilm": "Adicione seu primeiro filme",
-    "empty": "Seu portfólio está vazio",
+    "empty": "Seu reel está vazio",
     "emptyBody": "Adicione seu primeiro filme e vamos incorporar as palavras-chave dele à sua prática diária.",
     "eyebrow": "SEU REEL",
     "noMatch": "Não há filmes correspondentes",

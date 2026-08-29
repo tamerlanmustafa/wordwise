@@ -1,7 +1,7 @@
 {
   "analyzing": {
     "buildingFor": "Cómo crear tu lista de palabras para <0>{{title}}</0>",
-    "reelReady": "Listo para rodar",
+    "reelReady": "Reel listo",
     "title": "Analizando el guion…"
   },
   "detail": {
@@ -53,9 +53,9 @@
   },
   "myMovies": {
     "addFirstFilm": "Añade tu primera película",
-    "empty": "Tu carrete está vacío",
+    "empty": "Tu reel está vacío",
     "emptyBody": "Añade tu primera película y incorporaremos sus palabras clave a tu rutina diaria.",
-    "eyebrow": "TU CARRETE",
+    "eyebrow": "TU REEL",
     "noMatch": "No hay películas que coincidan",
     "showAll": "Mostrar todas las películas",
     "sortBy": "Ordenar por",
