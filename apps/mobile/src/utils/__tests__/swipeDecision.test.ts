@@ -1,5 +1,6 @@
 import {
   shouldClaimHorizontal,
+  shouldResetSwipeOffset,
   swipeActionOnRelease,
   SWIPE_CLAIM_DX,
   SWIPE_COMMIT_DX,
@@ -49,5 +50,31 @@ describe('swipeActionOnRelease', () => {
 
   it('returns null on a dead release (no movement, no velocity)', () => {
     expect(swipeActionOnRelease(0, 0)).toBeNull();
+  });
+});
+
+describe('shouldResetSwipeOffset', () => {
+  it('resets when a recycled row lands on a different movie', () => {
+    expect(shouldResetSwipeOffset('101', '102')).toBe(true);
+  });
+
+  it('does not reset while the row keeps showing the same movie', () => {
+    // Rows re-render constantly as the feed scrolls; resetting on every render
+    // would cancel a drag the finger is still holding.
+    expect(shouldResetSwipeOffset('101', '101')).toBe(false);
+  });
+
+  it('does not reset on first render, where the offset is already 0', () => {
+    expect(shouldResetSwipeOffset(undefined, '101')).toBe(false);
+  });
+
+  it('compares by identity, so numeric and string ids are distinct', () => {
+    // The list passes String(...) — this pins that a caller mixing the two
+    // would reset every render rather than silently never resetting.
+    expect(shouldResetSwipeOffset(101, '101')).toBe(true);
+  });
+
+  it('resets when a row is recycled onto an item with no id', () => {
+    expect(shouldResetSwipeOffset('101', undefined)).toBe(true);
   });
 });

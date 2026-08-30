@@ -30,6 +30,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { directionSign } from '../../i18n/rtl';
 import {
   shouldClaimHorizontal,
+  shouldResetSwipeOffset,
   swipeActionOnRelease,
   SWIPE_COMMIT_DX,
   type SwipeAction,
@@ -42,13 +43,18 @@ interface Props {
   height: number;
   /** Disable swiping (e.g. while a previous action is settling). */
   disabled?: boolean;
+  /** Identity of the item this row is currently showing (the movie id). When it
+   *  changes, the row has been recycled onto a different movie and the drag
+   *  offset is snapped back to 0. Lets the list reuse the row instead of keying
+   *  — and remounting — the whole subtree per movie. */
+  resetKey?: string | number;
 }
 
 // Far enough that the card fully clears the widest phone before we fire the
 // action and the parent removes the row.
 const OFFSCREEN = 700;
 
-export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
+export function SwipeableRow({ children, onSwipe, height, disabled, resetKey }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -56,6 +62,21 @@ export function SwipeableRow({ children, onSwipe, height, disabled }: Props) {
   // directions. Thresholds and backdrop opacities are all expressed here; only
   // the transform at the bottom converts back to physical pixels.
   const translate = useRef(new Animated.Value(0)).current;
+
+  // Recycle reset. Deliberately during render rather than in an effect: an
+  // effect runs after the new movie has already painted, so the row would show
+  // one frame still translated off-screen with the old action backdrop behind
+  // it — the exact artefact this guards against. Writing to a ref-held
+  // Animated.Value is not React state, so there is no re-render to loop on, and
+  // the write is idempotent if render is replayed.
+  const shownKey = useRef(resetKey);
+  if (shouldResetSwipeOffset(shownKey.current, resetKey)) {
+    shownKey.current = resetKey;
+    // Kill any still-running settle animation first, or it would keep driving
+    // the value after the reset and re-strand the row off-screen.
+    translate.stopAnimation();
+    translate.setValue(0);
+  }
   // Memoized because every new multiply node re-attaches a native animated
   // node, and these rows re-render as the feed scrolls.
   const translateX = useMemo(() => Animated.multiply(translate, directionSign), [translate]);

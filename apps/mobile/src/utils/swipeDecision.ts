@@ -57,3 +57,27 @@ export function swipeActionOnRelease(dx: number, vx: number): SwipeAction | null
   if (dir === 0) return null;
   return dir > 0 ? 'watched' : 'notInterested';
 }
+
+/**
+ * Whether a recycled row must snap its drag offset back to 0.
+ *
+ * FlashList reuses one row component for many movies as they scroll past. A row
+ * that was swiped away is left translated off-screen, so without a reset the
+ * next movie to land in that cell inherits the offset and shows the previous
+ * row's action backdrop underneath it.
+ *
+ * The list used to avoid this by keying the row subtree per movie id, which
+ * forced a full unmount/remount on every recycle and threw away the thing
+ * recycling exists to save. Comparing the identity here instead lets the row be
+ * reused while still resetting the one piece of state that must not carry over.
+ *
+ * Undefined `prev` means a first render, where the offset is already 0 and
+ * there is nothing to reset.
+ */
+export function shouldResetSwipeOffset(
+  prev: string | number | undefined,
+  next: string | number | undefined,
+): boolean {
+  if (prev === undefined) return false;
+  return prev !== next;
+}

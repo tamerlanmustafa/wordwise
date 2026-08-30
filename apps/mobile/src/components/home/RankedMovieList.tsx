@@ -78,6 +78,28 @@ import type { SwipeAction } from '../../utils/swipeDecision';
 const CARD_H        = 116;
 const CARD_GAP      = 8;
 const ITEM_H        = CARD_H + CARD_GAP;
+
+// NOTE — do not widen FlashList's `drawDistance` here without re-measuring.
+// Tried and reverted 2026-08-30. The knob works exactly as advertised: the
+// default 250 keeps 11 cards mounted, 500 keeps ~15 and 1000 keeps 20 (counted
+// in the AX tree on an iPhone 17 Pro sim). The problem is the cost curve. Peak
+// phys_footprint, 3 alternating runs each with TMDB backdrops actually loading:
+//
+//     250  → ~283 MB      (11 cards, FlashList default)
+//     500  → ~347 MB      (~15 cards, +64 MB)
+//     1000 → ~454 MB      (20 cards, +171 MB)
+//
+// ~19 MB per extra mounted card, because every live card pins a decoded w780
+// backdrop bitmap. A 60% jump in peak memory is not worth a deeper pre-render
+// bank. Measure with images loading if you revisit this: an earlier run with
+// the TMDB proxy 401ing showed only +11 MB and was badly misleading.
+//
+// The runway is also only a *burst* budget — it covers a flick from rest, not
+// sustained scrolling, where cards enter the window at whatever rate you scroll
+// regardless of its size. If blanks need fixing, make the cell cheaper (the
+// renderItem `key` below defeats FlashList's recycling, so every cell that
+// scrolls in is a full remount) rather than mounting more of them.
+
 // How many cards the fixed-height panel shows at rest. The list scrolls
 // (and virtualizes) within this window; the rest of the page scrolls around it.
 const VISIBLE_CARDS = 4;
@@ -477,13 +499,22 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
                 onPress={() => onMoviePress(item)}
               />
             );
+            const rowId = String(item.id ?? item.movie_id);
             return (
-              // key by movie id so a recycled FlashList cell remounts the
-              // SwipeableRow fresh (translateX back to 0) instead of keeping a
-              // swiped-off row's backdrop showing under the next movie.
-              <View style={s.cardSlot} key={String(item.id ?? item.movie_id)}>
+              // No `key` here on purpose. Keying by movie id made every recycled
+              // cell a full unmount/remount — ~10 native views, a PanResponder
+              // and the animated nodes rebuilt for each card that scrolled in —
+              // which is most of what FlashList's recycling exists to avoid.
+              // SwipeableRow now takes the identity as `resetKey` and snaps its
+              // own drag offset back to 0, so the row is reused and a swiped-off
+              // card's backdrop still can't show under the next movie.
+              <View style={s.cardSlot}>
                 {onSwipeAction ? (
-                  <SwipeableRow height={CARD_H} onSwipe={(action) => onSwipeAction(action, item)}>
+                  <SwipeableRow
+                    height={CARD_H}
+                    resetKey={rowId}
+                    onSwipe={(action) => onSwipeAction(action, item)}
+                  >
                     {card}
                   </SwipeableRow>
                 ) : (
