@@ -1449,7 +1449,11 @@ export const MovieDetailScreen = ({
           Two doors that part down the middle to uncover the movie screen,
           which has been mounted and laid out behind them the whole time.
           Interaction passes through the moment they start opening; onBack
-          stays reachable via the chip until then. */}
+          stays reachable via the chip until then.
+
+          The background sits on the DOOR, not on the face — see the note on
+          `doorFace`. Moving it down one level cuts the top half off the
+          wordmark. */}
       {splashMounted ? (
         <View style={splashStyles.wrap} pointerEvents={splashHolding ? 'auto' : 'none'}>
           {[doors.left, doors.right].map((half, i) => (
@@ -1457,16 +1461,11 @@ export const MovieDetailScreen = ({
               key={i}
               style={[
                 splashStyles.door,
-                { left: half.left, width: half.width },
+                { left: half.left, width: half.width, backgroundColor: tc.background },
                 doorMotion(half.travel),
               ]}
             >
-              <View
-                style={[
-                  splashStyles.doorFace,
-                  { left: half.faceLeft, width: screenW, backgroundColor: tc.background },
-                ]}
-              >
+              <View style={[splashStyles.doorFace, { left: half.faceLeft, width: screenW }]}>
                 {renderSplashFace(splashScaleFor())}
               </View>
             </Animated.View>
@@ -1489,15 +1488,28 @@ const splashStyles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
   },
-  /** Half the screen, clipping its face to that half. */
+  /** Half the screen, clipping its face to that half. Carries the background
+   *  colour — see `doorFace`. */
   door: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     overflow: 'hidden',
   },
-  /** Full-screen face inside a door, offset so it sits where it would if the
-   *  splash were one undivided view. Centering lives here, not on `wrap`. */
+  /**
+   * Full-screen face inside a door, offset so it sits where it would if the
+   * splash were one undivided view. Centering lives here, not on `wrap`.
+   *
+   * Deliberately has NO background: the wordmark it contains is tilted with
+   * `perspective` + `rotateX`, so its top half leans away from the viewer in
+   * z and its bottom half leans toward them. Once the door above gained a
+   * transform, that put the mark inside a 3D rendering context, and Core
+   * Animation depth-sorted the receding half BEHIND any background painted on
+   * this view — which read as the "WW" being sliced flat across the middle.
+   * Painting the background one level up, on the door, puts a plain view
+   * boundary between the ground and the 3D content, so the mark always draws
+   * in front of it. Do not move it back down.
+   */
   doorFace: {
     position: 'absolute',
     top: 0,
