@@ -217,14 +217,3 @@ export function ringDashOffset(score: number | null | undefined): number {
   const pct = Math.max(0, Math.min(100, score));
   return RING_C * (1 - pct / 100);
 }
-
-// ── Rank ───────────────────────────────────────────────────────────────────
-
-/**
- * The list position after the active sort, not a stored ranking. Under a
- * filter it renumbers from 01, which is correct: it describes this list, not
- * the catalogue.
- */
-export function formatRank(index: number): string {
-  return String(index + 1).padStart(2, '0');
-}

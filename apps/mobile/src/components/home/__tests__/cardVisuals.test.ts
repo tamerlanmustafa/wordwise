@@ -15,7 +15,6 @@ import {
   compositeOver,
   contrastRatio,
   cornerForGlyph,
-  formatRank,
   hexToRgb,
   parseCornerRgb,
   parseInk,
@@ -280,18 +279,6 @@ describe('level ring geometry', () => {
   it('clamps scores that fall outside 0–100', () => {
     expect(ringDashOffset(140)).toBeCloseTo(0, 6);
     expect(ringDashOffset(-20)).toBeCloseTo(RING_C, 6);
-  });
-});
-
-describe('formatRank', () => {
-  it('zero-pads the list position to two digits', () => {
-    expect(formatRank(0)).toBe('01');
-    expect(formatRank(8)).toBe('09');
-  });
-
-  it('stops padding past 99 rather than truncating', () => {
-    expect(formatRank(9)).toBe('10');
-    expect(formatRank(99)).toBe('100');
   });
 });
 

@@ -16,8 +16,8 @@
  * horizontal gradient scrim in the card's own stock colour — near-opaque
  * behind the type, easing to nothing by the trailing edge where the still
  * reads at full strength. Text is ink on paper, which is what lets one set of
- * colours survive both themes. The leading margin carries the two things the
- * row is actually sorted and judged by: its rank and its level ring.
+ * colours survive both themes. The leading margin carries the one thing the
+ * row is actually judged by: its level ring.
  *
  * The maths (gradient stops, ring geometry, plus-ink contrast) lives in
  * ./cardVisuals so it is testable and can be hoisted out of the row.
@@ -67,7 +67,6 @@ import {
   buildEdgeFade,
   buildScrim,
   cornerForGlyph,
-  formatRank,
   hexToRgb,
   pickPlusInk,
   plusHalo,
@@ -313,12 +312,9 @@ const LevelRing = React.memo(({
 // ── Single ranked card ─────────────────────────────────────────────────────
 const MovieCard = React.memo(({
   movie,
-  index,
   onPress,
 }: {
   movie: any;
-  /** List position after the active sort — drives the rank numeral. */
-  index: number;
   onPress: () => void;
 }) => {
   const tc = useThemeColors();
@@ -391,13 +387,10 @@ const MovieCard = React.memo(({
       ) : null}
 
       <View style={s.row}>
-        <View style={s.leftCol}>
-          <Text style={s.rank}>{formatRank(index)}</Text>
-          {/* collapsable={false} keeps the wrapper in the native view tree so
-              measureInWindow always returns a real rect. */}
-          <View ref={ringRef as any} collapsable={false}>
-            <LevelRing score={score} band={band} tc={tc} s={s} />
-          </View>
+        {/* collapsable={false} keeps the wrapper in the native view tree so
+            measureInWindow always returns a real rect. */}
+        <View ref={ringRef as any} collapsable={false}>
+          <LevelRing score={score} band={band} tc={tc} s={s} />
         </View>
 
         <View style={s.info}>
@@ -477,11 +470,10 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
         <FlashList
           data={data}
           keyExtractor={(item) => String(item.id || item.movie_id)}
-          renderItem={({ item, index }) => {
+          renderItem={({ item }) => {
             const card = (
               <MovieCard
                 movie={item}
-                index={index}
                 onPress={() => onMoviePress(item)}
               />
             );
@@ -635,20 +627,6 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       paddingStart: 14,
       paddingEnd: 12,
       gap: 13,
-    },
-
-    leftCol: {
-      alignItems: 'center',
-      gap: 9,
-    },
-
-    rank: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 19,
-      fontWeight: '700',
-      letterSpacing: -0.38,
-      lineHeight: 19,
-      color: tc.cardRank,
     },
 
     ring: {

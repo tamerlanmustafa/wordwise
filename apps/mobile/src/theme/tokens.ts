@@ -121,7 +121,6 @@ export interface ThemeColors {
   cardStock:          string;
   cardInk:            string;  // title + the percent inside the ring
   cardMeta:           string;  // year, rating, CEFR band, ring arc
-  cardRank:           string;  // the big mono list position
   cardRingTrack:      string;  // unfilled part of the level ring
 
   // Reel-only: the film stock substrate + sprocket palette
@@ -230,7 +229,6 @@ const light: ThemeColors = {
   cardStock:          '#FBF7EE',
   cardInk:            '#2D2418',
   cardMeta:           '#8B5A00',
-  cardRank:           'rgba(45,36,24,0.28)',
   cardRingTrack:      'rgba(45,36,24,0.12)',
 
   reelStock:          '#F4EFE3',
@@ -330,7 +328,6 @@ const dark: ThemeColors = {
   cardStock:          '#0F1013',
   cardInk:            '#F3EEE4',
   cardMeta:           '#FFD166',
-  cardRank:           'rgba(244,243,239,0.30)',
   cardRingTrack:      'rgba(255,255,255,0.10)',
 
   reelStock:          '#1a1109',
