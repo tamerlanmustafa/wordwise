@@ -9,14 +9,26 @@ hint chip, the Explore card, the movie-detail card deck — maps through here, s
 
 Anything outside the map returns None and the caller drops the label rather
 than printing a raw tag: "PART" or "X" on a card is worse than no label at all.
-That deliberately swallows the function-word tags (DET, ADP, PRON, SCONJ …),
-which is right for the two study surfaces — those words are not taught as
-vocabulary and their tag would only ever appear on a card by mistake.
 
-PROPN collapses to "noun" on purpose. It is not a distinction a learner needs,
-and a good share of the corpus's PROPN lemmas are ordinary words the parser
-mis-tagged from a capitalised line of dialogue (see issue #91) — labelling
-those "proper noun" would advertise the parse error.
+The function words are named rather than swallowed. This map began life on the
+quiz hint chip, where only content words ever appear, so four tags covered it;
+the Explore feed teaches whatever sits at a CEFR band, and A1 is full of `she`,
+`once` and `into`. A definition with no label beside it reads as broken — the
+reader cannot tell "we don't know" from "this word has no type" — so every tag
+with an honest one-word answer gets one.
+
+Two collapses on purpose:
+  * PROPN → "noun". Not a distinction a learner needs, and a good share of the
+    corpus's PROPN lemmas are ordinary words the parser mis-tagged from a
+    capitalised line of dialogue (see issue #91), so "proper noun" would
+    advertise the parse error.
+  * SCONJ + CCONJ → "conjunction". Subordinating versus coordinating is a
+    grammar lesson, not a label.
+
+Still unmapped, deliberately: PART (in English mostly infinitival "to" and
+possessive "'s" — "particle" tells a learner nothing), plus X, SYM, PUNCT,
+SPACE and NUM, which on a vocabulary card mean the tagger went wrong rather
+than that the word is a symbol.
 """
 from __future__ import annotations
 
@@ -29,6 +41,12 @@ POS_FRIENDLY: dict[str, str] = {
     "AUX": "verb",
     "ADJ": "adj",
     "ADV": "adv",
+    "PRON": "pronoun",
+    "ADP": "preposition",
+    "DET": "determiner",
+    "SCONJ": "conjunction",
+    "CCONJ": "conjunction",
+    "INTJ": "interjection",
 }
 
 

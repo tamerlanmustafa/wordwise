@@ -48,11 +48,26 @@ def test_propn_and_aux_collapse_into_their_plain_forms():
     assert friendly_pos("AUX") == "verb"
 
 
-def test_function_word_tags_have_no_label():
-    # Dropping beats printing: these words are not taught as vocabulary, so a
-    # tag reaching a card at all is already a bug — showing "SCONJ" makes it
-    # the reader's problem instead of a blank space.
-    for tag in ("PART", "DET", "ADP", "PRON", "SCONJ", "X", "PUNCT"):
+def test_function_words_are_named_not_swallowed():
+    # A1 is full of these — `she`, `once`, `into` all reach an Explore card —
+    # and a definition with no label beside it reads as broken rather than as
+    # "this word has no type".
+    assert friendly_pos("PRON") == "pronoun"
+    assert friendly_pos("ADP") == "preposition"
+    assert friendly_pos("DET") == "determiner"
+    assert friendly_pos("INTJ") == "interjection"
+
+
+def test_both_conjunction_tags_collapse_to_one_word():
+    # Subordinating vs coordinating is a grammar lesson, not a card label.
+    assert friendly_pos("SCONJ") == "conjunction"
+    assert friendly_pos("CCONJ") == "conjunction"
+
+
+def test_tags_with_no_honest_one_word_answer_have_no_label():
+    # PART is mostly infinitival "to" and possessive "'s"; the rest mean the
+    # tagger went wrong. Printing "X" makes that the reader's problem.
+    for tag in ("PART", "X", "SYM", "PUNCT", "SPACE", "NUM"):
         assert friendly_pos(tag) is None
 
 
