@@ -204,7 +204,7 @@ def test_lemma_is_lowercased(monkeypatch):
 
 
 def test_unmapped_pos_gets_no_chip(monkeypatch):
-    """spaCy tags outside `_POS_FRIENDLY` render no chip rather than a
+    """spaCy tags outside `POS_FRIENDLY` render no chip rather than a
     confusing raw "PART" / "X"."""
     _stub_spacy(monkeypatch)
     monkeypatch.setitem(_LEMMAS, "up", ("up", "PART"))

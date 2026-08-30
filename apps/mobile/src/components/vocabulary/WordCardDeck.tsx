@@ -31,6 +31,7 @@ import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import { wordTranslationDisplay } from './translationDisplay';
+import { glossLine } from '../../utils/glossLine';
 import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
@@ -241,35 +242,45 @@ const SentenceLabel = ({
 );
 
 /**
- * The English learner gloss under the headword.
+ * The English learner gloss under the headword — "(noun) a person who…".
  *
  * Shared by the focused card and the fly-away overlay's static body — the two
  * must render byte-identical slots or the card visibly pops at the instant the
  * overlay detaches, which is exactly the class of bug the static body exists to
  * avoid. Hence one component rather than two copies of the same four lines.
  *
- * The View renders whether or not there is a definition: the slot is part of
- * the card's constant height (see cardLayout), so it is reserved for a lemma
- * the definition worker hasn't reached yet and simply left blank. No dashed
- * placeholder — on this card dashes mean "this fills in when you tap", and
- * this line does not.
+ * The View renders whether or not there is anything to put in it: the slot is
+ * part of the card's constant height (see cardLayout), so it is reserved for a
+ * lemma the definition worker hasn't reached yet and simply left blank. No
+ * dashed placeholder — on this card dashes mean "this fills in when you tap",
+ * and this line does not.
+ *
+ * Both halves are independently optional, so `glossLine` composes them: a word
+ * whose part of speech the parser never tagged still shows its definition, and
+ * a word the definition worker hasn't reached still shows its type.
  */
 const DefinitionSlot = ({
   s,
   definition,
+  pos,
 }: {
   s: ReturnType<typeof makeDeckStyles>;
   definition?: string | null;
+  pos?: string | null;
 }) => {
-  const tier = definition ? definitionTier(definition) : null;
+  const gloss = glossLine(pos, definition);
+  // Tiered on the composed line, label included — see definitionTier.
+  const tier = gloss ? definitionTier(gloss.text) : null;
   return (
     <View style={s.definitionSlot}>
-      {definition && tier ? (
+      {gloss && tier ? (
         <Text
           style={[s.definition, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
           numberOfLines={tier.lines}
         >
-          {definition}
+          {gloss.pos ? <Text style={s.definitionPos}>{gloss.pos}</Text> : null}
+          {gloss.pos && gloss.definition ? ' ' : null}
+          {gloss.definition}
         </Text>
       ) : null}
     </View>
@@ -996,7 +1007,11 @@ export const WordCardDeck = ({
             {term}
           </Text>
         </View>
-        <DefinitionSlot s={s} definition={staticSentence?.definition} />
+        <DefinitionSlot
+          s={s}
+          definition={staticSentence?.definition}
+          pos={staticSentence?.pos}
+        />
         <View style={s.wordTrSlot}>
           <View style={[s.slotLayer, s.wordTrRow]}>
             <View style={s.langTagDashed}>
@@ -1162,7 +1177,11 @@ export const WordCardDeck = ({
                 sentence below uses. Not part of the reveal: it is the same
                 language as the sentence, so it belongs to the always-visible
                 half of the card. */}
-            <DefinitionSlot s={s} definition={visibleSentence?.definition} />
+            <DefinitionSlot
+              s={s}
+              definition={visibleSentence?.definition}
+              pos={visibleSentence?.pos}
+            />
 
             {/* 3 · word-translation slot: two stacked layers cross-fade in
                 place — dashed rule while hidden, translation when revealed */}
@@ -1559,6 +1578,13 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       // commentary on the headword above, not a rival to the sentence below.
       fontStyle: 'italic',
       color: light ? '#7A6A50' : tc.textFaint,
+    },
+    definitionPos: {
+      // Upright inside the italic line and gold, matching the Explore card.
+      // `fontStyle` must be restated: a nested Text inherits the parent's.
+      fontStyle: 'normal',
+      fontWeight: '600',
+      color: tc.goldOnSurface,
     },
     wordTrSlot: {
       marginTop: WORD_TR_SLOT_TOP,

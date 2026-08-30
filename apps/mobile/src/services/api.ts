@@ -603,6 +603,7 @@ export const wordwiseApi = {
         word_position: number;
         matched_form: string;
         definition?: string | null;
+        pos?: string | null;
       }[]
     >
   > => {
@@ -1005,6 +1006,10 @@ export interface FeedItem {
   /** No pronunciation source exists yet — always null today. The card hides
    *  the IPA line when it is, so a future source needs no client change. */
   ipa: string | null;
+  /** Learner label — `noun` / `verb` / `adj` / `adv`, mapped server-side from
+   *  the raw UPOS tag on `lemmas.pos`. Null when the parser never tagged the
+   *  lemma or tagged it as a function word. Prefixes `definition` on the card;
+   *  the two are independent, so either can be present without the other. */
   pos: string | null;
   cefr: string | null;
   /** One-line English learner gloss for the sense `sentence` uses. Null until

@@ -132,9 +132,20 @@ export const DEFINITION_TIER_MAX_CHARS = 46;
 /** Definition: one comfortable line, or two for a long gloss. Both tiers fit
  *  inside DEFINITION_SLOT_HEIGHT (32) — 1 × 20, 2 × 16 — and both keep a
  *  lineHeight/fontSize ratio above 1.3, which is what stops Android clipping
- *  the descenders of serif italic (see the slot's note). */
-export function definitionTier(definition: string): TypeTier {
-  return definition.length <= DEFINITION_TIER_MAX_CHARS
+ *  the descenders of serif italic (see the slot's note).
+ *
+ *  Measure the WHOLE line — `glossLine().text`, part-of-speech label included,
+ *  not the definition on its own. The label is ~7 characters of the same
+ *  budget, and sizing without it is how a line that "fits" gets clipped.
+ *
+ *  The 2-line tier seats about 90 characters, which is where the backend's
+ *  MAX_DEF_CHARS came from. A label on top of a definition already at that cap
+ *  therefore ellipsizes — true of 62 of the 27,068 glosses in the corpus
+ *  (0.2%, all of them 84+ chars). Left to clamp rather than paid for with a
+ *  third line: three at 12/16 is 48px against a 32px slot, so the fix would be
+ *  a taller card for every word to save the tail. */
+export function definitionTier(line: string): TypeTier {
+  return line.length <= DEFINITION_TIER_MAX_CHARS
     ? { fontSize: 14, lineHeight: 20, lines: 1 }
     : { fontSize: 12, lineHeight: 16, lines: 2 };
 }

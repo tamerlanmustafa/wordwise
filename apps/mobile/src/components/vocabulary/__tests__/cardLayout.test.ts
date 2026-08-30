@@ -16,6 +16,7 @@ import {
   SENTENCE_TIER_MAX_CHARS,
   MOVIE_TITLE_TIER_MAX_CHARS,
 } from '../cardLayout';
+import { glossLine } from '../../../utils/glossLine';
 
 // Stress strings from the approved mockup (1a "Ledger reveal").
 const LONG_IDIOM = 'burn the candle at both ends'; // 28 chars → small word tier
@@ -100,6 +101,17 @@ describe('definitionTier', () => {
   it('boundary: exactly 46 chars stays on the single-line tier', () => {
     expect(definitionTier('a'.repeat(DEFINITION_TIER_MAX_CHARS)).lines).toBe(1);
     expect(definitionTier('a'.repeat(DEFINITION_TIER_MAX_CHARS + 1)).lines).toBe(2);
+  });
+
+  it('the part-of-speech label counts against the same budget', () => {
+    // What the card renders is the composed line, so that is what has to be
+    // measured. A gloss that just fits one line no longer does once "(noun) "
+    // is in front of it, and sizing it as though it did is a clipped line on
+    // the smallest device.
+    const gloss = glossLine('noun', 'a'.repeat(DEFINITION_TIER_MAX_CHARS));
+
+    expect(definitionTier('a'.repeat(DEFINITION_TIER_MAX_CHARS)).lines).toBe(1);
+    expect(definitionTier(gloss!.text).lines).toBe(2);
   });
 });
 

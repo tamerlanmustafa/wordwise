@@ -29,6 +29,12 @@ export interface SentenceExample {
    *  it is the same on every movie containing the word. Absent until the
    *  definition worker has reached the lemma — the card hides the line. */
   definition?: string | null;
+  /** Learner part-of-speech label for the same lemma — `noun` / `verb` /
+   *  `adj` / `adv`, already mapped from the raw UPOS tag server-side. Prefixes
+   *  the definition on the card deck. Absent when the parser never tagged the
+   *  lemma (~14% of the registry), which is independent of whether the
+   *  definition is there. */
+  pos?: string | null;
 }
 
 const EXPAND_ANIM = {

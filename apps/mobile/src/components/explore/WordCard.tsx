@@ -2,23 +2,32 @@
  * WordCard — one full-viewport card in the Explore feed.
  *
  * Layout, top → bottom:
- *   1. Meta row (CEFR badge + part of speech). Pinned — it must NOT move
- *      when a panel opens, so it sits outside the lifting group.
+ *   1. Meta row (CEFR badge). Pinned — it must NOT move when a panel opens,
+ *      so it sits outside the lifting group.
  *   2. flex spacer
- *   3. Lifting group: word → IPA → section rule → sentence → translation.
- *      Transforms as one unit so the word rises clear of an open panel.
+ *   3. Lifting group: word → IPA → gloss → section rule → sentence →
+ *      translation. Transforms as one unit so the word rises clear of an
+ *      open panel.
  *   4. flex spacer
  *
  * Tapping anywhere toggles the translation — word and sentence together,
  * never one without the other. There is no reveal button and no hint text.
  *
- * The definition line sits between the word and the section rule, and renders
- * only when the server sent one — `lemmas.definition` is filled lazily by the
- * definition worker, so on a cold lemma the card still goes word → sentence
- * exactly as it did before the column existed. It is deliberately NOT part of
- * the reveal: it is English, describing the same sense the sentence uses, so
- * it belongs with the always-visible half of the card, not behind the tap that
- * shows the learner's own language.
+ * The gloss line sits between the word and the section rule and reads
+ * "(noun) a person who…" — the part of speech and the definition, both from
+ * `lemmas`, composed by `glossLine`. Either half can be missing (the parser
+ * had no tag; the definition worker hasn't reached the lemma), and the line
+ * renders whatever it has; with neither it disappears and the card goes word →
+ * sentence exactly as it did before the column existed.
+ *
+ * The part of speech is here rather than in the meta row because it belongs to
+ * the definition, not to the card's chrome: it says which sense the gloss
+ * describes. Printing it in both places would say the same word twice on one
+ * card.
+ *
+ * The line is deliberately NOT part of the reveal: it is English, describing
+ * the same sense the sentence uses, so it belongs with the always-visible half
+ * of the card, not behind the tap that shows the learner's own language.
  *
  * Motion note: the reveal animates height on the JS driver (RN can't drive
  * layout natively) while opacity + translateY run on the native driver, so
@@ -28,6 +37,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { glossLine } from '../../utils/glossLine';
 import type { FeedItem } from '../../services/api';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -95,6 +105,7 @@ function WordCardBase({
   };
 
   const hasTranslation = Boolean(item.translated_word || item.translated_sentence);
+  const gloss = glossLine(item.pos, item.definition);
 
   return (
     <Pressable
@@ -113,7 +124,6 @@ function WordCardBase({
             <Text style={s.badgeText}>{item.cefr}</Text>
           </View>
         ) : null}
-        {item.pos ? <Text style={s.pos}>{item.pos}</Text> : null}
       </View>
 
       <View style={s.spacerTop} />
@@ -134,12 +144,18 @@ function WordCardBase({
             Three, not the deck's two: the clamp here is a backstop against a
             pathological value, not a squeeze. The usable width is the card
             minus 24 and the action rail's lane (~300pt), which at 17pt seats
-            roughly 40 characters a line — so MAX_DEF_CHARS (90) needs a third
-            line to land whole on an SE. The deck can afford two because its
-            slot runs at 12pt. */}
-        {item.definition ? (
+            roughly 40 characters a line — so MAX_DEF_CHARS (90) plus the label
+            needs a third line to land whole on an SE. The deck can afford two
+            because its slot runs at 12pt.
+
+            One Text, not a row: the label has to wrap with the gloss rather
+            than sit beside it, or a long definition would flow underneath it
+            in a column of its own width. */}
+        {gloss ? (
           <Text style={s.definition} numberOfLines={3}>
-            {item.definition}
+            {gloss.pos ? <Text style={s.glossPos}>{gloss.pos}</Text> : null}
+            {gloss.pos && gloss.definition ? ' ' : null}
+            {gloss.definition}
           </Text>
         ) : null}
 
@@ -274,12 +290,6 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 1,
       color: tc.goldOnSurface,
     },
-    pos: {
-      fontFamily: SERIF_FAMILY,
-      fontStyle: 'italic',
-      fontSize: 14,
-      color: tc.textFaint,
-    },
     spacerTop: { flex: 1, minHeight: 12 },
     spacerBottom: { flex: 1, minHeight: 14 },
     word: {
@@ -304,6 +314,15 @@ const makeStyles = (tc: ThemeColors) =>
       // rather than as a second sentence competing with the example below.
       fontStyle: 'italic',
       color: tc.textSecondary,
+    },
+    glossPos: {
+      // Upright inside the italic line, and gold: the dictionary treatment,
+      // and the one thing on the card that names a grammatical fact rather
+      // than a meaning. `fontStyle` has to be reset explicitly — a nested
+      // Text inherits the parent's italic otherwise.
+      fontStyle: 'normal',
+      fontWeight: '600',
+      color: tc.goldOnSurface,
     },
     ruleRow: {
       flexDirection: 'row',

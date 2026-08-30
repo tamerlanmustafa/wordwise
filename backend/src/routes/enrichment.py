@@ -12,6 +12,7 @@ import logging
 from src.database import get_db
 from src.middleware.auth import get_current_active_user, get_admin_user
 from src.utils.nlp_executor import NLPOverloaded, nlp_slot, run_nlp
+from src.utils.pos_labels import friendly_pos
 from src.utils.rate_limit import rate_limit
 from prisma import Prisma
 from src.config import get_settings
@@ -1010,14 +1011,21 @@ async def get_word_sentences(
         # one; firing an LLM call from a tap would buy the same row at
         # request latency, on the event loop, for one user.
         definition = lemma_record.definition if lemma_record else None
+        # The label that prefixes it, from the same row and under the same
+        # shape rule. Its own field, not glued onto the definition string:
+        # the two have separate type treatments on the card, and a lemma can
+        # have one without the other.
+        pos = friendly_pos(lemma_record.pos) if lemma_record else None
         for item in raw_sentences:
             item["definition"] = definition
+            item["pos"] = pos
 
         return {
             "movie_id": movie_id,
             "word": word.lower(),
             "lemma": lemma_text,
             "definition": definition,
+            "pos": pos,
             "sentences": raw_sentences,
             "total": len(raw_sentences),
             "sentences_unavailable": sentences_unavailable,
@@ -1104,6 +1112,11 @@ async def get_word_sentences_batch(
     # it is a column on `lemmas`, not a join, so it costs nothing here. None
     # until the definition worker reaches the lemma; the card hides the line.
     lemma_str_to_def = {lr.lemma: lr.definition for lr in lemma_records}
+    # Same rows, same free ride: the part of speech that prefixes that line.
+    # Mapped to its learner label here rather than on the client so this
+    # endpoint and /srs/feed put the same word in front of the same gloss —
+    # `lemmas.pos` is a raw UPOS tag and must never reach a card.
+    lemma_str_to_pos = {lr.lemma: friendly_pos(lr.pos) for lr in lemma_records}
 
     if not lemma_str_to_id:
         total_ms = (time.perf_counter() - t_start) * 1000
@@ -1160,6 +1173,7 @@ async def get_word_sentences_batch(
                     "word_position": link.wordPosition or 0,
                     "matched_form": link.matchedForm or word,
                     "definition": lemma_str_to_def.get(lemma_str),
+                    "pos": lemma_str_to_pos.get(lemma_str),
                 }
                 for link in bucket
             ]
@@ -1217,7 +1231,15 @@ async def get_word_sentences_batch(
                             # definition worker — which reads that sentence to
                             # pick the sense — cannot have run on it yet. It
                             # will on its next cycle.
-                            results[word] = [{**payload, "definition": None}]
+                            #
+                            # `pos` is not in that boat: it was written when
+                            # the script was classified, long before this call,
+                            # so a slow-path word still gets its label.
+                            results[word] = [{
+                                **payload,
+                                "definition": None,
+                                "pos": lemma_str_to_pos.get(word_to_lemma.get(word, "")),
+                            }]
                         slow_path_state = "fired"
                     except CostCapExceeded as cap_err:
                         logger.warning(f"[batch-sentences] {cap_err}")

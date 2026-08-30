@@ -91,21 +91,30 @@ def _link(
 
 
 def _fake_db(
-    *, classification=None, lemma_id=1, links=(), script_text=SCRIPT, definition=None
+    *,
+    classification=None,
+    lemma_id=1,
+    links=(),
+    script_text=SCRIPT,
+    definition=None,
+    pos=None,
 ):
     """Enough of the Prisma client for the sentences handler.
 
     `classification=None` forces the bare-word lemma fallback; `links=()` forces
     the whole-script slow path. `definition` is the lemma's learner gloss, which
     the handler stamps onto every returned sentence — None (the default) is the
-    common case, a lemma the definition worker has not reached yet.
+    common case, a lemma the definition worker has not reached yet. `pos` is the
+    raw UPOS tag on the same row, mapped to a learner label on the way out.
     """
     async def classification_find_first(where):
         return classification
 
     async def lemma_find_first(where):
         return (
-            SimpleNamespace(id=lemma_id, lemma=where["lemma"], definition=definition)
+            SimpleNamespace(
+                id=lemma_id, lemma=where["lemma"], definition=definition, pos=pos
+            )
             if lemma_id
             else None
         )
@@ -371,6 +380,63 @@ async def test_the_definition_rides_along_on_the_lemma_row(monkeypatch):
     assert result["sentences"][0]["definition"] == (
         "to stop something before it is finished"
     )
+
+
+async def test_the_part_of_speech_rides_along_too(monkeypatch):
+    """The label that prefixes the gloss — "(noun) a place where…" — comes off
+    the same already-fetched row, mapped to its learner form here so the client
+    never sees a raw UPOS tag and both endpoints agree on the wording."""
+    _stub_spacy(monkeypatch)
+    links = [_link("The captain aborted the mission.", matched_form="aborted")]
+
+    db = _fake_db(
+        classification=SimpleNamespace(lemma="abort", cefrLevel="B2"),
+        links=links,
+        definition="to stop something before it is finished",
+        pos="VERB",
+    )
+    result = await _call(db, word="abort")
+
+    assert result["pos"] == "verb"
+    assert result["sentences"][0]["pos"] == "verb"
+
+
+async def test_an_untagged_lemma_serves_its_definition_without_a_label(monkeypatch):
+    """`lemmas.pos` is NULL on ~14% of the registry. The two halves of the
+    gloss line are independent: a missing tag must not cost the definition."""
+    _stub_spacy(monkeypatch)
+    links = [_link("The captain aborted the mission.", matched_form="aborted")]
+
+    db = _fake_db(
+        classification=SimpleNamespace(lemma="abort", cefrLevel="B2"),
+        links=links,
+        definition="to stop something before it is finished",
+        pos=None,
+    )
+    result = await _call(db, word="abort")
+
+    assert result["pos"] is None
+    assert result["sentences"][0]["definition"] == (
+        "to stop something before it is finished"
+    )
+
+
+async def test_a_function_word_tag_is_dropped_rather_than_printed(monkeypatch):
+    """"PART" on a card is worse than no label, so unmapped tags come back
+    None and the client prints the gloss alone."""
+    _stub_spacy(monkeypatch)
+    links = [_link("Give it up.", matched_form="up")]
+
+    db = _fake_db(
+        classification=SimpleNamespace(lemma="up", cefrLevel="A1"),
+        links=links,
+        definition="toward a higher place",
+        pos="PART",
+    )
+    result = await _call(db, word="up")
+
+    assert result["pos"] is None
+    assert result["sentences"][0]["pos"] is None
 
 
 async def test_a_lemma_without_a_definition_still_serves_its_sentence(monkeypatch):

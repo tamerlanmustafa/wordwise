@@ -769,17 +769,18 @@ export const MovieDetailScreen = ({
   // refetch them. A second empty response promotes them to 'miss-confirmed'
   // (the word genuinely has no indexed sentence — extract_word_sentences
   // does literal matching and skips inflected forms).
-  // Mirrors the batch endpoint's per-word payload. `definition` has to be
-  // declared even though nothing in this file reads it: the deck renders it,
-  // and it only survives the trip because this object is assigned through
-  // rather than constructed, so TypeScript never checks it. Leaving it off the
-  // type would let any future normalisation here drop every gloss on the deck
-  // with the typecheck and the whole suite still green.
+  // Mirrors the batch endpoint's per-word payload. `definition` and `pos` have
+  // to be declared even though nothing in this file reads them: the deck
+  // renders them, and they only survive the trip because this object is
+  // assigned through rather than constructed, so TypeScript never checks it.
+  // Leaving them off the type would let any future normalisation here drop
+  // every gloss on the deck with the typecheck and the whole suite still green.
   type SentenceEntry = {
     sentence: string;
     word_position: number;
     matched_form: string;
     definition?: string | null;
+    pos?: string | null;
   };
   type FetchStatus = 'in-flight' | 'in-flight-retry' | 'hit' | 'miss-recent' | 'miss-confirmed';
   const [sentencePreviews, setSentencePreviews] = useState<Record<string, SentenceEntry>>({});

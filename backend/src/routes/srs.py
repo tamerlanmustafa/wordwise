@@ -53,19 +53,8 @@ from ..services.srs_engine import (
 )
 from ..services.translation_service import TranslationService
 from ..utils.nlp_executor import run_nlp
+from ..utils.pos_labels import friendly_pos
 from ..utils.subscription import is_premium
-
-# Friendly POS labels surfaced on the typing-card hint chip. Anything
-# spaCy returns outside this map gets dropped (no chip rather than a
-# confusing "X" / "PART" tag).
-_POS_FRIENDLY: dict[str, str] = {
-    "NOUN": "noun",
-    "PROPN": "noun",
-    "VERB": "verb",
-    "AUX":  "verb",
-    "ADJ":  "adj",
-    "ADV":  "adv",
-}
 
 
 def _lemmatize_many(words: list[str]) -> dict[str, tuple[str, Optional[str]]]:
@@ -105,7 +94,7 @@ def _lemmatize_many(words: list[str]) -> dict[str, tuple[str, Optional[str]]]:
                 continue
             tok = doc[0]
             lemma = (tok.lemma_ or w).lower().strip() or w.lower()
-            out[word] = (lemma, _POS_FRIENDLY.get(tok.pos_))
+            out[word] = (lemma, friendly_pos(tok.pos_))
     except Exception as e:
         logger.warning(f"[srs.start] lemmatize failed for {len(pending)} word(s): {e}")
         for word in pending:
@@ -1508,7 +1497,7 @@ async def word_feed(
             FeedItem(
                 lemma_id=pick["lemma_id"],
                 word=pick["word"],
-                pos=_POS_FRIENDLY.get((pick.get("pos") or "").upper()),
+                pos=friendly_pos(pick.get("pos")),
                 cefr=pick.get("cefr_level"),
                 # Already on the candidate row — _eligible_lemma_candidates
                 # selects it, so the definition line costs the feed no extra
