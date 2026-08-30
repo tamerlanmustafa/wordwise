@@ -70,26 +70,45 @@ class _FakeNlp:
         return [self(t) for t in texts]
 
 
-def _link(sentence: str, *, matched_form: str | None, position: int = 0):
+def _link(
+    sentence: str,
+    *,
+    matched_form: str | None,
+    position: int = 0,
+    representative: bool = False,
+    sentence_id: int = 1,
+):
+    # isRepresentative/sentenceId are read by _sentence_link_sort_key so the
+    # endpoint resolves to the same row lemmas.definition was generated from.
     return SimpleNamespace(
         matchedForm=matched_form,
         wordPosition=position,
         score=1.0,
+        isRepresentative=representative,
+        sentenceId=sentence_id,
         sentence=SimpleNamespace(sentence=sentence, source="subtitle", movieId=42),
     )
 
 
-def _fake_db(*, classification=None, lemma_id=1, links=(), script_text=SCRIPT):
+def _fake_db(
+    *, classification=None, lemma_id=1, links=(), script_text=SCRIPT, definition=None
+):
     """Enough of the Prisma client for the sentences handler.
 
     `classification=None` forces the bare-word lemma fallback; `links=()` forces
-    the whole-script slow path.
+    the whole-script slow path. `definition` is the lemma's learner gloss, which
+    the handler stamps onto every returned sentence — None (the default) is the
+    common case, a lemma the definition worker has not reached yet.
     """
     async def classification_find_first(where):
         return classification
 
     async def lemma_find_first(where):
-        return SimpleNamespace(id=lemma_id, lemma=where["lemma"]) if lemma_id else None
+        return (
+            SimpleNamespace(id=lemma_id, lemma=where["lemma"], definition=definition)
+            if lemma_id
+            else None
+        )
 
     async def link_find_many(where, include):
         return list(links)
@@ -328,6 +347,46 @@ async def test_cached_rows_never_touch_the_worker(monkeypatch):
     assert hops == []
     assert result["sentences"][0]["matched_form"] == "aborted"
     assert result["sentences_unavailable"] is False
+
+
+async def test_the_definition_rides_along_on_the_lemma_row(monkeypatch):
+    """
+    The card's gloss line comes from `lemmas.definition`, which this handler
+    has already fetched to resolve the lemma — no second query, and no LLM
+    call from a tap. It is stamped on each item as well as the envelope so
+    this endpoint's shape matches /sentences/batch, which the card deck reads
+    through the same `SentenceExample` type.
+    """
+    _stub_spacy(monkeypatch)
+    links = [_link("The captain aborted the mission.", matched_form="aborted")]
+
+    db = _fake_db(
+        classification=SimpleNamespace(lemma="abort", cefrLevel="B2"),
+        links=links,
+        definition="to stop something before it is finished",
+    )
+    result = await _call(db, word="abort")
+
+    assert result["definition"] == "to stop something before it is finished"
+    assert result["sentences"][0]["definition"] == (
+        "to stop something before it is finished"
+    )
+
+
+async def test_a_lemma_without_a_definition_still_serves_its_sentence(monkeypatch):
+    """The common case at launch: coverage climbs lemma by lemma, so a null
+    gloss must be an empty line on the card, never a missing sentence."""
+    _stub_spacy(monkeypatch)
+    links = [_link("The captain aborted the mission.", matched_form="aborted")]
+
+    db = _fake_db(
+        classification=SimpleNamespace(lemma="abort", cefrLevel="B2"), links=links
+    )
+    result = await _call(db, word="abort")
+
+    assert result["definition"] is None
+    assert result["sentences"][0]["definition"] is None
+    assert result["sentences"][0]["sentence"] == "The captain aborted the mission."
 
 
 async def test_bare_word_lemmatization_is_offloaded(monkeypatch):

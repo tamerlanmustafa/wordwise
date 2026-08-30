@@ -198,6 +198,11 @@ class FeedItem(BaseModel):
     ipa: Optional[str] = None
     pos: Optional[str] = None
     cefr: Optional[str] = None
+    # One-line English learner gloss from `lemmas.definition`, describing the
+    # sense `sentence` uses. None until the definition worker reaches the
+    # lemma (or when it declined it) — the card hides the line when null, so
+    # coverage can climb without a client change.
+    definition: Optional[str] = None
     sentence: str
     sentence_match: Optional[SentenceMatch] = None
     translated_word: Optional[str] = None
@@ -1156,13 +1161,14 @@ async def _eligible_lemma_candidates(
 
     return await db.query_raw(
         f"""
-        SELECT lemma_id, word, pos, cefr_level, frequency_rank
+        SELECT lemma_id, word, pos, cefr_level, definition, frequency_rank
         FROM (
             SELECT
                 l.id              AS lemma_id,
                 l.lemma           AS word,
                 l.pos             AS pos,
                 l.cefr_level::text AS cefr_level,
+                l.definition      AS definition,
                 l.frequency_rank,
                 row_number() OVER (
                     PARTITION BY l.cefr_level
@@ -1452,6 +1458,10 @@ async def word_feed(
                 word=pick["word"],
                 pos=_POS_FRIENDLY.get((pick.get("pos") or "").upper()),
                 cefr=pick.get("cefr_level"),
+                # Already on the candidate row — _eligible_lemma_candidates
+                # selects it, so the definition line costs the feed no extra
+                # query and no extra round trip.
+                definition=pick.get("definition"),
                 sentence=sentence,
                 sentence_match=SentenceMatch(**match) if match else None,
                 translated_word=translated_word,

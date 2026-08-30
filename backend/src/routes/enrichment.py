@@ -36,14 +36,37 @@ def _sentence_link_sort_key(link):
 
     Priority: source (LLM-authored beats subtitle extraction) → movie-tied
     beats a global row within the same source (honors legacy per-movie LLM
-    rows) → higher score breaks ties. Both `/sentences/{word}` and
-    `/sentences/batch` sort with this so the collapsed preview and the
-    expanded sentence always resolve to the same row.
+    rows) → the representative link → higher score → lowest sentence id. Both
+    `/sentences/{word}` and `/sentences/batch` sort with this so the collapsed
+    preview and the expanded sentence always resolve to the same row.
+
+    The last three terms exist to agree, exactly, with the ordering
+    `definition_worker` and `/srs/feed` use to pick a lemma's global sentence
+    (`is_representative DESC, score DESC NULLS LAST, sentence_id ASC`). That
+    is not cosmetic: the definition on `lemmas.definition` is generated FROM
+    the sentence that ordering selects, so if this key picked a different
+    global row the card would show a gloss describing a sense other than the
+    sentence printed beneath it — the one failure the whole design exists to
+    prevent.
+
+    `is_representative` and the id tie-break were added on 2026-08-30 when the
+    definition column landed. Verified a no-op on the data at the time: across
+    all 34,849 lemmas with a global sentence, the two orderings already picked
+    the same row 34,849 times. The point is to keep that true as new sentences
+    arrive rather than to change anything today — nothing else would notice if
+    it stopped being true. See test_definition_sense_anchor.py.
+
+    They sit AFTER source and movie-tied on purpose. Those two encode "prefer
+    an authored sentence, prefer this movie's" and outrank everything; the
+    definition is only ever anchored to a global LLM row, so the agreement has
+    to hold within that set, not across it.
     """
     return (
         SENTENCE_SOURCE_PRIORITY.get(link.sentence.source, 99),
         0 if link.sentence.movieId is not None else 1,
+        0 if link.isRepresentative else 1,
         -(link.score or 0.0),
+        link.sentenceId,
     )
 
 
@@ -975,10 +998,26 @@ async def get_word_sentences(
                     except Exception as up_err:
                         logger.debug(f"word_sentence_example persist skipped: {up_err}")
 
+        # Definition line, from the row already fetched above. Stamped onto
+        # every item so this endpoint's shape matches /sentences/batch — the
+        # card deck reads one `SentenceExample` type from both, and a
+        # top-level field here would make expanding a row change where the
+        # client looks for the same value.
+        #
+        # It is deliberately NOT generated on demand when missing. Definitions
+        # are per-lemma and shared by every movie containing the word, so the
+        # definition worker's next cycle covers this reveal and every future
+        # one; firing an LLM call from a tap would buy the same row at
+        # request latency, on the event loop, for one user.
+        definition = lemma_record.definition if lemma_record else None
+        for item in raw_sentences:
+            item["definition"] = definition
+
         return {
             "movie_id": movie_id,
             "word": word.lower(),
             "lemma": lemma_text,
+            "definition": definition,
             "sentences": raw_sentences,
             "total": len(raw_sentences),
             "sentences_unavailable": sentences_unavailable,
@@ -1061,6 +1100,10 @@ async def get_word_sentences_batch(
     lemma_records = await db.lemma.find_many(where={"lemma": {"in": unique_lemmas}})
     lemma_q_ms = (time.perf_counter() - t_lemma_q) * 1000
     lemma_str_to_id = {lr.lemma: lr.id for lr in lemma_records}
+    # The card's definition line rides along on rows this query already read —
+    # it is a column on `lemmas`, not a join, so it costs nothing here. None
+    # until the definition worker reaches the lemma; the card hides the line.
+    lemma_str_to_def = {lr.lemma: lr.definition for lr in lemma_records}
 
     if not lemma_str_to_id:
         total_ms = (time.perf_counter() - t_start) * 1000
@@ -1116,6 +1159,7 @@ async def get_word_sentences_batch(
                     "sentence": link.sentence.sentence,
                     "word_position": link.wordPosition or 0,
                     "matched_form": link.matchedForm or word,
+                    "definition": lemma_str_to_def.get(lemma_str),
                 }
                 for link in bucket
             ]
@@ -1167,7 +1211,13 @@ async def get_word_sentences_batch(
                         )
                         for word, payload in llm_results.items():
                             n_hit_slow += 1
-                            results[word] = [payload]
+                            # Always null here, and stated rather than
+                            # omitted so both paths return the same keys: the
+                            # sentence was authored microseconds ago, so the
+                            # definition worker — which reads that sentence to
+                            # pick the sense — cannot have run on it yet. It
+                            # will on its next cycle.
+                            results[word] = [{**payload, "definition": None}]
                         slow_path_state = "fired"
                     except CostCapExceeded as cap_err:
                         logger.warning(f"[batch-sentences] {cap_err}")

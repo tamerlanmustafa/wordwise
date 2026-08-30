@@ -91,11 +91,17 @@ describe('the card is scaled, never re-cut', () => {
     expect(m.scaled).toBe(false);
   });
 
-  it('holds the card at its full 389pt contract', () => {
+  it('holds the card at its full 427pt contract', () => {
     // The escape hatch for a small screen is a uniform scale. A card whose
     // slots were re-tuned per device would be a different design, and the
     // reveal's zero-layout-shift promise would go with it.
-    expect(CARD_HEIGHT).toBe(389);
+    //
+    // 389 → 427 when the definition slot landed (6 top + 32 slot). The
+    // alternative was taking those 38pt out of the sentence-translation slot
+    // to hold 389, which would have cost a line of every revealed translation
+    // on every device; growing the card costs scale on the SE alone (see the
+    // pinned scales below) and nothing at all on the reference phones.
+    expect(CARD_HEIGHT).toBe(427);
     expect(DECK_ZONE_HEIGHT).toBeGreaterThan(CARD_HEIGHT);
   });
 
@@ -147,8 +153,16 @@ describe('invariants', () => {
     // Hiding the level chips (SHOW_LEVEL_FILTER_BAR) took 58pt back out of the
     // column, which is why the 16 Pro is now unscaled and the SE moved 0.577 →
     // 0.720. Flipping the flag on restores the old numbers.
+    //
+    // The definition slot then grew the CARD (not the column), which is the
+    // other way a number here moves: the large phones had slack above 1 and
+    // absorbed 38pt without leaving the clamp, so they still render the
+    // mockup 1:1, and the SE — the only device already scaling — paid the
+    // whole cost, 0.720 → 0.658. Still well clear of MIN_SCALE, so nothing
+    // crops. That asymmetry is the reason this was worth doing as a card
+    // change rather than by shrinking a neighbouring slot.
     expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.72, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.658, 3);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });

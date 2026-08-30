@@ -49,6 +49,8 @@ import {
   META_ROW_HEIGHT,
   WORD_SLOT_TOP,
   WORD_SLOT_HEIGHT,
+  DEFINITION_SLOT_TOP,
+  DEFINITION_SLOT_HEIGHT,
   WORD_TR_SLOT_TOP,
   WORD_TR_SLOT_HEIGHT,
   SENTENCE_LABEL_TOP,
@@ -65,6 +67,7 @@ import {
   B1_HIGHLIGHT,
   wordTier,
   wordTranslationTier,
+  definitionTier,
   sentenceTier,
   sentenceTranslationTier,
 } from './cardLayout';
@@ -235,6 +238,42 @@ const SentenceLabel = ({
     <View style={s.sentenceLabelRule} />
   </View>
 );
+
+/**
+ * The English learner gloss under the headword.
+ *
+ * Shared by the focused card and the fly-away overlay's static body — the two
+ * must render byte-identical slots or the card visibly pops at the instant the
+ * overlay detaches, which is exactly the class of bug the static body exists to
+ * avoid. Hence one component rather than two copies of the same four lines.
+ *
+ * The View renders whether or not there is a definition: the slot is part of
+ * the card's constant height (see cardLayout), so it is reserved for a lemma
+ * the definition worker hasn't reached yet and simply left blank. No dashed
+ * placeholder — on this card dashes mean "this fills in when you tap", and
+ * this line does not.
+ */
+const DefinitionSlot = ({
+  s,
+  definition,
+}: {
+  s: ReturnType<typeof makeDeckStyles>;
+  definition?: string | null;
+}) => {
+  const tier = definition ? definitionTier(definition) : null;
+  return (
+    <View style={s.definitionSlot}>
+      {definition && tier ? (
+        <Text
+          style={[s.definition, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
+          numberOfLines={tier.lines}
+        >
+          {definition}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
 
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
@@ -956,6 +995,7 @@ export const WordCardDeck = ({
             {term}
           </Text>
         </View>
+        <DefinitionSlot s={s} definition={staticSentence?.definition} />
         <View style={s.wordTrSlot}>
           <View style={[s.slotLayer, s.wordTrRow]}>
             <View style={s.langTagDashed}>
@@ -1107,6 +1147,12 @@ export const WordCardDeck = ({
                 {currentKey}
               </Text>
             </View>
+
+            {/* 2b · definition slot — English gloss for the sense the example
+                sentence below uses. Not part of the reveal: it is the same
+                language as the sentence, so it belongs to the always-visible
+                half of the card. */}
+            <DefinitionSlot s={s} definition={visibleSentence?.definition} />
 
             {/* 3 · word-translation slot: two stacked layers cross-fade in
                 place — dashed rule while hidden, translation when revealed */}
@@ -1486,6 +1532,19 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontWeight: '700',
       letterSpacing: -0.3,
       color: tc.text,
+    },
+    definitionSlot: {
+      marginTop: DEFINITION_SLOT_TOP,
+      height: DEFINITION_SLOT_HEIGHT,
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    definition: {
+      fontFamily: SERIF_FAMILY,
+      // Italic and secondary, the same treatment the Explore card gives it:
+      // commentary on the headword above, not a rival to the sentence below.
+      fontStyle: 'italic',
+      color: light ? '#7A6A50' : tc.textFaint,
     },
     wordTrSlot: {
       marginTop: WORD_TR_SLOT_TOP,

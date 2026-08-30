@@ -12,10 +12,13 @@
  * Tapping anywhere toggles the translation — word and sentence together,
  * never one without the other. There is no reveal button and no hint text.
  *
- * The definition line the design calls for is absent by decision: nothing in
- * the data model carries a learner gloss (`lemmas` has no definition column,
- * `words.definition` is empty), so rather than render a mostly-blank row the
- * card goes word → sentence. Wiring a gloss in later is one <Text> here.
+ * The definition line sits between the word and the section rule, and renders
+ * only when the server sent one — `lemmas.definition` is filled lazily by the
+ * definition worker, so on a cold lemma the card still goes word → sentence
+ * exactly as it did before the column existed. It is deliberately NOT part of
+ * the reveal: it is English, describing the same sense the sentence uses, so
+ * it belongs with the always-visible half of the card, not behind the tap that
+ * shows the learner's own language.
  *
  * Motion note: the reveal animates height on the JS driver (RN can't drive
  * layout natively) while opacity + translateY run on the native driver, so
@@ -122,6 +125,23 @@ function WordCardBase({
         </Text>
 
         {item.ipa ? <Text style={s.ipa}>{item.ipa}</Text> : null}
+
+        {/* Clamped, because this card has no fixed slots — it centres a
+            lifting group between two flex spacers, so an unclamped gloss would
+            eat the spacers and on a short viewport push the sentence past the
+            bottom edge.
+
+            Three, not the deck's two: the clamp here is a backstop against a
+            pathological value, not a squeeze. The usable width is the card
+            minus 24 and the action rail's lane (~300pt), which at 17pt seats
+            roughly 40 characters a line — so MAX_DEF_CHARS (90) needs a third
+            line to land whole on an SE. The deck can afford two because its
+            slot runs at 12pt. */}
+        {item.definition ? (
+          <Text style={s.definition} numberOfLines={3}>
+            {item.definition}
+          </Text>
+        ) : null}
 
         <View style={s.ruleRow}>
           <Text style={s.caption} numberOfLines={1}>
@@ -274,6 +294,16 @@ const makeStyles = (tc: ThemeColors) =>
       marginTop: 7,
       fontSize: 13.5,
       color: tc.textFaint,
+    },
+    definition: {
+      marginTop: 10,
+      fontFamily: SERIF_FAMILY,
+      fontSize: 17,
+      lineHeight: 17 * 1.45,
+      // Italic and secondary so it reads as commentary on the word above it
+      // rather than as a second sentence competing with the example below.
+      fontStyle: 'italic',
+      color: tc.textSecondary,
     },
     ruleRow: {
       flexDirection: 'row',

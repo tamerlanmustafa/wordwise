@@ -23,6 +23,11 @@ export interface SentenceExample {
    *  sentence. Absent when alignment is unavailable — fall back to a plain
    *  word translation. */
   word_translation?: string;
+  /** One-line English learner gloss for the sense THIS sentence uses
+   *  (`lemmas.definition`, generated from this very sentence). Per-lemma, so
+   *  it is the same on every movie containing the word. Absent until the
+   *  definition worker has reached the lemma — the card hides the line. */
+  definition?: string | null;
 }
 
 const EXPAND_ANIM = {

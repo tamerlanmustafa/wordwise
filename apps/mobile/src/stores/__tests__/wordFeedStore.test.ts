@@ -32,6 +32,10 @@ const item = (id: number, cefr = 'B1'): FeedItem => ({
   ipa: null,
   pos: 'noun',
   cefr,
+  // Null is the honest default for a fixture: most lemmas have no definition
+  // until the definition worker reaches them, and the card must render fine
+  // either way.
+  definition: null,
   sentence: `A sentence with word${id} inside.`,
   sentence_match: { start: 16, end: 16 + `word${id}`.length },
   translated_word: `t${id}`,

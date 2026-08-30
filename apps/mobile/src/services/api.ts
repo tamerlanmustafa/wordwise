@@ -595,7 +595,17 @@ export const wordwiseApi = {
     movieId: number,
     words: string[],
     maxExamples: number = 1,
-  ): Promise<Record<string, { sentence: string; word_position: number; matched_form: string }[]>> => {
+  ): Promise<
+    Record<
+      string,
+      {
+        sentence: string;
+        word_position: number;
+        matched_form: string;
+        definition?: string | null;
+      }[]
+    >
+  > => {
     if (!words.length) return {};
     const t0 = Date.now();
     const res = await authFetch(`${API_BASE_URL}/api/enrichment/movies/${movieId}/sentences/batch`, {
@@ -997,6 +1007,10 @@ export interface FeedItem {
   ipa: string | null;
   pos: string | null;
   cefr: string | null;
+  /** One-line English learner gloss for the sense `sentence` uses. Null until
+   *  the definition worker has reached the lemma; the card hides the line when
+   *  it is, so coverage climbs with no client change. */
+  definition: string | null;
   sentence: string;
   sentence_match: SentenceMatch | null;
   translated_word: string | null;

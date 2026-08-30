@@ -338,6 +338,7 @@ describe('user stories (cross-store integration)', () => {
       ipa: null,
       pos: 'adj',
       cefr: 'B2',
+      definition: 'unwilling to do something',
       sentence: 'She was reluctant to admit it.',
       sentence_match: { start: 8, end: 17 },
       translated_word: 'reacio',

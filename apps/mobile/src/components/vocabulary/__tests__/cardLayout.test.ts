@@ -3,13 +3,16 @@ import {
   DECK_ZONE_HEIGHT,
   STACK_HEADROOM,
   WORD_SLOT_HEIGHT,
+  DEFINITION_SLOT_HEIGHT,
   SENTENCE_LABEL_HEIGHT,
   wordTier,
   wordTranslationTier,
+  definitionTier,
   sentenceTier,
   sentenceTranslationTier,
   movieTitleTier,
   WORD_TIER_MAX_CHARS,
+  DEFINITION_TIER_MAX_CHARS,
   SENTENCE_TIER_MAX_CHARS,
   MOVIE_TITLE_TIER_MAX_CHARS,
 } from '../cardLayout';
@@ -25,8 +28,11 @@ const LONG_SENTENCE_TR =
   'soñador está alterando la arquitectura del sueño.'; // 122 chars
 
 describe('CARD_HEIGHT (the fixed-card contract)', () => {
-  it('matches the mockup constant — 389px', () => {
-    expect(CARD_HEIGHT).toBe(389);
+  it('matches the mockup constant — 427px', () => {
+    // Was 389 through the mockup era; the definition slot (6 top + 32) is the
+    // first element to GROW the card rather than be paid for out of a
+    // neighbour. deckMetrics' pinned scales are where that cost shows up.
+    expect(CARD_HEIGHT).toBe(427);
   });
 
   it('deck zone = headroom for the ghost stack + the card', () => {
@@ -47,6 +53,53 @@ describe('CARD_HEIGHT (the fixed-card contract)', () => {
       const tier = wordTier(word);
       expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(WORD_SLOT_HEIGHT);
     }
+  });
+});
+
+describe('definitionTier', () => {
+  // The backend caps a definition at MAX_DEF_CHARS = 90; that number was
+  // chosen against this slot, so the long tier has to seat 90 characters.
+  const LONG_DEF = 'to give up completely on something you were responsible for';
+
+  it('a short gloss keeps the comfortable single line', () => {
+    expect(definitionTier('to leave behind')).toEqual({
+      fontSize: 14,
+      lineHeight: 20,
+      lines: 1,
+    });
+  });
+
+  it('a long gloss steps down and wraps rather than shrinking the slot', () => {
+    expect(LONG_DEF.length).toBeGreaterThan(DEFINITION_TIER_MAX_CHARS);
+    expect(definitionTier(LONG_DEF)).toEqual({
+      fontSize: 12,
+      lineHeight: 16,
+      lines: 2,
+    });
+  });
+
+  it('both tiers fit the reserved slot exactly', () => {
+    for (const def of ['to leave behind', LONG_DEF]) {
+      const tier = definitionTier(def);
+      expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(
+        DEFINITION_SLOT_HEIGHT,
+      );
+    }
+  });
+
+  it('keeps enough leading for serif italic descenders on Android', () => {
+    // iOS treats lineHeight as advisory and absorbs a tight ratio; Android
+    // enforces it and clips. The first cut of the long tier was 12/13.5 —
+    // 1.125 — which would have shipped a bug visible on one platform only.
+    for (const def of ['to leave behind', LONG_DEF]) {
+      const tier = definitionTier(def);
+      expect(tier.lineHeight / tier.fontSize).toBeGreaterThan(1.3);
+    }
+  });
+
+  it('boundary: exactly 46 chars stays on the single-line tier', () => {
+    expect(definitionTier('a'.repeat(DEFINITION_TIER_MAX_CHARS)).lines).toBe(1);
+    expect(definitionTier('a'.repeat(DEFINITION_TIER_MAX_CHARS + 1)).lines).toBe(2);
   });
 });
 

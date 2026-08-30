@@ -17,9 +17,16 @@ from types import SimpleNamespace
 from src.routes.enrichment import _sentence_link_sort_key
 
 
-def _link(source: str, movie_id, score: float):
+def _link(source: str, movie_id, score: float, *, representative=False, sentence_id=1):
+    # `isRepresentative` / `sentenceId` joined the sort key when
+    # lemmas.definition landed, so that the two enrichment endpoints resolve to
+    # the exact row the definition was generated from. These cases predate that
+    # and exercise the source/movie terms; the new terms have their own file,
+    # test_definition_sense_anchor.py.
     return SimpleNamespace(
         score=score,
+        isRepresentative=representative,
+        sentenceId=sentence_id,
         sentence=SimpleNamespace(source=source, movieId=movie_id),
     )
 

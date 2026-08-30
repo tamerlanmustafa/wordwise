@@ -50,6 +50,21 @@ MAX_CHARS = 140
 # without a cleanup pass.
 SENTENCE_PROMPT_VERSION = "1"
 
+# Learner definitions. Bump whenever DEFINE_SYSTEM_PROMPT or the
+# _validate_definition rules change: the definition worker stores
+# "<model>|<this>" on every completed attempt and skips a lemma only while that
+# equals its own signature, so bumping re-admits the whole corpus for a rewrite
+# with no cleanup pass. That is the *only* revocation mechanism — there is no
+# "regenerate" flag — so it must move whenever the output would change.
+DEFINITION_PROMPT_VERSION = "1"
+
+# A definition longer than this is prose, not a gloss, and the card has one
+# line for it. Chosen against the card layout, not the model: at the Explore
+# card's width ~90 characters is two rendered lines, which is the most the
+# design absorbs before the sentence beneath it is pushed off screen.
+MAX_DEF_CHARS = 90
+MIN_DEF_CHARS = 3
+
 # Anthropic pricing (USD per million tokens) for the models we may call.
 # Update when Anthropic adjusts pricing or when we point at a new model.
 _PRICING: Dict[str, Dict[str, float]] = {
@@ -102,6 +117,24 @@ Return ONLY valid JSON, no prose: {"translation": "<target_lang word>"}
 If you cannot determine it, return {"translation": null}."""
 
 
+DEFINE_SYSTEM_PROMPT = """You write one-line dictionary definitions for a language-learning app.
+
+Each input has an English `word` and a `sentence` that uses it. The sentence is the authority on which sense to define: define the word AS USED IN THAT SENTENCE, not its most common meaning.
+
+Each definition must:
+- Describe only the sense the sentence uses.
+- Be a single clause, at most 12 words, no final period.
+- Start the way a dictionary does — a verb definition begins "to ...", a noun definition begins with a noun phrase, an adjective definition with an adjective phrase.
+- Be simpler than the word itself: use common vocabulary at or below the requested CEFR level, so the definition is easier to read than the word being defined.
+- Never contain the word being defined, or any form of it. "abandon: to abandon something" teaches nothing.
+- Be plain lowercase text — no markdown, no quotes, no parentheticals, no examples, no part-of-speech labels, no synonyms-only lists.
+
+Return ONLY valid JSON in this exact shape, no prose:
+{"definitions": [{"word": "<input word>", "definition": "<the definition>"}, ...]}
+
+Include one object per input word, in the same order. If you cannot produce a definition that satisfies every rule for a given word, return {"word": "<input word>", "definition": null} for that entry."""
+
+
 class CostCapExceeded(RuntimeError):
     """Raised when cumulative ledger spend has reached the configured cap."""
 
@@ -130,6 +163,20 @@ class WordRequest:
     word: str           # surface form the caller knows (e.g. "abandoned")
     lemma: str          # canonical form for matching (e.g. "abandon")
     cefr: Optional[str] # "A1".."C2" or None
+
+
+@dataclass(frozen=True)
+class DefinitionRequest:
+    """One lemma to define, plus the sentence that fixes which sense to define.
+
+    `sentence` is required, not optional. Defining a word without it produces
+    the most frequent sense, which for a polysemous word regularly disagrees
+    with the example sentence and the aligned gloss already on the same card —
+    so a caller that has no sentence has no business asking for a definition.
+    """
+    lemma: str
+    cefr: Optional[str]
+    sentence: str
 
 
 class LLMSentenceService:
@@ -172,6 +219,86 @@ class LLMSentenceService:
         the model or the prompt is itself the revocation.
         """
         return f"{self._model}|{SENTENCE_PROMPT_VERSION}"
+
+    @property
+    def definition_version(self) -> str:
+        """Signature stamped on every completed definition attempt.
+
+        Unlike `skip_version` this is written on success as well as refusal —
+        it is the definition worker's "already handled" marker *and* its
+        revocation lever in one column. Bumping DEFINITION_PROMPT_VERSION
+        therefore re-admits every lemma, generated and refused alike, which is
+        exactly what a prompt rewrite wants.
+        """
+        return f"{self._model}|{DEFINITION_PROMPT_VERSION}"
+
+    async def define_words(
+        self,
+        db: Prisma,
+        requests: Sequence[DefinitionRequest],
+        context: str = "definition_worker",
+    ) -> Dict[str, Optional[str]]:
+        """
+        One learner definition per lemma, keyed by lowercased lemma.
+
+        A None means "the model answered and had nothing usable for this
+        lemma" — a durable fact the caller may record. If the call itself
+        fails we raise ModelCallFailed rather than returning all-None, so an
+        outage can never be mistaken for a batch of refusals and written to
+        every row (the mistake #153 documents for sentences; the blast radius
+        here is larger, because this column marks success too — a
+        misrecorded outage would mark 15 lemmas permanently *done* with an
+        empty definition).
+
+        Raises CostCapExceeded BEFORE the API call if cumulative spend has
+        already reached the cap; no partial results are returned.
+        """
+        if not requests:
+            return {}
+
+        await self._check_cap(db)
+
+        user_payload = json.dumps(
+            {
+                "words": [
+                    {
+                        "word": r.lemma,
+                        "cefr": r.cefr or "B1",
+                        "sentence": r.sentence,
+                    }
+                    for r in requests
+                ]
+            },
+            ensure_ascii=False,
+        )
+        try:
+            raw_text, usage = await self._call_model(
+                user_payload, system=DEFINE_SYSTEM_PROMPT, max_tokens=1200
+            )
+        except Exception as e:
+            logger.warning(f"[llm-define] model call failed: {e}")
+            raise ModelCallFailed(str(e)) from e
+
+        # We paid for the call whether or not parsing succeeds.
+        await self._record_usage(db, usage, context=context)
+
+        parsed = self._parse_response(raw_text, key="definitions")
+        out: Dict[str, Optional[str]] = {}
+        by_lemma = {r.lemma.lower(): r for r in requests}
+        for entry in parsed:
+            requested = (entry.get("word") or "").lower()
+            req = by_lemma.get(requested)
+            if not req:
+                continue
+            raw_def = entry.get("definition")
+            out[req.lemma.lower()] = (
+                self._validate_definition(raw_def, req)
+                if isinstance(raw_def, str)
+                else None
+            )
+        for r in requests:
+            out.setdefault(r.lemma.lower(), None)
+        return out
 
     async def generate_sentences(
         self,
@@ -492,7 +619,15 @@ class LLMSentenceService:
                 }
         return text, usage_dict
 
-    def _parse_response(self, raw: str) -> List[dict]:
+    def _parse_response(self, raw: str, key: str = "sentences") -> List[dict]:
+        """Pull the list of per-word objects out of a batch reply.
+
+        `key` names the wrapper the prompt asked for ("sentences" or
+        "definitions"). Both prompts share this shape deliberately: same
+        fence-stripping, same "a malformed batch is zero entries, not an
+        exception" contract, so a caller's per-word fallback is the only
+        failure path either has.
+        """
         if not raw:
             return []
         text = raw.strip()
@@ -501,11 +636,22 @@ class LLMSentenceService:
             text = re.sub(r"\n?```$", "", text)
         try:
             obj = json.loads(text)
-            sentences = obj.get("sentences", [])
-            if isinstance(sentences, list):
-                return [s for s in sentences if isinstance(s, dict)]
         except json.JSONDecodeError:
             logger.warning(f"[llm-sentence] failed to parse JSON: {raw[:200]}")
+            return []
+        # `json.loads` succeeding does not mean we got an object: a bare list,
+        # a string, or a literal `null` all parse cleanly and none of them have
+        # `.get`. Without this check that is an AttributeError raised AFTER the
+        # call was billed, and it escapes define_words → run_cycle entirely, so
+        # the page is never stamped and the worker re-buys the same 15 lemmas
+        # every ERROR_SLEEP forever while emailing admins about it. A reply we
+        # cannot read is a batch of refusals, exactly like a malformed one.
+        if not isinstance(obj, dict):
+            logger.warning(f"[llm-sentence] reply was not an object: {raw[:200]}")
+            return []
+        entries = obj.get(key, [])
+        if isinstance(entries, list):
+            return [s for s in entries if isinstance(s, dict)]
         return []
 
     def _validate(self, sentence: str, wreq: WordRequest) -> Optional[str]:
@@ -528,6 +674,68 @@ class LLMSentenceService:
         if stem not in lowered:
             return None
         return s
+
+    def _validate_definition(
+        self, definition: str, req: "DefinitionRequest"
+    ) -> Optional[str]:
+        """Accept a gloss, or return None so the caller records a refusal.
+
+        Note the inversion against `_validate`: a good *sentence* must contain
+        the target word, and a good *definition* must not. Circularity
+        ("abandon: to abandon something") is the one failure a learner cannot
+        work around, and it is also the one an LLM produces most readily for
+        rare words, so it is checked rather than trusted to the prompt.
+        """
+        d = definition.strip().strip('"').strip("'").strip()
+        # The prompt asks for no closing period; strip one rather than reject.
+        # Punctuation the card can normalise is not worth re-buying the call.
+        d = d.rstrip(".").strip()
+        if not d or "\n" in d:
+            return None
+        if not (MIN_DEF_CHARS <= len(d) <= MAX_DEF_CHARS):
+            return None
+        # Markdown, parentheticals and POS labels ("(verb)") all render as
+        # literal junk on the card — there is no rich text in the definition
+        # slot.
+        if any(ch in d for ch in "*_`()[]{}<>|"):
+            return None
+
+        lemma = req.lemma.lower().strip()
+        lowered = d.lower()
+        if not lemma:
+            return None
+        # Two branches because a shared prefix means different things at
+        # different lengths. For a long lemma, a 4-char prefix is a reliable
+        # stem — "aban" catches abandon/abandoned/abandoning and almost
+        # nothing else. For a short one it is the whole word, and a bare
+        # prefix match would reject honest definitions: `\bbe` fires on
+        # "before" and "between", which is most of the vocabulary available
+        # for defining "be". So short lemmas match a small set of explicit
+        # stems instead.
+        if len(lemma) >= 5:
+            stems = [lemma[:4]]
+        else:
+            # English spells short inflections three ways, and only the plain
+            # one falls out of the lemma unchanged. Without the other two,
+            # "to be getting hold of" passes as a definition of `get` and
+            # "the act of giving" passes for `give` — and because the version
+            # stamp marks the row done, a circular gloss that slips through
+            # here is permanent until someone bumps the prompt version.
+            stems = [lemma]
+            if lemma.endswith("e"):
+                stems.append(lemma[:-1])            # give → giv(ing)
+            if len(lemma) >= 3 and lemma[-1].isalpha() and lemma[-1] not in "aeiou":
+                stems.append(lemma + lemma[-1])     # get → gett(ing)
+        suffixes = r"(s|es|d|ed|ing|en|er|ers)?"
+        circular = any(
+            re.search(rf"\b{re.escape(stem)}{suffixes}\b", lowered)
+            if len(lemma) < 5
+            else re.search(rf"\b{re.escape(stem)}", lowered)
+            for stem in stems
+        )
+        if circular:
+            return None
+        return d
 
     def _locate_word(self, sentence: str, wreq: WordRequest) -> Tuple[str, int]:
         """

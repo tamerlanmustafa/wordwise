@@ -603,6 +603,25 @@ model Lemma {
   sentenceSkipAt      DateTime? @map("sentence_skip_at") @db.Timestamptz(6)
   sentenceSkipVersion String?   @map("sentence_skip_version") @db.VarChar(96)
 
+  // The one-line learner gloss shown under the word on the Explore card and
+  // the movie-detail card deck. Generated from the lemma's *own* global LLM
+  // sentence, so it describes the sense that sentence uses — the same sense
+  // `word_sentence_examples.word_translation` is aligned to. A definition
+  // written from the bare headword would name the most frequent sense
+  // instead, and disagree with the card it sits on.
+  //
+  // `definitionVersion` is "<model>|<prompt version>" and carries three
+  // states at once, which is why there is no separate skip column:
+  //   version NULL                → never attempted
+  //   version set, definition set → generated
+  //   version set, definition NULL → the model was asked and declined
+  // The worker's backlog predicate is `IS DISTINCT FROM <running signature>`
+  // (same trap as #153: `<>` would filter out every never-attempted lemma),
+  // so changing the model or the prompt re-admits the whole corpus with no
+  // cleanup pass.
+  definition        String?   @db.Text
+  definitionVersion String?   @map("definition_version") @db.VarChar(96)
+
   movieMappings MovieLemmaMapping[]
   sentenceLinks SentenceLemmaLink[]
   listWords     UserListWord[]

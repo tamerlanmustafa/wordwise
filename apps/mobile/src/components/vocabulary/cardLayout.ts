@@ -21,6 +21,35 @@ export const WORD_SLOT_TOP = 8;
  *  exactly: the long tier is 2 × 28 lineHeight, the short tier one 38pt line
  *  sitting on the slot's floor. */
 export const WORD_SLOT_HEIGHT = 56;
+export const DEFINITION_SLOT_TOP = 6;
+/** 2b. Definition slot — the English learner gloss for the sense the example
+ *  sentence uses (`lemmas.definition`). Two lines at 12/16, so a long gloss
+ *  wraps rather than shrinking; MAX_DEF_CHARS (90, backend) is sized against
+ *  this slot.
+ *
+ *  32, not 27. The first cut packed two lines into 27 (12pt on a 13.5
+ *  lineHeight, a 1.125 ratio — the tightest in this file by some way). iOS
+ *  treats lineHeight as advisory and would have absorbed it; Android enforces
+ *  it, and this text is serif ITALIC, whose descenders reach furthest below
+ *  the baseline, so the clipping would have shown up on one platform only.
+ *
+ *  RESERVED UNCONDITIONALLY, like the translation zones — a card whose height
+ *  depended on whether the definition had been generated yet would change the
+ *  deck's geometry per word, and the fly-away overlay renders from the same
+ *  slot heights as the focused card, so it would pop at the instant of detach.
+ *  A lemma the definition worker hasn't reached renders the slot empty rather
+ *  than dashed: dashes are this card's idiom for "this fills in on tap", and
+ *  the definition never does.
+ *
+ *  Unlike the eyebrow row, this height is NOT taken out of a neighbour — it
+ *  grows CARD_HEIGHT, and the deck scales down uniformly to pay for it. The
+ *  large phones had slack above the scale clamp and absorbed it without
+ *  moving (16 Pro and Pixel 8 both stay at 1.000); the SE, already the only
+ *  device scaling, pays the whole cost at 0.720 → 0.659, still well clear of
+ *  MIN_SCALE. The alternative was halving the sentence-translation slot,
+ *  which would have cost real content on every reveal, on every device.
+ *  deckMetrics' invariant test pins the exact numbers. */
+export const DEFINITION_SLOT_HEIGHT = 32;
 export const WORD_TR_SLOT_TOP = 5;
 /** 3. Word-translation slot — dashed rule while hidden. */
 export const WORD_TR_SLOT_HEIGHT = 26;
@@ -45,6 +74,8 @@ export const CARD_HEIGHT =
   META_ROW_HEIGHT +
   WORD_SLOT_TOP +
   WORD_SLOT_HEIGHT +
+  DEFINITION_SLOT_TOP +
+  DEFINITION_SLOT_HEIGHT +
   WORD_TR_SLOT_TOP +
   WORD_TR_SLOT_HEIGHT +
   SENTENCE_LABEL_TOP +
@@ -95,6 +126,17 @@ export function wordTranslationTier(translation: string): TypeTier {
   return translation.length <= WORD_TR_TIER_MAX_CHARS
     ? { fontSize: 17, lineHeight: WORD_TR_SLOT_HEIGHT, lines: 1 }
     : { fontSize: 14, lineHeight: WORD_TR_SLOT_HEIGHT, lines: 1 };
+}
+
+export const DEFINITION_TIER_MAX_CHARS = 46;
+/** Definition: one comfortable line, or two for a long gloss. Both tiers fit
+ *  inside DEFINITION_SLOT_HEIGHT (32) — 1 × 20, 2 × 16 — and both keep a
+ *  lineHeight/fontSize ratio above 1.3, which is what stops Android clipping
+ *  the descenders of serif italic (see the slot's note). */
+export function definitionTier(definition: string): TypeTier {
+  return definition.length <= DEFINITION_TIER_MAX_CHARS
+    ? { fontSize: 14, lineHeight: 20, lines: 1 }
+    : { fontSize: 12, lineHeight: 16, lines: 2 };
 }
 
 export const SENTENCE_TIER_MAX_CHARS = 95;
