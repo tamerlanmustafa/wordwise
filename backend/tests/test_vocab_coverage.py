@@ -42,8 +42,11 @@ def _report(raw_overrides: dict, previous=None, cap_usd: float = 50.0) -> dict[s
         "orphan_sentences": 0,
         "dead_end_movies": 170,
         "llm_cost_24h": 0.0,
-        # Every level deeper than the warn band → ok.
-        "feed_pool_by_level": {"A2": 6000, "B1": 2000, "B2": 5000, "C1": 8000},
+        # Every level deeper than the warn band → ok. Six of them: the mix
+        # addresses the full A1–C2 range, so the report measures all six.
+        "feed_pool_by_level": {
+            "A1": 1700, "A2": 6000, "B1": 2000, "B2": 5000, "C1": 8000, "C2": 2700,
+        },
         "snapshot_age_hours": 24.0,   # written yesterday → ok
     }
     raw.update(raw_overrides)
@@ -407,7 +410,10 @@ _BASELINE_RAW = {
     "orphan_sentences": 0,
     "dead_end_movies": 170,
     "llm_cost_24h": 0.0,
-    "feed_pool_by_level": {"A2": 6489, "B1": 2323, "B2": 5124, "C1": 8552},
+    # Measured on prod 2026-08-30, after the mix widened to all six levels.
+    "feed_pool_by_level": {
+        "A1": 1756, "A2": 6548, "B1": 2331, "B2": 5104, "C1": 8590, "C2": 2706,
+    },
 }
 
 

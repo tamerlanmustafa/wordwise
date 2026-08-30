@@ -29,7 +29,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
 import { useListsStore } from './listsStore';
-import { defaultMixForLevel, isBalanced } from '../utils/levelMix';
+import { cutsToMix, defaultMixForLevel, isBalanced, mixToCuts } from '../utils/levelMix';
 import { randomToken, shuffle } from '../utils/random';
 
 const MIX_KEY = 'feedLevelMix';
@@ -201,9 +201,16 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       const stored = await AsyncStorage.getItem(MIX_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as LevelMix;
-        // Only trust a stored mix that still balances — a partial write or
-        // an older shape falls back to the level-derived default.
-        if (isBalanced(parsed)) mix = parsed;
+        if (parsed && typeof parsed === 'object') {
+          // A four-level mix written by the previous build arrives with A1 and
+          // C2 simply absent. Those read as 0, so it already totals 100 and
+          // passes through untouched — falling back to the default because two
+          // keys are missing would silently reset the mix of every existing
+          // user. Anything that *doesn't* total 100 (the old panel's
+          // half-assigned state, a torn write) is scaled and snapped through
+          // the cuts instead of discarded, so its shape survives too.
+          mix = isBalanced(parsed) ? parsed : cutsToMix(mixToCuts(parsed));
+        }
       }
     } catch {
       // Fall through to the default.

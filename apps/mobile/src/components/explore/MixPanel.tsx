@@ -1,22 +1,25 @@
 /**
  * MixPanel — the left-edge slide-in that sets the feed's CEFR blend.
  *
- * Geometry is pinned to the action rail: same height, same bottom edge, and
- * a 76px right inset so the rail stays fully visible and tappable while the
- * panel is open. It is flush to the left screen edge (no left border, only
- * the right corners are rounded), and it never scrolls at default type
- * sizes — the four rows and the footer are sized to fit 285px.
+ * Geometry is pinned to the action rail: same height, same bottom edge, and an
+ * end inset so the rail stays fully visible and tappable while the panel is
+ * open. It is flush to the start screen edge (no start border, only the end
+ * corners are rounded), and it never scrolls at default type sizes — see
+ * `mixPanelLayout`, which sizes the bar as the residual so six levels fit in a
+ * panel that could not have held six rows.
  *
- * The panel stays mounted and animates; it is not unmounted on close, so
- * the slide-out runs on the same curve as the slide-in.
+ * The control is one **composition bar**, not six sliders. Its state is an
+ * ordered array of cut points; the shares are derived from the cuts, so no
+ * arrangement of them can fail to total 100. That is why there is no status
+ * line, no "still to assign", and no disabled Done — the arithmetic the old
+ * panel made the user do is now a property of the geometry. All of it lives in
+ * utils/levelMix, so the panel and the store agree on the rules.
  *
- * All the arithmetic lives in utils/levelMix so the panel and the store
- * agree on what the rules are. Each level moves independently: `+` and drag
- * are clamped by what's left of 100 and never steal from another level,
- * `−` always works down to 0.
+ * The panel stays mounted and animates; it is not unmounted on close, so the
+ * slide-out runs on the same curve as the slide-in.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -25,29 +28,43 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useColorScheme, useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
 import type { LevelMix } from '../../services/api';
 import {
   MIX_LEVELS,
-  canDecrement,
-  canIncrement,
-  decrement,
-  increment,
-  isBalanced,
-  remainingToAssign,
-  setLevelFromFraction,
-  type MixLevel,
+  MIX_STEP,
+  cutsToMix,
+  mixShortfall,
+  mixToCuts,
+  moveCut,
+  nudge,
+  pageCounts,
+  type MixCuts,
 } from '../../utils/levelMix';
+import { FEED_PAGE_SIZE, useWordFeedStore } from '../../stores/wordFeedStore';
+import { mixPanelLayout } from './mixPanelLayout';
 import { directionSign } from '../../i18n/rtl';
 
 const SERIF_FAMILY = 'Source Serif 4';
+const MONO_FAMILY = 'Courier';
+
+/**
+ * Fill opacity per level, easiest to hardest. Derived from `tc.gold` at render
+ * time rather than added to the palette: the bar wants a difficulty *gradient*,
+ * and six new tokens would be six things to keep in step with the accent.
+ */
+const LEVEL_ALPHA = [0.14, 0.26, 0.42, 0.6, 0.8, 1.0];
+
+/** Below this share a segment is too narrow for its own label and the legend
+ *  carries it instead. */
+const LABEL_MIN_SHARE = 18;
 
 interface Props {
   /** Working copy — the panel edits freely; only Done commits. */
   draft: LevelMix;
   onChange: (mix: LevelMix) => void;
   onDone: () => void;
-  /** 0 = fully off-screen left, 1 = open. */
+  /** 0 = fully off-screen start edge, 1 = open. */
   progress: Animated.Value;
   visible: boolean;
   /** Must match the rail exactly — same height, same bottom edge, and an
@@ -68,10 +85,43 @@ export function MixPanel({
   lane,
 }: Props) {
   const tc = useThemeColors();
+  const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  const balanced = isBalanced(draft);
-  const remaining = remainingToAssign(draft);
+  // Cuts are the panel's language; `LevelMix` is the store's and the wire's.
+  // They are derived on open and converted back on every change, so nothing
+  // outside this component ever sees a cut.
+  const [cuts, setCuts] = useState<MixCuts>(() => mixToCuts(draft));
+
+  // Re-derive only when the panel opens. Following `draft` would mean
+  // re-deriving from the mix this component just emitted — a round trip that
+  // can only lose precision, and one that fights an in-flight drag.
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  useEffect(() => {
+    if (visible) setCuts(mixToCuts(latestDraft.current));
+  }, [visible]);
+
+  // The committed mix and what the server actually honoured — the truth for
+  // the thin-level note. Read from the store rather than added to the props so
+  // ExploreScreen keeps the props it already passes.
+  const committedMix = useWordFeedStore((st) => st.mix);
+  const mixApplied = useWordFeedStore((st) => st.mixApplied);
+  const shortfall = useMemo(
+    () => mixShortfall(committedMix, mixApplied),
+    [committedMix, mixApplied],
+  );
+
+  const layout = mixPanelLayout(height, shortfall !== null);
+
+  const mix = useMemo(() => cutsToMix(cuts), [cuts]);
+  const shares = MIX_LEVELS.map((level) => mix[level] ?? 0);
+  const counts = useMemo(() => pageCounts(mix, FEED_PAGE_SIZE), [mix]);
+
+  function apply(next: MixCuts) {
+    setCuts(next);
+    onChange(cutsToMix(next));
+  }
 
   return (
     <Animated.View
@@ -98,134 +148,226 @@ export function MixPanel({
       accessibilityViewIsModal={visible}
     >
       <Text style={s.title}>Word mix</Text>
-      <Text style={s.sub}>How much of your feed comes from each level.</Text>
+      <Text style={s.hint} numberOfLines={layout.hintLines}>
+        {layout.hintLines === 2
+          ? 'Drag a divider to trade share.\nTap a level to give it 5%.'
+          : 'Drag a divider, or tap a level.'}
+      </Text>
 
-      <View style={s.rows}>
+      <View style={s.spacer} />
+
+      <CompositionBar
+        cuts={cuts}
+        shares={shares}
+        barHeight={layout.barHeight}
+        onCuts={apply}
+        scheme={scheme}
+        tc={tc}
+        s={s}
+      />
+
+      <View style={s.legend}>
         {MIX_LEVELS.map((level, i) => (
-          <LevelRow
+          <TouchableOpacity
             key={level}
-            level={level}
-            value={draft[level] ?? 0}
-            mix={draft}
-            onChange={onChange}
-            showRule={i > 0}
-            tc={tc}
-            s={s}
-          />
+            style={s.chip}
+            // 44pt of touch on a chip that only draws ~24 — hitSlop rather
+            // than padding, so the legend row stays 30pt tall in the budget.
+            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+            activeOpacity={0.6}
+            onPress={() => apply(nudge(cuts, i, MIX_STEP))}
+            // VoiceOver never touches the bar; the chips are the control.
+            accessibilityRole="adjustable"
+            accessibilityLabel={`${level} share`}
+            accessibilityValue={{ min: 0, max: 100, now: shares[i] }}
+            accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+            onAccessibilityAction={(e) => {
+              const dir = e.nativeEvent.actionName === 'decrement' ? -MIX_STEP : MIX_STEP;
+              apply(nudge(cuts, i, dir));
+            }}
+          >
+            <Text style={[s.chipCode, shares[i] === 0 ? s.chipOff : null]}>{level}</Text>
+            <Text style={[s.chipValue, shares[i] === 0 ? s.chipOff : null]}>{shares[i]}%</Text>
+          </TouchableOpacity>
         ))}
       </View>
 
+      {layout.showsNote && shortfall ? (
+        <Text style={s.note} numberOfLines={1}>
+          {`${shortfall.short} is running low — those cards came from ${shortfall.from}.`}
+        </Text>
+      ) : null}
+
+      <View style={s.spacer} />
+
       <View style={s.footer}>
-        <Text style={[s.status, balanced ? s.statusOk : null]}>
-          {balanced ? 'Adds up to 100%' : `${remaining}% still to assign`}
+        <Text style={s.readout} numberOfLines={1}>
+          {`Next ${FEED_PAGE_SIZE} words`}
+          {counts.map((c) => ` · ${c.count} ${c.level}`).join('')}
         </Text>
         <TouchableOpacity
-          style={[s.done, balanced ? s.doneOn : s.doneOff]}
-          onPress={balanced ? onDone : undefined}
-          disabled={!balanced}
+          style={s.done}
+          onPress={onDone}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !balanced }}
+          accessibilityLabel="Done"
         >
-          <Text style={[s.doneText, balanced ? s.doneTextOn : s.doneTextOff]}>
-            {balanced ? 'Done' : `Assign ${remaining}%`}
-          </Text>
+          <Text style={s.doneText}>Done</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
 
-function LevelRow({
-  level,
-  value,
-  mix,
-  onChange,
-  showRule,
+function CompositionBar({
+  cuts,
+  shares,
+  barHeight,
+  onCuts,
+  scheme,
   tc,
   s,
 }: {
-  level: MixLevel;
-  value: number;
-  mix: LevelMix;
-  onChange: (mix: LevelMix) => void;
-  showRule: boolean;
+  cuts: MixCuts;
+  shares: number[];
+  barHeight: number;
+  onCuts: (cuts: MixCuts) => void;
+  scheme: 'light' | 'dark';
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
 }) {
-  const [trackWidth, setTrackWidth] = useState(0);
-  // PanResponder is built once, so it must read the live mix/width rather
-  // than the values captured at creation time.
-  const latest = useRef({ mix, trackWidth, onChange, level });
-  latest.current = { mix, trackWidth, onChange, level };
+  const [barWidth, setBarWidth] = useState(0);
+
+  // PanResponder is built once, so it must read the live cuts and width
+  // rather than the values captured at creation time.
+  const latest = useRef({ cuts, barWidth, onCuts, index: 0 });
+  latest.current = { ...latest.current, cuts, barWidth, onCuts };
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      // Claim the gesture so the FlatList underneath doesn't scroll the
-      // feed while the user is dragging a slider.
+      // Claim the gesture so the FlatList underneath doesn't scroll the feed
+      // while the user is dragging a divider.
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (e) => applyDrag(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => applyDrag(e.nativeEvent.locationX),
+      // Grant picks the divider but commits nothing. A tap that never moves
+      // must not restructure the mix — the legend chips are the tap
+      // affordance, and a stray touch on a wide segment yanking the nearest
+      // divider under the finger is a mix the user did not ask for.
+      onPanResponderGrant: (e) => {
+        const pct = toPercent(e.nativeEvent.locationX);
+        if (pct !== null) latest.current.index = pickCut(latest.current.cuts, pct);
+      },
+      onPanResponderMove: (e) => {
+        const pct = toPercent(e.nativeEvent.locationX);
+        if (pct !== null) drag(pct);
+      },
     }),
   ).current;
 
-  function applyDrag(x: number) {
-    const { mix: m, trackWidth: w, onChange: cb, level: l } = latest.current;
-    if (!w) return;
+  function toPercent(x: number): number | null {
+    const { barWidth: w } = latest.current;
+    if (!w) return null;
     // locationX is always measured from the view's visual left edge, but the
-    // fill grows from the start edge — which is the right one under RTL.
+    // bar runs from the start edge — which is the right one under RTL.
     const fraction = directionSign === 1 ? x / w : 1 - x / w;
-    cb(setLevelFromFraction(m, l, fraction));
+    return fraction * 100;
   }
 
-  const plusEnabled = canIncrement(mix);
-  const minusEnabled = canDecrement(mix, level);
+  function drag(pct: number) {
+    const { cuts: c, onCuts: cb, index } = latest.current;
+    cb(moveCut(c, index, pct));
+  }
 
   return (
-    <View style={[s.row, showRule ? s.rowRule : null]}>
-      <Text style={s.levelCode}>{level}</Text>
+    <View
+      style={[s.bar, { height: barHeight }]}
+      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      {...pan.panHandlers}
+    >
+      {MIX_LEVELS.map((level, i) => {
+        // `flex: share` rather than a width percentage: adjacent flex children
+        // are laid out against one measured line, so there is no rounding seam
+        // between two segments the way there is between two percentages.
+        const ink = labelInk(i, scheme, tc);
+        return (
+          <View
+            key={level}
+            // Segments never take a touch. `locationX` is measured from
+            // whichever view the touch actually landed on, so leaving them
+            // hittable would hand the PanResponder an offset relative to one
+            // 40pt segment and read it as a position on the whole bar.
+            pointerEvents="none"
+            style={{ flex: shares[i], backgroundColor: withAlpha(tc.gold, LEVEL_ALPHA[i]) }}
+          >
+            {shares[i] >= LABEL_MIN_SHARE ? (
+              <View style={s.segLabel}>
+                <Text style={[s.segCode, { color: ink }]}>{level}</Text>
+                <Text style={[s.segValue, { color: ink }]}>{shares[i]}%</Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
 
-      <View
-        style={s.trackHit}
-        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-        {...pan.panHandlers}
-      >
-        <View style={s.track}>
-          <View style={[s.fill, { width: `${value}%` }]} />
+      {cuts.map((cut, i) => (
+        // The pill is the affordance, the line is the seam. Both are in the
+        // panel's own paper so the bar reads as slotted rather than striped.
+        <View key={i} style={[s.seam, { start: `${cut}%` }]} pointerEvents="none">
+          <View style={s.seamLine} />
+          <View style={s.grab}>
+            <View style={s.tick} />
+            <View style={s.tick} />
+          </View>
         </View>
-        {/* Knob rides the end of the fill. Offset by half its width so it
-            centres on the fill edge instead of hanging past it. */}
-        <View
-          style={[s.knob, { start: `${value}%`, marginStart: -7.5 }]}
-          pointerEvents="none"
-        />
-      </View>
-
-      <TouchableOpacity
-        style={s.step}
-        onPress={() => onChange(decrement(mix, level))}
-        disabled={!minusEnabled}
-        accessibilityRole="button"
-        accessibilityLabel={`Decrease ${level}`}
-      >
-        <Text style={[s.stepGlyph, { color: minusEnabled ? tc.text : tc.textFaint }]}>−</Text>
-      </TouchableOpacity>
-
-      <Text style={s.value}>{value}%</Text>
-
-      <TouchableOpacity
-        style={s.step}
-        onPress={() => onChange(increment(mix, level))}
-        disabled={!plusEnabled}
-        accessibilityRole="button"
-        accessibilityLabel={`Increase ${level}`}
-      >
-        <Text style={[s.stepGlyph, { color: plusEnabled ? tc.text : tc.textFaint }]}>+</Text>
-      </TouchableOpacity>
+      ))}
     </View>
   );
+}
+
+/**
+ * Which divider a touch grabs: the nearest cut, except across a *stack* of
+ * cuts sitting on one value — which is what a collapsed level looks like.
+ * There, only the outermost cut of the stack can move without violating the
+ * ordering, so the touch takes the last tied index from the right and the
+ * first from the left. Getting this wrong doesn't just feel bad: it picks a
+ * divider whose every move is immediately overridden by the push.
+ */
+function pickCut(cuts: MixCuts, pct: number): number {
+  if (cuts.length === 0) return 0;
+
+  let best = 0;
+  let bestDistance = Infinity;
+  for (let i = 0; i < cuts.length; i++) {
+    const d = Math.abs(cuts[i] - pct);
+    if (d < bestDistance) {
+      bestDistance = d;
+      best = i;
+    }
+  }
+
+  const value = cuts[best];
+  let first = best;
+  let last = best;
+  while (first > 0 && cuts[first - 1] === value) first--;
+  while (last < cuts.length - 1 && cuts[last + 1] === value) last++;
+  return pct >= value ? last : first;
+}
+
+/**
+ * Label ink for segment `i`.
+ *
+ * In dark mode the ramp crosses over: the low alphas sit on near-black and
+ * need light ink, the top two are bright gold and need dark. In light mode it
+ * never crosses — every segment is gold-on-cream, from pale to ochre, and
+ * `goldDeep` is the only ink readable on all of them. White on the light
+ * theme's #C58B1B is ~3:1, which is not a label.
+ */
+function labelInk(index: number, scheme: 'light' | 'dark', tc: ThemeColors): string {
+  if (scheme === 'light') return tc.goldDeep;
+  return index >= LEVEL_ALPHA.length - 2 ? tc.goldDeep : '#FFFFFF';
 }
 
 const makeStyles = (tc: ThemeColors) =>
@@ -234,8 +376,8 @@ const makeStyles = (tc: ThemeColors) =>
       position: 'absolute',
       start: 0,
       backgroundColor: tc.paper,
-      // Flush left: only the right corners round, and there is no left
-      // border — the panel runs off the screen edge.
+      // Flush to the start edge: only the end corners round, and there is no
+      // start border — the panel runs off the screen edge.
       borderTopEndRadius: 22,
       borderBottomEndRadius: 22,
       borderTopWidth: 1,
@@ -258,99 +400,134 @@ const makeStyles = (tc: ThemeColors) =>
     title: {
       fontFamily: SERIF_FAMILY,
       fontSize: 18,
+      lineHeight: 24,
       fontWeight: '700',
       color: tc.text,
     },
-    sub: {
+    hint: {
       marginTop: 2,
       fontSize: 11.5,
+      lineHeight: 15,
       color: tc.textFaint,
     },
-    // flex:1 so a longer list would scroll the rows only, never the panel.
-    rows: { flex: 1, justifyContent: 'center' },
-    row: {
+    // Two of these split whatever the fixed bands leave over, so the bar sits
+    // optically centred however tall the panel turns out to be.
+    spacer: { flex: 1 },
+
+    bar: {
+      marginTop: 10,
+      borderRadius: 13,
+      overflow: 'hidden',
+      backgroundColor: tc.chipBg,
+      flexDirection: 'row',
+    },
+    segLabel: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segCode: {
+      fontSize: 10.5,
+      lineHeight: 13,
+      fontWeight: '900',
+      letterSpacing: 0.5,
+    },
+    segValue: {
+      fontSize: 17,
+      lineHeight: 21,
+      fontWeight: '800',
+    },
+    seam: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      width: 2,
+      // Centre the 2pt seam on the cut rather than hanging it off the edge.
+      marginStart: -1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    seamLine: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: tc.paper,
+    },
+    grab: {
+      width: 14,
+      height: 34,
+      borderRadius: 7,
+      backgroundColor: tc.paper,
+      borderWidth: 1,
+      borderColor: tc.goldLine,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 2,
-      gap: 8,
+      justifyContent: 'center',
+      gap: 2,
     },
-    rowRule: {
+    tick: {
+      width: 1,
+      height: 12,
+      backgroundColor: tc.gold,
+    },
+
+    legend: {
+      marginTop: 6,
+      height: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    chip: {
+      alignItems: 'center',
+      minWidth: 30,
+    },
+    chipCode: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 9,
+      lineHeight: 11,
+      fontWeight: '900',
+      color: tc.goldOnSurface,
+      letterSpacing: 0.4,
+    },
+    chipValue: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 10,
+      lineHeight: 12,
+      fontWeight: '800',
+      color: tc.goldOnSurface,
+    },
+    chipOff: { color: tc.textFaint },
+
+    note: {
+      marginTop: 4,
+      fontSize: 11,
+      lineHeight: 15,
+      color: tc.textFaint,
+    },
+
+    footer: {
       borderTopWidth: 1,
       borderTopColor: tc.border,
-    },
-    levelCode: {
-      width: 22,
-      fontSize: 11.5,
-      fontWeight: '900',
-      color: tc.text,
-    },
-    trackHit: {
-      flex: 1,
-      paddingVertical: 9,
-      justifyContent: 'center',
-    },
-    track: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: tc.chipBg,
-      overflow: 'hidden',
-    },
-    fill: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: tc.gold,
-    },
-    knob: {
-      position: 'absolute',
-      width: 15,
-      height: 15,
-      borderRadius: 7.5,
-      backgroundColor: tc.gold,
-      borderWidth: 2,
-      borderColor: tc.paper,
-    },
-    step: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: tc.chipBg,
-    },
-    stepGlyph: {
-      fontSize: 15,
-      fontWeight: '800',
-      lineHeight: 18,
-    },
-    value: {
-      width: 36,
-      textAlign: 'center',
-      fontSize: 13.5,
-      fontWeight: '800',
-      color: tc.text,
-    },
-    footer: {
+      paddingTop: 10,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 10,
     },
-    status: {
+    // Cards, not percentages: one 5% detent is exactly one card of a 20-card
+    // page, so the thing the user is dragging is legible in what they'll get.
+    readout: {
       flex: 1,
-      fontSize: 11.5,
+      fontSize: 10.5,
       color: tc.textFaint,
     },
-    statusOk: { color: tc.goldOnSurface },
+    // Always enabled. There is no unbalanced mix left to gate on.
     done: {
       height: 34,
       borderRadius: 10,
       paddingHorizontal: 16,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: tc.gold,
     },
-    doneOn: { backgroundColor: tc.gold },
-    doneOff: { backgroundColor: tc.chipBg },
-    doneText: { fontSize: 12.5, fontWeight: '800' },
-    doneTextOn: { color: tc.goldDeep },
-    doneTextOff: { color: tc.textFaint },
+    doneText: { fontSize: 12.5, fontWeight: '800', color: tc.goldDeep },
   });

@@ -18,21 +18,33 @@ from fastapi import HTTPException
 from src.routes.srs import (
     _allocate_mix,
     _eligible_lemma_candidates,
+    _fallback_mix,
     _feed_seed,
     _page_plan,
     _parse_mix,
     _sentence_match,
 )
+from src.services.feed_pool import FEED_MIX_LEVELS
 
 
 class TestParseMix:
     def test_parses_the_default_mix(self):
-        assert _parse_mix("A2:0,B1:70,B2:20,C1:10") == {
-            "A2": 0, "B1": 70, "B2": 20, "C1": 10,
+        assert _parse_mix("A1:0,A2:0,B1:70,B2:20,C1:10,C2:0") == {
+            "A1": 0, "A2": 0, "B1": 70, "B2": 20, "C1": 10, "C2": 0,
         }
 
     def test_tolerates_whitespace_and_case(self):
         assert _parse_mix(" b1 : 60 , b2:40 ") == {"B1": 60, "B2": 40}
+
+    def test_accepts_the_ends_of_the_range(self):
+        # The composition bar can drive any single level to 100, including the
+        # two the mix used to exclude.
+        assert _parse_mix("A1:100") == {"A1": 100}
+        assert _parse_mix("C2:100") == {"C2": 100}
+
+    def test_still_accepts_a_four_level_mix_from_an_old_build(self):
+        # An install that hasn't taken the update keeps sending four levels.
+        assert _parse_mix("A2:0,B1:70,B2:20,C1:10")["B1"] == 70
 
     def test_rejects_sum_below_100(self):
         with pytest.raises(HTTPException) as e:
@@ -45,9 +57,11 @@ class TestParseMix:
             _parse_mix("B1:70,B2:40")
 
     def test_rejects_unknown_level(self):
-        # A1 is deliberately outside the feed's addressable levels.
+        # The mix spans A1–C2; anything else is not a CEFR level.
         with pytest.raises(HTTPException):
-            _parse_mix("A1:100")
+            _parse_mix("D1:100")
+        with pytest.raises(HTTPException):
+            _parse_mix("UNKNOWN:100")
 
     def test_rejects_non_numeric_share(self):
         with pytest.raises(HTTPException):
@@ -105,6 +119,59 @@ class TestAllocateMix:
 
     def test_zero_limit_yields_nothing(self):
         assert _allocate_mix({"B1": 100}, 0, {"B1": 500}) == {}
+
+    def test_mix_applied_never_names_a_level_the_user_zeroed(self):
+        # The six-level panel sends every level, most of them at 0. A level the
+        # user dialled to nothing must never appear in the page, however short
+        # the ones they asked for turn out to be — redistribution stays inside
+        # the mix. (The route's last-resort fallback is the one exception, and
+        # it rewrites `requested` before ever reaching here.)
+        mix = {"A1": 0, "A2": 0, "B1": 60, "B2": 40, "C1": 0, "C2": 0}
+        stock = {lvl: 500 for lvl in FEED_MIX_LEVELS}
+        stock["B1"] = 1
+        counts = _allocate_mix(mix, 20, stock)
+        assert set(counts) == {"B1", "B2"}
+        assert sum(counts.values()) == 20
+
+    def test_single_level_mix_takes_the_whole_page(self):
+        for level in FEED_MIX_LEVELS:
+            counts = _allocate_mix({level: 100}, 20, {level: 500})
+            assert counts == {level: 20}
+
+    def test_single_level_mix_that_runs_dry_reports_the_truth(self):
+        # Nothing to redistribute to — the page is short and says so, rather
+        # than quietly serving a level the user did not ask for.
+        assert _allocate_mix({"C2": 100}, 20, {"C2": 5}) == {"C2": 5}
+
+
+class TestFallbackMix:
+    """The route's last resort: every level the user's mix names is empty for
+    them. An empty Explore tab is a worse answer than a page off-mix."""
+
+    def test_offers_the_levels_the_user_did_not_ask_for(self):
+        spare, mix = _fallback_mix(["C2"])
+        assert spare == ["A1", "A2", "B1", "B2", "C1"]
+        assert sum(mix.values()) == 100
+        assert "C2" not in mix
+
+    def test_fills_a_whole_page_from_the_spare_levels(self):
+        # The point of the fallback: a full page, and a mix_applied that names
+        # where the cards actually came from.
+        spare, mix = _fallback_mix(["A1"])
+        counts = _allocate_mix(mix, 20, {lvl: 500 for lvl in spare})
+        assert sum(counts.values()) == 20
+        assert "A1" not in counts
+
+    def test_survives_a_spare_set_that_does_not_divide_evenly(self):
+        for asked in (["A1"], ["A1", "A2"], ["A1", "A2", "B1"], ["C1", "C2"]):
+            _, mix = _fallback_mix(asked)
+            assert sum(mix.values()) == 100
+
+    def test_has_nothing_to_offer_when_the_mix_spans_everything(self):
+        # A mix naming all six levels that is *still* empty means the user has
+        # read the entire pool — there is no honest fallback, and the feed says
+        # so rather than inventing one.
+        assert _fallback_mix(list(FEED_MIX_LEVELS)) == ([], {})
 
 
 class TestPagePlan:

@@ -18,11 +18,19 @@ from typing import Iterable, Optional, Protocol
 
 from .hidden_words import hidden_word_exclusion_sql
 
-# Levels the Explore mix can address. A1 is deliberately out — the feed is a
-# stretch surface, and A1 lemmas are almost entirely function words. C2 is out
-# of the *mix* but still reachable as the "one level up" band /today and the
-# default feed stretch into.
-FEED_MIX_LEVELS = ["A2", "B1", "B2", "C1"]
+# Levels the Explore mix can address — the whole CEFR range. The mix panel is a
+# composition bar over all six, so a user can dial the feed anywhere from A1 to
+# C2, including a single level at 100%.
+#
+# A1 and C2 are the thin pools (measured on prod 2026-08-30: A1 1,756 and C2
+# 2,706 eligible lemmas, against C1's 8,590), and `FEED_MIN_LEMMA_LENGTH` below
+# is most of why A1 is thin — a lot of A1 vocabulary is under four letters. That
+# threshold stays: it keeps tokenizer debris out of the feed, and fattening a
+# level by lowering the bar for what counts as a word is not a trade worth
+# making. Keeping a page full when a thin bucket runs dry is `_allocate_mix`'s
+# job in routes/srs.py, which moves an exhausted level's share onto the levels
+# that still have stock and reports the result in `mix_applied`.
+FEED_MIX_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
 # Shorter strings are overwhelmingly abbreviations, interjections and
 # tokenizer debris rather than words worth teaching.

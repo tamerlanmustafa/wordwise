@@ -931,7 +931,7 @@ _FEED_MIX_LEVELS = FEED_MIX_LEVELS
 
 
 def _parse_mix(raw: str) -> dict[str, int]:
-    """Parse `A2:0,B1:70,B2:20,C1:10` into {level: percent}.
+    """Parse `A1:0,A2:0,B1:70,B2:20,C1:10,C2:0` into {level: percent}.
 
     Raises HTTPException(400) on anything malformed or not summing to 100 —
     a silently-renormalised mix would make the feed's distribution differ
@@ -1026,6 +1026,28 @@ def _allocate_mix(
                     progressed = True
 
     return {lvl: n for lvl, n in counts.items() if n > 0}
+
+
+def _fallback_mix(levels: list[str]) -> tuple[list[str], dict[str, int]]:
+    """Where to draw from when every level the user's mix names is empty.
+
+    Returns the levels they did *not* ask for, split evenly, or `([], {})` when
+    the mix already spans the whole range and there is nothing else to offer.
+
+    An even split rather than anything cleverer on purpose: this is a fallback,
+    not a recommendation. The user's stated preference has already turned out to
+    be unservable, so guessing a *second* preference on their behalf would just
+    be a different opinion with no more evidence behind it — spreading the page
+    across everything left gives them the widest sample to pick a new mix from.
+    """
+    spare = [lvl for lvl in _FEED_MIX_LEVELS if lvl not in levels]
+    if not spare:
+        return [], {}
+    share = 100 // len(spare)
+    requested = {lvl: share for lvl in spare}
+    # Rounding remainder goes to the easiest spare level.
+    requested[spare[0]] += 100 - share * len(spare)
+    return spare, requested
 
 
 def _page_plan(
@@ -1303,9 +1325,9 @@ async def word_feed(
     guaranteed global LLM sentence) plus an exclusion for anything already
     in the user's user_words, so saved and known words never come back.
 
-    `mix` (e.g. `A2:0,B1:70,B2:20,C1:10`, must sum to 100) sets how much of
-    each page comes from each CEFR level. Omit it to get the /today
-    behaviour: the user's level plus one above.
+    `mix` (e.g. `A1:0,A2:0,B1:70,B2:20,C1:10,C2:0`, must sum to 100) sets how
+    much of each page comes from each CEFR level, over the full A1–C2 range.
+    Omit it to get the /today behaviour: the user's level plus one above.
 
     `seed` is an opaque client token that fixes the pick order. The app mints
     one per cold start and echoes it on every page, so each launch is a fresh
@@ -1343,6 +1365,36 @@ async def word_feed(
     candidates = await _eligible_lemma_candidates(
         db, levels, exclude_user_id=current_user.id, limit=4000
     )
+
+    if not candidates and mix:
+        # Last resort: every level this user's mix names is empty *for them* —
+        # a single-level mix whose pool they have read out, or a thin level with
+        # nothing left after their user_words exclusion. An empty Explore tab is
+        # a worse answer than a page off-mix, so draw from the levels they did
+        # not ask for and say so honestly in `mix_applied`.
+        #
+        # The trigger is deliberately "no stock at all in the requested levels",
+        # not "this page came back short". A bucket that merely runs dry
+        # mid-page is _allocate_mix's redistribution to handle, and a page that
+        # comes back empty deep into a feed is the genuine end of it — falling
+        # back there would turn "you've seen them all" into an endless stream
+        # that quietly ignores the mix.
+        #
+        # It is also a second query rather than widening the first: the 4,000
+        # row budget is split evenly across `levels`, so always querying all six
+        # would cut a single-level mix's depth from 4,000 to 666 on every
+        # request to serve a case that, on current stock, no user reaches.
+        spare, spare_mix = _fallback_mix(levels)
+        if spare:
+            logger.warning(
+                f"[feed] mix levels exhausted user={current_user.id} "
+                f"levels={levels}; falling back to {spare}"
+            )
+            candidates = await _eligible_lemma_candidates(
+                db, spare, exclude_user_id=current_user.id, limit=4000
+            )
+            levels, requested = spare, spare_mix
+
     if not candidates:
         logger.warning(f"[feed] no eligible lemmas user={current_user.id} levels={levels}")
         return FeedResponse(items=[], mix_applied={}, has_more=False)

@@ -363,3 +363,39 @@ export function useThemeColors(): ThemeColors {
 export function useColorScheme(): 'light' | 'dark' {
   return useThemeStore((s) => s.resolved);
 }
+
+/**
+ * One palette colour at a given opacity, for the places that need a *ramp* of
+ * one token rather than a new token per step (the Explore mix bar's six
+ * difficulty bands, for instance). Deriving them keeps the ramp tied to
+ * whatever `gold` currently is in each theme instead of freezing six hexes
+ * that then drift when the accent moves.
+ *
+ * Handles the two shapes the palette actually uses — `#RRGGBB` and
+ * `rgb()`/`rgba()`. Anything else is returned untouched rather than mangled,
+ * so a future token shape degrades to "solid colour", never to garbage.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  const a = Math.min(Math.max(alpha, 0), 1);
+
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (hex) {
+    const digits =
+      hex[1].length === 3
+        ? hex[1]
+            .split('')
+            .map((c) => c + c)
+            .join('')
+        : hex[1];
+    const channel = (start: number) => parseInt(digits.slice(start, start + 2), 16);
+    return `rgba(${channel(0)},${channel(2)},${channel(4)},${a})`;
+  }
+
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(color.trim());
+  if (rgb) {
+    const [r, g, b] = rgb[1].split(',').map((p) => p.trim());
+    if (r && g && b) return `rgba(${r},${g},${b},${a})`;
+  }
+
+  return color;
+}

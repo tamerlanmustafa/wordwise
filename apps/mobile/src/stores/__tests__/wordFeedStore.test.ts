@@ -329,20 +329,56 @@ describe('wordFeedStore', () => {
       expect(useWordFeedStore.getState().mix).toEqual({ A2: 50, B1: 50 });
     });
 
-    it('ignores a stored mix that no longer balances', async () => {
+    it('carries a four-level mix from the previous build through unchanged', async () => {
+      // The literal value the four-level panel wrote. A1 and C2 are simply
+      // absent; they read as 0, so it still totals 100 and must survive the
+      // upgrade untouched — resetting it would throw away a choice the user
+      // made, and every existing install has one of these on disk.
+      await AsyncStorage.setItem(MIX_KEY, '{"A2":0,"B1":70,"B2":20,"C1":10}');
+      mockFeed.mockResolvedValue(page([item(1)]));
+
+      await useWordFeedStore.getState().hydrate('B2', 'es');
+
+      expect(useWordFeedStore.getState().mix).toEqual({ A2: 0, B1: 70, B2: 20, C1: 10 });
+    });
+
+    it('recovers a stored mix that no longer balances instead of discarding it', async () => {
+      // The old panel's legal-but-unsendable state. Scaled and snapped back to
+      // 100 with its shape intact, rather than replaced by the default.
       await AsyncStorage.setItem(MIX_KEY, JSON.stringify({ B1: 30 }));
       mockFeed.mockResolvedValue(page([item(1)]));
 
       await useWordFeedStore.getState().hydrate('B2', 'es');
 
-      // Falls back to the level-derived default rather than a broken mix.
-      expect(useWordFeedStore.getState().mix).toEqual({ A2: 0, B1: 0, B2: 70, C1: 30 });
+      expect(useWordFeedStore.getState().mix).toEqual({
+        A1: 0, A2: 0, B1: 100, B2: 0, C1: 0, C2: 0,
+      });
     });
 
     it('seeds the first-run mix from the onboarding level', async () => {
       mockFeed.mockResolvedValue(page([item(1)]));
       await useWordFeedStore.getState().hydrate('A2', 'es');
-      expect(useWordFeedStore.getState().mix).toEqual({ A2: 70, B1: 20, B2: 10, C1: 0 });
+      expect(useWordFeedStore.getState().mix).toEqual({
+        A1: 0, A2: 70, B1: 20, B2: 10, C1: 0, C2: 0,
+      });
+    });
+
+    it('seeds an A1 user on A1, now that the mix reaches that far down', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().hydrate('A1', 'es');
+      expect(useWordFeedStore.getState().mix).toEqual({
+        A1: 70, A2: 20, B1: 10, B2: 0, C1: 0, C2: 0,
+      });
+    });
+
+    it('accepts a single-level mix at either end of the range', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+
+      await useWordFeedStore.getState().setMix({ A1: 100, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 });
+      expect(useWordFeedStore.getState().mix.A1).toBe(100);
+
+      await useWordFeedStore.getState().setMix({ A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 100 });
+      expect(useWordFeedStore.getState().mix.C2).toBe(100);
     });
   });
 
