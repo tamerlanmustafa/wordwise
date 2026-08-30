@@ -24,6 +24,28 @@ export const SERIF_FAMILY: string | undefined = I18nManager.isRTL
       default: 'Georgia',
     }) as string);
 
+/**
+ * Serif italic — the definition/gloss lines, which are set italic to read as
+ * commentary on the headword rather than as a second sentence.
+ *
+ * A separate family because Georgia's italic is barely slanted: at the 12pt the
+ * deck's gloss slot runs it reads as roman, which is the whole point of the
+ * line lost. Baskerville's italic is a true calligraphic one and is
+ * unmistakable at that size. Android ships no Baskerville and silently falls
+ * back to Roboto — a sans in the middle of a serif card — so it keeps the
+ * system serif, whose italic (Noto Serif Italic) is already distinct enough.
+ *
+ * Only ever paired with `fontStyle: 'italic'`; the roman of this family is not
+ * the card's text face.
+ */
+export const SERIF_ITALIC_FAMILY: string | undefined = I18nManager.isRTL
+  ? undefined
+  : (Platform.select({
+      ios: 'Baskerville',
+      android: 'serif',
+      default: 'Georgia',
+    }) as string);
+
 /** Monospace — the small gold "edge-code"/eyebrow labels. */
 export const MONO_FAMILY: string | undefined = I18nManager.isRTL
   ? undefined

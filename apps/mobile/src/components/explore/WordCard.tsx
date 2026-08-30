@@ -37,9 +37,14 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { SERIF_ITALIC_FAMILY } from '../../theme/fonts';
 import { glossLine } from '../../utils/glossLine';
 import type { FeedItem } from '../../services/api';
 
+// Not a font the app ships or loads, so every line using it resolves to the
+// platform's default face. Left alone here because changing it would restyle
+// the whole card; the gloss below asks theme/fonts for a real installed face
+// instead, which is the only way `fontStyle: 'italic'` gets a true italic.
 const SERIF_FAMILY = 'Source Serif 4';
 
 /** The shared curve for every Explore movement. */
@@ -307,7 +312,7 @@ const makeStyles = (tc: ThemeColors) =>
     },
     definition: {
       marginTop: 10,
-      fontFamily: SERIF_FAMILY,
+      fontFamily: SERIF_ITALIC_FAMILY,
       fontSize: 17,
       lineHeight: 17 * 1.45,
       // Italic and secondary so it reads as commentary on the word above it

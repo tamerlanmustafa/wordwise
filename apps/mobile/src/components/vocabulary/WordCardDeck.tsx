@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
-import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
+import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import type { ThemeColors } from '../../theme/tokens';
 import {
   wordwiseApi,
@@ -577,7 +577,7 @@ export const WordCardDeck = ({
   // Cards mid-flight after a swipe: each overlay owns its own values and
   // removes itself when the fly-out finishes.
   const [outgoing, setOutgoing] = useState<
-    { id: number; dir: 1 | -1; startX: number; item: DeckItem; rank: number }[]
+    { id: number; dir: 1 | -1; startX: number; item: DeckItem }[]
   >([]);
   const outgoingIdRef = useRef(0);
   const handleOutgoingDone = useCallback((id: number) => {
@@ -622,7 +622,6 @@ export const WordCardDeck = ({
         dir,
         startX,
         item: currentItem,
-        rank: displayDeck.index + 1,
       },
     ]);
   };
@@ -966,7 +965,7 @@ export const WordCardDeck = ({
    * face the outgoing fly-away overlay shows. Slot heights mirror the
    * focused card exactly so the detach is invisible.
    */
-  const renderStaticBody = (item: DeckItem, rankNumber: number) => {
+  const renderStaticBody = (item: DeckItem) => {
     const staticIdiom = isIdiomItem(item);
     const term = keyOf(item);
     const lvl = ((item as { cefr_level?: string }).cefr_level || activeLevel).toUpperCase();
@@ -983,7 +982,6 @@ export const WordCardDeck = ({
     return (
       <>
         <View style={s.metaRow}>
-          <Text style={s.rank}>{rankNumber}</Text>
           <View style={[s.levelChip, { backgroundColor: `${lvlColor}22` }]}>
             <Text style={[s.levelChipText, { color: lvlColor }]}>{lvl}</Text>
           </View>
@@ -1133,9 +1131,10 @@ export const WordCardDeck = ({
             accessibilityRole="button"
             accessibilityLabel={expanded ? t('vocabulary:deck.hideTranslation') : t('vocabulary:deck.showTranslation')}
           >
-            {/* 1 · meta row: rank · level chip · idiom badge · save star */}
+            {/* 1 · meta row: level chip · idiom badge · save star. The card's
+                position in the deck is the progress bar's job, so it is not
+                also printed here. */}
             <View style={s.metaRow}>
-              <Text style={s.rank}>{displayDeck.index + 1}</Text>
               <View style={[s.levelChip, { backgroundColor: `${levelColor}22` }]}>
                 <Text style={[s.levelChipText, { color: levelColor }]}>{level}</Text>
               </View>
@@ -1319,7 +1318,7 @@ export const WordCardDeck = ({
             onDone={handleOutgoingDone}
             style={s.outgoingCard}
           >
-            {renderStaticBody(o.item, o.rank)}
+            {renderStaticBody(o.item)}
           </OutgoingCard>
         ))}
       </View>
@@ -1512,12 +1511,6 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       gap: 8,
       height: META_ROW_HEIGHT,
     },
-    rank: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 12,
-      fontWeight: '700',
-      color: tc.textFaint,
-    },
     levelChip: {
       paddingHorizontal: 7,
       paddingVertical: 2,
@@ -1573,9 +1566,11 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       overflow: 'hidden',
     },
     definition: {
-      fontFamily: SERIF_FAMILY,
       // Italic and secondary, the same treatment the Explore card gives it:
       // commentary on the headword above, not a rival to the sentence below.
+      // Its own family, because Georgia's italic barely slants at this size —
+      // see SERIF_ITALIC_FAMILY.
+      fontFamily: SERIF_ITALIC_FAMILY,
       fontStyle: 'italic',
       color: light ? '#7A6A50' : tc.textFaint,
     },

@@ -38,10 +38,18 @@ describe('font families', () => {
     expect(loadFonts(false, 'android').MONO_FAMILY).toBe('monospace');
   });
 
+  it('gives the gloss lines an italic that reads as italic, per platform', () => {
+    // iOS gets a face whose italic is unmistakable at 12pt; Android has no
+    // Baskerville, and an unknown family there resolves to the default sans.
+    expect(loadFonts(false, 'ios').SERIF_ITALIC_FAMILY).toBe('Baskerville');
+    expect(loadFonts(false, 'android').SERIF_ITALIC_FAMILY).toBe('serif');
+  });
+
   it('falls back to the system face under RTL, on both platforms', () => {
     for (const os of ['ios', 'android'] as const) {
       expect(loadFonts(true, os).SERIF_FAMILY).toBeUndefined();
       expect(loadFonts(true, os).MONO_FAMILY).toBeUndefined();
+      expect(loadFonts(true, os).SERIF_ITALIC_FAMILY).toBeUndefined();
     }
   });
 });

@@ -646,11 +646,6 @@ export const MovieDetailScreen = ({
 
   const idioms = vocabulary?.idioms || [];
 
-  // The hero's "N WORDS OF DIALOGUE" line: total classified vocab across levels.
-  const totalWordCount = vocabulary
-    ? Object.values(vocabulary.level_distribution).reduce((a, b) => a + (b || 0), 0)
-    : 0;
-
   // Idioms have their own CEFR level, so we group them the same way words are
   // grouped — by exact CEFR match. They render inline with the level's words.
   const idiomsByLevel = useMemo(() => {
@@ -1005,10 +1000,8 @@ export const MovieDetailScreen = ({
           backdropPath={movie.backdrop_path}
           posterPath={movie.poster_path}
           title={movie.title}
-          rating={movie.vote_average}
           level={difficulty?.level ?? null}
           matchPct={difficulty ? difficulty.score : null}
-          wordCount={vocabulary ? totalWordCount : null}
           onBack={onBack}
           onPosterPress={movie.poster_path ? () => setPosterZoomOpen(true) : undefined}
           style={{ paddingTop: insets.top }}
@@ -1101,14 +1094,12 @@ export const MovieDetailScreen = ({
             {wordsView === 'foryou' && suggestedWords.length === 0 ? (
               <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
             ) : viewMode === 'cards' ? (
-              /* Deck header row: CARD n / total on the left, the deck's
-                 identity tag on the right. */
+              /* Deck header row: CARD n / total, alone on its line. The deck's
+                 identity tag ("FOR YOU DECK") is gone — the screen is For You
+                 only, so it named the one thing it could ever say. */
               <View style={[styles.countSortRow, deckHeaderStyles.deckCountRow]}>
                 <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
                   CARD {deckCardClamped} / {deckTotal}
-                </Text>
-                <Text style={[deckHeaderStyles.deckTag, { color: tc.textFaint }]}>
-                  {wordsView === 'foryou' ? 'FOR YOU' : activeLevel} DECK
                 </Text>
               </View>
             ) : wordsView === 'all' ? (
@@ -1566,12 +1557,6 @@ const deckHeaderStyles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 1.05,
-  },
-  deckTag: {
-    fontFamily: MONO_FAMILY,
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.7,
   },
   sortCluster: {
     flexDirection: 'row',

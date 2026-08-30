@@ -58,7 +58,7 @@ export const FILTER_BAR = { gap: 14, height: 44 };
  *  below has to agree with what is actually rendered or `deckBlockHeightFor`
  *  starts describing a screen that does not exist. */
 export const SHOW_LEVEL_FILTER_BAR: boolean = false;
-/** `CARD 23 / 60` · `B2 DECK`. */
+/** `CARD 23 / 60`. */
 export const DECK_HEADER_ROW = { gap: 12, height: 13 };
 /** Thin progress rule under the deck header. */
 export const PROGRESS_BAR = { gap: 7, height: 3 };

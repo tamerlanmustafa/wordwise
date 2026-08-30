@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon } from '../../i18n/rtl';
-import { getFormattingLocale } from '../../i18n';
 import { movieTitleTier } from '../vocabulary/cardLayout';
 import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
 
@@ -51,15 +50,13 @@ export interface MovieDetailHeroProps {
   backdropPath?: string | null;
   posterPath?: string | null;
   title: string;
-  /** TMDB 0–10. Null/0 drops the star and its separator. */
-  rating?: number | null;
-  /** CEFR band for the film, e.g. 'B2'. Null drops it with its separator. */
+  /** CEFR band for the film, e.g. 'B2'. Null drops the whole meta line — it is
+   *  the only thing on it, the star rating and the dialogue-word count having
+   *  been cut: this screen grades a film for a learner, and a crowd's 0–10 and
+   *  a raw token count are neither that grade nor anything to act on. */
   level?: string | null;
   /** 0–100 match. Rendered only alongside `level`. */
   matchPct?: number | null;
-  /** Total dialogue words. Null while vocabulary is still loading — the line
-   *  is hidden rather than showing 0. */
-  wordCount?: number | null;
   onBack: () => void;
   onPosterPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -69,10 +66,8 @@ export const MovieDetailHero = ({
   backdropPath,
   posterPath,
   title,
-  rating,
   level,
   matchPct,
-  wordCount,
   onBack,
   onPosterPress,
   style,
@@ -84,13 +79,13 @@ export const MovieDetailHero = ({
 
   const tier = movieTitleTier(title);
 
-  // Each part drops independently, and the separator goes with it — a film
-  // with no rating must never render a dangling "·".
-  const metaParts: string[] = [];
-  if (rating != null && rating > 0) metaParts.push(`★ ${rating.toFixed(1)}`);
-  if (level) {
-    metaParts.push(matchPct != null ? `${level} ${Math.round(matchPct)}%` : level);
-  }
+  // The film's CEFR band, with the match percentage when we have one. Null
+  // until `difficulty` lands, and the line is hidden rather than reserved.
+  const metaLine = level
+    ? matchPct != null
+      ? `${level} ${Math.round(matchPct)}%`
+      : level
+    : null;
 
   return (
     <>
@@ -158,28 +153,9 @@ export const MovieDetailHero = ({
             >
               {title}
             </Text>
-            {/* start/end rather than x:0→1 so the rule fades outward from the
-                title's own edge under RTL too. */}
-            <LinearGradient
-              colors={['rgba(197,139,27,0.55)', 'rgba(197,139,27,0)']}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={s.rule}
-            />
-            {metaParts.length > 0 ? (
+            {metaLine ? (
               <Text style={s.metaGold} numberOfLines={1}>
-                {metaParts.join(' · ')}
-              </Text>
-            ) : null}
-            {wordCount != null && wordCount > 0 ? (
-              <Text style={s.metaFaint} numberOfLines={1}>
-                {/* `formatted` carries the grouped number because i18next is
-                    set up without a number formatter; `count` is still passed
-                    so a locale that needs plural forms can have them. */}
-                {t('movies:detail.wordsOfDialogue', {
-                  count: wordCount,
-                  formatted: wordCount.toLocaleString(getFormattingLocale()),
-                })}
+                {metaLine}
               </Text>
             ) : null}
           </View>
@@ -283,27 +259,17 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       letterSpacing: -0.4,
       color: tc.text,
     },
-    rule: {
-      height: 1,
-      marginTop: 9,
-    },
     metaGold: {
       fontFamily: MONO_FAMILY,
       fontSize: 9.5,
       lineHeight: 13,
       fontWeight: '700',
       letterSpacing: 1.05,
-      marginTop: 7,
+      // 10, not the old 7: it used to hang off a gold rule that carried 9pt of
+      // its own space above it, and inheriting only the 7 pulled the band up
+      // under the title's descenders.
+      marginTop: 10,
       color: tc.goldOnSurface,
-    },
-    metaFaint: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 9.5,
-      lineHeight: 13,
-      fontWeight: '700',
-      letterSpacing: 0.76,
-      marginTop: 3,
-      color: tc.metaMonoFaint,
     },
   });
 };
