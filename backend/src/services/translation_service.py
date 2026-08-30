@@ -128,12 +128,18 @@ class TranslationService:
         provider: Optional[str] = None,
     ) -> None:
         """Save translation to cache"""
-        # A translation identical to its source is almost always a provider
-        # passthrough / failure (e.g. English text returned unchanged as
-        # "Turkish"). Don't persist those — they'd serve wrong data forever
-        # and inflate the cache. The rare truly-identical word just re-resolves
-        # next time at negligible cost.
+        # A translation identical to its source must not enter the cache: if it
+        # was a provider failure (English handed back as "Turkish"), caching it
+        # would serve wrong data forever. The rare truly-identical word just
+        # re-resolves next time at negligible cost.
+        #
+        # It is still WRITTEN DOWN, in translation_passthroughs, rather than
+        # dropped. Not caching and not recording are different decisions, and
+        # for years this line made both at once — which is why prod could not
+        # answer "which words are the same in Turkish?" despite having answered
+        # that question 25,665 times.
         if self._is_passthrough(source_text, translated):
+            await self._record_passthroughs([source_text], target_lang, provider)
             return
         try:
             await self.db.translationcache.upsert(
@@ -170,6 +176,55 @@ class TranslationService:
         """
         return translated.strip().lower() == source_text.strip().lower()
 
+    async def _record_passthroughs(
+        self,
+        source_texts: List[str],
+        target_lang: str,
+        provider: Optional[str] = None,
+    ) -> None:
+        """Note that `provider` returned these terms unchanged for `target_lang`.
+
+        The counterpart to the cache's refusal to store them. "Identical" is
+        not one fact but two — a dead API call, and a loanword that genuinely
+        is the same word in the target language ("khat", "grappa", "argon" in
+        Turkish). One sighting cannot tell them apart, so this records the
+        sighting and leaves the judgement to whoever queries it: a term two
+        independent providers echo, repeatedly, is a loanword.
+
+        Best-effort by design. The caller already has its translation and is
+        about to return it; a bookkeeping failure must not turn that into an
+        error, so everything here is swallowed and logged.
+
+        One statement regardless of batch size — `_save_many_to_cache` exists
+        because a per-row await was costing a feed page 40 sequential round
+        trips, and re-introducing that loop here would hand the cost straight
+        back on exactly the pages most likely to contain passthroughs.
+        """
+        # DISTINCT matters twice over: ON CONFLICT raises "cannot affect row a
+        # second time" if one statement touches the same key twice, and a batch
+        # really can carry the same term more than once.
+        terms = sorted({t.strip().lower() for t in source_texts if t and t.strip()})
+        lang = (target_lang or "").strip().upper()
+        # EN→EN is identical by definition, not an observation about anything.
+        if not terms or not lang or lang == "EN":
+            return
+        try:
+            await self.db.execute_raw(
+                """
+                INSERT INTO translation_passthroughs
+                    (source_text, target_lang, provider)
+                SELECT t, $2, $3 FROM unnest($1::text[]) AS t
+                ON CONFLICT (source_text, target_lang, provider) DO UPDATE
+                    SET times_seen   = translation_passthroughs.times_seen + 1,
+                        last_seen_at = NOW()
+                """,
+                terms,
+                lang,
+                provider or "unknown",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record translation passthroughs ({lang}): {e}")
+
     async def _save_many_to_cache(
         self,
         rows: List[Tuple[str, str, Optional[str]]],
@@ -188,17 +243,24 @@ class TranslationService:
         that raced us to it. Its value is equally good, and skipping keeps
         this to a single insert.
         """
-        payload = [
-            {
-                "sourceText": source_text,
-                "targetLang": target_lang,
-                "translated": translated,
-                "sourceLang": source_lang,
-                "provider": provider,
-            }
-            for source_text, translated, source_lang in rows
-            if not self._is_passthrough(source_text, translated)
-        ]
+        payload = []
+        passthroughs = []
+        for source_text, translated, source_lang in rows:
+            if self._is_passthrough(source_text, translated):
+                passthroughs.append(source_text)
+                continue
+            payload.append(
+                {
+                    "sourceText": source_text,
+                    "targetLang": target_lang,
+                    "translated": translated,
+                    "sourceLang": source_lang,
+                    "provider": provider,
+                }
+            )
+        # One extra statement for the whole batch, not one per dropped row.
+        if passthroughs:
+            await self._record_passthroughs(passthroughs, target_lang, provider)
         if not payload:
             return
         try:

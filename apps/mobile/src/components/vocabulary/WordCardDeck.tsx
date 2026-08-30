@@ -30,6 +30,7 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
+import { wordTranslationDisplay } from './translationDisplay';
 import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
@@ -1048,8 +1049,17 @@ export const WordCardDeck = ({
   };
 
   const wTier = wordTier(currentKey);
+  // A provider that hands the word straight back ("khat" → "khat" in Turkish)
+  // is usually right — plenty of loanwords are identical — but echoing it into
+  // the translation slot reads as a broken card. Say it in words instead.
+  const wtDisplay = wordTranslationDisplay(currentKey, translation);
+  const wtSameAsSource = wtDisplay.kind === 'sameAsSource';
   const wtText =
-    translation != null && translation.length > 0 ? translation.toLowerCase() : '—';
+    wtDisplay.kind === 'translation'
+      ? wtDisplay.text
+      : wtSameAsSource
+        ? t('vocabulary:deck.sameAsSource')
+        : '—';
   const wtTier = wordTranslationTier(wtText);
   const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
   const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
@@ -1177,7 +1187,11 @@ export const WordCardDeck = ({
                 ]}
               >
                 <Text
-                  style={[s.wordTranslation, { fontSize: wtTier.fontSize }]}
+                  style={[
+                    s.wordTranslation,
+                    wtSameAsSource && s.wordTranslationSameAsSource,
+                    { fontSize: wtTier.fontSize },
+                  ]}
                   numberOfLines={1}
                 >
                   {wtText}
@@ -1564,6 +1578,12 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontWeight: '600',
       color: tc.primaryOnSurface,
       flexShrink: 1,
+    },
+    // "same as English" is a statement about the word, not the word's
+    // translation — lighter and unbolded so it doesn't read as the answer.
+    wordTranslationSameAsSource: {
+      fontWeight: '400',
+      color: tc.textSecondary,
     },
     langTagDashed: {
       borderWidth: 1,

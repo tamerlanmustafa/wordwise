@@ -342,6 +342,41 @@ model TranslationCache {
   @@map("translation_cache")
 }
 
+// A provider handed the source text straight back for a non-EN target.
+//
+// TranslationCache deliberately refuses to store these (see
+// services/translation_service._save_to_cache): a passthrough is often a
+// silently failed call, and caching one would serve English-as-Turkish
+// forever. But "identical" is two different facts wearing one coat —
+//   • a dead API call, which is junk, and
+//   • a genuine loanword ("khat", "grappa", "argon" really are the same in
+//     Turkish), which is a fact worth having —
+// and dropping the row destroyed the evidence that tells them apart. This
+// table keeps the *observation* rather than the interpretation; a term two
+// independent providers echo, repeatedly, is a loanword, and a one-off from
+// one provider is a failure.
+//
+// It is not a cache and nothing reads it on the request path. Writes are
+// best-effort: a failure here must never fail the translation it describes.
+model TranslationPassthrough {
+  id          Int      @id @default(autoincrement())
+  sourceText  String   @map("source_text") @db.VarChar
+  targetLang  String   @map("target_lang") @db.VarChar(10)
+  // One row per provider rather than a providers[] column, so "DeepL AND
+  // Google both echoed it" is a plain GROUP BY instead of array surgery in
+  // the upsert. Defaulted, never null: Postgres treats NULLs as distinct in
+  // a unique index, so a nullable provider would silently accumulate
+  // duplicate rows for the same term instead of incrementing timesSeen.
+  provider    String   @default("unknown") @db.VarChar(16)
+  timesSeen   Int      @default(1) @map("times_seen")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  @@unique([sourceText, targetLang, provider], map: "unique_translation_passthrough")
+  @@index([targetLang], map: "ix_translation_passthroughs_target_lang")
+  @@map("translation_passthroughs")
+}
+
 model UserTranslationHistory {
   id              Int      @id @default(autoincrement())
   userId          Int      @map("user_id")

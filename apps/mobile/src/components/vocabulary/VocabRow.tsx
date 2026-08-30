@@ -12,6 +12,7 @@ import {
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles } from './rowStyles';
+import { isSameAsSource } from './translationDisplay';
 
 export interface SentenceExample {
   sentence: string;
@@ -224,7 +225,7 @@ export const VocabRow = ({
     }
   };
 
-  const isUntranslatable = !!translation && translation.toLowerCase() === term.toLowerCase();
+  const isUntranslatable = isSameAsSource(term, translation);
   const enrichment = sentenceExamples[0] || null;
 
   // Word rows: the always-visible sentence is the batch preview, swapped for
