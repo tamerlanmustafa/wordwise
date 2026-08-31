@@ -37,7 +37,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { SERIF_ITALIC_FAMILY } from '../../theme/fonts';
+import { SERIF_ITALIC_FAMILY, opticalSize } from '../../theme/fonts';
 import { glossLine } from '../../utils/glossLine';
 import type { FeedItem } from '../../services/api';
 
@@ -46,6 +46,20 @@ import type { FeedItem } from '../../services/api';
 // the whole card; the gloss below asks theme/fonts for a real installed face
 // instead, which is the only way `fontStyle: 'italic'` gets a true italic.
 const SERIF_FAMILY = 'Source Serif 4';
+
+/**
+ * The gloss is the one line on this card in a real, named family, so it is the
+ * one line that has to be sized against its neighbours rather than at a round
+ * number. Everything around it renders in the platform face — SF on iOS, whose
+ * lowercase is TALLER than Charter's, and Roboto on Android, whose lowercase is
+ * slightly shorter than Noto Serif's — so the correction runs in opposite
+ * directions on the two platforms: 17 becomes ~17.8 on iOS and ~16.8 on
+ * Android, and the line looks the same size as the word above it on both.
+ *
+ * Safe to resize here, unlike the card deck: this card centres a lifting group
+ * between two flex spacers instead of seating the gloss in a fixed slot.
+ */
+const GLOSS_SIZE = opticalSize(17, 'serifItalic', 'sans');
 
 /** The shared curve for every Explore movement. */
 export const EXPLORE_EASING = Easing.bezier(0.22, 0.75, 0.28, 1);
@@ -313,8 +327,8 @@ const makeStyles = (tc: ThemeColors) =>
     definition: {
       marginTop: 10,
       fontFamily: SERIF_ITALIC_FAMILY,
-      fontSize: 17,
-      lineHeight: 17 * 1.45,
+      fontSize: GLOSS_SIZE,
+      lineHeight: GLOSS_SIZE * 1.45,
       // Italic and secondary so it reads as commentary on the word above it
       // rather than as a second sentence competing with the example below.
       fontStyle: 'italic',

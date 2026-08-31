@@ -1570,6 +1570,12 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       // commentary on the headword above, not a rival to the sentence below.
       // Its own family, because Georgia's italic barely slants at this size —
       // see SERIF_ITALIC_FAMILY.
+      //
+      // No optical size correction here, unlike the Explore card: the gloss
+      // sits in a fixed-height slot with a 2-line clamp (definitionTier), so
+      // growing the type to match its neighbours would ellipsize long glosses
+      // rather than fix anything. The family is metrically matched to the
+      // Georgia around it instead — within 1.4%, guarded in fonts.test.ts.
       fontFamily: SERIF_ITALIC_FAMILY,
       fontStyle: 'italic',
       color: light ? '#7A6A50' : tc.textFaint,

@@ -40,8 +40,8 @@ describe('font families', () => {
 
   it('gives the gloss lines an italic that reads as italic, per platform', () => {
     // iOS gets a face whose italic is unmistakable at 12pt; Android has no
-    // Baskerville, and an unknown family there resolves to the default sans.
-    expect(loadFonts(false, 'ios').SERIF_ITALIC_FAMILY).toBe('Baskerville');
+    // Charter, and an unknown family there resolves to the default sans.
+    expect(loadFonts(false, 'ios').SERIF_ITALIC_FAMILY).toBe('Charter');
     expect(loadFonts(false, 'android').SERIF_ITALIC_FAMILY).toBe('serif');
   });
 
@@ -50,6 +50,50 @@ describe('font families', () => {
       expect(loadFonts(true, os).SERIF_FAMILY).toBeUndefined();
       expect(loadFonts(true, os).MONO_FAMILY).toBeUndefined();
       expect(loadFonts(true, os).SERIF_ITALIC_FAMILY).toBeUndefined();
+    }
+  });
+});
+
+describe('apparent size', () => {
+  /**
+   * The guard that yesterday's Baskerville needed and did not have.
+   *
+   * The card deck seats the gloss in a fixed-height slot with a 2-line clamp,
+   * so it cannot correct a family's size at the style — the only lever is
+   * picking a face whose lowercase already draws like the Georgia beside it.
+   * Baskerville was 16% short, which is what "too small on my iPhone, fine on
+   * my Samsung" looked like. 3% is roughly the point where a reader stops
+   * seeing two sizes on one card.
+   */
+  const TOLERANCE_PCT = 3;
+
+  it('keeps the italic serif within 3% of the serif it sits beside', () => {
+    for (const os of ['ios', 'android'] as const) {
+      const { opticalSize } = loadFonts(false, os);
+      // 100 in, so the result reads directly as a percentage.
+      const corrected = opticalSize(100, 'serifItalic', 'serif');
+      expect(Math.abs(corrected - 100)).toBeLessThanOrEqual(TOLERANCE_PCT);
+    }
+  });
+
+  it('corrects in opposite directions on the two platforms', () => {
+    // The Explore gloss sits among the platform's own face: SF has a taller
+    // lowercase than Charter, Roboto a shorter one than Noto Serif. A single
+    // hard-coded number cannot be right on both, which is the whole point.
+    expect(loadFonts(false, 'ios').opticalSize(17, 'serifItalic', 'sans')).toBeGreaterThan(17);
+    expect(loadFonts(false, 'android').opticalSize(17, 'serifItalic', 'sans')).toBeLessThan(17);
+  });
+
+  it('is an identity when a face is matched against itself', () => {
+    for (const os of ['ios', 'android'] as const) {
+      const { opticalSize } = loadFonts(false, os);
+      expect(opticalSize(13.5, 'serif', 'serif')).toBe(13.5);
+    }
+  });
+
+  it('passes the size through under RTL, where every face is the system one', () => {
+    for (const os of ['ios', 'android'] as const) {
+      expect(loadFonts(true, os).opticalSize(17, 'serifItalic', 'sans')).toBe(17);
     }
   });
 });
