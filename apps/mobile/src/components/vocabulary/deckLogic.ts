@@ -189,6 +189,41 @@ export function warmWindowKeys(state: DeckState): string[] {
   return next != null && next !== focused ? [focused, next] : [focused];
 }
 
+/** Where the resume bookmark sits on the deck's progress rule. */
+export interface ResumeMarker {
+  /** 1-based card the reader came back to — what a screen reader says. */
+  card: number;
+  /** …and where to draw it, as a whole percentage of the track. */
+  percent: number;
+}
+
+/**
+ * The resume mark for a deck, or null when there is nothing to mark.
+ *
+ * `percent` is deliberately the SAME `card / total` the progress fill is drawn
+ * with, rounded the same way: on the card the reader came back to, the mark has
+ * to land exactly on the fill's leading edge or it reads as an off-by-one
+ * rather than as "here". The card number is returned alongside rather than
+ * recovered from the percentage, which after rounding to whole percent no
+ * longer identifies a card in a deck of more than a hundred.
+ *
+ * Null covers all three ways the mark stops meaning anything: no bookmark was
+ * stored, the deck is empty, or the bookmarked word is no longer in it (marked
+ * learned since, or dropped for having no example sentence). A word that has
+ * left the deck must not fall back to position 0 — that would pin the mark to
+ * the start of the rule and quietly claim the reader resumed at card 1.
+ */
+export function resumeMarker(
+  keys: string[],
+  resumeWord: string | null | undefined,
+): ResumeMarker | null {
+  if (!resumeWord || keys.length === 0) return null;
+  const i = keys.indexOf(resumeWord);
+  if (i < 0) return null;
+  const card = i + 1;
+  return { card, percent: Math.round((card / keys.length) * 100) };
+}
+
 /**
  * The card that gets focus after `removedKey` is marked learned — used to
  * write the implicit resume bookmark before the parent's item list catches up.

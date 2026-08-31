@@ -867,22 +867,6 @@ export const styles = StyleSheet.create({
     width: 320,
     height: 480,
   },
-  posterShareBtn: {
-    marginTop: 16,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-  },
-  posterShareBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
   undoToast: {
     position: 'absolute',
     left: 0,

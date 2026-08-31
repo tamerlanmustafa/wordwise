@@ -340,8 +340,6 @@ const UNDO_STACK_MAX = 20;
  * costs nothing — only a card the reader actually stopped on is fetched.
  */
 const WARM_SETTLE_MS = 600;
-/** How long the resume note stays up before fading itself out. */
-const RESUME_CHIP_MS = 3200;
 
 /**
  * Card-deck view mode for the movie vocabulary screen — the "Ledger Reveal"
@@ -387,9 +385,6 @@ export const WordCardDeck = ({
     restoreDeck(keys, initialWord ?? null),
   );
   const restoredRef = useRef(keys.length > 0);
-  const [resumedAt, setResumedAt] = useState<number | null>(() =>
-    initialWord && keys.includes(initialWord) ? keys.indexOf(initialWord) + 1 : null,
-  );
 
   // The screen does not scroll, so the deck block takes whatever the fixed
   // column leaves it and the deck zone scales to fit. Measured rather than
@@ -398,7 +393,6 @@ export const WordCardDeck = ({
   // return below, so this is computed unconditionally.
   const [available, setAvailable] = useState(0);
   const metrics = useMemo(() => deckMetrics({ available }), [available]);
-  const resumeFade = useRef(new Animated.Value(1)).current;
 
   // Keep the committed state in step with the parent's item list (learned
   // words leaving, undo re-adding, previews resolving). `displayDeck` applies
@@ -409,9 +403,6 @@ export const WordCardDeck = ({
       if (keys.length === 0) return;
       restoredRef.current = true;
       dispatch({ type: 'restore', keys, bookmarkWord: initialWord ?? null });
-      if (initialWord && keys.includes(initialWord)) {
-        setResumedAt(keys.indexOf(initialWord) + 1);
-      }
       return;
     }
     dispatch({ type: 'sync', keys });
@@ -441,27 +432,11 @@ export const WordCardDeck = ({
   const reduceMotionRef = useRef(reduceMotion);
   reduceMotionRef.current = reduceMotion;
 
-  // The resume note shows itself out. It also clears on the first advance,
-  // learn or undo, so this is only the path where the user reads it and does
-  // nothing — leaving it up forever would put a permanent label over a deck
-  // the user has already understood.
-  useEffect(() => {
-    if (resumedAt == null) return;
-    resumeFade.setValue(1);
-    if (reduceMotionRef.current) {
-      const id = setTimeout(() => setResumedAt(null), RESUME_CHIP_MS);
-      return () => clearTimeout(id);
-    }
-    const anim = Animated.sequence([
-      Animated.delay(RESUME_CHIP_MS),
-      Animated.timing(resumeFade, { toValue: 0, duration: 260, useNativeDriver: true }),
-    ]);
-    anim.start(({ finished }) => {
-      if (finished) setResumedAt(null);
-    });
-    return () => anim.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumedAt]);
+  // Where the reader resumed is marked on the header's progress rule, not by a
+  // note floating over the deck: a 3.2s chip that timed itself out could only
+  // be read by someone already looking at it, and the mark stays legible for
+  // the whole session at no cost to the card's budget (see MovieDetailScreen's
+  // `resumeMarkPct` and deckLogic.resumeMarkerPercent).
 
   // Advances commit IMMEDIATELY on release — the outgoing card keeps flying
   // as a detached overlay (OutgoingCard, fresh values per overlay) while the
@@ -639,7 +614,6 @@ export const WordCardDeck = ({
     undoStackRef.current.push(currentKey);
     if (undoStackRef.current.length > UNDO_STACK_MAX) undoStackRef.current.shift();
     nextMountAnimRef.current = 'step';
-    setResumedAt(null);
     setExpandedKey(null);
     dispatch({ type: 'advance' });
     onAdvanceBookmark(nextKey);
@@ -655,7 +629,6 @@ export const WordCardDeck = ({
     // by a beat — hide the focused card NOW so it never doubles the overlay.
     focusOpacity.setValue(0);
     nextMountAnimRef.current = 'step';
-    setResumedAt(null);
     setExpandedKey(null);
     onMarkLearned(term);
     if (promoted) onAdvanceBookmark(promoted);
@@ -672,7 +645,6 @@ export const WordCardDeck = ({
     if (key == null) return;
     track('deck_undo', {});
     nextMountAnimRef.current = 'return';
-    setResumedAt(null);
     setExpandedKey(null);
     dispatch({ type: 'focus', key });
     onAdvanceBookmark(key);
@@ -1322,21 +1294,6 @@ export const WordCardDeck = ({
           </OutgoingCard>
         ))}
       </View>
-
-      {/* Resume note — absolute, so it costs the budget nothing and the card
-          renders at the same scale whether it is up or not. It sits over the
-          ghost stack's headroom, above the focused card's meta row, and is
-          never touchable: a swipe that starts on it must still reach the
-          card underneath. */}
-      {resumedAt != null ? (
-        <Animated.View pointerEvents="none" style={[s.resumeLayer, { opacity: resumeFade }]}>
-          <View style={s.resumeChip}>
-            <Text style={s.resumeChipText} numberOfLines={1}>
-              ⚑ {t('vocabulary:deck.resumedAt', { card: resumedAt })}
-            </Text>
-          </View>
-        </Animated.View>
-      ) : null}
       </View>
 
       {/* actions under the deck — labeled tactile buttons with press-down
@@ -1419,38 +1376,6 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     wrap: {
       flex: 1,
       paddingTop: DECK_GAP_TOP,
-    },
-    resumeLayer: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      alignItems: 'center',
-      zIndex: 5,
-    },
-    resumeChip: {
-      backgroundColor: `${tc.gold}1F`,
-      borderWidth: 1,
-      borderColor: `${tc.gold}66`,
-      borderRadius: 999,
-      paddingVertical: 6,
-      paddingHorizontal: 14,
-      // Reads as floating rather than as part of the card behind it.
-      shadowColor: light ? '#2D2418' : '#000',
-      shadowOpacity: 0.14,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 4,
-    },
-    resumeChipText: {
-      fontSize: 11,
-      // Pinned so the chip is the same height on iOS and Android — it
-      // overlays the deck, and a taller line on one platform would reach
-      // further down over the card.
-      lineHeight: 14,
-      fontWeight: '700',
-      letterSpacing: 0.2,
-      color: tc.goldOnSurface,
     },
     deckWrap: {
       marginHorizontal: 18,

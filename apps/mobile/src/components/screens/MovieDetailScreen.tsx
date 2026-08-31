@@ -20,8 +20,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, cefrColors, cefrColorsDark } from '../../theme/palette';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
@@ -61,6 +59,7 @@ import {
   parseViewMode,
   pickDefaultLevel,
   resolveBookmarkLevel,
+  resumeMarker,
   DEFAULT_VIEW_MODE,
   VIEW_MODE_KEY,
   type StoredMovieBookmark,
@@ -918,6 +917,14 @@ export const MovieDetailScreen = ({
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 
+  // Where the reader came back to, marked on the progress rule. `deckStartWord`
+  // is written once at load and never moves — the bookmark itself follows every
+  // advance, so marking *that* would just redraw the fill's own edge.
+  const resumeMark = useMemo(
+    () => resumeMarker(deckItems.map(itemKey), deckStartWord),
+    [deckItems, deckStartWord],
+  );
+
   // ── Splash hold: the first card must be READY, not merely mounted ────────
   // Vocabulary is what *starts* the sentence batch — the batch effect can't
   // run until there are words to ask about — so dropping the splash the moment
@@ -1149,7 +1156,17 @@ export const MovieDetailScreen = ({
               </View>
             ) : null}
             {viewMode === 'cards' && deckTotal > 0 ? (
-              <View style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}>
+              <View
+                style={[deckHeaderStyles.progressTrack, { backgroundColor: tc.divider }]}
+                accessibilityRole="progressbar"
+                accessibilityValue={{ min: 0, max: deckTotal, now: deckCardClamped }}
+                // The bookmark mark is a 3pt notch and nothing else, so what it
+                // says has to reach a screen reader some other way — this is
+                // where the old floating chip's sentence went.
+                accessibilityLabel={
+                  resumeMark ? t('vocabulary:deck.resumedAt', { card: resumeMark.card }) : undefined
+                }
+              >
                 <View
                   style={[
                     deckHeaderStyles.progressFill,
@@ -1159,6 +1176,27 @@ export const MovieDetailScreen = ({
                     },
                   ]}
                 />
+                {/* Bookmark mark: a notch cut out of the rule in the screen's
+                    own background, rather than a coloured tick. The rule is
+                    gold where the reader has been and grey ahead of them, and
+                    no one flat colour contrasts with both in both themes — a
+                    gap contrasts with whatever it interrupts. It is a child of
+                    the track, so the track's `overflow: hidden` clips it
+                    instead of it bleeding past the rule's rounded end.
+
+                    Placed by a percentage-width spacer rather than by a
+                    percentage `start`: the fill above already proves this
+                    mechanism, and `flexDirection: 'row'` mirrors itself under
+                    RTL, so the mark is measured from the same end the fill
+                    grows from without a second direction rule to keep in step. */}
+                {resumeMark ? (
+                  <View style={deckHeaderStyles.resumeMarkRow} pointerEvents="none">
+                    <View style={{ width: `${resumeMark.percent}%` }} />
+                    <View
+                      style={[deckHeaderStyles.resumeMark, { backgroundColor: tc.background }]}
+                    />
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -1376,38 +1414,18 @@ export const MovieDetailScreen = ({
         animationType="fade"
         onRequestClose={() => setPosterZoomOpen(false)}
       >
+        {/* Zoom only — the artwork is TMDB's, and "Save to Photos" was the one
+            control on this screen that wrote to the device's library, so
+            dropping it takes the Photos permission prompt out of the product
+            on both platforms. */}
         <TouchableWithoutFeedback onPress={() => setPosterZoomOpen(false)}>
           <View style={styles.posterZoomBackdrop}>
             <TouchableWithoutFeedback>
-              <View>
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w780${movie.poster_path}` }}
-                  style={styles.posterZoomImage}
-                  resizeMode="contain"
-                />
-                <TouchableOpacity
-                  style={styles.posterShareBtn}
-                  onPress={async () => {
-                    try {
-                      const remote = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
-                      const safeTitle = movie.title.replace(/[^\w\-]+/g, '_');
-                      const localPath = `${FileSystem.cacheDirectory}${safeTitle}_poster.jpg`;
-                      const { uri } = await FileSystem.downloadAsync(remote, localPath);
-                      const { status } = await MediaLibrary.requestPermissionsAsync();
-                      if (status === 'granted') {
-                        await MediaLibrary.saveToLibraryAsync(uri);
-                        Alert.alert(t('movies:detail.saved'), t('movies:detail.posterSavedBody'));
-                      } else {
-                        Alert.alert(t('movies:detail.permissionDenied'), t('movies:detail.permissionDeniedBody'));
-                      }
-                    } catch (e) {
-                      Alert.alert(t('movies:detail.downloadFailed'), t('movies:detail.downloadFailedBody'));
-                    }
-                  }}
-                >
-                  <Text style={styles.posterShareBtnText}>{t('movies:detail.saveToPhotos')}</Text>
-                </TouchableOpacity>
-              </View>
+              <Image
+                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.poster_path}` }}
+                style={styles.posterZoomImage}
+                resizeMode="contain"
+              />
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
@@ -1601,6 +1619,20 @@ const deckHeaderStyles = StyleSheet.create({
   progressFill: {
     height: 3,
     borderRadius: 2,
+  },
+  resumeMarkRow: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+  },
+  // `marginStart` centres the 3pt notch on the card boundary rather than
+  // hanging it off the far side, and at 100% it is also what keeps a sliver of
+  // it inside the track instead of clipped away entirely. `flexShrink: 0` so a
+  // mark at 100% overflows into the clip rather than squeezing the spacer and
+  // dragging itself backwards off its own position.
+  resumeMark: {
+    width: 3,
+    marginStart: -1,
+    flexShrink: 0,
   },
 });
 

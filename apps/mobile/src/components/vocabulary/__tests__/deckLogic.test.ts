@@ -2,6 +2,7 @@ import {
   deckReducer,
   restoreDeck,
   promotedKeyAfterRemoval,
+  resumeMarker,
   warmWindowKeys,
   swipeDecision,
   shouldClaimHorizontalDrag,
@@ -315,5 +316,45 @@ describe('resolveBookmarkLevel (bookmarked screen load)', () => {
   it('keeps the stored level when the legacy phrase is no longer in the vocab', () => {
     const legacy = { word: 'long gone', level: 'advanced', mode: 'idioms' };
     expect(resolveBookmarkLevel(legacy, idioms)).toBe('advanced');
+  });
+});
+
+describe('resumeMarker (bookmark mark on the progress rule)', () => {
+  it('agrees with the progress fill on the card the reader resumed at', () => {
+    // The mark and the fill are drawn from the same number on purpose: on the
+    // resume card they must be the same edge, not two pixels apart.
+    const fill = (card: number, total: number) => Math.round((card / total) * 100);
+    expect(resumeMarker(KEYS, 'run out of')).toEqual({ card: 3, percent: fill(3, KEYS.length) });
+  });
+
+  it('measures from the start of the deck, not from the current card', () => {
+    expect(resumeMarker(KEYS, 'hollow')).toEqual({ card: 1, percent: 25 });
+    expect(resumeMarker(KEYS, 'grim')).toEqual({ card: 4, percent: 100 });
+  });
+
+  it('keeps the card number exact where the percentage cannot', () => {
+    // Rounding to whole percent stops identifying a card past ~100 of them,
+    // which is why the screen reads `card` rather than working back from
+    // `percent` — cards 136 and 137 of 400 are both 34%.
+    const long = Array.from({ length: 400 }, (_, i) => `w${i}`);
+    expect(resumeMarker(long, 'w135')).toEqual({ card: 136, percent: 34 });
+    expect(resumeMarker(long, 'w136')).toEqual({ card: 137, percent: 34 });
+  });
+
+  it('has nothing to mark without a bookmark', () => {
+    expect(resumeMarker(KEYS, null)).toBeNull();
+    expect(resumeMarker(KEYS, undefined)).toBeNull();
+    expect(resumeMarker(KEYS, '')).toBeNull();
+  });
+
+  it('drops the mark once the bookmarked word leaves the deck', () => {
+    // Marked learned, or filtered out for having no example sentence. Falling
+    // back to 0 here would park the mark at the start of the rule and claim
+    // the reader resumed at card 1.
+    expect(resumeMarker(KEYS, 'elsewhere')).toBeNull();
+  });
+
+  it('has nothing to mark on an empty deck', () => {
+    expect(resumeMarker([], 'hollow')).toBeNull();
   });
 });

@@ -30,6 +30,11 @@ import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
  * only tints the top of the screen, the poster is the single full-colour
  * object, and the title is ink on paper like the flashcards.
  *
+ * The poster is the artwork and nothing else: it used to sit inside a "physical
+ * print" — a cream paper margin, a cut edge, a 1.1° tilt and a drop shadow —
+ * which put a second frame around an image that already ships with its own
+ * border, and cost 19pt of the fixed column (see HERO_PLATE) for decoration.
+ *
  * Three layers, and the wash is a SIBLING of the content rather than its
  * child: it bleeds 232pt down the screen, past the end of this block, and on
  * Android a child is clipped to its parent's bounds. Render this component as
@@ -123,24 +128,23 @@ export const MovieDetailHero = ({
           </Pressable>
         </View>
 
-        {/* c · poster print + title */}
+        {/* c · poster + title */}
         <View style={s.plate}>
           <Pressable
             onPress={onPosterPress}
             disabled={!onPosterPress || !posterPath}
             accessibilityRole={onPosterPress && posterPath ? 'button' : undefined}
             accessibilityLabel={onPosterPress && posterPath ? t('movies:detail.viewPoster') : undefined}
-            style={s.print}
           >
             {posterPath ? (
               <Image
                 source={{ uri: `https://image.tmdb.org/t/p/w185${posterPath}` }}
-                style={s.printImage}
+                style={s.poster}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[s.printImage, s.printFallback]}>
-                <Text style={s.printFallbackLetter}>{title.slice(0, 1).toUpperCase()}</Text>
+              <View style={[s.poster, s.posterFallback]}>
+                <Text style={s.posterFallbackLetter}>{title.slice(0, 1).toUpperCase()}</Text>
               </View>
             )}
           </Pressable>
@@ -218,31 +222,19 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       marginTop: HERO_PLATE.gap,
       height: HERO_PLATE.height,
     },
-    // A physical print: paper margin all round, deeper at the foot.
-    print: {
-      paddingTop: 5,
-      paddingHorizontal: 5,
-      paddingBottom: 12,
-      backgroundColor: tc.printPaper,
-      borderWidth: 1,
-      borderColor: tc.printEdge,
-      transform: [{ rotate: '-1.1deg' }],
-      shadowColor: '#2D2418',
-      shadowOpacity: 0.18,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 6,
-    },
-    printImage: {
+    // The artwork on its own — no paper margin, no cut edge, no tilt, no
+    // shadow. HERO_PLATE.height is exactly this, so the frame's 19pt went to
+    // the card rather than staying in the column as empty space.
+    poster: {
       width: POSTER_W,
       height: POSTER_H,
     },
-    printFallback: {
+    posterFallback: {
       backgroundColor: tc.chipBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    printFallbackLetter: {
+    posterFallbackLetter: {
       fontFamily: SERIF_FAMILY,
       fontSize: 34,
       fontWeight: '700',
