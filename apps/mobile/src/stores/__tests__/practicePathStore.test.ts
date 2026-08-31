@@ -1,9 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  usePracticePathStore,
-  kindAtIndex,
-  PRACTICE_KIND_CYCLE,
-} from '../practicePathStore';
+import { usePracticePathStore } from '../practicePathStore';
 
 const KEY = 'practice.path.cursor.v1';
 const flush = () => new Promise<void>((r) => setImmediate(r));
@@ -92,18 +88,6 @@ describe('practicePathStore', () => {
       expect(usePracticePathStore.getState().cursor).toBe(9);
       // debounce cleared → an immediate advance still works.
       expect(usePracticePathStore.getState().advance()).toBe(10);
-    });
-  });
-
-  describe('kindAtIndex cycle alignment with the store', () => {
-    it('cycles through the canonical 3-step kind sequence', () => {
-      expect(PRACTICE_KIND_CYCLE).toEqual([
-        'quick_recall',
-        'tough_words',
-        'movie_deep_dive',
-      ]);
-      expect(kindAtIndex(0)).toBe('quick_recall');
-      expect(kindAtIndex(7)).toBe('tough_words'); // 7 % 3 === 1
     });
   });
 });

@@ -17,6 +17,7 @@ from src.services.feed_pool import (
     FEED_MIX_LEVELS,
     feed_eligibility_sql,
     feed_pool_by_level,
+    real_word_sql,
 )
 
 
@@ -63,6 +64,31 @@ class TestEligibilityFragment:
         # /feed for whatever the mix names, the report for all of them.
         frag = feed_eligibility_sql("l")
         assert "cefr_level" not in frag
+
+
+class TestRealWordSplit:
+    """`real_word_sql` was split out for the quiz's distractor pool, which
+    needs a word to be printable but not to be teachable. It is a split, not a
+    second definition — so the feed's fragment must still be a strict superset
+    of it, or the two drift apart and #116's guarantee quietly dies."""
+
+    def test_feed_fragment_still_contains_everything_real_word_does(self):
+        assert real_word_sql("l").strip() in feed_eligibility_sql("l")
+
+    def test_real_word_keeps_shape_and_curation(self):
+        frag = real_word_sql("l")
+        assert "^[a-zA-Z]+$" in frag
+        assert f"length(l.lemma) >= {FEED_MIN_LEMMA_LENGTH}" in frag
+        assert "hidden_words" in frag
+
+    def test_real_word_drops_only_the_sentence_requirement(self):
+        # The distractor pool would be shrunk to the feed's few thousand
+        # lemmas by this test, putting the option repetition straight back.
+        assert "sll.is_global" not in real_word_sql("l")
+        assert "sll.is_global" in feed_eligibility_sql("l")
+
+    def test_alias_is_honoured(self):
+        assert "cand.lemma" in real_word_sql("cand")
 
 
 # ── the pool count ───────────────────────────────────────────────────────────

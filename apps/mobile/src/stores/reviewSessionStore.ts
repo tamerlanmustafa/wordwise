@@ -9,10 +9,10 @@
  * the same running stats — so the user finishes the same 10 cards they
  * started instead of getting a fresh draw on every reopen.
  *
- * The cache is keyed by Practice tile (`kind` + optional `movieId`) so
- * quitting a Quick Recall and opening Tough Words next won't try to
- * resume the wrong session. Sessions older than `STALE_MS` (24 h) are
- * silently discarded — beyond a day the SRS schedule has moved on and
+ * The cache is keyed by `kind` plus, for the Lists tab's kinds, the
+ * `listId` — so quitting a Practice session and opening a list's deck next
+ * won't try to resume the wrong one. Sessions older than `STALE_MS` (24 h)
+ * are silently discarded — beyond a day the SRS schedule has moved on and
  * the cached deck is no longer relevant.
  */
 
@@ -32,7 +32,9 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 
 interface CachedSession {
   kind: SessionKind;
-  movieId: number | null;
+  /** The list this deck came from, for the two Lists-tab kinds. Null for
+   *  `practice`, which has exactly one deck. */
+  scopeId: number | null;
   /** Cards not yet answered. First entry is the next card to show. */
   remaining: SrsReviewCard[];
   /** Cumulative running totals across the WHOLE session (resumed +
@@ -48,10 +50,10 @@ interface ReviewSessionState {
   cached: CachedSession | null;
   hydrated: boolean;
   hydrate: () => Promise<void>;
-  /** Return the cached session if (a) it matches `kind` + `movieId`,
+  /** Return the cached session if (a) it matches `kind` + `scopeId`,
    *  (b) is younger than STALE_MS, and (c) still has remaining cards.
    *  Otherwise returns null and clears the cache on the side. */
-  resumable: (kind: SessionKind, movieId?: number) => CachedSession | null;
+  resumable: (kind: SessionKind, scopeId?: number) => CachedSession | null;
   /** Replace the cache (e.g. just started a fresh session). */
   start: (s: Omit<CachedSession, 'savedAt'>) => void;
   /** Drop the head card and adjust running stats. */
@@ -61,10 +63,12 @@ interface ReviewSessionState {
   clear: () => void;
 }
 
-function sameTile(c: CachedSession, kind: SessionKind, movieId?: number): boolean {
+function sameTile(c: CachedSession, kind: SessionKind, scopeId?: number): boolean {
   if (c.kind !== kind) return false;
-  if (kind === 'movie_deep_dive') {
-    return (c.movieId ?? null) === (movieId ?? null);
+  // The list kinds can each have many decks — one per list — so the id has to
+  // match too. `practice` has exactly one deck, so the kind alone settles it.
+  if (kind === 'list_words' || kind === 'list_films') {
+    return (c.scopeId ?? null) === (scopeId ?? null);
   }
   return true;
 }
@@ -84,7 +88,7 @@ async function readPersisted(): Promise<CachedSession | null> {
     }
     return {
       kind: parsed.kind as SessionKind,
-      movieId: typeof parsed.movieId === 'number' ? parsed.movieId : null,
+      scopeId: typeof parsed.scopeId === 'number' ? parsed.scopeId : null,
       remaining: parsed.remaining as SrsReviewCard[],
       got: typeof parsed.got === 'number' ? parsed.got : 0,
       forgot: typeof parsed.forgot === 'number' ? parsed.forgot : 0,
@@ -123,7 +127,7 @@ export const useReviewSessionStore = create<ReviewSessionState>((set, get) => ({
     set({ cached: persisted, hydrated: true });
   },
 
-  resumable: (kind, movieId) => {
+  resumable: (kind, scopeId) => {
     const c = get().cached;
     if (!c) return null;
     if (Date.now() - c.savedAt > STALE_MS) {
@@ -131,7 +135,7 @@ export const useReviewSessionStore = create<ReviewSessionState>((set, get) => ({
       set({ cached: null });
       return null;
     }
-    if (!sameTile(c, kind, movieId)) return null;
+    if (!sameTile(c, kind, scopeId)) return null;
     if (c.remaining.length === 0) return null;
     return c;
   },

@@ -128,10 +128,10 @@ class ReelTile(BaseModel):
     # (rare — happens before our catalog ingest catches up), or when that row
     # exists but its script has not been scored yet.
     cefr_level: Optional[Literal["A1", "A2", "B1", "B2", "C1", "C2"]] = None
-    # v0.7.2: internal Movie.id when we have a matching catalog entry.
-    # Needed by the Movie Deep-Dive practice tile, which calls
-    # /srs/session/start?kind=movie_deep_dive&movie_id=… The TMDB id on
-    # the tile alone isn't enough — the SRS engine keys on Movie.id.
+    # Internal Movie.id when we have a matching catalog entry. The TMDB id
+    # on the tile alone isn't enough — the SRS engine and `user_words` key on
+    # Movie.id. (Added for the Movie Deep-Dive practice tile, which is gone;
+    # the Lists tab's films lists still practise per-film and need this.)
     movie_id: Optional[int] = None
 
 

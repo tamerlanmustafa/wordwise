@@ -56,14 +56,11 @@ const SPACING_TIP_KEY = 'spacing_first_repeat_v1';
 // /srs/session/start to include it rather than fanning out N extra calls.
 
 export interface ReviewScreenProps {
-  /** v0.7.2 — which Practice tile to start. Omit / pass undefined for
-   *  the legacy quick_recall default. */
+  /** Which queue to draw from. Omit for the Practice tab's default. */
   kind?: SessionKind;
-  /** Required when `kind === 'movie_deep_dive'`. */
-  movieId?: number;
   /** Set for the Lists tab's `list_words` / `list_films` kinds. Scopes the
-   *  resume cache so quitting a list session and opening Quick Recall
-   *  doesn't try to resume the wrong deck. */
+   *  resume cache so quitting a list session and opening Practice doesn't
+   *  try to resume the wrong deck. */
   listId?: number;
   /** A session the caller already started, used by the Lists tab: its gold
    *  button hits POST /lists/{id}/practice so it can 409 on an empty pool
@@ -83,7 +80,6 @@ type Phase = 'loading' | 'card' | 'done' | 'empty' | 'error';
 
 export function ReviewScreen({
   kind,
-  movieId,
   listId,
   initialSession,
   onBack,
@@ -137,18 +133,18 @@ export function ReviewScreen({
     setIndex(0);
     setStats({ got: 0, forgot: 0 });
 
-    // v0.7 §7 — try resuming a cached in-flight session for this tile
-    // before hitting the server. The cache is scoped by kind+movieId
-    // and expires after 24h; if it's not eligible we fall through to a
-    // fresh /srs/session/start. We need the store hydrated first so
+    // v0.7 §7 — try resuming a cached in-flight session before hitting
+    // the server. The cache is scoped by kind (+ listId for the Lists
+    // kinds) and expires after 24h; if it's not eligible we fall through
+    // to a fresh /srs/session/start. We need the store hydrated first so
     // resumable() reads from AsyncStorage, not stale defaults.
     const session_store = useReviewSessionStore.getState();
     if (!session_store.hydrated) {
       await session_store.hydrate();
     }
-    const resolvedKind: SessionKind = kind ?? 'quick_recall';
-    // List sessions key their cache on the list, movie tiles on the movie.
-    const scopeId = listId ?? movieId;
+    const resolvedKind: SessionKind = kind ?? 'practice';
+    // List sessions key their cache on the list; Practice has one deck.
+    const scopeId = listId;
     const resumable = useReviewSessionStore.getState().resumable(resolvedKind, scopeId);
     if (resumable) {
       setCards(resumable.remaining);
@@ -160,10 +156,9 @@ export function ReviewScreen({
     }
 
     try {
-      // v0.7.2 — kind + movieId are passed through to the backend so
-      // the queue composer matches the Practice-tab tile the user
-      // tapped. Undefined kind hits the legacy quick_recall default.
-      const session = initialSession ?? await srsApi.startSession({ kind, movieId });
+      // `kind` picks the queue composer. Undefined hits the backend's
+      // `practice` default, which is what the Practice tab wants.
+      const session = initialSession ?? await srsApi.startSession({ kind });
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
@@ -172,10 +167,10 @@ export function ReviewScreen({
       } else {
         setPhase('card');
         // Cache the fresh session so a future quit-and-reopen resumes
-        // the same deck (within 24h, same kind+movie).
+        // the same deck (within 24h, same kind + list).
         useReviewSessionStore.getState().start({
           kind: resolvedKind,
-          movieId: scopeId ?? null,
+          scopeId: scopeId ?? null,
           remaining: session.cards,
           got: 0,
           forgot: 0,
@@ -191,7 +186,7 @@ export function ReviewScreen({
       setErrorMessage(e?.message || t('quiz:review.startFailed'));
       setPhase('error');
     }
-  }, [onPaywall, kind, movieId, listId, initialSession, t]);
+  }, [onPaywall, kind, listId, initialSession, t]);
 
   useEffect(() => {
     loadSession();
@@ -443,7 +438,10 @@ export function ReviewScreen({
     : null;
   const sharedHeader = (
     <QuizHeader
-      movie={currentCard.movie_title ?? t('quiz:review.dailyReview')}
+      // Practice is about the word, not where it came from. The payload
+      // still carries movie_title for words saved from a film (and for
+      // older builds that render it); this screen deliberately doesn't.
+      movie={t('quiz:review.dailyReview')}
       level={lvl}
       index={index + 1}
       total={cards.length}

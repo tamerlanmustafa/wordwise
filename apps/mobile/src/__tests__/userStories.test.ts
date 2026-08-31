@@ -31,10 +31,10 @@ jest.mock('../services/api', () => {
   };
 });
 
-import { srsApi, reelApi, wordwiseApi, listsApi, SrsPaywallError, type SrsReviewCard, type SessionKind, type FeedItem } from '../services/api';
+import { srsApi, reelApi, wordwiseApi, listsApi, SrsPaywallError, type SrsReviewCard, type FeedItem } from '../services/api';
 import { useWordFeedStore } from '../stores/wordFeedStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
-import { usePracticePathStore, kindAtIndex } from '../stores/practicePathStore';
+import { usePracticePathStore } from '../stores/practicePathStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReelStore } from '../stores/reelStore';
@@ -109,8 +109,8 @@ describe('user stories (cross-store integration)', () => {
 
     // Play through a 2-card deck (one right, one wrong).
     useReviewSessionStore.getState().start({
-      kind: 'quick_recall',
-      movieId: null,
+      kind: 'practice',
+      scopeId: null,
       remaining: [card(1), card(2)],
       got: 0,
       forgot: 0,
@@ -141,8 +141,8 @@ describe('user stories (cross-store integration)', () => {
     });
 
     useReviewSessionStore.getState().start({
-      kind: 'tough_words',
-      movieId: null,
+      kind: 'practice',
+      scopeId: null,
       remaining: [card(1)],
       got: 1,
       forgot: 0,
@@ -155,8 +155,8 @@ describe('user stories (cross-store integration)', () => {
 
   it('Story: I background the app mid-session and resume the exact same deck', async () => {
     useReviewSessionStore.getState().start({
-      kind: 'movie_deep_dive',
-      movieId: 777,
+      kind: 'list_words',
+      scopeId: 777,
       remaining: [card(1), card(2), card(3)],
       got: 0,
       forgot: 0,
@@ -169,12 +169,12 @@ describe('user stories (cross-store integration)', () => {
     useReviewSessionStore.setState({ cached: null, hydrated: false });
     await useReviewSessionStore.getState().hydrate();
 
-    const resumable = useReviewSessionStore.getState().resumable('movie_deep_dive', 777);
+    const resumable = useReviewSessionStore.getState().resumable('list_words', 777);
     expect(resumable).not.toBeNull();
     expect(resumable!.remaining.map((c) => c.user_word_id)).toEqual([2, 3]);
     expect(resumable!.got).toBe(1);
-    // Opening a *different* tile must not resume this deck.
-    expect(useReviewSessionStore.getState().resumable('quick_recall')).toBeNull();
+    // Opening the Practice deck must not resume this list's deck.
+    expect(useReviewSessionStore.getState().resumable('practice')).toBeNull();
   });
 
   it('Story: a free user who hit the daily cap is paywalled and the habit state is untouched', async () => {
@@ -186,7 +186,7 @@ describe('user stories (cross-store integration)', () => {
     // mutating streak/cursor.
     let paywall: SrsPaywallError | null = null;
     try {
-      await srsApi.startSession({ kind: 'quick_recall' });
+      await srsApi.startSession({ kind: 'practice' });
     } catch (e) {
       if (e instanceof SrsPaywallError) paywall = e;
     }
@@ -367,12 +367,12 @@ describe('user stories (cross-store integration)', () => {
       session_size: 10,
       is_preview: false,
       previews_remaining: 0,
-      kind: 'quick_recall',
+      kind: 'practice',
     });
-    const session = await srsApi.startSession({ kind: 'quick_recall' });
+    const session = await srsApi.startSession({ kind: 'practice' });
     useReviewSessionStore.getState().start({
-      kind: 'quick_recall',
-      movieId: null,
+      kind: 'practice',
+      scopeId: null,
       remaining: session.cards,
       got: 0,
       forgot: 0,
@@ -382,14 +382,30 @@ describe('user stories (cross-store integration)', () => {
     expect(useReviewSessionStore.getState().cached!.remaining[0].word).toBe('reluctant');
   });
 
-  it('Story: the practice path keeps cycling kinds as the user completes sessions', () => {
-    // cursor 0 → quick_recall, 1 → tough_words, 2 → movie_deep_dive, 3 → quick_recall ...
-    const kinds: SessionKind[] = [];
+  it('Story: the practice path advances one lesson per completed session', async () => {
+    // The path used to rotate three kinds, so which lesson you got depended
+    // on where the cursor landed — and one in three made you pick a film
+    // first. The cursor is now purely progress; every session is the same
+    // `practice` deck.
+    (srsApi.startSession as jest.Mock).mockResolvedValue({
+      cards: [card(1)],
+      total_due: 1,
+      session_size: 10,
+      is_preview: false,
+      previews_remaining: 0,
+      kind: 'practice',
+    });
+
+    const cursors: number[] = [];
     for (let i = 0; i < 4; i += 1) {
-      kinds.push(kindAtIndex(usePracticePathStore.getState().cursor));
+      cursors.push(usePracticePathStore.getState().cursor);
+      const session = await srsApi.startSession();
+      expect(session.kind).toBe('practice');
       jest.advanceTimersByTime(1000); // clear the advance debounce between sessions
       usePracticePathStore.getState().advance();
     }
-    expect(kinds).toEqual(['quick_recall', 'tough_words', 'movie_deep_dive', 'quick_recall']);
+    expect(cursors).toEqual([0, 1, 2, 3]);
+    // No film is ever named on the way to a session.
+    expect(srsApi.startSession).toHaveBeenCalledWith();
   });
 });

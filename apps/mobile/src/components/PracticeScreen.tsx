@@ -1,12 +1,15 @@
 /**
- * PracticeScreen — v0.7.3 "Practice" tab (Duolingo-style endless path).
+ * PracticeScreen — the "Practice" tab (Duolingo-style endless path).
  *
- * The tab is a linear chain of practice-tile circles, cycled through
- * the four lesson kinds. A single client-side cursor (see
- * `practicePathStore`) points at the next active tile; tapping it
- * starts that kind's session and the cursor advances on completion.
- * Streak-based unlocks have been retired — progression is purely
- * sequential. Mercy infrastructure (auto-grant + auto-consume freezes)
+ * The tab is a linear chain of practice-tile circles. A single
+ * client-side cursor (see `practicePathStore`) points at the next active
+ * tile; tapping it starts a session and the cursor advances on
+ * completion. Every tile is the same lesson: the server composes one
+ * deck mixing due recalls, the user's own saved words, and fresh words
+ * at their CEFR level. The path used to rotate three kinds, one of which
+ * opened a poster picker and drew its cards from a single film's script
+ * — so what you were quizzed on depended on your reel rather than your
+ * level. Mercy infrastructure (auto-grant + auto-consume freezes)
  * continues to protect the daily streak across missed days — see
  * `services/streak_service.py`.
  *
@@ -14,13 +17,13 @@
  *   1. Header (eyebrow + serif title + freeze/streak chips)
  *   2. Vertical tile path — window of WINDOW_SIZE tiles around cursor
  *
- * Tapping the active path tile starts that kind's session. Free users
- * still hit the daily cap on the second attempt — the server returns
- * 402 and we route through `onPaywall`.
+ * Tapping the active path tile starts a session. Free users still hit
+ * the daily cap on the second attempt — the server returns 402 and we
+ * route through `onPaywall`.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,28 +31,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
-import { useReelStore } from '../stores/reelStore';
 import {
   dailyApi,
   srsApi,
   type DailyState,
-  type SessionKind,
 } from '../services/api';
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
-import {
-  MoviePickerModal,
-  type DeepDiveMovieOption,
-} from './practice/MoviePickerModal';
 
 const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'JetBrains Mono';
 
 export interface PracticeScreenProps {
-  /** Open the ReviewScreen with a specific session kind. Falls back to
-   *  quick_recall when called with no args (kept for backward compat
-   *  with the journey/legacy paths). */
-  onStartDailyReview: (kind?: SessionKind, movieId?: number) => void;
+  /** Open the ReviewScreen on a new practice session. */
+  onStartDailyReview: () => void;
   /** True while this tab is the visible one. The screen is kept mounted
    *  across tab switches (KeepAlive), so we re-fetch the daily server
    *  state each time it becomes visible again — e.g. after finishing a
@@ -79,7 +74,7 @@ export function PracticeScreen({
     if (!dailyHydrated) void hydrateDaily();
   }, [dailyHydrated, hydrateDaily]);
 
-  // Practice-path cursor — drives which tile is active and the kind cycle.
+  // Practice-path cursor — drives which tile is active.
   const cursor = usePracticePathStore((st) => st.cursor);
   const pathHydrated = usePracticePathStore((st) => st.hydrated);
   const hydratePath = usePracticePathStore((st) => st.hydrate);
@@ -111,89 +106,18 @@ export function PracticeScreen({
     wasActive.current = active;
   }, [active, refreshServerState]);
 
-  // Reel tiles for the Movie Deep-Dive picker. Cheap re-use — the reel
-  // store is already hydrated by My Movies / Home elsewhere.
-  const reelTiles = useReelStore((st) => st.tiles);
-  const hydrateReel = useReelStore((st) => st.hydrate);
-  const reelHydrated = useReelStore((st) => st.hydrated);
-  const reelLoadError = useReelStore((st) => st.loadError);
-  useEffect(() => {
-    if (!reelHydrated) void hydrateReel();
-  }, [reelHydrated, hydrateReel]);
-
   // Effective streak — prefer server when present, fall back to the
   // local optimistic counter for the brief gap before the network
   // resolves on cold start.
   const effectiveStreak = serverState?.streak ?? dailyStreak;
 
-  // ── Movie picker modal state ────────────────────────────────────
-  // We surface every reel movie that has a catalog `movie_id` — the
-  // session composer pulls UserWord rows by movie and pads with fresh
-  // lemmas from the same film, so a 0%-comprehensibility movie still
-  // produces a perfectly fine all-fresh-vocab session.
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const deepDiveOptions = useMemo<DeepDiveMovieOption[]>(
-    () =>
-      reelTiles
-        .filter((t) => typeof t.movie_id === 'number')
-        .map((t) => ({
-          movieId: t.movie_id!,
-          title: t.title,
-          posterPath: t.poster_path,
-          comprehensibilityPercent: t.comprehensibility_percent ?? 0,
-          cefrLevel: t.cefr_level ?? null,
-        })),
-    [reelTiles],
-  );
-
-  // ── Session-start handlers ──────────────────────────────────────
+  // ── Session-start handler ───────────────────────────────────────
   // The daily cap is server-side: free users get one session/day, the
-  // server returns 402 and we route through `onPaywall`. Streak-based
-  // unlocks have been retired — the path is purely sequential, so any
-  // tap that reaches here is on the active tile.
-  const startKind = useCallback(
-    (kind: SessionKind, movieId?: number) => {
-      onStartDailyReview(kind, movieId);
-    },
-    [onStartDailyReview],
-  );
-
-  const handleTilePress = useCallback(
-    (kind: SessionKind) => {
-      if (kind === 'movie_deep_dive') {
-        if (deepDiveOptions.length === 0) {
-          // Distinguish "we couldn't load your reel" from "your reel is
-          // genuinely empty" — an empty list after a failed/pending load
-          // is unknown, not empty, so we offer a retry instead of lying.
-          if (!reelHydrated || reelLoadError) {
-            Alert.alert(
-              t('practice:loadFailedTitle'),
-              t('practice:loadFailed'),
-              [
-                { text: t('action.cancel'), style: 'cancel' },
-                { text: t('action.retry'), onPress: () => void hydrateReel() },
-              ],
-            );
-            return;
-          }
-          Alert.alert(t('practice:emptyReelTitle'), t('practice:emptyReelBody'));
-          return;
-        }
-        setPickerOpen(true);
-        return;
-      }
-      startKind(kind);
-    },
-    [deepDiveOptions.length, reelHydrated, reelLoadError, hydrateReel, startKind, t],
-  );
-
-  const handleMoviePicked = useCallback(
-    (movieId: number) => {
-      setPickerOpen(false);
-      startKind('movie_deep_dive', movieId);
-    },
-    [startKind],
-  );
+  // server returns 402 and we route through `onPaywall`. Progression is
+  // purely sequential, so any tap that reaches here is on the active tile.
+  const handleTilePress = useCallback(() => {
+    onStartDailyReview();
+  }, [onStartDailyReview]);
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
@@ -231,10 +155,10 @@ export function PracticeScreen({
         contentContainerStyle={[s.scrollPad, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* The tile chain — endless cycle of the 4 kinds. The active
-            tile is at the cursor; the rest are completed (past) or
-            locked (future). The path itself doesn't know about the
-            paywall / daily cap; the parent's `handleTilePress` does. */}
+        {/* The tile chain. The active tile is at the cursor; the rest
+            are completed (past) or locked (future). The path itself
+            doesn't know about the paywall / daily cap; the parent's
+            `handleTilePress` does. */}
         <View style={s.pathWrap}>
           <Text style={s.pathHeading}>{t('practice:pathHeading')}</Text>
           <Text style={s.pathLesson}>{t('practice:lesson', { number: cursor + 1 })}</Text>
@@ -244,13 +168,6 @@ export function PracticeScreen({
           />
         </View>
       </ScrollView>
-
-      <MoviePickerModal
-        visible={pickerOpen}
-        options={deepDiveOptions}
-        onPick={handleMoviePicked}
-        onClose={() => setPickerOpen(false)}
-      />
     </SafeAreaView>
   );
 }

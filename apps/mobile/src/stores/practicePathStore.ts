@@ -1,18 +1,17 @@
 /**
- * practicePathStore — cursor for the v0.7.3 Duolingo-style Practice path.
+ * practicePathStore — cursor for the Practice tab's lesson path.
  *
- * The Practice tab is now a linear, never-ending chain of lesson tiles.
+ * The Practice tab is a linear, never-ending chain of lesson tiles.
  * `cursor` is the index of the user's next active tile; it increments
- * by one on each completed SRS session (see ReviewScreen). The kind at
- * any index is derived deterministically from a fixed 3-step cycle:
+ * by one on each completed SRS session (see ReviewScreen).
  *
- *   index % 3 === 0  → quick_recall
- *   index % 3 === 1  → tough_words
- *   index % 3 === 2  → movie_deep_dive
- *
- * Note: there's no separate `synonym_round` tile anymore — the kind
- * (and the synonym MCQ format itself) was retired; every session now
- * serves translation MCQs.
+ * Every tile is the same kind of lesson. The path used to rotate three
+ * kinds — quick_recall, tough_words, movie_deep_dive — so what you were
+ * quizzed on depended on where the cursor happened to land, and one tile
+ * in three made you pick a film first. A vocabulary quiz should be about
+ * vocabulary, so the server composes one deck (`practice`) that mixes due
+ * recalls, your saved words and fresh words at your level. The cursor is
+ * now purely progress: which lesson number you are on.
  *
  * Persisted to AsyncStorage so a relaunch lands the user on the same
  * active tile. There is no day-rollover here — the path is a counter,
@@ -27,25 +26,9 @@
 
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { SessionKind } from '../services/api';
 
 const KEY = 'practice.path.cursor.v1';
 const ADVANCE_DEBOUNCE_MS = 800;
-
-/** The 3-step cycle. Keep in sync with `kindAtIndex` below. */
-export const PRACTICE_KIND_CYCLE: SessionKind[] = [
-  'quick_recall',
-  'tough_words',
-  'movie_deep_dive',
-];
-
-export function kindAtIndex(index: number): SessionKind {
-  const n = PRACTICE_KIND_CYCLE.length;
-  // JS `%` is sign-preserving on negative numbers; the cursor should
-  // never be negative but be defensive.
-  const i = ((index % n) + n) % n;
-  return PRACTICE_KIND_CYCLE[i];
-}
 
 interface PracticePathState {
   cursor: number;

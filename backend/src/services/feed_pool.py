@@ -11,6 +11,13 @@ Level filtering is deliberately NOT part of the fragment: /today asks for the
 user's band, /feed asks for whatever the mix names, and the report asks for all
 of them. Everything else — real-word shape, admin curation, "has something to
 read" — is global and lives here.
+
+`real_word_sql` is the first two of those three, exposed on its own for the
+quiz's distractor pool (`distractor_pool.py`), which needs a word to be
+printable but not to be teachable. That is a split, not a second definition:
+the feed and the coverage report both still read the composed
+`feed_eligibility_sql`, so the pair this module exists to keep in agreement
+still cannot drift apart.
 """
 from __future__ import annotations
 
@@ -37,13 +44,35 @@ FEED_MIX_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
 FEED_MIN_LEMMA_LENGTH = 4
 
 
+def real_word_sql(alias: str = "l") -> str:
+    """WHERE-clause fragment: `alias` is a lemma fit to print at all.
+
+    - looks like a real English word (alphabetic, >= FEED_MIN_LEMMA_LENGTH)
+    - isn't curated away in hidden_words (which is also where profanity and the
+      over-stripped junk lemmas live, so this is the filter that keeps them off
+      a screen)
+
+    Split out of `feed_eligibility_sql` for the quiz's distractor pool, which
+    needs everything here and none of the "has an example sentence" test below:
+    a distractor is a word on a tile the user reads once, not a card with a
+    definition and a sentence under it. Requiring a sentence would shrink the
+    pool to the same few thousand lemmas the feed draws from and put the
+    repetition straight back.
+
+    `alias` is written by the caller, never user input — it is interpolated.
+    """
+    return f"""
+          {alias}.lemma ~ '^[a-zA-Z]+$'
+          AND length({alias}.lemma) >= {FEED_MIN_LEMMA_LENGTH}
+          AND {hidden_word_exclusion_sql(f"{alias}.lemma")}
+    """
+
+
 def feed_eligibility_sql(alias: str = "l") -> str:
     """WHERE-clause fragment: `alias` is a lemma the feed may surface.
 
-    - looks like a real English word (alphabetic, >= FEED_MIN_LEMMA_LENGTH)
-    - isn't curated away in hidden_words
-    - has at least one global LLM-authored example sentence, so the card always
-      has something to show
+    `real_word_sql` plus: has at least one global LLM-authored example
+    sentence, so the card always has something to show.
 
     The "has a sentence" test reads `sll.is_global` instead of joining to
     sentence_bank (#120). Joining made the feed query rebuild the global-LLM set
@@ -55,9 +84,7 @@ def feed_eligibility_sql(alias: str = "l") -> str:
     `alias` is written by the caller, never user input — it is interpolated.
     """
     return f"""
-          {alias}.lemma ~ '^[a-zA-Z]+$'
-          AND length({alias}.lemma) >= {FEED_MIN_LEMMA_LENGTH}
-          AND {hidden_word_exclusion_sql(f"{alias}.lemma")}
+          {real_word_sql(alias)}
           AND EXISTS (
               SELECT 1
               FROM sentence_lemma_links sll

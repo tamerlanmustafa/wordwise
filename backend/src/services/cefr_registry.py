@@ -83,7 +83,7 @@ def trusted_registry_sql(alias: str = "l") -> str:
 # predicates only filter what it returns. The output casts are free: they shape
 # the returned row, not the plan.
 _REGISTRY_LOOKUP_SQL = (
-    "SELECT lemma, cefr_level::text AS cefr_level, confidence, "
+    "SELECT lemma, cefr_level::text AS cefr_level, pos, confidence, "
     "source::text AS source, frequency_rank "
     "FROM lemmas "
     "WHERE lemma = ANY($1::text[]) "
@@ -129,6 +129,33 @@ async def registry_levels(
         return {}
     rows = await db.query_raw(_REGISTRY_LOOKUP_SQL, wanted)
     return {row["lemma"]: row["cefr_level"] for row in rows}
+
+
+async def registry_pos(
+    db: _SupportsQueryRaw, words: Iterable[str]
+) -> Dict[str, str]:
+    """lemma -> raw UPOS tag (NOUN / VERB / ADJ / …), for callers that need to
+    match words by grammatical type.
+
+    Deliberately the RAW tag, not the learner label from `utils.pos_labels`.
+    The friendly labels collapse PROPN onto "noun" and AUX onto "verb" because
+    those distinctions do not help a reader; a matcher that wants a noun's
+    wrong answers to also be nouns needs the distinction back, or a place name
+    ends up as an option under a common noun.
+
+    Same one-query, lemma-keyed, absent-if-unknown contract as
+    `registry_levels`. ~14% of the registry has a NULL pos, and those rows are
+    simply omitted.
+    """
+    wanted = sorted({w.lower() for w in words if w and w.strip()})
+    if not wanted:
+        return {}
+    rows = await db.query_raw(_REGISTRY_LOOKUP_SQL, wanted)
+    return {
+        row["lemma"]: str(row["pos"]).upper()
+        for row in rows
+        if row.get("pos")
+    }
 
 
 async def apply_registry_levels(

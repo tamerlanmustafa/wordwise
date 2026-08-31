@@ -932,31 +932,23 @@ export interface SrsReviewCard {
   translation?: string | null;
 }
 
-/** v0.7.2 — Practice-tab "session kind". The user picks one tile per
- *  UTC day on the Practice screen; that pick is passed to
- *  `srsApi.startSession({ kind })`. Server-side dispatch in
- *  `services/session_kinds.py`. */
+/** Which queue a review session draws from. Server-side dispatch in
+ *  `services/session_kinds.py`.
+ *
+ *  The Practice tab is a single kind. It used to rotate three tiles —
+ *  quick_recall, tough_words and movie_deep_dive — which meant the words you
+ *  were quizzed on depended on which tile the path landed on, and Deep-Dive
+ *  meant they depended on which films were in your reel. `practice` mixes due
+ *  recalls, your own saved words and fresh words at your level into every
+ *  session instead. The backend still accepts the three retired names as
+ *  aliases for installed builds; nothing here sends them. */
 export type SessionKind =
-  | 'quick_recall'
-  | 'tough_words'
-  | 'movie_deep_dive'
-  // Lists tab. Started from a list's gold action rather than a Practice
-  // tile, so these never appear on the Practice path — but a session in
-  // flight is cached by kind, so the union has to carry them.
+  | 'practice'
+  // Lists tab. Started from a list's gold action rather than the Practice
+  // path — but a session in flight is cached by kind, so the union carries
+  // them.
   | 'list_words'
   | 'list_films';
-
-/** @deprecated v0.7.3 — streak-based unlocks were retired in favor of
- *  the Duolingo-style linear path (see `stores/practicePathStore.ts`).
- *  Kept here so any stale references compile while we sweep callers;
- *  remove when the next backend version drops the column entirely. */
-export const KIND_UNLOCK_THRESHOLDS: Record<SessionKind, number> = {
-  quick_recall:    0,
-  tough_words:     0,
-  movie_deep_dive: 0,
-  list_words:      0,
-  list_films:      0,
-};
 
 export interface SrsSessionStart {
   cards: SrsReviewCard[];
@@ -1130,22 +1122,13 @@ export const srsApi = {
   },
 
   startSession: async (opts: {
-    /** v0.7.2 — Practice-tab tile. Defaults to `quick_recall` when
-     *  unspecified; backward-compatible with older callers. */
+    /** Which queue to draw from. Omit for the backend default (`practice`). */
     kind?: SessionKind;
-    /** Required when `kind === 'movie_deep_dive'`. The internal Movie.id. */
-    movieId?: number;
   } = {}): Promise<SrsSessionStart> => {
     // RN's URLSearchParams polyfill lacks .set, so we build the query
-    // string by hand. Both params are optional; older callers that pass
-    // no opts at all hit the backend default (quick_recall).
-    const qsParts: string[] = [];
-    if (opts.kind) qsParts.push(`kind=${encodeURIComponent(opts.kind)}`);
-    if (typeof opts.movieId === 'number') {
-      qsParts.push(`movie_id=${opts.movieId}`);
-    }
-    const url = qsParts.length
-      ? `${API_BASE_URL}/srs/session/start?${qsParts.join('&')}`
+    // string by hand.
+    const url = opts.kind
+      ? `${API_BASE_URL}/srs/session/start?kind=${encodeURIComponent(opts.kind)}`
       : `${API_BASE_URL}/srs/session/start`;
     const res = await authFetch(url, { method: 'POST' });
     if (res.status === 402) {

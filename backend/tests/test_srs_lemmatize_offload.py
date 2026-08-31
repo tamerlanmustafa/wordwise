@@ -154,7 +154,9 @@ def _count_hops(monkeypatch):
 def _stub_session(monkeypatch, *, due: list, padded: list = ()):
     """Pin the two row sources and neutralise everything after hydration."""
     async def compose(db, **kwargs):
-        return list(due)
+        # (picked, reserve) — the reserve is what a short deck falls back on
+        # when the fresh pool runs dry, and these tests always pad enough.
+        return list(due), []
 
     async def pad(db, **kwargs):
         return list(padded)
@@ -162,20 +164,25 @@ def _stub_session(monkeypatch, *, due: list, padded: list = ()):
     async def no_examples(db, lemmas):
         return {}
 
+    async def no_pool(db, **kwargs):
+        return {}
+
     monkeypatch.setattr(srs_routes, "compose_for_kind", compose)
+    monkeypatch.setattr(srs_routes, "_pad_with_fresh_level_lemmas", pad)
     monkeypatch.setattr(srs_routes, "_pad_with_fresh_reel_lemmas", pad)
     monkeypatch.setattr(srs_routes, "get_llm_examples_for_lemmas", no_examples)
+    monkeypatch.setattr(srs_routes, "build_pool", no_pool)
     # One card per row, so the response reflects the deduped queue rather than
     # whatever the (separately tested) distractor picker decides.
     monkeypatch.setattr(
         srs_routes, "build_translation_choices",
-        lambda lemma, translations, rng=None: [{"word": lemma, "is_correct": True}],
+        lambda lemma, translations, **kwargs: [{"word": lemma, "is_correct": True}],
     )
 
 
 async def _start(db=None, user=None):
     return await start_session(
-        kind="quick_recall",
+        kind="practice",
         movie_id=None,
         list_id=None,
         current_user=user or _premium_user(),

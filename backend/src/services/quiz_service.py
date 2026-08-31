@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Iterable, List, Optional, Set
 
 CARDS_PER_SESSION = 10
 MCQ_RATIO = 0.7  # ~70% scored MCQ cards, ~30% self-rate
@@ -107,47 +107,108 @@ def build_translation_choices(
     word: str,
     translations: dict[str, str],
     *,
+    pool: Optional[Iterable[str]] = None,
+    avoid: Optional[Set[str]] = None,
     rng: Optional[random.Random] = None,
     n_choices: int = 4,
 ) -> Optional[List[dict]]:
     """
     Compose the choice grid for a translation MCQ: the word's own
-    translation plus distractors drawn from the OTHER words' translations
-    in the same deck — zero extra translation cost, and distractors are
-    automatically level-appropriate (they come from the same CEFR pool).
+    translation plus `n_choices - 1` wrong answers.
 
-    Distractors are deduped case-insensitively against the correct answer
-    and each other, so two deck words sharing a translation can't produce
-    a grid with two "right" tiles, and near-forms of the correct answer
-    are dropped as well (see `is_near_form`). Returns None when the word
-    has no translation or fewer than `n_choices - 1` usable distractors
-    remain — quiz then falls back to a self_rate card, SRS drops the word
-    from the session, so keep the filter cheap on candidates.
+    Where the wrong answers come from, in order:
+
+    1. `pool` — translations of words OUTSIDE the deck, matched to this
+       card's part of speech and CEFR level (see `services/distractor_pool`).
+       Preferred *exclusively*: while the pool can fill the grid, no deck
+       translation is used at all. That is what stops a word being a
+       distractor on card 1 and the correct answer on card 7, and what stops
+       a ten-card session recycling the same ten options ten times.
+    2. The other words' translations in the same deck — the original
+       behaviour, and still the whole story for a target language whose
+       `translation_cache` is too cold to fill a pool. Free, and
+       level-appropriate by construction since the deck shares a CEFR band.
+
+    `avoid` holds normalized keys already used as distractors earlier in the
+    same session. It is a preference, not a filter: candidates are split into
+    unused and already-used, unused is drawn from first, and already-used only
+    tops up a shortfall. A hard exclusion would starve the last cards of a
+    session, which is a worse failure than an option appearing twice.
+
+    Distractors are deduped case-insensitively against the correct answer and
+    each other, so two words sharing a translation can't produce a grid with
+    two "right" tiles, and near-forms of the correct answer are dropped as
+    well (see `is_near_form`). Returns None when the word has no translation
+    or fewer than `n_choices - 1` usable distractors remain — quiz then falls
+    back to a self_rate card, SRS drops the word from the session, so keep the
+    filter cheap on candidates.
     """
     correct = translations.get(word)
     if not correct:
         return None
     r = rng or random.Random()
+    n_distractors = n_choices - 1
+
     seen = {normalize_choice(correct)}
-    pool: List[str] = []
-    for other, t in translations.items():
-        if other == word:
-            continue
-        key = normalize_choice(t)
-        if key in seen:
-            continue
-        if is_near_form(t, correct):
-            continue
-        seen.add(key)
-        pool.append(t)
-    if len(pool) < n_choices - 1:
+
+    def usable(candidates: Iterable[str]) -> List[str]:
+        """Dedupe against the answer and anything already taken, drop
+        near-forms. Mutates `seen`, so calling it twice can't hand back the
+        same translation from two different sources."""
+        out: List[str] = []
+        for t in candidates:
+            if not t:
+                continue
+            key = normalize_choice(t)
+            if key in seen:
+                continue
+            if is_near_form(t, correct):
+                continue
+            seen.add(key)
+            out.append(t)
+        return out
+
+    distractors = _sample_preferring_unused(
+        usable(pool or ()), avoid, n_distractors, r,
+    )
+    if len(distractors) < n_distractors:
+        deck = usable(t for other, t in translations.items() if other != word)
+        distractors += _sample_preferring_unused(
+            deck, avoid, n_distractors - len(distractors), r,
+        )
+
+    if len(distractors) < n_distractors:
         return None
-    distractors = r.sample(pool, n_choices - 1)
     choices = [{"word": correct, "is_correct": True}] + [
         {"word": d, "is_correct": False} for d in distractors
     ]
     r.shuffle(choices)
     return choices
+
+
+def _sample_preferring_unused(
+    candidates: List[str],
+    avoid: Optional[Set[str]],
+    n: int,
+    r: random.Random,
+) -> List[str]:
+    """Up to `n` candidates, drawn from the ones not in `avoid` first.
+
+    Split rather than filter: `avoid` grows with every card in a session, so
+    filtering on it would leave the last cards of a long session with nothing
+    to choose from. Repeating an option late in a session is a mild flaw;
+    dropping the card entirely (which is what an empty pool causes) is not.
+    """
+    if n <= 0 or not candidates:
+        return []
+    if not avoid:
+        return r.sample(candidates, min(n, len(candidates)))
+    fresh = [t for t in candidates if normalize_choice(t) not in avoid]
+    reused = [t for t in candidates if normalize_choice(t) in avoid]
+    picked = r.sample(fresh, min(n, len(fresh)))
+    if len(picked) < n and reused:
+        picked += r.sample(reused, min(n - len(picked), len(reused)))
+    return picked
 
 
 def compute_stars(correct_count: int, total_scored: int) -> int:

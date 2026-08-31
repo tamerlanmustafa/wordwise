@@ -3,8 +3,8 @@
  *
  * The path is a linear, never-ending sequence of lesson tiles. A single
  * client-side cursor (see `practicePathStore`) points at the user's
- * next active tile. The kind shown at each index is derived from a
- * fixed 4-step cycle in `practicePathStore.ts::kindAtIndex`.
+ * next active tile. Every tile is the same lesson — the path used to
+ * rotate three kinds, one of which made the user pick a film first.
  *
  * Rendering window:
  *   • Show {@link WINDOW_SIZE} tiles around the cursor — up to
@@ -19,17 +19,15 @@
  *   • i == cursor → 'active'
  *   • i  > cursor → 'locked'
  *
- * The path itself doesn't know about session APIs / movie picks / the
- * free-tier daily cap; the parent screen wires the tap of the active
- * tile into the right side-effects.
+ * The path itself doesn't know about session APIs or the free-tier daily
+ * cap; the parent screen wires the tap of the active tile into the right
+ * side-effects.
  */
 
 import { Fragment, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { kindAtIndex } from '../../stores/practicePathStore';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
-import type { SessionKind } from '../../services/api';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 /** Total tiles rendered at once. */
@@ -86,16 +84,15 @@ export function isSectionStart(index: number): boolean {
 
 export interface PracticeTilePathProps {
   /** Number of sessions the user has already completed — the index of
-   *  the next active tile in the kind cycle. */
+   *  the next active tile. */
   cursor: number;
   /** Tap on the active tile. The path doesn't know what the tile does
    *  — the parent screen wires the actual session-start call. */
-  onTilePress: (kind: SessionKind, index: number) => void;
+  onTilePress: (index: number) => void;
 }
 
 interface RenderedTile {
   index: number;
-  kind: SessionKind;
   state: PracticeTileState;
 }
 
@@ -134,10 +131,9 @@ export function PracticeTilePath({
             ) : null}
             <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
               <PracticeTile
-                kind={tile.kind}
-                label={t(`practice:tile.${tile.kind}`)}
+                label={t('practice:tile.practice')}
                 state={tile.state}
-                onPress={() => onTilePress(tile.kind, tile.index)}
+                onPress={() => onTilePress(tile.index)}
               />
             </View>
           </Fragment>
@@ -222,11 +218,7 @@ export function buildWindow(cursor: number): RenderedTile[] {
     if (absolute < cursor) state = 'completed';
     else if (absolute === cursor) state = 'active';
     else state = 'locked';
-    out.push({
-      index: absolute,
-      kind: kindAtIndex(absolute),
-      state,
-    });
+    out.push({ index: absolute, state });
   }
   return out;
 }

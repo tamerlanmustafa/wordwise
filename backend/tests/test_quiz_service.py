@@ -18,6 +18,7 @@ from src.services.quiz_service import (
     compute_stars,
     compute_xp,
     is_near_form,
+    normalize_choice,
     is_unit_unlocked,
     pick_card_types,
     srs_outcome_for_card,
@@ -148,6 +149,127 @@ class TestBuildTranslationChoices:
             "sleep": "dormir",
         }
         assert build_translation_choices("house", deck, rng=random.Random(1)) is None
+
+
+
+class TestWideDistractorPool:
+    """The pool is what stopped a ten-card session recycling the same ten
+    translations as its options. These tests pin the preference order, because
+    the failure mode is silent: everything still works, it just gets boring
+    and answerable by elimination."""
+
+    DECK = {
+        "run": "correr",
+        "eat": "comer",
+        "sleep": "dormir",
+        "speak": "hablar",
+        "live": "vivir",
+    }
+    POOL = ["saltar", "escribir", "cantar", "nadar", "leer", "beber"]
+
+    def test_pool_is_used_in_preference_to_the_deck(self):
+        # The whole point: a word must not be a distractor on one card and the
+        # correct answer on another.
+        choices = build_translation_choices(
+            "run", self.DECK, pool=self.POOL, rng=random.Random(1),
+        )
+        assert choices is not None
+        wrong = {c["word"] for c in choices if not c["is_correct"]}
+        assert wrong <= set(self.POOL)
+        assert not wrong & set(self.DECK.values())
+
+    def test_deck_still_fills_in_when_the_pool_is_short(self):
+        # A target language whose translation_cache is nearly cold: take what
+        # the pool has, top up from the deck rather than dropping the card.
+        choices = build_translation_choices(
+            "run", self.DECK, pool=["saltar"], rng=random.Random(1),
+        )
+        assert choices is not None
+        wrong = {c["word"] for c in choices if not c["is_correct"]}
+        assert "saltar" in wrong
+        assert len(wrong & set(self.DECK.values())) == 2
+
+    def test_empty_pool_is_exactly_the_old_behaviour(self):
+        with_pool = build_translation_choices(
+            "run", self.DECK, pool=[], rng=random.Random(11),
+        )
+        without = build_translation_choices("run", self.DECK, rng=random.Random(11))
+        assert with_pool == without
+
+    def test_pool_candidates_are_filtered_like_deck_ones(self):
+        # A pool entry that is a near-form of the answer is as confusing as a
+        # deck one, and the cache has no idea what the answer is.
+        choices = build_translation_choices(
+            "run", self.DECK,
+            pool=["correr rapido", "saltar", "cantar", "nadar"],
+            rng=random.Random(1),
+        )
+        assert choices is not None
+        assert "correr rapido" not in {c["word"] for c in choices}
+
+    def test_pool_and_deck_cannot_both_supply_the_same_word(self):
+        # "comer" is in the deck and (say, via a stale cache row) in the pool.
+        # Offering it twice would put two identical tiles in one grid.
+        choices = build_translation_choices(
+            "run", self.DECK, pool=["comer", "saltar"], rng=random.Random(2),
+        )
+        assert choices is not None
+        words = [c["word"] for c in choices]
+        assert len(words) == len(set(words))
+
+
+class TestAvoidRepeatingChoices:
+    DECK = {"run": "correr", "eat": "comer", "sleep": "dormir", "speak": "hablar"}
+    POOL = ["saltar", "escribir", "cantar", "nadar", "leer", "beber"]
+
+    def test_unused_candidates_are_preferred(self):
+        used = {"saltar", "escribir", "cantar"}
+        choices = build_translation_choices(
+            "run", self.DECK, pool=self.POOL, avoid=used, rng=random.Random(1),
+        )
+        assert choices is not None
+        wrong = {c["word"] for c in choices if not c["is_correct"]}
+        assert wrong == {"nadar", "leer", "beber"}
+
+    def test_avoid_is_soft_so_late_cards_do_not_starve(self):
+        # `avoid` grows with every card in a session. If it filtered rather
+        # than reordered, the last cards of a long session would have nothing
+        # to choose from and get dropped entirely.
+        everything = {normalize_choice(t) for t in self.POOL}
+        choices = build_translation_choices(
+            "run", self.DECK, pool=self.POOL, avoid=everything,
+            rng=random.Random(1),
+        )
+        assert choices is not None
+        assert len(choices) == 4
+
+    def test_avoid_matches_case_insensitively(self):
+        choices = build_translation_choices(
+            "run", self.DECK, pool=["Saltar", "escribir", "cantar", "nadar"],
+            avoid={"saltar"}, rng=random.Random(1),
+        )
+        assert choices is not None
+        assert "Saltar" not in {c["word"] for c in choices}
+
+    def test_a_whole_session_keeps_its_grids_moving(self):
+        # The regression this whole change exists for: run every card in a
+        # deck and check the options are not the same handful each time.
+        deck = {w: f"t_{w}" for w in "abcdefghij"}
+        pool = [f"p_{i}" for i in range(60)]
+        used: set[str] = set()
+        rng = random.Random(5)
+        seen_grids = []
+        for word in deck:
+            choices = build_translation_choices(
+                word, deck, pool=pool, avoid=used, rng=rng,
+            )
+            assert choices is not None
+            wrong = [c["word"] for c in choices if not c["is_correct"]]
+            used.update(normalize_choice(w) for w in wrong)
+            seen_grids.append(frozenset(wrong))
+        # 10 cards x 3 wrong answers, none repeated anywhere in the session.
+        assert len(used) == 30
+        assert len(set(seen_grids)) == 10
 
 
 class TestIsNearForm:

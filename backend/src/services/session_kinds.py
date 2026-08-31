@@ -1,29 +1,43 @@
 """
-v0.7.2 — per-tile SRS queue composers for the Practice tab.
+SRS queue composers for the Practice tab and the Lists tab's practice button.
 
-Each "practice tile" maps to a different way of selecting today's 10
-cards. The daily-cap gate (`srs_last_session_started_at` + UTC rollover)
-still applies — the user picks exactly ONE tile per day, and that
-selection is recorded on `User.srsLastSessionKind` for the UI to render
-the right "done today" state.
+The Practice tab is ONE kind of session. It used to be a rotating path of
+tiles — Quick Recall, Tough Words, Movie Deep-Dive — which meant the vocabulary
+you were quizzed on depended on which tile the cursor happened to land on, and
+Deep-Dive meant it depended on which films were in your reel. A vocabulary quiz
+should be about vocabulary, so all three collapsed into `practice`, whose deck
+mixes the three things that actually matter in fixed proportions (`plan_deck`):
+
+  • recalls    — cards that are due. The retention test. Ordered box-first, so
+                 the words you keep failing come back before the ones you have
+                 nearly graduated. This is what `tough_words` used to be, folded
+                 into every session instead of every third one.
+  • your words — words the user saved from the reader or Explore, or added to a
+                 list, and has never studied.
+  • fresh      — new lemmas at the user's CEFR level and one above, padded in by
+                 the route (`routes/srs.py::_pad_with_fresh_level_lemmas`).
 
 Available kinds (`SessionKind`):
-  • quick_recall    — current default mix. Due-today cards + 1–2 fresh
-                      from next unstudied reel movie. Always available.
-  • tough_words     — Weighted toward `srsBox == 1` + recent misses. The
-                      "bring back what failed" mode. Unlocks at streak 5.
-  • movie_deep_dive — 10 cards from a specific reel movie (caller passes
-                      `movie_id`). Unlocks at streak 7.
+  • practice    — the Practice tab. The only kind a current client asks for.
+  • list_words  — a words list, practised from the Lists tab's gold button.
+  • list_films  — a films list. Still movie-scoped, and deliberately so: it is
+                  reached from a list of films the user built, not from
+                  Practice.
 
-(`synonym_round` was retired with the synonym MCQ format; stale clients
-requesting it get a 400 from the route layer.)
+`quick_recall`, `tough_words` and `movie_deep_dive` remain in VALID_KINDS as
+DEPRECATED ALIASES for `practice`. Builds already on the App Store still send
+them, and answering a shipped client with a 422 would leave Practice broken on
+every phone that has not updated. `movie_deep_dive`'s `movie_id` is accepted
+and ignored. (`synonym_round` was retired earlier with the synonym MCQ format
+and is not aliased — it never reached a released build.)
 
 Each composer returns a list of UserWord rows. The route layer (srs.py)
-hydrates them into ReviewCard objects identically across kinds — only
-the picking strategy varies here.
+hydrates them into ReviewCard objects identically across kinds — only the
+picking strategy varies here.
 """
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -31,37 +45,38 @@ from typing import Literal, Optional
 from prisma import Prisma
 
 SessionKind = Literal[
-    "quick_recall",
-    "tough_words",
-    "movie_deep_dive",
+    "practice",
     "list_words",
     "list_films",
 ]
 
+# Kinds a current client asks for.
 VALID_KINDS: set[str] = {
-    "quick_recall",
-    "tough_words",
-    "movie_deep_dive",
+    "practice",
     "list_words",
     "list_films",
 }
 
-# Kinds driven by a list rather than a movie — they require `list_id` where
-# movie_deep_dive requires `movie_id`.
+# Retired Practice tiles, still sent by installed builds. Each maps to the
+# single `practice` kind; see the module docstring for why they answer instead
+# of 422-ing. Remove once the store minimum version is past the release that
+# stopped sending them.
+DEPRECATED_KIND_ALIASES: dict[str, str] = {
+    "quick_recall":    "practice",
+    "tough_words":     "practice",
+    "movie_deep_dive": "practice",
+}
+
+VALID_KINDS |= set(DEPRECATED_KIND_ALIASES)
+
+# Kinds driven by a list — they require `list_id`.
 LIST_KINDS: set[str] = {"list_words", "list_films"}
 
-# Streak thresholds at which each kind unlocks. Quick recall is the
-# baseline (0); the rest space out across the critical first 2 weeks.
-# The list kinds are ungated at 0: they are started from the Lists tab's
-# gold button, not the Practice path, so a streak gate there would read as
-# the button being broken.
-KIND_UNLOCK_THRESHOLDS: dict[str, int] = {
-    "quick_recall":    0,
-    "tough_words":     5,
-    "movie_deep_dive": 7,
-    "list_words":      0,
-    "list_films":      0,
-}
+
+def canonical_kind(kind: str) -> str:
+    """The kind a request actually runs as, after alias resolution."""
+    return DEPRECATED_KIND_ALIASES.get(kind, kind)
+
 
 # Soft target session size — same as the existing SESSION_SIZE in
 # routes/srs.py. Kept here as a module constant so each composer
@@ -69,16 +84,88 @@ KIND_UNLOCK_THRESHOLDS: dict[str, int] = {
 KIND_SESSION_SIZE: int = 10
 
 # Cross-session cooldown: a word reviewed within this many hours is held
-# back from the next session in the kinds that aren't already gated by a
-# due-date filter (tough_words / movie_deep_dive). Stops a just-seen word
-# — especially one you just got wrong, which resets to box 1 and so would
-# otherwise re-appear immediately in tough_words — from "stalking" you
-# session-to-session. quick_recall doesn't need this: a reviewed card's
-# srsDueAt jumps ≥1 day out, so its `srsDueAt <= now` filter already
-# excludes it. Free users (one session/UTC-day) are effectively unaffected
-# at the default; the gate mainly de-duplicates premium multi-session days.
-# Tunable via env without a redeploy.
+# back from the next session, in the slices that aren't already gated by a
+# due-date filter. Stops a just-seen word — especially one you just got wrong,
+# which resets to box 1 and so would otherwise re-appear immediately — from
+# "stalking" you session-to-session. The recall slice doesn't need this: a
+# reviewed card's srsDueAt jumps ≥1 day out, so its `srsDueAt <= now` filter
+# already excludes it. Free users (one session/UTC-day) are effectively
+# unaffected at the default; the gate mainly de-duplicates premium
+# multi-session days. Tunable via env without a redeploy.
 REVIEW_COOLDOWN_HOURS: int = int(os.environ.get("SRS_REVIEW_COOLDOWN_HOURS", "8"))
+
+# ── Deck composition ───────────────────────────────────────────────────────
+# How many of a session's cards are recalls. The user asked for recalls "every
+# now and then" rather than as the main event, so at ordinary debt they are a
+# seasoning: 4 cards due yields 2 recalls and 8 new-ish ones.
+#
+# RECALL_MAX exists because a flat cap has a nasty long-run failure. A user who
+# misses a fortnight comes back to 60 due cards; at 2 recalls a session they
+# would need 30 sessions to clear a backlog that is still growing, so their
+# queue never drains and the SRS intervals stop meaning anything. Scaling the
+# count with the debt (a quarter of it, clamped) lets a backlog actually drain
+# without ever turning a session into pure review.
+RECALL_MIN: int = 2
+RECALL_MAX: int = 6
+
+# How many of a session's cards come from words the user saved or listed
+# themselves. Their words should show up reliably and soon after they save
+# them, but a session that is nothing but the user's own backlog never teaches
+# anything new, which is the point of the level-based fresh slice.
+SAVED_TARGET: int = 4
+
+
+def plan_deck(
+    due: int,
+    saved: int,
+    fresh: int,
+    size: int = KIND_SESSION_SIZE,
+) -> tuple[int, int, int]:
+    """How many cards each source contributes to one deck.
+
+    Returns `(n_recall, n_saved, n_fresh)`, always summing to at most `size`
+    and to exactly `size` whenever the three sources between them have the
+    material for it.
+
+    Pure and DB-free on purpose: this is the rule that decides what a Practice
+    session *feels* like, and it should be adjustable and testable without a
+    Postgres harness (see tests/test_session_kinds.py).
+
+    Slots go unclaimed rather than wasted — a source that can't fill its share
+    hands the remainder to the others, in the order recall → saved → fresh. So
+    a brand-new user with nothing due and nothing saved gets ten fresh words,
+    and a long-time user with no fresh stock left gets a full deck of their own
+    vocabulary.
+    """
+    size = max(0, size)
+    due, saved, fresh = max(0, due), max(0, saved), max(0, fresh)
+
+    if due <= 0:
+        n_recall = 0
+    else:
+        target = min(RECALL_MAX, max(RECALL_MIN, math.ceil(due / 4)))
+        n_recall = min(due, target, size)
+
+    n_saved = min(saved, SAVED_TARGET, size - n_recall)
+    n_fresh = min(fresh, size - n_recall - n_saved)
+
+    # Spill: whatever the capped sources left on the table goes to whoever
+    # still has stock. Recalls take it first — an unfilled deck means the user
+    # is short of material, and re-testing something they have seen beats
+    # ending the session early.
+    spare = size - (n_recall + n_saved + n_fresh)
+    if spare > 0:
+        take = min(spare, due - n_recall)
+        n_recall += take
+        spare -= take
+    if spare > 0:
+        take = min(spare, saved - n_saved)
+        n_saved += take
+        spare -= take
+    if spare > 0:
+        n_fresh += min(spare, fresh - n_fresh)
+
+    return n_recall, n_saved, n_fresh
 
 
 # ── Pure helpers ────────────────────────────────────────────────────────────
@@ -105,16 +192,24 @@ def cooldown_where_fragment(cutoff: datetime) -> dict:
         ]
     }
 
-def is_kind_unlocked(kind: str, current_streak: int) -> bool:
-    """True iff the user's streak meets the threshold for this kind.
+# Rows the user did not put in their own vocabulary: Practice's own padding.
+# `IS DISTINCT FROM` rather than `<>` — a plain inequality is NULL for the
+# legacy rows (which is every row saved before the column existed) and SQL
+# discards those, so `<>` would hide the user's entire saved vocabulary.
+# See prisma/manual/2026_08_31_user_words_source.sql.
+PRACTICE_SOURCE = "practice"
 
-    Unknown kinds return False — defensive against typos / removed kinds
-    that might still appear in stale client builds.
+
+def user_owned_where_fragment() -> dict:
+    """Prisma `where` fragment for rows the user chose to save, excluding the
+    ones a Practice session introduced by padding.
+
+    Spelled as an explicit OR with the NULL case rather than a bare `not`,
+    because whether an ORM's negation includes NULLs is exactly the kind of
+    thing that differs between versions — and getting it wrong here doesn't
+    fail loudly, it silently empties every user's saved-words list.
     """
-    threshold = KIND_UNLOCK_THRESHOLDS.get(kind)
-    if threshold is None:
-        return False
-    return current_streak >= threshold
+    return {"OR": [{"source": None}, {"source": {"not": PRACTICE_SOURCE}}]}
 
 
 # ── Per-kind composers ─────────────────────────────────────────────────────
@@ -124,86 +219,78 @@ def is_kind_unlocked(kind: str, current_streak: int) -> bool:
 #   • only rows belonging to the user
 # Hydration into ReviewCard / fresh-lemma padding happens in routes/srs.py.
 
-async def compose_quick_recall(
+async def compose_practice(
     db: Prisma,
     *,
     user_id: int,
     now: Optional[datetime] = None,
-) -> list:
-    """Default mix: due-today cards, oldest first, capped at SESSION_SIZE.
-    Padding with fresh reel lemmas remains the responsibility of the
-    route handler — same shape as the v0.6 default."""
-    when = now if now is not None else datetime.now(timezone.utc)
-    return await db.userword.find_many(
-        where={"userId": user_id, "srsDueAt": {"lte": when}},
-        order=[{"srsDueAt": "asc"}, {"id": "asc"}],
-        take=KIND_SESSION_SIZE,
-    )
+    size: int = KIND_SESSION_SIZE,
+) -> tuple[list, list]:
+    """The Practice tab's deck. Returns `(picked, reserve)`.
 
+    `picked` is the recall + saved slices sized by `plan_deck`; the route fills
+    the rest with fresh level-appropriate lemmas
+    (`routes/srs.py::_pad_with_fresh_level_lemmas`). `reserve` is everything
+    those two queries found but the plan had no room for — the route falls back
+    to it when the registry can't supply enough fresh words, so a user who has
+    exhausted the fresh pool still gets a full deck instead of a short one.
 
-async def compose_tough_words(
-    db: Prisma,
-    *,
-    user_id: int,
-    now: Optional[datetime] = None,
-) -> list:
-    """Words that are currently in box 1 — either freshly learned or
-    recently reset by a failed review. The "bring back what failed"
-    mode that surfaces struggle words deliberately.
+    The two slices:
 
-    A failed word resets to box 1 with `srsLastReviewedAt = now`, so
-    without a cooldown it would re-appear in the very next tough_words
-    session — the "stalking word" fatigue. We exclude rows reviewed
-    within {@link REVIEW_COOLDOWN_HOURS}; the route pads any shortfall
-    with fresh lemmas, which adds variety rather than repetition.
+    • RECALLS — `srsDueAt <= now`, ordered `srsBox ASC, srsDueAt ASC`. Box
+      first, not date first: box 1 is where a word lands when you fail it, so
+      ordering by box surfaces the words you are actually struggling with ahead
+      of the ones that merely came around again. No cooldown needed — a
+      reviewed card's due date jumps at least a day out, so the due filter has
+      already excluded anything seen today.
 
-    Sort: oldest `srsLastReviewedAt` first so words the user hasn't
-    re-tried in a while bubble up. Falls back to `srsDueAt` for rows
-    that have never been reviewed yet."""
-    when = now if now is not None else datetime.now(timezone.utc)
-    cutoff = recently_reviewed_cutoff(when)
-    return await db.userword.find_many(
-        where={
-            "userId": user_id,
-            "srsBox": 1,
-            **cooldown_where_fragment(cutoff),
-        },
-        order=[
-            {"srsLastReviewedAt": "asc"},
-            {"srsDueAt": "asc"},
-            {"id": "asc"},
-        ],
-        take=KIND_SESSION_SIZE,
-    )
+    • YOUR WORDS — saved from the reader or Explore, or added to a list, and
+      never studied (`srsLastReviewedAt IS NULL`). Filtered to rows the user
+      actually chose (`user_owned_where_fragment`), so Practice's own padding
+      from previous sessions can't come back through this slice and crowd out
+      the words the user asked for. Newest first: a word you saved this morning
+      is the one you are waiting to be quizzed on.
 
-
-async def compose_movie_deep_dive(
-    db: Prisma,
-    *,
-    user_id: int,
-    movie_id: int,
-    now: Optional[datetime] = None,
-) -> list:
-    """10 cards from a single movie's vocabulary. Pulls UserWord rows
-    keyed to `movie_id`, oldest-due first. Like tough_words this isn't
-    due-gated, so we apply the same cross-session cooldown (skip rows
-    reviewed within {@link REVIEW_COOLDOWN_HOURS}) to keep back-to-back
-    dives into the same film from re-showing the same words. The caller
-    is responsible for padding with fresh lemmas from that same movie
-    when the user has fewer than SESSION_SIZE rows tied to it — see
-    `routes/srs.py::_pad_with_fresh_reel_lemmas` for the existing pattern
-    (which accepts a `restrict_movie_id` parameter we add in the route)."""
+    Both slices are over-fetched to `size` so `plan_deck`'s spill has material
+    to work with, and the saved slice excludes anything the recall slice
+    already took.
+    """
     when = now if now is not None else datetime.now(timezone.utc)
     cutoff = recently_reviewed_cutoff(when)
-    return await db.userword.find_many(
+
+    due_rows = await db.userword.find_many(
         where={
             "userId": user_id,
-            "movieId": movie_id,
-            **cooldown_where_fragment(cutoff),
+            "isLearned": False,
+            "srsDueAt": {"lte": when},
         },
-        order=[{"srsDueAt": "asc"}, {"id": "asc"}],
-        take=KIND_SESSION_SIZE,
+        order=[{"srsBox": "asc"}, {"srsDueAt": "asc"}, {"id": "asc"}],
+        take=size,
     )
+
+    taken = {r.id for r in due_rows}
+    saved_rows = [
+        r
+        for r in await db.userword.find_many(
+            where={
+                "userId": user_id,
+                "isLearned": False,
+                "srsLastReviewedAt": None,
+                **user_owned_where_fragment(),
+                **cooldown_where_fragment(cutoff),
+            },
+            order=[{"createdAt": "desc"}, {"id": "desc"}],
+            take=size * 2,
+        )
+        if r.id not in taken
+    ]
+
+    n_recall, n_saved, _n_fresh = plan_deck(
+        due=len(due_rows), saved=len(saved_rows), fresh=size, size=size,
+    )
+    picked = list(due_rows[:n_recall]) + list(saved_rows[:n_saved])
+    reserve = list(due_rows[n_recall:]) + list(saved_rows[n_saved:])
+    return picked, reserve
 
 
 async def compose_list_words(
@@ -309,32 +396,34 @@ async def compose_for_kind(
     *,
     kind: str,
     user_id: int,
-    movie_id: Optional[int] = None,
     list_id: Optional[int] = None,
     now: Optional[datetime] = None,
-) -> list:
-    """Dispatch helper. Raises ValueError for unknown kinds, for
-    movie_deep_dive without a movie_id, or for a list kind without a
-    list_id — the route layer should translate those into 400/422
-    responses."""
-    if kind == "quick_recall":
-        return await compose_quick_recall(db, user_id=user_id, now=now)
-    if kind == "tough_words":
-        return await compose_tough_words(db, user_id=user_id, now=now)
-    if kind == "movie_deep_dive":
-        if movie_id is None:
-            raise ValueError("movie_deep_dive requires movie_id")
-        return await compose_movie_deep_dive(
-            db, user_id=user_id, movie_id=movie_id, now=now,
-        )
-    if kind in LIST_KINDS:
+) -> tuple[list, list]:
+    """Dispatch helper. Returns `(picked, reserve)` for every kind.
+
+    Only `practice` ever produces a non-empty reserve — the list kinds practise
+    a fixed set of members, so there is nothing held back to fall back on. The
+    uniform shape means the route hydrates all three identically.
+
+    Deprecated Practice tiles (`quick_recall`, `tough_words`,
+    `movie_deep_dive`) resolve to `practice` here rather than at the route, so
+    every caller gets the aliasing for free. Raises ValueError for unknown
+    kinds, or for a list kind without a `list_id` — the route layer translates
+    those into 422s.
+    """
+    resolved = canonical_kind(kind)
+    if resolved == "practice":
+        return await compose_practice(db, user_id=user_id, now=now)
+    if resolved in LIST_KINDS:
         if list_id is None:
-            raise ValueError(f"{kind} requires list_id")
-        if kind == "list_words":
-            return await compose_list_words(
+            raise ValueError(f"{resolved} requires list_id")
+        if resolved == "list_words":
+            rows = await compose_list_words(
                 db, user_id=user_id, list_id=list_id, now=now,
             )
-        return await compose_list_films(
-            db, user_id=user_id, list_id=list_id, now=now,
-        )
+        else:
+            rows = await compose_list_films(
+                db, user_id=user_id, list_id=list_id, now=now,
+            )
+        return rows, []
     raise ValueError(f"unknown session kind: {kind}")

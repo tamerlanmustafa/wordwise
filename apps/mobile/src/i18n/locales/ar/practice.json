@@ -13,19 +13,9 @@
   "dayLabel_few": "أيام",
   "dayLabel_many": "يومًا",
   "dayLabel_other": "يوم",
-  "emptyReelTitle": "قائمة أفلامك فارغة",
-  "emptyReelBody": "أضف فيلمًا من الرئيسية حتى يجد الغوص العميق ما يغوص فيه.",
-  "loadFailed": "واجهتنا مشكلة في الوصول إلى أفلامك. تحقق من اتصالك وحاول مرة أخرى.",
   "tile": {
-    "quick_recall": "استرجاع سريع",
-    "tough_words": "كلمات صعبة",
-    "movie_deep_dive": "غوص عميق في فيلم"
-  },
-  "moviePicker": {
-    "eyebrow": "اختر فيلمًا",
-    "title": "اغُص في فيلم"
+    "practice": "تدريب"
   },
   "title": "التدريب",
-  "lesson": "الدرس {{number}}",
-  "loadFailedTitle": "تعذّر تحميل قائمة أفلامك"
+  "lesson": "الدرس {{number}}"
 }

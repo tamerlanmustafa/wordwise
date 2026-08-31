@@ -4,20 +4,22 @@
  * A single 60px circle with a kind glyph + a label below. Four visual
  * states, derived by the parent path component from the cursor:
  *
- *   • active    → gold bg, kind glyph, spinning dashed ring, START
+ *   • active    → gold bg, lesson glyph, spinning dashed ring, START
  *                 callout. Tappable. Exactly one of these per render.
  *                 (= cursor position)
  *   • completed → gold bg + check glyph, faded. Past tiles already done.
- *   • locked    → dim, kind glyph, no badge. Future tiles — unlocks
+ *   • locked    → dim, lesson glyph, no badge. Future tiles — unlocks
  *                 when the user reaches them by walking the path.
  *   • repair    → red bg, alarm glyph, RESCUE STREAK callout.
  *                 (Reserved — pseudo-tile injected when
  *                 repair_window_active. Not yet implemented as a
  *                 real tappable flow; v1 just renders the visual.)
  *
- * The kind glyphs reuse the v0.7 vocabulary: speech-bubble (recall),
- * 4-grid (mcq), flame (tough), film (deep-dive). All stroked SVGs at
- * 24px inside the 60px body.
+ * Every tile is the same lesson, so they share one glyph — a speech
+ * bubble, the v0.7 "say it back to me" mark. The path used to give each
+ * of three rotating kinds its own glyph (flame for tough words, a film
+ * reel for the movie deep-dive); those kinds are gone. All stroked SVGs
+ * at 24px inside the 60px body.
  *
  * Depth: each circle is a two-layer "button" — a face over a darker
  * bottom edge (Duolingo-style 3D lip). Pressing the active tile pushes
@@ -30,7 +32,6 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import type { SessionKind } from '../../services/api';
 
 export type PracticeTileState =
   | 'active'
@@ -39,15 +40,13 @@ export type PracticeTileState =
   | 'repair';
 
 export interface PracticeTileProps {
-  kind: SessionKind;
-  /** Title shown under the circle (e.g. "Quick Recall"). */
+  /** Title shown under the circle (e.g. "Practice"). */
   label: string;
   state: PracticeTileState;
   onPress?: () => void;
 }
 
 export function PracticeTile({
-  kind,
   label,
   state,
   onPress,
@@ -136,10 +135,10 @@ export function PracticeTile({
   const hasSheen = isGold || state === 'repair';
 
   // Glyph shown in the center of the circle.
-  const glyphKind: SessionKind | 'check' | 'lock' | 'alarm' =
+  const glyphKind: TileGlyphKind =
     state === 'completed' ? 'check'
   : state === 'repair'    ? 'alarm'
-  : kind;
+  : 'lesson';
 
   return (
     <Pressable
@@ -206,11 +205,13 @@ export function PracticeTile({
   );
 }
 
+type TileGlyphKind = 'lesson' | 'check' | 'lock' | 'alarm';
+
 function TileGlyph({
   kind,
   color,
 }: {
-  kind: SessionKind | 'check' | 'lock' | 'alarm';
+  kind: TileGlyphKind;
   color: string;
 }) {
   const p = {
@@ -246,28 +247,11 @@ function TileGlyph({
       </Svg>
     );
   }
-  if (kind === 'quick_recall') {
-    // Speech bubble (recall — "say it back to me")
+  if (kind === 'lesson') {
+    // Speech bubble — "say it back to me". Every lesson is the same kind.
     return (
       <Svg {...p}>
         <Path d="M4 5h12a4 4 0 0 1 0 8H6l-2 3z" />
-      </Svg>
-    );
-  }
-  if (kind === 'tough_words') {
-    // Flame (tough / brought back)
-    return (
-      <Svg {...p}>
-        <Path d="M12 21c-4 0-7-3-7-7 0-2 1-4 3-5 0 2 2 3 3 2-1-3 0-6 2-8 0 4 6 5 6 11 0 4-3 7-7 7z" />
-      </Svg>
-    );
-  }
-  if (kind === 'movie_deep_dive') {
-    // Film reel (deep dive into one movie)
-    return (
-      <Svg {...p}>
-        <Rect x={3} y={4} width={18} height={16} rx={2} />
-        <Path d="M3 8h18M3 16h18M8 4v16M16 4v16" />
       </Svg>
     );
   }

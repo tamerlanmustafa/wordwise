@@ -5,6 +5,7 @@ from prisma import Prisma
 from prisma.errors import UniqueViolationError
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.session_kinds import PRACTICE_SOURCE, user_owned_where_fragment
 
 router = APIRouter(prefix="/user/words", tags=["user_words"])
 
@@ -46,6 +47,17 @@ async def save_word(
     existing = await db.userword.find_first(where=where_clause)
 
     if existing:
+        # A row a Practice session added for its own padding is not a save —
+        # the saved-word surfaces filter it out. Treating it as one would
+        # invert this toggle: the user taps the heart on a word they have never
+        # saved and the tap deletes the row instead of saving it. Promote it,
+        # keeping the SRS progress it has already accumulated.
+        if getattr(existing, "source", None) == PRACTICE_SOURCE:
+            await db.userword.update(
+                where={"id": existing.id},
+                data={"source": None},
+            )
+            return {"saved": True, "word": request.word}
         await db.userword.delete(where={"id": existing.id})
         return {"saved": False, "word": request.word}
 
@@ -201,8 +213,12 @@ async def get_user_words(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db)
 ):
+    # Excludes the rows a Practice session padded itself with. They live in
+    # user_words like everything else and carry real SRS state, but the user
+    # never saved them, so listing them here would silently fill the saved-words
+    # screen with vocabulary they did not choose. See UserWord.source.
     words = await db.userword.find_many(
-        where={"userId": current_user.id},
+        where={"userId": current_user.id, **user_owned_where_fragment()},
         include={"movie": True},
         order={"createdAt": "desc"}
     )
@@ -328,7 +344,11 @@ async def get_user_words_list(
     where_clause = {"userId": current_user.id}
 
     if list_name == "saved":
-        pass
+        # Same exclusion as GET / — a Practice session's padding is not a save.
+        # "learned" is left alone on purpose: marking a word learned is an
+        # explicit act, so a word the quiz introduced and the user then
+        # graduated genuinely belongs in that list.
+        where_clause.update(user_owned_where_fragment())
     elif list_name == "learned":
         where_clause["isLearned"] = True
 

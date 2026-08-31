@@ -5,19 +5,9 @@
   "freeze_other": "FREEZES",
   "dayLabel_one": "DAY",
   "dayLabel_other": "DAYS",
-  "emptyReelTitle": "Your reel is empty",
-  "emptyReelBody": "Add a movie from Home so Deep-Dive has something to dive into.",
-  "loadFailed": "We had trouble reaching your movies. Check your connection and try again.",
   "tile": {
-    "quick_recall": "Quick Recall",
-    "tough_words": "Tough Words",
-    "movie_deep_dive": "Movie Deep-Dive"
-  },
-  "moviePicker": {
-    "eyebrow": "PICK A MOVIE",
-    "title": "Deep-dive a film"
+    "practice": "Practice"
   },
   "title": "Practice",
-  "lesson": "LESSON {{number}}",
-  "loadFailedTitle": "Couldn't load your reel"
+  "lesson": "LESSON {{number}}"
 }

@@ -402,6 +402,16 @@ model UserWord {
   // movieId NOT NULL = a word saved from a specific movie.
   movieId           Int?      @map("movie_id")
   isLearned         Boolean   @default(false) @map("is_learned")
+  // Who put this row here. NULL = the user saved it (or it predates the
+  // column); "practice" = a Practice session's padding introduced it. The
+  // Favourites list and the saved-words screen are adapters over
+  // `movie_id IS NULL`, so before this column existed a NOT NULL movie_id was
+  // the only thing keeping auto-added vocabulary out of them — and Practice
+  // now pads from the lemmas registry, which has no movie to attribute.
+  // Read it as `IS DISTINCT FROM 'practice'`, never `<> 'practice'`: the
+  // latter is NULL for every legacy row and so filters out all of them.
+  // See manual/2026_08_31_user_words_source.sql.
+  source            String?   @db.VarChar(16)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   // Leitner SRS state. Box 1 = new/forgot, box 5 = graduated.
   // Intervals: 1d, 3d, 7d, 14d, 30d. See src/routes/srs.py.

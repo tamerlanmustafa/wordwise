@@ -35,11 +35,17 @@ describe('API endpoint wrappers', () => {
   });
 
   describe('srsApi.startSession', () => {
-    it('POSTs to /srs/session/start with the kind + movie_id query params', async () => {
+    it('POSTs to /srs/session/start with the kind query param', async () => {
       fetchMock.mockResolvedValue(ok({ cards: [], total_due: 0, session_size: 0, is_preview: false, previews_remaining: 3 }));
-      await srsApi.startSession({ kind: 'movie_deep_dive', movieId: 42 });
-      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/srs/session/start?kind=movie_deep_dive&movie_id=42`);
+      await srsApi.startSession({ kind: 'list_words' });
+      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/srs/session/start?kind=list_words`);
       expect(methodOf(fetchMock)).toBe('POST');
+    });
+
+    it('never sends a movie_id — practice is not scoped to a film', async () => {
+      fetchMock.mockResolvedValue(ok({ cards: [] }));
+      await srsApi.startSession({ kind: 'practice' });
+      expect(urlOf(fetchMock)).not.toContain('movie_id');
     });
 
     it('hits the bare endpoint (backend default) when no opts are given', async () => {

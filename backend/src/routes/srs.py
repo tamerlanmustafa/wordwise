@@ -31,17 +31,20 @@ from prisma import Prisma
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
-from ..services.cefr_registry import registry_levels
+from ..services.cefr_registry import registry_levels, registry_pos
 from ..services.chest_service import award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
+from ..services.distractor_pool import build_pool, pool_for
 from ..services.session_kinds import (
     LIST_KINDS,
+    PRACTICE_SOURCE,
     VALID_KINDS,
+    canonical_kind,
     compose_for_kind,
 )
-from ..services.quiz_service import build_translation_choices
+from ..services.quiz_service import build_translation_choices, normalize_choice
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
@@ -148,10 +151,10 @@ class SessionStartResponse(BaseModel):
     # Free-preview budget the client uses to show the paywall nudge.
     is_preview: bool
     previews_remaining: int
-    # v0.7.2 — which practice tile produced this session. Echoed back so
-    # the client can confirm + cross-check against `last_session_kind`
-    # on the next /daily/state read.
-    kind: str = "quick_recall"
+    # Which composer produced this session, in canonical form — so a client
+    # that asked with a deprecated alias sees what it actually got, and can
+    # cross-check against `last_session_kind` on the next /daily/state read.
+    kind: str = "practice"
 
 
 class TodaysWordResponse(BaseModel):
@@ -345,6 +348,126 @@ def _band_levels_around(level: str) -> list[str]:
     return _CEFR_LEVELS[max(0, i - 1): min(len(_CEFR_LEVELS), i + 2)]
 
 
+# How a Practice session's fresh words are split between the user's own level
+# and the one above it. Practice never goes below the user's level — the point
+# of the tab is to move them forward, and a B2 learner does not need to be
+# quizzed on A2 vocabulary — but a deck made entirely of harder words is a wall
+# rather than a stretch, so most of it sits where they already are.
+_LEVEL_SPLIT = (0.7, 0.3)
+
+
+def _levels_at_and_above(level: str) -> list[str]:
+    """The user's level and the next one up. Unknown level → B1's pair.
+
+    C2 has nothing above it and returns `['C2']` alone, which is correct rather
+    than a degenerate case: the split below hands the whole allocation to the
+    only level there is.
+    """
+    try:
+        i = _CEFR_LEVELS.index(level)
+    except ValueError:
+        i = _CEFR_LEVELS.index("B1")
+    return _CEFR_LEVELS[i: i + 2]
+
+
+def _split_across_levels(needed: int, levels: list[str]) -> list[tuple[str, int]]:
+    """Allocate `needed` cards across `levels` by `_LEVEL_SPLIT`.
+
+    The remainder lands on the first (easier) level, so a 1-card shortfall is
+    filled at the user's own level rather than above it.
+    """
+    if not levels or needed <= 0:
+        return []
+    if len(levels) == 1:
+        return [(levels[0], needed)]
+    above = int(needed * _LEVEL_SPLIT[1])
+    return [(levels[0], needed - above), (levels[1], above)]
+
+
+async def _pad_with_fresh_level_lemmas(
+    db: Prisma,
+    *,
+    user_id: int,
+    user_level: str,
+    excluded_words: set[str],
+    needed: int,
+    rng: Optional[random.Random] = None,
+):
+    """Top up a short Practice deck with new words at the user's CEFR level.
+
+    This replaced the reel-movie padding the Practice tab used to do. Padding
+    from `movie_lemma_mappings` meant the vocabulary a user was taught was
+    decided by which films happened to be in their reel — two users at the same
+    level got completely different words, and a user with an empty reel got no
+    fresh words at all. Drawing from the `lemmas` registry instead makes the
+    level the only thing that decides.
+
+    Reuses `_eligible_lemma_candidates` rather than writing a new query: it
+    already applies `feed_eligibility_sql` (real-word shape, `hidden_words`
+    curation, and a guaranteed global LLM example sentence so the card has
+    something to show) and takes `exclude_user_id` to skip anything already in
+    the user's `user_words`. One call per level so the 70/30 split is exact —
+    the helper divides its own budget evenly, which is not the shape we want.
+
+    Candidates come back frequency-ordered, so a straight `[:n]` would hand
+    every user at a level the identical ten words and hand them again to anyone
+    who quit before answering. We over-fetch and sample instead.
+
+    New rows are stamped `source="practice"` so they never appear in the user's
+    saved words or Favourites — see the migration note on `UserWord.source`.
+
+    Returns the newly-created UserWord rows, already refetched, in pick order.
+    """
+    if needed <= 0:
+        return []
+    r = rng or random.Random()
+
+    created_ids: list[int] = []
+    for level, want in _split_across_levels(needed, _levels_at_and_above(user_level)):
+        if want <= 0 or len(created_ids) >= needed:
+            continue
+        try:
+            candidates = await _eligible_lemma_candidates(
+                db,
+                [level],
+                exclude_user_id=user_id,
+                limit=max(want * 8, 40),
+            )
+        except Exception as e:
+            logger.warning("[srs.pad] level candidates failed for %s: %s", level, e)
+            continue
+
+        pool = [
+            str(row["word"]).lower()
+            for row in candidates
+            if str(row["word"]).lower() not in excluded_words
+        ]
+        r.shuffle(pool)
+        for word in pool[:want]:
+            if len(created_ids) >= needed:
+                break
+            if word in excluded_words:
+                continue
+            try:
+                uw = await db.userword.create(data={
+                    "userId": user_id,
+                    "word": word,
+                    "source": PRACTICE_SOURCE,
+                })
+            except Exception:
+                # Lost a race against the partial unique index on global rows
+                # — skip rather than fail the whole session start.
+                continue
+            created_ids.append(uw.id)
+            excluded_words.add(word)
+
+    if not created_ids:
+        return []
+    fresh = await db.userword.find_many(where={"id": {"in": created_ids}})
+    by_id = {row.id: row for row in fresh}
+    return [by_id[i] for i in created_ids if i in by_id]
+
+
 async def _pad_with_fresh_reel_lemmas(
     db: Prisma,
     *,
@@ -352,7 +475,6 @@ async def _pad_with_fresh_reel_lemmas(
     user_level: str,
     excluded_words: set[str],
     needed: int,
-    restrict_movie_id: Optional[int] = None,
     movie_ids: Optional[list[int]] = None,
 ):
     """Top up a short SRS queue with fresh lemmas from a set of movies.
@@ -371,9 +493,10 @@ async def _pad_with_fresh_reel_lemmas(
         films list could never practise: the user has no UserWord rows for
         a film they have not studied yet.
 
-    `restrict_movie_id` further narrows to a single movie — used by the
-    v0.7.2 Movie Deep-Dive tile so padding stays inside the user's pick
-    rather than spilling into other reel movies.
+    ONLY the Lists tab reaches this now. The Practice tab used to pad from the
+    reel too, and pads from the CEFR registry instead — see
+    `_pad_with_fresh_level_lemmas`. A films list is genuinely about its films,
+    so this stays.
 
     Returns the list of newly-created UserWord rows (already fetched), in
     the order they were picked. Empty list when the source can't fill the
@@ -400,9 +523,6 @@ async def _pad_with_fresh_reel_lemmas(
             if r.tmdbId in tmdb_to_movie_id
         ]
 
-    # Deep-dive: keep only the picked movie.
-    if restrict_movie_id is not None:
-        ordered_movie_ids = [m for m in ordered_movie_ids if m == restrict_movie_id]
     if not ordered_movie_ids:
         return []
 
@@ -464,11 +584,16 @@ async def _pad_with_fresh_reel_lemmas(
 
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
-    kind: str = Query("quick_recall", description="Practice tile (v0.7.2). One of "
-                                                 "quick_recall / tough_words / "
-                                                 "movie_deep_dive / list_words / "
-                                                 "list_films."),
-    movie_id: Optional[int] = Query(None, description="Required when kind=movie_deep_dive."),
+    kind: str = Query("practice", description="One of practice / list_words / "
+                                             "list_films. quick_recall, "
+                                             "tough_words and movie_deep_dive "
+                                             "are accepted as deprecated "
+                                             "aliases for practice."),
+    movie_id: Optional[int] = Query(None, deprecated=True,
+                                    description="Ignored. Retained so installed "
+                                                "builds sending it for the "
+                                                "retired movie_deep_dive tile "
+                                                "still get a session."),
     list_id: Optional[int] = Query(None, description="Required when kind=list_words "
                                                     "or kind=list_films."),
     current_user=Depends(get_current_active_user),
@@ -481,36 +606,30 @@ async def start_session(
     /srs/session/start a second time the same day returns HTTP 402 with
     a `srs_daily_cap_reached` paywall payload — premium unlocks unlimited.
 
-    v0.7.2: the user picks a "practice tile" (`kind` param) before
-    starting. Default `quick_recall` matches the v0.7.1 behaviour for
-    older clients that don't pass the param. Each kind has its own
-    queue composer in `services/session_kinds.py`. The kind is stamped
-    on `User.srsLastSessionKind` so the Practice tab can render the
-    matching tile as done-today.
+    The Practice tab is ONE kind of session (`practice`), whose deck mixes due
+    recalls, the user's own saved/listed words, and fresh words at their CEFR
+    level and one above. The three rotating tiles it replaced — quick_recall,
+    tough_words and movie_deep_dive — are accepted as aliases so installed
+    builds keep working, and `movie_id` is accepted and ignored for the same
+    reason: answering a shipped client with a 422 would leave Practice broken
+    on every phone that has not updated yet.
 
-    v0.7.3: streak-based per-kind unlocks have been retired. The
-    Practice tab is now a linear path with a client-side cursor — any
-    kind is reachable in order, and progression is sequential. The
-    KIND_UNLOCK_THRESHOLDS table is preserved in session_kinds.py for
-    backward compatibility with stale clients but is no longer
-    enforced server-side.
+    The Lists tab keeps its own two kinds, which practise a specific list.
+
+    The kind is stamped on `User.srsLastSessionKind` in its canonical form, so
+    a session started by a stale client still reads back as `practice`.
 
     The legacy `srsFreePreviewsUsed` counter is no longer consulted; the
     column remains in the schema for backward compatibility with older
     mobile builds that still poll /srs/stats.
     """
-    # v0.7.2 — validate kind + movie_id requirement.
     if kind not in VALID_KINDS:
         raise HTTPException(
             status_code=422,
             detail=f"Unknown session kind: {kind}. "
                    f"Expected one of {sorted(VALID_KINDS)}.",
         )
-    if kind == "movie_deep_dive" and movie_id is None:
-        raise HTTPException(
-            status_code=422,
-            detail="movie_deep_dive requires the `movie_id` query parameter.",
-        )
+    kind = canonical_kind(kind)
     if kind in LIST_KINDS and list_id is None:
         raise HTTPException(
             status_code=422,
@@ -540,14 +659,15 @@ async def start_session(
         where={"userId": current_user.id, "srsDueAt": {"lte": now}}
     )
 
-    # v0.7.2 — dispatch to the per-kind composer instead of the fixed
-    # due-today query. `compose_for_kind` raises ValueError for invalid
-    # combos; we already validated above so it shouldn't trigger.
-    due_rows = await compose_for_kind(
+    # Dispatch to the kind's composer. `practice` returns its planned recall +
+    # saved slices plus a `reserve` of rows the plan had no room for; the
+    # reserve is what a full deck falls back on when the fresh pool runs dry.
+    # `compose_for_kind` raises ValueError for invalid combos; we already
+    # validated above so it shouldn't trigger.
+    due_rows, reserve_rows = await compose_for_kind(
         db,
         kind=kind,
         user_id=current_user.id,
-        movie_id=movie_id,
         list_id=list_id,
         now=now,
     )
@@ -561,10 +681,9 @@ async def start_session(
         list_row = await lists_service.get_list_row(db, current_user.id, list_id)
         pad_movie_ids = await lists_service.list_movie_ids(db, current_user.id, list_row)
 
-    # Pad short sessions with fresh lemmas from the next reel movie so
-    # the daily 2-min habit always has SESSION_SIZE cards to chew on.
-    # Movie Deep-Dive constrains padding to the picked movie so the
-    # session stays "about that one film".
+    # Pad short sessions so the daily 2-min habit always has SESSION_SIZE cards
+    # to chew on. Practice pads from the CEFR registry, the list kinds from
+    # their own films.
     # Dedupe by lemma before padding. Cards display `word=lemma` (below),
     # so two saved inflections of one word — e.g. "run" and "running",
     # both lemmatize to "run" — would otherwise surface as two
@@ -601,16 +720,42 @@ async def start_session(
     if len(session_rows) < SESSION_SIZE and kind != "list_words":
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
-        fresh_rows = await _pad_with_fresh_reel_lemmas(
-            db,
-            user_id=current_user.id,
-            user_level=str(user_level),
-            excluded_words=set(seen_lemmas),
-            needed=SESSION_SIZE - len(session_rows),
-            restrict_movie_id=movie_id if kind == "movie_deep_dive" else None,
-            movie_ids=pad_movie_ids,
-        )
+        if kind == "practice":
+            fresh_rows = await _pad_with_fresh_level_lemmas(
+                db,
+                user_id=current_user.id,
+                user_level=str(user_level),
+                excluded_words=set(seen_lemmas),
+                needed=SESSION_SIZE - len(session_rows),
+            )
+        else:
+            fresh_rows = await _pad_with_fresh_reel_lemmas(
+                db,
+                user_id=current_user.id,
+                user_level=str(user_level),
+                excluded_words=set(seen_lemmas),
+                needed=SESSION_SIZE - len(session_rows),
+                movie_ids=pad_movie_ids,
+            )
         session_rows.extend(fresh_rows)
+
+    # Still short? Fall back to what the composer held back. The registry runs
+    # to tens of thousands of lemmas, so this is the long-tail user who has
+    # already studied everything at their level — better to re-test a word they
+    # own than to hand them a four-card session.
+    #
+    # These rows haven't been through spaCy yet, so the check below is on the
+    # surface form; the `carded_lemmas` guard in the card loop is what catches
+    # a true lemma collision ("running" against an already-picked "run") once
+    # the second lemmatization hop below has resolved them.
+    if len(session_rows) < SESSION_SIZE and reserve_rows:
+        for row in reserve_rows:
+            if len(session_rows) >= SESSION_SIZE:
+                break
+            if row.word.lower() in seen_lemmas:
+                continue
+            seen_lemmas.add(row.word.lower())
+            session_rows.append(row)
 
     # Hydrate cards with definitions and movie titles
     word_texts = list({r.word for r in session_rows})
@@ -711,6 +856,32 @@ async def start_session(
         except Exception as e:
             logger.warning(f"[srs.start] batch translate failed: {e}")
 
+    # Wrong answers from OUTSIDE the deck, so a ten-card session stops
+    # recycling the same ten translations as its options and a word stops
+    # being a distractor on one card and the answer on another. Two indexed
+    # reads, no translation spend: candidates are registry lemmas at the same
+    # (part of speech, CEFR level) as each card, and only the ones already in
+    # `translation_cache` for this language survive. A language whose cache is
+    # too cold yields an empty pool, and `build_translation_choices` falls
+    # straight back to the deck-only behaviour it has always had.
+    #
+    # The pos here is the RAW UPOS tag from the registry, not the friendly
+    # label on the card — matching nouns to nouns is a grammar test, and the
+    # friendly labels deliberately collapse PROPN onto "noun".
+    deck_pos = await registry_pos(db, unique_lemmas) if unique_lemmas else {}
+    distractors: dict = {}
+    if translation_map:
+        buckets = {
+            (deck_pos.get(lem), cefr_map.get(lem))
+            for lem in translation_map
+        }
+        distractors = await build_pool(
+            db,
+            target_lang=target_lang,
+            buckets=buckets,
+            exclude_lemmas=translation_map.keys(),
+        )
+
     cards: list[ReviewCard] = []
     skipped: list[str] = []
     # Last-line guard against a duplicate *displayed* word reaching the
@@ -719,6 +890,9 @@ async def start_session(
     # still introduce a form that lemmatizes onto a kept one, so we
     # re-check against the form actually shown.
     carded_lemmas: set[str] = set()
+    # Normalized keys already spent as wrong answers in this session. Passed to
+    # every subsequent card so the grid keeps changing as the deck goes on.
+    used_choices: set[str] = set()
     # Fresh per-request RNG so choice ordering varies per session.
     rng = random.Random()
     for r in session_rows:
@@ -751,8 +925,17 @@ async def start_session(
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
-        choices = build_translation_choices(lemma, translation_map, rng=rng)
+        choices = build_translation_choices(
+            lemma,
+            translation_map,
+            pool=pool_for(distractors, deck_pos.get(lemma), cefr),
+            avoid=used_choices,
+            rng=rng,
+        )
         if choices:
+            used_choices.update(
+                normalize_choice(c["word"]) for c in choices if not c["is_correct"]
+            )
             cards.append(ReviewCard(
                 **base,
                 card_type="mcq",
@@ -773,6 +956,15 @@ async def start_session(
             "[srs.start] dropped %d card(s) without a translation MCQ: %s",
             len(skipped), skipped[:10],
         )
+
+    # How much of the wide distractor pool this language could actually fill.
+    # `translation_cache` coverage varies per target language and nothing else
+    # reports it, so without this line a language quietly falling back to
+    # deck-only distractors — i.e. the repetition coming back — is invisible.
+    logger.info(
+        "[srs.start] distractor pool: %d option(s) across %d bucket(s) for %s",
+        sum(len(v) for v in distractors.values()), len(distractors), target_lang,
+    )
 
     # Stamp the daily-cap field + the picked kind only when there was
     # actually work to do. Don't penalize a free user who taps "review"

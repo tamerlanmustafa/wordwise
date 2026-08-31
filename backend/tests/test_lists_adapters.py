@@ -324,8 +324,25 @@ class TestAdapterReads:
         db = FakeDb({"userword.find_many": [SimpleNamespace(word="Reluctant")]})
         words = await svc.list_words(db, 7, FAVS)
         where = db.called("userword.find_many")[0]["where"]
-        assert where == {"userId": 7, "movieId": None, "isLearned": False}
+        assert where == {
+            "userId": 7,
+            "movieId": None,
+            "isLearned": False,
+            **svc.user_owned_where_fragment(),
+        }
         assert words == ["reluctant"]
+
+    async def test_favourites_words_exclude_practice_padding(self):
+        # A Practice session pads itself with global rows of exactly the
+        # favourites shape. Without the source filter every word the quiz
+        # introduced would appear in the list the user built by hand.
+        db = FakeDb({"userword.find_many": [SimpleNamespace(word="linger")]})
+        await svc.list_words(db, 7, FAVS)
+        where = db.called("userword.find_many")[0]["where"]
+        assert where["OR"] == [
+            {"source": None},
+            {"source": {"not": "practice"}},
+        ]
 
     async def test_custom_word_list_reads_its_own_table(self):
         db = FakeDb({"userlistword.find_many": [SimpleNamespace(word="Glimpse")]})

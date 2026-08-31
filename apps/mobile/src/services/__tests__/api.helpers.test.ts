@@ -3,7 +3,6 @@ import {
   SrsPaywallError,
   REPORT_REASON_LABELS,
   REPORT_STATUS_LABELS,
-  KIND_UNLOCK_THRESHOLDS,
 } from '../api';
 
 describe('tmdbApi.getPosterUrl', () => {
@@ -50,16 +49,5 @@ describe('label / threshold maps', () => {
     (['PENDING', 'REVIEWED', 'RESOLVED', 'DISMISSED'] as const).forEach((s) =>
       expect(REPORT_STATUS_LABELS[s]).toBeTruthy(),
     );
-  });
-
-  it('KIND_UNLOCK_THRESHOLDS exposes every session kind at the post-v0.7.3 zero gate', () => {
-    expect(KIND_UNLOCK_THRESHOLDS).toEqual({
-      quick_recall: 0,
-      tough_words: 0,
-      movie_deep_dive: 0,
-      // Lists tab kinds — started from a list's gold action, never gated.
-      list_words: 0,
-      list_films: 0,
-    });
   });
 });

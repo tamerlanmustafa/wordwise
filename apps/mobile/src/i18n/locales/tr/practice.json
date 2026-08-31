@@ -1,23 +1,13 @@
 {
   "dayLabel_one": "GÜN",
   "dayLabel_other": "GÜN",
-  "emptyReelBody": "“Home”dan bir film ekleyin ki Deep-Dive’ın dalabileceği bir şey olsun.",
-  "emptyReelTitle": "Reel'in boş",
   "eyebrow": "GÜNLÜK PRATİK",
   "freeze_one": "DONDURMA",
   "freeze_other": "DONDURMA",
   "lesson": "DERS {{number}}",
-  "loadFailed": "Filmlerine erişirken sorun yaşadık. İnternet bağlantını kontrol edip tekrar dene.",
-  "loadFailedTitle": "Reel'in yüklenemedi",
-  "moviePicker": {
-    "eyebrow": "BİR FİLM SEÇİN",
-    "title": "Bir filmi derinlemesine incelemek"
-  },
   "pathHeading": "PRATİK YOLUNUZ",
   "tile": {
-    "movie_deep_dive": "Film Analizi",
-    "quick_recall": "Hızlı Geri Çağırma",
-    "tough_words": "Sert Sözler"
+    "practice": "Pratik"
   },
   "title": "Pratik"
 }

@@ -275,23 +275,18 @@ export default function App() {
 
   const [paywallProps, setPaywallProps] = useState({ previewsUsed: 0, previewsLimit: 3 });
 
-  // v0.7.2 — when the Practice screen launches a review it passes the
-  // tile kind (+ optional movie id for Deep-Dive). Legacy callers
-  // (StatsScreen, HomeScreen) pass nothing → falls through to
-  // quick_recall server-side.
+  // Where a review session came from. The Practice tab and the other
+  // entry points (StatsScreen, notification deep links) pass nothing and
+  // get the server's `practice` default; only the Lists tab fills these in.
   const [reviewLaunch, setReviewLaunch] = useState<{
     kind?: import('../services/api').SessionKind;
-    movieId?: number;
     listId?: number;
     /** Set only by the Lists tab — see ReviewScreen's `initialSession`. */
     session?: SrsSessionStart;
   }>({});
 
-  const navigateToReview = (
-    kind?: import('../services/api').SessionKind,
-    movieId?: number,
-  ) => {
-    setReviewLaunch({ kind, movieId });
+  const navigateToReview = () => {
+    setReviewLaunch({});
     setCurrentScreen('review');
   };
 
@@ -901,7 +896,6 @@ export default function App() {
         ) : currentScreen === 'review' ? (
           <ReviewScreen
             kind={reviewLaunch.kind}
-            movieId={reviewLaunch.movieId}
             listId={reviewLaunch.listId}
             initialSession={reviewLaunch.session}
             onBack={reviewLaunch.listId ? navigateToLists : navigateToHome}

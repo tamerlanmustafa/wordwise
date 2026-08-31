@@ -35,10 +35,23 @@ from typing import Any, Literal, Optional
 from prisma import Prisma
 
 from .movie_cefr import CEFR_LEVELS, cefr_from_score
+from .session_kinds import PRACTICE_SOURCE, user_owned_where_fragment
 
 # ── Rules ──────────────────────────────────────────────────────────────────
 
 ListKind = Literal["films", "words"]
+
+# Favourites is an adapter over `user_words WHERE movie_id IS NULL`, and a
+# Practice session's padding writes rows of exactly that shape. Without this
+# predicate every word the quiz introduced would show up in the list the user
+# thinks of as "words I saved".
+#
+# `IS DISTINCT FROM`, never `<> 'practice'`: the latter evaluates to NULL for
+# a NULL source, which SQL discards — and NULL is every row written before the
+# column existed, i.e. every saved word in the database. The wrong operator
+# here empties the list rather than filtering it.
+# See prisma/manual/2026_08_31_user_words_source.sql.
+FAVOURITES_SOURCE_SQL = f"source IS DISTINCT FROM '{PRACTICE_SOURCE}'"
 
 SYSTEM_LISTS: dict[str, dict[str, str]] = {
     "reel":       {"kind": "films", "default_name": "Saved from Home"},
@@ -427,10 +440,12 @@ async def _word_stats(
 
     # (2) The favourites adapter. `is_learned = false` is what separates the
     # Explore heart's saves from /mark-learned's "never show again" markers,
-    # which share the same (user, word, movie_id IS NULL) shape.
+    # which share the same (user, word, movie_id IS NULL) shape. `source` is
+    # what separates both from the words a Practice session padded itself with
+    # — see FAVOURITES_SOURCE_SQL.
     if fav_id is not None:
         rows = await db.query_raw(
-            """
+            f"""
             SELECT word, cnt, due_cnt
             FROM (
                 SELECT
@@ -442,6 +457,7 @@ async def _word_stats(
                 WHERE user_id = $1
                   AND movie_id IS NULL
                   AND is_learned = false
+                  AND {FAVOURITES_SOURCE_SQL}
             ) t
             WHERE rn <= 3
             ORDER BY rn
@@ -618,7 +634,8 @@ async def _word_items(
         source = (
             "SELECT word, NULL::int AS lemma_id, created_at AS added_at "
             "FROM user_words "
-            "WHERE user_id = $1 AND movie_id IS NULL AND is_learned = false"
+            "WHERE user_id = $1 AND movie_id IS NULL AND is_learned = false "
+            f"AND {FAVOURITES_SOURCE_SQL}"
         )
         params: list[Any] = [user_id]
         uid_param = "$1"
@@ -895,6 +912,16 @@ async def _add_words(db: Prisma, user_id: int, row: Any, words: list[dict]) -> N
                 where={"userId": user_id, "word": lowered, "movieId": None},
             )
             if existing is not None:
+                # A row Practice added for itself is not a favourite, and the
+                # read side filters it out — so "already exists, nothing to do"
+                # would leave the user hearting a word and watching nothing
+                # appear. Promote it instead: they have now claimed the word,
+                # and its SRS progress is worth keeping.
+                if getattr(existing, "source", None) == PRACTICE_SOURCE:
+                    await db.userword.update(
+                        where={"id": existing.id},
+                        data={"source": None, "isLearned": False},
+                    )
                 continue
             try:
                 await db.userword.create(data={
@@ -1025,7 +1052,12 @@ async def list_words(db: Prisma, user_id: int, row: Any) -> list[str]:
     the adapter."""
     if row.systemKey == "favourites":
         rows = await db.userword.find_many(
-            where={"userId": user_id, "movieId": None, "isLearned": False},
+            where={
+                "userId": user_id,
+                "movieId": None,
+                "isLearned": False,
+                **user_owned_where_fragment(),
+            },
             order={"createdAt": "desc"},
         )
         return [r.word.lower() for r in rows]
