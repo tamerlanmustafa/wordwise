@@ -654,8 +654,8 @@ model Lemma {
   // (same trap as #153: `<>` would filter out every never-attempted lemma),
   // so changing the model or the prompt re-admits the whole corpus with no
   // cleanup pass.
-  definition        String?   @db.Text
-  definitionVersion String?   @map("definition_version") @db.VarChar(96)
+  definition        String? @db.Text
+  definitionVersion String? @map("definition_version") @db.VarChar(96)
 
   movieMappings MovieLemmaMapping[]
   sentenceLinks SentenceLemmaLink[]
