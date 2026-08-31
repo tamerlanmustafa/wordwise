@@ -10,6 +10,7 @@
 import {
   MIX_CUT_COUNT,
   MIX_LEVELS,
+  MIX_NUDGE_STEP,
   MIX_STEP,
   MIX_TOTAL,
   cutsToMix,
@@ -23,6 +24,7 @@ import {
   moveCut,
   nudge,
   pageCounts,
+  sameMix,
   type MixCuts,
 } from '../levelMix';
 import type { LevelMix } from '../../services/api';
@@ -88,7 +90,7 @@ describe('levelMix — total is always 100', () => {
             : nudge(
                 cuts,
                 Math.floor(rand() * MIX_LEVELS.length),
-                rand() < 0.5 ? MIX_STEP : -MIX_STEP,
+                rand() < 0.5 ? MIX_NUDGE_STEP : -MIX_NUDGE_STEP,
               );
 
         const mix = cutsToMix(cuts);
@@ -113,9 +115,19 @@ describe('levelMix — total is always 100', () => {
 });
 
 describe('levelMix — moveCut', () => {
-  it('snaps to 5% detents', () => {
-    expect(moveCut([0, 0, 0, 0, 0], 0, 63)).toEqual([65, 65, 65, 65, 65]);
-    expect(moveCut([0, 0, 0, 0, 0], 0, 61)).toEqual([60, 60, 60, 60, 60]);
+  it('snaps a drag to whole percents, not to the tap step', () => {
+    // The bar tracks the finger: 63 stays 63. It used to land on 65, which is
+    // what made the drag feel like it was fighting the aim.
+    expect(moveCut([0, 0, 0, 0, 0], 0, 63)).toEqual([63, 63, 63, 63, 63]);
+    expect(moveCut([0, 0, 0, 0, 0], 0, 61.4)).toEqual([61, 61, 61, 61, 61]);
+  });
+
+  it('never emits a fraction — the server parses shares with int()', () => {
+    for (const pct of [0.5, 12.7, 33.333, 61.4, 99.9]) {
+      for (const c of moveCut([10, 20, 30, 40, 50], 2, pct)) {
+        expect(Number.isInteger(c)).toBe(true);
+      }
+    }
   });
 
   it('pushes later cuts rather than crossing them', () => {
@@ -186,7 +198,7 @@ describe('levelMix — nudge', () => {
   });
 
   it('runs the trade backwards on a negative delta', () => {
-    const mix = cutsToMix(nudge(mixToCuts(DEFAULT), 2, -MIX_STEP));
+    const mix = cutsToMix(nudge(mixToCuts(DEFAULT), 2, -MIX_NUDGE_STEP));
     expect(mix.B1).toBe(65);
     // The largest other level receives it — B2 at 20.
     expect(mix.B2).toBe(25);
@@ -202,7 +214,27 @@ describe('levelMix — nudge', () => {
 
   it('is a no-op when the level has nothing to give back', () => {
     const cuts = mixToCuts(DEFAULT);
-    expect(nudge(cuts, MIX_LEVELS.indexOf('A1'), -MIX_STEP)).toEqual(cuts);
+    expect(nudge(cuts, MIX_LEVELS.indexOf('A1'), -MIX_NUDGE_STEP)).toEqual(cuts);
+  });
+
+  it('taps in MIX_NUDGE_STEP, not the drag step', () => {
+    // The two are independent on purpose. If the tap ever followed MIX_STEP,
+    // a chip press would move the mix by 1% — twenty presses to shift a
+    // single card, which is not a control anybody would use.
+    const mix = cutsToMix(nudge(mixToCuts(DEFAULT), MIX_LEVELS.indexOf('C1')));
+    expect(mix.C1).toBe(10 + MIX_NUDGE_STEP);
+    expect(MIX_NUDGE_STEP).toBeGreaterThan(MIX_STEP);
+  });
+
+  it('is worth exactly one card of a 20-card page', () => {
+    // The reason MIX_NUDGE_STEP is 5 and not any other round number: 100/5
+    // is the page size, so one tap is one card the user can actually see
+    // arrive. This breaks loudly if FEED_PAGE_SIZE ever moves.
+    const before = pageCounts(DEFAULT, 20);
+    const after = pageCounts(cutsToMix(nudge(mixToCuts(DEFAULT), MIX_LEVELS.indexOf('C1'))), 20);
+    const c1 = (counts: ReturnType<typeof pageCounts>) =>
+      counts.find((entry) => entry.level === 'C1')?.count ?? 0;
+    expect(c1(after) - c1(before)).toBe(1);
   });
 });
 
@@ -357,9 +389,41 @@ describe('levelMix — thin-level note', () => {
     expect(mixShortfall({ B1: 100 }, { B1: 20 })).toBeNull();
   });
 
+  it('holds the "asked for it" floor at one tap, not one drag step', () => {
+    // A share below one tap is worth less than a card of the page, so an
+    // empty result for it is not news. Tied to MIX_NUDGE_STEP rather than
+    // MIX_STEP: at 1% the note would fire for a fifth of a card.
+    expect(mixShortfall({ A1: 3, B1: 97 }, { B1: 20 })).toBeNull();
+    expect(mixShortfall({ A1: MIX_NUDGE_STEP, B1: 95 }, { B1: 20 })).toEqual({
+      short: 'A1',
+      from: 'B1',
+    });
+  });
+
   it('names the largest shortfall when several levels came back empty', () => {
     const note = mixShortfall({ A1: 10, A2: 30, B1: 60 }, { B1: 20 });
     expect(note).toEqual({ short: 'A2', from: 'B1' });
+  });
+});
+
+describe('levelMix — sameMix', () => {
+  it('reads a missing level as 0, so the legacy shape matches the six-level one', () => {
+    // The case the helper exists for: AsyncStorage holds the old four-level
+    // object, the panel emits all six. Structurally different, same feed.
+    expect(sameMix(LEGACY, DEFAULT)).toBe(true);
+    expect(sameMix({ B1: 100 }, { A1: 0, A2: 0, B1: 100, B2: 0, C1: 0, C2: 0 })).toBe(true);
+  });
+
+  it('sees a one-percent move as a change', () => {
+    // The drag step is 1, so this is the smallest thing the guard must not
+    // swallow — dedupe that rounds would silently drop a real edit.
+    expect(sameMix(DEFAULT, { ...DEFAULT, B1: 69, B2: 21 })).toBe(false);
+  });
+
+  it('is symmetric and handles an empty object', () => {
+    expect(sameMix(DEFAULT, {})).toBe(false);
+    expect(sameMix({}, DEFAULT)).toBe(false);
+    expect(sameMix({}, {})).toBe(true);
   });
 });
 

@@ -29,7 +29,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
 import { useListsStore } from './listsStore';
-import { cutsToMix, defaultMixForLevel, isBalanced, mixToCuts } from '../utils/levelMix';
+import { cutsToMix, defaultMixForLevel, isBalanced, mixToCuts, sameMix } from '../utils/levelMix';
 import { randomToken, shuffle } from '../utils/random';
 
 const MIX_KEY = 'feedLevelMix';
@@ -271,11 +271,21 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     // legal feed state — the server rejects it, so stop here.
     if (!isBalanced(mix)) return;
 
+    // Deliberately before the early return: the mix held in memory on a first
+    // run is a default nobody has written yet, so an unchanged Done is still
+    // the moment to make it durable.
     try {
       await AsyncStorage.setItem(MIX_KEY, JSON.stringify(mix));
     } catch {
       // Persisting is best-effort; the mix still applies this session.
     }
+
+    // Opening the panel, changing nothing, and tapping Done must not cost the
+    // user their place. Everything below throws the deck away and refetches,
+    // which is right when the proportions moved and pure destruction when they
+    // did not — and it is what lets the reload *mean* "your change landed"
+    // instead of firing whether or not anything happened.
+    if (sameMix(mix, get().mix)) return;
 
     // The buffer holds the previous mix's levels, so restoring it next
     // launch would contradict the proportions just dialled in. A new seed

@@ -26,9 +26,29 @@ export const MIX_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 
 export type MixLevel = (typeof MIX_LEVELS)[number];
 
-/** Every control moves in 5% detents — finer than that is fiddly on a bar a
- *  phone wide, and one detent is exactly one card of a 20-card page. */
-export const MIX_STEP = 5;
+/**
+ * The bar's own resolution: dragging commits whole percents.
+ *
+ * There are deliberately **two** steps here, because a drag and a tap are
+ * asking different questions. A drag is aiming — the finger is already on the
+ * exact spot it wants, and a coarse detent fights it. On a bar a phone wide 1%
+ * is ~3.3pt, fine enough that the divider tracks the finger and coarse enough
+ * that nothing but integers ever reach the wire (the server parses shares with
+ * `int()`, so floats must not leak out of the panel).
+ */
+export const MIX_STEP = 1;
+
+/**
+ * What one *tap* is worth — the legend chip, VoiceOver's increment, and the
+ * floor under "did the user really ask for this level?".
+ *
+ * 5 because a page is 20 cards and 100/5 = 20, so one tap is exactly one card
+ * of the next page: tap B1 once and the page provably comes back with one more
+ * B1 in it. A tap has no aim of its own, so it should be worth something you
+ * can see; that is precisely one card. Kept independent of MIX_STEP so making
+ * the drag finer never quietly makes the tap useless.
+ */
+export const MIX_NUDGE_STEP = 5;
 
 export const MIX_TOTAL = 100;
 
@@ -163,7 +183,7 @@ export function moveCut(cuts: MixCuts, index: number, valuePct: number): MixCuts
  * Ties break toward the *higher* CEFR level, so nudging A1 does not keep
  * gutting B1 while B2 sits at the same share.
  */
-export function nudge(cuts: MixCuts, levelIndex: number, delta: number = MIX_STEP): MixCuts {
+export function nudge(cuts: MixCuts, levelIndex: number, delta: number = MIX_NUDGE_STEP): MixCuts {
   const ordered = orderCuts(cuts);
   const mix = cutsToMix(ordered);
   const shares = MIX_LEVELS.map((level) => mix[level] ?? 0);
@@ -226,6 +246,21 @@ export function defaultMixForLevel(level: string | null | undefined): LevelMix {
   if (overflow > 0) mix[MIX_LEVELS[MIX_LEVELS.length - 1]] += overflow;
 
   return mix;
+}
+
+/**
+ * Do these two mixes mean the same thing?
+ *
+ * Compared over MIX_LEVELS with a missing level read as 0, which is the whole
+ * reason this isn't a deep-equal at the call site: a mix restored from the
+ * previous build is `{A2,B1,B2,C1}` while the panel always emits all six, so
+ * `{B1:70,B2:20,C1:10}` and `{A1:0,…,C2:0}` are structurally different objects
+ * that describe an identical feed. Anything keying off "did the mix change"
+ * would otherwise fire on every Done for exactly the users who never changed
+ * anything.
+ */
+export function sameMix(a: LevelMix, b: LevelMix): boolean {
+  return MIX_LEVELS.every((level) => (a?.[level] ?? 0) === (b?.[level] ?? 0));
 }
 
 /** Guard for anything read back from storage or handed to the server. The UI
@@ -301,8 +336,10 @@ export function mixShortfall(requested: LevelMix, applied: LevelMix): MixShortfa
 
   let short: MixLevel | null = null;
   for (const level of MIX_LEVELS) {
-    // Below one detent the user did not really ask for the level.
-    if ((requested[level] ?? 0) < MIX_STEP) continue;
+    // Below one *tap* the user did not really ask for the level. Deliberately
+    // MIX_NUDGE_STEP and not MIX_STEP: at 1% this would fire the "running low"
+    // note for a share worth a fifth of a card, which is noise, not truth.
+    if ((requested[level] ?? 0) < MIX_NUDGE_STEP) continue;
     if ((applied[level] ?? 0) > 0) continue;
     if (short === null || (requested[level] ?? 0) > (requested[short] ?? 0)) short = level;
   }

@@ -308,6 +308,55 @@ describe('wordFeedStore', () => {
       expect(useWordFeedStore.getState().items.map((i) => i.lemma_id)).toEqual([9]);
     });
 
+    it('keeps the deck when Done commits a mix that did not change', async () => {
+      mockFeed.mockResolvedValue(page([item(1), item(2)]));
+      await useWordFeedStore.getState().fetchNext();
+      useWordFeedStore.getState().setActiveIndex(1);
+      mockFeed.mockClear();
+
+      // What the panel emits for the legacy four-level mix the store holds:
+      // same feed, six-level shape. Opening the panel and tapping Done must
+      // not throw away the deck or the user's place in it.
+      await useWordFeedStore.getState().setMix({
+        A1: 0, A2: 0, B1: 70, B2: 20, C1: 10, C2: 0,
+      });
+
+      expect(mockFeed).not.toHaveBeenCalled();
+      expect(ids()).toEqual([1, 2]);
+      expect(useWordFeedStore.getState().activeIndex).toBe(1);
+    });
+
+    it('still persists an unchanged mix, which a first run has never written', async () => {
+      // The in-memory mix on a first run is a default nobody stored, so the
+      // write has to happen before the no-change bail.
+      expect(await AsyncStorage.getItem(MIX_KEY)).toBeNull();
+
+      await useWordFeedStore.getState().setMix({
+        A1: 0, A2: 0, B1: 70, B2: 20, C1: 10, C2: 0,
+      });
+
+      expect(JSON.parse((await AsyncStorage.getItem(MIX_KEY))!)).toEqual({
+        A1: 0, A2: 0, B1: 70, B2: 20, C1: 10, C2: 0,
+      });
+      expect(mockFeed).not.toHaveBeenCalled();
+    });
+
+    it('still reloads on a one-percent change', async () => {
+      // The drag commits whole percents, so this is the smallest real edit.
+      // A dedupe that swallowed it would strand the user on the old deck.
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().fetchNext();
+      mockFeed.mockClear();
+      mockFeed.mockResolvedValue(page([item(9)]));
+
+      await useWordFeedStore.getState().setMix({
+        A1: 0, A2: 0, B1: 69, B2: 21, C1: 10, C2: 0,
+      });
+
+      expect(mockFeed).toHaveBeenCalledWith(expect.objectContaining({ offset: 0 }));
+      expect(ids()).toEqual([9]);
+    });
+
     it('rejects a mix that does not total 100', async () => {
       await useWordFeedStore.getState().setMix({ A2: 0, B1: 70, B2: 20, C1: 0 });
 

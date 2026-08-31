@@ -32,7 +32,7 @@ import { useColorScheme, useThemeColors, withAlpha, type ThemeColors } from '../
 import type { LevelMix } from '../../services/api';
 import {
   MIX_LEVELS,
-  MIX_STEP,
+  MIX_NUDGE_STEP,
   cutsToMix,
   mixShortfall,
   mixToCuts,
@@ -118,6 +118,15 @@ export function MixPanel({
   const shares = MIX_LEVELS.map((level) => mix[level] ?? 0);
   const counts = useMemo(() => pageCounts(mix, FEED_PAGE_SIZE), [mix]);
 
+  /** A move mid-drag repaints the bar and nothing else. The parent holds the
+   *  draft that Done commits, and it does not need a new one sixty times a
+   *  second for a divider the finger has not finished aiming — that is one
+   *  ExploreScreen render per touch event to show a value about to change. */
+  function preview(next: MixCuts) {
+    setCuts(next);
+  }
+
+  /** Where the finger stopped, or a tap: the parent hears about this one. */
   function apply(next: MixCuts) {
     setCuts(next);
     onChange(cutsToMix(next));
@@ -160,7 +169,8 @@ export function MixPanel({
         cuts={cuts}
         shares={shares}
         barHeight={layout.barHeight}
-        onCuts={apply}
+        onCuts={preview}
+        onCommit={apply}
         scheme={scheme}
         tc={tc}
         s={s}
@@ -175,14 +185,14 @@ export function MixPanel({
             // than padding, so the legend row stays 30pt tall in the budget.
             hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
             activeOpacity={0.6}
-            onPress={() => apply(nudge(cuts, i, MIX_STEP))}
+            onPress={() => apply(nudge(cuts, i, MIX_NUDGE_STEP))}
             // VoiceOver never touches the bar; the chips are the control.
             accessibilityRole="adjustable"
             accessibilityLabel={`${level} share`}
             accessibilityValue={{ min: 0, max: 100, now: shares[i] }}
             accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
             onAccessibilityAction={(e) => {
-              const dir = e.nativeEvent.actionName === 'decrement' ? -MIX_STEP : MIX_STEP;
+              const dir = e.nativeEvent.actionName === 'decrement' ? -MIX_NUDGE_STEP : MIX_NUDGE_STEP;
               apply(nudge(cuts, i, dir));
             }}
           >
@@ -224,6 +234,7 @@ function CompositionBar({
   shares,
   barHeight,
   onCuts,
+  onCommit,
   scheme,
   tc,
   s,
@@ -231,7 +242,10 @@ function CompositionBar({
   cuts: MixCuts;
   shares: number[];
   barHeight: number;
+  /** Every move of the finger — repaint only. */
   onCuts: (cuts: MixCuts) => void;
+  /** Once, where the finger stopped. */
+  onCommit: (cuts: MixCuts) => void;
   scheme: 'light' | 'dark';
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
@@ -240,8 +254,8 @@ function CompositionBar({
 
   // PanResponder is built once, so it must read the live cuts and width
   // rather than the values captured at creation time.
-  const latest = useRef({ cuts, barWidth, onCuts, index: 0 });
-  latest.current = { ...latest.current, cuts, barWidth, onCuts };
+  const latest = useRef({ cuts, barWidth, onCuts, onCommit, index: 0 });
+  latest.current = { ...latest.current, cuts, barWidth, onCuts, onCommit };
 
   const pan = useRef(
     PanResponder.create({
@@ -262,6 +276,13 @@ function CompositionBar({
         const pct = toPercent(e.nativeEvent.locationX);
         if (pct !== null) drag(pct);
       },
+      // The drag has only been repainting; this is the one place the mix the
+      // user aimed at leaves the bar. Terminate matters as much as Release:
+      // a gesture cancelled by the panel closing or a system sheet taking the
+      // touch would otherwise strand the parent on a pre-drag draft while the
+      // bar shows the dragged one.
+      onPanResponderRelease: () => commit(),
+      onPanResponderTerminate: () => commit(),
     }),
   ).current;
 
@@ -276,7 +297,17 @@ function CompositionBar({
 
   function drag(pct: number) {
     const { cuts: c, onCuts: cb, index } = latest.current;
-    cb(moveCut(c, index, pct));
+    const next = moveCut(c, index, pct);
+    // Written to the ref rather than waiting to read it back off the next
+    // render: `commit` fires from the release event and must see the last
+    // move, not whatever the last completed render happened to hold.
+    latest.current.cuts = next;
+    cb(next);
+  }
+
+  function commit() {
+    const { cuts: c, onCommit: cb } = latest.current;
+    cb(c);
   }
 
   return (
@@ -513,8 +544,11 @@ const makeStyles = (tc: ThemeColors) =>
       justifyContent: 'space-between',
       gap: 10,
     },
-    // Cards, not percentages: one 5% detent is exactly one card of a 20-card
-    // page, so the thing the user is dragging is legible in what they'll get.
+    // Cards, not percentages: one tap (MIX_NUDGE_STEP) is exactly one card of
+    // a 20-card page, so the thing the user is dragging is legible in what
+    // they'll get. A drag moves in whole percents and so crosses a card
+    // boundary every fifth one — the read-out holding still between those is
+    // the truth about the next page, not the bar failing to respond.
     readout: {
       flex: 1,
       fontSize: 10.5,
