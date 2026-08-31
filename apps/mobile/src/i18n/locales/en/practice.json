@@ -5,9 +5,6 @@
   "freeze_other": "FREEZES",
   "dayLabel_one": "DAY",
   "dayLabel_other": "DAYS",
-  "tile": {
-    "practice": "Practice"
-  },
   "title": "Practice",
   "lesson": "LESSON {{number}}"
 }

@@ -6,8 +6,5 @@
   "freeze_other": "DONDURMA",
   "lesson": "DERS {{number}}",
   "pathHeading": "PRATİK YOLUNUZ",
-  "tile": {
-    "practice": "Pratik"
-  },
   "title": "Pratik"
 }

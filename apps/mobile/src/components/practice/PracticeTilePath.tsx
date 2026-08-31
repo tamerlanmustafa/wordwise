@@ -27,7 +27,6 @@
 import { Fragment, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { useTranslation } from 'react-i18next';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 /** Total tiles rendered at once. */
@@ -100,7 +99,6 @@ export function PracticeTilePath({
   cursor,
   onTilePress,
 }: PracticeTilePathProps) {
-  const { t } = useTranslation();
   const tiles = useMemo<RenderedTile[]>(
     () => buildWindow(cursor),
     [cursor],
@@ -131,7 +129,6 @@ export function PracticeTilePath({
             ) : null}
             <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
               <PracticeTile
-                label={t('practice:tile.practice')}
                 state={tile.state}
                 onPress={() => onTilePress(tile.index)}
               />

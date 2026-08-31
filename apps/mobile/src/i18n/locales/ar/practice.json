@@ -13,9 +13,6 @@
   "dayLabel_few": "أيام",
   "dayLabel_many": "يومًا",
   "dayLabel_other": "يوم",
-  "tile": {
-    "practice": "تدريب"
-  },
   "title": "التدريب",
   "lesson": "الدرس {{number}}"
 }

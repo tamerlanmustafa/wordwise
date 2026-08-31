@@ -10,8 +10,5 @@
   "freeze_other": "ЗАМОРОЗКИ",
   "lesson": "УРОК {{number}}",
   "pathHeading": "ВАШ ПУТЬ ПРАКТИКИ",
-  "tile": {
-    "practice": "Практика"
-  },
   "title": "Практика"
 }

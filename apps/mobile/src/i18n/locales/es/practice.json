@@ -6,8 +6,5 @@
   "freeze_other": "CONGELACIONES",
   "lesson": "LECCIÓN {{number}}",
   "pathHeading": "TU RUTA DE PRÁCTICA",
-  "tile": {
-    "practice": "Práctica"
-  },
   "title": "Práctica"
 }

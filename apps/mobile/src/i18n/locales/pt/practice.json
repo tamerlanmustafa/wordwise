@@ -6,8 +6,5 @@
   "freeze_other": "CONGELAMENTOS",
   "lesson": "LIÇÃO {{number}}",
   "pathHeading": "SEU PERCURSO DE PRÁTICA",
-  "tile": {
-    "practice": "Prática"
-  },
   "title": "Prática"
 }

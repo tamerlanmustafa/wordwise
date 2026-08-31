@@ -1,8 +1,8 @@
 /**
  * PracticeTile — v0.7.3 Practice-tab tile (Duolingo-style path).
  *
- * A single 60px circle with a kind glyph + a label below. Four visual
- * states, derived by the parent path component from the cursor:
+ * A single 60px circle with a glyph. Four visual states, derived by the
+ * parent path component from the cursor:
  *
  *   • active    → gold bg, lesson glyph, spinning dashed ring, START
  *                 callout. Tappable. Exactly one of these per render.
@@ -40,14 +40,11 @@ export type PracticeTileState =
   | 'repair';
 
 export interface PracticeTileProps {
-  /** Title shown under the circle (e.g. "Practice"). */
-  label: string;
   state: PracticeTileState;
   onPress?: () => void;
 }
 
 export function PracticeTile({
-  label,
   state,
   onPress,
 }: PracticeTileProps) {
@@ -192,13 +189,6 @@ export function PracticeTile({
               </View>
             ) : null}
           </View>
-
-          <Text
-            style={[s.label, { color: state === 'active' ? tc.text : tc.textFaint }]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
         </>
       )}
     </Pressable>
@@ -268,6 +258,13 @@ const makeStyles = (_tc: ThemeColors) =>
     hit: {
       alignItems: 'center',
       paddingHorizontal: 4,
+      // The START callout is absolutely positioned inside circleWrap and
+      // hangs ~23px past its bottom edge, so the tile has to reserve that
+      // space or the callout lands on top of the connector dots below.
+      // Applied to every state, not just 'active': an active-only padding
+      // would change the tile's height as the cursor moves and make the
+      // whole path jump. This used to be the label's marginTop.
+      paddingBottom: 26,
     },
     circleWrap: {
       width: 76,
@@ -341,16 +338,5 @@ const makeStyles = (_tc: ThemeColors) =>
       fontSize: 10,
       fontWeight: '900',
       letterSpacing: 1.2,
-    },
-    label: {
-      // 28px clears the absolute-positioned START callout on the
-      // active tile (callout extends ~24px below the circle); all
-      // other states have a benign empty space below the circle, so
-      // the uniform margin keeps the path visually evenly spaced.
-      marginTop: 28,
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0.3,
-      textAlign: 'center',
     },
   });
