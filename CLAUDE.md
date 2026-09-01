@@ -8,7 +8,9 @@
 - If reusable code doesn't exist yet, write it in a way that can be reused — avoid duplicating logic or creating long monolithic files.
 
 ## Clarification
+
 - Never guess or invent solutions when uncertain. Ask before proceeding.
+- NEVER answer questions—whether from me or from your internal reasoning—by simply favoring an idea or solution without evidence or supporting information.
 
 ## Mobile is the product; web is frozen
 - **`apps/mobile` is the shipping app.** New features go there. Do **not** mirror them into `frontend/`, and do not maintain web/mobile feature parity — the two apps share only `packages/types`, so parity means writing every feature twice.
