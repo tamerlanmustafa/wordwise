@@ -184,7 +184,16 @@ const makeStyles = (tc: ThemeColors) =>
     root: {
       flex: 1,
     },
+    // `flexGrow` lets the content container fill the space between the header
+    // and the CTA bar, so `justifyContent` can centre the card in it. Without
+    // the grow the container is only as tall as its content and the word +
+    // answer grid sit hard against the header, leaving the bottom third of a
+    // modern phone empty. Still a ScrollView: once the content is taller than
+    // the gap — a long example sentence, large text sizes, the NOT QUITE
+    // callout — it scrolls from the top as before instead of clipping.
     body: {
+      flexGrow: 1,
+      justifyContent: 'center',
       paddingHorizontal: 18,
       paddingTop: 4,
       paddingBottom: 24,

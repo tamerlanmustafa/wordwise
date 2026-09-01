@@ -52,6 +52,8 @@ import { useReelStore } from '../stores/reelStore';
 import { useWordFeedStore } from '../stores/wordFeedStore';
 import type { Screen, ListFilter, MovieData, ListSummary } from './types';
 import { PARENT_OF, PROFILE_SHEET } from './navParents';
+import { quizReturnScreen, type QuizOriginKind } from './quizReturn';
+import { SwipeBackView } from '../components/common/SwipeBackView';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
 import { LoginScreen } from '../components/screens/LoginScreen';
@@ -504,18 +506,22 @@ export default function App() {
       // 'explore' is deliberately absent: back from the feed lands on Home
       // rather than exiting the app, since it's a browsing surface rather
       // than the app's root.
-      const rootTabs: Screen[] = ['home', 'journey', 'practice', 'lists'];
+      const rootTabs: Screen[] = ['home', 'practice', 'lists'];
       if (authed && !rootTabs.includes(currentScreen)) {
-        // Account screens have a real parent — go there, exactly as the
-        // on-screen Back does. Everything else still unwinds to Home.
-        if (!goToParent(currentScreen)) navigateToHome();
+        // Same resolver the header chevron and the edge swipe use, so the
+        // hardware button can no longer disagree with them — it used to send
+        // every non-account screen to Home, abandoning a quiz mid-flow and
+        // stranding its session state.
+        const back = resolveBackRef.current(currentScreen);
+        if (back) back();
+        else navigateToHome();
         return true;
       }
       return false; // on a root tab (or login) — let Android do its default
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
     return () => sub.remove();
-  }, [currentScreen, showUserSheet, showNotifSheet, status, goToParent]);
+  }, [currentScreen, showUserSheet, showNotifSheet, status]);
 
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
@@ -605,11 +611,15 @@ export default function App() {
     }
   };
 
+  // Both hub exits return to the reel the hub was opened from. They used to
+  // route to the legacy 'journey' screen, which no tab lights up and which
+  // renders the Explore feed in its inactive state — so backing out of a film
+  // dropped the user on a dead surface instead of the list they came from.
   const handleHubRemove = async () => {
     if (!activePreviewTile) return;
     const tmdbId = activePreviewTile.tile.tmdb_id;
     setActivePreviewTile(null);
-    setCurrentScreen('journey');
+    setCurrentScreen('savedMovies');
     try {
       await useReelStore.getState().remove(tmdbId);
     } catch (err: any) {
@@ -619,7 +629,7 @@ export default function App() {
 
   const handleHubBack = () => {
     setActivePreviewTile(null);
-    setCurrentScreen('journey');
+    setCurrentScreen('savedMovies');
   };
 
   // Start a journey quiz from the MovieDetailScreen's "Quiz me" pill.
@@ -655,20 +665,6 @@ export default function App() {
     setQuizSession({ session, level, movieTitle: movie.title });
     setCurrentScreen('quizLesson');
   };
-
-  const handleSetIntroBack = () => {
-    setSetIntroData(null);
-    // Drop back to wherever the quiz was started from.
-    const src = quizSourceRef.current;
-    if (src?.kind === 'movie-detail') {
-      setCurrentScreen('movieDetail');
-    } else if (activePreviewTile) {
-      setCurrentScreen('moviePreview');
-    } else {
-      setCurrentScreen('journey');
-    }
-  };
-
 
   const handleQuizSessionStart = (session: QuizStartSessionResponse, level: string) => {
     setQuizSession({
@@ -717,25 +713,87 @@ export default function App() {
     setCurrentScreen('quizResult');
   };
 
-  const handleQuizResultDone = () => {
+  // Every way out of the quiz — backing out of the Set Intro, quitting a lesson
+  // mid-deck, dismissing the result, Android back, the edge swipe — unwinds
+  // through this one function, so no two exits can disagree about where the
+  // flow came from. It clears the whole flow's state, not just its own screen's
+  // slice: leaving a stale session or source behind is what let the *next*
+  // quiz's result screen navigate somewhere the user had never been.
+  const leaveQuizFlow = () => {
+    const src = quizSourceRef.current;
+    quizSourceRef.current = null;
+    setSetIntroData(null);
     setQuizSession(null);
     setQuizResult(null);
     setJourneyResultMeta(null);
-    const src = quizSourceRef.current;
-    quizSourceRef.current = null;
-    if (src?.kind === 'reel-preview' && activePreviewTile) {
-      // Return to the same movie's preview hub so the user sees fresh
-      // stars/state for what they just quizzed.
-      setCurrentScreen('moviePreview');
-      return;
-    }
-    if (src?.kind === 'movie-detail') {
-      setCurrentScreen('movieDetail');
-      return;
-    }
-    if (batch) setCurrentScreen('quizBatchJourney');
-    else setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
+    // Returning to the preview hub also refreshes the stars/state for the film
+    // that was just quizzed, which is why the origin is preferred over Home.
+    setCurrentScreen(
+      quizReturnScreen({
+        origin: (src?.kind ?? null) as QuizOriginKind | null,
+        hasPreviewTile: !!activePreviewTile,
+        hasSelectedMovie: !!selectedMovie,
+      }),
+    );
   };
+
+  const handleSetIntroBack = () => leaveQuizFlow();
+  const handleQuizExit = () => leaveQuizFlow();
+  const handleQuizResultDone = () => leaveQuizFlow();
+
+  const handleMovieDetailBack = () => {
+    // If we came from the reel preview hub, return there; otherwise drop back
+    // to Home as before.
+    if (activePreviewTile) setCurrentScreen('moviePreview');
+    else navigateToHome();
+  };
+
+  // ── One answer to "where does Back go from here" ──────────────────────
+  // `PARENT_OF` already unified the account area, but its answers are static
+  // and the flows below choose at runtime (which film, which quiz origin, which
+  // list started the review). They stayed hand-wired per call site, so the
+  // header chevron, Android's back button and the new edge swipe could each
+  // send the user somewhere different from the same screen. Everything now
+  // resolves here; `null` means the screen is a root and Back does nothing.
+  const resolveBack = (from: Screen): (() => void) | null => {
+    switch (from) {
+      // Quiz flow — all three exits share leaveQuizFlow.
+      case 'setIntro':
+        return handleSetIntroBack;
+      case 'quizLesson':
+        return handleQuizExit;
+      case 'quizResult':
+        return handleQuizResultDone;
+      case 'moviePreview':
+        return handleHubBack;
+      case 'movieDetail':
+        return handleMovieDetailBack;
+      case 'searchResults':
+        return navigateToHome;
+      case 'addToReel':
+        return navigateToSavedMovies;
+      case 'review':
+        return reviewLaunch.listId ? navigateToLists : navigateToHome;
+      case 'paywall':
+        return navigateToHome;
+      // Orphaned by the v0.7 nav and unreachable, but if anything ever lands
+      // here there has to be a way out — QuizJourneyScreen renders no back
+      // control of its own.
+      case 'quizJourney':
+        return () => setCurrentScreen('movieDetail');
+      case 'quizBatchJourney':
+        return () => setCurrentScreen('quizBatchBuilder');
+      case 'quizBatchBuilder':
+        return navigateToHome;
+      default:
+        return PARENT_OF[from] ? () => goToParent(from) : null;
+    }
+  };
+
+  // Read by the hardware-back listener, which is registered once per screen
+  // rather than re-subscribed on every render just to see fresh handlers.
+  const resolveBackRef = useRef(resolveBack);
+  resolveBackRef.current = resolveBack;
 
   const handleUserUpdated = (updatedUser: any) => {
     // PATCH /auth/me returns a camelCase payload but the app reads snake_case
@@ -812,16 +870,18 @@ export default function App() {
       case 'lists':
       case 'listDetail':
         return 'lists';
-      // Movie preview is reached from Home's ranked list (and from the
-      // saved reel in the Profile sheet), so Home keeps the highlight.
+      // The preview hub is only reachable through the saved reel, which now
+      // hangs off the Profile sheet — so Profile keeps the highlight. It used
+      // to light Home, from a Home entry point that no longer exists.
       case 'moviePreview':
-        return 'home';
-      // Practice tab owns the daily SRS habit + per-movie lesson nodes.
-      // Set intro / quiz / review all originate from Practice now.
+        return 'profile';
+      // Practice tab owns the daily SRS habit.
       case 'practice':
-      case 'setIntro':
       case 'review':
         return 'practice';
+      // Set intro / lesson / result are a full-screen flow reached from either
+      // the preview hub or a film's detail screen, so no single tab owns them.
+      // Lighting Practice was a leftover from when the path started there.
       // Account / profile-area screens are all reached from the Profile sheet,
       // so keep the Profile tab lit while they're open (UX audit F-006).
       case 'settings':
@@ -853,7 +913,10 @@ export default function App() {
       ) : isAuthenticated && !onboardingDone ? (
         <OnboardingFlow initialLanguage={targetLanguage} onLanguageChange={setTargetLanguage} />
       ) : isAuthenticated ? (
-        <View style={{ flex: 1 }}>
+        // Themed ground under every layer. It is what the back swipe uncovers
+        // when the screen it dismisses isn't sitting on top of a live tab, so
+        // the gesture never flashes a bare white window in dark mode.
+        <View style={{ flex: 1, backgroundColor: tc.background }}>
         {/* Persistent bottom-tab layer. Each tab is mounted lazily on first
             visit and then kept alive (hidden via display:none) so switching
             tabs — or opening a detail screen and pressing back — retains its
@@ -885,6 +948,11 @@ export default function App() {
           />
         </KeepAlive>
 
+        {/* Deep screens, plus the edge-swipe-back gesture that dismisses them.
+            The swipe reads the same `resolveBack` the header chevron and
+            Android's back button do, so all three land in the same place; it
+            goes inert on a root tab, where the ternary renders nothing. */}
+        <SwipeBackView screenKey={currentScreen} onBack={resolveBack(currentScreen)}>
         {currentScreen === 'settings' ? (
           <SettingsScreen onBack={backFrom('settings')} backLabel={backLabelFor('settings')} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
         ) : currentScreen === 'vocabulary' ? (
@@ -968,7 +1036,7 @@ export default function App() {
           <SearchResultsScreen
             query=""
             mode="addToReel"
-            onBack={() => setCurrentScreen('journey')}
+            onBack={navigateToSavedMovies}
             onMoviePress={() => {}}
           />
         ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
@@ -996,10 +1064,7 @@ export default function App() {
             session={quizSession.session}
             level={quizSession.level}
             movieTitle={quizSession.movieTitle}
-            onExit={() => {
-              setQuizSession(null);
-              setCurrentScreen(selectedMovie ? 'quizJourney' : 'home');
-            }}
+            onExit={handleQuizExit}
             onComplete={handleQuizComplete}
           />
         ) : currentScreen === 'quizResult' && quizResult ? (
@@ -1012,15 +1077,7 @@ export default function App() {
         ) : currentScreen === 'movieDetail' && selectedMovie ? (
           <MovieDetailScreen
             movie={selectedMovie}
-            onBack={() => {
-              // If we came from the reel preview hub, return there;
-              // otherwise drop back to home as before.
-              if (activePreviewTile) {
-                setCurrentScreen('moviePreview');
-              } else {
-                navigateToHome();
-              }
-            }}
+            onBack={handleMovieDetailBack}
             targetLanguage={targetLanguage}
             onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
           />
@@ -1032,6 +1089,7 @@ export default function App() {
           // nothing for them — the live tab shows through.
           null
         )}
+        </SwipeBackView>
         <UserMenuSheet
           visible={showUserSheet}
           onClose={() => setShowUserSheet(false)}
