@@ -3,12 +3,10 @@
   "dayLabel_many": "ДНЕЙ",
   "dayLabel_one": "ДЕНЬ",
   "dayLabel_other": "ДНЯ",
-  "eyebrow": "ЕЖЕДНЕВНАЯ ПРАКТИКА",
   "freeze_few": "ЗАМОРОЗКИ",
   "freeze_many": "ЗАМОРОЗОК",
   "freeze_one": "ЗАМОРОЗКА",
   "freeze_other": "ЗАМОРОЗКИ",
   "lesson": "УРОК {{number}}",
-  "pathHeading": "ВАШ ПУТЬ ПРАКТИКИ",
-  "title": "Практика"
+  "pathHeading": "ВАШ ПУТЬ ПРАКТИКИ"
 }

@@ -1,10 +1,8 @@
 {
   "dayLabel_one": "DIA",
   "dayLabel_other": "DIAS",
-  "eyebrow": "PRÁTICA DIÁRIA",
   "freeze_one": "CONGELAMENTO",
   "freeze_other": "CONGELAMENTOS",
   "lesson": "LIÇÃO {{number}}",
-  "pathHeading": "SEU PERCURSO DE PRÁTICA",
-  "title": "Prática"
+  "pathHeading": "SEU PERCURSO DE PRÁTICA"
 }

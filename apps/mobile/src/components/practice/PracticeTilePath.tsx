@@ -19,6 +19,13 @@
  *   • i == cursor → 'active'
  *   • i  > cursor → 'locked'
  *
+ * Vertical rhythm: the coins *are* the road. There used to be a trail of
+ * three dots drawn between every pair of them, which cost 26pt a row on top
+ * of the row's own padding and stretched the path so far that barely four
+ * tiles fitted on a phone screen. Tiles now sit {@link ROW_GAP} apart, which
+ * puts seven on screen at once — the density the path was designed for, and
+ * what makes it read as one continuous route rather than a sparse column.
+ *
  * The path itself doesn't know about session APIs or the free-tier daily
  * cap; the parent screen wires the tap of the active tile into the right
  * side-effects.
@@ -30,39 +37,27 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 /** Total tiles rendered at once. */
-const WINDOW_SIZE = 7;
+const WINDOW_SIZE = 9;
 /** How many completed tiles to show above the active one (capped by
  *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
 const COMPLETED_ABOVE = 2;
+/** Vertical gap between two coins. Sized so the active tile's START callout
+ *  lands *in* the gap rather than on the tile below it. */
+const ROW_GAP = 24;
 
-/** Gentle zigzag — same energy as the v0.7 reel offsets. Keyed on each
- *  tile's *absolute* index (see {@link offsetForIndex}) rather than its
- *  rendered slot, so the path's shape scrolls past as the cursor
- *  advances — the road moves, instead of the window showing an identical
- *  frozen shape every session. */
-const X_OFFSETS = [0, 24, -16, 12, -8, 18, -20];
+/** Horizontal sway of the road, as a smooth wave rather than a jitter: four
+ *  steps out and four back, so consecutive tiles lean into each other the way
+ *  a path bends. Keyed on each tile's *absolute* index (see
+ *  {@link offsetForIndex}) rather than its rendered slot, so the shape scrolls
+ *  past as the cursor advances — the road moves, instead of the window showing
+ *  an identical frozen shape every session. */
+const X_OFFSETS = [0, 28, 40, 28, 0, -28, -40, -28];
 
 /** Horizontal zigzag offset for a tile at absolute path index. Pure +
  *  exported for unit testing. */
 export function offsetForIndex(index: number): number {
   const n = X_OFFSETS.length;
   return X_OFFSETS[((index % n) + n) % n];
-}
-
-/** Dots drawn in the trail between two consecutive tiles. */
-export const CONNECTOR_DOTS = 3;
-
-/** X offsets for the connector dots between tiles `prevIndex` →
- *  `nextIndex`, stepping evenly between the two tiles' zigzag offsets
- *  so the trail leans toward the next circle instead of running
- *  straight down. Pure + exported for unit testing. */
-export function connectorXs(prevIndex: number, nextIndex: number): number[] {
-  const a = offsetForIndex(prevIndex);
-  const b = offsetForIndex(nextIndex);
-  return Array.from({ length: CONNECTOR_DOTS }, (_, i) => {
-    const t = (i + 1) / (CONNECTOR_DOTS + 1);
-    return Math.round(a + (b - a) * t);
-  });
 }
 
 /** How many tiles make up one "section" — the landmark cadence. A
@@ -108,26 +103,26 @@ export function PracticeTilePath({
     <View style={styles.wrap}>
       {tiles.map((tile, slot) => {
         const x = offsetForIndex(tile.index);
-        const prev = slot > 0 ? tiles[slot - 1] : null;
+        const startsSection = isSectionStart(tile.index);
         return (
           <Fragment key={tile.index}>
-            {isSectionStart(tile.index) ? (
+            {startsSection ? (
               <SectionDivider
                 section={sectionForIndex(tile.index)}
                 completed={cursor >= tile.index + SECTION_SIZE}
                 current={tile.index <= cursor && cursor < tile.index + SECTION_SIZE}
-              />
-            ) : prev ? (
-              // Dotted trail tying consecutive circles into one road.
-              // Skipped at section boundaries — the divider is the
-              // visual break there.
-              <PathConnector
-                prevIndex={prev.index}
-                nextIndex={tile.index}
-                walked={tile.index <= cursor}
+                first={slot === 0}
               />
             ) : null}
-            <View style={[styles.tileRow, { transform: [{ translateX: x }] }]}>
+            <View
+              style={[
+                styles.tileRow,
+                // The divider owns the space above the tile it introduces, so
+                // the row's own gap would double it.
+                slot > 0 && !startsSection && styles.tileGap,
+                { transform: [{ translateX: x }] },
+              ]}
+            >
               <PracticeTile
                 state={tile.state}
                 onPress={() => onTilePress(tile.index)}
@@ -140,40 +135,6 @@ export function PracticeTilePath({
   );
 }
 
-/** Three small dots between two tiles, leaning from the previous tile's
- *  x offset toward the next one's. Walked segments (up to and including
- *  the active tile) read gold; the road ahead stays faint. */
-function PathConnector({
-  prevIndex,
-  nextIndex,
-  walked,
-}: {
-  prevIndex: number;
-  nextIndex: number;
-  walked: boolean;
-}) {
-  const tc = useThemeColors();
-  const xs = connectorXs(prevIndex, nextIndex);
-  const color = walked ? tc.goldOnSurface : tc.textFaint;
-  return (
-    <View style={styles.connector} pointerEvents="none">
-      {xs.map((x, i) => (
-        <View
-          key={i}
-          style={[
-            styles.connectorDot,
-            {
-              backgroundColor: color,
-              opacity: walked ? 0.9 : 0.35,
-              transform: [{ translateX: x }],
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
 /** Checkpoint banner between sections. A completed section reads gold +
  *  checked (a landmark you've walked past); the section holding the
  *  cursor gets the bright gold accent; future sections stay faint. */
@@ -181,16 +142,19 @@ function SectionDivider({
   section,
   completed,
   current,
+  first,
 }: {
   section: number;
   completed: boolean;
   current: boolean;
+  /** Opening the window — no tile above it to be separated from. */
+  first: boolean;
 }) {
   const tc = useThemeColors();
   const ds = useMemo(() => makeDividerStyles(tc), [tc]);
   const accent = completed ? tc.goldOnSurface : current ? tc.gold : tc.textFaint;
   return (
-    <View style={ds.wrap}>
+    <View style={[ds.wrap, first && ds.wrapFirst]}>
       <View style={[ds.line, { backgroundColor: tc.border }]} />
       <View style={[ds.pill, { borderColor: accent, backgroundColor: tc.paper }]}>
         <Text style={[ds.label, { color: accent }]}>
@@ -222,23 +186,16 @@ export function buildWindow(cursor: number): RenderedTile[] {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingTop: 12,
+    paddingTop: 6,
     paddingBottom: 24,
-    // No flex gap — the space between rows is owned by the connector
-    // trail (or the section divider's margins at boundaries).
+    // No flex gap — the space between rows is owned by `tileGap` (or the
+    // section divider's margins at boundaries).
   },
   tileRow: {
     alignItems: 'center',
   },
-  connector: {
-    height: 26,
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-  },
-  connectorDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+  tileGap: {
+    marginTop: ROW_GAP,
   },
 });
 
@@ -249,8 +206,14 @@ const makeDividerStyles = (_tc: ThemeColors) =>
       alignItems: 'center',
       gap: 10,
       paddingHorizontal: 4,
-      // Owns its own breathing room now that the path has no flex gap.
-      marginVertical: 14,
+      // Owns its own breathing room now that the path has no flex gap. The
+      // active tile's START callout can hang into the space above a divider,
+      // so the top margin is the larger of the two.
+      marginTop: ROW_GAP + 4,
+      marginBottom: 8,
+    },
+    wrapFirst: {
+      marginTop: 0,
     },
     line: {
       flex: 1,

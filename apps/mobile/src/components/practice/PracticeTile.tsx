@@ -1,16 +1,16 @@
 /**
  * PracticeTile — v0.7.3 Practice-tab tile (Duolingo-style path).
  *
- * A single 60px circle with a glyph. Four visual states, derived by the
- * parent path component from the cursor:
+ * One pressable coin with a glyph. Four visual states, derived by the parent
+ * path component from the cursor:
  *
- *   • active    → gold bg, lesson glyph, spinning dashed ring, START
- *                 callout. Tappable. Exactly one of these per render.
+ *   • active    → gold coin, lesson glyph, a slowly turning ring of dots,
+ *                 START callout. Tappable. Exactly one per render.
  *                 (= cursor position)
- *   • completed → gold bg + check glyph, faded. Past tiles already done.
- *   • locked    → dim, lesson glyph, no badge. Future tiles — unlocks
- *                 when the user reaches them by walking the path.
- *   • repair    → red bg, alarm glyph, RESCUE STREAK callout.
+ *   • completed → gold coin + check glyph, slightly receded. Past tiles.
+ *   • locked    → matte stone coin, lesson glyph, no badge. Future tiles —
+ *                 unlocked by walking the path to them.
+ *   • repair    → red coin, alarm glyph, RESCUE STREAK callout.
  *                 (Reserved — pseudo-tile injected when
  *                 repair_window_active. Not yet implemented as a
  *                 real tappable flow; v1 just renders the visual.)
@@ -18,20 +18,19 @@
  * Every tile is the same lesson, so they share one glyph — a speech
  * bubble, the v0.7 "say it back to me" mark. The path used to give each
  * of three rotating kinds its own glyph (flame for tough words, a film
- * reel for the movie deep-dive); those kinds are gone. All stroked SVGs
- * at 24px inside the 60px body.
+ * reel for the movie deep-dive); those kinds are gone.
  *
- * Depth: each circle is a two-layer "button" — a face over a darker
- * bottom edge (Duolingo-style 3D lip). Pressing the active tile pushes
- * the face down onto its edge, so the tap physically depresses the
- * button instead of just dimming it. The edge replaces the old
- * hard-offset shadow, which rendered differently on iOS vs Android.
+ * The 3D body itself lives in {@link TileCoin} and the ring in
+ * {@link TileRing}; this file owns the state → colour mapping, the two
+ * animations, and the callout.
  */
 
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import { Path, Rect } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { COIN_BLOCK, COIN_H, TileCoin } from './TileCoin';
+import { RING_SIZE, TileRing } from './TileRing';
 
 export type PracticeTileState =
   | 'active'
@@ -51,8 +50,8 @@ export function PracticeTile({
   const tc = useThemeColors();
   const s = makeStyles(tc);
 
-  // Active-state spinning dashed ring — same Reanimated-style loop the
-  // archived LessonNode used. 18s/360°.
+  // Active-state turning ring — same Reanimated-style loop the archived
+  // LessonNode used. 18s/360°.
   const rotate = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (state !== 'active') return;
@@ -111,12 +110,12 @@ export function PracticeTile({
   const tappable = state === 'active';
 
   const isGold = state === 'active' || state === 'completed';
-  const bodyBg = state === 'repair'
+  const faceColor = state === 'repair'
     ? tc.error
     : isGold
       ? tc.gold
       : tc.nodeLocked;
-  const edgeBg = state === 'repair'
+  const edgeColor = state === 'repair'
     ? tc.nodeRepairEdge
     : isGold
       ? tc.nodeGoldEdge
@@ -126,12 +125,12 @@ export function PracticeTile({
     : isGold
       ? tc.goldDeep
       : tc.textFaint;
-  const bodyBorderColor = state === 'locked' ? tc.nodeLockedBorder : 'transparent';
-  const bodyBorderWidth = state === 'locked' ? 2 : 0;
-  // Matte states (locked) skip the glossy top sheen.
-  const hasSheen = isGold || state === 'repair';
+  // Locked tiles are matte stone: no gloss, barely a rim. Their colours are
+  // already dim, so they keep full opacity — fading them on top of that made
+  // the road ahead disappear rather than recede.
+  const matte = state === 'locked';
 
-  // Glyph shown in the center of the circle.
+  // Glyph shown in the centre of the coin.
   const glyphKind: TileGlyphKind =
     state === 'completed' ? 'check'
   : state === 'repair'    ? 'alarm'
@@ -141,55 +140,46 @@ export function PracticeTile({
     <Pressable
       onPress={tappable ? onPress : undefined}
       style={s.hit}
-      hitSlop={6}
+      hitSlop={8}
     >
       {({ pressed }) => (
-        <>
-          <View style={s.circleWrap}>
-            {state === 'active' ? (
-              <Animated.View
-                style={[s.ring, { borderColor: tc.lessonRing, transform: [{ rotate: spin }] }]}
-                pointerEvents="none"
-              />
-            ) : null}
-
-            {/* Face + edge move as one unit so the bounce never splits
-                the button apart; pressing sinks only the face. */}
+        <View style={s.stack}>
+          {state === 'active' ? (
             <Animated.View
-              style={[
-                s.button,
-                state === 'locked' && { opacity: 0.6 },
-                state === 'completed' && { opacity: 0.75 },
-                state === 'active' && { transform: [{ translateY }] },
-              ]}
+              style={[s.ringLayer, { transform: [{ rotate: spin }] }]}
+              pointerEvents="none"
             >
-              <View style={[s.edge, { backgroundColor: edgeBg }]} />
-              <View
-                style={[
-                  s.face,
-                  {
-                    backgroundColor: bodyBg,
-                    borderColor: bodyBorderColor,
-                    borderWidth: bodyBorderWidth,
-                  },
-                  pressed && tappable && s.facePressed,
-                ]}
-              >
-                {hasSheen ? <View style={s.sheen} /> : null}
-                <TileGlyph kind={glyphKind} color={fgColor} />
-              </View>
+              <TileRing color={tc.lessonRing} />
             </Animated.View>
+          ) : null}
 
-            {state === 'active' ? (
-              <View style={s.startCallout} pointerEvents="none">
-                <View style={[s.startTail, { backgroundColor: tc.text }]} />
-                <View style={[s.startBody, { backgroundColor: tc.text }]}>
-                  <Text style={[s.startText, { color: tc.background }]}>START</Text>
-                </View>
+          {/* Face and lip move as one unit so the bounce never splits the
+              coin apart; pressing sinks only the face onto its lip. */}
+          <Animated.View
+            style={[
+              state === 'completed' && { opacity: 0.9 },
+              state === 'active' && { transform: [{ translateY }] },
+            ]}
+          >
+            <TileCoin
+              face={faceColor}
+              edge={edgeColor}
+              matte={matte}
+              pressed={pressed && tappable}
+            >
+              <TileGlyph kind={glyphKind} color={fgColor} />
+            </TileCoin>
+          </Animated.View>
+
+          {state === 'active' ? (
+            <View style={s.startCallout} pointerEvents="none">
+              <View style={[s.startTail, { backgroundColor: tc.text }]} />
+              <View style={[s.startBody, { backgroundColor: tc.text }]}>
+                <Text style={[s.startText, { color: tc.background }]}>START</Text>
               </View>
-            ) : null}
-          </View>
-        </>
+            </View>
+          ) : null}
+        </View>
       )}
     </Pressable>
   );
@@ -197,6 +187,8 @@ export function PracticeTile({
 
 type TileGlyphKind = 'lesson' | 'check' | 'lock' | 'alarm';
 
+/** SVG children, not a standalone <Svg>: the glyph is drawn inside the
+ *  coin's face group so it sinks with the face on press. */
 function TileGlyph({
   kind,
   color,
@@ -204,123 +196,70 @@ function TileGlyph({
   kind: TileGlyphKind;
   color: string;
 }) {
+  // Heavier than the 2.4 it was drawn at: on a lit, gradient-filled face a
+  // hairline glyph reads as a smudge rather than as a mark.
   const p = {
-    width: 24,
-    height: 24,
-    viewBox: '0 0 24 24',
     fill: 'none',
     stroke: color,
-    strokeWidth: 2.4,
+    strokeWidth: 3,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   };
   if (kind === 'check') {
-    return (
-      <Svg {...p}>
-        <Path d="M5 12l4 4 10-10" />
-      </Svg>
-    );
+    return <Path {...p} d="M5 12l4 4 10-10" />;
   }
   if (kind === 'lock') {
     return (
-      <Svg {...p}>
-        <Rect x={5} y={11} width={14} height={9} rx={2} />
-        <Path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </Svg>
+      <>
+        <Rect {...p} x={5} y={11} width={14} height={9} rx={2} />
+        <Path {...p} d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </>
     );
   }
   if (kind === 'alarm') {
     return (
-      <Svg {...p}>
-        <Path d="M12 8v4l3 2M4 5l3-2M20 5l-3-2" />
-        <Path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
-      </Svg>
+      <>
+        <Path {...p} d="M12 8v4l3 2M4 5l3-2M20 5l-3-2" />
+        <Path {...p} d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
+      </>
     );
   }
   if (kind === 'lesson') {
     // Speech bubble — "say it back to me". Every lesson is the same kind.
-    return (
-      <Svg {...p}>
-        <Path d="M4 5h12a4 4 0 0 1 0 8H6l-2 3z" />
-      </Svg>
-    );
+    // Redrawn to fill the glyph box: the old one occupied its top-left
+    // corner with a square shoulder, which at tile size read as a letter P.
+    return <Path {...p} d="M5 4h14a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4h-8l-6 4v-4a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" />;
   }
   return null;
 }
-
-const RING_INSET = 8;
-const CIRCLE = 60;
-/** Height of the 3D bottom lip under the face. */
-const EDGE = 5;
 
 const makeStyles = (_tc: ThemeColors) =>
   StyleSheet.create({
     hit: {
       alignItems: 'center',
-      paddingHorizontal: 4,
-      // The START callout is absolutely positioned inside circleWrap and
-      // hangs ~23px past its bottom edge, so the tile has to reserve that
-      // space or the callout lands on top of the connector dots below.
-      // Applied to every state, not just 'active': an active-only padding
-      // would change the tile's height as the cursor moves and make the
-      // whole path jump. This used to be the label's marginTop.
-      paddingBottom: 26,
     },
-    circleWrap: {
-      width: 76,
-      height: 76,
+    // Exactly the painted height of one coin. The ring and the START callout
+    // overflow it deliberately — reserving space for them would make every
+    // row as tall as the tallest state and stretch the path to half as many
+    // tiles per screen. Both are pointer-transparent, so the overflow costs
+    // nothing but pixels.
+    stack: {
+      width: RING_SIZE,
+      height: COIN_BLOCK,
       alignItems: 'center',
-      // Top-aligned with padding (not centered) so the face's centre
-      // stays at the wrap's centre despite the extra EDGE below it —
-      // keeps the spinning ring concentric with the face.
-      paddingTop: (76 - CIRCLE) / 2,
-      position: 'relative',
     },
-    ring: {
+    ringLayer: {
       position: 'absolute',
-      top: -RING_INSET,
-      left: -RING_INSET,
-      right: -RING_INSET,
-      bottom: -RING_INSET,
-      borderRadius: (CIRCLE + RING_INSET * 2) / 2,
-      borderWidth: 2.5,
-      borderStyle: 'dashed',
-    },
-    button: {
-      width: CIRCLE,
-      height: CIRCLE + EDGE,
-    },
-    edge: {
-      position: 'absolute',
-      top: EDGE,
-      left: 0,
-      width: CIRCLE,
-      height: CIRCLE,
-      borderRadius: CIRCLE / 2,
-    },
-    face: {
-      width: CIRCLE,
-      height: CIRCLE,
-      borderRadius: CIRCLE / 2,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
-    facePressed: {
-      transform: [{ translateY: EDGE }],
-    },
-    sheen: {
-      position: 'absolute',
-      top: 6,
-      left: (CIRCLE - 32) / 2,
-      width: 32,
-      height: 12,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.26)',
+      // Centred on the *face*, not on the coin block: the lip hangs below
+      // the face, and a ring centred on the whole block would sit low.
+      top: COIN_H / 2 - RING_SIZE / 2,
+      start: 0,
     },
     startCallout: {
       position: 'absolute',
-      top: 74,
+      top: COIN_BLOCK + 2,
+      start: 0,
+      end: 0,
       alignItems: 'center',
     },
     startTail: {
@@ -330,13 +269,13 @@ const makeStyles = (_tc: ThemeColors) =>
       marginBottom: -4,
     },
     startBody: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 3,
       borderRadius: 6,
     },
     startText: {
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: '900',
-      letterSpacing: 1.2,
+      letterSpacing: 1.1,
     },
   });

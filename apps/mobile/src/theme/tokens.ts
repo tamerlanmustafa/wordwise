@@ -372,7 +372,33 @@ export function useColorScheme(): 'light' | 'dark' {
  */
 export function withAlpha(color: string, alpha: number): string {
   const a = Math.min(Math.max(alpha, 0), 1);
+  const rgb = parseRgb(color);
+  if (!rgb) return color;
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+}
 
+/**
+ * One palette colour moved a fraction of the way toward white (`amount > 0`)
+ * or black (`amount < 0`). The practice tiles need three tones of the *same*
+ * token to read as a lit 3D surface — a bright top, the token itself, a
+ * shaded bottom — and there are four tile states, so freezing twelve hexes in
+ * the palette would mean twelve places to miss the next time the accent moves.
+ *
+ * Same contract as {@link withAlpha}: handles `#RGB`, `#RRGGBB` and
+ * `rgb()`/`rgba()`, and hands anything else back untouched so an unrecognised
+ * token degrades to a flat colour rather than to an invisible view.
+ */
+export function shade(color: string, amount: number): string {
+  const rgb = parseRgb(color);
+  if (!rgb) return color;
+  const t = Math.min(Math.max(amount, -1), 1);
+  const target = t >= 0 ? 255 : 0;
+  const mixed = rgb.map((c) => Math.round(c + (target - c) * Math.abs(t)));
+  return `rgb(${mixed[0]},${mixed[1]},${mixed[2]})`;
+}
+
+/** The two colour shapes the palette actually stores → channels, or null. */
+function parseRgb(color: string): [number, number, number] | null {
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
   if (hex) {
     const digits =
@@ -383,14 +409,14 @@ export function withAlpha(color: string, alpha: number): string {
             .join('')
         : hex[1];
     const channel = (start: number) => parseInt(digits.slice(start, start + 2), 16);
-    return `rgba(${channel(0)},${channel(2)},${channel(4)},${a})`;
+    return [channel(0), channel(2), channel(4)];
   }
 
   const rgb = /^rgba?\(([^)]+)\)$/i.exec(color.trim());
   if (rgb) {
-    const [r, g, b] = rgb[1].split(',').map((p) => p.trim());
-    if (r && g && b) return `rgba(${r},${g},${b},${a})`;
+    const [r, g, b] = rgb[1].split(',').map((p) => Number(p.trim()));
+    if ([r, g, b].every((c) => Number.isFinite(c))) return [r, g, b];
   }
 
-  return color;
+  return null;
 }

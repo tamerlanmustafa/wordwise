@@ -14,7 +14,7 @@
  * `services/streak_service.py`.
  *
  * Sections, top → bottom:
- *   1. Header (eyebrow + serif title + freeze/streak chips)
+ *   1. Header (freeze + streak chips, the streak's flame animated)
  *   2. Vertical tile path — window of WINDOW_SIZE tiles around cursor
  *
  * Tapping the active path tile starts a session. Free users still hit
@@ -38,8 +38,8 @@ import {
 } from '../services/api';
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
+import { StreakFlame } from './ui/StreakFlame';
 
-const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'JetBrains Mono';
 
 export interface PracticeScreenProps {
@@ -130,10 +130,6 @@ export function PracticeScreen({
       <PracticeBackdrop />
 
       <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>{t('practice:eyebrow')}</Text>
-          <Text style={s.title}>{t('practice:title')}</Text>
-        </View>
         <View style={s.headerChips}>
           <View style={s.streakChip}>
             <Ionicons name="shield-checkmark" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
@@ -143,7 +139,7 @@ export function PracticeScreen({
             </Text>
           </View>
           <View style={s.streakChip}>
-            <Ionicons name="flame" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
+            <StreakFlame size={20} lit={effectiveStreak > 0} style={s.streakIcon} />
             <Text style={s.streakNumber}>{effectiveStreak}</Text>
             <Text style={s.streakLabel}>{t('practice:dayLabel', { count: effectiveStreak })}</Text>
           </View>
@@ -185,29 +181,16 @@ const makeStyles = (tc: ThemeColors) =>
       right: 0,
       height: 280,
     },
+    // Chips only. The screen used to open with a "DAILY PRACTICE" eyebrow over
+    // a serif "Practice" title, which named the tab the user had just tapped
+    // and cost ~60pt of the path's vertical room to do it.
     header: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
-      justifyContent: 'space-between',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
       paddingHorizontal: 18,
-      paddingTop: 6,
-      paddingBottom: 6,
-    },
-    eyebrow: {
-      fontSize: 10,
-      fontWeight: '900',
-      letterSpacing: 2,
-      color: tc.goldOnSurface,
-      textTransform: 'uppercase',
-      marginBottom: 4,
-    },
-    title: {
-      fontFamily: SERIF_FAMILY,
-      fontSize: 30,
-      fontWeight: '600',
-      letterSpacing: -0.8,
-      color: tc.text,
-      lineHeight: 32,
+      paddingTop: 4,
+      paddingBottom: 4,
     },
     headerChips: {
       flexDirection: 'row',

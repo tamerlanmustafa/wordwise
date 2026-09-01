@@ -1,19 +1,17 @@
 import {
   buildWindow,
   offsetForIndex,
-  connectorXs,
-  CONNECTOR_DOTS,
   sectionForIndex,
   isSectionStart,
   SECTION_SIZE,
 } from '../PracticeTilePath';
 describe('buildWindow', () => {
-  it('renders 7 tiles for a fresh user (cursor=0): one active + six locked', () => {
+  it('renders 9 tiles for a fresh user (cursor=0): one active + eight locked', () => {
     const w = buildWindow(0);
-    expect(w).toHaveLength(7);
+    expect(w).toHaveLength(9);
     expect(w[0]).toEqual({ index: 0, state: 'active' });
     expect(w.slice(1).every((t) => t.state === 'locked')).toBe(true);
-    expect(w.map((t) => t.index)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(w.map((t) => t.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   it('shows one completed above when cursor=1', () => {
@@ -33,7 +31,7 @@ describe('buildWindow', () => {
 
   it('slides the window once cursor advances past 2', () => {
     const w = buildWindow(5);
-    expect(w.map((t) => t.index)).toEqual([3, 4, 5, 6, 7, 8, 9]);
+    expect(w.map((t) => t.index)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(w[0].state).toBe('completed');
     expect(w[1].state).toBe('completed');
     expect(w[2]).toEqual({ index: 5, state: 'active' });
@@ -53,22 +51,52 @@ describe('buildWindow', () => {
     expect(w[2].index).toBe(100);
     expect(w[2].state).toBe('active');
     expect(w.filter((t) => t.state === 'completed')).toHaveLength(2);
-    expect(w.filter((t) => t.state === 'locked')).toHaveLength(4);
+    expect(w.filter((t) => t.state === 'locked')).toHaveLength(6);
     expect(w.filter((t) => t.state === 'active')).toHaveLength(1);
+  });
+
+  it('always shows the road ahead, never just the road behind', () => {
+    // The window is what makes the tab read as a journey rather than a
+    // button: shrink the tiles below the cursor and the path stops being one.
+    for (const cursor of [0, 1, 7, 42]) {
+      const ahead = buildWindow(cursor).filter((t) => t.state === 'locked');
+      expect(ahead.length).toBeGreaterThanOrEqual(6);
+    }
   });
 });
 
 describe('offsetForIndex (zigzag anchored to absolute index)', () => {
-  it('is keyed on absolute index, repeating every 7', () => {
+  it('is keyed on absolute index, repeating every 8', () => {
     expect(offsetForIndex(0)).toBe(0);
-    expect(offsetForIndex(1)).toBe(24);
-    expect(offsetForIndex(7)).toBe(offsetForIndex(0));
-    expect(offsetForIndex(8)).toBe(offsetForIndex(1));
+    expect(offsetForIndex(1)).toBe(28);
+    expect(offsetForIndex(8)).toBe(offsetForIndex(0));
+    expect(offsetForIndex(9)).toBe(offsetForIndex(1));
+  });
+
+  it('sways as a wave, so consecutive tiles lean into each other', () => {
+    // The jitter it replaced ([0, 24, -16, 12, …]) crossed the centre line on
+    // every step, which reads as noise once the trail of dots between tiles is
+    // gone and the coins themselves have to describe the road.
+    const wave = Array.from({ length: 8 }, (_, i) => offsetForIndex(i));
+    expect(wave).toEqual([0, 28, 40, 28, 0, -28, -40, -28]);
+    // One sign change per half-period, not one per step.
+    const crossings = wave.filter((v, i) => i > 0 && Math.sign(v) * Math.sign(wave[i - 1]) < 0);
+    expect(crossings).toHaveLength(0);
+  });
+
+  it('stays inside the narrowest phone the app supports', () => {
+    // A tile is 88pt wide including its ring, on a 320pt screen with 18pt of
+    // page padding: an amplitude that clips would only show up on hardware.
+    const halfTile = 44;
+    const halfScreen = 320 / 2 - 18;
+    for (let i = 0; i < 8; i += 1) {
+      expect(Math.abs(offsetForIndex(i)) + halfTile).toBeLessThanOrEqual(halfScreen);
+    }
   });
 
   it('handles a defensively negative index', () => {
-    // ((-1 % 7) + 7) % 7 === 6 → last offset.
-    expect(offsetForIndex(-1)).toBe(-20);
+    // ((-1 % 8) + 8) % 8 === 7 → last offset.
+    expect(offsetForIndex(-1)).toBe(-28);
   });
 
   it('scrolls the path shape as the cursor advances (not frozen)', () => {
@@ -78,27 +106,6 @@ describe('offsetForIndex (zigzag anchored to absolute index)', () => {
     const shapeAt = (cursor: number) =>
       buildWindow(cursor).map((t) => offsetForIndex(t.index));
     expect(shapeAt(3)).not.toEqual(shapeAt(4));
-  });
-});
-
-describe('connectorXs (dotted trail between consecutive tiles)', () => {
-  it('steps evenly between the two tiles’ zigzag offsets', () => {
-    // offsetForIndex: 0 → 0, 1 → 24. Dots at t = ¼, ½, ¾ of the span.
-    expect(connectorXs(0, 1)).toEqual([6, 12, 18]);
-  });
-
-  it('interpolates across a negative→positive span', () => {
-    // offsetForIndex: 2 → -16, 3 → 12 (span 28).
-    expect(connectorXs(2, 3)).toEqual([-9, -2, 5]);
-  });
-
-  it('always returns CONNECTOR_DOTS offsets', () => {
-    expect(connectorXs(4, 5)).toHaveLength(CONNECTOR_DOTS);
-  });
-
-  it('wraps absolute indices the same way offsetForIndex does', () => {
-    // Indices 7/8 land on the same zigzag slots as 0/1.
-    expect(connectorXs(7, 8)).toEqual(connectorXs(0, 1));
   });
 });
 
@@ -116,5 +123,14 @@ describe('section checkpoints', () => {
     expect(isSectionStart(SECTION_SIZE * 2)).toBe(true);
     expect(isSectionStart(1)).toBe(false);
     expect(isSectionStart(SECTION_SIZE - 1)).toBe(false);
+  });
+
+  it('puts at most two dividers in one window', () => {
+    // Each divider is ~30pt of vertical room. Three of them in a nine-tile
+    // window would undo the density this window size exists for.
+    for (const cursor of [0, 3, 4, 5, 12, 99]) {
+      const dividers = buildWindow(cursor).filter((t) => isSectionStart(t.index));
+      expect(dividers.length).toBeLessThanOrEqual(2);
+    }
   });
 });
