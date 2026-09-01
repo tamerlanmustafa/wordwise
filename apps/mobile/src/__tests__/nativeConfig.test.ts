@@ -156,6 +156,56 @@ describe('the settings deleted from app.json are still applied natively', () => 
       expect(infoPlist).toContain('<key>NSPhotoLibraryAddUsageDescription</key>');
     });
   });
+
+  /**
+   * The flip side of "no plugins run here": a native dependency's OWN manifest
+   * still merges into the app's, and what the config plugin would have stripped
+   * for a managed project has to be stripped by hand. expo-audio (#162) brings
+   * RECORD_AUDIO and a microphone foreground service to an app that never
+   * records — a Play Console policy surface, not just an unused permission.
+   */
+  describe('expo-audio arrives without its microphone half', () => {
+    const mergedManifest = readMobile('android', 'app', 'src', 'main', 'AndroidManifest.xml');
+
+    it('the manifest can use tools:node at all', () => {
+      expect(mergedManifest).toContain('xmlns:tools="http://schemas.android.com/tools"');
+    });
+
+    it.each([
+      'android.permission.RECORD_AUDIO',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+    ])('removes %s from the merged manifest', (permission) => {
+      expect(mergedManifest).toMatch(
+        new RegExp(`<uses-permission android:name="${permission}" tools:node="remove"/>`)
+      );
+    });
+
+    it.each([
+      'expo.modules.audio.service.AudioRecordingService',
+      'expo.modules.audio.service.AudioControlsService',
+    ])('removes the %s foreground service', (service) => {
+      expect(mergedManifest).toMatch(
+        new RegExp(`<service android:name="${service}" tools:node="remove"/>`)
+      );
+    });
+
+    it('is still the only library manifest declaring those, so the removal hits nothing else', () => {
+      const libs = path.join(MOBILE, 'node_modules');
+      const declaring: string[] = [];
+      for (const name of fs.readdirSync(libs)) {
+        const candidates = name.startsWith('@')
+          ? fs.readdirSync(path.join(libs, name)).map((sub) => `${name}/${sub}`)
+          : [name];
+        for (const pkg of candidates) {
+          const file = path.join(libs, pkg, 'android', 'src', 'main', 'AndroidManifest.xml');
+          if (!fs.existsSync(file)) continue;
+          if (/FOREGROUND_SERVICE|RECORD_AUDIO/.test(fs.readFileSync(file, 'utf8'))) declaring.push(pkg);
+        }
+      }
+      expect(declaring).toEqual(['expo-audio']);
+    });
+  });
 });
 
 describe('the splash screen paints the same colour on both platforms', () => {

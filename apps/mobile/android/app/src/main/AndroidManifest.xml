@@ -1,4 +1,16 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <!-- expo-audio's own manifest declares microphone recording plus two
+       foreground services (media controls, recording). WordWise only plays
+       short UI chimes (#162): no recording, no background audio, no lock-screen
+       controls — so the merged manifest strips them. This is the bare-workflow
+       equivalent of the config plugin's recordAudioAndroid:false and
+       android.blockedPermissions. A future feature that needs one of these
+       deletes its remove line here; expo-audio only starts the services when
+       asked (setActiveForLockScreen / a recorder), never on play().
+       Guarded by src/__tests__/nativeConfig.test.ts. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" tools:node="remove"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -17,6 +29,9 @@
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/672b17ee-a16a-4162-8666-f93b98681c5f"/>
     <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
+    <!-- See the expo-audio note at the top of this file. -->
+    <service android:name="expo.modules.audio.service.AudioRecordingService" tools:node="remove"/>
+    <service android:name="expo.modules.audio.service.AudioControlsService" tools:node="remove"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>

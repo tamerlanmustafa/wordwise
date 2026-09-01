@@ -874,6 +874,11 @@ export const WordCardDeck = ({
     setPlayingAudio(true);
     try {
       const { Audio } = require('expo-av');
+      // Pronunciation is content the user asked for: it plays through the
+      // iOS silent switch (expo-av's default does not). UI chimes take the
+      // opposite setting — the matrix is AUDIO_MODES in utils/feedback.ts,
+      // and #163 moves this call site onto expo-audio and that matrix.
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
         { uri: premiumApi.pronounceUrl(currentKey) },
         { shouldPlay: true },

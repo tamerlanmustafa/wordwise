@@ -216,6 +216,9 @@ export const VocabRow = ({
     setPlayingAudio(true);
     try {
       const { Audio } = require('expo-av');
+      // Plays through the iOS silent switch — see WordCardDeck.handlePronounce
+      // and AUDIO_MODES in utils/feedback.ts. #163 migrates this to expo-audio.
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
         { uri: premiumApi.pronounceUrl(term) },
         { shouldPlay: true }
