@@ -265,10 +265,11 @@ describe('source guard — one file owns the native feedback modules', () => {
     return out;
   }
 
-  it('only utils/feedback.ts imports expo-haptics or expo-audio', () => {
+  it('only utils/feedback.ts and utils/pronunciation.ts import expo-haptics or expo-audio', () => {
     const offenders = walk(SRC)
       .filter((file) => /['"]expo-(haptics|audio)['"]/.test(fs.readFileSync(file, 'utf8')))
-      .map((file) => path.relative(SRC, file));
-    expect(offenders).toEqual(['utils/feedback.ts']);
+      .map((file) => path.relative(SRC, file))
+      .sort();
+    expect(offenders).toEqual(['utils/feedback.ts', 'utils/pronunciation.ts']);
   });
 });

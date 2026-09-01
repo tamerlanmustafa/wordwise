@@ -51,6 +51,8 @@ jest.mock('expo-glass-effect', () => {
 // resolve immediately; feedback.test.ts asserts on what was called. The
 // audio mock keeps every created player so a test can find "the correct
 // chime" by its source and check it was played, rewound, or released.
+// Players also record `addListener` subscriptions so pronunciation.test.ts
+// can deliver a `playbackStatusUpdate` (`__emit`) and check it was dropped.
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(async () => {}),
   impactAsync: jest.fn(async () => {}),
@@ -63,12 +65,30 @@ jest.mock('expo-audio', () => {
   const players = [];
   return {
     createAudioPlayer: jest.fn((source) => {
+      const listeners = [];
       const player = {
         source,
         play: jest.fn(),
         pause: jest.fn(),
         seekTo: jest.fn(async () => {}),
         remove: jest.fn(),
+        addListener: jest.fn((event, fn) => {
+          const entry = { event, fn };
+          listeners.push(entry);
+          return {
+            remove: jest.fn(() => {
+              const i = listeners.indexOf(entry);
+              if (i >= 0) listeners.splice(i, 1);
+            }),
+          };
+        }),
+        /** Test-only: deliver an event to every live listener. */
+        __emit: (event, payload) => {
+          for (const entry of listeners.slice()) {
+            if (entry.event === event) entry.fn(payload);
+          }
+        },
+        __listenerCount: () => listeners.length,
         volume: 1,
         isLoaded: true,
         playing: false,

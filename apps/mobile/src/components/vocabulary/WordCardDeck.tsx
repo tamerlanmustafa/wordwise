@@ -20,7 +20,6 @@ import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/font
 import type { ThemeColors } from '../../theme/tokens';
 import {
   wordwiseApi,
-  premiumApi,
   authFetch,
   API_BASE_URL,
   type WordInfo,
@@ -32,6 +31,7 @@ import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import { wordTranslationDisplay } from './translationDisplay';
 import { glossLine } from '../../utils/glossLine';
+import { pronounce } from '../../utils/pronunciation';
 import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
@@ -869,27 +869,15 @@ export const WordCardDeck = ({
     return () => clearTimeout(id);
   }, [warmFocus, warmNext]);
 
+  // Audio mode, bearer token and player lifecycle all live in
+  // utils/pronunciation.ts; the promise settles when the clip ends, fails,
+  // or is cancelled by a newer tap, so "…" always gives the speaker back.
   const handlePronounce = async () => {
     if (playingAudio || currentKey == null) return;
     setPlayingAudio(true);
     try {
-      const { Audio } = require('expo-av');
-      // Pronunciation is content the user asked for: it plays through the
-      // iOS silent switch (expo-av's default does not). UI chimes take the
-      // opposite setting — the matrix is AUDIO_MODES in utils/feedback.ts,
-      // and #163 moves this call site onto expo-audio and that matrix.
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: premiumApi.pronounceUrl(currentKey) },
-        { shouldPlay: true },
-      );
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-          setPlayingAudio(false);
-        }
-      });
-    } catch {
+      await pronounce(currentKey);
+    } finally {
       setPlayingAudio(false);
     }
   };

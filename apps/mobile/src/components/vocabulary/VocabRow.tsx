@@ -13,6 +13,7 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
+import { pronounce } from '../../utils/pronunciation';
 
 export interface SentenceExample {
   sentence: string;
@@ -211,25 +212,14 @@ export const VocabRow = ({
     }
   };
 
+  // Same shape as WordCardDeck.handlePronounce — the audio mode, bearer token
+  // and player lifecycle are utils/pronunciation.ts's, not the row's.
   const handlePronounce = async () => {
     if (playingAudio) return;
     setPlayingAudio(true);
     try {
-      const { Audio } = require('expo-av');
-      // Plays through the iOS silent switch — see WordCardDeck.handlePronounce
-      // and AUDIO_MODES in utils/feedback.ts. #163 migrates this to expo-audio.
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: premiumApi.pronounceUrl(term) },
-        { shouldPlay: true }
-      );
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-          setPlayingAudio(false);
-        }
-      });
-    } catch {
+      await pronounce(term);
+    } finally {
       setPlayingAudio(false);
     }
   };

@@ -11,8 +11,10 @@
  * `Haptics.impactAsync` through `MCQCard` is how a screen ends up buzzing
  * twice.
  *
- * This is the ONLY file allowed to import `expo-haptics` or `expo-audio`
- * (pinned by `__tests__/feedback.test.ts`).
+ * Only this file and `utils/pronunciation.ts` (word audio, #163) may import
+ * `expo-haptics` or `expo-audio` (pinned by `__tests__/feedback.test.ts`).
+ * Both read the `AUDIO_MODES` matrix below, so the silent-switch policy is
+ * decided once and never in a component.
  *
  * Channels:
  *   haptic — fire-and-forget. Weak and device-dependent on Android, so it is
