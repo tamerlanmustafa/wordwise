@@ -2,6 +2,7 @@
 
 ## Git
 - Never run `git add`, `git commit`, `git push`, or any destructive git command unless explicitly asked; instead, stage nothing and tell the user what you'd commit.
+- **Standing exception (2026-09-01):** a `/next-ticket` session ships the ticket it just finished — stages that ticket's files by name, commits, pushes `main`, and publishes to EAS `preview` (an OTA, or an `eas build` when native changed), exactly as step 6 of `.claude/skills/next-ticket/SKILL.md` lays out. The exception covers that step only: no mid-work commits, no `git add -A`, no stashing, no force-push, no `eas submit`.
 
 ## Code reuse
 - Before implementing a new feature, check for existing components, hooks, styles, and utilities that can be reused.
