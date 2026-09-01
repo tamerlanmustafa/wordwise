@@ -1,24 +1,31 @@
 /**
- * MCQChoice — single rectangular tile in the 2x2 MCQ answer grid
- * (two tiles top, two bottom; the parent MCQCard owns the grid layout).
+ * MCQChoice — one full-width row in the MCQ answer list (the parent
+ * MCQCard owns the stack).
  *
  * State matrix (see mcqLogic.choiceStateFor):
- *   idle           — default tile, full shadow, tappable
- *   correct        — success border + tint + green check glyph (the
- *                    user tapped the right one)
- *   wrong          — error border + tint + red × glyph
+ *   idle           — default row, full shadow, tappable
+ *   correct        — success border + tint + green label (the user
+ *                    tapped the right one)
+ *   wrong          — error border + tint + red label and × glyph
  *   reveal-correct — same as correct (used to highlight the *actual*
  *                    answer after the user picked wrong)
  *
- * Disabled (post-answer, untapped wrong-eligible tiles) get opacity 0.4.
+ * Only the miss carries a glyph. A check on the right answer was saying
+ * a second time what the green border, tint and label already say, and it
+ * had to say it about two different rows (the tapped one and the revealed
+ * one) that mean different things to the reader. The × stays because red
+ * alone reads as "wrong answer" rather than "the one you chose".
+ *
+ * Disabled (post-answer, untapped wrong-eligible rows) get opacity 0.4.
  * The component takes a single `state` plus optional `disabled` flag;
  * the parent MCQCard composes the matrix.
  */
 
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { alignStart } from '../../i18n/rtl';
 import type { MCQChoiceState } from './mcqLogic';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -29,7 +36,7 @@ export interface MCQChoiceProps {
   label: string;
   state: MCQChoiceState;
   /** Visually dimmed (opacity 0.4) — used for the untapped wrong-eligible
-   *  tiles after the user has answered. Doesn't disable the press
+   *  rows after the user has answered. Doesn't disable the press
    *  handler at React-Native level; the parent is responsible for
    *  ignoring late taps. */
   disabled?: boolean;
@@ -64,21 +71,13 @@ export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
         pressed && isIdle && { opacity: 0.85 },
       ]}
     >
-      <Text style={[s.label, { color: fg }]} numberOfLines={3}>
+      <Text style={[s.label, { color: fg }]} numberOfLines={2}>
         {label}
       </Text>
-      {isCorrect || isWrong ? (
-        <View style={s.glyph}>
-          {isCorrect ? (
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={tc.success} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M5 12l4 4 10-10" />
-            </Svg>
-          ) : (
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={tc.error} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M6 6l12 12M18 6L6 18" />
-            </Svg>
-          )}
-        </View>
+      {isWrong ? (
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={tc.error} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M6 6l12 12M18 6L6 18" />
+        </Svg>
       ) : null}
     </Pressable>
   );
@@ -86,15 +85,18 @@ export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
 
 const makeStyles = (_tc: ThemeColors) =>
   StyleSheet.create({
+    // A row, not a tile: full width, laid out as an inline run so the label
+    // and the miss glyph sit on one baseline. `minHeight` is the tap target
+    // (44pt is Apple's floor, 56 leaves room either side of a wrapped gloss).
     tile: {
-      flex: 1,
-      minHeight: 92,
-      paddingHorizontal: 12,
-      paddingVertical: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 56,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       borderRadius: 14,
       borderWidth: 2,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     idleShadow: {
       shadowColor: '#000',
@@ -103,18 +105,15 @@ const makeStyles = (_tc: ThemeColors) =>
       shadowOffset: { width: 0, height: 6 },
       elevation: 2,
     },
-    // Result glyph pinned to the corner so the centered label doesn't
-    // shift when it appears.
-    glyph: {
-      position: 'absolute',
-      top: 8,
-      end: 8,
-    },
+    // `flex: 1` so the label owns the row and the glyph is pushed to the
+    // trailing edge — and so the label's own width doesn't change when the
+    // glyph appears, which would re-wrap the text mid-answer.
     label: {
+      flex: 1,
       fontFamily: SERIF_FAMILY,
       fontSize: 16,
       fontWeight: '600',
       letterSpacing: -0.2,
-      textAlign: 'center',
+      textAlign: alignStart,
     },
   });

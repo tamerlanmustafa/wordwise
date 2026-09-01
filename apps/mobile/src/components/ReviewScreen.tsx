@@ -371,13 +371,12 @@ export function ReviewScreen({
     const justHitGoal = dailySummary?.justHitGoal ?? false;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} hitSlop={8}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('quiz:review.todaysDone')}</Text>
-          <View style={{ width: 60 }} />
-        </View>
+        {/* Same chrome as the card screens the user just came through —
+            round back button, gold-edged chip on the app background — minus
+            the counter and progress bar, which have nothing left to report.
+            This used to be a paper bar with a "← Back" text label, which
+            read as a different screen from the deck it ends. */}
+        <QuizHeader movie={t('quiz:review.todaysDone')} onBack={onBack} />
         <SessionComplete
           eyebrow={t('quiz:review.dailyReview')}
           title={

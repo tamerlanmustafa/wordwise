@@ -36,6 +36,7 @@ import { PressableScale } from './ui/PressableScale';
 import { FadeInUp } from './ui/FadeInUp';
 import { Confetti } from './ui/Confetti';
 import { SessionComplete } from './common/SessionComplete';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 import { FORWARD_ARROW } from '../i18n/rtl';
 
 export interface JourneyResultMeta {
@@ -70,6 +71,9 @@ export function QuizResultScreen({
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
+  // Legacy mode owns its own footer (journey mode delegates to
+  // SessionComplete, which reserves the bar itself).
+  const barInset = useBottomBarInset();
 
   const accent = cefrColors[level] || tc.primaryOnSurface;
   const label = t(`cefr.${level}`, { defaultValue: level });
@@ -218,7 +222,7 @@ export function QuizResultScreen({
           </FadeInUp>
         ) : null}
 
-        <View style={s.footer}>
+        <View style={[s.footer, { paddingBottom: barInset }]}>
           {onPlayAgain ? (
             <PressableScale
               onPress={onPlayAgain}
@@ -275,8 +279,9 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
     fontSize: 10, fontWeight: '900', color: tc.goldOnSurface,
     letterSpacing: 1.8, marginBottom: 6,
   },
+  // `paddingBottom` is applied inline from `useBottomBarInset`.
   footer: {
-    paddingHorizontal: 24, paddingBottom: 16,
+    paddingHorizontal: 24,
     gap: 10,
   },
   primaryBtn: {

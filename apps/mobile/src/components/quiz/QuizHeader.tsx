@@ -11,6 +11,12 @@
  *   ─ Row: 36×36 round back · centered movie chip (CEFR badge +
  *      title in serif) · 36×36 round N/total counter (monospace).
  *   ─ 4px gold progress bar at `index/total` fill.
+ *
+ * Also the header for the *end* of a session, where there is no position
+ * in a deck to report: omit `index`/`total` and the counter and progress
+ * bar drop out (see `quizHeaderLayout`), leaving the same back button and
+ * chip. The counter's slot is held by a spacer so the chip stays centered
+ * either way.
  */
 
 import { useMemo } from 'react';
@@ -19,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { quizHeaderProgress } from './quizHeaderLayout';
 
 // Spec §7: 62px total clearance from the device top to the first row.
 // Parents wrap in `SafeAreaView edges={['top']}`, which already pushes
@@ -33,10 +40,11 @@ export interface QuizHeaderProps {
   movie: string;
   /** CEFR level for the mini-badge inside the chip. */
   level?: keyof typeof cefrColors | null;
-  /** 1-indexed position in the card stack. */
-  index: number;
-  /** Total card count. */
-  total: number;
+  /** 1-indexed position in the card stack. Omit on a surface with no deck
+   *  behind it (the done screen) to drop the counter and progress bar. */
+  index?: number;
+  /** Total card count. Omit alongside `index`. */
+  total?: number;
   onBack: () => void;
 }
 
@@ -44,14 +52,14 @@ export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderPro
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const pct = Math.max(0, Math.min(100, total > 0 ? (index / total) * 100 : 0));
+  const { showProgress, pct } = quizHeaderProgress(index, total);
   const cefrColor = level ? cefrColors[level] : tc.gold;
   // Clears the dynamic island on every device. Floor at 12 so non-notch
   // devices (where insets.top can be 20) still get breathing room.
   const extraTop = Math.max(12, HEADER_TOP_TARGET - insets.top);
 
   return (
-    <View>
+    <View style={showProgress ? null : s.bareBottom}>
       {/* Top row: back · movie chip · counter */}
       <View style={[s.row, { paddingTop: extraTop }]}>
         <Pressable
@@ -84,25 +92,38 @@ export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderPro
           </Text>
         </View>
 
-        <View style={s.counter}>
-          <Text style={s.counterText}>
-            {index}/{total}
-          </Text>
-        </View>
+        {showProgress ? (
+          <View style={s.counter}>
+            <Text style={s.counterText}>
+              {index}/{total}
+            </Text>
+          </View>
+        ) : (
+          // Holds the counter's slot so the chip stays optically centered
+          // between the two ends of the row rather than drifting right.
+          <View style={s.counterSpacer} />
+        )}
       </View>
 
       {/* Progress bar */}
-      <View style={s.progressWrap}>
-        <View style={[s.progressTrack, { backgroundColor: tc.divider }]}>
-          <View style={[s.progressFill, { width: `${pct}%`, backgroundColor: tc.gold }]} />
+      {showProgress ? (
+        <View style={s.progressWrap}>
+          <View style={[s.progressTrack, { backgroundColor: tc.divider }]}>
+            <View style={[s.progressFill, { width: `${pct}%`, backgroundColor: tc.gold }]} />
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 }
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
+    // Without the progress bar the row's own 12pt is the only breathing room
+    // under the chip; this restores roughly the bar's share of it.
+    bareBottom: {
+      paddingBottom: 14,
+    },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -169,6 +190,10 @@ const makeStyles = (tc: ThemeColors) =>
       borderColor: tc.border,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    counterSpacer: {
+      width: 36,
+      height: 36,
     },
     counterText: {
       fontFamily: MONO_FAMILY,

@@ -16,6 +16,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { PressableScale } from '../ui/PressableScale';
 import { Confetti } from '../ui/Confetti';
 import { CountUp } from '../ui/CountUp';
@@ -59,6 +60,9 @@ export function SessionComplete({
 }: SessionCompleteProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  // Both hosts render under the global tab bar, which is an absolute overlay
+  // — without this the Done button sits behind it.
+  const barInset = useBottomBarInset();
 
   const compDelta = comprehension ? Math.round(comprehension.after - comprehension.before) : 0;
 
@@ -108,7 +112,7 @@ export function SessionComplete({
         {children}
       </ScrollView>
 
-      <View style={s.footer}>
+      <View style={[s.footer, { paddingBottom: barInset }]}>
         <PressableScale style={s.primaryBtn} onPress={onPrimary} accessibilityRole="button" accessibilityLabel={primaryLabel}>
           <Text style={s.primaryBtnText}>{primaryLabel}</Text>
         </PressableScale>
@@ -195,8 +199,8 @@ const makeStyles = (tc: ThemeColors) =>
     statValue: { fontSize: 24, fontWeight: '800', color: tc.text },
     statValueAccent: { color: tc.goldOnSurface },
     statLabel: { fontSize: 12, color: tc.textSecondary, marginTop: 2 },
-    // Footer
-    footer: { paddingHorizontal: 24, paddingBottom: 16, paddingTop: 8, gap: 10 },
+    // Footer. `paddingBottom` is applied inline from `useBottomBarInset`.
+    footer: { paddingHorizontal: 24, paddingTop: 8, gap: 10 },
     primaryBtn: { backgroundColor: tc.gold, paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
     primaryBtnText: { color: tc.goldDeep, fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
     secondaryBtn: { alignItems: 'center', paddingVertical: 6 },

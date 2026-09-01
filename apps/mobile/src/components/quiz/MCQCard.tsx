@@ -3,17 +3,17 @@
  * (choices are translations in the user's native language; replaced
  * the retired typed-translation card).
  *
- * Self-contained: renders eyebrow, WordCard, a 2x2 grid of MCQChoice
- * tiles (two top, two bottom), post-answer NOT QUITE callout (when
- * wrong), and a sticky bottom CTA bar. Calls `onAnswer(correct)` once
- * when the user finishes a card (either via Continue tap, or via
- * auto-advance on correct after 600ms).
+ * Self-contained: renders eyebrow, WordCard, a stack of four full-width
+ * MCQChoice rows, post-answer NOT QUITE callout (when wrong), and a
+ * sticky bottom CTA bar. Calls `onAnswer(correct)` once when the user
+ * finishes a card (either via Continue tap, or via auto-advance on
+ * correct after 600ms).
  *
  * Behaviour (cf. CLAUDE_PROMPT §7.1):
- *   • Tap on a tile in `idle` → tile flips to correct/wrong
+ *   • Tap on a row in `idle` → the row flips to correct/wrong
  *     immediately. The actual right answer is always highlighted in
  *     green (`reveal-correct` state) even when the user picked wrong.
- *     Other tiles fade to opacity 0.4.
+ *     Other rows fade to opacity 0.4.
  *   • 600ms after a correct tap, `onAnswer(true)` fires automatically
  *     (the CTA also pulses + becomes "Continue →" in case the user
  *     wants to advance manually before then; either path is fine).
@@ -21,7 +21,7 @@
  *     stays there until the user taps it — we don't auto-advance on
  *     misses so they can read the NOT QUITE callout.
  *   • Idle CTA is a ghost pill ("Pick the translation") — never
- *     "Check", because the tap on a tile IS the answer (no Check step).
+ *     "Check", because the tap on a row IS the answer (no Check step).
  *
  * The card relies on `card.choices` where each choice has
  * `{ word, is_correct }`. The first `is_correct: true` entry is the
@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { WordCard } from './WordCard';
 import { MCQChoice } from './MCQChoice';
 import {
@@ -68,6 +69,9 @@ export function MCQCard({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const copy = MCQ_COPY;
+  // The global tab bar is an absolute overlay, so the sticky CTA has to
+  // reserve its height or the button sits underneath it.
+  const barInset = useBottomBarInset();
 
   const [phase, setPhase] = useState<MCQPhase>('idle');
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
@@ -134,17 +138,16 @@ export function MCQCard({
         <Text style={s.eyebrow}>{copy.eyebrow}</Text>
         <WordCard word={word} pos={pos} example={example} size={36} />
 
-        {/* 2x2 answer grid — two tiles top, two bottom. */}
-        <View style={s.choicesGrid}>
+        {/* Answer list — one full-width row per choice. */}
+        <View style={s.choicesList}>
           {choices.map((c, i) => (
-            <View key={`${c.word}-${i}`} style={s.choiceCell}>
-              <MCQChoice
-                label={c.word}
-                state={choiceStateFor(i, answerState)}
-                disabled={choiceIsDimmed(i, answerState)}
-                onPress={() => handleChoicePress(i)}
-              />
-            </View>
+            <MCQChoice
+              key={`${c.word}-${i}`}
+              label={c.word}
+              state={choiceStateFor(i, answerState)}
+              disabled={choiceIsDimmed(i, answerState)}
+              onPress={() => handleChoicePress(i)}
+            />
           ))}
         </View>
 
@@ -160,7 +163,7 @@ export function MCQCard({
       </ScrollView>
 
       {/* Sticky CTA bar */}
-      <View style={s.ctaBar}>
+      <View style={[s.ctaBar, { paddingBottom: barInset }]}>
         <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
           <Pressable
             onPress={ctaEnabled ? handleAdvance : undefined}
@@ -207,17 +210,13 @@ const makeStyles = (tc: ThemeColors) =>
       textAlign: 'center',
       marginTop: 6,
     },
-    choicesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+    // One choice per row. A 2x2 grid packed four tiles into the width and
+    // paid for it in height — each tile needed 92pt so a two-word gloss had
+    // somewhere to wrap. Four rows read top-to-bottom in one pass, fit a
+    // longer translation on a single line, and leave the card shorter.
+    choicesList: {
       gap: 10,
       marginTop: 6,
-    },
-    // Two per row; flexGrow soaks up the width the gap doesn't use.
-    // Tiles in the same row stretch to equal height.
-    choiceCell: {
-      flexBasis: '47%',
-      flexGrow: 1,
     },
     notQuiteCard: {
       marginTop: 22,
@@ -245,10 +244,11 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.success,
       fontWeight: '800',
     },
+    // `paddingBottom` is applied inline from `useBottomBarInset` — the bar
+    // floats over this surface, so the room it needs is device-dependent.
     ctaBar: {
       paddingHorizontal: 18,
       paddingTop: 12,
-      paddingBottom: 24,
       borderTopWidth: 1,
       borderTopColor: tc.divider,
       backgroundColor: tc.background,
