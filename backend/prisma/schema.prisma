@@ -403,7 +403,10 @@ model UserWord {
   movieId           Int?      @map("movie_id")
   isLearned         Boolean   @default(false) @map("is_learned")
   // Who put this row here. NULL = the user saved it (or it predates the
-  // column); "practice" = a Practice session's padding introduced it. The
+  // column); "practice" = a Practice session's padding introduced it;
+  // "movie_lesson" = a Screening Mode scene test created it for a word the
+  // user was tested on (#166) — treated as the user's own vocabulary, unlike
+  // "practice", and kept out of saved-word lists by its movie_id alone. The
   // Favourites list and the saved-words screen are adapters over
   // `movie_id IS NULL`, so before this column existed a NOT NULL movie_id was
   // the only thing keeping auto-added vocabulary out of them — and Practice

@@ -38,11 +38,15 @@ from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.distractor_pool import build_pool, pool_for
 from ..services.session_kinds import (
+    DAILY_CAP_EXEMPT_KINDS,
     LIST_KINDS,
+    MOVIE_LESSON_MAX_WORDS,
     PRACTICE_SOURCE,
+    UNPADDED_KINDS,
     VALID_KINDS,
     canonical_kind,
     compose_for_kind,
+    normalize_lesson_words,
 )
 from ..services.quiz_service import build_translation_choices, normalize_choice
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
@@ -585,17 +589,23 @@ async def _pad_with_fresh_reel_lemmas(
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
     kind: str = Query("practice", description="One of practice / list_words / "
-                                             "list_films. quick_recall, "
-                                             "tough_words and movie_deep_dive "
-                                             "are accepted as deprecated "
-                                             "aliases for practice."),
-    movie_id: Optional[int] = Query(None, deprecated=True,
-                                    description="Ignored. Retained so installed "
-                                                "builds sending it for the "
-                                                "retired movie_deep_dive tile "
-                                                "still get a session."),
+                                             "list_films / movie_lesson. "
+                                             "quick_recall, tough_words and "
+                                             "movie_deep_dive are accepted as "
+                                             "deprecated aliases for practice."),
+    movie_id: Optional[int] = Query(None, description="Required when "
+                                                     "kind=movie_lesson: the film "
+                                                     "the scene belongs to. "
+                                                     "Ignored otherwise — installed "
+                                                     "builds still send it for the "
+                                                     "retired movie_deep_dive tile."),
     list_id: Optional[int] = Query(None, description="Required when kind=list_words "
                                                     "or kind=list_films."),
+    words: Optional[list[str]] = Query(None, description="Required when "
+                                                        "kind=movie_lesson, repeated: "
+                                                        "the words the scene is testing "
+                                                        "(?words=linger&words=brace). "
+                                                        f"At most {MOVIE_LESSON_MAX_WORDS}."),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
@@ -605,6 +615,15 @@ async def start_session(
     Free users: one session per UTC day (the daily 2-min habit). Hitting
     /srs/session/start a second time the same day returns HTTP 402 with
     a `srs_daily_cap_reached` paywall payload — premium unlocks unlimited.
+    `movie_lesson` is outside that cap (`DAILY_CAP_EXEMPT_KINDS`): Screening
+    Mode is priced by energy instead, so a scene test neither trips the gate
+    nor spends the free user's Practice session for the day.
+
+    `movie_lesson` (#166) takes `movie_id` plus the repeated `words` the scene
+    is testing and returns one card per word the user does not already know,
+    creating `UserWord` rows only for words that have none. Words with no
+    translation MCQ are dropped like any other card, so the client must cope
+    with fewer cards than words asked for.
 
     The Practice tab is ONE kind of session (`practice`), whose deck mixes due
     recalls, the user's own saved/listed words, and fresh words at their CEFR
@@ -635,12 +654,37 @@ async def start_session(
             status_code=422,
             detail=f"{kind} requires the `list_id` query parameter.",
         )
+    if kind == "movie_lesson":
+        if movie_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="movie_lesson requires the `movie_id` query parameter.",
+            )
+        lesson_words = normalize_lesson_words(words)
+        if not lesson_words:
+            raise HTTPException(
+                status_code=422,
+                detail="movie_lesson requires at least one `words` query parameter.",
+            )
+        if len(lesson_words) > MOVIE_LESSON_MAX_WORDS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"movie_lesson tests at most {MOVIE_LESSON_MAX_WORDS} words "
+                       f"per start; got {len(lesson_words)}.",
+            )
+        # An unknown film is a client error, not a server one: the composer
+        # would otherwise write rows pointing at a movie that does not exist.
+        if await db.movie.find_unique(where={"id": movie_id}) is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown movie_id: {movie_id}.",
+            )
 
     premium = is_premium(current_user)
     now = datetime.now(timezone.utc)
+    last_started = getattr(current_user, "srsLastSessionStartedAt", None)
 
-    if not premium:
-        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
+    if not premium and kind not in DAILY_CAP_EXEMPT_KINDS:
         if not can_free_user_start_session_today(last_started, now=now):
             raise HTTPException(
                 status_code=402,
@@ -669,6 +713,8 @@ async def start_session(
         kind=kind,
         user_id=current_user.id,
         list_id=list_id,
+        movie_id=movie_id if kind == "movie_lesson" else None,
+        words=words if kind == "movie_lesson" else None,
         now=now,
     )
 
@@ -712,12 +758,13 @@ async def start_session(
         seen_lemmas.add(lemma)
         session_rows.append(r)
 
-    # `list_words` is deliberately excluded from padding: a words list must
-    # practise its own members and nothing else, and its composer has already
-    # materialised the unstudied ones. Padding it from the reel would put
-    # words the user never put in the list into a session they started from
-    # that list.
-    if len(session_rows) < SESSION_SIZE and kind != "list_words":
+    # `list_words` and `movie_lesson` are deliberately excluded from padding
+    # (`UNPADDED_KINDS`): a words list must practise its own members and a
+    # scene test must ask the words the reader just studied, and both
+    # composers have already materialised the rows they need. Padding either
+    # would put words the user never chose into a session they started from
+    # something specific.
+    if len(session_rows) < SESSION_SIZE and kind not in UNPADDED_KINDS:
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
         if kind == "practice":
@@ -968,8 +1015,11 @@ async def start_session(
 
     # Stamp the daily-cap field + the picked kind only when there was
     # actually work to do. Don't penalize a free user who taps "review"
-    # into an empty queue.
-    if cards:
+    # into an empty queue. A cap-exempt kind stamps neither: both fields are
+    # the daily-cap machinery (`/daily/state` reads the kind only for the day
+    # the start was stamped), and a scene test is not today's Practice.
+    stamped = bool(cards) and kind not in DAILY_CAP_EXEMPT_KINDS
+    if stamped:
         await db.user.update(
             where={"id": current_user.id},
             data={
@@ -984,10 +1034,13 @@ async def start_session(
     # free, sentinel-high for premium.
     if premium:
         remaining = FREE_PREVIEW_SESSIONS
+    elif stamped:
+        # We just used today's slot.
+        remaining = 0
     else:
-        # `cards` may have stamped the field above; if so, we just used today's
-        # slot. Otherwise the queue was empty and the slot remains available.
-        remaining = 0 if cards else 1
+        # Either the queue was empty or this kind is outside the cap; the
+        # Practice slot is whatever it was before this call.
+        remaining = 1 if can_free_user_start_session_today(last_started, now=now) else 0
 
     return SessionStartResponse(
         cards=cards,

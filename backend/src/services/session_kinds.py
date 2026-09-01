@@ -23,6 +23,14 @@ Available kinds (`SessionKind`):
   • list_films  — a films list. Still movie-scoped, and deliberately so: it is
                   reached from a list of films the user built, not from
                   Practice.
+  • movie_lesson — a Screening Mode scene test (#166). The client names the
+                  film and the exact words the scene is testing; the composer
+                  returns one UserWord row per word, creating rows only for
+                  the words with none. Every answer then posts to /srs/review
+                  like any other card, so a word missed in a film comes back
+                  in Practice on the same row, in the same Leitner box — the
+                  "missed words" of a film are a view over its low-box rows,
+                  not a second memory model.
 
 `quick_recall`, `tough_words` and `movie_deep_dive` remain in VALID_KINDS as
 DEPRECATED ALIASES for `practice`. Builds already on the App Store still send
@@ -43,11 +51,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from prisma import Prisma
+from prisma.errors import UniqueViolationError
 
 SessionKind = Literal[
     "practice",
     "list_words",
     "list_films",
+    "movie_lesson",
 ]
 
 # Kinds a current client asks for.
@@ -55,6 +65,7 @@ VALID_KINDS: set[str] = {
     "practice",
     "list_words",
     "list_films",
+    "movie_lesson",
 }
 
 # Retired Practice tiles, still sent by installed builds. Each maps to the
@@ -71,6 +82,36 @@ VALID_KINDS |= set(DEPRECATED_KIND_ALIASES)
 
 # Kinds driven by a list — they require `list_id`.
 LIST_KINDS: set[str] = {"list_words", "list_films"}
+
+# Kinds that practise exactly the words they were handed. The route never pads
+# these from the registry or a film: a words list must test its own members
+# and a scene test must ask the words the reader just studied — padding either
+# would put vocabulary the user never chose into a session they started from
+# something specific.
+UNPADDED_KINDS: set[str] = {"list_words", "movie_lesson"}
+
+# Kinds outside the free tier's one-session-per-UTC-day cap. Decided on #161
+# (2026-09-01): Screening Mode is priced by energy (#168), which REPLACES the
+# daily cap rather than stacking on it, so a scene test neither trips the
+# `srsLastSessionStartedAt` gate nor stamps it — a free user's lesson must not
+# spend their Practice session for the day. The gate itself retires with #168.
+DAILY_CAP_EXEMPT_KINDS: set[str] = {"movie_lesson"}
+
+# `UserWord.source` for a row a scene test materialised. Distinct from
+# `PRACTICE_SOURCE` on purpose: Practice's padding is hidden from every
+# saved-word surface (`user_owned_where_fragment`), but a word the user was
+# tested on in a film IS their vocabulary now, and it should come back through
+# Practice's "your words" slice if the lesson ends before the row is answered.
+# Saved-words / Favourites are adapters over `movie_id IS NULL`, and these
+# rows carry the film's id, so they stay out of those lists regardless.
+MOVIE_LESSON_SOURCE = "movie_lesson"
+
+# Most words one movie_lesson start may ask for. A six-card scene tests 3 + 2
+# resurfaced words, the longest scene (11 cards) tests 6 + 2, and the Final
+# Cut (#171) asks 10. Twenty leaves a scene runner room to fetch a whole scene
+# in one call without this ever becoming a bulk-create endpoint — the point of
+# lazy creation is that a film the user bounces off writes nothing.
+MOVIE_LESSON_MAX_WORDS: int = 20
 
 
 def canonical_kind(kind: str) -> str:
@@ -210,6 +251,47 @@ def user_owned_where_fragment() -> dict:
     fail loudly, it silently empties every user's saved-words list.
     """
     return {"OR": [{"source": None}, {"source": {"not": PRACTICE_SOURCE}}]}
+
+
+def normalize_lesson_words(words: Optional[list[str]]) -> list[str]:
+    """The words a movie_lesson request actually asks for: stripped,
+    lowercased, blanks dropped, duplicates collapsed, original order kept.
+
+    Lowercased because every row this composer writes is keyed on the
+    lowercase lemma (the deck displays `display_form`, which is the lowercase
+    lemma), so a re-run that spells "Linger" differently must still find the
+    row it created last time instead of writing a second one.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in words or []:
+        word = (raw or "").strip().lower()
+        if not word or word in seen:
+            continue
+        seen.add(word)
+        out.append(word)
+    return out
+
+
+def pick_lesson_row(rows: list, movie_id: int):
+    """Which of a user's existing rows for one word a scene test should use,
+    or None when the word should not be asked at all.
+
+    A word can have several rows — one per film it was saved from, plus the
+    global (movie_id NULL) marker — each carrying its own Leitner state. The
+    film's own row wins, so the mastery ring #171 reads off box state stays
+    coherent for that film; otherwise the row Practice would surface first
+    (soonest due, then oldest). A word marked learned on ANY row is skipped:
+    the learned marker hides a word everywhere else in the app, and a lesson
+    should not be the one surface that keeps asking it.
+    """
+    if not rows:
+        return None
+    if any(getattr(r, "isLearned", False) for r in rows):
+        return None
+    own = [r for r in rows if getattr(r, "movieId", None) == movie_id]
+    pool = own or list(rows)
+    return min(pool, key=lambda r: (r.srsDueAt, r.id))
 
 
 # ── Per-kind composers ─────────────────────────────────────────────────────
@@ -391,25 +473,98 @@ async def compose_list_films(
     )
 
 
+async def compose_movie_lesson(
+    db: Prisma,
+    *,
+    user_id: int,
+    movie_id: int,
+    words: list[str],
+    now: Optional[datetime] = None,
+) -> list:
+    """One UserWord row per word a Screening Mode scene is testing, in the
+    order asked. The film and the words come from the client — the scene
+    runner knows which cards the reader just studied and which misses it is
+    bringing back; the server's job is only to give each word a row.
+
+    Lazy on purpose: rows are created for the words this call tests and no
+    others (precedent: `compose_list_words`). MovieDetailScreen shows ~60
+    words the moment a film opens, and a row for each would put sixty
+    never-studied words into the Practice queue of everyone who bounces off
+    a film after one look. A word the user already has a row for — saved from
+    a subtitle, padded by Practice, tested in another film — reuses that row
+    (`pick_lesson_row`), so the lesson and the Practice tab agree on one
+    Leitner box per word instead of keeping two opinions about it.
+
+    The words are trusted to belong to the film, as `POST /user-words` trusts
+    a saved word's `movie_id`. Checking them against `movie_lemma_mappings`
+    was measured against prod and rejected: the deck is built from
+    `word_classifications`, and the two tables agree on only 96% of a film's
+    lemmas, so the check would refuse real deck words.
+    """
+    wanted = normalize_lesson_words(words)[:MOVIE_LESSON_MAX_WORDS]
+    if not wanted:
+        return []
+
+    when = now if now is not None else datetime.now(timezone.utc)
+    existing = await db.userword.find_many(
+        where={
+            "userId": user_id,
+            "word": {"in": wanted, "mode": "insensitive"},
+        },
+    )
+    by_word: dict[str, list] = {}
+    for row in existing:
+        by_word.setdefault(row.word.lower(), []).append(row)
+
+    picked: list = []
+    for word in wanted:
+        rows = by_word.get(word)
+        if rows:
+            row = pick_lesson_row(rows, movie_id)
+            if row is not None:
+                picked.append(row)
+            continue
+        try:
+            picked.append(await db.userword.create(data={
+                "userId": user_id,
+                "word": word,
+                "movieId": movie_id,
+                "srsDueAt": when,
+                "source": MOVIE_LESSON_SOURCE,
+            }))
+        except UniqueViolationError:
+            # Lost a race against `unique_user_word_movie` — two starts for
+            # the same scene at once. Skip it rather than fail the session;
+            # the retry finds the row the other request wrote. Only that
+            # error: anything else (a dropped connection, a bad column) must
+            # surface as a 500, not as a lesson with fewer questions.
+            continue
+    return picked
+
+
 async def compose_for_kind(
     db: Prisma,
     *,
     kind: str,
     user_id: int,
     list_id: Optional[int] = None,
+    movie_id: Optional[int] = None,
+    words: Optional[list[str]] = None,
     now: Optional[datetime] = None,
 ) -> tuple[list, list]:
     """Dispatch helper. Returns `(picked, reserve)` for every kind.
 
-    Only `practice` ever produces a non-empty reserve — the list kinds practise
-    a fixed set of members, so there is nothing held back to fall back on. The
-    uniform shape means the route hydrates all three identically.
+    Only `practice` ever produces a non-empty reserve — the list kinds and
+    `movie_lesson` practise a fixed set of words, so there is nothing held
+    back to fall back on. The uniform shape means the route hydrates every
+    kind identically.
 
     Deprecated Practice tiles (`quick_recall`, `tough_words`,
     `movie_deep_dive`) resolve to `practice` here rather than at the route, so
     every caller gets the aliasing for free. Raises ValueError for unknown
-    kinds, or for a list kind without a `list_id` — the route layer translates
-    those into 422s.
+    kinds, for a list kind without a `list_id`, or for `movie_lesson` without
+    a `movie_id` and at least one word — the route layer translates those
+    into 422s.
     """
     resolved = canonical_kind(kind)
     if resolved == "practice":
@@ -425,5 +580,14 @@ async def compose_for_kind(
             rows = await compose_list_films(
                 db, user_id=user_id, list_id=list_id, now=now,
             )
+        return rows, []
+    if resolved == "movie_lesson":
+        if movie_id is None:
+            raise ValueError("movie_lesson requires movie_id")
+        if not normalize_lesson_words(words):
+            raise ValueError("movie_lesson requires at least one word")
+        rows = await compose_movie_lesson(
+            db, user_id=user_id, movie_id=movie_id, words=words or [], now=now,
+        )
         return rows, []
     raise ValueError(f"unknown session kind: {kind}")
