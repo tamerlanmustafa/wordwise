@@ -5,7 +5,7 @@
  * that used to sit inline in the component.
  */
 
-import { quizHeaderProgress } from '../quizHeaderLayout';
+import { quizHeaderProgress, sessionPosition } from '../quizHeaderLayout';
 
 describe('quizHeaderProgress — mid-deck', () => {
   it('reports progress and fills proportionally', () => {
@@ -41,5 +41,43 @@ describe('quizHeaderProgress — no deck behind the header', () => {
   it('treats a zero-card session as no deck rather than dividing by zero', () => {
     expect(quizHeaderProgress(0, 0)).toEqual({ showProgress: false, pct: 0 });
     expect(quizHeaderProgress(1, 0).pct).not.toBeNaN();
+  });
+});
+
+describe('sessionPosition — a resumed deck counts from where it left off', () => {
+  // `reviewSessionStore` caches an in-flight session so quitting Practice
+  // and coming back picks up the same cards. It hands back only what's
+  // *left* — answered cards are dropped as they're consumed — and the
+  // screen fed that straight to the header. A user three cards into a
+  // ten-card session was told "1 / 7", with the gold bar reset to empty,
+  // while the done screen at the end reported all ten. The store has kept
+  // `totalCards` since it was written; nothing read it.
+
+  it('counts across the whole session, not the tail', () => {
+    // Answered 3 of 10, quit, reopened: 7 cards loaded, sitting on the first.
+    expect(sessionPosition(0, 7, 3)).toEqual({ index: 4, total: 10 });
+  });
+
+  it('advances through the resumed portion to the real end', () => {
+    expect(sessionPosition(6, 7, 3)).toEqual({ index: 10, total: 10 });
+  });
+
+  it('is the plain count for a fresh session', () => {
+    // Nothing answered before, so the offset has to disappear entirely
+    // rather than shift a normal session by one.
+    expect(sessionPosition(0, 10, 0)).toEqual({ index: 1, total: 10 });
+    expect(sessionPosition(9, 10, 0)).toEqual({ index: 10, total: 10 });
+  });
+
+  it('feeds a progress bar that never runs backwards on resume', () => {
+    // The bug's visible half: reopening used to reset the bar to ~14%
+    // after the user had already filled 30% of it.
+    const before = quizHeaderProgress(3, 10).pct;
+    const resumed = sessionPosition(0, 7, 3);
+    expect(quizHeaderProgress(resumed.index, resumed.total).pct).toBeGreaterThan(before);
+  });
+
+  it('ignores a negative offset rather than counting below one', () => {
+    expect(sessionPosition(0, 5, -2)).toEqual({ index: 1, total: 5 });
   });
 });

@@ -28,6 +28,10 @@
     "starting": "Başlıyoruz…",
     "title": "WordWise Plus",
     "welcomeBody": "Aboneliğin artık aktif.",
-    "welcomeTitle": "Plus'a hoş geldin!"
+    "welcomeTitle": "Plus'a hoş geldin!",
+    "heroTitle": "Kelime potansiyelini\ntamamen aç",
+    "subDailyCap": "Bugünün ücretsiz tekrarını tamamladın. Şimdi ve her gün devam etmek için yükselt.",
+    "subPreviews": "{{limit}} ücretsiz tekrar oturumundan {{used}} tanesini kullandın. Aralıklı tekrarla öğrenmeye devam etmek için yükselt.",
+    "subGeneric": "İstediğin kadar tekrar yapmak için yükselt — aralıklı tekrar kelimelerin unutulmasını önler."
   }
 }

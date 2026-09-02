@@ -33,3 +33,45 @@ export function quizHeaderProgress(index?: number, total?: number): QuizHeaderPr
     pct: Math.max(0, Math.min(100, (index / total) * 100)),
   };
 }
+
+// ── Position in a session that may have been resumed ───────────────────────
+//
+// `reviewSessionStore` caches an in-flight deck so quitting and reopening
+// Practice picks the same cards back up. What it hands back is only the
+// *remaining* cards — the answered ones are dropped as they are consumed —
+// and the screen fed `cards.length` straight to the header. So a user who
+// answered 3 of 10, closed the app and came back was told "1 / 7", with the
+// gold bar reset to empty, for a session they were a third of the way
+// through. The store has kept `totalCards` since it was written; nothing
+// read it.
+//
+// The done screen never had the bug, because it counts from the running
+// `got + forgot` totals, which the store *does* restore. That split — one
+// surface counting the whole session, the other counting the tail — is why
+// the position belongs in one shared function rather than at each call site.
+
+export interface SessionPosition {
+  /** 1-indexed card number across the whole session. */
+  index: number;
+  /** Cards in the whole session, resumed portion included. */
+  total: number;
+}
+
+/**
+ * Absolute position in a session, given the index within the cards currently
+ * loaded and how many were already answered before this run.
+ *
+ * `answeredBefore` is 0 for a fresh session, which collapses to the obvious
+ * `index + 1` of `remaining.length`.
+ */
+export function sessionPosition(
+  indexInLoaded: number,
+  loadedCount: number,
+  answeredBefore: number,
+): SessionPosition {
+  const before = Math.max(0, answeredBefore);
+  return {
+    index: before + indexInLoaded + 1,
+    total: before + loadedCount,
+  };
+}

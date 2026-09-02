@@ -21,8 +21,10 @@ import { PressableScale } from './ui/PressableScale';
 import {
   PAYWALL_FEATURES,
   annualSavingsPercent,
+  paywallSubtitle,
   MONTHLY_PRICE_LABEL,
   ANNUAL_PRICE_LABEL,
+  type PaywallReason,
 } from './paywallPricing';
 import { directionalIcon } from '../i18n/rtl';
 
@@ -30,11 +32,18 @@ export interface PaywallScreenProps {
   onBack: () => void;
   previewsUsed: number;
   previewsLimit: number;
+  /** Why the screen opened. `/srs/session/start` 402s for two different
+   *  reasons and they need different copy — the subtitle used to be a
+   *  single hard-coded sentence about the legacy preview budget, which the
+   *  daily-cap path renders as "You've used 0 of 0 free review sessions"
+   *  because that payload carries no counts. Optional: the entry points
+   *  that just browse the upgrade pass nothing. */
+  reason?: PaywallReason;
 }
 
 type Plan = 'annual' | 'monthly';
 
-export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallScreenProps) {
+export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = null }: PaywallScreenProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -42,6 +51,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
   const [plan, setPlan] = useState<Plan>('annual');
   const [busy, setBusy] = useState(false);
   const savings = annualSavingsPercent();
+  const subtitle = paywallSubtitle(reason, previewsUsed, previewsLimit);
 
   const buy = async () => {
     if (busy) return;
@@ -75,14 +85,11 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit }: PaywallSc
       </View>
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <Text style={s.heroTitle}>Unlock your full{'\n'}vocabulary potential</Text>
+        <Text style={s.heroTitle}>{t('billing:paywall.heroTitle')}</Text>
         {isPremium ? (
           <Text style={s.heroSub}>{t('billing:paywall.alreadyPlus')}</Text>
         ) : (
-          <Text style={s.heroSub}>
-            You've used {previewsUsed} of {previewsLimit} free review sessions. Upgrade to keep learning with
-            spaced repetition.
-          </Text>
+          <Text style={s.heroSub}>{t(subtitle.key, subtitle.params)}</Text>
         )}
 
         <View style={s.featureList}>

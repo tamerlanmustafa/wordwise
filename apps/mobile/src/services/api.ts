@@ -958,6 +958,11 @@ export interface SrsSessionStart {
   previews_remaining: number;
   /** v0.7.2 — echoed back so the client confirms which tile was claimed. */
   kind?: SessionKind;
+  /** Why `cards` is empty, when it is: `caught_up` (nothing due, nothing to
+   *  pad with) vs `unavailable` (words existed but no card could be built
+   *  for any of them). The screen showed "You're all caught up" for both.
+   *  Optional — older servers don't send it; see `quiz/emptyDeck.ts`. */
+  deck_status?: 'ok' | 'caught_up' | 'unavailable';
 }
 
 export interface SavedWordEntry {

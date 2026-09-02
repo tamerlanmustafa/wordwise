@@ -27,10 +27,13 @@ import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
+import { sessionPosition } from './quiz/quizHeaderLayout';
+import { emptyDeckCopy } from './quiz/emptyDeck';
 import { feedback } from '../utils/feedback';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
+import type { PaywallReason } from './paywallPricing';
 import { SessionComplete } from './common/SessionComplete';
 import { Skeleton } from './ui/Skeleton';
 
@@ -70,7 +73,15 @@ export interface ReviewScreenProps {
    *  instead of calling /srs/session/start again. */
   initialSession?: SrsSessionStart;
   onBack: () => void;
-  onPaywall: (previews_used: number, previews_limit: number) => void;
+  /** `reason` picks the paywall's copy. The daily cap and the legacy preview
+   *  budget both arrive as a 402 and need different sentences — without it
+   *  the cap rendered the preview sentence over counts the payload never
+   *  sent, i.e. "You've used 0 of 0 free review sessions". */
+  onPaywall: (
+    previews_used: number,
+    previews_limit: number,
+    reason: PaywallReason,
+  ) => void;
 }
 
 // v0.7 §7 — `recall` is gone. The server only ships translation `mcq`
@@ -96,6 +107,13 @@ export function ReviewScreen({
   const [previewsRemaining, setPreviewsRemaining] = useState<number | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Cards already answered before this run — non-zero only when we resumed a
+  // cached deck. `cards` holds just what is left, so without this the header
+  // counted the tail: "1 / 7" for a session the user was 3 cards into.
+  const [answeredBefore, setAnsweredBefore] = useState(0);
+  // Why the deck came back empty, when it did. Distinguishes "you're caught
+  // up" from "we couldn't build your cards" — see `quiz/emptyDeck.ts`.
+  const [deckStatus, setDeckStatus] = useState<string | undefined>(undefined);
   // Bump info for the streak/wall on the done screen. Populated once when
   // the session finishes; not re-bumped on re-renders.
   const [dailySummary, setDailySummary] = useState<{
@@ -160,6 +178,11 @@ export function ReviewScreen({
       setIsPreview(false);
       setPreviewsRemaining(null);
       setStats({ got: resumable.got, forgot: resumable.forgot });
+      // `totalCards` is the whole session; `remaining` is what's left. The
+      // difference is what the header has to add back so a resumed deck
+      // reads "4 / 10" rather than restarting the count at "1 / 7".
+      setAnsweredBefore(Math.max(0, resumable.totalCards - resumable.remaining.length));
+      setDeckStatus('ok');
       setPhase('card');
       return;
     }
@@ -171,6 +194,8 @@ export function ReviewScreen({
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
+      setAnsweredBefore(0);
+      setDeckStatus(session.deck_status);
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
@@ -188,7 +213,7 @@ export function ReviewScreen({
       }
     } catch (e: any) {
       if (e instanceof SrsPaywallError) {
-        onPaywall(e.previews_used, e.previews_limit);
+        onPaywall(e.previews_used, e.previews_limit, e.kind);
         return;
       }
       console.warn('[ReviewScreen] startSession failed:', e?.message);
@@ -218,7 +243,11 @@ export function ReviewScreen({
     const renderable = currentCard.card_type === 'mcq' && currentCard.choices;
     if (renderable) return;
     console.warn('[ReviewScreen] skipping unrenderable card:', currentCard.card_type, currentCard.word);
-    advance(true);
+    // `record: false` — the user never saw this card, so posting an outcome
+    // for it would push a word they were never asked up the Leitner boxes
+    // and out to a 30-day interval on the strength of a card the client
+    // couldn't draw. Skipping silently leaves it due, which is the truth.
+    advance(true, { record: false });
     // We intentionally exclude `advance` from deps to avoid the effect
     // re-running on every advance() call (which mutates state on the
     // next render). Keying off currentCard + phase fires once per card.
@@ -235,22 +264,30 @@ export function ReviewScreen({
   }, [phase, currentCard, tipHydrated]);
 
   const advance = useCallback(
-    (correct: boolean) => {
+    (correct: boolean, opts?: { record?: boolean }) => {
       if (!currentCard) return;
+      const record = opts?.record ?? true;
       // Fire-and-forget the review POST. If it fails the scheduler will
       // just show the card again on the next session — worst case a user
-      // sees a word one extra time, not a silent data-loss bug.
-      srsApi.review(currentCard.user_word_id, correct).catch((e) => {
-        console.warn('[ReviewScreen] review record failed:', e?.message);
-      });
-      setStats((s) => ({
-        got: s.got + (correct ? 1 : 0),
-        forgot: s.forgot + (correct ? 0 : 1),
-      }));
-      // Pop the answered card from the persistent cache so a quit-and-
-      // reopen resumes at the NEXT card. Stats inside the store mirror
-      // ours so /srs/session/complete totals stay coherent on resume.
-      useReviewSessionStore.getState().consume(correct);
+      // sees a word one extra time, not a silent data-loss bug. The *day*
+      // is no longer riding on these: /srs/session/complete records that
+      // separately, so a flaky connection can no longer eat the streak.
+      // Pop the card from the persistent cache either way, so a quit-and-
+      // reopen resumes at the NEXT one. Stats inside the store mirror ours so
+      // /srs/session/complete totals stay coherent on resume.
+      const cache = useReviewSessionStore.getState();
+      if (record) {
+        srsApi.review(currentCard.user_word_id, correct).catch((e) => {
+          console.warn('[ReviewScreen] review record failed:', e?.message);
+        });
+        setStats((s) => ({
+          got: s.got + (correct ? 1 : 0),
+          forgot: s.forgot + (correct ? 0 : 1),
+        }));
+        cache.consume(correct);
+      } else {
+        cache.skip();
+      }
 
       Animated.sequence([
         Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true }),
@@ -275,13 +312,27 @@ export function ReviewScreen({
         // network is flaky we still show the done screen; the chest
         // simply won't appear. Server enforces one-per-day so a retry
         // won't double-credit.
-        const justCorrect = correct ? stats.got + 1 : stats.got;
-        const total = stats.got + stats.forgot + 1;
+        const scored = record ? 1 : 0;
+        const justCorrect = correct && record ? stats.got + 1 : stats.got;
+        const total = stats.got + stats.forgot + scored;
         srsApi.completeSession(justCorrect, total)
           .then((res) => {
             if (res.chest) {
               setChest(res.chest);
               setChestVisible(true);
+            }
+            // Correct the optimistic local streak with the server's. The
+            // local one is computed from the device calendar and the server's
+            // from UTC, and a fresh install starts at zero however long the
+            // user's real streak is — so the done screen could say "Nice
+            // work" while the Practice header, which reads the server, said
+            // "day 12" one tap later. /srs/session/complete now records the
+            // session itself, which makes this number the authoritative one.
+            if (typeof res.streak === 'number' && res.streak > 0) {
+              setDailySummary((prev) => ({
+                streak: res.streak,
+                justHitGoal: prev?.justHitGoal ?? false,
+              }));
             }
             // v0.6 W10 — queue any newly-crossed milestones for celebration.
             // We don't markSeen here; that happens when the user dismisses
@@ -352,6 +403,9 @@ export function ReviewScreen({
   }
 
   if (phase === 'empty') {
+    // Two different empty decks, two different things to tell the user —
+    // "come back tomorrow" vs "try again in a moment". See `quiz/emptyDeck`.
+    const copy = emptyDeckCopy(deckStatus);
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -362,12 +416,14 @@ export function ReviewScreen({
           <View style={{ width: 60 }} />
         </View>
         <EmptyState
-          icon="checkmark-circle"
-          tone="success"
-          title={t('quiz:review.caughtUpTitle')}
-          body={t('quiz:review.caughtUpBody')}
-          ctaLabel={t('quiz:review.backHome')}
-          onCta={onBack}
+          icon={copy.icon}
+          tone={copy.tone}
+          title={t(copy.titleKey)}
+          body={t(copy.bodyKey)}
+          ctaLabel={t(copy.ctaKey)}
+          onCta={copy.retry ? loadSession : onBack}
+          subCtaLabel={copy.retry ? t('quiz:review.backHome') : undefined}
+          onSubCta={copy.retry ? onBack : undefined}
         />
       </SafeAreaView>
     );
@@ -444,6 +500,9 @@ export function ReviewScreen({
   const lvl = (currentCard.cefr_level && currentCard.cefr_level in cefrColors)
     ? (currentCard.cefr_level as keyof typeof cefrColors)
     : null;
+  // Count across the whole session, not just the cards still loaded — a
+  // resumed deck holds only what's left (see `sessionPosition`).
+  const pos = sessionPosition(index, cards.length, answeredBefore);
   const sharedHeader = (
     <QuizHeader
       // Practice is about the word, not where it came from. The payload
@@ -451,8 +510,8 @@ export function ReviewScreen({
       // older builds that render it); this screen deliberately doesn't.
       movie={t('quiz:review.dailyReview')}
       level={lvl}
-      index={index + 1}
-      total={cards.length}
+      index={pos.index}
+      total={pos.total}
       onBack={onBack}
     />
   );

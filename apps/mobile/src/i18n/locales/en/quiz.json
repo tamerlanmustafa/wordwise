@@ -55,6 +55,8 @@
     "tipEyebrow": "Did you know?",
     "tipTitle": "That's the spacing effect at work",
     "tipBody": "Studies suggest that reviewing a word 3–6 days after first seeing it is when memory really sticks — much better than cramming on one day. You're seeing this word again on that exact rhythm.",
-    "screenTitle": "Review"
+    "screenTitle": "Review",
+    "notReadyTitle": "Getting your words ready",
+    "notReadyBody": "We couldn't build today's cards just yet. Give it a moment and try again — nothing you've saved is lost."
   }
 }

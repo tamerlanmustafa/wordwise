@@ -53,6 +53,7 @@ from ..services.srs_engine import (
     advance_word_after_review,
     can_free_user_start_session_today,
     next_due_after,
+    record_session_day,
 )
 from ..services.translation_service import TranslationService
 from ..utils.nlp_executor import run_nlp
@@ -155,6 +156,18 @@ class SessionStartResponse(BaseModel):
     # that asked with a deprecated alias sees what it actually got, and can
     # cross-check against `last_session_kind` on the next /daily/state read.
     kind: str = "practice"
+    # Why `cards` is empty, when it is. An empty deck has two very different
+    # causes and the client used to render "You're all caught up" for both:
+    #   • caught_up   — nothing due and nothing left to pad with. Honest.
+    #   • unavailable — we HAD words for this user and dropped every one of
+    #     them, because no translation MCQ could be built (a target language
+    #     whose translation cache is still cold, mostly). Telling that user
+    #     they are caught up is a lie, and it hides the outage: they retry
+    #     tomorrow instead of in five minutes, and nothing in the app ever
+    #     says a deck failed to build.
+    # Always "ok" when `cards` is non-empty. Optional-with-default so older
+    # builds, which ignore the field, keep parsing the response.
+    deck_status: str = "ok"
 
 
 class TodaysWordResponse(BaseModel):
@@ -648,6 +661,16 @@ async def start_session(
                     "paywall": "srs_daily_cap_reached",
                     "message": "You've finished today's free review. "
                                "Come back tomorrow — or upgrade for unlimited sessions.",
+                    # The daily cap is a budget of one session per UTC day, so
+                    # "1 of 1" is the honest reading of these legacy fields.
+                    # They were absent, and the mobile paywall defaults a
+                    # missing value to 0 — which put "You've used 0 of 0 free
+                    # review sessions" on the one screen whose whole job is to
+                    # ask for money. Newer builds key their copy off `paywall`
+                    # instead, but every already-installed build reads these,
+                    # and those builds cannot be fixed from the client.
+                    "previews_used": 1,
+                    "previews_limit": 1,
                 },
             )
 
@@ -989,6 +1012,16 @@ async def start_session(
         # slot. Otherwise the queue was empty and the slot remains available.
         remaining = 0 if cards else 1
 
+    # `session_rows` is what the composer + padding managed to gather; `cards`
+    # is what survived the MCQ build. The gap between the two is the whole
+    # distinction the client needs (see `deck_status` on the model).
+    if cards:
+        deck_status = "ok"
+    elif session_rows:
+        deck_status = "unavailable"
+    else:
+        deck_status = "caught_up"
+
     return SessionStartResponse(
         cards=cards,
         total_due=total_due,
@@ -996,6 +1029,7 @@ async def start_session(
         is_preview=not premium,
         previews_remaining=remaining,
         kind=kind,
+        deck_status=deck_status,
     )
 
 
@@ -1067,10 +1101,34 @@ async def complete_session(
     `correct_count` / `total_count` are accepted for analytics / future
     chest-weighting; they're echoed back so the client UI doesn't need
     to redundantly compute them.
+
+    This is also where finishing a session gets *recorded*. The streak and
+    `srsLastSessionDate` used to move only as a side effect of the per-card
+    `POST /srs/review`, which the client fires fire-and-forget: a user who
+    finished ten cards on a bad connection saw "day 5" on the done screen
+    while the server still had 4, and `/daily/state` still said today wasn't
+    done. Recording it here also removes a race that made the returned
+    `streak` wrong even on a good connection — the last card's `/srs/review`
+    is still in flight when this call reads the user row, so the number came
+    back one bump stale. `record_session_day` is idempotent, so whichever
+    lands second is a no-op.
+
+    A session that scored nothing does not count as a day. The client can
+    legitimately reach here with `total_count == 0` — a deck whose every card
+    turned out to be unrenderable is dropped card by card and then "finishes"
+    — and crediting the streak for a session where the user was never asked
+    anything is exactly the kind of hollow number the streak is supposed to
+    mean something against. Same guard `advance_user_rollup_after_review`
+    already applies.
     """
     now = datetime.now(timezone.utc)
     today = now.date()
 
+    if body.total_count > 0:
+        await record_session_day(db, user_id=current_user.id, today=today)
+
+    # Read after the write, so the streak we return is the one the done
+    # screen should show rather than the one from before this session.
     user = await db.user.find_unique(where={"id": current_user.id})
     streak = (user.srsCurrentStreak or 0) if user else 0
     last_chest = user.srsLastChestDate if user else None

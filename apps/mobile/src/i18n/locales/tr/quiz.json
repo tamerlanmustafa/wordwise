@@ -55,6 +55,8 @@
     "tipEyebrow": "Biliyor muydun?",
     "tipTitle": "İşte bu, aralık etkisinin işleyiş şekli",
     "todaysDone": "Bugünkü iş bitti",
-    "upgradeBody": "Yarın tekrar gelin — ya da sınırsız tekrar için yükseltin."
+    "upgradeBody": "Yarın tekrar gelin — ya da sınırsız tekrar için yükseltin.",
+    "notReadyTitle": "Kelimelerin hazırlanıyor",
+    "notReadyBody": "Bugünün kartlarını henüz oluşturamadık. Biraz bekleyip tekrar dene — kaydettiğin hiçbir şey kaybolmadı."
   }
 }

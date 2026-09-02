@@ -58,6 +58,12 @@ interface ReviewSessionState {
   start: (s: Omit<CachedSession, 'savedAt'>) => void;
   /** Drop the head card and adjust running stats. */
   consume: (correct: boolean) => void;
+  /** Drop the head card WITHOUT scoring it. For a card the client could
+   *  not render, which the user therefore never answered — counting it as
+   *  remembered would inflate the accuracy on the done screen with a card
+   *  that was never shown. Also shrinks `totalCards`, so the header's
+   *  denominator matches the number of cards actually asked. */
+  skip: () => void;
   /** Wipe the cache — called on session-complete or when we detect a
    *  stale entry. */
   clear: () => void;
@@ -154,6 +160,19 @@ export const useReviewSessionStore = create<ReviewSessionState>((set, get) => ({
       remaining: c.remaining.slice(1),
       got: c.got + (correct ? 1 : 0),
       forgot: c.forgot + (correct ? 0 : 1),
+      savedAt: Date.now(),
+    };
+    void writePersisted(next);
+    set({ cached: next });
+  },
+
+  skip: () => {
+    const c = get().cached;
+    if (!c || c.remaining.length === 0) return;
+    const next: CachedSession = {
+      ...c,
+      remaining: c.remaining.slice(1),
+      totalCards: Math.max(0, c.totalCards - 1),
       savedAt: Date.now(),
     };
     void writePersisted(next);

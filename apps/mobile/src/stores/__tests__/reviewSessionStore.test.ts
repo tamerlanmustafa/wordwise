@@ -156,6 +156,63 @@ describe('reviewSessionStore', () => {
     });
   });
 
+  describe('skip', () => {
+    // A card the client cannot render — an unknown `card_type` from a server
+    // build ahead of this one — is dropped on the floor so the deck doesn't
+    // black-screen. It used to be dropped through `consume(true)`, which
+    // scored it: a word the user was never shown was recorded as remembered,
+    // pushing it up the Leitner boxes and out to a 30-day interval, and
+    // inflating the accuracy on the done screen with a card nobody answered.
+    it('drops the head card without scoring it', async () => {
+      useReviewSessionStore.getState().start(session('practice', [1, 2, 3]));
+      await flush();
+      useReviewSessionStore.getState().skip();
+      await flush();
+
+      const c = useReviewSessionStore.getState().cached!;
+      expect(c.remaining.map((r) => r.user_word_id)).toEqual([2, 3]);
+      expect({ got: c.got, forgot: c.forgot }).toEqual({ got: 0, forgot: 0 });
+    });
+
+    it('shrinks the total so the header counts only what was asked', async () => {
+      useReviewSessionStore.getState().start(session('practice', [1, 2, 3]));
+      await flush();
+      useReviewSessionStore.getState().skip();
+      await flush();
+
+      // Three cards drawn, one undrawable: the user is answering two.
+      expect(useReviewSessionStore.getState().cached!.totalCards).toBe(2);
+    });
+
+    it('persists, so a resume does not resurrect the skipped card', async () => {
+      useReviewSessionStore.getState().start(session('practice', [1, 2]));
+      await flush();
+      useReviewSessionStore.getState().skip();
+      await flush();
+
+      const raw = JSON.parse((await AsyncStorage.getItem(KEY))!);
+      expect(raw.remaining.map((r: any) => r.user_word_id)).toEqual([2]);
+    });
+
+    it('is a no-op on an empty or absent cache', async () => {
+      useReviewSessionStore.getState().clear();
+      await flush();
+      expect(() => useReviewSessionStore.getState().skip()).not.toThrow();
+      expect(useReviewSessionStore.getState().cached).toBeNull();
+    });
+
+    it('leaves a score already earned alone', async () => {
+      useReviewSessionStore.getState().start(session('practice', [1, 2, 3]));
+      await flush();
+      useReviewSessionStore.getState().consume(true);
+      useReviewSessionStore.getState().skip();
+      await flush();
+
+      const c = useReviewSessionStore.getState().cached!;
+      expect({ got: c.got, forgot: c.forgot }).toEqual({ got: 1, forgot: 0 });
+    });
+  });
+
   describe('clear', () => {
     it('wipes both the in-memory cache and the persisted copy', async () => {
       useReviewSessionStore.getState().start(session('practice', [1]));

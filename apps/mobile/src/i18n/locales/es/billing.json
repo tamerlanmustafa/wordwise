@@ -28,6 +28,10 @@
     "starting": "Empezamos…",
     "title": "WordWise Plus",
     "welcomeBody": "Tu suscripción ya está activa.",
-    "welcomeTitle": "¡Bienvenido a Plus!"
+    "welcomeTitle": "¡Bienvenido a Plus!",
+    "heroTitle": "Aprovecha todo tu\npotencial de vocabulario",
+    "subDailyCap": "Ya has hecho el repaso gratuito de hoy. Mejora tu plan para seguir ahora mismo, y todos los días.",
+    "subPreviews": "Has usado {{used}} de {{limit}} sesiones de repaso gratuitas. Mejora tu plan para seguir aprendiendo con repetición espaciada.",
+    "subGeneric": "Mejora tu plan para repasar todo lo que quieras, con repetición espaciada para que no se te olviden las palabras."
   }
 }

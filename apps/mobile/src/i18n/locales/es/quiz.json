@@ -55,6 +55,8 @@
     "tipEyebrow": "¿Sabías que...?",
     "tipTitle": "Así es como funciona el efecto de espaciado",
     "todaysDone": "Ya he terminado por hoy",
-    "upgradeBody": "Vuelve mañana, o mejora tu plan para repasos ilimitados."
+    "upgradeBody": "Vuelve mañana, o mejora tu plan para repasos ilimitados.",
+    "notReadyTitle": "Preparando tus palabras",
+    "notReadyBody": "Todavía no hemos podido crear las tarjetas de hoy. Espera un momento e inténtalo de nuevo: no has perdido nada de lo que guardaste."
   }
 }

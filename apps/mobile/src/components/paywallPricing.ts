@@ -33,3 +33,58 @@ export const PAYWALL_FEATURES: ReadonlyArray<PaywallFeature> = [
   { icon: '🚫', title: 'No ads', desc: 'A clean, distraction-free learning experience.' },
   { icon: '📊', title: 'Detailed stats', desc: 'Track retention and comprehension over time.' },
 ];
+
+// ── Why the user is looking at this screen ─────────────────────────────────
+//
+// `/srs/session/start` answers 402 for two different reasons and the screen
+// needs a different sentence for each. It used to have neither: the subtitle
+// was hard-coded to "You've used {used} of {limit} free review sessions", and
+// the daily-cap payload carries no counts, so the client's `?? 0` fallbacks
+// put **"You've used 0 of 0 free review sessions"** in front of every free
+// user who finished today's Practice lesson and tapped the coin again. That
+// is the app's entire monetisation surface, reached from its most-used tab.
+//
+// Keeping the decision here, rather than inline in the component, is what
+// lets it be tested at all — the mobile suite is logic-only by policy, so a
+// sentence chosen inside JSX is a sentence nothing can check.
+
+/** Why the paywall opened. `null` for the entry points that are just
+ *  browsing the upgrade (a Settings tap, an upsell row) rather than being
+ *  turned away from something. */
+export type PaywallReason = 'daily_cap_reached' | 'preview_exhausted' | null;
+
+export interface PaywallSubtitle {
+  /** i18n key under the `billing` namespace. */
+  key: string;
+  /** Interpolation values, if the chosen string takes any. */
+  params?: Record<string, number>;
+}
+
+/**
+ * Pick the subtitle for the paywall.
+ *
+ * `daily_cap_reached` deliberately takes no counts: the budget is one
+ * session per UTC day and "1 of 1" reads like a quota the user could have
+ * spent differently. "You've done today's review" is the true statement,
+ * and it is the one that makes the upgrade legible — what Plus buys is the
+ * *next* session, today.
+ */
+export function paywallSubtitle(
+  reason: PaywallReason,
+  previewsUsed: number,
+  previewsLimit: number,
+): PaywallSubtitle {
+  if (reason === 'daily_cap_reached') {
+    return { key: 'billing:paywall.subDailyCap' };
+  }
+  // The legacy preview budget. Only render the count when it is coherent —
+  // a zero limit means the server sent nothing useful, and "0 of 0" is
+  // worse than saying nothing at all.
+  if (reason === 'preview_exhausted' && previewsLimit > 0) {
+    return {
+      key: 'billing:paywall.subPreviews',
+      params: { used: Math.min(previewsUsed, previewsLimit), limit: previewsLimit },
+    };
+  }
+  return { key: 'billing:paywall.subGeneric' };
+}

@@ -16,6 +16,7 @@ import { GOOGLE_CLIENT_ID_IOS, GOOGLE_CLIENT_ID_WEB } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
 import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
+import type { PaywallReason } from '../components/paywallPricing';
 import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
 import { registerForPushNotifications, scheduleWordReminder, scheduleReviewReminder } from '../services/notifications';
@@ -282,7 +283,18 @@ export default function App() {
     setCurrentScreen('admin');
   };
 
-  const [paywallProps, setPaywallProps] = useState({ previewsUsed: 0, previewsLimit: 3 });
+  // `reason` decides the paywall's subtitle — the daily cap and the legacy
+  // preview budget are different sentences, and the daily-cap 402 carries no
+  // counts to put in the old one. `origin` is the screen the user was turned
+  // away from, so backing out returns them there instead of dropping them on
+  // Home: the cap is hit by tapping the Practice coin, and Back sent them to
+  // a tab they hadn't asked for.
+  const [paywallProps, setPaywallProps] = useState<{
+    previewsUsed: number;
+    previewsLimit: number;
+    reason: PaywallReason;
+    origin: Screen;
+  }>({ previewsUsed: 0, previewsLimit: 3, reason: null, origin: 'home' });
 
   // Where a review session came from. The Practice tab and the other
   // entry points (StatsScreen, notification deep links) pass nothing and
@@ -312,10 +324,23 @@ export default function App() {
     setCurrentScreen('review');
   };
 
-  const navigateToPaywall = (previewsUsed: number, previewsLimit: number) => {
-    setPaywallProps({ previewsUsed, previewsLimit });
+  const navigateToPaywall = (
+    previewsUsed: number,
+    previewsLimit: number,
+    reason: PaywallReason = null,
+  ) => {
+    // Where to return on Back. A review that 402s is launched from Practice
+    // (or the open list), and `currentScreen` is still 'review' here because
+    // ReviewScreen calls this from its own start-session failure path.
+    const origin: Screen =
+      currentScreen === 'review'
+        ? (reviewLaunch.listId ? 'lists' : 'practice')
+        : currentScreen;
+    setPaywallProps({ previewsUsed, previewsLimit, reason, origin });
     setCurrentScreen('paywall');
   };
+
+  const leavePaywall = () => setCurrentScreen(paywallProps.origin);
 
   const navigateToStats = () => {
     setCurrentScreen('stats');
@@ -782,7 +807,7 @@ export default function App() {
       case 'review':
         return reviewLaunch.listId ? navigateToLists : navigateToHome;
       case 'paywall':
-        return navigateToHome;
+        return leavePaywall;
       // Orphaned by the v0.7 nav and unreachable, but if anything ever lands
       // here there has to be a way out — QuizJourneyScreen renders no back
       // control of its own.
@@ -977,7 +1002,12 @@ export default function App() {
             onPaywall={navigateToPaywall}
           />
         ) : currentScreen === 'paywall' ? (
-          <PaywallScreen onBack={navigateToHome} previewsUsed={paywallProps.previewsUsed} previewsLimit={paywallProps.previewsLimit} />
+          <PaywallScreen
+            onBack={leavePaywall}
+            previewsUsed={paywallProps.previewsUsed}
+            previewsLimit={paywallProps.previewsLimit}
+            reason={paywallProps.reason}
+          />
         ) : currentScreen === 'stats' ? (
           <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
         ) : currentScreen === 'notebook' ? (

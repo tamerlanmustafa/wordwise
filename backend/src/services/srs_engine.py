@@ -188,3 +188,64 @@ async def advance_user_rollup_after_review(
         new_streak=new_streak,
         current_unlocked=parse_unlocked(user.unlockedCosmetics),
     )
+
+
+async def record_session_day(
+    db: Prisma,
+    *,
+    user_id: int,
+    today: Optional[date] = None,
+) -> int:
+    """Mark today as a completed-session day and return the resulting streak.
+
+    The streak and `srsLastSessionDate` used to be written *only* by
+    `advance_user_rollup_after_review`, i.e. only as a side effect of
+    `POST /srs/review`. The mobile client fires those per-card calls
+    fire-and-forget — a failure is logged and swallowed, on the reasoning
+    that a lost card outcome just means the scheduler shows that word once
+    more. That reasoning is right about the card and wrong about the day:
+    with the per-card writes gone, nothing recorded that the user practised
+    at all, so a session finished on a flaky connection left the client
+    celebrating "day 5" while the server still believed 4.
+
+    `POST /srs/session/complete` calls this so the *session*, not the
+    individual card, is what anchors the habit. Deliberately separate from
+    `advance_user_rollup_after_review`: that one also adds to
+    `srsTotalReviews` / `srsTotalCorrect`, which must stay one-per-card, and
+    calling it here would double-count every session's answers.
+
+    Idempotent by construction — when `srsLastSessionDate` is already today
+    there is nothing to write, so repeat calls (a retry, a premium user's
+    second session, the last `/srs/review` landing after this one) all
+    return the same number without touching the row.
+    """
+    user = await db.user.find_unique(where={"id": user_id})
+    if user is None:
+        return 0
+
+    day = today if today is not None else datetime.now(timezone.utc).date()
+    last_date = user.srsLastSessionDate
+    if isinstance(last_date, datetime):
+        last_date = last_date.date()
+    prev_streak = user.srsCurrentStreak or 0
+    if last_date == day:
+        return prev_streak
+
+    new_streak = compute_new_streak(prev_streak, last_date, day)
+    day_dt = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    await db.user.update(
+        where={"id": user_id},
+        data={
+            "srsCurrentStreak": new_streak,
+            "srsLongestStreak": max(user.srsLongestStreak or 0, new_streak),
+            "srsLastSessionDate": day_dt,
+        },
+    )
+    await apply_milestone_unlocks(
+        db,
+        user_id=user_id,
+        prev_streak=prev_streak,
+        new_streak=new_streak,
+        current_unlocked=parse_unlocked(user.unlockedCosmetics),
+    )
+    return new_streak
