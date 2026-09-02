@@ -6,6 +6,7 @@ import {
   activeFilterCount,
   animatedParam,
 } from '../filterOptions';
+import { LEVEL_DOT_COLORS } from '../../ui/icons';
 
 describe('LEVEL_OPTIONS (CEFR level picker)', () => {
   it('lists exactly the six CEFR levels in ascending order', () => {
@@ -18,24 +19,40 @@ describe('LEVEL_OPTIONS (CEFR level picker)', () => {
     });
   });
 
-  it('gives every option a non-empty difficulty icon', () => {
+  it('carries no icon field at all', () => {
+    // It held 🟢🟡🟠🔴 and nothing rendered it — `LevelSheet` passes
+    // `swatch={cefrColors[value]}`, the real CEFR palette. Six emoji nobody
+    // could see, kept alive by a test asserting they existed.
     LEVEL_OPTIONS.forEach((o) => {
-      expect(o.icon.length).toBeGreaterThan(0);
+      expect(o).not.toHaveProperty('icon');
     });
   });
 
-  it('uses progressively "harder" icons (green → yellow/orange → red)', () => {
-    const byValue = Object.fromEntries(LEVEL_OPTIONS.map((o) => [o.value, o.icon]));
-    expect(byValue.A1).toBe('🟢');
-    expect(byValue.A2).toBe('🟢');
-    expect(byValue.C1).toBe('🔴');
-    expect(byValue.C2).toBe('🔴');
+  it('every level still has a colour on the difficulty ramp', () => {
+    // The ramp the emoji encoded is real and worth keeping; it just lives in
+    // `LEVEL_DOT_COLORS` now, as colours a drawn dot can actually use.
+    LEVEL_OPTIONS.forEach((o) => {
+      expect(LEVEL_DOT_COLORS[o.value]).toMatch(/^#[0-9A-F]{6}$/i);
+    });
+  });
+
+  it('ramps green → amber → red as the level rises', () => {
+    expect(LEVEL_DOT_COLORS.A1).toBe(LEVEL_DOT_COLORS.A2);
+    expect(LEVEL_DOT_COLORS.C1).toBe(LEVEL_DOT_COLORS.C2);
+    expect(LEVEL_DOT_COLORS.A1).not.toBe(LEVEL_DOT_COLORS.B1);
+    expect(LEVEL_DOT_COLORS.B1).not.toBe(LEVEL_DOT_COLORS.C1);
   });
 });
 
 describe('MOVIE_TYPE_OPTIONS (animation filter, #114)', () => {
   it('offers exactly three states with All first, so the default is the top row', () => {
     expect(MOVIE_TYPE_OPTIONS.map((o) => o.value)).toEqual(['all', 'animation', 'live']);
+  });
+
+  it('names a drawn icon rather than carrying a glyph', () => {
+    // 🎬 ✨ 🎥 previously. A name resolves to a component the row renders in
+    // the app's own palette; a glyph is whatever the OS font decides.
+    expect(MOVIE_TYPE_OPTIONS.map((o) => o.icon)).toEqual(['clapper', 'sparkle', 'camera']);
   });
 
   it('carries i18n keys, not literal labels', () => {

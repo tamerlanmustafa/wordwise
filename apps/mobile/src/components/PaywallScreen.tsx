@@ -27,6 +27,7 @@ import {
   type PaywallReason,
 } from './paywallPricing';
 import { directionalIcon } from '../i18n/rtl';
+import { BlockIcon, BrainIcon, ChartIcon, FilmIcon } from './ui/icons';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -95,7 +96,12 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
         <View style={s.featureList}>
           {PAYWALL_FEATURES.map((f) => (
             <View key={f.title} style={s.featureRow}>
-              <Text style={s.featureIcon}>{f.icon}</Text>
+              <View style={s.featureIcon}>
+                {f.icon === 'brain' ? <BrainIcon size={22} color={tc.gold} />
+                  : f.icon === 'film' ? <FilmIcon size={22} color={tc.gold} />
+                  : f.icon === 'block' ? <BlockIcon size={22} color={tc.gold} />
+                  : <ChartIcon size={22} color={tc.gold} />}
+              </View>
               <View style={s.featureText}>
                 <Text style={s.featureTitle}>{f.title}</Text>
                 <Text style={s.featureDesc}>{f.desc}</Text>
@@ -213,7 +219,7 @@ const makeStyles = (tc: ThemeColors) =>
     heroSub: { fontSize: 14, color: tc.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 12 },
     featureList: { marginTop: 28, gap: 18 },
     featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-    featureIcon: { fontSize: 24, marginTop: 2 },
+    featureIcon: { width: 26, alignItems: 'center', marginTop: 2 },
     featureText: { flex: 1 },
     featureTitle: { fontSize: 16, fontWeight: '700', color: tc.text, marginBottom: 2 },
     featureDesc: { fontSize: 13, color: tc.textSecondary, lineHeight: 18 },

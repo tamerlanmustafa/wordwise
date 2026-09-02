@@ -26,6 +26,7 @@ import { watchedApi, type WatchedMovie } from '../../services/api';
 import { showToast } from '../../stores/toastStore';
 import type { MovieData } from '../../core/types';
 import { BACK_ARROW } from '../../i18n/rtl';
+import { FilmIcon } from '../ui/icons';
 
 interface Props {
   onBack: () => void;
@@ -107,7 +108,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
                   />
                 ) : (
                   <View style={[s.poster, s.posterFallback]}>
-                    <Text style={s.posterEmoji}>🎬</Text>
+                    <FilmIcon size={26} />
                   </View>
                 )}
                 <View style={s.meta}>

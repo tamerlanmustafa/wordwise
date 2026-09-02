@@ -12,6 +12,7 @@ import { BACK_ARROW } from '../i18n/rtl';
 import { wordwiseApi, type SavedWordEntry } from '../services/api';
 import { swr, writeCache } from '../services/swrCache';
 import { Skeleton } from './ui/Skeleton';
+import { StarIcon } from './ui/icons';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -216,7 +217,7 @@ function WordItem({ word, onUnsave, compact }: { word: SavedWordEntry; onUnsave:
       <View style={styles.wordItemRight}>
         <Text style={styles.wordItemDate}>{dateStr}</Text>
         <TouchableOpacity onPress={() => onUnsave(word)} hitSlop={8}>
-          <Text style={styles.unsaveIcon}>★</Text>
+          <StarIcon size={18} filled animate={false} style={styles.unsaveIcon} />
         </TouchableOpacity>
       </View>
     </View>
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
   wordItemMovie: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
   wordItemRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   wordItemDate: { fontSize: 11, color: COLORS.textTertiary },
-  unsaveIcon: { fontSize: 18, color: COLORS.primary },
+  unsaveIcon: {},
   movieGroup: {
     backgroundColor: COLORS.paper,
     borderRadius: 14,

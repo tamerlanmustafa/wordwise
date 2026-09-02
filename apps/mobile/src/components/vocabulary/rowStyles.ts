@@ -161,6 +161,14 @@ export const makeRowStyles = (tc: ThemeColors) =>
       gap: 16,
       marginTop: 7,
     },
+    // The action labels used to carry their glyph inside the text run (⚐, 🚫)
+    // so the icon sat on the text baseline and scaled with the font. They are
+    // drawn icons in a row beside the label now.
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
     actionText: {
       fontSize: 11,
       fontWeight: '600',
@@ -168,12 +176,6 @@ export const makeRowStyles = (tc: ThemeColors) =>
     },
     actionHide: {
       color: tc.error,
-    },
-    pronounceIcon: {
-      fontSize: 14,
-    },
-    pronounceIconActive: {
-      opacity: 0.5,
     },
     starBtn: {
       flexShrink: 0,
@@ -185,16 +187,6 @@ export const makeRowStyles = (tc: ThemeColors) =>
       marginStart: 4,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    star: {
-      fontSize: 20,
-      lineHeight: 22,
-      color: tc.textFaint,
-      opacity: 0.5,
-    },
-    starActive: {
-      color: tc.gold,
-      opacity: 1,
     },
     idiomBadge: {
       paddingHorizontal: 6,

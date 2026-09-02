@@ -87,6 +87,7 @@ import {
   UNDO_SIZE,
   UNDO_EDGE,
 } from './deckMetrics';
+import { FlagIcon, HeartIcon, SpeakerIcon } from '../ui/icons';
 
 /**
  * Interpolated style that slides the incoming focused card from the near-
@@ -959,9 +960,7 @@ export const WordCardDeck = ({
           ) : null}
           <View style={s.flexSpacer} />
           {isAuthenticated ? (
-            <Text style={[s.save, savedWords.has(term) && s.saveActive]}>
-              {savedWords.has(term) ? '♥' : '♡'}
-            </Text>
+            <HeartIcon size={21} filled={savedWords.has(term)} color={savedWords.has(term) ? tc.gold : tc.textFaint} />
           ) : null}
         </View>
         <View style={s.wordSlot}>
@@ -1018,13 +1017,18 @@ export const WordCardDeck = ({
         {/* Mirror the focused card's footer exactly: any element missing
             here would pop at the instant the overlay detaches. */}
         <View style={s.footerRow}>
-          {isAuthenticated ? <Text style={s.actionText}>⚐ Report an issue</Text> : null}
+          {isAuthenticated ? (
+            <View style={s.actionRow}>
+              <FlagIcon size={13} color={tc.textFaint} />
+              <Text style={s.actionText}>{t('vocabulary:row.reportIssue')}</Text>
+            </View>
+          ) : null}
           {isPremium && !staticIdiom ? (
             // A plain View, mirroring the focused card's TouchableOpacity
             // wrapper: the overlay is pointer-inert, but its footer has to
             // measure identically or the icon shifts as the overlay detaches.
             <View>
-              <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
+              <SpeakerIcon size={16} color={tc.textFaint} />
             </View>
           ) : null}
           <Text style={s.tapHint}>{t('vocabulary:deck.tapToReveal')}</Text>
@@ -1128,7 +1132,7 @@ export const WordCardDeck = ({
                   accessibilityRole="button"
                   accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
                 >
-                  <Text style={[s.save, isSaved && s.saveActive]}>{isSaved ? '♥' : '♡'}</Text>
+                  <HeartIcon size={21} filled={isSaved} color={isSaved ? tc.gold : tc.textFaint} />
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -1256,13 +1260,14 @@ export const WordCardDeck = ({
             {/* 7 · footer: report + pronounce + reveal-state hint */}
             <View style={s.footerRow}>
               {isAuthenticated ? (
-                <Text
-                  style={s.actionText}
+                <TouchableOpacity
+                  style={s.actionRow}
                   onPress={() => setReportOpen(true)}
                   accessibilityRole="button"
                 >
-                  ⚐ Report an issue
-                </Text>
+                  <FlagIcon size={13} color={tc.textFaint} />
+                  <Text style={s.actionText}>{t('vocabulary:row.reportIssue')}</Text>
+                </TouchableOpacity>
               ) : null}
               {isPremium && !idiom ? (
                 // A touchable with real slop, not a bare `Text onPress`: the
@@ -1279,9 +1284,11 @@ export const WordCardDeck = ({
                   accessibilityRole="button"
                   accessibilityLabel={t('vocabulary:row.pronounce')}
                 >
-                  <Text style={[s.actionText, s.pronounceIcon, playingAudio && s.pronounceActive]}>
-                    {playingAudio ? '…' : '🔊'}
-                  </Text>
+                  <SpeakerIcon
+                    size={16}
+                    playing={playingAudio}
+                    color={playingAudio ? tc.gold : tc.textFaint}
+                  />
                 </TouchableOpacity>
               ) : null}
               <Text style={s.tapHint}>{expanded ? t('vocabulary:deck.tapToHide') : t('vocabulary:deck.tapToReveal')}</Text>
@@ -1474,14 +1481,6 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     // The heart glyph draws about a point smaller than the star it replaced,
     // so 23 keeps it the same optical size inside the 24pt meta row.
-    save: {
-      fontSize: 23,
-      lineHeight: 24,
-      color: light ? '#C9BB9C' : tc.textFaint,
-    },
-    saveActive: {
-      color: tc.gold,
-    },
     wordSlot: {
       marginTop: WORD_SLOT_TOP,
       height: WORD_SLOT_HEIGHT,
@@ -1655,16 +1654,18 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       marginTop: FOOTER_TOP,
       height: FOOTER_HEIGHT,
     },
+    // The footer's icons are drawn now (they were ⚐ and 🔊 inside the text
+    // run, sitting on the baseline and scaling with the font), so the label
+    // gets a row of its own to sit in beside them.
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
     actionText: {
       fontSize: 11,
       fontWeight: '600',
       color: tc.textFaint,
-    },
-    pronounceIcon: {
-      fontSize: 13,
-    },
-    pronounceActive: {
-      opacity: 0.5,
     },
     tapHint: {
       marginStart: 'auto',

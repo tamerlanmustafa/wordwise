@@ -46,7 +46,9 @@
     "pronounce": "Pronunciar la palabra",
     "removeFromSaved": "Eliminar de los favoritos",
     "saveWord": "Guardar palabra",
-    "showsTranslation": "Muestra la traducción"
+    "showsTranslation": "Muestra la traducción",
+    "reportIssue": "Informar de un problema",
+    "hideWord": "Ocultar palabra"
   },
   "savedWords": "Palabras guardadas",
   "screenTitle": "Vocabulario",

@@ -10,13 +10,21 @@
  * added; a computed one cannot.
  */
 
-export const LEVEL_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
-  { value: 'A1', label: 'A1 Beginner',       icon: '🟢' },
-  { value: 'A2', label: 'A2 Elementary',      icon: '🟢' },
-  { value: 'B1', label: 'B1 Intermediate',    icon: '🟡' },
-  { value: 'B2', label: 'B2 Upper-Int.',      icon: '🟠' },
-  { value: 'C1', label: 'C1 Advanced',        icon: '🔴' },
-  { value: 'C2', label: 'C2 Proficiency',     icon: '🔴' },
+/**
+ * The `icon` field is gone. It held 🟢🟡🟠🔴 — coloured-circle emoji standing
+ * in for the difficulty ramp — and nothing ever rendered it: `LevelSheet`
+ * passes `swatch={cefrColors[value]}` instead, which is the real CEFR palette
+ * and the same colour the badges use elsewhere. Six emoji nobody could see.
+ * `LEVEL_DOT_COLORS` in `ui/icons` carries the ramp for anywhere that wants a
+ * dot rather than a full swatch.
+ */
+export const LEVEL_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'A1', label: 'A1 Beginner' },
+  { value: 'A2', label: 'A2 Elementary' },
+  { value: 'B1', label: 'B1 Intermediate' },
+  { value: 'B2', label: 'B2 Upper-Int.' },
+  { value: 'C1', label: 'C1 Advanced' },
+  { value: 'C2', label: 'C2 Proficiency' },
 ];
 
 /**
@@ -38,10 +46,18 @@ export const DEFAULT_LEVEL = 'B1';
  */
 export type MovieType = 'all' | 'animation' | 'live';
 
-export const MOVIE_TYPE_OPTIONS: Array<{ value: MovieType; labelKey: string; icon: string }> = [
-  { value: 'all',       labelKey: 'home:filters.type.all',       icon: '🎬' },
-  { value: 'animation', labelKey: 'home:filters.type.animation', icon: '✨' },
-  { value: 'live',      labelKey: 'home:filters.type.live',      icon: '🎥' },
+/** Which drawn icon each type row shows. Names, not glyphs — the row resolves
+ *  them to components, so the sheet is not an emoji font's idea of a film. */
+export type MovieTypeIcon = 'clapper' | 'sparkle' | 'camera';
+
+export const MOVIE_TYPE_OPTIONS: Array<{
+  value: MovieType;
+  labelKey: string;
+  icon: MovieTypeIcon;
+}> = [
+  { value: 'all',       labelKey: 'home:filters.type.all',       icon: 'clapper' },
+  { value: 'animation', labelKey: 'home:filters.type.animation', icon: 'sparkle' },
+  { value: 'live',      labelKey: 'home:filters.type.live',      icon: 'camera' },
 ];
 
 /**

@@ -14,6 +14,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { HomeIcon } from './HomeIcons';
+import { FilmIcon, SparkleIcon } from '../ui/icons';
+import type { MovieTypeIcon } from './filterOptions';
 
 interface Props {
   label: string;
@@ -21,8 +23,10 @@ interface Props {
   onPress: () => void;
   /** A CEFR colour chip (level rows) — mutually exclusive with `icon`. */
   swatch?: string;
-  /** An emoji glyph (type rows) — mutually exclusive with `swatch`. */
-  icon?: string;
+  /** A drawn icon (type rows) — mutually exclusive with `swatch`. Was an
+   *  emoji glyph in a `<Text>`, which sat on the text baseline rather than in
+   *  the row's layout box and was drawn by the OS in a font we don't control. */
+  icon?: MovieTypeIcon;
   /** Shown just before the check on the active row — the sort direction. */
   trailing?: string;
   /** Hairline under the row; omit on the last row of a group. */
@@ -54,9 +58,15 @@ export function SheetOptionRow({
     >
       {swatch ? (
         <View style={[s.swatch, { backgroundColor: swatch }]} />
-      ) : (
-        <Text style={s.icon}>{icon}</Text>
-      )}
+      ) : icon ? (
+        <View style={s.icon}>
+          {icon === 'sparkle' ? (
+            <SparkleIcon size={17} color={tc.textSecondary} />
+          ) : (
+            <FilmIcon size={17} variant={icon === 'camera' ? 'camera' : 'clapper'} />
+          )}
+        </View>
+      ) : null}
       <Text style={[s.label, active && s.labelActive]}>{label}</Text>
       {active && trailing ? <Text style={s.trailing}>{trailing}</Text> : null}
       {active ? (
@@ -99,11 +109,13 @@ const makeStyles = (tc: ThemeColors) =>
       borderRadius: 3,
     },
     icon: {
-      // Same 10pt column the CEFR swatch occupies, so labels line up whether a
-      // row leads with a colour chip or an emoji.
-      width: 10,
-      fontSize: 14,
-      textAlign: 'center',
+      // The drawn icon is wider than the 10pt CEFR swatch, so it is centred in
+      // a box of its own and the box is what keeps the labels aligned whether a
+      // row leads with a colour chip or an icon. The old emoji sat in a `Text`
+      // at 14pt and lined up by luck.
+      width: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     label: {
       flex: 1,

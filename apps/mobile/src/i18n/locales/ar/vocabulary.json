@@ -8,7 +8,9 @@
     "showsTranslation": "يعرض الترجمة",
     "pronounce": "انطق الكلمة",
     "removeFromSaved": "إزالة من المحفوظات",
-    "saveWord": "احفظ الكلمة"
+    "saveWord": "احفظ الكلمة",
+    "reportIssue": "الإبلاغ عن مشكلة",
+    "hideWord": "إخفاء الكلمة"
   },
   "deck": {
     "empty": "لا توجد كلمات في هذه المجموعة بعد.",

@@ -9,9 +9,9 @@
  *
  *   2. Journey mode. Renders:
  *        • correct/total headline
- *        • 🔥 streak +1 ticker
+ *        • streak +1 ticker
  *        • Daily-goal pips (n / DAILY_GOAL)
- *        • Per-word ✓/× recap
+ *        • Per-word correct/miss recap
  *        • Wall copy (when justHitGoal) OR a simple "back to movie" CTA
  *
  * Light/dark: tokens drive the surfaces, text, and CTA. The primary CTA
@@ -38,6 +38,7 @@ import { Confetti } from './ui/Confetti';
 import { SessionComplete } from './common/SessionComplete';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 import { FORWARD_ARROW } from '../i18n/rtl';
+import { StarIcon } from './ui/icons';
 
 export interface JourneyResultMeta {
   completedTileIdx: number;
@@ -186,15 +187,12 @@ export function QuizResultScreen({
 
         <View style={s.starsRow}>
           {[star1, star2, star3].map((v, i) => (
-            <Animated.Text
+            <Animated.View
               key={i}
-              style={[
-                s.star,
-                { opacity: v, transform: [{ scale: v }] },
-              ]}
+              style={[s.star, { opacity: v, transform: [{ scale: v }] }]}
             >
-              {i < result.stars ? '⭐' : '☆'}
-            </Animated.Text>
+              <StarIcon size={34} filled={i < result.stars} animate={false} />
+            </Animated.View>
           ))}
         </View>
 
@@ -432,7 +430,7 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') => StyleSheet.cr
   levelBadgeText: { fontSize: 24, fontWeight: '800', color: tc.textInverse },
   levelLabel: { fontSize: 14, color: tc.textSecondary, marginTop: 8, textAlign: 'center' },
   starsRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, gap: 8 },
-  star: { fontSize: 64 },
+  star: { width: 34, height: 34 },
   statsCard: {
     width: '100%', marginTop: 32, padding: 20,
     backgroundColor: tc.paper, borderRadius: 16,

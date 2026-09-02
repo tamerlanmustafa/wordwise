@@ -24,7 +24,7 @@ import { HomeIcon } from './HomeIcons';
  * translated example) is the card's substance. Front face shows the word,
  * its CEFR level, the example sentence, and a Save button with a stroked
  * bookmark icon (→ stroked check + success tint when saved). No emoji /
- * ★☆ glyphs survive.
+ * the star glyphs survive.
  */
 
 const SERIF_FAMILY = 'Source Serif 4';

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BACK_ARROW } from '../i18n/rtl';
 import { achievementsApi, type Achievement, type AchievementsResponse } from '../services/api';
+import { LockIcon, MedalIcon } from './ui/icons';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -87,9 +88,13 @@ export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProp
               <Text style={styles.categoryTitle}>{CATEGORY_LABELS[category] || category}</Text>
               {achievements.map((a) => (
                 <View key={a.key} style={[styles.achievementRow, a.unlocked && styles.achievementUnlocked]}>
-                  <Text style={[styles.achievementIcon, !a.unlocked && styles.achievementIconLocked]}>
-                    {a.unlocked ? a.icon || '🏅' : '🔒'}
-                  </Text>
+                  {/* Drawn, not typed. This was `a.icon || '🏅'` for an
+                      unlocked badge and 🔒 for a locked one — a server-supplied
+                      emoji string with an emoji fallback, so the row's look
+                      depended on the OS font and on whatever the API sent. */}
+                  <View style={[styles.achievementIcon, !a.unlocked && styles.achievementIconLocked]}>
+                    {a.unlocked ? <MedalIcon size={26} /> : <LockIcon size={24} />}
+                  </View>
                   <View style={styles.achievementInfo}>
                     <Text style={[styles.achievementTitle, !a.unlocked && styles.textLocked]}>{a.title}</Text>
                     <Text style={styles.achievementDesc}>{a.description}</Text>
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
   },
   achievementUnlocked: { borderColor: COLORS.gold, borderWidth: 1.5 },
-  achievementIcon: { fontSize: 28, marginEnd: 14 },
+  achievementIcon: { marginEnd: 14 },
   achievementIconLocked: { opacity: 0.4 },
   achievementInfo: { flex: 1 },
   achievementTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },

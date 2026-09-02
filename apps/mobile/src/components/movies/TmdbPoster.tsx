@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Image, ImageStyle, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Image, ImageStyle, StyleProp, View, ViewStyle } from 'react-native';
 import { colors } from '../../theme/palette';
 import { tmdbApi } from '../../services/api';
+import { FilmIcon } from '../ui/icons';
 
 // Module-level cache of the resolved image URL. `tmdbApi.getMovieDetails`
 // caches the metadata itself and coalesces the lookups a grid of posters
@@ -42,7 +43,7 @@ export const TmdbPoster = ({ tmdbId, style }: Props) => {
   if (!uri) {
     return (
       <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
-        <Text style={{ fontSize: 24 }}>🎬</Text>
+        <FilmIcon size={26} />
       </View>
     );
   }

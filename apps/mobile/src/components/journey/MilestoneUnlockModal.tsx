@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { ConfettiIcon } from '../ui/icons';
 
 /** Display copy per slug. Keys MUST match the backend
  *  `milestone_service.MILESTONES` table. */
@@ -76,7 +77,7 @@ export function MilestoneUnlockModal({ slug, onDismiss }: MilestoneUnlockModalPr
       <View style={s.overlay}>
         <Animated.View style={[s.card, { opacity, transform: [{ scale }] }]}>
           <View style={[s.glyphDisc, { backgroundColor: tc.gold }]}>
-            <Text style={s.glyph}>🎉</Text>
+            <ConfettiIcon size={40} style={s.glyph} />
           </View>
           <Text style={s.eyebrow}>{t('movies:journey.newUnlock')}</Text>
           <Text style={s.name}>{slug}</Text>
@@ -139,7 +140,7 @@ const makeStyles = (tc: ThemeColors) =>
       justifyContent: 'center',
       marginBottom: 6,
     },
-    glyph: { fontSize: 36 },
+    glyph: { alignSelf: 'center' },
     eyebrow: {
       fontSize: 11,
       fontWeight: '900',

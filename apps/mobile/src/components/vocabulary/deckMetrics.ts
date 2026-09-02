@@ -51,7 +51,7 @@ export const BACK_ROW = { gap: 1, height: 34 };
  *  be 119 for a paper frame around it (5 + 100 + 12 of margin, 1pt edge each
  *  side), and the frame is gone. */
 export const HERO_PLATE = { gap: 12, height: 100 };
-/** ✦ For You + six CEFR chips. */
+/** For You + six CEFR chips. */
 export const FILTER_BAR = { gap: 14, height: 44 };
 /** The screen is For You only, so the level chips have nothing to switch
  *  between and the bar is hidden — code kept, flip to true to bring it back.

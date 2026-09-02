@@ -21,17 +21,23 @@ export function annualSavingsPercent(
   return Math.round((1 - annual / (monthly * 12)) * 100);
 }
 
+/** Which drawn icon a feature row shows. A name, not a glyph: these were
+ *  🧠 🎬 🚫 📊, four system emoji sitting in the one screen that asks for
+ *  money, each drawn by the OS in a font we do not control and none of them
+ *  matching the app's palette. */
+export type PaywallFeatureIcon = 'brain' | 'film' | 'block' | 'chart';
+
 export interface PaywallFeature {
-  icon: string;
+  icon: PaywallFeatureIcon;
   title: string;
   desc: string;
 }
 
 export const PAYWALL_FEATURES: ReadonlyArray<PaywallFeature> = [
-  { icon: '🧠', title: 'Unlimited SRS reviews', desc: 'Review all your saved words with spaced repetition — no session limits.' },
-  { icon: '🎬', title: 'Unlimited reels', desc: 'Add as many films as you like and analyze every script.' },
-  { icon: '🚫', title: 'No ads', desc: 'A clean, distraction-free learning experience.' },
-  { icon: '📊', title: 'Detailed stats', desc: 'Track retention and comprehension over time.' },
+  { icon: 'brain', title: 'Unlimited SRS reviews', desc: 'Review all your saved words with spaced repetition — no session limits.' },
+  { icon: 'film',  title: 'Unlimited reels', desc: 'Add as many films as you like and analyze every script.' },
+  { icon: 'block', title: 'No ads', desc: 'A clean, distraction-free learning experience.' },
+  { icon: 'chart', title: 'Detailed stats', desc: 'Track retention and comprehension over time.' },
 ];
 
 // ── Why the user is looking at this screen ─────────────────────────────────

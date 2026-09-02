@@ -25,7 +25,7 @@ export interface JourneyNodeProps {
 
 // Geometry
 const TILE = 70;
-const SCALE_X = 1.5; // 👈 makes left/right corners pointier
+const SCALE_X = 1.5; // makes left/right corners pointier
 const SCALE_Y = 1;   // keep vertical natural
 const SKIRT_DEPTH = 8;
 const RADIUS = 8;

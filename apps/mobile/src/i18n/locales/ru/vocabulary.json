@@ -50,7 +50,9 @@
     "pronounce": "Произнести слово",
     "removeFromSaved": "Удалить из сохраненных",
     "saveWord": "Сохранить слово",
-    "showsTranslation": "Показывает перевод"
+    "showsTranslation": "Показывает перевод",
+    "reportIssue": "Сообщить о проблеме",
+    "hideWord": "Скрыть слово"
   },
   "savedWords": "Сохраненные слова",
   "screenTitle": "Словарный запас",

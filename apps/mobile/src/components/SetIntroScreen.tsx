@@ -37,6 +37,7 @@ import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 import { directionalIcon } from '../i18n/rtl';
+import { FilmIcon } from './ui/icons';
 
 export interface SetIntroWord {
   /** Target word shown verbatim — never blurred or redacted. */
@@ -199,7 +200,7 @@ export function SetIntroScreen({
             <Image source={{ uri: posterW185 }} style={s.filmPoster} />
           ) : (
             <View style={[s.filmPoster, s.filmPosterFallback]}>
-              <Text style={s.filmPosterGlyph}>🎬</Text>
+              <FilmIcon size={30} />
             </View>
           )}
           <View style={s.filmInfo}>

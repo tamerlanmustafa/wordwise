@@ -5,9 +5,9 @@
  * Renders as a centered card with a spring-scale entrance. The icon and
  * accent color vary by reward kind:
  *   • xp_small   ⭐  gold     "+25 XP"
- *   • xp_large   🌟  gold     "+100 XP"
- *   • freeze     🛡️  blue-ish "Streak freeze"
- *   • cosmetic   🎬  purple   "Director's Cut Frame"
+ *   • xp_large   glowing star, gold     "+100 XP"
+ *   • freeze     shield, blue-ish       "Streak freeze"
+ *   • cosmetic   clapperboard, purple   "Director's Cut Frame"
  *
  * v1 keeps it deliberately simple — placeholder shapes/emoji rather than
  * custom art, per the v0.6 decision in SRS_HABIT_ENGINE_PLAN.md. The
@@ -15,7 +15,7 @@
  * milestones will own that).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import {
   Animated,
   StyleSheet,
@@ -26,6 +26,7 @@ import {
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
 import type { ChestKind, ChestPayload } from '../../services/api';
+import { FilmIcon, ShieldIcon, StarIcon } from '../ui/icons';
 
 export interface ChestRevealProps {
   chest: ChestPayload;
@@ -35,16 +36,23 @@ export interface ChestRevealProps {
 }
 
 interface KindStyle {
-  glyph: string;
+  /** Drawn, not typed. The four rewards used to be ⭐ 🌟 🛡️ 🎬 — system
+   *  emoji, drawn by the OS in a font we do not control, on the app's single
+   *  biggest celebratory beat. They ignored the accent colour behind them,
+   *  changed shape between iOS and Android, and the shield needed a variation
+   *  selector to stop rendering as a monochrome outline at all. */
+  Icon: (props: { size?: number }) => ReactElement;
   accent: keyof ThemeColors;
   fg: keyof ThemeColors;
 }
 
 const KIND_STYLES: Record<ChestKind, KindStyle> = {
-  xp_small: { glyph: '⭐', accent: 'gold', fg: 'goldDeep' },
-  xp_large: { glyph: '🌟', accent: 'gold', fg: 'goldDeep' },
-  freeze:   { glyph: '🛡️', accent: 'primary', fg: 'textInverse' },
-  cosmetic: { glyph: '🎬', accent: 'primary', fg: 'textInverse' },
+  xp_small: { Icon: (p) => <StarIcon {...p} />, accent: 'gold', fg: 'goldDeep' },
+  // The big one earns the glow and the sparkles — same treatment as the
+  // streak flame, which is the other thing that says "you did well today".
+  xp_large: { Icon: (p) => <StarIcon {...p} glow />, accent: 'gold', fg: 'goldDeep' },
+  freeze:   { Icon: (p) => <ShieldIcon {...p} />, accent: 'primary', fg: 'textInverse' },
+  cosmetic: { Icon: (p) => <FilmIcon {...p} solid />, accent: 'primary', fg: 'textInverse' },
 };
 
 export function ChestReveal({ chest, onCollect }: ChestRevealProps) {
@@ -87,7 +95,7 @@ export function ChestReveal({ chest, onCollect }: ChestRevealProps) {
         ]}
       >
         <View style={[styles.iconDisc, { backgroundColor: accent }]}>
-          <Text style={styles.iconGlyph}>{ks.glyph}</Text>
+          <ks.Icon size={34} />
         </View>
         <Text style={[styles.eyebrow, { color: tc.textSecondary }]}>
           {t('movies:journey.dailyChest')}
@@ -140,7 +148,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 6,
   },
-  iconGlyph: { fontSize: 32 },
   eyebrow: {
     fontSize: 11,
     fontWeight: '900',

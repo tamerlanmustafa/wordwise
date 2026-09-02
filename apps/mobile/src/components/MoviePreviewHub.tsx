@@ -35,6 +35,7 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import type { NodeLevel } from './journey/JourneyNode';
 import type { ReelTile } from '../services/api';
 import { directionalIcon } from '../i18n/rtl';
+import { FilmIcon } from './ui/icons';
 
 export interface MoviePreviewHubProps {
   tile: ReelTile;
@@ -144,7 +145,7 @@ export function MoviePreviewHub({
             <Image source={{ uri: posterW185 }} style={styles.filmPoster} />
           ) : (
             <View style={[styles.filmPoster, styles.filmPosterFallback]}>
-              <Text style={styles.filmPosterGlyph}>🎬</Text>
+              <FilmIcon size={30} />
             </View>
           )}
           <View style={styles.filmInfo}>

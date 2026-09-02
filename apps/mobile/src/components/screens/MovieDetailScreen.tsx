@@ -77,6 +77,7 @@ import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 import { Skeleton } from '../ui/Skeleton';
+import { BoltIcon, SparkleIcon } from '../ui/icons';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -1019,7 +1020,7 @@ export const MovieDetailScreen = ({
             — there is no scroll for it to stick against. */}
         {vocabulary ? (
           <View>
-            {/* Ledger filter bar: ✦ For You, a divider, then the six CEFR
+            {/* Ledger filter bar: For You, a divider, then the six CEFR
                 chips sharing the remaining width equally — no horizontal
                 scroll, selection tinted per CEFR colour.
                 Hidden (SHOW_LEVEL_FILTER_BAR): the screen is For You only, so
@@ -1046,7 +1047,7 @@ export const MovieDetailScreen = ({
                       accessibilityRole="button"
                       accessibilityState={{ selected: foryouActive }}
                     >
-                      <Text style={[ledgerStyles.forYouGlyph, { color: tc.gold }]}>✦</Text>
+                      <SparkleIcon size={13} color={tc.gold} style={ledgerStyles.forYouGlyph} />
                       <Text
                         style={[
                           ledgerStyles.forYouLabel,
@@ -1461,7 +1462,7 @@ export const MovieDetailScreen = ({
             onPress={() => onStartQuiz(userProficiency)}
             activeOpacity={0.85}
           >
-            <Text style={quizPillStyles.pillGlyph}>⚡</Text>
+            <BoltIcon size={15} color={tc.goldDeep} style={quizPillStyles.pillGlyph} />
             <Text style={quizPillStyles.pillText}>
               {t('movies:detail.quizMe', { count: 5 })}
             </Text>
@@ -1666,7 +1667,7 @@ const ledgerStyles = StyleSheet.create({
     borderColor: 'transparent',
   },
   forYouGlyph: {
-    fontSize: 12,
+    marginTop: 0.5,
   },
   forYouLabel: {
     fontSize: 12.5,
@@ -1718,8 +1719,7 @@ const quizPillStyles = StyleSheet.create({
     elevation: 8,
   },
   pillGlyph: {
-    fontSize: 14,
-    color: '#3a2400',
+    marginTop: 0.5,
   },
   pillText: {
     fontSize: 13,

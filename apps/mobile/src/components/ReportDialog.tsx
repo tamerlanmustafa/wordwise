@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { reportsApi, type ReportReason } from '../services/api';
+import { FlagIcon } from './ui/icons';
 
 // Mirrors the web ReportDialog (frontend/src/components/ReportDialog.tsx),
 // adapted to React Native primitives. Same shape, same backend call.
@@ -115,7 +116,7 @@ export function ReportDialog({
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerIcon}>⚑</Text>
+            <FlagIcon size={18} solid color={COLORS.warning} style={styles.headerIcon} />
             <Text style={styles.headerTitle}>{t('report.title')}</Text>
             <TouchableOpacity onPress={handleClose} disabled={submitting} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={styles.headerClose}>✕</Text>
@@ -231,8 +232,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   headerIcon: {
-    fontSize: 20,
-    color: COLORS.warning,
     marginEnd: 8,
   },
   headerTitle: {

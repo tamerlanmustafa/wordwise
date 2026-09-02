@@ -25,6 +25,7 @@ import {
   previewWords,
 } from './listStyles';
 import type { ListSummary } from '../../core/types';
+import { HeartIcon } from '../ui/icons';
 
 interface Props {
   list: ListSummary;
@@ -111,7 +112,7 @@ function WordTile({ list }: { list: ListSummary }) {
       ]}
     >
       {isFavourites ? (
-        <Text style={[s.heart, { color: tc.gold }]}>♥</Text>
+        <HeartIcon size={22} filled color={tc.gold} />
       ) : (
         <Text style={s.initial}>{initial}</Text>
       )}

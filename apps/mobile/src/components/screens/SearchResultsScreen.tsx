@@ -17,6 +17,7 @@ import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
 import { Skeleton } from '../ui/Skeleton';
+import { StarIcon } from '../ui/icons';
 
 interface Props {
   query: string;
@@ -260,10 +261,15 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
               )}
               <View style={styles.searchResultInfo}>
                 <Text style={styles.searchResultTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.searchResultYear}>
-                  {item.release_date?.slice(0, 4)}
-                  {item.vote_average ? `  ⭐ ${item.vote_average.toFixed(1)}` : ''}
-                </Text>
+                <View style={styles.searchResultMetaRow}>
+                  <Text style={styles.searchResultYear}>{item.release_date?.slice(0, 4)}</Text>
+                  {item.vote_average ? (
+                    <>
+                      <StarIcon size={11} filled animate={false} />
+                      <Text style={styles.searchResultYear}>{item.vote_average.toFixed(1)}</Text>
+                    </>
+                  ) : null}
+                </View>
                 {item.overview ? (
                   <Text style={styles.searchResultOverview} numberOfLines={2}>{item.overview}</Text>
                 ) : null}

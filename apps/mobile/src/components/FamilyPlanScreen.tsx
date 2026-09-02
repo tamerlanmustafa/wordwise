@@ -7,6 +7,7 @@ import { familyApi, type FamilyPlan } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { Skeleton } from './ui/Skeleton';
+import { FamilyIcon } from './ui/icons';
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
@@ -114,7 +115,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
         </View>
       ) : !plan ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyIcon}>👨‍👩‍👧‍👦</Text>
+          <FamilyIcon size={56} style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>{t('billing:family.title')}</Text>
           <Text style={styles.emptyBody}>
             Share your WordWise Plus subscription with up to 4 family members.

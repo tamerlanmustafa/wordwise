@@ -15,6 +15,7 @@ import { SERIF_FAMILY } from '../../theme/fonts';
 import { META_SEPARATOR, metaText } from './listStyles';
 import type { ListFilmItem, ListWordItem } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
+import { HeartIcon, StarIcon } from '../ui/icons';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w185';
 
@@ -38,10 +39,10 @@ export function FilmItemRow({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  const meta = [
-    item.rating != null ? `★ ${item.rating.toFixed(1)}` : null,
-    item.cefr,
-  ].filter(Boolean).join(META_SEPARATOR);
+  // The rating's star is drawn beside the line rather than prefixed into it —
+  // it was `★ 7.4`, a glyph inside the text run, so it took the meta line's
+  // colour and size and sat on its baseline.
+  const meta = [item.cefr].filter(Boolean).join(META_SEPARATOR);
 
   return (
     <TouchableOpacity style={s.filmRow} onPress={onPress} activeOpacity={0.85}>
@@ -53,7 +54,15 @@ export function FilmItemRow({
 
       <View style={s.filmBody}>
         <Text style={s.filmTitle} numberOfLines={2}>{item.title}</Text>
-        {meta ? <Text style={s.filmMeta}>{meta}</Text> : null}
+        <View style={s.filmMetaRow}>
+          {item.rating != null ? (
+            <>
+              <StarIcon size={11} filled animate={false} />
+              <Text style={s.filmMeta}>{item.rating.toFixed(1)}</Text>
+            </>
+          ) : null}
+          {meta ? <Text style={s.filmMeta}>{meta}</Text> : null}
+        </View>
         {item.wordCount != null ? (
           <Text style={s.filmWords}>
             {t('meta.wordCount', { count: item.wordCount })}
@@ -124,9 +133,7 @@ export function WordItemRow({
         accessibilityRole="button"
         accessibilityState={{ selected: favourite }}
       >
-        <Text style={[s.heart, { color: favourite ? tc.gold : tc.textFaint }]}>
-          {favourite ? '♥' : '♡'}
-        </Text>
+        <HeartIcon size={19} filled={favourite} color={favourite ? tc.gold : tc.textFaint} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -188,6 +195,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   filmPoster: { width: 52, height: 74, borderRadius: 3 },
   filmBody: { flex: 1, gap: 3 },
   filmTitle: { fontFamily: SERIF_FAMILY, fontSize: 15.5, fontWeight: '600', color: tc.text },
+  filmMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   filmMeta: { ...metaText, color: tc.goldOnSurface },
   filmWords: { ...metaText, color: tc.textFaint },
   stateBtn: {

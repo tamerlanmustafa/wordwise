@@ -8,7 +8,9 @@
     "showsTranslation": "Shows the translation",
     "pronounce": "Pronounce word",
     "removeFromSaved": "Remove from saved",
-    "saveWord": "Save word"
+    "saveWord": "Save word",
+    "reportIssue": "Report an issue",
+    "hideWord": "Hide word"
   },
   "deck": {
     "empty": "No words in this deck yet.",

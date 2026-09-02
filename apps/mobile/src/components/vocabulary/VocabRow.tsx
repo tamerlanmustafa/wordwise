@@ -15,6 +15,7 @@ import { pronounce } from '../../utils/pronunciation';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles, ROW_ICON_HIT_SLOP } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
+import { BlockIcon, FlagIcon, SpeakerIcon, StarIcon } from '../ui/icons';
 
 export interface SentenceExample {
   sentence: string;
@@ -113,10 +114,10 @@ export function renderHighlighted(
  * The single word-first row used across the whole vocabulary list — For You
  * tab, level tabs, and idioms. Anatomy:
  *
- *   [##]  word  · translation-when-open            [☆]
+ *   [##]  word  · translation-when-open         [star]
  *         example sentence with the ~word~ highlighted
  *         ┃ sentence translation (only when open)
- *         ┃ ⚐ Report an issue
+ *         ┃ [flag] Report an issue
  */
 export const VocabRow = ({
   term,
@@ -332,22 +333,24 @@ export const VocabRow = ({
 
                   <View style={styles.actionsRow}>
                     {isAuthenticated && (
-                      <Text
-                        style={styles.actionText}
+                      <TouchableOpacity
+                        style={styles.actionRow}
                         onPress={() => setReportOpen(true)}
                         accessibilityRole="button"
                       >
-                        ⚐ Report an issue
-                      </Text>
+                        <FlagIcon size={14} color={tc.textSecondary} />
+                        <Text style={styles.actionText}>{t('vocabulary:row.reportIssue')}</Text>
+                      </TouchableOpacity>
                     )}
                     {onHide && (
-                      <Text
-                        style={[styles.actionText, styles.actionHide]}
+                      <TouchableOpacity
+                        style={styles.actionRow}
                         onPress={() => onHide(term)}
                         accessibilityRole="button"
                       >
-                        🚫 Hide word
-                      </Text>
+                        <BlockIcon size={14} color={tc.error} />
+                        <Text style={[styles.actionText, styles.actionHide]}>{t('vocabulary:row.hideWord')}</Text>
+                      </TouchableOpacity>
                     )}
                     {isPremium && !isIdiom && (
                       // Touchable + slop, not a bare `Text onPress` — see
@@ -363,11 +366,11 @@ export const VocabRow = ({
                         accessibilityRole="button"
                         accessibilityLabel={t('vocabulary:row.pronounce')}
                       >
-                        <Text
-                          style={[styles.actionText, styles.pronounceIcon, playingAudio && styles.pronounceIconActive]}
-                        >
-                          {playingAudio ? '…' : '🔊'}
-                        </Text>
+                        <SpeakerIcon
+                          size={17}
+                          playing={playingAudio}
+                          color={playingAudio ? tc.gold : tc.textSecondary}
+                        />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -397,7 +400,7 @@ export const VocabRow = ({
             accessibilityRole="button"
             accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
           >
-            <Text style={[styles.star, isSaved && styles.starActive]}>{isSaved ? '★' : '☆'}</Text>
+            <StarIcon size={20} filled={isSaved} animate={false} color={tc.textFaint} />
           </TouchableOpacity>
         )}
       </TouchableOpacity>

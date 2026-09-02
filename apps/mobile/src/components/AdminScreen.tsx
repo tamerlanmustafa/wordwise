@@ -41,6 +41,7 @@ import { EventLoopView } from './admin/EventLoopView';
 import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
+import { StarIcon } from './ui/icons';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -448,7 +449,10 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                       <Text style={styles.statusChipText}>{lvLabel}</Text>
                     </View>
                     {m.vote_average != null ? (
-                      <Text style={styles.processedMetaText}>★ {m.vote_average.toFixed(1)}</Text>
+                      <View style={styles.processedRatingRow}>
+                        <StarIcon size={10} filled animate={false} />
+                        <Text style={styles.processedMetaText}>{m.vote_average.toFixed(1)}</Text>
+                      </View>
                     ) : null}
                     {m.vote_count != null ? (
                       <Text style={styles.processedMetaText}>{m.vote_count.toLocaleString()} votes</Text>
@@ -1574,6 +1578,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 6,
   },
+  processedRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   processedMetaText: {
     fontSize: 12,
     color: COLORS.textSecondary,

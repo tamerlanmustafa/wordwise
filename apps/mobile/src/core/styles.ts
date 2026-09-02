@@ -522,6 +522,9 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  // The rating star is a drawn icon beside the year now, not a ⭐ glyph
+  // prefixed into the same text run.
+  searchResultMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   searchResultYear: {
     fontSize: 13,
     color: colors.textSecondary,
@@ -951,7 +954,7 @@ export const styles = StyleSheet.create({
     start: 0,
     flexDirection: 'row',
     alignItems: 'stretch',
-    // Matches unifiedTabsRow's horizontal padding so the ★ For You tab sits
+    // Matches unifiedTabsRow's horizontal padding so the For You tab sits
     // flush at the pill's left edge. The floating back button fades out as
     // the bar docks (see MovieDetailScreen), so no clearance inset is needed.
     paddingStart: 6,

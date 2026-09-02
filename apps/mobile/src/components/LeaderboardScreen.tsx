@@ -13,6 +13,7 @@ import {
   type QuizLeaderboardMetric,
 } from '../services/api';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { MedalIcon } from './ui/icons';
 
 // Medal/highlight colors are symbolic and stay constant across themes.
 const MEDAL = {
@@ -125,9 +126,14 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
 
   const renderItem = ({ item }: { item: BoardRow }) => (
     <View style={[styles.row, item.isYou && styles.rowHighlight]}>
-      <Text style={[styles.rank, { color: medalColor(item.rank) }]}>
-        {item.rank <= 3 ? ['🥇', '🥈', '🥉'][item.rank - 1] : `#${item.rank}`}
-      </Text>
+      {/* Top three get a drawn medal; the rest get their number. These were
+          🥇🥈🥉 — three emoji whose metal colours came from the OS font and
+          did not match `MEDAL`, the palette the row's own text already used. */}
+      {item.rank <= 3 ? (
+        <MedalIcon rank={item.rank} size={22} style={styles.rank} />
+      ) : (
+        <Text style={[styles.rank, { color: medalColor(item.rank) }]}>{`#${item.rank}`}</Text>
+      )}
       <Text style={[styles.username, item.isYou && styles.usernameBold]} numberOfLines={1}>
         {item.isYou ? t('stats:leaderboard.you', { username: item.username }) : item.username}
       </Text>
@@ -267,7 +273,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     borderWidth: 1, borderColor: tc.border,
   },
   rowHighlight: { backgroundColor: tc.primary + '18', borderColor: tc.primary },
-  rank: { fontSize: 16, fontWeight: '800', width: 44, textAlign: 'center' },
+  rank: { fontSize: 16, fontWeight: '800', width: 44, textAlign: 'center', alignItems: 'center' },
   username: { flex: 1, fontSize: 15, color: tc.text, marginStart: 8 },
   usernameBold: { fontWeight: '700', color: tc.primary },
   score: { fontSize: 15, fontWeight: '700', color: tc.text },

@@ -46,7 +46,9 @@
     "pronounce": "Kelimeyi telaffuz et",
     "removeFromSaved": "Kaydedilenlerden kaldır",
     "saveWord": "Kelimeyi kaydet",
-    "showsTranslation": "Çeviriyi gösterir"
+    "showsTranslation": "Çeviriyi gösterir",
+    "reportIssue": "Bir sorun bildir",
+    "hideWord": "Kelimeyi gizle"
   },
   "savedWords": "Kaydedilen Kelimeler",
   "screenTitle": "Kelime Dağarcığı",
