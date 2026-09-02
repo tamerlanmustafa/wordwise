@@ -58,7 +58,11 @@ import { SwipeableRow } from './SwipeableRow';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
+  CARD_GAP,
+  CARD_H,
+  CARD_RADIUS,
   EDGE_FADE_W,
+  ITEM_H,
   RING_C,
   RING_HOLE,
   RING_R,
@@ -75,9 +79,9 @@ import {
 import type { SwipeAction } from '../../utils/swipeDecision';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
-const CARD_H        = 116;
-const CARD_GAP      = 8;
-const ITEM_H        = CARD_H + CARD_GAP;
+// Now imported from `cardVisuals` rather than declared here, so `FeedSkeleton`
+// can draw a placeholder that is genuinely this card's size and the two cannot
+// drift apart again.
 
 // NOTE — do not widen FlashList's `drawDistance` here without re-measuring.
 // Tried and reverted 2026-08-30. The knob works exactly as advertised: the
@@ -613,7 +617,7 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
   return StyleSheet.create({
     card: {
       flex: 1,
-      borderRadius: 14,
+      borderRadius: CARD_RADIUS,
       overflow: 'hidden',
       backgroundColor: tc.cardStock,
       borderWidth: 1,

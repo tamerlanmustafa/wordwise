@@ -52,6 +52,7 @@ import { ActionRail } from './explore/ActionRail';
 import { MixPanel } from './explore/MixPanel';
 import { ListPanel } from './explore/ListPanel';
 import { useListsStore } from '../stores/listsStore';
+import { Skeleton } from './ui/Skeleton';
 
 interface Props {
   /** Whether this tab is the visible one — drives panel reset on leave. */
@@ -427,13 +428,18 @@ export function ExploreScreen({
 }
 
 /** Shown only if paging somehow loses the race with the scroll — never a
- *  full-screen loader. */
+ *  full-screen loader.
+ *
+ *  Bars were hand-rolled `View`s in `tc.skeleton`: correctly coloured, but
+ *  completely static, so a card that stalled read as a broken render rather
+ *  than a pending one. The `Skeleton` primitive carries the pulse and the
+ *  reduce-motion fallback, which is the whole reason it exists. */
 function CardSkeleton({ height, s }: { height: number; s: Styles }) {
   return (
     <View style={[s.skeleton, { height }]}>
-      <View style={[s.skelBar, { width: '55%', height: 44 }]} />
-      <View style={[s.skelBar, { width: '90%', height: 16, marginTop: 40 }]} />
-      <View style={[s.skelBar, { width: '72%', height: 16, marginTop: 10 }]} />
+      <Skeleton width="55%" height={44} radius={6} />
+      <Skeleton width="90%" height={16} radius={6} delay={80} style={s.skelGapLarge} />
+      <Skeleton width="72%" height={16} radius={6} delay={140} style={s.skelGapSmall} />
     </View>
   );
 }
@@ -466,10 +472,10 @@ const makeStyles = (tc: ThemeColors) =>
     skeleton: {
       paddingTop: 18,
       paddingStart: 24,
+      paddingEnd: 24,
       justifyContent: 'center',
     },
-    skelBar: {
-      borderRadius: 6,
-      backgroundColor: tc.skeleton,
-    },
+    // Spacing between the word block and the two sentence lines below it.
+    skelGapLarge: { marginTop: 40 },
+    skelGapSmall: { marginTop: 10 },
   });

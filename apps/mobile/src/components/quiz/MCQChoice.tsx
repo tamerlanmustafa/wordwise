@@ -26,7 +26,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { alignStart } from '../../i18n/rtl';
-import type { MCQChoiceState } from './mcqLogic';
+import { MCQ_CHOICE_MIN_H, MCQ_CHOICE_RADIUS, type MCQChoiceState } from './mcqLogic';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -92,10 +92,10 @@ const makeStyles = (_tc: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      minHeight: 56,
+      minHeight: MCQ_CHOICE_MIN_H,
       paddingHorizontal: 16,
       paddingVertical: 12,
-      borderRadius: 14,
+      borderRadius: MCQ_CHOICE_RADIUS,
       borderWidth: 2,
     },
     idleShadow: {

@@ -14,6 +14,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
 import { META_SEPARATOR, metaText } from './listStyles';
 import type { ListFilmItem, ListWordItem } from '../../core/types';
+import { Skeleton } from '../ui/Skeleton';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w185';
 
@@ -128,6 +129,51 @@ export function WordItemRow({
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
+  );
+}
+
+/**
+ * Placeholder rows for an open list that is still loading.
+ *
+ * Lives here, beside the rows it stands in for, and draws itself with their
+ * own `makeStyles` — so it is the real row's height by construction rather
+ * than by a number someone remembered to copy.
+ *
+ * ListDetailScreen used to render three bare `Skeleton height={74}` blocks.
+ * 74 is the *poster's* height, not the row's: a film row is 74 plus 10pt of
+ * padding either side, so every placeholder was 20pt short. They also had no
+ * gap between them, so the three ran together into one grey slab, and the
+ * same shape was drawn for a words list, whose rows are shorter and carry no
+ * poster at all.
+ */
+export function ListItemsSkeleton({ kind, rows = 4 }: { kind: 'films' | 'words'; rows?: number }) {
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+
+  return (
+    <View>
+      {Array.from({ length: rows }).map((_, i) =>
+        kind === 'films' ? (
+          <View key={i} style={s.filmRow}>
+            <Skeleton width={52} height={74} radius={3} sheen delay={i * 70} />
+            <View style={s.filmBody}>
+              <Skeleton width="68%" height={15} radius={4} sheen delay={i * 70 + 40} />
+              <Skeleton width="40%" height={10} radius={4} sheen delay={i * 70 + 70} />
+              <Skeleton width="52%" height={10} radius={4} sheen delay={i * 70 + 100} />
+            </View>
+            <Skeleton width={34} height={34} radius={17} sheen delay={i * 70 + 130} />
+          </View>
+        ) : (
+          <View key={i} style={s.wordRow}>
+            <View style={s.wordBody}>
+              <Skeleton width="45%" height={20} radius={4} sheen delay={i * 70} />
+              <Skeleton width="70%" height={10} radius={4} sheen delay={i * 70 + 50} />
+            </View>
+            <Skeleton width={28} height={28} radius={14} sheen delay={i * 70 + 90} />
+          </View>
+        ),
+      )}
+    </View>
   );
 }
 

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BACK_ARROW } from '../i18n/rtl';
 import { familyApi, type FamilyPlan } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { Skeleton } from './ui/Skeleton';
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
@@ -96,8 +97,20 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
       </View>
 
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={tc.primary} />
+        /* The plan card and its member rows, at their own measurements. The
+           screen has two very different loaded states — a plan, or the
+           create/upsell pitch — and a centred spinner previewed neither. */
+        <View style={styles.content}>
+          <View style={styles.planCard}>
+            <Skeleton width="55%" height={18} radius={5} sheen />
+            <Skeleton width="34%" height={14} radius={4} sheen delay={60} style={styles.skeletonPlanMeta} />
+          </View>
+          <Skeleton width={92} height={13} radius={4} sheen delay={110} style={styles.skeletonSection} />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <View key={i} style={styles.memberRow}>
+              <Skeleton width="62%" height={15} radius={4} sheen delay={160 + i * 70} />
+            </View>
+          ))}
         </View>
       ) : !plan ? (
         <View style={styles.centered}>
@@ -200,6 +213,8 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   planCard: { backgroundColor: tc.paper, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: tc.border, marginBottom: 20 },
   planTitle: { fontSize: 18, fontWeight: '700', color: tc.text },
   memberCount: { fontSize: 14, color: tc.textSecondary, marginTop: 4 },
+  skeletonPlanMeta: { marginTop: 6 },
+  skeletonSection: { marginTop: 8, marginBottom: 8 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: tc.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 8 },
   memberRow: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: tc.paper, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: tc.border },
   memberEmail: { fontSize: 15, color: tc.text, flex: 1 },

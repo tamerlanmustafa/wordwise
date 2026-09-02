@@ -15,7 +15,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   ScrollView,
   StyleSheet,
@@ -28,6 +27,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { directionSign } from '../../i18n/rtl';
 import type { ListSummary } from '../../core/types';
+import { Skeleton } from '../ui/Skeleton';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -110,7 +110,16 @@ export function ListPanel({
 
       <View style={s.rows}>
         {loading && lists.length === 0 ? (
-          <ActivityIndicator color={tc.gold} style={s.spinner} />
+          /* Rows the shape of the list rows about to replace them, so the
+             panel does not resize under the user's thumb mid-save. */
+          <View>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <View key={i} style={s.row}>
+                <Skeleton width={22} height={22} radius={6} delay={i * 70} />
+                <Skeleton width="55%" height={13} radius={4} delay={i * 70 + 40} />
+              </View>
+            ))}
+          </View>
         ) : lists.length === 0 ? (
           <Text style={s.empty}>No word lists yet — make one below.</Text>
         ) : (

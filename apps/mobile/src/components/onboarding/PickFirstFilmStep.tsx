@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import type { CefrLevel } from '../../types';
 import { TmdbPoster } from '../movies/TmdbPoster';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
+import { Skeleton } from '../ui/Skeleton';
 
 export interface FirstFilm {
   tmdb_id: number;
@@ -152,7 +153,28 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         {loading && grid.length === 0 ? (
-          <ActivityIndicator color={tc.gold} style={{ marginTop: 32 }} />
+          /* Tiles at the real card's size — 47% wide, 150pt poster, 16pt
+             radius — instead of a lone spinner. This is a new user's first
+             wait in the app, so it is the worst place to show a screen that
+             is empty except for a wheel. */
+          <View style={s.grid}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={i} style={[s.card, s.skeletonCard]}>
+                <Skeleton width="100%" height={150} radius={0} sheen delay={i * 80} />
+                <View style={s.cardInfo}>
+                  <Skeleton width="78%" height={15} radius={4} sheen delay={i * 80 + 50} />
+                  <Skeleton
+                    width="42%"
+                    height={12}
+                    radius={4}
+                    sheen
+                    delay={i * 80 + 80}
+                    style={s.skeletonYear}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
         ) : (
           <View style={s.grid}>
             {grid.map((m) => {
@@ -211,6 +233,10 @@ const makeStyles = (tc: ThemeColors) =>
     scroll: { flex: 1 },
     scrollContent: { padding: 18, paddingTop: 14 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+    // The real card's 2pt border is coloured by selection state; the
+    // placeholder borrows the resting one so the tile is the same size.
+    skeletonCard: { borderColor: tc.border },
+    skeletonYear: { marginTop: 6 },
     card: {
       width: '47%',
       flexGrow: 1,

@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +24,7 @@ import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
+import { QuizCardSkeleton } from './quiz/QuizCardSkeleton';
 import { sessionPosition } from './quiz/quizHeaderLayout';
 import { emptyDeckCopy } from './quiz/emptyDeck';
 import { feedback } from '../utils/feedback';
@@ -35,7 +33,6 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import type { PaywallReason } from './paywallPricing';
 import { SessionComplete } from './common/SessionComplete';
-import { Skeleton } from './ui/Skeleton';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -356,24 +353,16 @@ export function ReviewScreen({
   );
 
   if (phase === 'loading') {
-    // Skeleton shaped like a review card (progress bar + word card + choices)
-    // instead of a bare spinner (F-015).
+    // The same chrome the deck itself runs in. This used to render a paper bar
+    // with a "← Back" text label above a stack of loose bars — so the entire
+    // top of the screen changed shape the instant the first card arrived, on
+    // top of the card body changing too. QuizHeader with no index/total drops
+    // the counter and the progress bar and holds their slot with a spacer, so
+    // loading gains those two pieces rather than being replaced.
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} hitSlop={8}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
-          <View style={{ width: 60 }} />
-        </View>
-        <View style={{ padding: 20, gap: 16 }}>
-          <Skeleton height={6} radius={3} sheen />
-          <Skeleton height={160} radius={16} sheen delay={80} />
-          <Skeleton height={52} radius={12} sheen delay={140} />
-          <Skeleton height={52} radius={12} sheen delay={200} />
-          <Skeleton height={52} radius={12} sheen delay={260} />
-        </View>
+        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizCardSkeleton />
       </SafeAreaView>
     );
   }
@@ -381,13 +370,7 @@ export function ReviewScreen({
   if (phase === 'error') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} hitSlop={8}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
-          <View style={{ width: 60 }} />
-        </View>
+        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
         <EmptyState
           icon="cloud-offline-outline"
           tone="error"
@@ -408,13 +391,7 @@ export function ReviewScreen({
     const copy = emptyDeckCopy(deckStatus);
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} hitSlop={8}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('quiz:review.screenTitle')}</Text>
-          <View style={{ width: 60 }} />
-        </View>
+        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
         <EmptyState
           icon={copy.icon}
           tone={copy.tone}
@@ -489,11 +466,14 @@ export function ReviewScreen({
   // here. If we do (old server build), drop the card on the floor and
   // advance silently so the queue doesn't black-screen.
   if (!currentCard) {
+    // A frame-long gap between two cards, not a load — but a bare spinner on
+    // an otherwise blank screen is the most alarming thing the deck can show,
+    // and it appeared with no header at all. The card outline says "next one
+    // is coming" using the shape that is actually coming.
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={tc.primaryOnSurface} />
-        </View>
+        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizCardSkeleton />
       </SafeAreaView>
     );
   }
@@ -550,14 +530,12 @@ export function ReviewScreen({
     );
   }
 
-  // Unrenderable card — the skip effect above has already queued an
-  // `advance(true)`. Show the spinner for the brief gap.
+  // Unrenderable card — the skip effect above has already queued the skip.
+  // Same card outline as every other gap, so nothing on screen moves.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {sharedHeader}
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={tc.primaryOnSurface} />
-      </View>
+      <QuizCardSkeleton />
       {sharedTip}
     </SafeAreaView>
   );
@@ -565,25 +543,6 @@ export function ReviewScreen({
 
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: tc.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: tc.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: tc.border,
-  },
-  backText: { fontSize: 16, color: tc.primaryOnSurface, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 16,
-  },
   primaryBtn: {
     backgroundColor: tc.primary,
     paddingVertical: 16,

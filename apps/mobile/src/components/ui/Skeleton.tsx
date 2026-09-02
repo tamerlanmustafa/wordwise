@@ -26,6 +26,13 @@ import { useThemeColors } from '../../theme/tokens';
  * Colours default to the theme `skeleton`/`skeletonSheen` tokens; pass `color`
  * to override for a surface that isn't the app background. Honors reduce-motion
  * by falling back to a static block.
+ *
+ * Invisible to screen readers, on both platforms. A placeholder has nothing to
+ * say — it is a drawing of content that has not arrived — and a feed skeleton
+ * is a dozen of them, so without this VoiceOver and TalkBack walk the user
+ * through a stack of unlabelled empty boxes before the real content lands and
+ * replaces them. Marking the primitive is what makes that true everywhere;
+ * doing it per call site is how half of them end up announced.
  */
 export interface SkeletonProps {
   width?: DimensionValue;
@@ -98,6 +105,8 @@ export function Skeleton({
     return (
       <Animated.View
         onLayout={onLayout}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={[{ width, height, borderRadius: radius, backgroundColor: base, overflow: 'hidden' }, style]}
       >
         {!reduceMotion && blockW > 0 ? (
@@ -114,6 +123,8 @@ export function Skeleton({
 
   return (
     <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       style={[
         { width, height, borderRadius: radius, backgroundColor: base, opacity: reduceMotion ? 0.7 : pulse },
         style,

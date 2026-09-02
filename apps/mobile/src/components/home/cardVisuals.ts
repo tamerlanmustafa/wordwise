@@ -200,6 +200,30 @@ export function cornerForGlyph(value: unknown, isRtl: boolean): Rgb | null {
   return isRtl ? null : parseCornerRgb(value);
 }
 
+// ── Card geometry ──────────────────────────────────────────────────────────
+// Shared with `FeedSkeleton`, which draws the placeholder shown while the feed
+// loads. The skeleton used to carry its own numbers — a 64x96 portrait poster
+// with two text lines beside it — which was the row layout from *before* the
+// card redesign. Nothing failed when the card became a 116pt full-width
+// backdrop tile; the skeleton simply went on describing a screen that no
+// longer existed, and the feed jumped shape the moment the data landed.
+//
+// Placeholders are only worth having if they are the size of the thing they
+// stand in for, so the numbers live here and both sides read them.
+
+/** Height of one card. */
+export const CARD_H = 116;
+/** Vertical space between two cards. */
+export const CARD_GAP = 8;
+/** Row pitch — what a list has to reserve per item. */
+export const ITEM_H = CARD_H + CARD_GAP;
+/** Card corner radius. */
+export const CARD_RADIUS = 14;
+/** Inset from the card's leading edge to the ring. */
+export const CARD_PAD_START = 14;
+/** Gap between the ring and the title block. */
+export const CARD_ROW_GAP = 13;
+
 // ── Level ring ─────────────────────────────────────────────────────────────
 // One 44pt ring, gold arc drawn to the comprehension percentage, CEFR band and
 // percent stacked inside. r=20 with a 4pt stroke spans 18–22, so the hole is

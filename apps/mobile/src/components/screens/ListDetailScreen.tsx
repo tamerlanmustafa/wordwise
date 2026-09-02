@@ -17,9 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { BACK_ARROW } from '../../i18n/rtl';
-import { Skeleton } from '../ui/Skeleton';
 import { SortSheet } from '../lists/SortSheet';
-import { FilmItemRow, WordItemRow } from '../lists/ListItemRows';
+import { FilmItemRow, ListItemsSkeleton, WordItemRow } from '../lists/ListItemRows';
 import { useListDisplayName } from '../lists/ListRow';
 import {
   METRICS,
@@ -201,7 +200,7 @@ export function ListDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
-          [0, 1, 2].map((i) => <Skeleton key={i} height={74} radius={8} />)
+          <ListItemsSkeleton kind={isFilms ? 'films' : 'words'} />
         ) : items.length === 0 ? (
           <Text style={s.empty}>
             {isFilms ? t('empty.films') : t('empty.words')}

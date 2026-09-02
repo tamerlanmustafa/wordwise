@@ -50,3 +50,30 @@ export const MCQ_COPY: { eyebrow: string; idleCta: string; notQuiteSuffix: strin
   idleCta: 'Pick the translation',
   notQuiteSuffix: ' is the translation.',
 };
+
+// ── Card geometry ──────────────────────────────────────────────────────────
+// Shared between the real card and the skeleton shown while the deck loads.
+// The skeleton carried its own numbers and got all of them wrong: three rows
+// where every deck has four, 52pt tall against a 56pt tap target, radius 12
+// against 14. A placeholder that is the wrong size is worse than none, because
+// the screen visibly re-lays-out the moment the cards arrive — and nothing
+// fails, so it survives every review.
+
+/** Choices per card. The server builds exactly four; the deck has no other
+ *  shape, so a placeholder showing three is simply wrong. */
+export const MCQ_CHOICE_COUNT = 4;
+/** Minimum row height — this is the tap target, not just a look. */
+export const MCQ_CHOICE_MIN_H = 56;
+export const MCQ_CHOICE_RADIUS = 14;
+/** Vertical gap between two choice rows. */
+export const MCQ_CHOICE_GAP = 10;
+/** WordCard's corner radius. */
+export const WORD_CARD_RADIUS = 18;
+/** WordCard's outer vertical margin. */
+export const WORD_CARD_MARGIN_Y = 16;
+/** Roughly what a WordCard occupies with a word and a one-line subtitle:
+ *  28pt padding, a ~44pt serif line, an 8pt gap, a 17pt subtitle, 28pt
+ *  padding. Approximate on purpose — the real card grows with the sentence,
+ *  and a placeholder that guesses the common case is closer than one that
+ *  guesses nothing. */
+export const WORD_CARD_H = 125;

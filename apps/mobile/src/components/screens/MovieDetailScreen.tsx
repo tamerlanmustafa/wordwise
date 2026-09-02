@@ -76,6 +76,7 @@ import {
 import { track } from '../../services/analytics';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
+import { Skeleton } from '../ui/Skeleton';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -1247,9 +1248,13 @@ export const MovieDetailScreen = ({
           <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
             {isSwitching ? (
               Array.from({ length: INITIAL_ROWS }).map((_, i) => (
+                // Bars were plain Views in a hard-coded `rgba(124, 92, 191, …)`
+                // — the old purple primary — so they stayed lilac in dark mode
+                // and never animated. The primitive carries the theme token,
+                // the pulse and the reduce-motion fallback.
                 <View key={`skel-${i}`} style={styles.wordSkeletonRow}>
-                  <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarPrimary]} />
-                  <View style={[styles.wordSkeletonBar, styles.wordSkeletonBarSecondary]} />
+                  <Skeleton height={12} radius={4} delay={i * 60} style={styles.wordSkeletonBarPrimary} />
+                  <Skeleton width={28} height={12} radius={4} delay={i * 60 + 40} />
                 </View>
               ))
             ) : deferredWordsView === 'foryou' ? (

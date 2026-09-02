@@ -16,6 +16,7 @@ import { styles } from '../../core/styles';
 import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
+import { Skeleton } from '../ui/Skeleton';
 
 interface Props {
   query: string;
@@ -213,8 +214,27 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
       ) : null}
 
       {loading ? (
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        /* Rows at the real result row's measurements — 46x69 poster, 8pt
+           padding, hairline divider — rather than the full-screen spinner
+           this used to be. A spinner in the middle of an empty screen says
+           "wait"; a list of the right shape says what is arriving. */
+        <View>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <View key={i} style={styles.searchResultItem}>
+              <Skeleton width={46} height={69} radius={4} sheen delay={i * 60} />
+              <View style={styles.searchResultInfo}>
+                <Skeleton width="66%" height={15} radius={4} sheen delay={i * 60 + 40} />
+                <Skeleton
+                  width="30%"
+                  height={11}
+                  radius={4}
+                  sheen
+                  delay={i * 60 + 70}
+                  style={styles.searchSkeletonMeta}
+                />
+              </View>
+            </View>
+          ))}
         </View>
       ) : (
         <FlatList

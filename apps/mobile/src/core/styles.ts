@@ -512,6 +512,11 @@ export const styles = StyleSheet.create({
     flex: 1,
     marginStart: 12,
   },
+  // Gap under the title in the loading placeholder, matching where the year
+  // line sits in a real result row.
+  searchSkeletonMeta: {
+    marginTop: 6,
+  },
   searchResultTitle: {
     fontSize: 15,
     fontWeight: '600',
@@ -714,32 +719,6 @@ export const styles = StyleSheet.create({
   },
   levelSortTextActive: {
     color: '#9c27b0',
-  },
-  skeletonContainer: {
-    paddingTop: 4,
-  },
-  skeletonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  skeletonPoster: {
-    width: 60,
-    height: 90,
-    borderRadius: 6,
-    backgroundColor: colors.border,
-    marginEnd: 14,
-    marginStart: 48,
-  },
-  skeletonInfo: {
-    flex: 1,
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: colors.border,
   },
   carousel: {
     paddingEnd: 16,
@@ -1076,23 +1055,15 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(124, 92, 191, 0.10)',
-    backgroundColor: 'rgba(124, 92, 191, 0.06)',
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     gap: 12,
   },
-  wordSkeletonBar: {
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: 'rgba(124, 92, 191, 0.18)',
-  },
   wordSkeletonBarPrimary: {
     flex: 1,
-  },
-  wordSkeletonBarSecondary: {
-    width: 28,
   },
   forYouEmpty: {
     textAlign: 'center',
