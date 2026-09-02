@@ -19,6 +19,8 @@ from prisma import Prisma
 
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
+from ..services.tts_service import MAX_WORD_LEN, TTSUnavailable, synthesize
+from ..utils.offload import CPUOverloaded
 from ..utils.subscription import is_premium
 
 logger = logging.getLogger(__name__)
@@ -103,34 +105,51 @@ async def pronounce_word(
     """
     Return an audio pronunciation for a word using Google TTS.
     Premium-gated due to TTS cost.
+
+    The synthesis itself is `services/tts_service`'s: it is a synchronous
+    network round trip, so it runs on the CPU worker pool rather than on the
+    event loop this single-process API shares with every other request, and
+    its result is cached per word.
+
+    A fresh `BytesIO` per response, wrapping cached bytes — a stream is
+    consumed by the response that sends it, so handing the same buffer to a
+    second request would send an empty body.
     """
     _require_premium(current_user)
 
-    clean = word.strip()[:60]
+    clean = word.strip()[:MAX_WORD_LEN]
     if not clean:
         raise HTTPException(400, detail="Empty word")
 
     try:
-        from gtts import gTTS
-
-        tts = gTTS(text=clean, lang="en", slow=False)
-        buf = io.BytesIO()
-        tts.write_to_fp(buf)
-        buf.seek(0)
-
-        return StreamingResponse(
-            buf,
-            media_type="audio/mpeg",
-            headers={"Content-Disposition": f'inline; filename="{clean}.mp3"'},
-        )
-    except ImportError:
+        audio = await synthesize(clean)
+    except TTSUnavailable:
+        # No speech backend in this image. A deployment fact, not a transient
+        # failure — this is what every request hit before `gtts` was declared
+        # in requirements.txt (prod, 2026-09-01).
+        logger.error("TTS unavailable: gtts is not installed in this image")
         raise HTTPException(
             501,
             detail="TTS not available — install gtts: pip install gtts",
         )
+    except CPUOverloaded:
+        # Shed rather than queue behind a round trip the caller has stopped
+        # waiting for. The client treats any failure as silent and the reader
+        # can tap again.
+        raise HTTPException(
+            503,
+            detail="Pronunciation busy, try again",
+            headers={"Retry-After": "1"},
+        )
     except Exception as e:
         logger.error(f"TTS failed for '{clean}': {e}")
         raise HTTPException(500, detail="Pronunciation unavailable")
+
+    return StreamingResponse(
+        io.BytesIO(audio),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'inline; filename="{clean}.mp3"'},
+    )
 
 
 # ── Export to Anki / CSV ─────────────────────────────────────────────────────

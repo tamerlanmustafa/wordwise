@@ -13,6 +13,27 @@ export const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default
 // [tc]) — every colour comes from `tc.*` so the row is correct in light AND
 // dark. Per-row accents that depend on the CEFR level colour (highlight,
 // expansion rule, level washes) are applied inline by the component.
+/** Spacing between the actions under an expanded row, both axes. */
+export const ROW_ACTIONS_GAP = 16;
+
+/**
+ * Touch padding for a row's icon-only action (the speaker). Same defect and
+ * same fix as the card deck's `FOOTER_ICON_HIT_SLOP`: a bare `Text onPress`
+ * on a 14pt emoji, inside the row's own expand/collapse touchable, gives a
+ * target barely larger than the glyph.
+ *
+ * Bounded on BOTH axes here, where the card's is bounded only horizontally:
+ * `actionsRow` sets `flexWrap`, so when the actions spill onto a second line
+ * the gap above and below is also `ROW_ACTIONS_GAP` — a taller slop would
+ * overlap the wrapped neighbour and start eating its taps.
+ */
+export const ROW_ICON_HIT_SLOP = {
+  top: ROW_ACTIONS_GAP / 2,
+  bottom: ROW_ACTIONS_GAP / 2,
+  left: ROW_ACTIONS_GAP / 2,
+  right: ROW_ACTIONS_GAP / 2,
+} as const;
+
 export const makeRowStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     row: {

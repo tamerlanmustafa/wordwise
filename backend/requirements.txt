@@ -67,6 +67,12 @@ google-cloud-translate==3.11.3
 # LLM Example Sentence Generation
 anthropic==0.39.0
 
+# Word pronunciation audio (/premium/pronounce). The route imported this from
+# day one but nothing ever declared it, so the deployed image answered 501 to
+# every request — see services/tts_service.py. Its own deps (requests, click)
+# are already here or transitive.
+gTTS==2.5.4
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1

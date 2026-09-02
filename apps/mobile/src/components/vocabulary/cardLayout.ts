@@ -67,6 +67,37 @@ export const SENTENCE_TR_SLOT_HEIGHT = 68;
 export const FOOTER_TOP = 14;
 /** 7. Footer row: report · audio · TAP TO REVEAL hint. */
 export const FOOTER_HEIGHT = 16;
+/** Horizontal spacing between the footer's actions. */
+export const FOOTER_GAP = 16;
+
+/**
+ * Touch padding for the footer's icon-only actions — today just the speaker.
+ *
+ * The speaker is a 13pt emoji sitting inside the card's own tap-to-reveal
+ * Pressable, so without slop its target is the glyph itself: a tap a few
+ * points off flips the card instead of playing the word, which reads as "the
+ * speaker doesn't work". The save heart in the meta row was given a target
+ * (`hitSlop` 10); the speaker never was.
+ *
+ * The two numbers are bounded by different neighbours, which is why they
+ * differ:
+ *
+ * • Horizontal is capped at half `FOOTER_GAP`. Slop regions of adjacent
+ *   actions must not overlap — where they do, the deeper/later view wins the
+ *   touch and "Report an issue" would start swallowing presses meant for the
+ *   speaker. Half the gap each is the widest that cannot collide.
+ * • Vertical is capped at `FOOTER_TOP`, the empty run above the row. Nothing
+ *   there is interactive (it belongs to the card's own Pressable, which the
+ *   speaker is allowed to win), so it can take the whole gap — and it needs
+ *   to, since `FOOTER_HEIGHT` alone is 16pt and 16 + 14 + 14 is the ~44pt
+ *   target both platforms' guidelines ask for.
+ */
+export const FOOTER_ICON_HIT_SLOP = {
+  top: FOOTER_TOP,
+  bottom: FOOTER_TOP,
+  left: FOOTER_GAP / 2,
+  right: FOOTER_GAP / 2,
+} as const;
 
 /** The constant card height — the sum of every slot, gap, and padding. */
 export const CARD_HEIGHT =

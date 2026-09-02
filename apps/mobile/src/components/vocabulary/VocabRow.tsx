@@ -11,7 +11,7 @@ import {
 } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
-import { makeRowStyles } from './rowStyles';
+import { makeRowStyles, ROW_ICON_HIT_SLOP } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
 import { pronounce } from '../../utils/pronunciation';
 
@@ -350,14 +350,25 @@ export const VocabRow = ({
                       </Text>
                     )}
                     {isPremium && !isIdiom && (
-                      <Text
-                        style={[styles.actionText, styles.pronounceIcon, playingAudio && styles.pronounceIconActive]}
-                        onPress={handlePronounce}
+                      // Touchable + slop, not a bare `Text onPress` — see
+                      // ROW_ICON_HIT_SLOP. The row itself is a touchable, so
+                      // an unpadded near miss collapsed the row instead of
+                      // playing the word.
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handlePronounce();
+                        }}
+                        hitSlop={ROW_ICON_HIT_SLOP}
                         accessibilityRole="button"
                         accessibilityLabel={t('vocabulary:row.pronounce')}
                       >
-                        {playingAudio ? '…' : '🔊'}
-                      </Text>
+                        <Text
+                          style={[styles.actionText, styles.pronounceIcon, playingAudio && styles.pronounceIconActive]}
+                        >
+                          {playingAudio ? '…' : '🔊'}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </View>
 

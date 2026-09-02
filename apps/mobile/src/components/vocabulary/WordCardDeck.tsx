@@ -63,6 +63,7 @@ import {
   SENTENCE_TR_SLOT_HEIGHT,
   FOOTER_TOP,
   FOOTER_HEIGHT,
+  FOOTER_ICON_HIT_SLOP,
   REVEAL_IN_MS,
   REVEAL_OUT_MS,
   REVEAL_RISE_PX,
@@ -1018,7 +1019,12 @@ export const WordCardDeck = ({
         <View style={s.footerRow}>
           {isAuthenticated ? <Text style={s.actionText}>⚐ Report an issue</Text> : null}
           {isPremium && !staticIdiom ? (
-            <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
+            // A plain View, mirroring the focused card's TouchableOpacity
+            // wrapper: the overlay is pointer-inert, but its footer has to
+            // measure identically or the icon shifts as the overlay detaches.
+            <View>
+              <Text style={[s.actionText, s.pronounceIcon]}>🔊</Text>
+            </View>
           ) : null}
           <Text style={s.tapHint}>{t('vocabulary:deck.tapToReveal')}</Text>
         </View>
@@ -1258,14 +1264,24 @@ export const WordCardDeck = ({
                 </Text>
               ) : null}
               {isPremium && !idiom ? (
-                <Text
-                  style={[s.actionText, s.pronounceIcon, playingAudio && s.pronounceActive]}
-                  onPress={handlePronounce}
+                // A touchable with real slop, not a bare `Text onPress`: the
+                // glyph is 13pt inside the card's tap-to-reveal Pressable, so
+                // an unpadded target made a near miss flip the card instead of
+                // playing the word. `stopPropagation` for the hits that do
+                // land, exactly as the save heart does.
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handlePronounce();
+                  }}
+                  hitSlop={FOOTER_ICON_HIT_SLOP}
                   accessibilityRole="button"
                   accessibilityLabel={t('vocabulary:row.pronounce')}
                 >
-                  {playingAudio ? '…' : '🔊'}
-                </Text>
+                  <Text style={[s.actionText, s.pronounceIcon, playingAudio && s.pronounceActive]}>
+                    {playingAudio ? '…' : '🔊'}
+                  </Text>
+                </TouchableOpacity>
               ) : null}
               <Text style={s.tapHint}>{expanded ? t('vocabulary:deck.tapToHide') : t('vocabulary:deck.tapToReveal')}</Text>
             </View>

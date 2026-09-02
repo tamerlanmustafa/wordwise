@@ -5,6 +5,10 @@ import {
   WORD_SLOT_HEIGHT,
   DEFINITION_SLOT_HEIGHT,
   SENTENCE_LABEL_HEIGHT,
+  FOOTER_TOP,
+  FOOTER_HEIGHT,
+  FOOTER_GAP,
+  FOOTER_ICON_HIT_SLOP,
   wordTier,
   wordTranslationTier,
   definitionTier,
@@ -205,5 +209,38 @@ describe('sentenceTranslationTier', () => {
     const tier = sentenceTranslationTier(LONG_SENTENCE_TR);
     expect(tier).toEqual({ fontSize: 12.5, lineHeight: 17, lines: 4 });
     expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(68);
+  });
+});
+
+describe('FOOTER_ICON_HIT_SLOP', () => {
+  // The speaker is a 13pt emoji sitting inside the card's tap-to-reveal
+  // Pressable. Without slop its target is the glyph, so a near miss flipped
+  // the card instead of playing the word — which reads as "the speaker
+  // doesn't work". These pin the two bounds that decide the numbers.
+
+  it('is wide enough to press but cannot reach its neighbour', () => {
+    // Footer actions sit FOOTER_GAP apart. Where two slop regions overlap the
+    // deeper view wins, so "Report an issue" would start eating presses
+    // meant for the speaker. Half the gap each is the widest that cannot.
+    expect(FOOTER_ICON_HIT_SLOP.left + FOOTER_ICON_HIT_SLOP.right).toBeLessThanOrEqual(
+      FOOTER_GAP,
+    );
+    expect(FOOTER_ICON_HIT_SLOP.left).toBeGreaterThan(0);
+  });
+
+  it('takes the whole empty run above the row, and no more', () => {
+    // Nothing above the footer is interactive — it belongs to the card's own
+    // Pressable, which the speaker is allowed to win — so the vertical slop
+    // can have all of FOOTER_TOP, but stepping past it would start covering
+    // the sentence-translation slot.
+    expect(FOOTER_ICON_HIT_SLOP.top).toBeLessThanOrEqual(FOOTER_TOP);
+    expect(FOOTER_ICON_HIT_SLOP.bottom).toBeLessThanOrEqual(FOOTER_TOP);
+  });
+
+  it('reaches the ~44pt target both platforms ask for', () => {
+    // FOOTER_HEIGHT alone is 16pt: without slop this is less than half the
+    // minimum touch target on either platform.
+    const height = FOOTER_HEIGHT + FOOTER_ICON_HIT_SLOP.top + FOOTER_ICON_HIT_SLOP.bottom;
+    expect(height).toBeGreaterThanOrEqual(44);
   });
 });
