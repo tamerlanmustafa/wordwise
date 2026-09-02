@@ -17,6 +17,8 @@ const progress = (
   missed: [],
   tested: [],
   known: [],
+  got: 0,
+  forgot: 0,
   ...over,
 });
 const q = (...keys: string[]) => keys.map(key => ({ key, source: 'scene' as const }));
@@ -120,6 +122,16 @@ describe('screeningStore', () => {
       store().answer(7, true);
       expect(store().resumable(7)!.tested).toEqual([]);
     });
+
+    it("counts the scene's answers, so a resumed scene still knows its score", () => {
+      store().start(progress(7, { beat: 7, queue: q('a', 'b') }));
+      store().answer(7, false); // a → back of the queue
+      store().answer(7, true); // b
+      store().answer(7, true); // a
+      const c = store().resumable(7)!;
+      // Three answers, not two: the retry is a real attempt and is counted.
+      expect({ got: c.got, forgot: c.forgot }).toEqual({ got: 2, forgot: 1 });
+    });
   });
 
   describe('markKnown', () => {
@@ -147,12 +159,16 @@ describe('screeningStore', () => {
           missed: ['x'],
           tested: ['y'],
           known: ['z'],
+          got: 3,
+          forgot: 1,
         }),
       );
       clock += STALE_MS + 1;
       const c = store().resumable(7)!;
       expect(c.beat).toBe(0);
       expect(c.queue).toBeNull();
+      // The scene's own tally restarts with the scene; the film's does not.
+      expect({ got: c.got, forgot: c.forgot }).toEqual({ got: 0, forgot: 0 });
       expect(isSceneInFlight(c)).toBe(false);
       expect(c.scene).toBe(2);
       expect(c.missed).toEqual(['x']);
@@ -236,6 +252,8 @@ describe('screeningStore', () => {
         missed: [],
         tested: [],
         known: [],
+        got: 0,
+        forgot: 0,
       });
     });
   });

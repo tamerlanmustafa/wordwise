@@ -948,7 +948,12 @@ export type SessionKind =
   // path — but a session in flight is cached by kind, so the union carries
   // them.
   | 'list_words'
-  | 'list_films';
+  | 'list_films'
+  // Screening Mode (#166): one card per word a scene is testing, for the
+  // film named by `movieId`. Outside the free daily cap — a scene test is
+  // priced in energy, not in the day's one Practice session — and never
+  // cached by reviewSessionStore: screeningStore owns that resume.
+  | 'movie_lesson';
 
 export interface SrsSessionStart {
   cards: SrsReviewCard[];
@@ -1124,11 +1129,24 @@ export const srsApi = {
   startSession: async (opts: {
     /** Which queue to draw from. Omit for the backend default (`practice`). */
     kind?: SessionKind;
+    /** Required for `movie_lesson`: the film the scene belongs to. */
+    movieId?: number;
+    /** Required for `movie_lesson`: the words the scene is testing, sent as
+     *  a repeated `?words=` param. The server drops any word it cannot build
+     *  a translation MCQ for, so EXPECT FEWER CARDS THAN WORDS — callers key
+     *  the returned cards by `word` rather than by position. At most 20. */
+    words?: readonly string[];
   } = {}): Promise<SrsSessionStart> => {
     // RN's URLSearchParams polyfill lacks .set, so we build the query
     // string by hand.
-    const url = opts.kind
-      ? `${API_BASE_URL}/srs/session/start?kind=${encodeURIComponent(opts.kind)}`
+    const params: string[] = [];
+    if (opts.kind) params.push(`kind=${encodeURIComponent(opts.kind)}`);
+    if (opts.movieId != null) params.push(`movie_id=${opts.movieId}`);
+    for (const word of opts.words ?? []) {
+      params.push(`words=${encodeURIComponent(word)}`);
+    }
+    const url = params.length
+      ? `${API_BASE_URL}/srs/session/start?${params.join('&')}`
       : `${API_BASE_URL}/srs/session/start`;
     const res = await authFetch(url, { method: 'POST' });
     if (res.status === 402) {

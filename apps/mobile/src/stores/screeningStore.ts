@@ -55,6 +55,15 @@ export interface ScreeningProgress {
   tested: string[];
   /** Keys swiped "I know this" — out of every remaining scene and test. */
   known: string[];
+  /**
+   * Answers in the SCENE IN FLIGHT, for its complete screen. Persisted
+   * rather than held in the runner, because "quitting mid-scene and
+   * reopening resumes at the same beat with the same running stats" is an
+   * acceptance criterion (#165) — a resumed scene that reports 0 / 0 has
+   * lost the half the reader already did. Both reset when a scene starts.
+   */
+  got: number;
+  forgot: number;
   savedAt: number;
 }
 
@@ -103,7 +112,10 @@ function isStale(p: ScreeningProgress, now: number): boolean {
 
 /** The stale rule: the in-flight scene restarts at its first card; the film keeps its progress. */
 function restartScene(p: ScreeningProgress, now: number): ScreeningProgress {
-  return { ...p, beat: 0, queue: null, savedAt: now };
+  // Scene stats go with the scene — a restarted scene has answered nothing
+  // yet. The film-level Missed and Tested sets are what the reader earned,
+  // and they stay.
+  return { ...p, beat: 0, queue: null, got: 0, forgot: 0, savedAt: now };
 }
 
 const isStringArray = (v: unknown): v is string[] =>
@@ -132,6 +144,11 @@ async function readPersisted(movieId: number): Promise<ScreeningProgress | null>
       missed: isStringArray(p.missed) ? p.missed : [],
       tested: isStringArray(p.tested) ? p.tested : [],
       known: isStringArray(p.known) ? p.known : [],
+      // Defaulted, not required, so a record written before the scene stats
+      // existed still reads back as a resumable lesson rather than as
+      // nothing. That is why KEY_PREFIX did not need its version bumped.
+      got: typeof p.got === 'number' ? p.got : 0,
+      forgot: typeof p.forgot === 'number' ? p.forgot : 0,
       savedAt: p.savedAt,
     };
   } catch {
@@ -196,6 +213,7 @@ export const useScreeningStore = create<ScreeningState>((set, get) => {
           ...p,
           queue: p.queue.slice(1),
           tested: p.tested.includes(head.key) ? p.tested : [...p.tested, head.key],
+          got: p.got + 1,
           savedAt: Date.now(),
         });
       } else {
@@ -203,6 +221,7 @@ export const useScreeningStore = create<ScreeningState>((set, get) => {
           ...p,
           queue: requeue(p.queue, 0),
           missed: p.missed.includes(head.key) ? p.missed : [...p.missed, head.key],
+          forgot: p.forgot + 1,
           savedAt: Date.now(),
         });
       }

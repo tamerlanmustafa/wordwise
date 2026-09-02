@@ -41,6 +41,15 @@ import { useReelStore } from '../stores/reelStore';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { useFlightStore } from '../stores/flightStore';
 import { useListsStore } from '../stores/listsStore';
+import { useScreeningStore } from '../stores/screeningStore';
+import {
+  beatAfterCardRun,
+  indexItems,
+  queueFromCards,
+  resolveScene,
+  wordsForBeat,
+  type RunnerItem,
+} from '../components/vocabulary/screeningRunner';
 
 // Microtask flush — fake timers are active in this file, so setImmediate is
 // faked; the AsyncStorage mock resolves on microtasks, which still run.
@@ -76,6 +85,55 @@ async function completeReviewSession() {
   return { daily, cursor, newCosmetics: fresh, streak: completion.streak };
 }
 
+// ── Screening Mode (#165) ───────────────────────────────────────────────────
+// A film's six-word first scene, rarest last so the test's ordering is
+// readable. The orchestrators below mirror ScreeningScene's own handlers.
+const FILM = 42;
+const sceneDeck: RunnerItem[] = ['linger', 'veer', 'brace', 'wane', 'cleave', 'gild'].map(
+  (word, i) => ({ key: word, word, rank: 100 + i }),
+);
+const sceneItems = indexItems(sceneDeck);
+
+const lessonCard = (word: string): SrsReviewCard =>
+  ({
+    ...card(sceneDeck.findIndex(d => d.key === word) + 1),
+    word,
+    card_type: 'mcq',
+    choices: [{ word: 'right', is_correct: true }, { word: 'wrong', is_correct: false }],
+  } as SrsReviewCard);
+
+const screening = () => useScreeningStore.getState();
+const film = () => screening().byMovie[FILM]!;
+const scene = () => resolveScene(film(), sceneItems);
+
+/** ScreeningScene's `goToBeat`: move, and drop the queue behind you. */
+const goToBeat = (index: number) => screening().update(FILM, { beat: index, queue: null });
+
+/** ScreeningScene's question-beat effect: compose, ask the lesson endpoint,
+ *  and queue only what came back carded. */
+async function openQuestionBeat() {
+  const p = film();
+  const r = scene();
+  const questions = wordsForBeat(r.beats[p.beat], p, r, sceneItems);
+  const session = await srsApi.startSession({
+    kind: 'movie_lesson',
+    movieId: FILM,
+    words: questions.map(q => sceneItems.get(q.key)!.word),
+  });
+  const { queue, byKey } = queueFromCards(questions, session.cards);
+  screening().update(FILM, { queue });
+  return byKey;
+}
+
+/** ScreeningScene's `handleAnswer`: post the review, then let the store
+ *  requeue or retire the head. */
+function answerHead(cards: Map<string, SrsReviewCard>, correct: boolean) {
+  const head = film().queue![0];
+  srsApi.review(cards.get(head.key)!.user_word_id, correct);
+  screening().answer(FILM, correct);
+  return head.key;
+}
+
 describe('user stories (cross-store integration)', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
@@ -93,6 +151,7 @@ describe('user stories (cross-store integration)', () => {
     useWordFeedStore.getState().reset();
     useWordFeedStore.setState({ mix: { A2: 0, B1: 70, B2: 20, C1: 10 } });
     useListsStore.getState().reset();
+    useScreeningStore.setState({ byMovie: {} });
   });
 
   afterEach(() => jest.useRealTimers());
@@ -407,5 +466,113 @@ describe('user stories (cross-store integration)', () => {
     expect(cursors).toEqual([0, 1, 2, 3]);
     // No film is ever named on the way to a session.
     expect(srsApi.startSession).toHaveBeenCalledWith();
+  });
+
+  it('Story: a Screening Mode scene runs cards → spot check → cards → test → complete', async () => {
+    (srsApi.startSession as jest.Mock).mockImplementation(async ({ words }: { words: string[] }) => ({
+      cards: words.map(lessonCard),
+      total_due: words.length,
+      session_size: words.length,
+      is_preview: false,
+      previews_remaining: 0,
+      kind: 'movie_lesson',
+    }));
+
+    screening().start({
+      movieId: FILM,
+      keys: sceneDeck.map(d => d.key),
+      scene: 0,
+      beat: 0,
+      queue: null,
+      missed: [],
+      tested: [],
+      known: [],
+      got: 0,
+      forgot: 0,
+    });
+
+    // Six cards, the spot check after the third, then the test: 8 beats.
+    expect(scene().beats.map(b => b.kind)).toEqual([
+      'card', 'card', 'card', 'spot_check', 'card', 'card', 'card', 'test',
+    ]);
+
+    // Read the first three cards.
+    goToBeat(1);
+    goToBeat(2);
+    goToBeat(beatAfterCardRun(scene().beats, 3));
+    expect(film().beat).toBe(3);
+
+    // The spot check. Miss it once: a wrong answer goes to the back of the
+    // queue, and a one-question queue means it is asked again immediately.
+    let cards = await openQuestionBeat();
+    expect(film().queue!.map(q => q.key)).toEqual(['brace']);
+    expect(answerHead(cards, false)).toBe('brace');
+    expect(film().queue!.map(q => q.key)).toEqual(['brace']);
+    answerHead(cards, true);
+    expect(film().queue).toEqual([]);
+
+    // The second run of cards, with one swiped "I know this" partway.
+    goToBeat(4);
+    screening().markKnown(FILM, 'wane');
+    goToBeat(beatAfterCardRun(scene().beats, film().beat));
+
+    // The scene test. Its fresh picks come from the cards that are LEFT, so
+    // the word the reader swiped away is not asked about.
+    cards = await openQuestionBeat();
+    const asked = film().queue!.map(q => q.key);
+    expect(asked).not.toContain('wane');
+    // …and the word missed on the spot check is brought back.
+    expect(asked).toContain('brace');
+
+    while ((film().queue?.length ?? 0) > 0) answerHead(cards, true);
+    goToBeat(film().beat + 1);
+
+    // Past the last beat: the scene is over, and it ended on an answer, not
+    // on a wrap. That is the whole point of the linear traversal.
+    expect(film().beat).toBeGreaterThanOrEqual(scene().beats.length);
+    expect(film().got).toBe(1 + asked.length);
+    expect(film().forgot).toBe(1);
+    // One /srs/review per answer — the film shares the Practice tab's memory
+    // model rather than keeping a second one.
+    expect(srsApi.review).toHaveBeenCalledTimes(2 + asked.length);
+  });
+
+  it('Story: quitting mid-scene and reopening the film resumes at the same beat with the same score', async () => {
+    (srsApi.startSession as jest.Mock).mockImplementation(async ({ words }: { words: string[] }) => ({
+      cards: words.map(lessonCard),
+      total_due: words.length,
+      session_size: words.length,
+      is_preview: false,
+      previews_remaining: 0,
+      kind: 'movie_lesson',
+    }));
+
+    screening().start({
+      movieId: FILM,
+      keys: sceneDeck.map(d => d.key),
+      scene: 0,
+      beat: 3,
+      queue: null,
+      missed: [],
+      tested: [],
+      known: [],
+      got: 0,
+      forgot: 0,
+    });
+    const cards = await openQuestionBeat();
+    answerHead(cards, false); // one miss on the spot check, then the app dies
+    await flush();
+
+    // Cold start: nothing in memory, everything read back off disk.
+    useScreeningStore.setState({ byMovie: {} });
+    await screening().hydrate(FILM);
+    const resumed = screening().resumable(FILM)!;
+
+    expect(resumed.beat).toBe(3);
+    expect(resumed.queue!.map(q => q.key)).toEqual(['brace']);
+    expect({ got: resumed.got, forgot: resumed.forgot }).toEqual({ got: 0, forgot: 1 });
+    expect(resumed.missed).toEqual(['brace']);
+    // The scene is owed a right answer and still owes it after the crash.
+    expect(resumed.queue).toHaveLength(1);
   });
 });
