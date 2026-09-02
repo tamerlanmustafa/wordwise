@@ -46,6 +46,69 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
+// expo-av — in-memory Audio.Sound. There is no audio hardware under jest, so
+// the mock's job is to record what the app asked for (the source, crucially
+// including its headers) and to let a test drive playback to an end:
+//   __sounds        every sound created, newest last
+//   sound.__emit(s) delivers a status update to that sound's listener
+//   __failNextLoad  makes the next createAsync reject, the 401/load-error path
+jest.mock('expo-av', () => {
+  const sounds = [];
+  let failNextLoad = false;
+
+  const createAsync = jest.fn(async (source, initialStatus) => {
+    if (failNextLoad) {
+      failNextLoad = false;
+      throw new Error('Load failed: 401');
+    }
+    const sound = {
+      source,
+      initialStatus,
+      listener: null,
+      setOnPlaybackStatusUpdate: jest.fn(function (cb) {
+        this.listener = cb;
+      }),
+      unloadAsync: jest.fn(async () => {}),
+      playAsync: jest.fn(async () => {}),
+      replayAsync: jest.fn(async () => {}),
+      stopAsync: jest.fn(async () => {}),
+      setPositionAsync: jest.fn(async () => {}),
+      __emit(status) {
+        this.listener?.({ isLoaded: true, didJustFinish: false, ...status });
+      },
+    };
+    sounds.push(sound);
+    return { sound, status: { isLoaded: true } };
+  });
+
+  return {
+    Audio: {
+      Sound: { createAsync },
+      setAudioModeAsync: jest.fn(async () => {}),
+    },
+    InterruptionModeIOS: { MixWithOthers: 0, DoNotMix: 1, DuckOthers: 2 },
+    InterruptionModeAndroid: { DoNotMix: 1, DuckOthers: 2 },
+    __sounds: sounds,
+    __failNextLoad: () => {
+      failNextLoad = true;
+    },
+    __reset: () => {
+      sounds.length = 0;
+      failNextLoad = false;
+    },
+  };
+});
+
+// expo-haptics — there is no haptic engine under jest. Calls are recorded so a
+// test can assert which one a moment fired without a device.
+jest.mock('expo-haptics', () => ({
+  notificationAsync: jest.fn(async () => {}),
+  impactAsync: jest.fn(async () => {}),
+  selectionAsync: jest.fn(async () => {}),
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+}));
+
 // Silence the intentional console.warn noise from optional-native-module
 // fallbacks (billing / notifications require()-guard their imports) so test
 // output stays readable. Runs at setup time (before the test framework is

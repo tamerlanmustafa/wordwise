@@ -65,5 +65,10 @@
   "usernameRequired": "Kullanıcı adı zorunludur",
   "vocabulary": "Kelime Dağarcığı",
   "wordOfTheHour": "Günün Kelimesi",
-  "wordOfTheHourDesc": "Keşfedilip öğrenilecek yeni bir kelime"
+  "wordOfTheHourDesc": "Keşfedilip öğrenilecek yeni bir kelime",
+  "soundAndHaptics": "Ses ve titreşim",
+  "soundEffects": "Ses efektleri",
+  "soundEffectsDesc": "Cevap sesleri ve kelime telaffuzu",
+  "haptics": "Titreşim",
+  "hapticsDesc": "Dokunuşlarda ve cevaplarda hafif titreşim"
 }

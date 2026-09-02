@@ -27,6 +27,7 @@ import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
+import { feedback } from '../utils/feedback';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
@@ -115,6 +116,14 @@ export function ReviewScreen({
   useEffect(() => {
     if (!tipHydrated) tipHydrate();
   }, [tipHydrated, tipHydrate]);
+
+  // Answer chimes, loaded for the length of the session (see QuizLessonScreen).
+  useEffect(() => {
+    void feedback.preload();
+    return () => {
+      void feedback.release();
+    };
+  }, []);
 
   // Milestone unlock queue. completeSession returns the full inventory;
   // we diff against AsyncStorage "seen" to find new ones and present

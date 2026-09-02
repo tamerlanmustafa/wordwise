@@ -34,6 +34,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { feedback } from '../../utils/feedback';
 import { WordCard } from './WordCard';
 import { MCQChoice } from './MCQChoice';
 import {
@@ -108,8 +109,14 @@ export function MCQCard({
       if (phase !== 'idle') return;
       setPickedIdx(idx);
       setPhase('answered');
+      // Fires here, not in `onAnswer`: the row turns green or red on this
+      // frame, and feedback that arrives after the colour has already landed
+      // (600ms later, at the auto-advance) reads as a glitch rather than a
+      // response to the tap.
+      if (choices[idx]?.is_correct) feedback.correct();
+      else feedback.wrong();
     },
-    [phase],
+    [phase, choices],
   );
 
   const handleAdvance = useCallback(() => {

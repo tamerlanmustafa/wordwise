@@ -10,6 +10,8 @@ import {
   type CrossMovieSentence,
 } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
+import { showToast } from '../../stores/toastStore';
+import { pronounce } from '../../utils/pronunciation';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles, ROW_ICON_HIT_SLOP } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
@@ -214,21 +216,12 @@ export const VocabRow = ({
   const handlePronounce = async () => {
     if (playingAudio) return;
     setPlayingAudio(true);
-    try {
-      const { Audio } = require('expo-av');
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: premiumApi.pronounceUrl(term) },
-        { shouldPlay: true }
-      );
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-          setPlayingAudio(false);
-        }
-      });
-    } catch {
-      setPlayingAudio(false);
-    }
+    // Shared with the card deck (utils/pronunciation): the bearer token this
+    // endpoint requires is decided in one place, not per component.
+    const result = await pronounce(term);
+    setPlayingAudio(false);
+    if (result === 'failed') showToast({ tone: 'error', message: t('vocabulary:pronounceFailed') });
+    else if (result === 'muted') showToast({ message: t('vocabulary:pronounceMuted') });
   };
 
   const isUntranslatable = isSameAsSource(term, translation);

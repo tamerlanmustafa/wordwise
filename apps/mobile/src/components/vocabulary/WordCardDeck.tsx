@@ -20,13 +20,14 @@ import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/font
 import type { ThemeColors } from '../../theme/tokens';
 import {
   wordwiseApi,
-  premiumApi,
   authFetch,
   API_BASE_URL,
   type WordInfo,
   type IdiomInfo,
 } from '../../services/api';
 import { useIsPremium } from '../../stores/entitlementsStore';
+import { showToast } from '../../stores/toastStore';
+import { pronounce } from '../../utils/pronunciation';
 import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
@@ -873,21 +874,14 @@ export const WordCardDeck = ({
   const handlePronounce = async () => {
     if (playingAudio || currentKey == null) return;
     setPlayingAudio(true);
-    try {
-      const { Audio } = require('expo-av');
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: premiumApi.pronounceUrl(currentKey) },
-        { shouldPlay: true },
-      );
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-          setPlayingAudio(false);
-        }
-      });
-    } catch {
-      setPlayingAudio(false);
-    }
+    // `pronounce` never rejects and always settles, so the icon always comes
+    // back — including on the 401 that made this button silent for months.
+    const result = await pronounce(currentKey);
+    setPlayingAudio(false);
+    if (result === 'failed') showToast({ tone: 'error', message: t('vocabulary:pronounceFailed') });
+    // A tap that does nothing is the bug this ticket fixed; "off in Settings"
+    // is still nothing happening unless we say so.
+    else if (result === 'muted') showToast({ message: t('vocabulary:pronounceMuted') });
   };
 
   if (total === 0 || currentItem == null || currentKey == null) {

@@ -50,5 +50,7 @@
   },
   "savedWords": "Kaydedilen Kelimeler",
   "screenTitle": "Kelime Dağarcığı",
-  "wordsYouKnow": "Zaten bildiğin kelimeler"
+  "wordsYouKnow": "Zaten bildiğin kelimeler",
+  "pronounceFailed": "Telaffuz çalınamadı",
+  "pronounceMuted": "Ses kapalı — Ayarlar'dan açabilirsin"
 }

@@ -9,6 +9,8 @@ import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useFeedbackPrefsStore, getFeedbackPrefs } from '../stores/feedbackPrefsStore';
+import { setPronunciationGate } from '../utils/pronunciation';
 import { useThemeColors } from '../theme/tokens';
 import { GOOGLE_CLIENT_ID_IOS, GOOGLE_CLIENT_ID_WEB } from '../config/env';
 import { AdminScreen } from '../components/AdminScreen';
@@ -143,6 +145,11 @@ export default function App() {
     useThemeStore.getState().hydrate();
     useDailyGoalStore.getState().hydrate();
     useOnboardingStore.getState().hydrate();
+    useFeedbackPrefsStore.getState().hydrate();
+    // The Sound switch covers word audio too, so the player asks the same
+    // preference the chimes do (#179). Injected rather than imported by
+    // utils/pronunciation so that module stays free of store dependencies.
+    setPronunciationGate(() => getFeedbackPrefs().soundEnabled);
     track('app_open');
     // Defer notification setup until after first paint/interactions so it never
     // contends with getting the user to the home screen (playbook §4). Push

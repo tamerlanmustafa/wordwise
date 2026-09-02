@@ -80,6 +80,29 @@ Screening Mode and both are live defects in the shipped app:
 
 ---
 
+## Tier 10 — Go live and get paid
+
+Filed 2026-09-02. Nothing here is a nice-to-have: **the app currently cannot take a
+payment.** The paywall is finished UI over a client with no store module (`billing.ts`
+requires a package that isn't installed) and a server whose verification endpoints
+return 501. Items 54 and 57 are **yours, not a session's** — no code can be written or
+tested until the products exist in the two consoles.
+
+Order matters: 54 unblocks 55 and 56; 57 is last because you should not submit a build
+whose paywall cannot take money.
+
+| # | Status | Issue | Work |
+|---|--------|-------|------|
+| 54 | `user` | #173 | **Store accounts + subscription products.** Paid-apps agreement, banking/tax, `com.wordwise.plus.monthly` / `.annual` at $4.99 / $29.99 with a free trial, shared secret + Play service account JSON. Blocks 55 and 56. |
+| 55 | `todo` | #174 | **IAP client.** No purchase module is installed, so every tap returns `false` before reaching a store. Pick the library (RevenueCat vs `react-native-iap`) with the user first — it changes 56. Native dep → `eas build`. |
+| 56 | `todo` | #175 | **Receipt verification + webhooks.** Both `verify` endpoints 501, `restore` never asks the store, both webhooks ignore the payload, so renewals/refunds never land. Must be idempotent. Also fixes the streak-freeze 501. |
+| 57 | `user` | #176 | **Listing, compliance forms, first submission.** Screenshots, privacy labels + Data safety, review demo account, `eas.json` submit profile, `eas build`/`eas submit`, device walk on both platforms. |
+| 58 | `todo` | #177 | **Push pipe.** The token is fetched and discarded; no column, no endpoint, no APNs/FCM credentials — so nothing can reach a lapsed user, and the permission prompt is already spent. |
+| 59 | `doing` | #178 | **Pronunciation 401** — code complete, suite green, **unshipped**. `utils/pronunciation.ts` sends the bearer token; both call sites share it. JS-only, so it can go as an OTA, but it is simpler to let 60's build carry it. |
+| 60 | `doing` | #179 | **Sound + haptics settings** — code complete, suite green, **unshipped**. `expo-haptics` added (pods in), `runtimeVersion` **1.0.2 → 1.0.4**; 1.0.3 is skipped on purpose, burned by the reverted Tier 9 builds. Needs `eas build`, not an OTA. |
+
+---
+
 ## Open on you — pending outside the repo
 
 Not agent-workable, and **not tracked by any `todo` row** — each is a footnote on a `done` row above,
@@ -129,4 +152,6 @@ does not require reading it: `cat >> LAUNCH_QUEUE_ARCHIVE.md`.
 |------|------|---------|
 | 2026-09-01 | — | Tiers 1–8 and 54 log entries moved to `LAUNCH_QUEUE_ARCHIVE.md`; this file went 142KB → 12KB. Tier 9 (Screening Mode, #161–#172) filed. New `/dispatch` skill spawns a fresh session per ticket from the phone. |
 | 2026-09-01 | — | `next-ticket` now ships its own ticket (step 6): files by name, push `main`, EAS preview OTA — or `eas build` + runtime-version bump in all three copies when native changed. CLAUDE.md carries the carve-out; `dispatch` text updated. |
+| 2026-09-02 | 59, 60 | **#178 + #179 built together, unshipped.** Pronunciation now sends its bearer token (shared `utils/pronunciation`, expo-av `headers`); Settings gains Sound + Haptics switches over a new `utils/feedback` + prefs store, wired to MCQ answers and `PressableScale`. `expo-haptics` added, pods in, runtime **1.0.4** (1.0.3 burned by the reverted tier). 1,221 tests green. Needs `eas build`. |
+| 2026-09-02 | 54–60 | **Tier 10 filed** (#173–#179): payments end to end, store submission, push pipe, pronunciation, sound. The app cannot take a payment today — no IAP module is installed and both verify endpoints 501. Items 54 + 57 are the user's. |
 | 2026-09-02 | 42–53 | **Tier 9 dropped in full by user decision.** #162 #163 #164 #165 #166 #167 reverted out of `main` (5c7a759); #168 discarded unpushed; #169–#172 closed unbuilt. All twelve issues closed, every row `dropped`. `expo-av` is back and `runtimeVersion` returns to 1.0.2, so the rollback took an `eas build`, not an OTA, plus a 1.0.3 channel rollback. Restore point: tag `pre-tier9-revert`. |

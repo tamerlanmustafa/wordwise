@@ -58,5 +58,7 @@
     "watchedFilms": "الأفلام المشاهَدة",
     "watchedFilmsSub": "الأفلام التي علّمتها كمشاهَدة"
   },
-  "wordsYouKnow": "كلمات تعرفها بالفعل"
+  "wordsYouKnow": "كلمات تعرفها بالفعل",
+  "pronounceFailed": "تعذّر تشغيل النطق",
+  "pronounceMuted": "الصوت مُوقَف — فعّله من الإعدادات"
 }

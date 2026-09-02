@@ -50,5 +50,7 @@
   },
   "savedWords": "Palabras guardadas",
   "screenTitle": "Vocabulario",
-  "wordsYouKnow": "Palabras que ya conoces"
+  "wordsYouKnow": "Palabras que ya conoces",
+  "pronounceFailed": "No se pudo reproducir la pronunciación",
+  "pronounceMuted": "El sonido está desactivado — actívalo en Ajustes"
 }

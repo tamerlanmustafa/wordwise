@@ -65,5 +65,10 @@
   },
   "profile": "Profile",
   "username": "Username",
-  "legal": "Legal"
+  "legal": "Legal",
+  "soundAndHaptics": "Sound & Haptics",
+  "soundEffects": "Sound effects",
+  "soundEffectsDesc": "Answer chimes and word pronunciation",
+  "haptics": "Haptics",
+  "hapticsDesc": "A light buzz on taps and answers"
 }

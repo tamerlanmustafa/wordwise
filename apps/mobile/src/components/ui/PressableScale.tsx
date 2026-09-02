@@ -7,6 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { feedback } from '../../utils/feedback';
 
 /**
  * PressableScale — a button that gives instant tactile feedback.
@@ -20,20 +21,26 @@ import {
  * Drop-in for the common `<TouchableOpacity style={...} onPress={...}>` button:
  * the visual style (padding / background / radius) goes on `style`.
  *
- * Haptics hook: a light haptic on press would complete the effect, but that
- * needs `expo-haptics` (not yet a dependency) — wire it into `onPressIn` once
- * the module is added.
+ * The light haptic this file has always wanted now fires here (#179), on
+ * `onPressIn` alongside the scale dip so both channels land on the same frame.
+ * It is gated by the user's Haptics switch inside `utils/feedback`, so this
+ * component never reads a preference itself. Set `haptic={false}` on a button
+ * whose own handler already fires a stronger one — a double buzz reads as a
+ * bug.
  */
 export interface PressableScaleProps extends Omit<PressableProps, 'style' | 'children'> {
   style?: StyleProp<ViewStyle>;
   /** Scale applied while pressed. Default 0.96. */
   activeScale?: number;
+  /** Fire the light press haptic. Default true. */
+  haptic?: boolean;
   children?: React.ReactNode;
 }
 
 export function PressableScale({
   style,
   activeScale = 0.96,
+  haptic = true,
   children,
   onPressIn,
   onPressOut,
@@ -51,6 +58,7 @@ export function PressableScale({
 
   const handlePressIn = (e: GestureResponderEvent) => {
     animateTo(activeScale);
+    if (haptic) feedback.tap();
     onPressIn?.(e);
   };
   const handlePressOut = (e: GestureResponderEvent) => {

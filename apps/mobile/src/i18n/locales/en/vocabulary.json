@@ -50,5 +50,7 @@
     "watchedFilms": "Watched Films",
     "watchedFilmsSub": "Movies you have marked as seen"
   },
-  "wordsYouKnow": "Words you already know"
+  "wordsYouKnow": "Words you already know",
+  "pronounceFailed": "Couldn't play that pronunciation",
+  "pronounceMuted": "Sound is off — turn it on in Settings"
 }

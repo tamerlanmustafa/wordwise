@@ -18,6 +18,7 @@ import {
   type QuizStartSessionResponse,
 } from '../services/api';
 import { track } from '../services/analytics';
+import { feedback } from '../utils/feedback';
 import { QuizHeader } from './quiz/QuizHeader';
 import { SessionFinishing } from './quiz/SessionFinishing';
 import { MCQCard } from './quiz/MCQCard';
@@ -70,6 +71,16 @@ export function QuizLessonScreen({
   useEffect(() => {
     track('lesson_start', { level, cards: total });
   }, [level, total]);
+
+  // Load the answer chimes while the user is reading the first card, so the
+  // first answer doesn't pay ~100ms of decode on the frame that should feel
+  // instant. Released with the session — nothing outside a deck uses them.
+  useEffect(() => {
+    void feedback.preload();
+    return () => {
+      void feedback.release();
+    };
+  }, []);
   // Primary accent retained for the self-rate / empty paths that still
   // use the old styles. The new card components key off `tc.gold` /
   // `tc.success` etc. directly.

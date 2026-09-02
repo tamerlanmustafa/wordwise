@@ -65,5 +65,10 @@
   "usernameRequired": "É necessário informar o nome de usuário",
   "vocabulary": "Vocabulário",
   "wordOfTheHour": "Palavra do Momento",
-  "wordOfTheHourDesc": "Uma palavra nova para descobrir e aprender"
+  "wordOfTheHourDesc": "Uma palavra nova para descobrir e aprender",
+  "soundAndHaptics": "Som e vibração",
+  "soundEffects": "Efeitos sonoros",
+  "soundEffectsDesc": "Sons de resposta e pronúncia das palavras",
+  "haptics": "Vibração",
+  "hapticsDesc": "Uma vibração leve ao tocar e ao responder"
 }

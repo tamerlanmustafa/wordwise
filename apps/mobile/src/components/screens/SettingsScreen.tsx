@@ -20,6 +20,7 @@ import { DAILY_GOAL_OPTIONS } from '../onboarding/placement';
 import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
+import { useFeedbackPrefsStore } from '../../stores/feedbackPrefsStore';
 import { API_BASE_URL, authApi } from '../../services/api';
 import {
   scheduleWordReminder,
@@ -90,6 +91,13 @@ export const SettingsScreen = ({
   const tc = useThemeColors();
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
+  // Sound/haptics live in a store rather than this screen's local state: the
+  // fire path reads them synchronously from anywhere in the app, and Settings
+  // is only one of the places that can change them.
+  const soundEnabled = useFeedbackPrefsStore((s) => s.soundEnabled);
+  const hapticsEnabled = useFeedbackPrefsStore((s) => s.hapticsEnabled);
+  const setSoundEnabled = useFeedbackPrefsStore((s) => s.setSoundEnabled);
+  const setHapticsEnabled = useFeedbackPrefsStore((s) => s.setHapticsEnabled);
   const appearanceStyles = useMemo(() => makeAppearanceStyles(tc), [tc]);
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
 
@@ -528,6 +536,32 @@ export const SettingsScreen = ({
             onPress={toggleAccordionMode}
           >
             <Text style={settingsStyles.notifToggleText}>{accordionMode ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={settingsStyles.sectionTitle}>{t('settings:soundAndHaptics')}</Text>
+        <View style={settingsStyles.notifRow}>
+          <View style={settingsStyles.notifInfo}>
+            <Text style={settingsStyles.notifLabel}>{t('settings:soundEffects')}</Text>
+            <Text style={settingsStyles.notifDesc}>{t('settings:soundEffectsDesc')}</Text>
+          </View>
+          <TouchableOpacity
+            style={[settingsStyles.notifToggle, soundEnabled && settingsStyles.notifToggleOn]}
+            onPress={() => setSoundEnabled(!soundEnabled)}
+          >
+            <Text style={settingsStyles.notifToggleText}>{soundEnabled ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={settingsStyles.notifRow}>
+          <View style={settingsStyles.notifInfo}>
+            <Text style={settingsStyles.notifLabel}>{t('settings:haptics')}</Text>
+            <Text style={settingsStyles.notifDesc}>{t('settings:hapticsDesc')}</Text>
+          </View>
+          <TouchableOpacity
+            style={[settingsStyles.notifToggle, hapticsEnabled && settingsStyles.notifToggleOn]}
+            onPress={() => setHapticsEnabled(!hapticsEnabled)}
+          >
+            <Text style={settingsStyles.notifToggleText}>{hapticsEnabled ? 'ON' : 'OFF'}</Text>
           </TouchableOpacity>
         </View>
 
