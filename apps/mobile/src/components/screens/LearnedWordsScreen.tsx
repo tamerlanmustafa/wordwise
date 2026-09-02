@@ -14,6 +14,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
 import { BACK_ARROW } from '../../i18n/rtl';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 interface Props {
   onBack: () => void;
@@ -24,6 +25,9 @@ interface Props {
 // Shows every word the user has globally marked "never show again".
 // Tap a row to unlearn it (word reappears in movie lists on next load).
 export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
@@ -85,7 +89,7 @@ export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
+        <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: barInset + 24 }}>
           <Text style={{ color: tc.textSecondary, fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
             {t('vocabulary:learned.hiddenCount', { count: words.length })}
           </Text>

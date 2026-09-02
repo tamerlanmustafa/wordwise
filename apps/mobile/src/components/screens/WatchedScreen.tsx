@@ -27,6 +27,7 @@ import { showToast } from '../../stores/toastStore';
 import type { MovieData } from '../../core/types';
 import { BACK_ARROW } from '../../i18n/rtl';
 import { FilmIcon } from '../ui/icons';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 interface Props {
   onBack: () => void;
@@ -44,6 +45,9 @@ const toMovieData = (m: WatchedMovie): MovieData => ({
 });
 
 export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -93,7 +97,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
         <FlatList
           data={movies}
           keyExtractor={(m) => String(m.tmdb_id)}
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={[s.listContent, { paddingBottom: barInset + 24 }]}
           renderItem={({ item }) => (
             <View style={s.row}>
               <TouchableOpacity

@@ -14,6 +14,7 @@ import {
 } from '../services/api';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { MedalIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 // Medal/highlight colors are symbolic and stay constant across themes.
 const MEDAL = {
@@ -47,6 +48,9 @@ export interface LeaderboardScreenProps {
 }
 
 export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -219,7 +223,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
           data={rows}
           renderItem={renderItem}
           keyExtractor={(item) => `${activeLabel}-${item.rank}-${item.username}`}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: barInset + 24 }]}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.emptyText}>

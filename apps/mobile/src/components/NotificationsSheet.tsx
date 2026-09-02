@@ -45,6 +45,9 @@ interface Props {
   bottomOffset: number;
 }
 
+/** The sheet's own bottom padding, before the bar's reserved height. */
+const SHEET_PAD_BOTTOM = 22;
+
 export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -67,10 +70,11 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
 
   const onSheetLayout = useCallback(
     (e: LayoutChangeEvent) => {
-      hiddenY.current = e.nativeEvent.layout.height + bottomOffset + 24;
+      // The bar's reserved height is inside this measurement now.
+      hiddenY.current = e.nativeEvent.layout.height + 24;
       if (!visible) slideAnim.setValue(hiddenY.current);
     },
-    [visible, bottomOffset, slideAnim],
+    [visible, slideAnim],
   );
 
   const handleItemPress = (item: AppNotification) => {
@@ -84,7 +88,7 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
 
   return (
     <View
-      style={[StyleSheet.absoluteFillObject, { bottom: bottomOffset }]}
+      style={StyleSheet.absoluteFillObject}
       pointerEvents={visible ? 'box-none' : 'none'}
     >
       {visible && (
@@ -95,7 +99,11 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
 
       <Animated.View
         onLayout={onSheetLayout}
-        style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        style={[
+          styles.sheet,
+          { paddingBottom: SHEET_PAD_BOTTOM + bottomOffset },
+          { transform: [{ translateY: slideAnim }] },
+        ]}
       >
         <View style={styles.handle} />
 
@@ -171,7 +179,7 @@ const makeStyles = (tc: ThemeColors) =>
       borderColor: tc.border,
       paddingHorizontal: 20,
       paddingTop: 10,
-      paddingBottom: 22,
+      // paddingBottom is applied inline — it carries the bar's height.
     },
     handle: {
       width: 40,

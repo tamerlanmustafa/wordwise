@@ -78,6 +78,7 @@ import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 import { Skeleton } from '../ui/Skeleton';
 import { BoltIcon, SparkleIcon } from '../ui/icons';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -118,6 +119,9 @@ export const MovieDetailScreen = ({
   sceneStrips,
   onStartQuiz,
 }: Props) => {
+  // The tab bar is an absolute overlay, so the word list reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
@@ -1219,8 +1223,12 @@ export const MovieDetailScreen = ({
         ) : null}
 
         {vocabulary ? (
+        // `paddingBottom` is what makes the card deck's own measurement honest:
+        // it lays out into whatever height this container gives it, so without
+        // the bar's inset here its Know / Don't-know pills measured into the
+        // strip behind the floating capsule and sat under it.
         <View
-          style={{ flex: 1 }}
+          style={{ flex: 1, paddingBottom: barInset }}
           onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
         >
           {viewMode === 'cards' && !isSwitching ? (
@@ -1245,7 +1253,11 @@ export const MovieDetailScreen = ({
               onCursorChange={handleDeckCursorChange}
             />
           ) : (
-          <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollViewRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          >
           <View style={[styles.wordList, { backgroundColor: tc.paper }]}>
             {isSwitching ? (
               Array.from({ length: INITIAL_ROWS }).map((_, i) => (

@@ -7,8 +7,17 @@
  * open. Overlaying inside the tree keeps the bar live and matches how every
  * other sheet in the app behaves.
  *
- * The scrim and the sheet both stop at `bottomOffset` so the bar is never
- * covered. Callers pass the measured bar height.
+ * The overlay covers the **whole** screen, bar included. It used to stop at
+ * `bottomOffset`, on the reasoning that the bar must stay live — but the bar
+ * is rendered after every sheet in App.tsx, so it draws on top and stays
+ * tappable regardless. All the inset actually bought was a strip of
+ * *undimmed* content along the bottom of the screen, most visible under the
+ * iOS 26 glass capsule, which floats clear of the screen edge and so had
+ * bright content showing above, below and around it while a sheet was open.
+ *
+ * `bottomOffset` still matters, but as padding *inside* the sheet: the sheet
+ * now reaches the screen's bottom edge and reserves the bar's height so no row
+ * of its own can hide behind the capsule.
  *
  * Extracted from the UserMenuSheet / NotificationsSheet pattern when the
  * Lists tab needed two more sheets; those two are untouched, but new sheets
@@ -28,7 +37,8 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Height of GlobalBottomBar — sheet and scrim stop above it. */
+  /** GlobalBottomBar's reserved height. Padding inside the sheet, so its last
+   *  row clears the bar; the scrim itself covers the full screen. */
   bottomOffset?: number;
   children: React.ReactNode;
 }
@@ -53,9 +63,10 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
   }, [visible, slide]);
 
   const onSheetLayout = (e: LayoutChangeEvent) => {
-    // Slack past its own height so the sheet always fully clears the bar
-    // however tall it grows — the same allowance UserMenuSheet uses.
-    const height = e.nativeEvent.layout.height + bottomOffset + 24;
+    // Slack past its own height so the closed sheet is fully off-screen. The
+    // bar's height is inside this measurement now (it is the sheet's own
+    // paddingBottom), so it must not be added a second time.
+    const height = e.nativeEvent.layout.height + 24;
     hiddenY.current = height;
     // Snap straight to the hidden position the first time, so the sheet
     // doesn't animate up from nowhere on mount.
@@ -73,7 +84,7 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
     // default — without it the closed sheet's text paints straight through
     // the home-indicator strip below the tab bar.
     <View
-      style={[StyleSheet.absoluteFill, { bottom: bottomOffset, overflow: 'hidden' }]}
+      style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
       pointerEvents={visible ? 'auto' : 'none'}
     >
       <TouchableWithoutFeedback onPress={onClose} accessible={false}>
@@ -90,7 +101,11 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       </TouchableWithoutFeedback>
 
       <Animated.View
-        style={[s.sheet, { transform: [{ translateY: slide }] }]}
+        style={[
+          s.sheet,
+          { paddingBottom: SHEET_PAD_BOTTOM + bottomOffset },
+          { transform: [{ translateY: slide }] },
+        ]}
         onLayout={onSheetLayout}
       >
         <View style={s.grabber} />
@@ -99,6 +114,9 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
     </View>
   );
 }
+
+/** The sheet's own bottom padding, before the bar's height is added. */
+const SHEET_PAD_BOTTOM = 24;
 
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   scrim: {
@@ -114,7 +132,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     borderTopStartRadius: 24,
     borderTopEndRadius: 24,
     paddingTop: 10,
-    paddingBottom: 24,
+    // paddingBottom is applied inline — it carries the bar's reserved height.
     paddingHorizontal: 20,
   },
   grabber: {

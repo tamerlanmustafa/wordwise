@@ -26,6 +26,7 @@ import { OfflineBanner } from './common/OfflineBanner';
 import { EmptyState } from './common/EmptyState';
 import type { MoviePreviewPayload, NodeLevel } from './journey/sharedTypes';
 import { BACK_ARROW } from '../i18n/rtl';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 interface Props {
   onBack: () => void;
@@ -56,6 +57,9 @@ export function SavedMoviesScreen({
   onSearchPress,
   onOpenMoviePreview,
 }: Props) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -85,7 +89,7 @@ export function SavedMoviesScreen({
       <OfflineBanner />
 
       {tiles.length === 0 ? (
-        <ScrollView contentContainerStyle={s.emptyScroll}>
+        <ScrollView contentContainerStyle={[s.emptyScroll, { paddingBottom: barInset + 24 }]}>
           <EmptyState
             icon="film-outline"
             title={t('movies:myMovies.empty')}
@@ -99,7 +103,7 @@ export function SavedMoviesScreen({
           </View>
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={s.list}>
+        <ScrollView contentContainerStyle={[s.list, { paddingBottom: barInset + 24 }]}>
           {tiles.map((tile, idx) => (
             <MovieRow
               key={`${tile.tmdb_id}-${idx}`}

@@ -1,8 +1,18 @@
 /**
  * UserMenuSheet — slides up from the bottom, rendered as an absolute-position
  * overlay (no Modal) so the GlobalBottomBar rendered after it in the tree
- * stays fully interactive. The scrim and sheet both stop at `bottomOffset`
- * so the bar is never covered.
+ * stays fully interactive.
+ *
+ * The overlay covers the **whole** screen, bar included. It used to stop at
+ * `bottomOffset` to keep the bar clear — but the bar is rendered after this
+ * component in App.tsx, so it draws on top and stays tappable either way. All
+ * the inset bought was a strip of *undimmed* content along the bottom of the
+ * screen: the sheet floated with a bright gap beneath it, and under the iOS 26
+ * glass capsule — which is inset from all three edges — live content showed
+ * above, below and around the bar while the sheet was open.
+ *
+ * `bottomOffset` is now padding *inside* the sheet, so the sheet reaches the
+ * screen's bottom edge while its last row still clears the capsule.
  *
  * Styled to the v0.7 cinema / reading-room system (theme/tokens): warm
  * surfaces, gold accents, serif identity name, and stroked SVG icons in
@@ -44,6 +54,9 @@ import { visibleMenuRows, type MenuRowKey } from './userMenuRows';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
+/** The sheet's own bottom padding, before the bar's reserved height. */
+const SHEET_PAD_BOTTOM = 18;
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -62,7 +75,8 @@ interface Props {
   onNavigateToNotifications: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
-  /** Height of GlobalBottomBar — sheet and scrim stop above it. */
+  /** GlobalBottomBar's reserved height. Padding inside the sheet, so its last
+   *  row clears the bar; the scrim covers the full screen. */
   bottomOffset: number;
 }
 
@@ -109,10 +123,12 @@ export function UserMenuSheet({
   // when closed so it never peeks before the first open.
   const onSheetLayout = useCallback(
     (e: LayoutChangeEvent) => {
-      hiddenY.current = e.nativeEvent.layout.height + bottomOffset + 24;
+      // The bar's height is inside this measurement now (it is the sheet's own
+      // paddingBottom), so it must not be added a second time.
+      hiddenY.current = e.nativeEvent.layout.height + 24;
       if (!visible) slideAnim.setValue(hiddenY.current);
     },
-    [visible, bottomOffset, slideAnim],
+    [visible, slideAnim],
   );
 
   const wrap = (fn: () => void) => () => { onClose(); setTimeout(fn, 200); };
@@ -158,7 +174,7 @@ export function UserMenuSheet({
   return (
     // Covers everything above the bar; pointer events pass through to bar below
     <View
-      style={[StyleSheet.absoluteFillObject, { bottom: bottomOffset }]}
+      style={StyleSheet.absoluteFillObject}
       pointerEvents={visible ? 'box-none' : 'none'}
     >
       {/* Scrim — only present when open so it never blocks touches when closed */}
@@ -171,7 +187,11 @@ export function UserMenuSheet({
       {/* Sheet */}
       <Animated.View
         onLayout={onSheetLayout}
-        style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        style={[
+          styles.sheet,
+          { paddingBottom: SHEET_PAD_BOTTOM + bottomOffset },
+          { transform: [{ translateY: slideAnim }] },
+        ]}
       >
         <View style={styles.handle} />
 
@@ -403,7 +423,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     borderColor: tc.border,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 18,
+    // paddingBottom is applied inline — it carries the bar's reserved height.
   },
   handle: {
     width: 40,

@@ -18,6 +18,7 @@ import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
 import { Skeleton } from '../ui/Skeleton';
 import { StarIcon } from '../ui/icons';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 interface Props {
   query: string;
@@ -35,6 +36,9 @@ interface Props {
 //    or `/movies/by-level` (old enum), with per-row TMDB enrichment.
 //  - anything else → TMDB title text search.
 export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open' }: Props) => {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   // In addToReel mode the user types into an inline search box; we
   // re-run the query whenever `liveQuery` changes (debounced).
@@ -281,7 +285,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
               ) : null}
             </TouchableOpacity>
           )}
-          contentContainerStyle={{ paddingHorizontal: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: barInset + 24 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={

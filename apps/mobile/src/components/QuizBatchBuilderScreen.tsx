@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, cefrColors } from '../theme/palette';
 import { wordwiseApi } from '../services/api';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 export interface QuizBatchBuilderScreenProps {
   userLevel?: string | null;
@@ -32,6 +33,9 @@ const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 // Build-a-journey: user hand-picks 3+ movies whose vocab will be pooled into
 // one long journey. Filter chip lets them browse across CEFR levels.
 export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatchBuilderScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const initialLevel = (userLevel || 'B1').toUpperCase();
   const [activeLevel, setActiveLevel] = useState<string>(LEVELS.includes(initialLevel) ? initialLevel : 'B1');
@@ -125,7 +129,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
         <FlatList
           data={movies}
           keyExtractor={(m) => String(m.movie_id)}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: barInset + 24 }}
           renderItem={({ item }) => {
             const isSelected = selected.has(item.movie_id);
             return (

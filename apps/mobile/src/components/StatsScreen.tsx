@@ -16,6 +16,7 @@ import { ContributionCalendar } from './stats/ContributionCalendar';
 import { calendarIntensity } from './stats/statsSelectors';
 import { Skeleton } from './ui/Skeleton';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 const CALENDAR_WEEKS = 5;
 
@@ -40,6 +41,9 @@ export interface StatsScreenProps {
 }
 
 export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -114,7 +118,7 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Header onBack={onBack} backLabel={backLabel} styles={styles} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: barInset + 24 }]}>
         {/* Streak + Retention hero */}
         <View style={styles.heroRow}>
           <StatCard

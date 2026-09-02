@@ -36,6 +36,7 @@ import type { NodeLevel } from './journey/JourneyNode';
 import type { ReelTile } from '../services/api';
 import { directionalIcon } from '../i18n/rtl';
 import { FilmIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 export interface MoviePreviewHubProps {
   tile: ReelTile;
@@ -74,6 +75,9 @@ export function MoviePreviewHub({
   onRemove,
   quizStarting,
 }: MoviePreviewHubProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const styles = useMemo(() => makeStyles(tc), [tc]);
@@ -182,7 +186,7 @@ export function MoviePreviewHub({
       {/* ── Middle: value strap + actions list ─────────────────────── */}
       <ScrollView
         style={{ flex: 1, marginTop: HERO_H }}
-        contentContainerStyle={{ paddingBottom: 24 + 56 + 80 }}
+        contentContainerStyle={{ paddingBottom: barInset + 24 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.strap}>

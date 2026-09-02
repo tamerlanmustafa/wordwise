@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BACK_ARROW } from '../i18n/rtl';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -19,6 +20,9 @@ export interface PrivacyScreenProps {
 }
 
 export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const isPrivacy = mode === 'privacy';
 
   return (
@@ -30,7 +34,7 @@ export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
         <Text style={styles.headerTitle}>{isPrivacy ? 'Privacy Policy' : 'Terms of Service'}</Text>
         <View style={{ width: 60 }} />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barInset + 24 }]}>
         {isPrivacy ? <PrivacyContent /> : <TermsContent />}
       </ScrollView>
     </SafeAreaView>

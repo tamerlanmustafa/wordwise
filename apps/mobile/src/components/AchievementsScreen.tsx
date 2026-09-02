@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { BACK_ARROW } from '../i18n/rtl';
 import { achievementsApi, type Achievement, type AchievementsResponse } from '../services/api';
 import { LockIcon, MedalIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -33,6 +34,9 @@ export interface AchievementsScreenProps {
 }
 
 export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const [data, setData] = useState<AchievementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +76,7 @@ export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProp
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barInset + 24 }]}>
           <View style={styles.summary}>
             <Text style={styles.summaryCount}>{data?.total_unlocked || 0}</Text>
             <Text style={styles.summaryLabel}>of {data?.total_available || 0} unlocked</Text>

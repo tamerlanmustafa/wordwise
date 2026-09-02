@@ -42,6 +42,7 @@ import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
 import { StarIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -90,6 +91,9 @@ type AdminView =
   | 'clientIp';
 
 export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const [view, setView] = useState<AdminView>('main');
   const [deadJobs, setDeadJobs] = useState<DeadJob[] | null>(null);
   const [deadLoading, setDeadLoading] = useState(false);
@@ -429,7 +433,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             <Text style={styles.emptyText}>No movies</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
             <Text style={styles.deadIntro}>
               {processedMovies.length} movie{processedMovies.length === 1 ? '' : 's'}, ordered by TMDB vote count (most-rated first).
             </Text>
@@ -502,7 +506,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             <Text style={styles.emptyText}>No dead jobs</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
             <Text style={styles.deadIntro}>
               These {deadJobs.length} movies couldn't be ingested — every script
               source (STANDS4 PDF, STANDS4 API, OpenSubtitles) returned nothing.
@@ -722,7 +726,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
       ) : null}
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Platform stats */}

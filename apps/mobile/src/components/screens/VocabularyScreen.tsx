@@ -6,6 +6,7 @@ import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
 import { BACK_ARROW, FORWARD_ARROW } from '../../i18n/rtl';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 interface Props {
   onBack: () => void;
@@ -18,6 +19,9 @@ interface Props {
 // vocabulary-related sub-sections (currently just Learned Words; room
 // for future things like custom word lists, etc.).
 export const VocabularyScreen = ({ onBack, backLabel, onNavigateToLearnedWords }: Props) => {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
@@ -39,7 +43,10 @@ export const VocabularyScreen = ({ onBack, backLabel, onNavigateToLearnedWords }
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={{ paddingTop: 12 }}>
+      <ScrollView
+        style={settingsStyles.scrollContent}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: barInset + 24 }}
+      >
         <TouchableOpacity style={settingsStyles.settingsLink} onPress={onNavigateToLearnedWords}>
           <View style={{ flex: 1 }}>
             <Text style={settingsStyles.settingsLinkText}>{t('vocabulary:learnedWords')}</Text>

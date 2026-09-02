@@ -26,6 +26,7 @@ import {
   type QuizUnitState,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 import {
   JourneyNode,
   JOURNEY_NODE_WIDTH,
@@ -57,6 +58,9 @@ export function QuizJourneyScreen({
   onBack: _onBack,
   onStartSession,
 }: QuizJourneyScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   void onStartSession; void movieTitle;
 
@@ -212,7 +216,7 @@ export function QuizJourneyScreen({
         <ScrollView
           ref={scrollRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ height: totalHeight }}
+          contentContainerStyle={{ height: totalHeight + barInset }}
           onContentSizeChange={onContentSizeChange}
           showsVerticalScrollIndicator={false}
         >

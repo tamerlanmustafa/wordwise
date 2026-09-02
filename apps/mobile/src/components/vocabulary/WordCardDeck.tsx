@@ -391,8 +391,11 @@ export const WordCardDeck = ({
 
   // The screen does not scroll, so the deck block takes whatever the fixed
   // column leaves it and the deck zone scales to fit. Measured rather than
-  // computed: `available` then already accounts for the bottom bar, the
-  // safe-area insets and every block above. Hooks run before the empty-deck
+  // computed, so `available` accounts for the safe-area insets and every block
+  // above — and for the bottom bar, but only because the parent pads by
+  // `useBottomBarInset()`. Measurement cannot see an absolute overlay; the
+  // deck used to measure straight through the floating capsule and lay its
+  // action pills out underneath it. Hooks run before the empty-deck
   // return below, so this is computed unconditionally.
   const [available, setAvailable] = useState(0);
   const metrics = useMemo(() => deckMetrics({ available }), [available]);

@@ -28,6 +28,7 @@ import {
 } from './paywallPricing';
 import { directionalIcon } from '../i18n/rtl';
 import { BlockIcon, BrainIcon, ChartIcon, FilmIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -53,6 +54,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
   const [busy, setBusy] = useState(false);
   const savings = annualSavingsPercent();
   const subtitle = paywallSubtitle(reason, previewsUsed, previewsLimit);
+  const barInset = useBottomBarInset();
 
   const buy = async () => {
     if (busy) return;
@@ -85,7 +87,10 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[s.content, { paddingBottom: barInset + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={s.heroTitle}>{t('billing:paywall.heroTitle')}</Text>
         {isPremium ? (
           <Text style={s.heroSub}>{t('billing:paywall.alreadyPlus')}</Text>

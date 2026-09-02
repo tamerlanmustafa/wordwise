@@ -13,6 +13,7 @@ import { wordwiseApi, type SavedWordEntry } from '../services/api';
 import { swr, writeCache } from '../services/swrCache';
 import { Skeleton } from './ui/Skeleton';
 import { StarIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 const COLORS = {
   primary: '#7C5CBF',
@@ -37,6 +38,9 @@ export interface NotebookScreenProps {
 }
 
 export function NotebookScreen({ onBack, backLabel, filter = 'saved', title }: NotebookScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const [words, setWords] = useState<SavedWordEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,14 +168,14 @@ export function NotebookScreen({ onBack, backLabel, filter = 'saved', title }: N
         <FlatList
           data={words}
           keyExtractor={(item) => `${item.id}`}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: barInset + 24 }]}
           renderItem={({ item }) => <WordItem word={item} onUnsave={handleUnsave} />}
         />
       ) : (
         <FlatList
           data={movieGrouped}
           keyExtractor={(item) => item.title}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: barInset + 24 }]}
           renderItem={({ item }) => (
             <View style={styles.movieGroup}>
               <Text style={styles.movieGroupTitle}>{item.title}</Text>

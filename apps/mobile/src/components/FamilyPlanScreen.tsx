@@ -8,6 +8,7 @@ import { useIsPremium } from '../stores/entitlementsStore';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { Skeleton } from './ui/Skeleton';
 import { FamilyIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
@@ -17,6 +18,9 @@ export interface FamilyPlanScreenProps {
 }
 
 export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const isPremium = useIsPremium();
   // This screen carried its own frozen light palette — a `COLORS` object of
@@ -101,7 +105,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
         /* The plan card and its member rows, at their own measurements. The
            screen has two very different loaded states — a plan, or the
            create/upsell pitch — and a centred spinner previewed neither. */
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: barInset + 24 }]}>
           <View style={styles.planCard}>
             <Skeleton width="55%" height={18} radius={5} sheen />
             <Skeleton width="34%" height={14} radius={4} sheen delay={60} style={styles.skeletonPlanMeta} />
@@ -130,7 +134,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
           )}
         </View>
       ) : (
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: barInset + 24 }]}>
           <View style={styles.planCard}>
             <Text style={styles.planTitle}>
               {isOwner ? t('billing:family.yourPlan') : t('billing:family.ownersPlan', { email: plan.owner_email })}

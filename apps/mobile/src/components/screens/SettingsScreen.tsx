@@ -37,6 +37,7 @@ import {
 } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
 import { BACK_ARROW, FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import {
   SELECTABLE_UI_LANGUAGES,
   clearExplicitAppLanguage,
@@ -106,6 +107,10 @@ export const SettingsScreen = ({
   const setHapticsEnabled = useFeedbackPrefsStore((s) => s.setHapticsEnabled);
   const appearanceStyles = useMemo(() => makeAppearanceStyles(tc), [tc]);
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
+  // The tab bar is an absolute overlay, so this screen has to reserve its
+  // height itself. Without it the last section — Legal — scrolled under the
+  // floating capsule and its links could not be tapped.
+  const barInset = useBottomBarInset();
 
   useEffect(() => {
     AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
@@ -392,7 +397,10 @@ export const SettingsScreen = ({
           the same avatar, the same name and the same email — so it restated
           your identity to you and spent ~90pt of the first screenful doing it,
           pushing the settings themselves below the fold. */}
-      <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={settingsStyles.scrollContainer}>
+      <ScrollView
+        style={settingsStyles.scrollContent}
+        contentContainerStyle={[settingsStyles.scrollContainer, { paddingBottom: barInset + 24 }]}
+      >
         <Text style={settingsStyles.sectionTitle}>{t('settings:profile')}</Text>
         <View style={settingsStyles.inputContainer}>
           <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>

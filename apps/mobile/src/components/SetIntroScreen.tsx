@@ -38,6 +38,7 @@ import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/token
 import type { NodeLevel } from './journey/JourneyNode';
 import { directionalIcon } from '../i18n/rtl';
 import { FilmIcon } from './ui/icons';
+import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 export interface SetIntroWord {
   /** Target word shown verbatim — never blurred or redacted. */
@@ -92,6 +93,9 @@ export function SetIntroScreen({
   onBack,
   onStart,
 }: SetIntroScreenProps) {
+  // The tab bar is an absolute overlay, so every scroller reserves its height
+  // itself or its last rows sit behind the floating capsule.
+  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
@@ -239,7 +243,7 @@ export function SetIntroScreen({
       {/* ── Middle content (value-prop + word list) ─────────────────── */}
       <ScrollView
         style={{ flex: 1, marginTop: HERO_H }}
-        contentContainerStyle={{ paddingBottom: 14 + 56 + 24 }}
+        contentContainerStyle={{ paddingBottom: barInset + 24 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Layer 4 — Value-prop strap */}

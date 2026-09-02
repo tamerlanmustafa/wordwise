@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
 import { PressableScale } from '../ui/PressableScale';
+import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 export type EmptyStateTone = 'neutral' | 'success' | 'error';
 
@@ -40,13 +41,17 @@ export function EmptyState({
   style,
 }: EmptyStateProps) {
   const tc = useThemeColors();
+  // Centre in the space the user can actually see. The bar is an absolute
+  // overlay, so `flex: 1` centring here put the CTA optically low and, on a
+  // tall empty state, could park it under the capsule.
+  const barInset = useBottomBarInset();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   const accent = tone === 'success' ? tc.success : tone === 'error' ? tc.error : tc.gold;
   const ringBg = tone === 'success' ? tc.successTint : tone === 'error' ? tc.errorTint : tc.primaryTint;
 
   return (
-    <View style={[s.root, style]}>
+    <View style={[s.root, { paddingBottom: barInset }, style]}>
       <View style={[s.ring, { backgroundColor: ringBg, borderColor: accent }]}>
         <Ionicons name={icon} size={32} color={accent} />
       </View>
