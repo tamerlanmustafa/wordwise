@@ -1,22 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BACK_ARROW } from '../i18n/rtl';
 import { familyApi, type FamilyPlan } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
-
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  textTertiary: '#9AA0AE',
-  border: '#E8E8EC',
-  error: '#D66A6A',
-  success: '#4CAF9A',
-};
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
@@ -28,6 +17,12 @@ export interface FamilyPlanScreenProps {
 export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreenProps) {
   const { t } = useTranslation();
   const isPremium = useIsPremium();
+  // This screen carried its own frozen light palette — a `COLORS` object of
+  // literal hex values — so in dark mode it rendered as a white sheet with
+  // near-black text, the only screen in the Profile tree that did not turn
+  // over. It is reached from Settings › Subscription › Family Plan.
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const [plan, setPlan] = useState<FamilyPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -102,7 +97,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={tc.primary} />
         </View>
       ) : !plan ? (
         <View style={styles.centered}>
@@ -157,7 +152,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
                 <TextInput
                   style={styles.inviteInput}
                   placeholder={t('billing:family.emailPlaceholder')}
-                  placeholderTextColor={COLORS.textTertiary}
+                  placeholderTextColor={tc.textFaint}
                   value={inviteEmail}
                   onChangeText={setInviteEmail}
                   keyboardType="email-address"
@@ -185,37 +180,37 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: tc.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.paper,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: tc.paper,
+    borderBottomWidth: 1, borderBottomColor: tc.border,
   },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  backText: { fontSize: 16, color: tc.primary, fontWeight: '500', width: 60 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: tc.text },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 8 },
-  emptyBody: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  needsPremium: { fontSize: 13, color: COLORS.textTertiary, fontStyle: 'italic' },
-  primaryBtn: { backgroundColor: COLORS.primary, paddingVertical: 16, paddingHorizontal: 32, borderRadius: 12 },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: tc.text, marginBottom: 8 },
+  emptyBody: { fontSize: 14, color: tc.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  needsPremium: { fontSize: 13, color: tc.textFaint, fontStyle: 'italic' },
+  primaryBtn: { backgroundColor: tc.primary, paddingVertical: 16, paddingHorizontal: 32, borderRadius: 12 },
+  primaryBtnText: { color: tc.textInverse, fontSize: 16, fontWeight: '700' },
   content: { padding: 16 },
-  planCard: { backgroundColor: COLORS.paper, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: COLORS.border, marginBottom: 20 },
-  planTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  memberCount: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 8 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: COLORS.paper, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: COLORS.border },
-  memberEmail: { fontSize: 15, color: COLORS.text, flex: 1 },
-  memberUsername: { fontSize: 12, color: COLORS.textTertiary },
-  ownerBadge: { fontSize: 12, fontWeight: '700', color: COLORS.primary, backgroundColor: '#F0EBFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  removeBtn: { fontSize: 13, color: COLORS.error, fontWeight: '600' },
+  planCard: { backgroundColor: tc.paper, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: tc.border, marginBottom: 20 },
+  planTitle: { fontSize: 18, fontWeight: '700', color: tc.text },
+  memberCount: { fontSize: 14, color: tc.textSecondary, marginTop: 4 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: tc.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 8 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: tc.paper, borderRadius: 10, marginBottom: 6, borderWidth: 1, borderColor: tc.border },
+  memberEmail: { fontSize: 15, color: tc.text, flex: 1 },
+  memberUsername: { fontSize: 12, color: tc.textFaint },
+  ownerBadge: { fontSize: 12, fontWeight: '700', color: tc.primary, backgroundColor: tc.primaryTint, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  removeBtn: { fontSize: 13, color: tc.error, fontWeight: '600' },
   inviteSection: { marginTop: 16 },
   inviteRow: { flexDirection: 'row', gap: 10 },
-  inviteInput: { flex: 1, backgroundColor: COLORS.paper, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border, fontSize: 15, color: COLORS.text },
-  inviteBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 20, borderRadius: 10, justifyContent: 'center' },
-  inviteBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  leaveBtn: { marginTop: 24, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.error, alignItems: 'center' },
-  leaveBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.error },
+  inviteInput: { flex: 1, backgroundColor: tc.paper, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: tc.border, fontSize: 15, color: tc.text },
+  inviteBtn: { backgroundColor: tc.primary, paddingHorizontal: 20, borderRadius: 10, justifyContent: 'center' },
+  inviteBtnText: { color: tc.textInverse, fontSize: 14, fontWeight: '700' },
+  leaveBtn: { marginTop: 24, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: tc.error, alignItems: 'center' },
+  leaveBtnText: { fontSize: 15, fontWeight: '600', color: tc.error },
 });

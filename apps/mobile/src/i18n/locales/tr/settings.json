@@ -70,5 +70,8 @@
   "soundEffects": "Ses efektleri",
   "soundEffectsDesc": "Cevap sesleri ve kelime telaffuzu",
   "haptics": "Titreşim",
-  "hapticsDesc": "Dokunuşlarda ve cevaplarda hafif titreşim"
+  "hapticsDesc": "Dokunuşlarda ve cevaplarda hafif titreşim",
+  "unsavedTitle": "Yeni kullanıcı adın silinsin mi?",
+  "unsavedBody": "Yeni bir kullanıcı adı yazdın ama henüz kaydetmedin. Şimdi çıkarsan eskisi kalır.",
+  "discardChanges": "Vazgeç"
 }

@@ -12,10 +12,17 @@
  * Most navigation rows are hidden for now — see `userMenuRows.ts`. They are
  * hidden, not removed: the props, handlers and screens behind them are all
  * still wired, so restoring one means editing that list, nothing here.
+ *
+ * Scope: identity, navigation, and the two account actions. It used to carry a
+ * Light/Auto/Dark row as well, which was a second control over the same
+ * `themeStore` that Settings › Appearance already owns — and the copy did not
+ * even agree, because these chips were hard-coded English ("Auto") while
+ * Settings runs its labels through i18n ("System"). One preference with two
+ * controls is one control too many; Appearance lives in Settings, next to App
+ * Language, which is where someone hunting for it actually looks.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useThemeStore, type ThemePreference } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useNotificationsStore, selectHasUnread } from '../stores/notificationsStore';
 import { showConfirm } from '../stores/confirmStore';
@@ -88,8 +95,6 @@ export function UserMenuSheet({
   // Distance to translate the sheet down so it sits fully below the bottom bar.
   const hiddenY = useRef(900);
 
-  const pref = useThemeStore((s) => s.preference);
-
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: visible ? 0 : hiddenY.current,
@@ -150,12 +155,6 @@ export function UserMenuSheet({
 
   const navItems = visibleMenuRows(!!isAdmin).map((key) => ({ key, ...rows[key] }));
 
-  const themeOpts: { key: ThemePreference; label: string; icon: MenuIconName }[] = [
-    { key: 'light',  label: 'Light',  icon: 'sun' },
-    { key: 'system', label: 'Auto',   icon: 'phone' },
-    { key: 'dark',   label: 'Dark',   icon: 'moon' },
-  ];
-
   return (
     // Covers everything above the bar; pointer events pass through to bar below
     <View
@@ -205,28 +204,6 @@ export function UserMenuSheet({
             <MenuIcon name="chevron" size={16} color={tc.textFaint} />
           </TouchableOpacity>
         ))}
-
-        <View style={styles.divider} />
-
-        <Text style={styles.sectionLabel}>{t('settings:menu.appearance')}</Text>
-        <View style={styles.themeChips}>
-          {themeOpts.map((o) => {
-            const on = pref === o.key;
-            return (
-              <TouchableOpacity
-                key={o.key}
-                style={[styles.themeChip, on && styles.themeChipActive]}
-                onPress={() => useThemeStore.getState().setPreference(o.key)}
-                activeOpacity={0.7}
-              >
-                <MenuIcon name={o.icon} size={16} color={on ? tc.primary : tc.textSecondary} />
-                <Text style={[styles.themeChipLabel, on && styles.themeChipLabelActive]}>
-                  {o.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         <View style={styles.divider} />
 
@@ -302,9 +279,6 @@ type MenuIconName =
   | 'admin'
   | 'logout'
   | 'trash'
-  | 'sun'
-  | 'moon'
-  | 'phone'
   | 'chevron';
 
 function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; size?: number; color?: string }) {
@@ -402,26 +376,6 @@ function MenuIcon({ name, size = 18, color = '#000' }: { name: MenuIconName; siz
           <Path d="M10 11v6M14 11v6" />
         </Svg>
       );
-    case 'sun':
-      return (
-        <Svg {...p}>
-          <Circle cx={12} cy={12} r={4} />
-          <Path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-        </Svg>
-      );
-    case 'moon':
-      return (
-        <Svg {...p}>
-          <Path d="M21 12.8A8 8 0 1 1 11.2 3a6 6 0 0 0 9.8 9.8z" />
-        </Svg>
-      );
-    case 'phone':
-      return (
-        <Svg {...p}>
-          <Rect x={7} y={3} width={10} height={18} rx={2.5} />
-          <Path d="M11 18h2" />
-        </Svg>
-      );
     case 'chevron':
     default:
       return (
@@ -500,15 +454,6 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   userEmail: { fontSize: 12.5, color: tc.textSecondary, marginTop: 2 },
   divider: { height: 1, backgroundColor: tc.divider, marginVertical: 8 },
-  sectionLabel: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 1.8,
-    color: tc.textFaint,
-    textTransform: 'uppercase',
-    marginTop: 2,
-    marginBottom: 10,
-  },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 14 },
   iconChip: {
     width: 38,
@@ -537,23 +482,4 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     borderColor: tc.paper,
   },
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: tc.text },
-  themeChips: { flexDirection: 'row', gap: 8 },
-  themeChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: tc.border,
-    backgroundColor: tc.background,
-    gap: 6,
-  },
-  themeChipActive: {
-    borderColor: tc.primary,
-    backgroundColor: tc.primaryTint,
-  },
-  themeChipLabel: { fontSize: 12.5, fontWeight: '600', color: tc.textSecondary },
-  themeChipLabelActive: { color: tc.primary, fontWeight: '800' },
 });

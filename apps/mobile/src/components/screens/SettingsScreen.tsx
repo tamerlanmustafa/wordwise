@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -21,7 +20,14 @@ import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { useFeedbackPrefsStore } from '../../stores/feedbackPrefsStore';
-import { API_BASE_URL, authApi } from '../../services/api';
+import { authApi } from '../../services/api';
+import { showConfirm } from '../../stores/confirmStore';
+import {
+  canSaveUsername,
+  hasUnsavedUsername,
+  normalizeUsername,
+  usernameState,
+} from './profileForm';
 import {
   scheduleWordReminder,
   scheduleReviewReminder,
@@ -217,48 +223,87 @@ export const SettingsScreen = ({
     }
   };
 
-  const handleSave = async () => {
-    if (!username.trim()) {
-      setError(t('settings:usernameRequired'));
-      return;
-    }
-
+  /**
+   * PATCH one or more account fields and reconcile local state.
+   *
+   * This replaced a hand-rolled `fetch` that re-read the token, rebuilt the
+   * auth header and re-implemented error extraction — all of which
+   * `authApi.updateProfile` already does, including surfacing the backend's
+   * own reason ("Username already taken") verbatim.
+   *
+   * `default_tab` is deliberately never sent: mobile has no Books tab and
+   * never reads the field, so including it would clobber the web user's
+   * choice (UX audit F-005/F-025).
+   */
+  const savePatch = async (patch: Record<string, unknown>, successMsg?: string) => {
     setSaving(true);
     setError(null);
     setSuccess(null);
-
     try {
-      const token = await (await import('../../services/auth/tokenStorage')).tokenStorage.getAccessToken();
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          username: username.trim(),
-          native_language: nativeLanguage,
-          learning_language: learningLanguage,
-          proficiency_level: proficiencyLevel,
-          // `default_tab` intentionally omitted — mobile has no Books tab and
-          // never reads it, so it must not clobber the web user's choice
-          // (UX audit F-005/F-025).
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || t('settings:saveFailed'));
-      }
-
-      const updatedUser = await response.json();
+      const updatedUser = await authApi.updateProfile(patch);
       onUserUpdated(updatedUser);
-      setSuccess(t('settings:saveSuccess'));
+      if (successMsg) setSuccess(successMsg);
+      return true;
     } catch (err: any) {
       setError(err.message || t('settings:saveFailed'));
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * The three account pickers now commit on selection, like every other
+   * control on this screen. They used to wait for a "Save changes" button
+   * parked below the translation chips — so picking a proficiency level and
+   * tapping Back silently discarded it, and proficiency is what composes the
+   * Practice deck and the Explore mix.
+   *
+   * Optimistic: the row shows the new value immediately and rolls back if the
+   * PATCH fails, so a dead network can't leave the UI claiming a level the
+   * server never took.
+   */
+  const commitField = (
+    field: 'native_language' | 'learning_language' | 'proficiency_level',
+    value: string,
+    apply: (v: string) => void,
+    previous: string,
+  ) => {
+    apply(value);
+    void savePatch({ [field]: value }).then((ok) => {
+      if (!ok) apply(previous);
+    });
+  };
+
+  const handleSaveUsername = async () => {
+    const next = normalizeUsername(username);
+    if (!canSaveUsername(username, user?.username)) {
+      if (usernameState(username, user?.username) === 'empty') {
+        setError(t('settings:usernameRequired'));
+      }
+      return;
+    }
+    await savePatch({ username: next }, t('settings:saveSuccess'));
+  };
+
+  /**
+   * Back, with a guard for an unsaved username.
+   *
+   * Everything else on the screen is already committed by the time you reach
+   * here, so this is the only edit Back can destroy.
+   */
+  const handleBack = () => {
+    if (!hasUnsavedUsername(username, user?.username)) {
+      onBack();
+      return;
+    }
+    showConfirm({
+      title: t('settings:unsavedTitle'),
+      message: t('settings:unsavedBody'),
+      confirmLabel: t('settings:discardChanges'),
+      tone: 'destructive',
+      onConfirm: onBack,
+    });
   };
 
   const getLangName = (code: string) =>
@@ -335,31 +380,54 @@ export const SettingsScreen = ({
   return (
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
       <View style={settingsStyles.header}>
-        <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={settingsStyles.backButton}>
           <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
         </TouchableOpacity>
         <Text style={settingsStyles.headerTitle}>{t('settings:title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
+      {/* The avatar + email block that used to open this screen is gone. You
+          can only arrive here from the profile sheet, which has just shown you
+          the same avatar, the same name and the same email — so it restated
+          your identity to you and spent ~90pt of the first screenful doing it,
+          pushing the settings themselves below the fold. */}
       <ScrollView style={settingsStyles.scrollContent} contentContainerStyle={settingsStyles.scrollContainer}>
-        <View style={settingsStyles.profileHeader}>
-          {user?.profile_picture_url ? (
-            <Image source={{ uri: user.profile_picture_url }} style={settingsStyles.avatar} />
-          ) : (
-            <View style={settingsStyles.avatarPlaceholder}>
-              <Text style={settingsStyles.avatarInitial}>
-                {user?.username?.[0]?.toUpperCase() || 'U'}
-              </Text>
-            </View>
-          )}
-          <View style={settingsStyles.profileInfo}>
-            <Text style={settingsStyles.profileTitle}>{t('settings:accountSettings')}</Text>
-            <Text style={settingsStyles.profileEmail}>{user?.email}</Text>
-          </View>
+        <Text style={settingsStyles.sectionTitle}>{t('settings:profile')}</Text>
+        <View style={settingsStyles.inputContainer}>
+          <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>
+          <TextInput
+            style={settingsStyles.textInput}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t('settings:usernamePlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={handleSaveUsername}
+          />
         </View>
 
-        <View style={settingsStyles.divider} />
+        {/* Save sits with the field it saves. It used to live below the
+            translation-language chips, far enough down that the button and the
+            input were never on screen together — and the success/error banner
+            was further up still, above the fold, so the confirmation for a tap
+            down here appeared somewhere you weren't looking. */}
+        {canSaveUsername(username, user?.username) ? (
+          <TouchableOpacity
+            style={[settingsStyles.saveButton, saving && settingsStyles.saveButtonDisabled]}
+            onPress={handleSaveUsername}
+            disabled={saving}
+            activeOpacity={0.7}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={settingsStyles.saveButtonText}>{t('settings:saveChanges')}</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
 
         {error && (
           <View style={settingsStyles.alertError}>
@@ -371,18 +439,6 @@ export const SettingsScreen = ({
             <Text style={settingsStyles.alertSuccessText}>{success}</Text>
           </View>
         )}
-
-        <Text style={settingsStyles.sectionTitle}>{t('settings:profile')}</Text>
-        <View style={settingsStyles.inputContainer}>
-          <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>
-          <TextInput
-            style={settingsStyles.textInput}
-            value={username}
-            onChangeText={setUsername}
-            placeholder={t('settings:usernamePlaceholder')}
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
 
         <View style={settingsStyles.divider} />
 
@@ -490,38 +546,35 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
+        {/* Every language we can translate into, labelled. This rendered
+            `AVAILABLE_LANGUAGES.slice(0, 8)` — the list has 12, so Chinese,
+            Dutch, Polish and Azerbaijani were unreachable from Settings
+            entirely, pickable only during onboarding. The chips also showed
+            the raw code ("ZH"), which is not what a speaker scans for. */}
         <Text style={settingsStyles.sectionTitle}>{t('settings:translationLanguage')}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-          {AVAILABLE_LANGUAGES.slice(0, 8).map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[
-                settingsStyles.selectButton,
-                { paddingVertical: 8, paddingHorizontal: 14, marginBottom: 0 },
-                lang.code === targetLanguage && { backgroundColor: colors.primary, borderColor: colors.primary },
-              ]}
-              onPress={() => setTargetLanguage(lang.code)}
-              activeOpacity={0.7}
-            >
-              <Text style={[settingsStyles.selectLabel, lang.code === targetLanguage && { color: '#fff' }]}>
-                {lang.code}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={appearanceStyles.langGrid}>
+          {AVAILABLE_LANGUAGES.map((lang) => {
+            const isActive = lang.code === targetLanguage;
+            return (
+              <TouchableOpacity
+                key={lang.code}
+                style={[appearanceStyles.langChip, isActive && appearanceStyles.langChipActive]}
+                onPress={() => setTargetLanguage(lang.code)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={lang.name}
+              >
+                <Text
+                  style={[appearanceStyles.langChipText, isActive && appearanceStyles.langChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {lang.nativeName}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-
-        <TouchableOpacity
-          style={[settingsStyles.saveButton, saving && settingsStyles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.7}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={settingsStyles.saveButtonText}>{t('settings:saveChanges')}</Text>
-          )}
-        </TouchableOpacity>
 
         <View style={settingsStyles.divider} />
 
@@ -644,9 +697,34 @@ export const SettingsScreen = ({
         handleSelectAppLanguage,
         t('settings:appLanguage.pickerTitle'),
       )}
-      {renderPicker(showNativeLangPicker, () => setShowNativeLangPicker(false), SUPPORTED_LANGUAGES, nativeLanguage, setNativeLanguage, t('settings:nativeLanguage'))}
-      {renderPicker(showLearningLangPicker, () => setShowLearningLangPicker(false), SUPPORTED_LANGUAGES, learningLanguage, setLearningLanguage, t('settings:learningLanguage'))}
-      {renderPicker(showProficiencyPicker, () => setShowProficiencyPicker(false), proficiencyItems, proficiencyLevel, setProficiencyLevel, t('settings:proficiencyLevel'))}
+      {/* The three account pickers commit on selection now — see `commitField`.
+          They used to hold their value in local state until a Save button far
+          down the page, which meant picking a proficiency level and tapping
+          Back threw it away without a word. */}
+      {renderPicker(
+        showNativeLangPicker,
+        () => setShowNativeLangPicker(false),
+        SUPPORTED_LANGUAGES,
+        nativeLanguage,
+        (code) => commitField('native_language', code, setNativeLanguage, nativeLanguage),
+        t('settings:nativeLanguage'),
+      )}
+      {renderPicker(
+        showLearningLangPicker,
+        () => setShowLearningLangPicker(false),
+        SUPPORTED_LANGUAGES,
+        learningLanguage,
+        (code) => commitField('learning_language', code, setLearningLanguage, learningLanguage),
+        t('settings:learningLanguage'),
+      )}
+      {renderPicker(
+        showProficiencyPicker,
+        () => setShowProficiencyPicker(false),
+        proficiencyItems,
+        proficiencyLevel,
+        (code) => commitField('proficiency_level', code, setProficiencyLevel, proficiencyLevel),
+        t('settings:proficiencyLevel'),
+      )}
     </SafeAreaView>
   );
 };
@@ -677,5 +755,35 @@ const makeAppearanceStyles = (tc: ThemeColors) => StyleSheet.create({
   },
   segmentTextActive: {
     color: tc.textInverse,
+  },
+  // Translation languages. A wrapping grid rather than the `segmented` row —
+  // twelve endonyms of very different widths ("中文" against "Azərbaycan")
+  // don't divide a row evenly, and forcing them to would clip the long ones.
+  langGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  langChip: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: tc.border,
+    backgroundColor: tc.paper,
+  },
+  langChipActive: {
+    backgroundColor: tc.primary,
+    borderColor: tc.primary,
+  },
+  langChipText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: tc.textSecondary,
+  },
+  langChipTextActive: {
+    color: tc.textInverse,
+    fontWeight: '800',
   },
 });

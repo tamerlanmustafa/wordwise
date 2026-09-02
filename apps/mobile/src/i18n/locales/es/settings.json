@@ -70,5 +70,8 @@
   "soundEffects": "Efectos de sonido",
   "soundEffectsDesc": "Sonidos de respuesta y pronunciación de palabras",
   "haptics": "Vibración",
-  "hapticsDesc": "Una vibración ligera al tocar y al responder"
+  "hapticsDesc": "Una vibración ligera al tocar y al responder",
+  "unsavedTitle": "¿Descartar tu nuevo nombre de usuario?",
+  "unsavedBody": "Has escrito un nombre de usuario nuevo pero aún no lo has guardado. Si sales ahora, se mantendrá el anterior.",
+  "discardChanges": "Descartar"
 }

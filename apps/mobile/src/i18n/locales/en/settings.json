@@ -70,5 +70,8 @@
   "soundEffects": "Sound effects",
   "soundEffectsDesc": "Answer chimes and word pronunciation",
   "haptics": "Haptics",
-  "hapticsDesc": "A light buzz on taps and answers"
+  "hapticsDesc": "A light buzz on taps and answers",
+  "unsavedTitle": "Discard your new username?",
+  "unsavedBody": "You've typed a new username but haven't saved it yet. Leaving now keeps your old one.",
+  "discardChanges": "Discard"
 }

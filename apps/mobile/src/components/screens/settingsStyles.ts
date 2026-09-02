@@ -43,42 +43,10 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-  },
-  avatarPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: tc.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: tc.textInverse,
-  },
-  profileInfo: {
-    marginStart: 16,
-  },
-  profileTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: tc.text,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: tc.textSecondary,
-    marginTop: 2,
-  },
+  // The avatar / name / email header these dressed is gone from Settings: you
+  // can only reach that screen from the profile sheet, which has just shown
+  // you the same three things, so it restated your identity to you and spent
+  // ~90pt of the first screenful doing it. Nothing else drew them.
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: tc.border,

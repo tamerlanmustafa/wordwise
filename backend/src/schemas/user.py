@@ -5,6 +5,37 @@ from prisma.enums import proficiencylevel
 from ..utils.subscription import entitlements_payload
 from ..utils.ui_languages import normalize_ui_language
 
+# The levels a *learner* can be. `proficiencylevel` is shared with the word
+# registry, where it gained an `UNKNOWN` member in #91 as the holding bucket
+# for words the classifier could not place. The schema's own comment says
+# UNKNOWN is "never written to users.proficiency_level" — but the request
+# models type this field as the raw enum, so both `POST /auth/register` and
+# `PATCH /auth/me` accepted it and would happily store it.
+#
+# It degrades rather than crashes (`_band_levels_around` falls back to B1),
+# which is exactly why it would have gone unnoticed: the user's Practice deck
+# and Explore feed would quietly compose for B1 forever while Settings showed
+# them a level that is not a level. Reject at the edge instead.
+LEARNER_LEVELS: frozenset[proficiencylevel] = frozenset({
+    proficiencylevel.A1,
+    proficiencylevel.A2,
+    proficiencylevel.B1,
+    proficiencylevel.B2,
+    proficiencylevel.C1,
+    proficiencylevel.C2,
+})
+
+
+def _reject_non_learner_level(
+    v: Optional[proficiencylevel],
+) -> Optional[proficiencylevel]:
+    if v is not None and v not in LEARNER_LEVELS:
+        raise ValueError(
+            f"{v.value} is not a proficiency level a user can be set to. "
+            f"Expected one of {sorted(lvl.value for lvl in LEARNER_LEVELS)}."
+        )
+    return v
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -27,6 +58,8 @@ class UserCreate(BaseModel):
         # unable to create accounts at all. `PATCH /auth/me` rejects instead,
         # which is where a client finds out it sent something we don't ship.
         return normalize_ui_language(v)
+
+    _check_level = field_validator("proficiency_level")(_reject_non_learner_level)
 
     @field_validator("password")
     @classmethod
@@ -114,6 +147,12 @@ class UserUpdate(BaseModel):
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
     default_tab: Optional[str] = None  # "movies" or "books"
+
+    # Unlike signup, which drops a bad `language_preference` rather than fail
+    # account creation, PATCH rejects: this is where a client finds out it sent
+    # something we don't ship, and the caller is a settings form that can show
+    # the reason.
+    _check_level = field_validator("proficiency_level")(_reject_non_learner_level)
 
 
 class Token(BaseModel):
