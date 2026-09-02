@@ -74,10 +74,35 @@ def _free_user(*, last_started):
     )
 
 
-def _stub_after_compose(monkeypatch, *, rows):
+def _es_user(*, last_started=None):
+    """A Spanish native, so the route actually builds a translation MCQ and
+    the distractor rungs come into play. ES is the cold language in prod:
+    48 cached lemma translations against Turkish's 18,317 (#167)."""
+    return SimpleNamespace(
+        id=1, isAdmin=False, nativeLanguage="es", proficiencyLevel="B1",
+        srsLastSessionStartedAt=last_started,
+    )
+
+
+class _FakeTranslator:
+    """`batch_translate` without a provider: every lemma gets a translation,
+    so `translation_map` is populated and the pool logic runs."""
+
+    def __init__(self, db):
+        self.db = db
+
+    async def batch_translate(self, *, texts, target_lang, source_lang, user_id):
+        return [{"translated": f"{t}-es"} for t in texts]
+
+
+def _stub_after_compose(monkeypatch, *, rows, wide_pool=None):
     """Pin the composer's output and neutralise everything downstream, while
-    recording whether the route reached for padding."""
-    calls: dict = {"compose": None, "pad": 0}
+    recording whether the route reached for padding, for the wide distractor
+    pool, and for the film rung.
+
+    `wide_pool` is what rung 1 returns — pass a thin one to simulate a cold
+    `translation_cache`, which is the condition the film rung exists for."""
+    calls: dict = {"compose": None, "pad": 0, "wide": None, "film": None}
 
     async def compose(db, **kwargs):
         calls["compose"] = kwargs
@@ -90,8 +115,13 @@ def _stub_after_compose(monkeypatch, *, rows):
     async def no_examples(db, lemmas):
         return {}
 
-    async def no_pool(db, **kwargs):
-        return {}
+    async def wide(db, **kwargs):
+        calls["wide"] = kwargs
+        return {k: list(v) for k, v in (wide_pool or {}).items()}
+
+    async def film(db, **kwargs):
+        calls["film"] = kwargs
+        return {("VERB", "B2"): ["saltar", "cantar", "nadar", "leer", "beber"]}
 
     async def identity_nlp(fn, words, *args, **kwargs):
         return {w: (w.lower(), None) for w in words}
@@ -100,7 +130,9 @@ def _stub_after_compose(monkeypatch, *, rows):
     monkeypatch.setattr(srs_routes, "_pad_with_fresh_level_lemmas", pad)
     monkeypatch.setattr(srs_routes, "_pad_with_fresh_reel_lemmas", pad)
     monkeypatch.setattr(srs_routes, "get_llm_examples_for_lemmas", no_examples)
-    monkeypatch.setattr(srs_routes, "build_pool", no_pool)
+    monkeypatch.setattr(srs_routes, "TranslationService", _FakeTranslator)
+    monkeypatch.setattr(srs_routes, "build_pool", wide)
+    monkeypatch.setattr(srs_routes, "build_film_pool", film)
     monkeypatch.setattr(srs_routes, "run_nlp", identity_nlp)
     monkeypatch.setattr(
         srs_routes, "build_translation_choices",
@@ -240,6 +272,82 @@ async def test_the_composer_receives_the_film_and_the_words(monkeypatch):
     assert calls["compose"]["kind"] == "movie_lesson"
     assert calls["compose"]["movie_id"] == FILM
     assert calls["compose"]["words"] == ["Linger", "veer"]
+
+
+# ---------------------------------------------------------------------------
+# 4. The film rung (#167) — a scene test must not be a shell game
+# ---------------------------------------------------------------------------
+
+async def test_a_cold_language_reaches_for_the_film_rung(monkeypatch):
+    # ES holds 48 cached lemma translations in prod, so rung 1 comes back
+    # near-empty and every grid would otherwise be built from the words the
+    # scene is testing.
+    calls = _stub_after_compose(
+        monkeypatch,
+        rows=[_user_word(1, "linger"), _user_word(2, "veer")],
+        wide_pool={("VERB", "B2"): ["demorarse"]},
+    )
+
+    await _start(_fake_db(), _es_user())
+
+    assert calls["film"] is not None, "a starved wide pool must fall to the film"
+    assert calls["film"]["movie_id"] == FILM
+
+
+async def test_the_scenes_own_words_are_never_offered_back_as_options(monkeypatch):
+    # The acceptance criterion: a word under test must not be another
+    # question's wrong answer within the same scene.
+    calls = _stub_after_compose(
+        monkeypatch,
+        rows=[_user_word(1, "linger"), _user_word(2, "veer")],
+        wide_pool={},
+    )
+
+    await _start(_fake_db(), _es_user())
+
+    assert sorted(calls["film"]["exclude_lemmas"]) == ["linger", "veer"]
+
+
+async def test_a_warm_language_never_pays_for_the_film_read(monkeypatch):
+    # TR holds 18,317. Two cards want six options and the wide pool has
+    # eight, so the second query would buy nothing.
+    calls = _stub_after_compose(
+        monkeypatch,
+        rows=[_user_word(1, "linger"), _user_word(2, "veer")],
+        wide_pool={("VERB", "B2"): [f"t{i}" for i in range(8)]},
+    )
+
+    await _start(_fake_db(), _es_user())
+
+    assert calls["wide"] is not None, "rung 1 still runs"
+    assert calls["film"] is None, "a full wide pool must not trigger a second read"
+
+
+async def test_practice_never_reaches_the_film_rung(monkeypatch):
+    # Practice draws from every film the user has saved from, so there is no
+    # single film whose vocabulary would be fair game.
+    calls = _stub_after_compose(
+        monkeypatch, rows=[_user_word(1, "linger", movie_id=None)], wide_pool={},
+    )
+
+    await _start(
+        _fake_db(), _es_user(), kind="practice", movie_id=None, words=None,
+    )
+
+    assert calls["film"] is None
+
+
+async def test_english_natives_reach_neither_rung(monkeypatch):
+    # No translations at all, so there is no grid to fill and no read worth
+    # paying for.
+    calls = _stub_after_compose(
+        monkeypatch, rows=[_user_word(1, "linger")], wide_pool={},
+    )
+
+    await _start(_fake_db(), _free_user(last_started=None))
+
+    assert calls["wide"] is None
+    assert calls["film"] is None
 
 
 async def test_other_kinds_do_not_receive_the_lesson_arguments(monkeypatch):

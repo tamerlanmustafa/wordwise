@@ -36,7 +36,13 @@ from ..services.chest_service import award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
-from ..services.distractor_pool import build_pool, pool_for
+from ..services.distractor_pool import (
+    build_film_pool,
+    build_pool,
+    is_thin,
+    merge_pools,
+    pool_for,
+)
 from ..services.session_kinds import (
     DAILY_CAP_EXEMPT_KINDS,
     LIST_KINDS,
@@ -917,6 +923,7 @@ async def start_session(
     # friendly labels deliberately collapse PROPN onto "noun".
     deck_pos = await registry_pos(db, unique_lemmas) if unique_lemmas else {}
     distractors: dict = {}
+    buckets: set = set()
     if translation_map:
         buckets = {
             (deck_pos.get(lem), cefr_map.get(lem))
@@ -928,6 +935,31 @@ async def start_session(
             buckets=buckets,
             exclude_lemmas=translation_map.keys(),
         )
+
+    # The film rung (#167). A Screening Mode scene tests 5 words, so on a
+    # language whose `translation_cache` is cold the wide pool comes back
+    # near-empty and every grid is built from the scene itself: by question
+    # three the reader is answering by elimination, and a word that was a
+    # wrong answer on Q1 is the right one on Q5. The film the scene belongs
+    # to is the one place a cold language reliably holds paid-for
+    # translations — every card the reader revealed, every gloss the deck
+    # aligned, every word an earlier scene tested — so it goes between the
+    # wide pool and the deck. One indexed read, no translation spend.
+    #
+    # Gated on `is_thin` rather than on emptiness: a pool with four options
+    # in it is not a working pool for a five-card test, and a warm language
+    # (TR holds 18k cached lemmas; ES 48) never pays for the read at all.
+    film_added = 0
+    if translation_map and kind == "movie_lesson" and movie_id is not None:
+        if is_thin(distractors, len(translation_map)):
+            film_pool = await build_film_pool(
+                db,
+                target_lang=target_lang,
+                movie_id=movie_id,
+                buckets=buckets,
+                exclude_lemmas=translation_map.keys(),
+            )
+            distractors, film_added = merge_pools(distractors, film_pool)
 
     cards: list[ReviewCard] = []
     skipped: list[str] = []
@@ -1009,8 +1041,10 @@ async def start_session(
     # reports it, so without this line a language quietly falling back to
     # deck-only distractors — i.e. the repetition coming back — is invisible.
     logger.info(
-        "[srs.start] distractor pool: %d option(s) across %d bucket(s) for %s",
+        "[srs.start] distractor pool: %d option(s) across %d bucket(s) for %s "
+        "(%d from the film rung)",
         sum(len(v) for v in distractors.values()), len(distractors), target_lang,
+        film_added,
     )
 
     # Stamp the daily-cap field + the picked kind only when there was

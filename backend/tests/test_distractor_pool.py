@@ -15,7 +15,10 @@ import pytest
 from src.services.distractor_pool import (
     CANDIDATES_PER_BUCKET,
     MAX_CANDIDATES,
+    build_film_pool,
     build_pool,
+    is_thin,
+    merge_pools,
     pool_for,
 )
 
@@ -54,6 +57,17 @@ def candidate(lemma, pos, level):
 
 def cache_row(source_text, translated):
     return SimpleNamespace(sourceText=source_text, translated=translated)
+
+
+def film_row(lemma, pos, level, translated):
+    """A row of `_FILM_POOL_SQL`: a film word the deck already paid to
+    translate, carrying the registry's own (pos, level)."""
+    return {"lemma": lemma, "pos": pos, "cefr_level": level, "translated": translated}
+
+
+# The (pos, level) pairs a scene's cards span — what the route passes both
+# rungs. The film rung reads only the parts of speech out of them.
+DECK_BUCKETS = [("VERB", "B2"), ("NOUN", "B2")]
 
 
 class TestBuildPool:
@@ -193,6 +207,264 @@ class TestBuildPool:
             db, target_lang="ES", buckets=[("VERB", "B2")], exclude_lemmas=[],
         )
         assert "hidden_words" in db.sql[0]
+
+
+class TestBuildFilmPool:
+    """Rung 2 (#167): the film's own already-translated vocabulary.
+
+    It exists for the cold-language case the wide pool cannot serve — prod
+    holds 18,317 cached lemma translations for TR and 48 for ES — where a
+    five-word scene test would otherwise build every grid out of the five
+    words it is testing.
+    """
+
+    ROWS = [
+        film_row("linger", "VERB", "B2", "demorarse"),
+        film_row("kettle", "NOUN", "B2", "hervidor"),
+        film_row("ponder", "VERB", "C1", "reflexionar"),
+    ]
+
+    async def test_only_the_decks_parts_of_speech_are_candidates(self):
+        # Measured against prod: unrestricted, the rung's most frequent film
+        # words are its function words — `that`, `this`, `with`, `your` — and
+        # no learner mistakes "with" for a B2 verb, so the grid gives itself
+        # away. Rung 1 never meets this because it only queries the deck's
+        # own buckets.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=[("VERB", "B2"), ("NOUN", "B2")], exclude_lemmas=[],
+        )
+        assert db.args[0][2] == ["NOUN", "VERB"]
+        assert "l.pos = ANY($3::text[])" in db.sql[0]
+
+    async def test_level_is_left_open_unlike_the_wide_pool(self):
+        # A cold film has too few translations to also demand an exact CEFR
+        # match, and `pool_for` already counts a neighbouring level as fair.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=[("VERB", "B2")], exclude_lemmas=[],
+        )
+        assert "cefr_level IN" not in db.sql[0]
+
+    async def test_no_placeable_part_of_speech_means_no_rung(self):
+        # Same rule rung 1 applies: a (None, …) bucket matches everything,
+        # which is not a distractor rule. Don't spend a query proving it.
+        db = FakeDb(candidates=self.ROWS)
+        assert await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=[(None, "B2"), (None, None)], exclude_lemmas=[],
+        ) == {}
+        assert db.sql == []
+
+    async def test_each_bucket_gets_its_own_slots(self):
+        # The #116 trap, which the first cut of this query walked into:
+        # frequency rank correlates hard with CEFR, so one global
+        # `ORDER BY frequency_rank LIMIT n` hands every slot to the easiest
+        # bucket. Ordering by `rn` takes each bucket's best before any
+        # bucket's second.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        sql = db.sql[0]
+        assert "PARTITION BY l.cefr_level, l.pos" in sql
+        assert f"WHERE rn <= {CANDIDATES_PER_BUCKET}" in sql
+        assert "ORDER BY rn" in sql
+
+    async def test_one_translation_per_lemma_in_sql(self):
+        # The cache and the gloss can both hold a word; the plain word
+        # translation wins because a distractor is read with no sentence
+        # around it to be aligned to.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert "DISTINCT ON (lemma)" in db.sql[0]
+        assert "ORDER BY lemma, src" in db.sql[0]
+
+    async def test_buckets_the_films_words_by_pos_and_level(self):
+        db = FakeDb(candidates=self.ROWS)
+        pool = await build_film_pool(
+            db, target_lang="ES", movie_id=42, buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert pool == {
+            ("VERB", "B2"): ["demorarse"],
+            ("NOUN", "B2"): ["hervidor"],
+            ("VERB", "C1"): ["reflexionar"],
+        }
+
+    async def test_one_indexed_read_and_no_translation_api(self):
+        # Same cost model as the wide pool: a word the film has not already
+        # paid to translate is simply not a candidate. This rung must never
+        # become a reason to spend DeepL characters.
+        db = FakeDb(candidates=self.ROWS)
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert len(db.sql) == 1
+        assert db.cache_where == [], "no cache read, and certainly no provider call"
+
+    async def test_the_scenes_own_words_are_excluded_in_sql(self):
+        # The acceptance criterion: a word under test must never be another
+        # question's wrong answer within the same scene.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42, buckets=DECK_BUCKETS,
+            exclude_lemmas=["Linger", "VEER"],
+        )
+        assert db.args[0][3] == ["linger", "veer"]
+
+    async def test_scoped_to_the_film_and_the_language(self):
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="tr", movie_id=7,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert db.args[0][0] == 7
+        assert db.args[0][1] == "TR"
+
+    async def test_reads_both_paid_sources(self):
+        # translation_cache holds the deck's standalone word translations;
+        # word_sentence_examples holds the gloss aligned to the card's
+        # sentence, which never reaches translation_cache. A film whose deck
+        # was read but never quizzed has its translations only in the second.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        sql = db.sql[0]
+        assert "translation_cache" in sql
+        assert "word_sentence_examples" in sql
+
+    async def test_a_lemma_in_both_sources_yields_one_option(self):
+        # The gloss and the cache can both hold "linger". Two tiles carrying
+        # one word is a grid with two answers that look right.
+        db = FakeDb(candidates=[
+            film_row("linger", "VERB", "B2", "demorarse"),
+            film_row("linger", "VERB", "B2", "demorarse"),
+        ])
+        pool = await build_film_pool(
+            db, target_lang="ES", movie_id=42, buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert pool == {("VERB", "B2"): ["demorarse"]}
+
+    async def test_passthrough_translations_are_dropped_in_sql(self):
+        # A translation identical to its source is a word the provider could
+        # not translate (the deck renders those as "same as English"). On a
+        # Spanish grid it is an English tile, which gives the answer away.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert "LOWER(BTRIM(b.translated)) <> l.lemma" in db.sql[0]
+
+    async def test_hidden_words_are_never_offered_as_options(self):
+        # Same curation as rung 1: profanity and the over-stripped junk
+        # lemmas live in hidden_words, and a distractor is printed on a tile.
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert "hidden_words" in db.sql[0]
+
+    async def test_row_budget_is_bounded(self):
+        db = FakeDb(candidates=[])
+        await build_film_pool(
+            db, target_lang="ES", movie_id=42,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        )
+        assert f"LIMIT {MAX_CANDIDATES}" in db.sql[0]
+
+    @pytest.mark.parametrize(
+        "lang,movie_id", [("EN", 42), ("ES", None), ("", 42)],
+    )
+    async def test_nothing_to_do_costs_no_query(self, lang, movie_id):
+        # English natives have no translations to build a grid from at all,
+        # and a session with no film has no film rung.
+        db = FakeDb(candidates=self.ROWS)
+        assert await build_film_pool(
+            db, target_lang=lang, movie_id=movie_id,
+            buckets=DECK_BUCKETS, exclude_lemmas=[],
+        ) == {}
+        assert db.sql == []
+
+    async def test_query_failure_degrades_to_empty(self):
+        # A pool failure costs choice variety, never the session.
+        db = FakeDb(raise_on={"query_raw"})
+        assert await build_film_pool(
+            db, target_lang="ES", movie_id=42, buckets=DECK_BUCKETS, exclude_lemmas=[],
+        ) == {}
+
+
+class TestIsThin:
+    """The gate on the film rung: a warm language never pays for the read."""
+
+    def test_a_pool_that_can_fill_every_grid_is_not_thin(self):
+        pool = {("VERB", "B2"): [f"t{i}" for i in range(15)]}
+        assert is_thin(pool, 5) is False
+
+    def test_one_option_short_is_thin(self):
+        pool = {("VERB", "B2"): [f"t{i}" for i in range(14)]}
+        assert is_thin(pool, 5) is True
+
+    def test_an_empty_pool_is_thin(self):
+        assert is_thin({}, 5) is True
+
+    def test_measured_on_the_total_not_per_bucket(self):
+        # `pool_for` widens to the whole pool before it starves a card, so
+        # the total is what a card actually sees.
+        pool = {("VERB", "B2"): ["a", "b", "c"], ("NOUN", "B2"): ["d", "e", "f"]}
+        assert is_thin(pool, 2) is False
+
+    def test_a_session_with_no_cards_needs_nothing(self):
+        assert is_thin({}, 0) is False
+
+
+class TestMergePools:
+    WIDE = {("VERB", "B2"): ["demorarse"]}
+    FILM = {("VERB", "B2"): ["quedarse"], ("NOUN", "B2"): ["hervidor"]}
+
+    def test_film_widens_the_wide_pool(self):
+        merged, added = merge_pools(self.WIDE, self.FILM)
+        assert merged[("VERB", "B2")] == ["demorarse", "quedarse"]
+        assert merged[("NOUN", "B2")] == ["hervidor"]
+        assert added == 2
+
+    def test_wide_entries_keep_their_place_at_the_front(self):
+        # Registry candidates are the better-matched ones; the film rung is
+        # what a card falls back on, not what it sees first.
+        merged, _ = merge_pools(self.WIDE, self.FILM)
+        assert merged[("VERB", "B2")][0] == "demorarse"
+
+    def test_a_translation_already_in_the_wide_pool_is_not_added_twice(self):
+        merged, added = merge_pools(self.WIDE, {("VERB", "B2"): ["Demorarse"]})
+        assert merged == self.WIDE
+        assert added == 0, "a film pool that adds nothing must report nothing"
+
+    def test_dedupe_spans_buckets_not_just_one(self):
+        # One grid draws from several buckets through `pool_for`'s ladder, so
+        # the same translation in two buckets could still land twice on it.
+        merged, added = merge_pools(self.WIDE, {("NOUN", "B2"): ["demorarse"]})
+        assert added == 0
+        assert ("NOUN", "B2") not in merged
+
+    def test_an_empty_film_pool_returns_the_wide_pool_unchanged(self):
+        merged, added = merge_pools(self.WIDE, {})
+        assert merged is self.WIDE
+        assert added == 0
+
+    def test_the_wide_pool_is_never_mutated(self):
+        wide = {("VERB", "B2"): ["demorarse"]}
+        merge_pools(wide, self.FILM)
+        assert wide == {("VERB", "B2"): ["demorarse"]}
 
 
 class TestPoolFor:

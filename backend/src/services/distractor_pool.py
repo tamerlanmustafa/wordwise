@@ -22,6 +22,20 @@ cached is simply not a candidate. That is the whole cost model — a cold
 language yields a thin pool and `build_translation_choices` falls back to the
 old deck-only behaviour, which is exactly what it does today.
 
+THE FILM RUNG (#167)
+
+The cost model has a hole a Screening Mode scene test falls straight through.
+`build_pool` starts from the most *frequent* registry lemmas and keeps the
+cached ones, so on a language nobody has warmed it comes back nearly empty —
+prod on 2026-09-01 held 18,317 cached lemma translations for TR and 48 for ES,
+21 DE, 6 RU, 1 PT — and a scene test then builds every grid from the three to
+five words it is testing. That is the shell game above, with a deck too small
+to even fill a grid. The one place a cold language *does* hold paid-for
+translations is the film the reader is in: every card they revealed and every
+word an earlier scene tested has been translated once already. `build_film_pool`
+reads those back, so the ladder is wide pool → film → deck, and the film step
+costs one indexed read and, again, no API call.
+
 WHAT MAKES A GOOD DISTRACTOR
 
 Same part of speech and same CEFR level as the correct answer. Both come from
@@ -35,6 +49,7 @@ import logging
 from typing import Iterable, Optional, Protocol
 
 from .feed_pool import real_word_sql
+from .quiz_service import normalize_choice
 from .translation_service import normalize_cache_text
 
 logger = logging.getLogger(__name__)
@@ -134,13 +149,206 @@ async def build_pool(
 
     pool: dict[BucketKey, list[str]] = {}
     for row in rows:
-        lemma = str(row["lemma"])
-        translated = translation_by_lemma.get(lemma)
-        if not translated:
-            continue
-        key = (_norm_pos(row["pos"]), _norm_level(row["cefr_level"]))
-        pool.setdefault(key, []).append(translated)
+        translated = translation_by_lemma.get(str(row["lemma"]))
+        if translated:
+            _add_to_bucket(pool, row["pos"], row["cefr_level"], translated)
     return pool
+
+
+# The film's vocabulary that has already been translated into the user's
+# language, with the registry's (pos, level) for bucketing. Two sources, both
+# paid for by the deck the reader is looking at:
+#
+#   * `translation_cache` — the deck's standalone word translations and every
+#     word an earlier scene test asked (its `batch_translate` writes here);
+#   * `word_sentence_examples.word_translation` — the gloss the deck aligned to
+#     a card's example sentence, which never touches translation_cache.
+#
+# `lemmas` is joined on the bare lemma column (its unique index; every lemma,
+# classification and cache key in prod is already lower-case). A translation
+# identical to its source is a passthrough the provider could not translate
+# (the deck shows those as "same as English") and would be an English tile in
+# a grid of Spanish ones, so it is dropped. `real_word_sql` is the same
+# curation the wide pool applies: alphabetic, long enough, not hidden.
+#
+# Restricted to the parts of speech the DECK spans, at any level. Run against
+# prod without that restriction the rung returned `that`, `this`, `with`,
+# `your` — a film's most frequent words are its function words, and no learner
+# mistakes "with" for the translation of a B2 verb, so those options give the
+# answer away as surely as a mismatched grammar does. Rung 1 never meets this
+# because it only ever queries the deck's own buckets. Level is deliberately
+# left open: `pool_for` already treats a same-part-of-speech word from a
+# neighbouring level as a fair distractor, and a cold film has too few
+# translations to also demand an exact CEFR match.
+#
+# Per-bucket `row_number()`, then `ORDER BY rn` — the #116 trap, which the
+# first version of this query walked straight into. Frequency rank correlates
+# hard with CEFR, so one global `ORDER BY frequency_rank LIMIT n` hands every
+# slot to the easiest bucket and returns nothing for the hard one. Ordering by
+# rn takes each bucket's best candidate before any bucket's second.
+#
+# `DISTINCT ON` keeps one translation per lemma: the cache's plain word
+# translation in preference to the sentence-aligned gloss, because a distractor
+# is read on its own tile with no sentence to be aligned to.
+_FILM_POOL_SQL = f"""
+    WITH film AS (
+        SELECT DISTINCT wc.lemma
+        FROM movie_scripts ms
+        JOIN word_classifications wc ON wc.script_id = ms.id
+        WHERE ms.movie_id = $1
+    ),
+    paid AS (
+        SELECT f.lemma AS lemma, tc.translated AS translated, 1 AS src
+        FROM film f
+        JOIN translation_cache tc
+          ON tc.source_text = f.lemma AND tc.target_lang = $2
+        UNION ALL
+        SELECT LOWER(BTRIM(wse.lemma)), wse.word_translation, 2
+        FROM word_sentence_examples wse
+        WHERE wse.movie_id = $1
+          AND wse.target_lang = $2
+          AND wse.word_translation IS NOT NULL
+    ),
+    best AS (
+        SELECT DISTINCT ON (lemma) lemma, translated
+        FROM paid
+        ORDER BY lemma, src
+    ),
+    ranked AS (
+        SELECT
+            l.lemma            AS lemma,
+            l.pos              AS pos,
+            l.cefr_level::text AS cefr_level,
+            b.translated       AS translated,
+            row_number() OVER (
+                PARTITION BY l.cefr_level, l.pos
+                ORDER BY l.frequency_rank ASC NULLS LAST, l.id
+            ) AS rn
+        FROM best b
+        JOIN lemmas l ON l.lemma = b.lemma
+        WHERE l.pos = ANY($3::text[])
+          AND NOT (l.lemma = ANY($4::text[]))
+          AND LOWER(BTRIM(b.translated)) <> l.lemma
+          AND {real_word_sql("l")}
+    )
+    SELECT lemma, pos, cefr_level, translated
+    FROM ranked
+    WHERE rn <= {CANDIDATES_PER_BUCKET}
+    ORDER BY rn, lemma
+    LIMIT {MAX_CANDIDATES}
+"""
+
+
+async def build_film_pool(
+    db: _SupportsQueryRaw,
+    *,
+    target_lang: str,
+    movie_id: Optional[int],
+    buckets: Iterable[BucketKey],
+    exclude_lemmas: Iterable[str],
+) -> dict[BucketKey, list[str]]:
+    """The film rung: cached translations of the film's other words.
+
+    `movie_id` is the film the scene belongs to and `exclude_lemmas` the words
+    the scene is testing — a tested word must never be another question's
+    wrong answer, which is the acceptance criterion this rung exists for.
+    Only the parts of speech in `buckets` are candidates (their levels are
+    not: see `_FILM_POOL_SQL`), so a deck of verbs is never offered the film's
+    prepositions. A deck whose words the registry cannot place at all yields
+    no rung, exactly as it yields no wide pool.
+
+    Same contract as `build_pool`: `{(pos, level): [translation, ...]}` with
+    empty buckets omitted so `pool_for`'s ladder works unchanged, one
+    translation per lemma, never raises (a failure costs variety, not the
+    session), and **no translation API call** — anything the film has not
+    already paid to translate is simply not a candidate. One indexed read.
+    """
+    lang = (target_lang or "").upper()
+    tags = sorted({pos for pos, _level in buckets if pos})
+    if movie_id is None or not lang or lang == "EN" or not tags:
+        return {}
+
+    excluded = sorted({w.lower() for w in exclude_lemmas if w})
+    try:
+        rows = await db.query_raw(_FILM_POOL_SQL, movie_id, lang, tags, excluded)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("[distractor_pool] film pool query failed: %s", e)
+        return {}
+
+    pool: dict[BucketKey, list[str]] = {}
+    seen: set[str] = set()
+    for row in rows:
+        lemma = str(row["lemma"])
+        translated = row.get("translated")
+        # One option per lemma: the gloss and the cache may both hold it, and
+        # two tiles for one word would be two "right" answers in disguise.
+        if lemma in seen or not translated:
+            continue
+        seen.add(lemma)
+        _add_to_bucket(pool, row["pos"], row["cefr_level"], str(translated))
+    return pool
+
+
+def is_thin(
+    pool: dict[BucketKey, list[str]],
+    n_cards: int,
+    *,
+    per_card: int = 3,
+) -> bool:
+    """Whether `pool` is too small to give every card its own wrong answers.
+
+    A session of N cards wants `per_card × N` distinct options — fewer and
+    `avoid` starts recycling before the last card. Measured on the total, not
+    per bucket, because `pool_for` widens to the whole pool before it gives
+    up, so the total is what a starved card actually sees. This is the gate
+    on the film rung: a warm language never pays for a read it would not use,
+    a cold one always does.
+    """
+    return sum(len(v) for v in pool.values()) < per_card * max(0, n_cards)
+
+
+def merge_pools(
+    wide: dict[BucketKey, list[str]],
+    film: dict[BucketKey, list[str]],
+) -> tuple[dict[BucketKey, list[str]], int]:
+    """`wide` widened with everything in `film` it doesn't already hold.
+
+    Returns the merged pool and how many options the film rung actually
+    contributed, which is the only number worth logging: a film pool of 40
+    that adds 0 means the wide pool already had them.
+
+    Merged rather than used as a separate fallback because `pool_for`'s
+    ladder is what decides how far a card widens, and a card whose exact
+    (pos, level) bucket exists in `wide` would never reach a second dict —
+    which is exactly the starved card the film rung is for. Wide entries
+    keep their position at the front of each bucket, so the better-matched
+    registry candidates are still what a card sees first.
+
+    Dedupe is on `normalize_choice`, the same key the choice builder uses
+    for `avoid`, and it spans the whole pool rather than each bucket: one
+    grid can draw from several buckets through the ladder, so a translation
+    that appears in two buckets could still land twice in one grid.
+    """
+    if not film:
+        return wide, 0
+    merged = {key: list(vals) for key, vals in wide.items()}
+    seen = {normalize_choice(t) for vals in merged.values() for t in vals}
+    added = 0
+    for key, translations in film.items():
+        for t in translations:
+            fold = normalize_choice(t)
+            if fold in seen:
+                continue
+            seen.add(fold)
+            merged.setdefault(key, []).append(t)
+            added += 1
+    return merged, added
+
+
+def _add_to_bucket(
+    pool: dict[BucketKey, list[str]], pos, level, translated: str
+) -> None:
+    pool.setdefault((_norm_pos(pos), _norm_level(level)), []).append(translated)
 
 
 async def _candidate_lemmas(
