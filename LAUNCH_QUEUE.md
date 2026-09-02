@@ -37,38 +37,46 @@ Rules for whoever works this file:
 
 ---
 
-## Tier 9 — Screening Mode
+## Tier 9 — Screening Mode — **DROPPED 2026-09-02**
 
-Added 2026-09-01. The first tier in this queue that is **new feature work** rather than triage of a
-pre-launch backlog: turning MovieDetailScreen's browsable word deck into paced lessons with tests, an
-energy economy, and feedback you can feel. Plan and the Duolingo research behind it:
-https://claude.ai/code/artifact/27221287-a317-4f0a-ab56-46a9d92109fa
+Added 2026-09-01, dropped 2026-09-02 by the user, who stopped the plan and asked for all of it to be
+undone. The tier turned MovieDetailScreen's browsable word deck into paced lessons with tests, an
+energy economy, and feedback you can feel. Plan and the Duolingo research behind it, kept for the
+record: https://claude.ai/code/artifact/27221287-a317-4f0a-ab56-46a9d92109fa
 
-Ordered by dependency, not by issue number. **Item 42 gates most of the tier** — it is four product
-decisions only the user can make, and two of them (does energy replace the free daily session cap;
-scene length) are constants the code encodes. A session that reaches a blocked item should say so and
-stop rather than pick a value.
+**Six items had shipped and were reverted out of `main` in `5c7a759`** (#162, #163, #164, #165, #166,
+#167). Item 49 (#168) was in progress and uncommitted, and was discarded. Items 50–53 were never
+started. **All twelve issues are closed** — #161–#167 as completed-then-reverted, #168–#172 as not
+planned, each with the reason on the issue.
 
-Items 43 and 44 depend on nothing and can be worked in any order — 43 ships a real improvement to the
-**existing** quiz before any Screening Mode structure exists, which is why it is first.
+**Do not pick any of these up.** They are `dropped`, not `todo`; a session that reaches this tier
+should skip it entirely. If Screening Mode is ever revived it starts from a fresh set of issues
+against whatever the app looks like then, not from these — the restore point is the git tag
+`pre-tier9-revert` at `238e585`.
 
-⚠️ **Item 43 needs an `eas build`, not an `eas update`.** `expo-haptics` is a new native dependency;
-an OTA carrying it crashes on launch. Batch it with any other pending native work.
+**Two findings survived the drop and are worth re-filing on their own**, because neither depends on
+Screening Mode and both are live defects in the shipped app:
+- **Pronunciation is broken again.** 928ddf8's backend TTS was kept, but its bearer-token half left
+  with #163, so the endpoint is bearer-only and the client sends no header — every tap 401s. The
+  server can synthesise audio nothing can ask for.
+- **`expo-av` is still removed in SDK 55.** #163's migration will have to happen again before that
+  upgrade; its findings are on the closed issue.
+- **Streak freezes are unobtainable** — only buyable through an IAP that returns 501 (from #170).
 
 | # | Status | Issue | Work |
 |---|--------|-------|------|
-| 42 | `user` | #161 | **Four product decisions that gate the tier.** (1) Does energy replace the free daily session cap or sit beside it — two meters over one budget is a mystery bug. (2) Scene length, 8 cards or 6. (3) Is Screening Mode the default on MovieDetailScreen or a mode you enter. (4) Do we want rewarded ads at all — `ads_eligible` exists, no ad SDK does. **No session should decide these.** |
-| 43 | `todo` | #162 | One feedback module (`utils/feedback.ts`) firing haptics + sound + motion together on every answer, wired into the **existing** `MCQCard` / `ReviewScreen`. Ships value before any new structure. ⚠️ New native dep → `eas build`. SFX go on `expo-audio`, not `expo-av`. |
-| 44 | `todo` | #163 | Migrate the two `expo-av` pronunciation call sites (`WordCardDeck.tsx:876`, `VocabRow.tsx:218`) to `expo-audio` — `expo-av` is **removed in SDK 55** and we are on the last SDK that ships it. |
-| 45 | `todo` | #164 | **The structural blocker.** `deckLogic.ts` is a rotation with no end, so a lesson has nothing to finish on. Add a linear traversal + scene partitioning as pure, testable logic. ⚠️ `deckItems` is sentence-filtered, so **60 is not 60** — size everything from the runtime `deckTotal`, never `SUGGESTED_CAP`. Blocked on item 42's scene-length answer. |
-| 46 | `todo` | #166 | `movie_lesson` session kind: composer + **lazy** `UserWord` creation for tested words only (precedent: `compose_list_words`). Every answer posts to the existing `/srs/review` — do not build a second memory model. Blocked on item 42's daily-cap answer. |
-| 47 | `todo` | #167 | Distractor pool falls back to deck-only on a cold language; in an 8-word scene that is a shell game by question three. Add a film-wide rung between the wide pool and the deck. **Check the prod pool-size log line first** — this may be CLOSE rather than RESOLVE. |
-| 48 | `todo` | #165 | The scene runner: 4 cards → spot check → 4 cards → 6-question test, wrong answers requeued until right. Reuses `MCQCard`, `QuizHeader`, `SessionComplete`, `Confetti`. **A scene must never be lost** — running out pauses resumably. Needs 45, 46, 47. |
-| 49 | `todo` | #168 | Energy as **derived state** — `energy` + `energyUpdatedAt`, computed on read. Never a cron ticking every user. Spend on test questions only, never on study cards. Schema goes via manual SQL applied to prod **before** the push (Prisma drift). Blocked on item 42. |
-| 50 | `todo` | #169 | Energy meter UI: optimistic decrement on tap, the 5-correct streak rebate, the out-of-energy sheet, ∞ for premium. Needs 49. |
-| 51 | `todo` | #170 | Coins — earned currency, and the **first real sink** for streak freezes (`consumables.py`, currently only buyable via a 501 IAP) and cosmetics (`unlocked_cosmetics`). Grants must be idempotent against a retried completion. Needs 49; ads half blocked on item 42. |
-| 52 | `todo` | #171 | The Final Cut (10 questions from the missed set) + a film mastery ring on the poster, read from **SRS box state**, not scenes completed. Needs 48. |
-| 53 | `todo` | #172 | Gap-fill questions from the film's own line — the only format that puts the film back into the test, and the data (`word_position`, `matched_form`, `renderHighlighted`) already ships. Names three more formats for later. Needs 48. |
+| 42 | `dropped` | #161 | Four product decisions that gated the tier. Answered 2026-09-01, **un-taken 2026-09-02** — nothing they decided still exists. The free daily cap (`srsLastSessionStartedAt`) was never replaced and remains the only limiter; `ads_eligible` remains in place, unused. |
+| 43 | `dropped` | #162 | Feedback module — **built, then reverted.** `utils/feedback.ts`, the four `.wav` assets and the `expo-audio` + `expo-haptics` deps are gone; quiz answers are silent again. |
+| 44 | `dropped` | #163 | expo-av → expo-audio — **built, then reverted.** `expo-av` is back, `runtimeVersion` back to 1.0.2. Will need doing again before SDK 55. |
+| 45 | `dropped` | #164 | Scene partitioning + linear cursor — **built, then reverted.** `deckLogic.ts` is a rotation with no end again. |
+| 46 | `dropped` | #166 | `movie_lesson` session kind — **built, then reverted.** The endpoint no longer exists; no client ever depended on it but the scene runner. |
+| 47 | `dropped` | #167 | Film-wide distractor rung — **built, then reverted.** Cold languages fall back to deck-only distractors again. |
+| 48 | `dropped` | #165 | The scene runner — **built, then reverted.** A film opens into the browsable deck, not a lesson. |
+| 49 | `dropped` | #168 | Energy as derived state — **in progress and discarded unpushed.** No schema was applied to prod; nothing to reverse. |
+| 50 | `dropped` | #169 | Energy meter UI — never started; depended on 49. |
+| 51 | `dropped` | #170 | Coins — never started; depended on 49. The streak-freeze 501 it named is real and outlives this tier. |
+| 52 | `dropped` | #171 | The Final Cut + mastery ring — never started; depended on 48. The ring read SRS box state and is not blocked on anything, if it is ever wanted alone. |
+| 53 | `dropped` | #172 | Gap-fill questions — never started; depended on 48. `word_position`, `matched_form` and `renderHighlighted` all still ship unused. |
 
 ---
 
@@ -85,7 +93,6 @@ every row. These are why 7 issues stay open despite their code being shipped.
 | ~~#103~~ | ~~SQL to apply~~ — **APPLIED 2026-08-27**, verified lossless and green; issue closed. Nothing left. (Item 7) |
 | ~~#104~~ | ~~Walk Arabic on a device~~ — **#104 closed 2026-08-28; nothing is pending here.** Decision taken: Arabic stays `preview: true`, so the unwalked RTL is unreachable by users and the walk stopped being outstanding work. The requirement moved somewhere stronger than a tracker — the comment on `src/i18n/languages.ts:61-63` sits on the flag itself, and **7 tests** (`i18n/__tests__/locales.test.ts`, `appLanguage.test.ts`) fail the moment `preview` is dropped, two of them on backend parity with `ui_languages.py`. Promoting Arabic later means device walk + native review + backend parity + a locale email block, filed fresh. (Item 22) |
 | #101 | Native-speaker review of es/pt/tr/ru — now also covers item 37's new survey copy. (Item 10) |
-| #161 | **Four Screening Mode decisions, and most of Tier 9 waits on two of them.** Does energy replace the free daily session cap (two meters over one budget is a mystery bug), scene length 8 or 6, default mode or opt-in, and rewarded ads yes or no. Each changes what gets built, not how — no session can answer them. Items 45, 46, 49 and 51 are blocked until they are. (Item 42) |
 | #90 | **Marketing and distribution strategy — real future work, but nothing an agent session can build.** No code, no AC a test can check; the strategy content is the issue body. Kept open on purpose 2026-08-27 as the record of positioning. When a phase becomes real, file it as its own ticket (Phase 3 SEO needs a public web surface; Phase 4 shareable progress needs a data model) rather than reviving the epic. (Item 40) |
 
 Also outstanding and **not an issue**: the Anthropic credit balance ran out 2026-08-22, so the
@@ -122,4 +129,4 @@ does not require reading it: `cat >> LAUNCH_QUEUE_ARCHIVE.md`.
 |------|------|---------|
 | 2026-09-01 | — | Tiers 1–8 and 54 log entries moved to `LAUNCH_QUEUE_ARCHIVE.md`; this file went 142KB → 12KB. Tier 9 (Screening Mode, #161–#172) filed. New `/dispatch` skill spawns a fresh session per ticket from the phone. |
 | 2026-09-01 | — | `next-ticket` now ships its own ticket (step 6): files by name, push `main`, EAS preview OTA — or `eas build` + runtime-version bump in all three copies when native changed. CLAUDE.md carries the carve-out; `dispatch` text updated. |
-| 2026-09-02 | 43–49 | **Tier 9 reverted in full by user decision.** #162 #163 #164 #165 #166 #167 backed out of `main`; #168 discarded unpushed. All rows back to `todo`, #161's four decisions un-taken. `expo-av` is back and `runtimeVersion` returns to 1.0.2, so the rollback needs an `eas build`, not an OTA. Pronunciation keeps its backend fix (928ddf8) but loses the bearer token again. Restore point: tag `pre-tier9-revert`. |
+| 2026-09-02 | 42–53 | **Tier 9 dropped in full by user decision.** #162 #163 #164 #165 #166 #167 reverted out of `main` (5c7a759); #168 discarded unpushed; #169–#172 closed unbuilt. All twelve issues closed, every row `dropped`. `expo-av` is back and `runtimeVersion` returns to 1.0.2, so the rollback took an `eas build`, not an OTA, plus a 1.0.3 channel rollback. Restore point: tag `pre-tier9-revert`. |
