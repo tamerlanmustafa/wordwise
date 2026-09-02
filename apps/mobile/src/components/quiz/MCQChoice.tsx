@@ -22,7 +22,7 @@
  */
 
 import { useMemo } from 'react';
-import { Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { alignStart } from '../../i18n/rtl';
@@ -41,13 +41,9 @@ export interface MCQChoiceProps {
    *  ignoring late taps. */
   disabled?: boolean;
   onPress?: () => void;
-  /** Native-driver scale the parent pulses on an answer (utils/feedback
-   *  `pulse`). Attached from mount so the animation can start in the same
-   *  tick as the tap; the row renders unscaled at 1. */
-  scale?: Animated.Value;
 }
 
-export function MCQChoice({ label, state, disabled, onPress, scale }: MCQChoiceProps) {
+export function MCQChoice({ label, state, disabled, onPress }: MCQChoiceProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
@@ -60,7 +56,6 @@ export function MCQChoice({ label, state, disabled, onPress, scale }: MCQChoiceP
   const fg = isCorrect ? tc.success : isWrong ? tc.error : tc.text;
 
   return (
-    <Animated.View style={scale ? { transform: [{ scale }] } : undefined}>
     <Pressable
       onPress={disabled || !isIdle ? undefined : onPress}
       style={({ pressed }) => [
@@ -85,7 +80,6 @@ export function MCQChoice({ label, state, disabled, onPress, scale }: MCQChoiceP
         </Svg>
       ) : null}
     </Pressable>
-    </Animated.View>
   );
 }
 

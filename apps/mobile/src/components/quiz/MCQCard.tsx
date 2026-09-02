@@ -43,7 +43,6 @@ import {
   type MCQAnswerState,
   type MCQPhase,
 } from './mcqLogic';
-import { feedback, isStreakMilestone, pulse, shake } from '../../utils/feedback';
 
 interface MCQChoicePayload {
   word: string;
@@ -57,13 +56,6 @@ export interface MCQCardProps {
   choices: MCQChoicePayload[];
   /** Called exactly once when the user advances past this card. */
   onAnswer: (correct: boolean) => void;
-  /** Consecutive correct answers BEFORE this card — the host tracks it
-   *  across cards. A correct tap that lands on a `STREAK_EVERY` multiple
-   *  fires the streak moment instead of the plain correct one. Default 0. */
-  correctRun?: number;
-  /** The host's streak motion (the gold sweep across QuizHeader). Invoked
-   *  from inside the feedback gate, so it is skipped under Reduce Motion. */
-  onStreak?: () => void;
 }
 
 export function MCQCard({
@@ -72,8 +64,6 @@ export function MCQCard({
   example,
   choices,
   onAnswer,
-  correctRun = 0,
-  onStreak,
 }: MCQCardProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -113,50 +103,13 @@ export function MCQCard({
     return () => clearTimeout(t);
   }, [phase, ctaScale, userWasCorrect, onAnswer]);
 
-  // Answer motion (issue #162). One scale per row, all attached from mount,
-  // so the pulse can start in the same tick as the tap instead of waiting
-  // for a re-render to bind the value; one translateX for the card shake.
-  // The card is re-keyed per word, so the row count is fixed for its life.
-  const rowScales = useRef(choices.map(() => new Animated.Value(1))).current;
-  const shakeX = useRef(new Animated.Value(0)).current;
-
   const handleChoicePress = useCallback(
     (idx: number) => {
       if (phase !== 'idle') return;
       setPickedIdx(idx);
       setPhase('answered');
-      // Feedback fires on the tap, not on advance — the 600ms before
-      // auto-advance is exactly the gap the co-firing has to fill. Haptic,
-      // sound and motion go through one call so they can never drift.
-      const pulseRow = (i: number) => {
-        const v = rowScales[i];
-        if (v) pulse(v).start();
-      };
-      if (choices[idx]?.is_correct !== true) {
-        feedback.wrong({
-          motion: () => {
-            shake(shakeX).start();
-            // The revealed right answer pulses green so the eye lands on it.
-            pulseRow(correctIdx);
-          },
-        });
-        return;
-      }
-      const motion = () => pulseRow(idx);
-      if (isStreakMilestone(correctRun + 1)) {
-        // Replaces the correct moment rather than stacking on it — two
-        // haptics in one tick is the double-buzz the module exists to prevent.
-        feedback.streak({
-          motion: () => {
-            motion();
-            onStreak?.();
-          },
-        });
-      } else {
-        feedback.correct({ motion });
-      }
     },
-    [phase, choices, correctIdx, correctRun, onStreak, rowScales, shakeX],
+    [phase],
   );
 
   const handleAdvance = useCallback(() => {
@@ -182,35 +135,31 @@ export function MCQCard({
   return (
     <View style={s.root}>
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        {/* The whole card body shakes on a miss — transform only, native driver. */}
-        <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
-          <Text style={s.eyebrow}>{copy.eyebrow}</Text>
-          <WordCard word={word} pos={pos} example={example} size={36} />
+        <Text style={s.eyebrow}>{copy.eyebrow}</Text>
+        <WordCard word={word} pos={pos} example={example} size={36} />
 
-          {/* Answer list — one full-width row per choice. */}
-          <View style={s.choicesList}>
-            {choices.map((c, i) => (
-              <MCQChoice
-                key={`${c.word}-${i}`}
-                label={c.word}
-                state={choiceStateFor(i, answerState)}
-                disabled={choiceIsDimmed(i, answerState)}
-                onPress={() => handleChoicePress(i)}
-                scale={rowScales[i]}
-              />
-            ))}
+        {/* Answer list — one full-width row per choice. */}
+        <View style={s.choicesList}>
+          {choices.map((c, i) => (
+            <MCQChoice
+              key={`${c.word}-${i}`}
+              label={c.word}
+              state={choiceStateFor(i, answerState)}
+              disabled={choiceIsDimmed(i, answerState)}
+              onPress={() => handleChoicePress(i)}
+            />
+          ))}
+        </View>
+
+        {phase === 'answered' && !userWasCorrect && correctChoice ? (
+          <View style={s.notQuiteCard}>
+            <Text style={s.notQuiteEyebrow}>{t('quiz:mcq.notQuite')}</Text>
+            <Text style={s.notQuiteBody}>
+              <Text style={s.notQuiteAnswer}>{correctChoice.word}</Text>
+              {copy.notQuiteSuffix}
+            </Text>
           </View>
-
-          {phase === 'answered' && !userWasCorrect && correctChoice ? (
-            <View style={s.notQuiteCard}>
-              <Text style={s.notQuiteEyebrow}>{t('quiz:mcq.notQuite')}</Text>
-              <Text style={s.notQuiteBody}>
-                <Text style={s.notQuiteAnswer}>{correctChoice.word}</Text>
-                {copy.notQuiteSuffix}
-              </Text>
-            </View>
-          ) : null}
-        </Animated.View>
+        ) : null}
       </ScrollView>
 
       {/* Sticky CTA bar */}

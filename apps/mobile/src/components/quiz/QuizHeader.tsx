@@ -20,12 +20,11 @@
  */
 
 import { useMemo } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { directionSign } from '../../i18n/rtl';
 import { quizHeaderProgress } from './quizHeaderLayout';
 
 // Spec §7: 62px total clearance from the device top to the first row.
@@ -47,52 +46,20 @@ export interface QuizHeaderProps {
   /** Total card count. Omit alongside `index`. */
   total?: number;
   onBack: () => void;
-  /** 0 → 1 progress of the streak sweep (utils/feedback `sweep`): a gold
-   *  band crosses the header in the reading direction. Omit on surfaces
-   *  with no streak to report; at 0 nothing is drawn. */
-  sweep?: Animated.Value;
 }
 
-export function QuizHeader({ movie, level, index, total, onBack, sweep }: QuizHeaderProps) {
+export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderProps) {
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const { width } = useWindowDimensions();
   const { showProgress, pct } = quizHeaderProgress(index, total);
   const cefrColor = level ? cefrColors[level] : tc.gold;
   // Clears the dynamic island on every device. Floor at 12 so non-notch
   // devices (where insets.top can be 20) still get breathing room.
   const extraTop = Math.max(12, HEADER_TOP_TARGET - insets.top);
 
-  // The band starts fully off the leading edge and travels one header width
-  // plus its own, so it enters and leaves cleanly. Transform + opacity only.
-  const bandWidth = width * 0.5;
-  const sweepStyle = sweep
-    ? {
-        opacity: sweep.interpolate({
-          inputRange: [0, 0.15, 0.85, 1],
-          outputRange: [0, 0.35, 0.35, 0],
-        }),
-        transform: [
-          {
-            translateX: sweep.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, (width + bandWidth) * directionSign],
-            }),
-          },
-          { skewX: '-20deg' },
-        ],
-      }
-    : null;
-
   return (
-    <View style={[showProgress ? null : s.bareBottom, sweep ? s.sweepHost : null]}>
-      {sweepStyle ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[s.sweepBand, { start: -bandWidth, width: bandWidth }, sweepStyle]}
-        />
-      ) : null}
+    <View style={showProgress ? null : s.bareBottom}>
       {/* Top row: back · movie chip · counter */}
       <View style={[s.row, { paddingTop: extraTop }]}>
         <Pressable
@@ -156,17 +123,6 @@ const makeStyles = (tc: ThemeColors) =>
     // under the chip; this restores roughly the bar's share of it.
     bareBottom: {
       paddingBottom: 14,
-    },
-    // Clips the streak band to the header while it travels.
-    sweepHost: {
-      overflow: 'hidden',
-    },
-    sweepBand: {
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
-      backgroundColor: tc.gold,
-      zIndex: 1,
     },
     row: {
       flexDirection: 'row',

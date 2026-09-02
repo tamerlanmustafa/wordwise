@@ -32,7 +32,6 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import { SessionComplete } from './common/SessionComplete';
 import { Skeleton } from './ui/Skeleton';
-import { feedback, sweep } from '../utils/feedback';
 
 // v0.6 spacing-effect tip key — incrementable suffix lets us replace
 // the body copy without grandfathering old dismissals (`v2` would
@@ -93,9 +92,6 @@ export function ReviewScreen({
   const [cards, setCards] = useState<SrsReviewCard[]>([]);
   const [index, setIndex] = useState(0);
   const [stats, setStats] = useState({ got: 0, forgot: 0 });
-  // Consecutive correct answers so far — the card turns its 5th, 10th, …
-  // into the streak moment (issue #162). Resets on a miss and on a new deck.
-  const [correctRun, setCorrectRun] = useState(0);
   const [previewsRemaining, setPreviewsRemaining] = useState<number | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -131,23 +127,11 @@ export function ReviewScreen({
   }, [milestoneHydrated, milestoneHydrate]);
 
   const fade = useRef(new Animated.Value(1)).current;
-  // Drives QuizHeader's gold streak sweep; started from inside the card's
-  // feedback gate so Reduce Motion skips it.
-  const sweepX = useRef(new Animated.Value(0)).current;
-
-  // Preload the answer chimes for the whole session (issue #162): creating
-  // a player per tap is a hitch on the frame that is supposed to feel
-  // instant. Released with the screen.
-  useEffect(() => {
-    feedback.preload().catch(() => {});
-    return () => feedback.release();
-  }, []);
 
   const loadSession = useCallback(async () => {
     setPhase('loading');
     setIndex(0);
     setStats({ got: 0, forgot: 0 });
-    setCorrectRun(0);
 
     // v0.7 §7 — try resuming a cached in-flight session before hitting
     // the server. The cache is scoped by kind (+ listId for the Lists
@@ -254,7 +238,6 @@ export function ReviewScreen({
         got: s.got + (correct ? 1 : 0),
         forgot: s.forgot + (correct ? 0 : 1),
       }));
-      setCorrectRun((r) => (correct ? r + 1 : 0));
       // Pop the answered card from the persistent cache so a quit-and-
       // reopen resumes at the NEXT card. Stats inside the store mirror
       // ours so /srs/session/complete totals stay coherent on resume.
@@ -303,9 +286,6 @@ export function ReviewScreen({
           .catch((e) => {
             console.warn('[ReviewScreen] completeSession failed:', e?.message);
           });
-        // Haptic + resolving chord land with the done screen; its confetti
-        // is SessionComplete's own (already Reduce-Motion aware).
-        feedback.complete();
         setPhase('done');
       } else {
         setIndex(index + 1);
@@ -465,7 +445,6 @@ export function ReviewScreen({
       index={index + 1}
       total={cards.length}
       onBack={onBack}
-      sweep={sweepX}
     />
   );
   const sharedTip = (
@@ -496,8 +475,6 @@ export function ReviewScreen({
             example={currentCard.example_sentence}
             choices={currentCard.choices}
             onAnswer={(correct) => advance(correct)}
-            correctRun={correctRun}
-            onStreak={() => sweep(sweepX).start()}
           />
         </Animated.View>
         {sharedTip}

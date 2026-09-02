@@ -20,6 +20,7 @@ import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/font
 import type { ThemeColors } from '../../theme/tokens';
 import {
   wordwiseApi,
+  premiumApi,
   authFetch,
   API_BASE_URL,
   type WordInfo,
@@ -31,7 +32,6 @@ import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import { wordTranslationDisplay } from './translationDisplay';
 import { glossLine } from '../../utils/glossLine';
-import { pronounce } from '../../utils/pronunciation';
 import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
@@ -322,11 +322,6 @@ export interface WordCardDeckProps {
   sentencePreviews: Record<string, SentenceExample | undefined>;
   /** Reports the 1-based focused card number for the header progress row. */
   onCursorChange?: (cardNumber: number) => void;
-  /** Screening Mode (#165): the run ENDS. Set this and an advance off the
-   *  last card calls it instead of wrapping to the first — the deck browses
-   *  forever for a reader, but a lesson needs a last card to finish on.
-   *  Omitted everywhere else, so the browsing rotation is unchanged. */
-  onExhausted?: () => void;
   /** Fires when a card drag starts/ends so the parent can freeze its
    *  vertical scroll — otherwise the ScrollView pans under the slide. */
   onDragStateChange?: (dragging: boolean) => void;
@@ -371,7 +366,6 @@ export const WordCardDeck = ({
   initialWord,
   sentencePreviews,
   onCursorChange,
-  onExhausted,
   onDragStateChange,
 }: WordCardDeckProps) => {
   const { t } = useTranslation();
@@ -610,16 +604,6 @@ export const WordCardDeck = ({
 
   const doAdvance = (method: 'swipe' | 'button') => {
     if (displayDeck.index < 0 || total === 0 || currentKey == null) return;
-    // Linear run (Screening Mode): the last card hands the beat on instead of
-    // wrapping. Checked before the single-card settle-back, so a one-card run
-    // still ends — a scene thinned to one card must reach its test.
-    if (onExhausted && displayDeck.index >= total - 1) {
-      track('deck_advance', { method });
-      pushOutgoing(1, method === 'swipe' ? lastDragXRef.current : 0);
-      setExpandedKey(null);
-      onExhausted();
-      return;
-    }
     if (total === 1) {
       // Only card in rotation: nothing to advance to — settle back.
       Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
@@ -886,15 +870,22 @@ export const WordCardDeck = ({
     return () => clearTimeout(id);
   }, [warmFocus, warmNext]);
 
-  // Audio mode, bearer token and player lifecycle all live in
-  // utils/pronunciation.ts; the promise settles when the clip ends, fails,
-  // or is cancelled by a newer tap, so "…" always gives the speaker back.
   const handlePronounce = async () => {
     if (playingAudio || currentKey == null) return;
     setPlayingAudio(true);
     try {
-      await pronounce(currentKey);
-    } finally {
+      const { Audio } = require('expo-av');
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: premiumApi.pronounceUrl(currentKey) },
+        { shouldPlay: true },
+      );
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+          setPlayingAudio(false);
+        }
+      });
+    } catch {
       setPlayingAudio(false);
     }
   };

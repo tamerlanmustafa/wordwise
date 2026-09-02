@@ -50,18 +50,5 @@
   },
   "savedWords": "Palavras salvas",
   "screenTitle": "Vocabulário",
-  "wordsYouKnow": "Palavras que você já conhece",
-  "screening": {
-    "eyebrow": "MODO EXIBIÇÃO",
-    "sceneOf": "Cena {{scene}} de {{total}}",
-    "sceneComplete": "Cena concluída",
-    "nextScene": "Próxima cena",
-    "filmDone": "Você viu todas as cenas",
-    "browse": "Explorar o baralho",
-    "startFailed": "Não foi possível iniciar esta cena.",
-    "capped": "Você já usou a sessão gratuita de hoje.",
-    "progressSafe": "Seu progresso está salvo.",
-    "emptyTitle": "Ainda não há nada para exibir",
-    "emptyBody": "Este filme não tem palavras com frase de exemplo no seu nível. Tente outro nível ou explore o baralho."
-  }
+  "wordsYouKnow": "Palavras que você já conhece"
 }

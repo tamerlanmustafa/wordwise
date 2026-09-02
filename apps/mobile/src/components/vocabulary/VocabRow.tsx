@@ -13,7 +13,6 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles, ROW_ICON_HIT_SLOP } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
-import { pronounce } from '../../utils/pronunciation';
 
 export interface SentenceExample {
   sentence: string;
@@ -212,14 +211,22 @@ export const VocabRow = ({
     }
   };
 
-  // Same shape as WordCardDeck.handlePronounce — the audio mode, bearer token
-  // and player lifecycle are utils/pronunciation.ts's, not the row's.
   const handlePronounce = async () => {
     if (playingAudio) return;
     setPlayingAudio(true);
     try {
-      await pronounce(term);
-    } finally {
+      const { Audio } = require('expo-av');
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: premiumApi.pronounceUrl(term) },
+        { shouldPlay: true }
+      );
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+          setPlayingAudio(false);
+        }
+      });
+    } catch {
       setPlayingAudio(false);
     }
   };

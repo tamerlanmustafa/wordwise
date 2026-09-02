@@ -47,7 +47,6 @@ import { BookmarkRowWrapper } from '../vocabulary/BookmarkRowWrapper';
 import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
 import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
-import { ScreeningScene } from '../vocabulary/ScreeningScene';
 import { FilmEdgeBackdrop } from '../ui/FilmEdgeBackdrop';
 import { MovieDetailHero } from './MovieDetailHero';
 import {
@@ -85,12 +84,6 @@ const ROWS_MODE_ENABLED: boolean = false;
 
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
-
-// Screening Mode (#161 decision 3, #165): opening a film opens its lesson,
-// and "Browse the deck" steps out to the endless deck for the rest of the
-// visit. The one-line kill switch if the paced flow has to come off in a
-// hurry — flipping this to false leaves the film screen exactly as it was.
-const SCREENING_MODE_ENABLED: boolean = true;
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -158,11 +151,6 @@ export const MovieDetailScreen = ({
   );
   const [deckStartWord, setDeckStartWord] = useState<string | null>(null);
   const [deckCardNumber, setDeckCardNumber] = useState(0);
-  // Screening Mode is the default (#161), so this records the reader LEAVING
-  // it rather than entering it. Not persisted: "browse this film's deck" is a
-  // decision about right now, and coming back to the film should come back to
-  // the lesson that is waiting mid-scene.
-  const [browsingDeck, setBrowsingDeck] = useState(false);
   useEffect(() => {
     if (!ROWS_MODE_ENABLED) return;
     AsyncStorage.getItem(VIEW_MODE_KEY)
@@ -929,21 +917,6 @@ export const MovieDetailScreen = ({
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 
-  // Screening Mode covers the film screen when there is a lesson to run.
-  // Needs a signed-in user (every question is a /srs card against their own
-  // UserWord row) and an internal movie id (the lesson endpoint is keyed on
-  // it), and waits for the splash so a lesson never opens over a loading
-  // screen. Everything under it stays mounted, which is what makes "Browse
-  // the deck" instant and keeps the film's own back button where it was.
-  const screeningOpen =
-    SCREENING_MODE_ENABLED &&
-    !browsingDeck &&
-    !loading &&
-    isAuthenticated &&
-    movieId != null &&
-    viewMode === 'cards' &&
-    deckTotal > 0;
-
   // Where the reader came back to, marked on the progress rule. `deckStartWord`
   // is written once at load and never moves — the bookmark itself follows every
   // advance, so marking *that* would just redraw the fill's own edge.
@@ -1135,22 +1108,6 @@ export const MovieDetailScreen = ({
                 <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
                   CARD {deckCardClamped} / {deckTotal}
                 </Text>
-                {/* The way back INTO the lesson. Screening Mode opens on its
-                    own, so this only ever appears once the reader has stepped
-                    out of it — without it, "Browse the deck" would be a
-                    one-way door for the rest of the visit. */}
-                {SCREENING_MODE_ENABLED && browsingDeck && isAuthenticated && movieId != null ? (
-                  <TouchableOpacity
-                    onPress={() => setBrowsingDeck(false)}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.countSortSort, { color: tc.primaryOnSurface }]}>
-                      {t('vocabulary:screening.eyebrow')}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
               </View>
             ) : wordsView === 'all' ? (
               <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
@@ -1507,34 +1464,6 @@ export const MovieDetailScreen = ({
         </View>
       ) : null}
 
-      {/* Screening Mode (#165) — the film's paced lesson, over the browsing
-          screen rather than beside it: it wants the whole viewport for its
-          own header, and the deck underneath stays mounted so stepping out
-          costs no reload. Below the splash's zIndex on purpose, so a lesson
-          never appears before the doors have opened. */}
-      {screeningOpen && movieId != null ? (
-        <View style={screeningStyles.overlay}>
-          <ScreeningScene
-            movieId={movieId}
-            items={deckItems}
-            deck={{
-              activeLevel,
-              levelColorFor,
-              movieId,
-              movieTitle: movie.title,
-              targetLang,
-              isAuthenticated,
-              savedWords,
-              onSave: handleSaveWord,
-              sentencePreviews,
-            }}
-            onMarkLearned={handleMarkLearned}
-            onAdvanceBookmark={recordAdvanceBookmark}
-            onExit={() => setBrowsingDeck(true)}
-          />
-        </View>
-      ) : null}
-
       {/* Loading splash — a pulsing extruded "WW" wordmark centered on the
           default app background. Stacked offset text layers fake the 3D
           extrusion; a perspective/rotateX tilt sells the depth.
@@ -1568,13 +1497,6 @@ export const MovieDetailScreen = ({
     </View>
   );
 };
-
-const screeningStyles = StyleSheet.create({
-  // Opaque is the point: this is a different screen sharing a mount, not a
-  // panel over the deck. zIndex 40 sits under the splash's 50 and over the
-  // undo toast, which belongs to the browsing deck it is covering.
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 40 },
-});
 
 // Extrusion depths (px) for the 3D "WW" splash mark, painted deepest-first
 // so the face (offset 0) lands on top.

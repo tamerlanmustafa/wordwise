@@ -50,18 +50,5 @@
     "watchedFilms": "Watched Films",
     "watchedFilmsSub": "Movies you have marked as seen"
   },
-  "wordsYouKnow": "Words you already know",
-  "screening": {
-    "eyebrow": "SCREENING MODE",
-    "sceneOf": "Scene {{scene}} of {{total}}",
-    "sceneComplete": "Scene complete",
-    "nextScene": "Next scene",
-    "filmDone": "You have screened every scene",
-    "browse": "Browse the deck",
-    "startFailed": "Could not start this scene.",
-    "capped": "You have used today's free session.",
-    "progressSafe": "Your progress is saved.",
-    "emptyTitle": "Nothing to screen yet",
-    "emptyBody": "This film has no words with an example sentence at your level. Try another level, or browse the deck."
-  }
+  "wordsYouKnow": "Words you already know"
 }

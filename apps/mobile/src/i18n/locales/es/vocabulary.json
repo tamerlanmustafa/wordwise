@@ -50,18 +50,5 @@
   },
   "savedWords": "Palabras guardadas",
   "screenTitle": "Vocabulario",
-  "wordsYouKnow": "Palabras que ya conoces",
-  "screening": {
-    "eyebrow": "MODO PROYECCIÓN",
-    "sceneOf": "Escena {{scene}} de {{total}}",
-    "sceneComplete": "Escena completada",
-    "nextScene": "Siguiente escena",
-    "filmDone": "Has visto todas las escenas",
-    "browse": "Explorar el mazo",
-    "startFailed": "No se pudo iniciar esta escena.",
-    "capped": "Ya has usado la sesión gratuita de hoy.",
-    "progressSafe": "Tu progreso está guardado.",
-    "emptyTitle": "Todavía no hay nada que proyectar",
-    "emptyBody": "Esta película no tiene palabras con frase de ejemplo en tu nivel. Prueba otro nivel o explora el mazo."
-  }
+  "wordsYouKnow": "Palabras que ya conoces"
 }

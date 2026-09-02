@@ -36,23 +36,13 @@ from ..services.chest_service import award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
-from ..services.distractor_pool import (
-    build_film_pool,
-    build_pool,
-    is_thin,
-    merge_pools,
-    pool_for,
-)
+from ..services.distractor_pool import build_pool, pool_for
 from ..services.session_kinds import (
-    DAILY_CAP_EXEMPT_KINDS,
     LIST_KINDS,
-    MOVIE_LESSON_MAX_WORDS,
     PRACTICE_SOURCE,
-    UNPADDED_KINDS,
     VALID_KINDS,
     canonical_kind,
     compose_for_kind,
-    normalize_lesson_words,
 )
 from ..services.quiz_service import build_translation_choices, normalize_choice
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
@@ -595,23 +585,17 @@ async def _pad_with_fresh_reel_lemmas(
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_session(
     kind: str = Query("practice", description="One of practice / list_words / "
-                                             "list_films / movie_lesson. "
-                                             "quick_recall, tough_words and "
-                                             "movie_deep_dive are accepted as "
-                                             "deprecated aliases for practice."),
-    movie_id: Optional[int] = Query(None, description="Required when "
-                                                     "kind=movie_lesson: the film "
-                                                     "the scene belongs to. "
-                                                     "Ignored otherwise — installed "
-                                                     "builds still send it for the "
-                                                     "retired movie_deep_dive tile."),
+                                             "list_films. quick_recall, "
+                                             "tough_words and movie_deep_dive "
+                                             "are accepted as deprecated "
+                                             "aliases for practice."),
+    movie_id: Optional[int] = Query(None, deprecated=True,
+                                    description="Ignored. Retained so installed "
+                                                "builds sending it for the "
+                                                "retired movie_deep_dive tile "
+                                                "still get a session."),
     list_id: Optional[int] = Query(None, description="Required when kind=list_words "
                                                     "or kind=list_films."),
-    words: Optional[list[str]] = Query(None, description="Required when "
-                                                        "kind=movie_lesson, repeated: "
-                                                        "the words the scene is testing "
-                                                        "(?words=linger&words=brace). "
-                                                        f"At most {MOVIE_LESSON_MAX_WORDS}."),
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db),
 ):
@@ -621,15 +605,6 @@ async def start_session(
     Free users: one session per UTC day (the daily 2-min habit). Hitting
     /srs/session/start a second time the same day returns HTTP 402 with
     a `srs_daily_cap_reached` paywall payload — premium unlocks unlimited.
-    `movie_lesson` is outside that cap (`DAILY_CAP_EXEMPT_KINDS`): Screening
-    Mode is priced by energy instead, so a scene test neither trips the gate
-    nor spends the free user's Practice session for the day.
-
-    `movie_lesson` (#166) takes `movie_id` plus the repeated `words` the scene
-    is testing and returns one card per word the user does not already know,
-    creating `UserWord` rows only for words that have none. Words with no
-    translation MCQ are dropped like any other card, so the client must cope
-    with fewer cards than words asked for.
 
     The Practice tab is ONE kind of session (`practice`), whose deck mixes due
     recalls, the user's own saved/listed words, and fresh words at their CEFR
@@ -660,37 +635,12 @@ async def start_session(
             status_code=422,
             detail=f"{kind} requires the `list_id` query parameter.",
         )
-    if kind == "movie_lesson":
-        if movie_id is None:
-            raise HTTPException(
-                status_code=422,
-                detail="movie_lesson requires the `movie_id` query parameter.",
-            )
-        lesson_words = normalize_lesson_words(words)
-        if not lesson_words:
-            raise HTTPException(
-                status_code=422,
-                detail="movie_lesson requires at least one `words` query parameter.",
-            )
-        if len(lesson_words) > MOVIE_LESSON_MAX_WORDS:
-            raise HTTPException(
-                status_code=422,
-                detail=f"movie_lesson tests at most {MOVIE_LESSON_MAX_WORDS} words "
-                       f"per start; got {len(lesson_words)}.",
-            )
-        # An unknown film is a client error, not a server one: the composer
-        # would otherwise write rows pointing at a movie that does not exist.
-        if await db.movie.find_unique(where={"id": movie_id}) is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unknown movie_id: {movie_id}.",
-            )
 
     premium = is_premium(current_user)
     now = datetime.now(timezone.utc)
-    last_started = getattr(current_user, "srsLastSessionStartedAt", None)
 
-    if not premium and kind not in DAILY_CAP_EXEMPT_KINDS:
+    if not premium:
+        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
         if not can_free_user_start_session_today(last_started, now=now):
             raise HTTPException(
                 status_code=402,
@@ -719,8 +669,6 @@ async def start_session(
         kind=kind,
         user_id=current_user.id,
         list_id=list_id,
-        movie_id=movie_id if kind == "movie_lesson" else None,
-        words=words if kind == "movie_lesson" else None,
         now=now,
     )
 
@@ -764,13 +712,12 @@ async def start_session(
         seen_lemmas.add(lemma)
         session_rows.append(r)
 
-    # `list_words` and `movie_lesson` are deliberately excluded from padding
-    # (`UNPADDED_KINDS`): a words list must practise its own members and a
-    # scene test must ask the words the reader just studied, and both
-    # composers have already materialised the rows they need. Padding either
-    # would put words the user never chose into a session they started from
-    # something specific.
-    if len(session_rows) < SESSION_SIZE and kind not in UNPADDED_KINDS:
+    # `list_words` is deliberately excluded from padding: a words list must
+    # practise its own members and nothing else, and its composer has already
+    # materialised the unstudied ones. Padding it from the reel would put
+    # words the user never put in the list into a session they started from
+    # that list.
+    if len(session_rows) < SESSION_SIZE and kind != "list_words":
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
         if kind == "practice":
@@ -923,7 +870,6 @@ async def start_session(
     # friendly labels deliberately collapse PROPN onto "noun".
     deck_pos = await registry_pos(db, unique_lemmas) if unique_lemmas else {}
     distractors: dict = {}
-    buckets: set = set()
     if translation_map:
         buckets = {
             (deck_pos.get(lem), cefr_map.get(lem))
@@ -935,31 +881,6 @@ async def start_session(
             buckets=buckets,
             exclude_lemmas=translation_map.keys(),
         )
-
-    # The film rung (#167). A Screening Mode scene tests 5 words, so on a
-    # language whose `translation_cache` is cold the wide pool comes back
-    # near-empty and every grid is built from the scene itself: by question
-    # three the reader is answering by elimination, and a word that was a
-    # wrong answer on Q1 is the right one on Q5. The film the scene belongs
-    # to is the one place a cold language reliably holds paid-for
-    # translations — every card the reader revealed, every gloss the deck
-    # aligned, every word an earlier scene tested — so it goes between the
-    # wide pool and the deck. One indexed read, no translation spend.
-    #
-    # Gated on `is_thin` rather than on emptiness: a pool with four options
-    # in it is not a working pool for a five-card test, and a warm language
-    # (TR holds 18k cached lemmas; ES 48) never pays for the read at all.
-    film_added = 0
-    if translation_map and kind == "movie_lesson" and movie_id is not None:
-        if is_thin(distractors, len(translation_map)):
-            film_pool = await build_film_pool(
-                db,
-                target_lang=target_lang,
-                movie_id=movie_id,
-                buckets=buckets,
-                exclude_lemmas=translation_map.keys(),
-            )
-            distractors, film_added = merge_pools(distractors, film_pool)
 
     cards: list[ReviewCard] = []
     skipped: list[str] = []
@@ -1041,19 +962,14 @@ async def start_session(
     # reports it, so without this line a language quietly falling back to
     # deck-only distractors — i.e. the repetition coming back — is invisible.
     logger.info(
-        "[srs.start] distractor pool: %d option(s) across %d bucket(s) for %s "
-        "(%d from the film rung)",
+        "[srs.start] distractor pool: %d option(s) across %d bucket(s) for %s",
         sum(len(v) for v in distractors.values()), len(distractors), target_lang,
-        film_added,
     )
 
     # Stamp the daily-cap field + the picked kind only when there was
     # actually work to do. Don't penalize a free user who taps "review"
-    # into an empty queue. A cap-exempt kind stamps neither: both fields are
-    # the daily-cap machinery (`/daily/state` reads the kind only for the day
-    # the start was stamped), and a scene test is not today's Practice.
-    stamped = bool(cards) and kind not in DAILY_CAP_EXEMPT_KINDS
-    if stamped:
+    # into an empty queue.
+    if cards:
         await db.user.update(
             where={"id": current_user.id},
             data={
@@ -1068,13 +984,10 @@ async def start_session(
     # free, sentinel-high for premium.
     if premium:
         remaining = FREE_PREVIEW_SESSIONS
-    elif stamped:
-        # We just used today's slot.
-        remaining = 0
     else:
-        # Either the queue was empty or this kind is outside the cap; the
-        # Practice slot is whatever it was before this call.
-        remaining = 1 if can_free_user_start_session_today(last_started, now=now) else 0
+        # `cards` may have stamped the field above; if so, we just used today's
+        # slot. Otherwise the queue was empty and the slot remains available.
+        remaining = 0 if cards else 1
 
     return SessionStartResponse(
         cards=cards,

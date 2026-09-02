@@ -50,18 +50,5 @@
   },
   "savedWords": "Kaydedilen Kelimeler",
   "screenTitle": "Kelime Dağarcığı",
-  "wordsYouKnow": "Zaten bildiğin kelimeler",
-  "screening": {
-    "eyebrow": "GÖSTERİM MODU",
-    "sceneOf": "Sahne {{scene}} / {{total}}",
-    "sceneComplete": "Sahne tamamlandı",
-    "nextScene": "Sonraki sahne",
-    "filmDone": "Tüm sahneleri izledin",
-    "browse": "Desteye göz at",
-    "startFailed": "Bu sahne başlatılamadı.",
-    "capped": "Bugünkü ücretsiz oturumu kullandın.",
-    "progressSafe": "İlerlemen kaydedildi.",
-    "emptyTitle": "Henüz gösterilecek bir şey yok",
-    "emptyBody": "Bu filmde senin seviyende örnek cümlesi olan kelime yok. Başka bir seviye dene ya da desteye göz at."
-  }
+  "wordsYouKnow": "Zaten bildiğin kelimeler"
 }
