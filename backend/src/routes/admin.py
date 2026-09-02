@@ -18,6 +18,7 @@ from src.services.movie_cefr import (
     normalize_level,
 )
 from src.services.vocab_coverage import compute_vocab_coverage
+from src.utils.offload import run_nlp
 from src.utils.rate_limit import client_ip_observation, rate_limit
 from src.utils.subscription import entitlements_payload
 from pathlib import Path
@@ -443,7 +444,12 @@ async def reprocess_script(
     await db.wordclassification.delete_many(where={"scriptId": script_id})
 
     classifier = get_classifier()
-    classifications = classifier.classify_text(script.cleanedScriptText)
+    # No `nlp_slot` here, unlike the user-facing paths: an admin reprocess
+    # should wait its turn behind live traffic, not be shed. Offloading is
+    # still required — being an admin does not make 2.9s of spaCy any less
+    # of a freeze for everyone else's requests.
+    script_text = script.cleanedScriptText
+    classifications = await run_nlp(lambda: classifier.classify_text(script_text))
 
     # Keep words the registry can place out of the UNKNOWN bucket (#119).
     await apply_registry_levels(db, classifications)
@@ -538,8 +544,16 @@ async def reprocess_all_scripts(
             # Delete existing classifications
             await db.wordclassification.delete_many(where={"scriptId": script.id})
 
-            # Reclassify
-            classifications = classifier.classify_text(script.cleanedScriptText)
+            # Reclassify. One hop per script is right here even though the
+            # module rule says "batch, then offload once" — the unit of work
+            # already *is* a whole script, so this is N large jobs, not N
+            # small ones. Between them the loop is free to serve requests,
+            # which is the entire point: this endpoint walks every script in
+            # the database and inline it would freeze the API for minutes.
+            script_text = script.cleanedScriptText
+            classifications = await run_nlp(
+                lambda: classifier.classify_text(script_text)
+            )
 
             # Keep words the registry can place out of the UNKNOWN bucket (#119).
             await apply_registry_levels(db, classifications)

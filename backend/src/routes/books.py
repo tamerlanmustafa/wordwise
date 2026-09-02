@@ -24,6 +24,7 @@ from ..services.gutendex_client import get_gutendex_client
 from ..services.hidden_words import get_hidden_word_set
 from ..services.open_library_client import get_open_library_client
 from ..utils.rate_limit import rate_limit
+from ..utils.offload import NLPOverloaded, nlp_slot, run_nlp
 from .cefr import get_classifier, should_keep_word
 from ..services.cefr_classifier import detect_phrasal_verbs_and_idioms_async
 from ..services.movie_cefr import cefr_from_score
@@ -59,6 +60,11 @@ def _book_difficulty_enum(score: Optional[int]):
 # throttle keeps us from being farmed as a free proxy.
 _search_throttle = rate_limit(30, 60.0, scope="books-search")
 _epub_throttle = rate_limit(10, 60.0, scope="books-epub")
+
+# A book is the biggest job the single NLP thread ever takes, so the queue for
+# it is kept shallower than the script caps elsewhere: two waiting books
+# already mean the third caller sits through both.
+MAX_PENDING_BOOK_CLASSIFICATIONS = 2
 
 
 @router.get("/search")
@@ -550,7 +556,15 @@ async def analyze_book(
         # Run CEFR classification
         try:
             classifier = get_classifier()
-            classifications = classifier.classify_text(book_text)
+            # A whole book, so the largest text this classifier ever sees —
+            # well past the 1.6–2.9s a film script costs. Inline it froze the
+            # one event loop for every other request; it goes to the NLP
+            # worker like every other classification path.
+            def _classify_book():
+                return classifier.classify_text(book_text)
+
+            with nlp_slot(MAX_PENDING_BOOK_CLASSIFICATIONS):
+                classifications = await run_nlp(_classify_book)
 
             # Build a helper to find page number for a word position
             def find_page_for_word(word: str) -> Optional[int]:
@@ -654,6 +668,23 @@ async def analyze_book(
                 "difficulty_level": level,
                 "difficulty_score": score,
                 "already_exists": False
+            }
+
+        except NLPOverloaded:
+            # Shed, not broken. The book is saved either way, so this keeps
+            # the existing degrade-to-success shape rather than 503-ing —
+            # but says "try again" so the client knows the vocabulary is
+            # recoverable by re-running the analysis.
+            logger.warning("[Books] classification shed: NLP queue at capacity")
+            return {
+                "book_id": book_entry.id,
+                "title": book_entry.title,
+                "author": book_details.get("author"),
+                "word_count": word_count,
+                "unique_words": 0,
+                "cefr_distribution": {},
+                "already_exists": False,
+                "warning": "Vocabulary analysis is busy — try analysing again shortly"
             }
 
         except Exception as e:

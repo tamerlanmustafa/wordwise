@@ -8,6 +8,7 @@ Creates movie entries with MANUAL_UPLOAD source and processes through CEFR pipel
 import json
 import logging
 from datetime import datetime
+from functools import partial
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -21,6 +22,7 @@ from ..utils.subtitle_parser import SubtitleParser
 from ..utils.pdf_extractor import PDFExtractor
 from ..services.cefr_registry import apply_registry_levels
 from ..utils.epub_extractor import EPUBExtractor, EPUBExtractionError
+from ..utils.offload import CPUOverloaded, NLPOverloaded, cpu_slot, nlp_slot, run_cpu, run_nlp
 from .cefr import get_classifier
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,17 @@ router = APIRouter(prefix="/api/upload", tags=["upload"])
 SUPPORTED_EXTENSIONS = {'.srt', '.vtt', '.txt', '.epub', '.pdf'}
 MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+# One upload is two separate pieces of blocking work on two different pools,
+# so it needs two caps.
+#
+# Extraction is the CPU pool: pdfplumber over a 10MB PDF is seconds of pure
+# Python, and the cap is deliberately far below DEFAULT_CPU_MAX_PENDING
+# because that pool also carries every bcrypt hash — a burst of uploads that
+# filled it would be logging the whole app out (utils/offload.py).
+MAX_PENDING_EXTRACTIONS = 2
+# Classification is the single NLP thread, one whole document per job.
+MAX_PENDING_CLASSIFICATIONS = 2
 
 
 @router.post("/file", response_model=FileUploadResponse)
@@ -101,6 +114,14 @@ async def upload_file(
     # Extract text based on file type
     try:
         extracted = await _extract_text(content, extension, filename)
+    except CPUOverloaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Too many uploads being processed, try again",
+            headers={"Retry-After": "10"},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[Upload] Text extraction failed: {e}")
         raise HTTPException(
@@ -165,7 +186,16 @@ async def upload_file(
     # Classify words with CEFR
     try:
         classifier = get_classifier()
-        classifications = classifier.classify_text(extracted["cleaned_text"])
+        # spaCy over the whole document — 1.6–2.9s for a film script, and an
+        # uploaded book is larger. Off the loop, one hop, like every other
+        # classification path.
+        cleaned_text = extracted["cleaned_text"]
+
+        def _classify_upload():
+            return classifier.classify_text(cleaned_text)
+
+        with nlp_slot(MAX_PENDING_CLASSIFICATIONS):
+            classifications = await run_nlp(_classify_upload)
 
         # Keep words the registry can place out of the UNKNOWN bucket (#119).
         await apply_registry_levels(db, classifications)
@@ -250,6 +280,17 @@ async def upload_file(
             cefr_distribution=level_distribution
         )
 
+    except NLPOverloaded:
+        # The document is already saved; only the word analysis was shed. A
+        # 503 tells the client to retry rather than reporting a broken upload.
+        logger.warning("[Upload] classification shed: NLP queue at capacity")
+        raise HTTPException(
+            status_code=503,
+            detail="Analysis busy, try again",
+            headers={"Retry-After": "10"},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[Upload] CEFR classification failed: {e}", exc_info=True)
         # Still return success since the file was saved
@@ -264,7 +305,18 @@ async def upload_file(
 
 async def _extract_text(content: bytes, extension: str, filename: str) -> dict:
     """
-    Extract text from file based on its extension.
+    Extract text from a file, on the CPU worker pool.
+
+    Every extractor below is synchronous and unbounded in cost: pdfplumber
+    builds char-level objects for each page, the EPUB path unzips and parses
+    HTML, and even the "cheap" subtitle and txt paths run regex passes over up
+    to 10MB. Called inline from this `async def` they pinned the event loop
+    that every other request shares — the failure mode CLAUDE.md measures at
+    /health going 0.16s → 7.86s.
+
+    `_extract_from_pdf` used to be `async def` with no `await` inside it,
+    which is the trap worth naming: the keyword made the call site read as if
+    it yielded, while the work stayed on the loop.
 
     Returns dict with:
         - raw_text: Original extracted text
@@ -273,15 +325,20 @@ async def _extract_text(content: bytes, extension: str, filename: str) -> dict:
         - metadata: Extraction metadata
     """
     if extension in {'.srt', '.vtt'}:
-        return _extract_from_subtitle(content, extension, filename)
+        fn = partial(_extract_from_subtitle, content, extension, filename)
     elif extension == '.txt':
-        return _extract_from_txt(content, filename)
+        fn = partial(_extract_from_txt, content, filename)
     elif extension == '.epub':
-        return _extract_from_epub(content, filename)
+        fn = partial(_extract_from_epub, content, filename)
     elif extension == '.pdf':
-        return await _extract_from_pdf(content, filename)
+        fn = partial(_extract_from_pdf, content, filename)
     else:
         raise ValueError(f"Unsupported extension: {extension}")
+
+    # One hop for the whole document — never per page, which would put N
+    # round trips through a pool that logins also queue on.
+    with cpu_slot(MAX_PENDING_EXTRACTIONS):
+        return await run_cpu(fn)
 
 
 def _extract_from_subtitle(content: bytes, extension: str, filename: str) -> dict:
@@ -347,8 +404,13 @@ def _extract_from_epub(content: bytes, filename: str) -> dict:
     }
 
 
-async def _extract_from_pdf(content: bytes, filename: str) -> dict:
-    """Extract text from PDF files"""
+def _extract_from_pdf(content: bytes, filename: str) -> dict:
+    """Extract text from PDF files.
+
+    Synchronous by declaration as well as in fact — it was `async def` with no
+    `await` in the body, which bought nothing and hid the blocking. Callers
+    reach it through `_extract_text`, which puts it on the CPU pool.
+    """
     import io
     import re
 

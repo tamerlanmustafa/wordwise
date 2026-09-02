@@ -34,6 +34,7 @@ from src.services.profanity_filter import is_profane_entry
 from src.services.script_doc import parse_script_async
 from src.services.script_idioms import get_script_idioms
 from src.utils.nlp_executor import NLPOverloaded
+from src.utils.offload import nlp_slot, run_nlp
 from prisma import Prisma
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,14 @@ router = APIRouter(prefix="/api/cefr", tags=["CEFR Classification"])
 # still gets in. A drop costs nothing — the next classification of the movie
 # starts it again (issue #142).
 MAX_PENDING_BANK_PARSES = 2
+
+# Queue depth at which a *script classification* is shed. Higher than the bank
+# parse above because a caller is waiting on this one — it is the response, not
+# a background top-up — but still low, because each job is a whole script
+# (1.6–2.9s measured) and a queue of them is itself the outage: at one worker,
+# a depth of 3 already means the last caller waits ~9s for a parse it will have
+# given up on.
+MAX_PENDING_CLASSIFICATIONS = 3
 
 # Master exclusion list - ultra-common A1 words that all learners know
 # These are filtered out to show only meaningful vocabulary
@@ -510,7 +519,18 @@ async def run_script_classification(
                 genres = []
 
         classifier = get_classifier()
-        classifications = classifier.classify_text(script.cleanedScriptText, genres=genres)
+        # spaCy plus a full regex pass over the script: 1.6–2.9s of pure CPU
+        # (CLAUDE.md). Called inline it pinned the one event loop this
+        # single-process API shares, so every other request — including
+        # /health and every login — waited it out. One hop, whole script.
+        script_text = script.cleanedScriptText
+        classify_genres = genres
+
+        def _classify_script():
+            return classifier.classify_text(script_text, genres=classify_genres)
+
+        with nlp_slot(MAX_PENDING_CLASSIFICATIONS):
+            classifications = await run_nlp(_classify_script)
 
         # A word the registry can already place must not be stored UNKNOWN
         # just because this script capitalised it (#119). Before statistics,
@@ -699,6 +719,17 @@ async def run_script_classification(
 
     except HTTPException:
         raise
+    except NLPOverloaded:
+        # The worker queue was already deep enough that this caller would have
+        # waited through several whole-script parses. Shedding at the door is
+        # the honest answer — and it must be a 503, not the 500 the catch-all
+        # below would turn it into: this is "try again", not "we are broken".
+        logger.warning("classify-script shed: NLP queue at capacity")
+        raise HTTPException(
+            status_code=503,
+            detail="Classification busy, try again",
+            headers={"Retry-After": "5"},
+        )
     except Exception as e:
         logger.error(f"Error classifying script: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

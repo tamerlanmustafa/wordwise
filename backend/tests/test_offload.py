@@ -240,7 +240,24 @@ def test_nlp_executor_reexports_the_same_objects():
 #
 # A loop that offloads *chunks* rather than items is legitimate. If you add
 # one, name it here with the reason rather than deleting the test.
-OFFLOAD_IN_LOOP_ALLOWED: set[str] = set()
+OFFLOAD_IN_LOOP_ALLOWED: set[str] = {
+    # admin.py `reprocess_all_scripts` walks every script in the database and
+    # offloads one *whole script* per iteration. The item here is already the
+    # batch — a 1.6–2.9s classification — so this is N large jobs, not the N
+    # small ones the rule is aimed at, and the executor round-trip is noise
+    # against the work it carries.
+    #
+    # The alternative is worse in both directions: classifying every script in
+    # a single hop would hold the one NLP thread for minutes with no chance to
+    # serve anyone else, and leaving it inline — which is what it did until the
+    # 2026-09-02 endpoint audit — freezes the whole API for the length of the
+    # batch. Yielding between scripts is the entire point.
+    #
+    # Caveat worth knowing: this allowlist is per *file*, so it also stops the
+    # guard checking any future offload added elsewhere in admin.py. Prefer
+    # putting new per-item work in another module over widening this entry.
+    "admin.py",
+}
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 OFFLOAD_HELPERS = {"run_nlp", "run_cpu"}
