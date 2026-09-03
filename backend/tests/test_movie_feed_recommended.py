@@ -28,10 +28,9 @@ import re
 import pytest
 
 from src.routes.movies import (
-    RECOMMENDED_MIN_POOL,
     RECOMMENDED_ROTATION_SECONDS,
     _BY_CEFR_SELECT,
-    _RECOMMENDED_POOL_COUNT,
+    _RECOMMENDED_TIER_SQL,
     current_seed,
     list_movies_by_cefr,
     next_rotation_at,
@@ -39,22 +38,20 @@ from src.routes.movies import (
 
 
 class _FakeDb:
-    """Records each query_raw call. `pool` is what the count query answers."""
+    """Records the SQL text and bound params of each query_raw call."""
 
-    def __init__(self, pool: int = 500):
+    def __init__(self, rows: list | None = None):
         self.calls: list[tuple[str, tuple]] = []
-        self.pool = pool
+        self.rows = rows if rows is not None else []
 
     async def query_raw(self, sql, *params):
         self.calls.append((sql, params))
-        if "COUNT(*) AS n" in sql:
-            return [{"n": self.pool}]
-        return []
+        return self.rows
 
 
-async def _call(pool: int = 500, **kwargs):
+async def _call(rows: list | None = None, **kwargs):
     """Run the handler with the defaults the mobile feed now sends."""
-    db = _FakeDb(pool=pool)
+    db = _FakeDb(rows=rows)
     opts = {
         "level": "B1",
         "genre": None,
@@ -73,8 +70,20 @@ async def _call(pool: int = 500, **kwargs):
 
 
 def _page_call(db: _FakeDb) -> tuple[str, tuple]:
-    """The row query, i.e. everything that is not the pool count."""
-    return [c for c in db.calls if "COUNT(*) AS n" not in c[0]][0]
+    """The one and only query this endpoint makes."""
+    assert len(db.calls) == 1, f"expected a single query, got {len(db.calls)}"
+    return db.calls[0]
+
+
+def _tier(vote_count: int, vote_average: float) -> int:
+    """Python mirror of `_RECOMMENDED_TIER_SQL`, for the ordering properties."""
+    if vote_count >= 1000 and vote_average >= 7.0:
+        return 0
+    if vote_count >= 300 and vote_average >= 6.5:
+        return 1
+    if vote_count >= 100 and vote_average >= 6.0:
+        return 2
+    return 3
 
 
 # ── The permutation itself ──────────────────────────────────────────────────
@@ -155,8 +164,10 @@ class TestRecommendedSql:
     async def test_orders_by_a_hash_of_id_and_seed(self):
         db, _ = await _call(seed=4242)
         sql, params = _page_call(db)
-        assert "ORDER BY md5(m.id::text || '-' || $" in sql
-        assert "m.id ASC" in sql
+        order = sql.partition("ORDER BY")[2].partition("LIMIT")[0]
+        assert "md5(m.id::text || '-' || $" in order
+        # `m.id ASC` last: the tiebreaker that makes the ordering total.
+        assert order.rstrip().endswith("m.id ASC")
         # Bound, never interpolated — `seed` comes straight off the query
         # string, and the whole point of the whitelist on CEFR_SORT_COLUMNS is
         # that nothing caller-controlled reaches the SQL text.
@@ -226,89 +237,129 @@ class TestRecommendedSql:
         assert "cache" not in " ".join(result.keys()).lower()
 
 
-# ── The quality floor ───────────────────────────────────────────────────────
+# ── Quality as a sort key, not a filter ─────────────────────────────────────
+# The first cut of this was a WHERE clause (`vote_count >= 200 AND
+# vote_average >= 6.0`) plus a COUNT query per request to decide whether the
+# level could survive it. Tiering does the same job — good films first — with
+# no predicate that can empty a shelf and no second round trip to guard it.
 @pytest.mark.asyncio
-class TestQualityFloor:
-    async def test_a_deep_shelf_gets_the_floor(self):
-        db, _ = await _call(pool=RECOMMENDED_MIN_POOL + 1)
+class TestQualityTier:
+    async def test_quality_is_in_the_order_by_not_the_where(self):
+        db, _ = await _call()
         sql, _params = _page_call(db)
-        assert "COALESCE(m.tmdb_vote_count, 0) >= 200" in sql
-        assert "COALESCE(m.tmdb_vote_average, 0) >= 6.0" in sql
+        head, _, tail = sql.partition("ORDER BY")
 
-    async def test_a_thin_shelf_drops_back_to_the_base_predicates(self):
-        # A1 and C2 are the thin shelves. Recommended being *emptier* than Top
-        # rated is a worse outcome than a couple of obscure films in the deck.
-        db, _ = await _call(pool=RECOMMENDED_MIN_POOL - 1)
+        # The tier decides position...
+        assert _RECOMMENDED_TIER_SQL in tail
+        assert "tmdb_vote_average, 0) >= 7.0" in tail
+        # ...and nothing about it narrows the result set.
+        assert ">= 7.0" not in head
+        assert ">= 1000" not in head
+
+    async def test_no_film_is_excluded_for_being_unpopular(self):
+        # The property that matters: Recommended can never return fewer films
+        # than Top rated at the same level, because it filters nothing extra.
+        rec_sql, _ = _page_call((await _call())[0])
+        rated_sql, _ = _page_call((await _call(sort="rating"))[0])
+
+        # Placeholder *numbers* legitimately differ — recommended binds a seed,
+        # which pushes the user id along by one — so compare the predicates,
+        # not the numbering.
+        def predicates(sql: str) -> str:
+            return re.sub(r"\$\d+", "$N", sql.partition("ORDER BY")[0])
+
+        assert predicates(rec_sql) == predicates(rated_sql)
+
+    async def test_the_shared_vote_floor_is_untouched(self):
+        # `vote_count >= 50` is the catalogue-wide floor every sort has always
+        # had; tiering replaces the *extra* one, not this.
+        db, _ = await _call()
         sql, _params = _page_call(db)
-        assert ">= 200" not in sql
-        # The shared floor is still there — this only drops the extra one.
         assert "COALESCE(m.tmdb_vote_count, 0) >= 50" in sql
 
-    async def test_a_thin_shelf_still_returns_rows(self):
-        db = _FakeDb(pool=0)
+    async def test_tier_is_ordered_before_the_shuffle(self):
+        # Reverse them and the tier stops mattering: a hash sorts first and the
+        # tier only breaks its (nonexistent) ties.
+        db, _ = await _call()
+        sql, _params = _page_call(db)
+        order = sql.partition("ORDER BY")[2]
+        assert order.index("CASE") < order.index("md5(")
 
-        async def query_raw(sql, *params):
-            db.calls.append((sql, params))
-            if "COUNT(*) AS n" in sql:
-                return [{"n": 0}]
-            return [
-                {
-                    "movie_id": 1,
-                    "tmdb_id": 11,
-                    "title": "Thin shelf film",
-                    "year": 1972,
-                    "poster_url": None,
-                    "description": None,
-                    "backdrop_corner_rgb": None,
-                    "difficulty_score": 40,
-                    "vote_average": 5.1,
-                    "vote_count": 60,
-                    "unique_words": 900,
-                    "cefr_distribution": None,
-                }
-            ]
+    async def test_it_makes_exactly_one_query(self):
+        # The COUNT round trip is gone — for every sort, not just the columns.
+        for sort in ("recommended", "rating", "popularity", "level"):
+            db, _ = await _call(sort=sort)
+            assert len(db.calls) == 1, sort
 
-        db.query_raw = query_raw  # type: ignore[method-assign]
-        result = await list_movies_by_cefr(
-            level="A1",
-            genre=None,
-            animated=None,
-            limit=10,
-            offset=0,
-            sort="recommended",
-            order="desc",
-            seed=5,
-            db=db,
-            current_user=None,
-        )
+    async def test_a_thin_level_still_returns_its_films(self):
+        # C2 has SIX films in prod (2026-09-03). Under a hard floor that shelf
+        # depended on a fallback branch being right; under tiering there is no
+        # branch — the films are simply ordered.
+        rows = [
+            {
+                "movie_id": 1,
+                "tmdb_id": 11,
+                "title": "Thin shelf film",
+                "year": 1972,
+                "poster_url": None,
+                "description": None,
+                "backdrop_corner_rgb": None,
+                "difficulty_score": 90,
+                "vote_average": 5.1,
+                "vote_count": 60,
+                "unique_words": 900,
+                "cefr_distribution": None,
+            }
+        ]
+        _db, result = await _call(rows=rows, level="C2", seed=5)
         assert [m["title"] for m in result["movies"]] == ["Thin shelf film"]
 
-    async def test_the_pool_is_counted_with_the_same_predicates_as_the_page(self):
-        # A count that measured a different shelf would apply the floor to a
-        # pool the page never sees — and would flip on and off between pages.
-        db, _ = await _call(genre="Comedy", animated=True)
-        count_sql, count_params = [c for c in db.calls if "COUNT(*) AS n" in c[0]][0]
-        page_sql, _page_params = _page_call(db)
 
-        assert count_sql.startswith(_RECOMMENDED_POOL_COUNT)
-        for fragment in (
-            "m.genre ILIKE",
-            "AND m.genre ILIKE '%Animation%'",
-            "user_watched_movies",
-        ):
-            assert fragment in count_sql and fragment in page_sql
-        used = {int(n) for n in re.findall(r"\$(\d+)", count_sql)}
-        assert used == set(range(1, len(count_params) + 1))
+class TestTierOrdering:
+    """The tier's effect on the shelf, evaluated in Python against the same
+    thresholds the SQL uses."""
 
-    async def test_the_count_skips_the_expensive_projection(self):
-        # unique_words / cefr_distribution are correlated subqueries over
-        # word_classifications — the costly half of the row query, and a COUNT
-        # needs neither.
-        db, _ = await _call()
-        count_sql, _ = [c for c in db.calls if "COUNT(*) AS n" in c[0]][0]
-        assert "word_classifications" not in count_sql
+    # A shelf shaped like a real level: a deep top tier and a long tail.
+    CATALOGUE = [
+        *[(i, 5000, 7.8) for i in range(1, 41)],    # tier 0
+        *[(i, 500, 6.8) for i in range(41, 61)],    # tier 1
+        *[(i, 150, 6.2) for i in range(61, 81)],    # tier 2
+        *[(i, 60, 5.0) for i in range(81, 101)],    # tier 3
+    ]
 
-    async def test_the_column_sorts_do_not_pay_for_the_count(self):
-        db, _ = await _call(sort="popularity")
-        assert not [c for c in db.calls if "COUNT(*) AS n" in c[0]]
-        assert len(db.calls) == 1
+    def _order(self, seed: int) -> list[int]:
+        return [
+            m[0]
+            for m in sorted(
+                self.CATALOGUE,
+                key=lambda m: (
+                    _tier(m[1], m[2]),
+                    hashlib.md5(f"{m[0]}-{seed}".encode()).hexdigest(),
+                    m[0],
+                ),
+            )
+        ]
+
+    def test_the_first_page_is_all_top_tier(self):
+        by_id = {m[0]: m for m in self.CATALOGUE}
+        first_page = self._order(1000)[:10]
+        assert all(_tier(by_id[i][1], by_id[i][2]) == 0 for i in first_page)
+
+    def test_the_shelf_quality_is_identical_across_rotations(self):
+        # This is what "the change doesn't have to be dramatic" buys: the
+        # rotation changes *which* good films you see, never how good they are.
+        by_id = {m[0]: m for m in self.CATALOGUE}
+        tiers = [
+            [_tier(by_id[i][1], by_id[i][2]) for i in self._order(s)[:10]]
+            for s in (1000, 1001, 1002)
+        ]
+        assert tiers[0] == tiers[1] == tiers[2]
+
+    def test_but_the_titles_do_rotate(self):
+        # A tiered order that never changed would just be "top rated" again.
+        assert self._order(1000)[:10] != self._order(1001)[:10]
+
+    def test_the_tail_is_still_reachable(self):
+        # Ordered last, not dropped: page 9 of a C2-sized shelf is the only
+        # place some films exist at all.
+        assert set(self._order(1000)) == {m[0] for m in self.CATALOGUE}

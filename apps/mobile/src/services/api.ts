@@ -483,18 +483,43 @@ export const wordwiseApi = {
       cefr_distribution?: Record<string, number> | null;
     }>;
   }> => {
-    let query = `level=${encodeURIComponent(level)}&limit=${limit}`;
-    if (opts?.offset != null) query += `&offset=${opts.offset}`;
-    if (opts?.sort) query += `&sort=${opts.sort}`;
-    if (opts?.order) query += `&order=${opts.order}`;
-    if (opts?.seed != null) query += `&seed=${opts.seed}`;
-    // `!= null` on purpose: `animated=false` is the live-action filter and has
-    // to be sent, so a truthiness check would silently swallow it.
-    if (opts?.animated != null) query += `&animated=${opts.animated}`;
+    const buildQuery = (sort?: string, seed?: number) => {
+      let q = `level=${encodeURIComponent(level)}&limit=${limit}`;
+      if (opts?.offset != null) q += `&offset=${opts.offset}`;
+      if (sort) q += `&sort=${sort}`;
+      if (opts?.order) q += `&order=${opts.order}`;
+      if (seed != null) q += `&seed=${seed}`;
+      // `!= null` on purpose: `animated=false` is the live-action filter and
+      // has to be sent, so a truthiness check would silently swallow it.
+      if (opts?.animated != null) q += `&animated=${opts.animated}`;
+      return q;
+    };
+
     // authFetch (not plain fetch): /movies/by-cefr personalizes when a token
     // is present — it excludes the user's watched / not-interested movies, so
     // swiped-away cards don't reappear when a filter/sort refetches the feed.
-    const res = await authFetch(`${API_BASE_URL}/movies/by-cefr?${query}`);
+    const res = await authFetch(
+      `${API_BASE_URL}/movies/by-cefr?${buildQuery(opts?.sort, opts?.seed)}`,
+    );
+
+    // A 400 on `sort=recommended` means one thing in practice: this build is
+    // newer than the API it is talking to. That happened for real — the OTA
+    // reached phones before Railway finished deploying — and because the feed
+    // renders a failed fetch as "no classified movies found", the whole Home
+    // tab went blank rather than degrading. The client already knows a sort
+    // that every version of this endpoint has ever accepted, so fall back to
+    // it: a feed ordered by rating is a small loss, an empty Home is not.
+    //
+    // Scoped tight on purpose — only this sort, only 400, only once. A 5xx is
+    // a server in trouble and retrying it with different params would just
+    // hide that.
+    if (res.status === 400 && opts?.sort === 'recommended') {
+      const fallback = await authFetch(
+        `${API_BASE_URL}/movies/by-cefr?${buildQuery('rating')}`,
+      );
+      if (fallback.ok) return fallback.json();
+    }
+
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /movies/by-cefr → ${res.status} ${body.slice(0, 120)}`);

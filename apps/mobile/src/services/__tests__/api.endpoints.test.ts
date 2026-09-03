@@ -382,6 +382,47 @@ describe('API endpoint wrappers', () => {
       expect(urlOf(fetchMock)).toContain('&animated=true');
     });
 
+    it('getMoviesByCefr sends the recommendation seed when paging a draw', async () => {
+      fetchMock.mockResolvedValue(ok({ level: 'B1', total: 0, offset: 0, has_more: false, movies: [] }));
+      await wordwiseApi.getMoviesByCefr('B1', 10, { offset: 10, sort: 'recommended', seed: 82798 });
+      expect(urlOf(fetchMock)).toContain('&seed=82798');
+    });
+
+    // A new build talking to an API that has not deployed yet. This happened
+    // for real: the OTA reached phones minutes before Railway finished, the
+    // old server 400'd on the unknown sort, and the feed renders a failed
+    // fetch as "no classified movies found" — so Home went blank, not
+    // degraded. One retry on a sort every version of the endpoint accepts.
+    it('getMoviesByCefr falls back to rating when the API rejects `recommended`', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok('Invalid sort: recommended', 400))
+        .mockResolvedValueOnce(ok({ level: 'B1', total: 1, offset: 0, has_more: false, movies: [{ movie_id: 1 }] }));
+
+      const res = await wordwiseApi.getMoviesByCefr('B1', 10, { sort: 'recommended' });
+
+      expect(res.movies).toHaveLength(1);
+      expect(urlOf(fetchMock)).toContain('sort=rating');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('getMoviesByCefr does not retry a 400 on the column sorts', async () => {
+      fetchMock.mockResolvedValue(ok('Invalid CEFR level: ZZ', 400));
+      await expect(
+        wordwiseApi.getMoviesByCefr('ZZ', 10, { sort: 'rating' }),
+      ).rejects.toThrow(/by-cefr → 400/);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('getMoviesByCefr does not retry a 5xx — that is a server in trouble', async () => {
+      // Retrying with different params would hide the outage behind a feed
+      // that looks fine, which is worse than an error the user can retry.
+      fetchMock.mockResolvedValue(ok('upstream exploded', 503));
+      await expect(
+        wordwiseApi.getMoviesByCefr('B1', 10, { sort: 'recommended' }),
+      ).rejects.toThrow(/by-cefr → 503/);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('getMoviesByLevel sends the learner CEFR band onboarding actually holds', async () => {
       // #103: onboarding's "pick your first film" passes startingLevel, a CEFR
       // code. The endpoint used to validate against the retired long-name enum

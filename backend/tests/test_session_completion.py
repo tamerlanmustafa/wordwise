@@ -42,8 +42,19 @@ import pytest
 
 from src.services.srs_engine import record_session_day
 
+# `record_session_day` takes `today` as an argument, so its own tests pin it
+# to a fixed date and stay hermetic.
 TODAY = date(2026, 9, 2)
 YESTERDAY = date(2026, 9, 1)
+
+# The *endpoint* cannot use those. `complete_session` reads the real clock, so
+# a fixture pinned to a frozen "yesterday" only looks like yesterday on the day
+# the test was written — this file went red in CI on 2026-09-03 and would have
+# gone red every morning after, on a commit that never touched the streak.
+# Deriving the fixture from the same clock the code under test reads is what
+# makes "practised yesterday, practises today" mean that on every day.
+REAL_TODAY = datetime.now(timezone.utc).date()
+REAL_YESTERDAY = REAL_TODAY - timedelta(days=1)
 
 
 def _dt(d: date) -> datetime:
@@ -261,7 +272,7 @@ class TestCompleteSessionEndpoint:
     async def test_finishing_a_session_bumps_the_streak(self):
         """The whole point: this happens even when every `/srs/review` was
         lost, because the client fires those and forgets them."""
-        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(YESTERDAY)))
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
 
         res = await self._complete(db, correct=8, total=10)
 
@@ -281,7 +292,7 @@ class TestCompleteSessionEndpoint:
         """A deck whose every card was unrenderable finishes with 0 scored.
         Crediting a streak day for a session the user was never asked
         anything in is exactly the hollow number the streak exists against."""
-        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(YESTERDAY)))
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
 
         res = await self._complete(db, correct=0, total=0)
 
@@ -290,10 +301,10 @@ class TestCompleteSessionEndpoint:
         # own concern. What must not move is the streak.
         streak_writes = [u for u in db.user.updates if "srsCurrentStreak" in u]
         assert streak_writes == []
-        assert db.user._user.srsLastSessionDate == _dt(YESTERDAY)
+        assert db.user._user.srsLastSessionDate == _dt(REAL_YESTERDAY)
 
     async def test_the_echoed_counts_are_untouched(self):
-        db = _FakeDb(_user(srsLastSessionDate=_dt(YESTERDAY)))
+        db = _FakeDb(_user(srsLastSessionDate=_dt(REAL_YESTERDAY)))
 
         res = await self._complete(db, correct=7, total=10)
 

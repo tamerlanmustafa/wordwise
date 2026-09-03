@@ -189,19 +189,37 @@ CEFR_SORT_COLUMNS = {
 # without any per-user state, a cron, or a stored ordering to invalidate.
 RECOMMENDED_ROTATION_SECONDS = 6 * 3600
 
-# Under this many films at a level, the quality floor is dropped rather than
-# applied. A1 and C2 are the thin shelves; a Recommended view that is emptier
-# than Top rated is worse than one with a couple of rough films in it.
-RECOMMENDED_MIN_POOL = 40
-
-# TMDB thresholds for the shuffle only. A pure shuffle over the level surfaces
-# the long tail — the shared `_BY_CEFR_SELECT` floor is `vote_count >= 50`,
-# which the column sorts survive because rating/popularity bury those rows
-# anyway and a shuffle does not.
-_RECOMMENDED_QUALITY_SQL = (
-    "\n              AND COALESCE(m.tmdb_vote_count, 0) >= 200"
-    "\n              AND COALESCE(m.tmdb_vote_average, 0) >= 6.0"
-)
+# Quality is a **sort key, not a filter**.
+#
+# A pure shuffle over a level surfaces the long tail, so the shelf needs some
+# notion of "show the good ones first". The obvious way is a WHERE clause —
+# and it was the first cut of this: `vote_count >= 200 AND vote_average >= 6.0`,
+# plus a COUNT query per request to decide whether the level was deep enough
+# to survive it. That is a whole extra round trip spent to answer a question
+# that only matters because the predicate can empty a shelf.
+#
+# Tiering removes the question. Nothing is excluded, so Recommended can never
+# return fewer films than Top rated at the same level; the well-known, well-
+# liked films simply sort first, and a thin level (C2 has **6 films** in prod,
+# 2026-09-03) just shows its lower tiers sooner. One query, no floor to tune,
+# no way for it to go blank.
+#
+# It is also what "mix the trending ones in" means here: tier 0 is high vote
+# count *and* high rating — films people actually watched and liked — and they
+# lead every draw. The shuffle then decides *which* of them you get this
+# window, so the shelf's character stays constant while its titles rotate.
+# Measured on prod 2026-09-03 (top 100 by popularity per level): A1 50/100 in
+# tier 0, A2 79, B1 77, B2 76, C1 64 — deep enough everywhere that the first
+# page is drawn from tier 0 alone and genuinely reshuffles each window.
+_RECOMMENDED_TIER_SQL = """CASE
+                WHEN COALESCE(m.tmdb_vote_count, 0) >= 1000
+                     AND COALESCE(m.tmdb_vote_average, 0) >= 7.0 THEN 0
+                WHEN COALESCE(m.tmdb_vote_count, 0) >= 300
+                     AND COALESCE(m.tmdb_vote_average, 0) >= 6.5 THEN 1
+                WHEN COALESCE(m.tmdb_vote_count, 0) >= 100
+                     AND COALESCE(m.tmdb_vote_average, 0) >= 6.0 THEN 2
+                ELSE 3
+              END"""
 
 
 def current_seed() -> int:
@@ -280,17 +298,6 @@ def _animation_filter_sql(animated: Optional[bool]) -> str:
 # rather than by copying the whole statement per combination: `genre` and
 # `animated` are independent, so branching would mean four near-identical
 # 45-line queries drifting apart.
-#
-# The WHERE half is split out so the Recommended pool count can reuse the exact
-# same predicates without dragging the two correlated subqueries (unique_words,
-# cefr_distribution) along — a COUNT does not need them, and they are the
-# expensive part of this projection.
-_BY_CEFR_WHERE = """
-            FROM movies m
-            WHERE m.difficulty_score >= $1
-              AND m.difficulty_score <= $2
-              AND COALESCE(m.tmdb_vote_count, 0) >= 50"""
-
 _BY_CEFR_SELECT = """
             SELECT m.id                AS movie_id,
                    m.title             AS title,
@@ -318,12 +325,11 @@ _BY_CEFR_SELECT = """
                        WHERE ms.movie_id = m.id
                        GROUP BY wc.cefr_level
                      ) sub
-                   )                   AS cefr_distribution""" + _BY_CEFR_WHERE
-
-# Same predicates, no projection — "how many films would the quality floor
-# leave at this level, for this caller".
-_RECOMMENDED_POOL_COUNT = """
-            SELECT COUNT(*) AS n""" + _BY_CEFR_WHERE
+                   )                   AS cefr_distribution
+            FROM movies m
+            WHERE m.difficulty_score >= $1
+              AND m.difficulty_score <= $2
+              AND COALESCE(m.tmdb_vote_count, 0) >= 50"""
 
 
 @router.get("/by-cefr")
@@ -395,61 +401,37 @@ async def list_movies_by_cefr(
     # Positional placeholders are numbered as the params list grows, so an
     # optional filter can be dropped in without renumbering everything after
     # it — which is what made the old two-branch copy hard to extend.
-    #
-    # The level + genre + animation predicates are built once and shared with
-    # the pool count below, so the count can never be measuring a different
-    # shelf from the one the page reads.
-    filter_params: List[Any] = [lo, hi]
+    params: List[Any] = [lo, hi]
     filters = ""
 
     if genre:
-        filter_params.append(genre)
+        params.append(genre)
         filters += (
             "\n              AND m.genre IS NOT NULL"
-            f"\n              AND m.genre ILIKE '%' || ${len(filter_params)} || '%'"
+            f"\n              AND m.genre ILIKE '%' || ${len(params)} || '%'"
         )
 
     filters += _animation_filter_sql(animated)
 
     active_seed: Optional[int] = None
-    quality = ""
 
     if recommended:
         # A caller paging through an existing draw sends its seed back; a first
         # page does not, and gets the current window. Deriving it per request
         # is what makes the rotation free of any stored state.
         active_seed = seed if seed is not None else current_seed()
-
-        # Ask what the quality floor would leave *before* applying it. A shuffle
-        # with a floor over a 30-film shelf is a shorter shelf, and Recommended
-        # being emptier than Top rated is a worse outcome than a couple of
-        # obscure films in the deck. Counted with the caller's own exclusions,
-        # because those are part of what makes a shelf thin.
-        count_params: List[Any] = [*filter_params, user_id]
-        count_rows = await db.query_raw(
-            _RECOMMENDED_POOL_COUNT
-            + filters
-            + _RECOMMENDED_QUALITY_SQL
-            + _exclude_seen_sql(f"${len(count_params)}")
-            + "\n",
-            *count_params,
-        )
-        pool = int(count_rows[0]["n"]) if count_rows else 0
-        if pool >= RECOMMENDED_MIN_POOL:
-            quality = _RECOMMENDED_QUALITY_SQL
-
-    params: List[Any] = list(filter_params)
-
-    if recommended:
         # Bound as text, not as an int, so the parameter's type is unambiguous
         # to the query engine — it is only ever concatenated into a hash input.
         params.append(str(active_seed))
-        # Hashing (id, seed) is a permutation: fixed for a given seed, so the
-        # three pages a user scrolls are slices of ONE ordering, and unrelated
-        # to the next seed's. The seed is a bound parameter, never interpolated
-        # — it arrives straight off the query string.
+        # Quality tier first, then the shuffle within it. Hashing (id, seed) is
+        # a permutation: fixed for a given seed, so the three pages a user
+        # scrolls are slices of ONE ordering, and unrelated to the next seed's.
+        # The seed is a bound parameter, never interpolated — it arrives
+        # straight off the query string.
         order_by = (
-            f"ORDER BY md5(m.id::text || '-' || ${len(params)}::text) ASC, m.id ASC"
+            f"ORDER BY {_RECOMMENDED_TIER_SQL} ASC,"
+            f"\n              md5(m.id::text || '-' || ${len(params)}::text) ASC,"
+            "\n              m.id ASC"
         )
     else:
         # `m.id ASC` is a stable tiebreaker — without it, rows with equal sort
@@ -467,7 +449,6 @@ async def list_movies_by_cefr(
     rows = await db.query_raw(
         _BY_CEFR_SELECT
         + filters
-        + quality
         + _exclude_seen_sql(user_ph)
         + order_by
         + f"\n            LIMIT {limit_ph} OFFSET {offset_ph}\n",
