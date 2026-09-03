@@ -41,15 +41,32 @@ class TestBands:
             (35, "B1"),
             (44, "B1"),
             (45, "B2"),
-            (54, "B2"),
-            (55, "C1"),
-            (69, "C1"),
-            (70, "C2"),
+            (52, "B2"),
+            (53, "C1"),
+            (57, "C1"),
+            (58, "C2"),
             (100, "C2"),
         ],
     )
     def test_every_boundary_lands_on_the_intended_side(self, score, expected):
         assert cefr_from_score(score) == expected
+
+    def test_the_top_band_starts_where_films_actually_reach(self):
+        """The bands are only useful if the catalogue lands in all six.
+
+        C2 used to start at 70 while the hardest film in prod scores 72, so the
+        shelf held 7 films — and not the hardest ones, since the scorer's clamp
+        caps most films at 65 and only the genre multiplier could carry one
+        past 70. Measured 2026-09-03 over 4,429 scored films: p50=39, p75=49,
+        p92=55, max=72. A top band above ~58 is a band nothing is in.
+        """
+        lo, _hi = CEFR_SCORE_RANGES["C2"]
+        assert lo <= 58, (
+            "C2 must start inside the range the scorer actually produces "
+            "(prod max is 72); a higher floor empties the shelf"
+        )
+        # And it must still be a top band, not half the catalogue.
+        assert lo > CEFR_SCORE_RANGES["B1"][1]
 
     def test_unscored_movies_have_no_level_rather_than_a_guessed_one(self):
         # 171 of 4,577 prod movies have never had a script processed. The

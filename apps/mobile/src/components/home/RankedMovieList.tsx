@@ -392,9 +392,11 @@ const MovieCard = React.memo(({
     : null;
   const rating = movie.vote_average > 0 ? Number(movie.vote_average).toFixed(1) : null;
   const year   = movie.release_date ? String(movie.release_date).slice(0, 4) : null;
-  // The film's own band, from `difficulty_score`. Still shown — it just is not
-  // the ring any more, because it says nothing about the reader.
-  const band   = scoreToCefr(movie.difficulty_score ?? null);
+  // The film's own band. Still shown — it just is not the ring any more,
+  // because it says nothing about the reader. The server's answer wins: it is
+  // the same function that decided which shelf this card is on, so the two
+  // cannot disagree. `scoreToCefr` is the fallback for payloads without it.
+  const band   = movie.cefr_level ?? scoreToCefr(movie.difficulty_score ?? null);
   // A pure function of the payload and the reader's level, so it is computed
   // per render rather than stored: a cached copy is exactly the staleness
   // `services/movie_cefr.py` exists to prevent.

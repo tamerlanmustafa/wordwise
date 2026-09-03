@@ -229,6 +229,37 @@ class TestRecommendedSql:
         assert "user_watched_movies" in sql
         assert "user_hidden_movies" in sql
 
+    async def test_each_film_carries_the_band_the_server_put_it_in(self):
+        # The card prints this beside the year. Without it the client bands
+        # `difficulty_score` with its own copy of the boundaries, and the two
+        # drift the moment either side is recalibrated — a B1 shelf showing
+        # cards labelled B2. That is the #103 bug across the API boundary,
+        # which is the one place a shared constant cannot reach.
+        rows = [
+            {
+                "movie_id": 1, "tmdb_id": 11, "title": "Tenet", "year": 2020,
+                "poster_url": None, "description": None,
+                "backdrop_corner_rgb": None, "difficulty_score": 58,
+                "vote_average": 7.3, "vote_count": 9000,
+                "unique_words": 1500, "cefr_distribution": None,
+            }
+        ]
+        _db, result = await _call(rows=rows, level="C2", seed=1)
+        assert result["movies"][0]["cefr_level"] == "C2"
+
+    async def test_an_unscored_film_reports_no_band_rather_than_a_guess(self):
+        rows = [
+            {
+                "movie_id": 2, "tmdb_id": 12, "title": "Unprocessed", "year": 1999,
+                "poster_url": None, "description": None,
+                "backdrop_corner_rgb": None, "difficulty_score": None,
+                "vote_average": 6.0, "vote_count": 100,
+                "unique_words": None, "cefr_distribution": None,
+            }
+        ]
+        _db, result = await _call(rows=rows)
+        assert result["movies"][0]["cefr_level"] is None
+
     async def test_no_cache_header_is_added(self):
         # /by-cefr is deliberately excluded from HTTP caching (#123): it
         # subtracts the caller's watched/hidden films, so a shared cache would

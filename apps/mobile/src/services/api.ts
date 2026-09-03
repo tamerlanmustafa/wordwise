@@ -475,6 +475,9 @@ export const wordwiseApi = {
       poster_url: string | null;
       description: string | null;
       difficulty_score: number | null;
+      /** The band the server put this film in. Prefer it over banding
+       *  `difficulty_score` locally — see `scoreToCefr`. */
+      cefr_level?: string | null;
       vote_average: number | null;
       vote_count: number | null;
       unique_words?: number | null;

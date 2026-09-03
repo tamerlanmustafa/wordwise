@@ -479,6 +479,13 @@ async def list_movies_by_cefr(
                 # onboarding's "pick your first film" list and draws no card.
                 "backdrop_corner_rgb": unpack_rgb(r.get("backdrop_corner_rgb")),
                 "difficulty_score": r["difficulty_score"],
+                # The band the score falls in, decided here rather than left to
+                # each client's own copy of the boundaries. The mobile card
+                # prints this beside the year, and a client banding the score
+                # itself can label a film B2 while sitting on the B1 shelf this
+                # very query built — the #103 bug, reappearing across the API
+                # boundary the one place a shared constant cannot reach.
+                "cefr_level": cefr_from_score(r["difficulty_score"]),
                 "vote_average": r["vote_average"],
                 "vote_count": r["vote_count"],
                 "unique_words": r.get("unique_words"),

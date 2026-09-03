@@ -29,15 +29,21 @@ describe('scoreToCefr', () => {
     expect(scoreToCefr(35)).toBe('B1');
     expect(scoreToCefr(44)).toBe('B1');
     expect(scoreToCefr(45)).toBe('B2');
-    expect(scoreToCefr(54)).toBe('B2');
-    expect(scoreToCefr(55)).toBe('C1');
-    expect(scoreToCefr(69)).toBe('C1');
-    expect(scoreToCefr(70)).toBe('C2');
+    expect(scoreToCefr(52)).toBe('B2');
+    expect(scoreToCefr(53)).toBe('C1');
+    expect(scoreToCefr(57)).toBe('C1');
+    expect(scoreToCefr(58)).toBe('C2');
     expect(scoreToCefr(100)).toBe('C2');
   });
 
-  // Bucket boundaries must match backend/src/services/difficulty_scorer.py.
-  // If one of these fails after a backend change, fix both sides together.
+  // These numbers are a MIRROR of `CEFR_SCORE_RANGES` in
+  // backend/src/services/movie_cefr.py, which is what actually decides which
+  // films are on a level's shelf. This copy only decides what the card prints,
+  // so a drift shows up as a B1 shelf full of cards labelled B2. If one of
+  // these fails after a backend change, move both sides together.
+  //
+  // Recalibrated 2026-09-03: the old C2 floor of 70 sat above the hardest film
+  // in the catalogue (72), so the C2 shelf held 7 films.
   it('covers the exact upper/lower bounds of every band', () => {
     const bands: Array<[number, string]> = [
       [24, 'A1'],
@@ -46,10 +52,10 @@ describe('scoreToCefr', () => {
       [35, 'B1'],
       [44, 'B1'],
       [45, 'B2'],
-      [54, 'B2'],
-      [55, 'C1'],
-      [69, 'C1'],
-      [70, 'C2'],
+      [52, 'B2'],
+      [53, 'C1'],
+      [57, 'C1'],
+      [58, 'C2'],
     ];
     bands.forEach(([score, expected]) => {
       expect(scoreToCefr(score)).toBe(expected);

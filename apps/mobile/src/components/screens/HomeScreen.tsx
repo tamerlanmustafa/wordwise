@@ -601,7 +601,10 @@ export const HomeScreen = ({
           dist={ringDetail.movie.cefr_distribution}
           level={selectedLevel}
           share={ringDetail.share}
-          band={scoreToCefr(ringDetail.movie.difficulty_score ?? null)}
+          band={
+            ringDetail.movie.cefr_level ??
+            scoreToCefr(ringDetail.movie.difficulty_score ?? null)
+          }
         />
       ) : null}
     </SafeAreaView>

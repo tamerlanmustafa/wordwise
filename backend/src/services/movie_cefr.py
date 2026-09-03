@@ -34,13 +34,47 @@ CEFR_LEVELS: tuple[str, ...] = ("A1", "A2", "B1", "B2", "C1", "C2")
 # Inclusive score bounds per level. Contiguous and gap-free across 0-100 —
 # `tests/test_movie_cefr.py` pins that, because a gap would drop real films out
 # of every level shelf at once while still leaving them in the catalogue.
+#
+# ── Why the top two bands are narrow (recalibrated 2026-09-03) ──────────────
+# These boundaries were drawn as if `difficulty_score` used the full 0-100
+# range. It does not. `difficulty_scorer` blends sixteen signals into 0.0-1.0
+# and then clamps a film with little advanced vocabulary to 0.65, so the scores
+# it actually produces are packed into a narrow hump: measured across all 4,429
+# scored films in prod on 2026-09-03, p25=33, p50=39, p75=49, p92=55, and the
+# single hardest film in the catalogue scores **72**.
+#
+# A C2 band of 70-100 therefore described a region almost nothing reaches. It
+# held **7 films** — and not the hardest ones: the clamp caps most films at 65,
+# so the only route past 70 was the genre multiplier applied afterwards
+# (Documentary is 1.12, and 65 x 1.12 = 72 is exactly what Citizenfour and
+# Blackfish score). C2 meant "documentary", not "hard vocabulary", and the C2
+# shelf on Home was unusable.
+#
+# The bands below are cut at real quantiles of that distribution instead, so
+# every shelf is stocked with the films that genuinely sit hardest:
+#
+#     A1  0-24    165 films   3.7%
+#     A2 25-34  1,193        26.9%
+#     B1 35-44  1,488        33.6%
+#     B2 45-52    911        20.6%
+#     C1 53-57    470        10.6%
+#     C2 58-100   202         4.6%   (was 7)
+#
+# This is a *read-side* change and needs no backfill: nothing stores a level,
+# by design (#103) — `cefr_from_score` derives it on every read. That is also
+# what makes it cheap to revisit when the scorer's own range changes.
+#
+# Note the scale is the catalogue's, not an external CEFR authority's: "C2"
+# here means "in the hardest ~5% of films we have", which is what a level shelf
+# can honestly promise. Widening the scorer's output range is the separate,
+# much larger job — it would mean re-running spaCy over every script.
 CEFR_SCORE_RANGES: dict[str, tuple[int, int]] = {
     "A1": (0, 24),
     "A2": (25, 34),
     "B1": (35, 44),
-    "B2": (45, 54),
-    "C1": (55, 69),
-    "C2": (70, 100),
+    "B2": (45, 52),
+    "C1": (53, 57),
+    "C2": (58, 100),
 }
 
 # Builds shipped before #103 still call `/movies/by-level` with the retired
