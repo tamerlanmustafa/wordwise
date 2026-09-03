@@ -15,28 +15,32 @@ import { SHELF_FULL_RING, learningPayload } from '../comprehension';
 const FULL = { A1: 400, A2: 200, B1: 150, B2: 130, C1: 70, C2: 50 };
 
 describe('learningPayload (what is left to teach you)', () => {
-  it('counts from your level upward, inclusive of your own band', () => {
-    // "At or above", not "above": at your own level you are still
-    // consolidating, and strictly-above collapses to zero at C2.
+  it('counts your own band plus exactly one above it', () => {
+    // Starts *at* your level because you are still consolidating there, and
+    // strictly-above collapses to zero at C2. Stops one up because that is
+    // what MovieDetail's "For you" deck is built from — counting to the top
+    // of the ladder promised words the deck would never offer.
+    expect(learningPayload(FULL, 'A1')?.count).toBe(600); // 400 + 200
+    expect(learningPayload(FULL, 'B1')?.count).toBe(280); // 150 + 130
+    expect(learningPayload(FULL, 'C1')?.count).toBe(120); // 70 + 50
+  });
+
+  it('is just the top band at C2, where there is nothing above', () => {
     expect(learningPayload(FULL, 'C2')?.count).toBe(50);
-    expect(learningPayload(FULL, 'C1')?.count).toBe(120);
-    expect(learningPayload(FULL, 'B2')?.count).toBe(250);
-    expect(learningPayload(FULL, 'B1')?.count).toBe(400);
   });
 
-  it('is the film’s whole vocabulary at A1, which is the honest answer there', () => {
-    expect(learningPayload(FULL, 'A1')?.count).toBe(1000);
-    expect(learningPayload(FULL, 'A1')?.total).toBe(1000);
+  it('never promises more than the deck behind it can deliver', () => {
+    // The regression this guards: an A1 card once read 1,203 while the deck
+    // offered 884. The count must equal level + next, never the whole tail.
+    const atOrAbove = 1000; // every band, which is what it used to count
+    expect(learningPayload(FULL, 'A1')!.count).toBeLessThan(atOrAbove);
+    expect(learningPayload(FULL, 'A1')!.count).toBe(FULL.A1 + FULL.A2);
   });
 
-  it('shrinks monotonically as the reader climbs', () => {
-    const counts = (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).map(
-      (l) => learningPayload(FULL, l)!.count,
-    );
-    expect(counts).toEqual([1000, 600, 400, 250, 120, 50]);
-    counts.forEach((n, i) => {
-      if (i > 0) expect(n).toBeLessThanOrEqual(counts[i - 1]);
-    });
+  it('still reports the film’s whole vocabulary as the total', () => {
+    // The sheet prints "N different words are spoken in this film", which is
+    // the film, not the deck.
+    expect(learningPayload(FULL, 'C2')?.total).toBe(1000);
   });
 });
 

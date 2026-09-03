@@ -55,8 +55,8 @@
   },
   "comprehension": {
     "title": "What this film can teach you",
-    "body": "{{total}} different words are spoken in {{title}}. {{count}} of them sit at {{level}} or above — those are the ones left for you. The rest you should already know.",
-    "factShare": "Words at or above your level — what this film still has to teach you.",
+    "body": "{{total}} different words are spoken in {{title}}. {{count}} of them sit at {{level}} or one step above — that is the deck this film builds for you. The rest you should already know.",
+    "factShare": "Words at your level or the next one — exactly what this film's word list will offer you.",
     "factBand": "The film's own level, from its whole vocabulary.",
     "caveat": "Counted per distinct word, not per line of dialogue — a word said once counts the same as one repeated all film."
   }

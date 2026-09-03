@@ -55,8 +55,8 @@
   },
   "comprehension": {
     "title": "O que este filme pode lhe ensinar",
-    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{count}} delas estão em {{level}} ou acima — são essas que sobram para você. O resto você já deveria conhecer.",
-    "factShare": "Palavras no seu nível ou acima — o que este filme ainda tem a lhe ensinar.",
+    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{count}} delas estão em {{level}} ou um passo acima — é esse o baralho que este filme monta para você. O resto você já deveria conhecer.",
+    "factShare": "Palavras no seu nível ou no seguinte — exatamente o que a lista deste filme vai lhe oferecer.",
     "factBand": "O nível do próprio filme, a partir de todo o seu vocabulário.",
     "caveat": "Contado por palavra distinta, não por linha de diálogo — uma palavra dita uma vez conta o mesmo que outra repetida o filme todo."
   }

@@ -75,16 +75,15 @@ export function ComprehensionSheet({
         return {
           code,
           count: Number.isFinite(n) && n > 0 ? n : 0,
-          // Gold marks the half the RING counts — at or above the reader's
-          // level. It used to mark the half below, back when the ring measured
-          // coverage; leaving it that way would have the bar and the ring
-          // highlighting opposite halves of the same picture.
-          payload: i >= cut,
-          // Stepping down in alpha from the cut upward, so the gold reads as
-          // one block that is *made of* bands rather than six unrelated
-          // colours; everything the reader is past is quiet ink.
-          color: i >= cut
-            ? withAlpha(tc.gold, 0.95 - (i - cut) * 0.2)
+          // Gold marks exactly the bands the RING counts — the reader's own
+          // level and the one above it. Not "everything above": that is what
+          // the ring used to count, and it promised words the "For you" deck
+          // would never offer. Bands below are behind the reader; bands two or
+          // more above are out of reach for now. Both are quiet ink, because
+          // neither is what this film is going to teach them next.
+          payload: i === cut || i === cut + 1,
+          color: i === cut || i === cut + 1
+            ? withAlpha(tc.gold, 0.95 - (i - cut) * 0.25)
             : withAlpha(tc.text, 0.16),
         };
       }).filter((seg) => seg.count > 0),

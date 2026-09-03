@@ -1,6 +1,7 @@
 /**
  * What the home card's ring measures: how much this film has left to teach
- * *you* — the number of its distinct words that sit at or above your level.
+ * *you* — the number of its distinct words at your level or the next one, which
+ * is exactly the pool MovieDetail's "For you" deck is built from.
  *
  * ## Two dead ends this replaced
  *
@@ -40,16 +41,35 @@
  * hard vocabulary is not: a C2 film with 340 advanced words is a different
  * proposition from one with 16, and under coverage both read `100%`.
  *
- * So the ring counts. "At or above", not "above": strictly-above degenerates
- * to zero at C2 the same way coverage degenerates to 100 there. At A1 the
- * count is the film's whole vocabulary, which is honest — nearly all of it is
- * still being consolidated.
+ * So the ring counts. Strictly-above degenerates to zero at C2 the same way
+ * coverage degenerates to 100 there, so the count starts *at* the reader's own
+ * band — at your own level you are still consolidating.
+ *
+ * ## Why it stops one band up
+ *
+ * It counted everything at or above, which over-promised against the thing the
+ * app actually does. MovieDetail's "For you" deck is built from your level and
+ * **the next one only** (`SUGGESTED_CAP` / `targetLevels` there) — i+1
+ * comprehensible input. Counting to the top of the ladder meant an A1 card
+ * promised 1,203 words while the deck behind it offered 884. The two agree at
+ * C2 either way (there is nothing above it), which is why the mismatch was
+ * invisible on the shelf where the ring was first checked.
+ *
+ * The ring is the promise and the deck is the delivery, so the promise counts
+ * exactly what the deck will contain.
+ *
+ * One known approximation: "For you" also subtracts words the reader has
+ * already learned, and the feed card has no cheap access to that set — a store
+ * subscription per recycled cell is the thing this module exists to avoid. The
+ * ring therefore reads slightly high for a reader deep into a film's
+ * vocabulary. Worth revisiting only if learned-word counts get big.
  */
 
 import { CEFR_LEVELS, type CefrLevel } from '../../types/constants';
 
 export interface LearningPayload {
-  /** Distinct words at or above the reader's level — what is left to teach. */
+  /** Distinct words at the reader's level or the next one — what the
+   *  MovieDetail deck will actually be built from. */
   count: number;
   /** Distinct classified words in the film, `UNKNOWN` excluded. */
   total: number;
@@ -70,21 +90,24 @@ export interface LearningPayload {
  * the arc worth drawing at all.
  *
  *     shelf   films   median payload   p90 (full ring)
- *     A1        165              842             1051
- *     A2      1,193              332              505
- *     B1      1,488              230              359
- *     B2        912              139              235
+ *     A1        165              710              860
+ *     A2      1,193              246              381
+ *     B1      1,488              202              310
+ *     B2        912              136              229
  *     C1        470               37               62
  *     C2        202                7               16
+ *
+ * C1 and C2 are unchanged by the one-band-up cut: from C1 the two definitions
+ * are the same set, and above C2 there is nothing.
  *
  * These drift as the catalogue grows, which only makes rings a little fuller
  * or emptier — never wrong. Re-measure when the catalogue changes materially.
  */
 export const SHELF_FULL_RING: Record<CefrLevel, number> = {
-  A1: 1051,
-  A2: 505,
-  B1: 359,
-  B2: 235,
+  A1: 860,
+  A2: 381,
+  B1: 310,
+  B2: 229,
   C1: 62,
   C2: 16,
 };
@@ -114,7 +137,9 @@ export function learningPayload(
     const n = Number(dist[band]);
     if (!Number.isFinite(n) || n <= 0) return;
     total += n;
-    if (i >= idx) count += n;
+    // The reader's own band and the one above it — no further. See the
+    // docblock: this has to match what "For you" will actually offer.
+    if (i === idx || i === idx + 1) count += n;
   });
 
   if (total === 0) return null;

@@ -55,8 +55,8 @@
   },
   "comprehension": {
     "title": "Bu filmin sana öğretebilecekleri",
-    "body": "{{title}} filminde {{total}} farklı kelime konuşuluyor. Bunların {{count}} tanesi {{level}} veya üstünde — sana kalanlar bunlar. Geri kalanını zaten bilmen gerekir.",
-    "factShare": "Kendi seviyende ve üstündeki kelimeler — bu filmin sana hâlâ öğretebilecekleri.",
+    "body": "{{title}} filminde {{total}} farklı kelime konuşuluyor. Bunların {{count}} tanesi {{level}} veya bir üst seviyede — bu filmin sana kuracağı deste bu. Geri kalanını zaten bilmen gerekir.",
+    "factShare": "Kendi seviyendeki ve bir üstündeki kelimeler — bu filmin kelime listesinin sana sunacağının tamamı.",
     "factBand": "Filmin kendi seviyesi, tüm kelime dağarcığından.",
     "caveat": "Diyalog satırı başına değil, farklı kelime başına sayılır — bir kez söylenen kelime, film boyunca tekrarlanan bir kelimeyle aynı sayılır."
   }
