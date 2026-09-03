@@ -17,15 +17,18 @@
  * behind the type, easing to nothing by the trailing edge where the still
  * reads at full strength. Text is ink on paper, which is what lets one set of
  * colours survive both themes. The leading margin carries the one thing the
- * row is actually judged by: its comprehension ring.
+ * row is actually judged by: its learning-payload ring.
  *
- * That ring reads `<pct>% / KNOWN` — the share of the film's dialogue
- * vocabulary at or below the reader's level (`./comprehension`). It used to
- * draw `difficulty_score` with `scoreToCefr()` of the *same number* stacked
- * inside it, which said one thing twice and said nothing about the reader; on
- * a B1 shelf every card read `B1` with a percentage inside the 10-point-wide
- * B1 band. The film's own band still appears — on the meta line, beside the
- * year, where it is plainly a fact about the film.
+ * That ring reads `<n> / TO LEARN` — how many of the film's distinct words sit
+ * at or above the reader's level (`./comprehension`). Two earlier metrics
+ * failed here and the docblock in that module explains both: `difficulty_score`
+ * said one thing twice and nothing about the reader, and coverage ("share at
+ * or below your level") saturated at 100% for every film above B1. A count is
+ * the one form that varies at every level, because shares are normalised by
+ * film length and the shelf is selected on exactly that.
+ *
+ * The film's own band still appears — on the meta line, beside the year, where
+ * it is plainly a fact about the film.
  *
  * The maths (gradient stops, ring geometry, plus-ink contrast) lives in
  * ./cardVisuals so it is testable and can be hoisted out of the row.
@@ -63,7 +66,7 @@ import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
 import { SwipeableRow } from './SwipeableRow';
-import { knownShare, type KnownShare } from './comprehension';
+import { learningPayload, type LearningPayload } from './comprehension';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
@@ -166,15 +169,15 @@ function prefetchMovieImages(movie: any) {
 interface Props {
   movies: any[];
   onMoviePress: (movie: any) => void;
-  /** The reader's CEFR level — what each ring's percentage is measured
-   *  against. Passed down rather than read from a store inside the cell: these
-   *  cells are recycled, and a store subscription per row is a subscription
-   *  per *recycled* row. */
+  /** The reader's CEFR level — the cut point each ring counts from. Passed
+   *  down rather than read from a store inside the cell: these cells are
+   *  recycled, and a store subscription per row is a subscription per
+   *  *recycled* row. */
   level: string;
-  /** Tapping a ring opens the "what does 86% mean" sheet. The sheet is the
+  /** Tapping a ring opens the "what this film can teach you" sheet. The sheet is the
    *  parent's to render — an absolute overlay inside a 116pt cell would be
    *  clipped to it. Rings on films with no distribution don't fire. */
-  onRingPress?: (movie: any, share: KnownShare) => void;
+  onRingPress?: (movie: any, payload: LearningPayload) => void;
   /** Called when the user scrolls near the bottom — load the next page. */
   onEndReached?: () => void;
   /** True while the next page is being fetched (drives the footer spinner). */
@@ -301,26 +304,30 @@ const AddToReelPlus = React.memo(({
   );
 });
 
-// ── Comprehension ring ──────────────────────────────────────────────────────
-// A gold arc drawn to the share of this film's dialogue vocabulary at or below
-// the reader's level, with that percent and the word KNOWN stacked inside. The
-// hole is filled with card stock, not left transparent, so the backdrop can't
-// show through it. The percent is deliberately ink rather than gold — two
-// golds at that size failed contrast.
+// ── Learning-payload ring ───────────────────────────────────────────────────
+// How many of this film's distinct words sit at or above the reader's level —
+// what it has left to teach them — with a one-word caption under it. The hole
+// is filled with card stock, not left transparent, so the backdrop can't show
+// through it. The number is deliberately ink rather than gold: two golds at
+// this size failed contrast.
 //
-// KNOWN is one word of caption and it is the whole point: without it the
-// number reads as "how B1 this film is", which is what the ring used to mean
-// and is precisely the confusion this change exists to end.
+// The caption is the whole point. Without it the number reads as a runtime, a
+// rank, or the film's own level — and the two metrics this ring has already
+// been through both failed by being mistaken for something about the film
+// rather than about the reader.
 //
-// Geometry, RING_*, and the stock-filled hole are unchanged; only what feeds
-// the arc changed.
+// The arc is NOT the count: a count has no natural 0-100. It fills against a
+// typical film on the same shelf (`SHELF_FULL_RING`), so a full ring means
+// "unusually rich for this level" rather than "100% of anything".
+//
+// Geometry, RING_*, and the stock-filled hole are unchanged.
 const LevelRing = React.memo(({
-  share,
+  payload,
   caption,
   tc,
   s,
 }: {
-  share: KnownShare | null;
+  payload: LearningPayload | null;
   /** The word under the percent, already translated. Passed in rather than
    *  looked up here so a cell that FlashList recycles doesn't take an i18n
    *  context subscription per row. */
@@ -338,7 +345,7 @@ const LevelRing = React.memo(({
         stroke={tc.cardRingTrack}
         fill="none"
       />
-      {share ? (
+      {payload ? (
         <Circle
           cx={RING_MID}
           cy={RING_MID}
@@ -347,7 +354,7 @@ const LevelRing = React.memo(({
           stroke={tc.cardMeta}
           fill="none"
           strokeDasharray={RING_C}
-          strokeDashoffset={ringDashOffset(share.pct)}
+          strokeDashoffset={ringDashOffset(payload.fill)}
           strokeLinecap="butt"
           transform={`rotate(-90 ${RING_MID} ${RING_MID})`}
         />
@@ -355,11 +362,16 @@ const LevelRing = React.memo(({
     </Svg>
     <View style={s.ringHoleWrap} pointerEvents="none">
       <View style={s.ringHole}>
-        {/* No distribution → bare track and an em dash. 0% would read as
-            "you know none of this film", which is a claim; the dash is not. */}
-        <Text style={s.ringPct}>{share ? `${share.pct}%` : '—'}</Text>
-        {share ? (
-          <Text style={s.ringCaption} numberOfLines={1}>{caption}</Text>
+        {/* No distribution → bare track and an em dash. `0` would read as
+            "this film has nothing for you", which is a claim; the dash is not. */}
+        <Text style={s.ringPct}>{payload ? payload.count : '—'}</Text>
+        {payload ? (
+          // adjustsFontSizeToFit, because this word is translated into six
+          // languages and the hole is a fixed 36pt: "TO LEARN" fits, but a
+          // longer locale must shrink rather than truncate to "TO LEA…".
+          <Text style={s.ringCaption} numberOfLines={1} adjustsFontSizeToFit>
+            {caption}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -378,7 +390,7 @@ const MovieCard = React.memo(({
   movie: any;
   onPress: () => void;
   level: string;
-  onRingPress?: (movie: any, share: KnownShare) => void;
+  onRingPress?: (movie: any, payload: LearningPayload) => void;
   knownCaption: string;
   /** `LEVEL {{band}}`, already translated — see `knownCaption`. */
   bandLabel: (band: string) => string;
@@ -400,8 +412,8 @@ const MovieCard = React.memo(({
   // A pure function of the payload and the reader's level, so it is computed
   // per render rather than stored: a cached copy is exactly the staleness
   // `services/movie_cefr.py` exists to prevent.
-  const share = useMemo(
-    () => knownShare(movie.cefr_distribution ?? movie.cefrDistribution, level),
+  const payload = useMemo(
+    () => learningPayload(movie.cefr_distribution ?? movie.cefrDistribution, level),
     [movie.cefr_distribution, movie.cefrDistribution, level],
   );
   // Same single meta line as before — the year gains a suffix, it does not
@@ -478,14 +490,14 @@ const MovieCard = React.memo(({
           <TouchableOpacity
             onPress={(e: any) => {
               e?.stopPropagation?.();
-              if (share) onRingPress?.(movie, share);
+              if (payload) onRingPress?.(movie, payload);
             }}
-            disabled={!share || !onRingPress}
+            disabled={!payload || !onRingPress}
             activeOpacity={0.75}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityRole={share && onRingPress ? 'button' : undefined}
+            accessibilityRole={payload && onRingPress ? 'button' : undefined}
           >
-            <LevelRing share={share} caption={knownCaption} tc={tc} s={s} />
+            <LevelRing payload={payload} caption={knownCaption} tc={tc} s={s} />
           </TouchableOpacity>
         </View>
 
@@ -766,6 +778,8 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     // The percent is the headline now (it was the 9.5pt understudy to the
     // band), so it takes the size the band used to have.
+    // A count, not a percent — up to four digits on an A1 shelf, so it keeps
+    // the 12pt size but is allowed to shrink rather than overflow the hole.
     ringPct: {
       fontFamily: MONO_FAMILY,
       fontSize: 12,

@@ -6,7 +6,7 @@
     "endOfLevel": "Isso é tudo neste nível",
     "tapToClose": "Toque para fechar",
     "emptyFiltered": "Ainda não há filmes de {{type}} neste nível.",
-    "knownCaption": "SABE",
+    "knownCaption": "APRENDER",
     "filmBand": "NÍVEL {{band}}"
   },
   "search": {
@@ -54,10 +54,10 @@
     "recommendedEyebrow": "Recomendados para {{level}} · seleção nova em {{hours}} h"
   },
   "comprehension": {
-    "title": "O que significa {{pct}}%",
-    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{atOrBelow}} delas — {{pct}}% — estão em {{level}} ou abaixo. O resto é o que este filme lhe ensinaria.",
-    "factShare": "Parte do vocabulário falado deste filme que você já deveria conhecer, no seu nível.",
+    "title": "O que este filme pode lhe ensinar",
+    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{count}} delas estão em {{level}} ou acima — são essas que sobram para você. O resto você já deveria conhecer.",
+    "factShare": "Palavras no seu nível ou acima — o que este filme ainda tem a lhe ensinar.",
     "factBand": "O nível do próprio filme, a partir de todo o seu vocabulário.",
-    "caveat": "Contado por palavra distinta, não por linha de diálogo — as palavras mais comuns se repetem o filme todo, então na prática você acompanha mais de {{pct}}% do que é dito."
+    "caveat": "Contado por palavra distinta, não por linha de diálogo — uma palavra dita uma vez conta o mesmo que outra repetida o filme todo."
   }
 }

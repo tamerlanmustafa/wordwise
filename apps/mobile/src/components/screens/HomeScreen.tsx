@@ -31,7 +31,7 @@ import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { FeedFilterSheet } from '../home/FeedFilterSheet';
 import { ComprehensionSheet } from '../home/ComprehensionSheet';
-import type { KnownShare } from '../home/comprehension';
+import type { LearningPayload } from '../home/comprehension';
 import { scoreToCefr } from '../../utils/formatting';
 import {
   DEFAULT_FEED_FILTERS,
@@ -110,11 +110,11 @@ export const HomeScreen = ({
   // The card whose ring was tapped, with the share already computed by the
   // cell that drew it. Held here, not in the list, because BottomSheet is an
   // absolute overlay and a 116pt recycled cell would clip it.
-  const [ringDetail, setRingDetail] = useState<{ movie: any; share: KnownShare } | null>(null);
+  const [ringDetail, setRingDetail] = useState<{ movie: any; payload: LearningPayload } | null>(null);
   // Stable, so MovieCard's React.memo survives — an inline arrow here would
   // hand every recycled cell a new prop on every HomeScreen render.
   const handleRingPress = useCallback(
-    (movie: any, share: KnownShare) => setRingDetail({ movie, share }),
+    (movie: any, payload: LearningPayload) => setRingDetail({ movie, payload }),
     [],
   );
 
@@ -600,7 +600,7 @@ export const HomeScreen = ({
           title={ringDetail.movie.title}
           dist={ringDetail.movie.cefr_distribution}
           level={selectedLevel}
-          share={ringDetail.share}
+          payload={ringDetail.payload}
           band={
             ringDetail.movie.cefr_level ??
             scoreToCefr(ringDetail.movie.difficulty_score ?? null)

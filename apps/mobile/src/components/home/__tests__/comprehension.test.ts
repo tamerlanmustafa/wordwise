@@ -1,96 +1,145 @@
 /**
- * `knownShare` — what the home card's ring actually measures.
+ * `learningPayload` — what the home card's ring counts.
  *
- * The boundaries are the whole test: this replaced a ring that showed
- * `difficulty_score` and `scoreToCefr()` of the *same number*, so the failure
- * this guards against is not a crash but a plausible-looking percentage that
- * is quietly about the wrong thing.
+ * The thing under test is not really the arithmetic (it is a filtered sum);
+ * it is the *shape* of the metric. Two previous metrics shipped here and both
+ * failed the same way — they produced a plausible number that was identical on
+ * every card — so the tests that matter are the ones asserting it still varies
+ * where its predecessors went flat.
  */
 
-import { knownShare } from '../comprehension';
+import { SHELF_FULL_RING, learningPayload } from '../comprehension';
 
-// A film with every band populated, so a cut point at any level is visible.
-// 1000 total across the six real bands, which makes the expected percentages
-// readable without a calculator.
+// A film with every band populated. 1000 across the six real bands, so the
+// expected counts are readable without a calculator.
 const FULL = { A1: 400, A2: 200, B1: 150, B2: 130, C1: 70, C2: 50 };
 
-describe('knownShare (share of a film at or below the reader)', () => {
-  it('counts only A1 at A1 — the bottom of the ladder is not "everything"', () => {
-    expect(knownShare(FULL, 'A1')).toEqual({ pct: 40, atOrBelow: 400, total: 1000 });
+describe('learningPayload (what is left to teach you)', () => {
+  it('counts from your level upward, inclusive of your own band', () => {
+    // "At or above", not "above": at your own level you are still
+    // consolidating, and strictly-above collapses to zero at C2.
+    expect(learningPayload(FULL, 'C2')?.count).toBe(50);
+    expect(learningPayload(FULL, 'C1')?.count).toBe(120);
+    expect(learningPayload(FULL, 'B2')?.count).toBe(250);
+    expect(learningPayload(FULL, 'B1')?.count).toBe(400);
   });
 
-  it('counts everything at C2 — the top of the ladder is 100%', () => {
-    expect(knownShare(FULL, 'C2')).toEqual({ pct: 100, atOrBelow: 1000, total: 1000 });
+  it('is the film’s whole vocabulary at A1, which is the honest answer there', () => {
+    expect(learningPayload(FULL, 'A1')?.count).toBe(1000);
+    expect(learningPayload(FULL, 'A1')?.total).toBe(1000);
   });
 
-  it('is inclusive of the reader’s own band, not just below it', () => {
-    // B1 must include the 150 B1 words. "at or below" is the claim the sheet
-    // makes in prose, so an off-by-one-band here would make the copy false.
-    expect(knownShare(FULL, 'B1')?.atOrBelow).toBe(750);
-    expect(knownShare(FULL, 'B1')?.pct).toBe(75);
-  });
-
-  it('walks the ladder monotonically', () => {
-    const pcts = (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).map(
-      (l) => knownShare(FULL, l)!.pct,
+  it('shrinks monotonically as the reader climbs', () => {
+    const counts = (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).map(
+      (l) => learningPayload(FULL, l)!.count,
     );
-    expect(pcts).toEqual([40, 60, 75, 88, 95, 100]);
-    pcts.forEach((p, i) => {
-      if (i > 0) expect(p).toBeGreaterThanOrEqual(pcts[i - 1]);
+    expect(counts).toEqual([1000, 600, 400, 250, 120, 50]);
+    counts.forEach((n, i) => {
+      if (i > 0) expect(n).toBeLessThanOrEqual(counts[i - 1]);
+    });
+  });
+});
+
+describe('it does not go flat at the top, which is why it replaced coverage', () => {
+  it('separates two C2 films that coverage rendered identically', () => {
+    // Real prod films on the C2 shelf. Under "share at or below your level"
+    // both read 100%; the difference between them is 13x.
+    const lincoln = { A1: 900, A2: 500, B1: 300, B2: 200, C1: 90, C2: 52 };
+    const alien = { A1: 900, A2: 500, B1: 300, B2: 200, C1: 40, C2: 4 };
+
+    expect(learningPayload(lincoln, 'C2')!.count).toBe(52);
+    expect(learningPayload(alien, 'C2')!.count).toBe(4);
+    // And the rings look different, not just the numbers.
+    expect(learningPayload(lincoln, 'C2')!.fill).toBeGreaterThan(
+      learningPayload(alien, 'C2')!.fill + 40,
+    );
+  });
+
+  it('never returns the same count for films with different hard vocabulary', () => {
+    const a = learningPayload({ ...FULL, C2: 10 }, 'C2')!.count;
+    const b = learningPayload({ ...FULL, C2: 40 }, 'C2')!.count;
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('the ring arc', () => {
+  it('fills against a typical film on the same shelf, not against the film', () => {
+    // count/total would peg every C2 ring near empty (12 of 1,479 is 0.8%).
+    // The reference is the shelf's own p90.
+    const p = learningPayload({ ...FULL, C2: SHELF_FULL_RING.C2 }, 'C2')!;
+    expect(p.fill).toBe(100);
+  });
+
+  it('clamps rather than overflowing when a film beats the reference', () => {
+    const p = learningPayload({ ...FULL, C2: SHELF_FULL_RING.C2 * 5 }, 'C2')!;
+    expect(p.fill).toBe(100);
+  });
+
+  it('has a reference for every level, or the arc would be NaN', () => {
+    (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).forEach((l) => {
+      expect(SHELF_FULL_RING[l]).toBeGreaterThan(0);
+      expect(Number.isFinite(learningPayload(FULL, l)!.fill)).toBe(true);
+    });
+  });
+
+  it('references get smaller as the shelf gets harder', () => {
+    // A C2 shelf's films carry a handful of C2 words where an A1 shelf's carry
+    // hundreds; one shared reference would peg the top of the ladder at empty.
+    const refs = (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).map(
+      (l) => SHELF_FULL_RING[l],
+    );
+    refs.forEach((r, i) => {
+      if (i > 0) expect(r).toBeLessThan(refs[i - 1]);
     });
   });
 });
 
 describe('UNKNOWN is not a band', () => {
-  it('is excluded from the denominator, not just the numerator', () => {
-    // #91's holding pen: words the classifier could not place. Leaving them in
-    // the denominator would depress every film's percentage by however much of
-    // the catalogue is still unclassified — a fact about our data pretending
-    // to be a fact about the film.
-    const withUnknown = { ...FULL, UNKNOWN: 500 };
-    expect(knownShare(withUnknown, 'B1')).toEqual(knownShare(FULL, 'B1'));
-    expect(knownShare(withUnknown, 'B1')?.total).toBe(1000);
+  it('is excluded from the total the sheet prints', () => {
+    // #91's holding pen: words the classifier could not place. Counting them
+    // would inflate "N different words are spoken in this film" with words
+    // nobody can be taught.
+    expect(learningPayload({ ...FULL, UNKNOWN: 500 }, 'B1')).toEqual(
+      learningPayload(FULL, 'B1'),
+    );
   });
 
   it('ignores any other stray key the payload carries', () => {
-    expect(knownShare({ ...FULL, A0: 999, native: 12 }, 'C2')?.total).toBe(1000);
+    expect(learningPayload({ ...FULL, A0: 999, native: 12 }, 'A1')?.total).toBe(1000);
   });
 });
 
 describe('no usable distribution', () => {
   it('is null for a film with no script processed', () => {
-    // 171 prod films. The card draws a bare track and an em dash for these —
-    // 0% would read as "you know none of this film", which is a claim.
-    expect(knownShare(null, 'B1')).toBeNull();
-    expect(knownShare(undefined, 'B1')).toBeNull();
+    // 171 prod films. The card draws a bare track and an em dash — `0` would
+    // read as "this film has nothing for you", which is a claim.
+    expect(learningPayload(null, 'B1')).toBeNull();
+    expect(learningPayload(undefined, 'B1')).toBeNull();
   });
 
-  it('is null for an empty distribution', () => {
-    expect(knownShare({}, 'B1')).toBeNull();
-  });
-
-  it('is null when every band is zero or unusable', () => {
-    expect(knownShare({ A1: 0, B1: 0 }, 'B1')).toBeNull();
-    expect(knownShare({ A1: Number.NaN } as never, 'B1')).toBeNull();
-    expect(knownShare({ A1: -5 }, 'B1')).toBeNull();
+  it('is null for an empty or unusable distribution', () => {
+    expect(learningPayload({}, 'B1')).toBeNull();
+    expect(learningPayload({ A1: 0, B1: 0 }, 'B1')).toBeNull();
+    expect(learningPayload({ A1: Number.NaN } as never, 'B1')).toBeNull();
+    expect(learningPayload({ A1: -5 }, 'B1')).toBeNull();
   });
 
   it('is null for a level that is not on the ladder, rather than a guess', () => {
-    // `proficiency_level` is user data and has held junk before. Guessing a
-    // cut point would print a confident percentage measured against nothing.
-    expect(knownShare(FULL, 'b1')).toBeNull();
-    expect(knownShare(FULL, 'D1')).toBeNull();
-    expect(knownShare(FULL, '')).toBeNull();
+    // `proficiency_level` is user data and has held junk before.
+    expect(learningPayload(FULL, 'b1')).toBeNull();
+    expect(learningPayload(FULL, 'D1')).toBeNull();
+    expect(learningPayload(FULL, '')).toBeNull();
   });
 });
 
 describe('shape', () => {
-  it('rounds the percent but keeps the raw counts, which the sheet prints', () => {
-    const share = knownShare({ A1: 1, B1: 2 }, 'A1')!;
-    expect(share).toEqual({ pct: 33, atOrBelow: 1, total: 3 });
+  it('carries the raw counts the sheet prints alongside the fill', () => {
+    const p = learningPayload({ A1: 1, B1: 2 }, 'B1')!;
+    expect(p.count).toBe(2);
+    expect(p.total).toBe(3);
   });
 
   it('tolerates numeric strings, which JSON round-trips have produced before', () => {
-    expect(knownShare({ A1: '400', B1: '600' } as never, 'A1')?.pct).toBe(40);
+    expect(learningPayload({ A1: '400', B1: '600' } as never, 'B1')?.count).toBe(600);
   });
 });
