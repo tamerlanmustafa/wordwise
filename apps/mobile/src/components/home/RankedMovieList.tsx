@@ -64,8 +64,7 @@ import { colors } from '../../theme/palette';
 import { useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
 import { isRTL } from '../../i18n/rtl';
-import { getFormattingLocale } from '../../i18n';
-import { scoreToCefr } from '../../utils/formatting';
+import { formatCompactCount, scoreToCefr } from '../../utils/formatting';
 import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
@@ -367,7 +366,7 @@ const LevelRing = React.memo(({
         {/* No distribution → bare track and an em dash. `0` would read as
             "this film has nothing for you", which is a claim; the dash is not. */}
         <Text style={s.ringPct} numberOfLines={1} adjustsFontSizeToFit>
-          {vocab ? vocab.words.toLocaleString(getFormattingLocale()) : '—'}
+          {vocab ? formatCompactCount(vocab.words) : '—'}
         </Text>
         {vocab ? (
           // adjustsFontSizeToFit, because this word is translated into six
@@ -784,7 +783,15 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     // band), so it takes the size the band used to have.
     // A count, not a percent — up to four digits on an A1 shelf, so it keeps
     // the 12pt size but is allowed to shrink rather than overflow the hole.
+    // Both lines are width-bounded and centred. Without an explicit width they
+    // size to their own content inside an `alignItems: 'center'` parent, so
+    // `adjustsFontSizeToFit` has no box to shrink into and a long value spills
+    // out of the 36pt hole onto the gold arc — which is exactly what "1,667"
+    // did. Short of the full 36 because these lines sit above and below the
+    // circle's midline, where it is already narrowing.
     ringPct: {
+      width: RING_HOLE - 4,
+      textAlign: 'center',
       fontFamily: MONO_FAMILY,
       fontSize: 12,
       fontWeight: '700',
@@ -795,6 +802,8 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     // Small enough to read as a unit label rather than as a second value —
     // it has to fit the 36pt hole in every locale, hence numberOfLines={1}.
     ringCaption: {
+      width: RING_HOLE - 4,
+      textAlign: 'center',
       fontFamily: MONO_FAMILY,
       fontSize: 6.5,
       fontWeight: '700',

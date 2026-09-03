@@ -1,4 +1,38 @@
-import { formatVoteCount, scoreToCefr } from '../formatting';
+import { formatCompactCount, formatVoteCount, scoreToCefr } from '../formatting';
+
+describe('formatCompactCount', () => {
+  it('keeps three-digit counts exact — they already fit', () => {
+    expect(formatCompactCount(907)).toBe('907');
+    expect(formatCompactCount(999)).toBe('999');
+  });
+
+  it('shortens anything that would overflow the ring hole', () => {
+    // The bug: "1,667" at 12pt mono is wider than the card ring's 36pt hole,
+    // so it painted over the gold arc. Four characters fit; six did not.
+    expect(formatCompactCount(1667)).toBe('1.7k');
+    expect(formatCompactCount(1243)).toBe('1.2k');
+    expect(formatCompactCount(3390)).toBe('3.4k');
+    expect(formatCompactCount(1667).length).toBeLessThanOrEqual(4);
+  });
+
+  it('drops the decimal once the rounded value reaches 10k', () => {
+    // The bound must not depend on the catalogue staying small — today's
+    // largest film speaks 3,390 words, but the ring should not break if a
+    // script one day has 40,000. Note 9,999 is *under* 10,000 yet rounds to
+    // "10.0" at one decimal, which is why the threshold is on the rounded
+    // value: a raw `>= 10000` check still emitted five characters here.
+    expect(formatCompactCount(9999)).toBe('10k');
+    expect(formatCompactCount(12345)).toBe('12k');
+    expect(formatCompactCount(99999)).toBe('100k');
+    [0, 20, 730, 1000, 1351, 3390, 9949, 9999, 12345, 99999].forEach((n) => {
+      expect(formatCompactCount(n).length).toBeLessThanOrEqual(4);
+    });
+  });
+
+  it('leaves formatVoteCount alone — it has room for the decimal', () => {
+    expect(formatVoteCount(12345)).toBe('12.3k');
+  });
+});
 
 describe('formatVoteCount', () => {
   it('returns the raw count under 1000', () => {
