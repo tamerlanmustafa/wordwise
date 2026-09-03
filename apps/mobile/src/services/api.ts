@@ -447,17 +447,26 @@ export const wordwiseApi = {
     limit: number = 50,
     opts?: {
       offset?: number;
-      sort?: 'rating' | 'popularity' | 'level';
+      sort?: 'recommended' | 'rating' | 'popularity' | 'level';
       order?: 'asc' | 'desc';
       /** Animation filter: true = animated only, false = live action only.
        *  Leave undefined for the unfiltered feed — see `animatedParam`. */
       animated?: boolean;
+      /** Which recommendation draw to page through (`sort=recommended` only).
+       *  Omit on the first page — the server picks the current one and returns
+       *  it — then send it back on every append, or pagination re-shuffles
+       *  under the caller. Ignored by the column sorts. */
+      seed?: number;
     }
   ): Promise<{
     level: string;
     total: number;
     offset: number;
     has_more: boolean;
+    /** The draw the server used. Null on the column sorts. */
+    seed?: number | null;
+    /** ISO instant this draw expires. Null on the column sorts. */
+    next_rotation_at?: string | null;
     movies: Array<{
       movie_id: number;
       tmdb_id: number | null;
@@ -468,12 +477,17 @@ export const wordwiseApi = {
       difficulty_score: number | null;
       vote_average: number | null;
       vote_count: number | null;
+      unique_words?: number | null;
+      /** Distinct classified words per CEFR band — what the card's ring is
+       *  measured from (`components/home/comprehension.ts`). */
+      cefr_distribution?: Record<string, number> | null;
     }>;
   }> => {
     let query = `level=${encodeURIComponent(level)}&limit=${limit}`;
     if (opts?.offset != null) query += `&offset=${opts.offset}`;
     if (opts?.sort) query += `&sort=${opts.sort}`;
     if (opts?.order) query += `&order=${opts.order}`;
+    if (opts?.seed != null) query += `&seed=${opts.seed}`;
     // `!= null` on purpose: `animated=false` is the live-action filter and has
     // to be sent, so a truthiness check would silently swallow it.
     if (opts?.animated != null) query += `&animated=${opts.animated}`;

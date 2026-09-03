@@ -1,5 +1,7 @@
 import json
 import logging
+import time
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from prisma import Prisma
 from pydantic import BaseModel
@@ -165,11 +167,57 @@ async def list_movies_by_level(
 # Maps the client-facing `sort` value to a real DB column. Keeping this a
 # whitelist (rather than interpolating the raw query param) is what makes it
 # safe to f-string the column into the ORDER BY clause below.
+#
+# `recommended` is deliberately NOT in here. It is not a column, and adding a
+# fake entry to make the lookup succeed is how a whitelist stops being one.
 CEFR_SORT_COLUMNS = {
     "rating": "m.tmdb_vote_average",
     "popularity": "m.tmdb_vote_count",
     "level": "m.difficulty_score",
 }
+
+# ── Recommended: a rotating shelf ───────────────────────────────────────────
+# The three column sorts are near-static per level. Rating and popularity
+# barely move, and `level` only spreads a 10-point band, so the top of a B1
+# shelf was the same six films every day and a newly-classified one sat behind
+# pagination nobody scrolls to.
+#
+# `recommended` orders by md5(movie id + seed) instead: a permutation of the
+# level's candidate set that is *deterministic for a given seed* — which is
+# what makes OFFSET pagination coherent over it — and different for the next
+# one. The seed is a wall-clock bucket, so the shelf turns over on its own
+# without any per-user state, a cron, or a stored ordering to invalidate.
+RECOMMENDED_ROTATION_SECONDS = 6 * 3600
+
+# Under this many films at a level, the quality floor is dropped rather than
+# applied. A1 and C2 are the thin shelves; a Recommended view that is emptier
+# than Top rated is worse than one with a couple of rough films in it.
+RECOMMENDED_MIN_POOL = 40
+
+# TMDB thresholds for the shuffle only. A pure shuffle over the level surfaces
+# the long tail — the shared `_BY_CEFR_SELECT` floor is `vote_count >= 50`,
+# which the column sorts survive because rating/popularity bury those rows
+# anyway and a shuffle does not.
+_RECOMMENDED_QUALITY_SQL = (
+    "\n              AND COALESCE(m.tmdb_vote_count, 0) >= 200"
+    "\n              AND COALESCE(m.tmdb_vote_average, 0) >= 6.0"
+)
+
+
+def current_seed() -> int:
+    """The rotation window we are in. Integer division of the epoch, so every
+    caller in the same six hours derives the same value with no shared state.
+    """
+    return int(time.time()) // RECOMMENDED_ROTATION_SECONDS
+
+
+def next_rotation_at(seed: int) -> str:
+    """When `seed`'s window ends, ISO-8601 UTC. The client turns this into
+    "new set in 4h"; it is not a cache directive.
+    """
+    return datetime.fromtimestamp(
+        (seed + 1) * RECOMMENDED_ROTATION_SECONDS, tz=timezone.utc
+    ).isoformat()
 
 
 def _exclude_seen_sql(p: str) -> str:
@@ -232,6 +280,17 @@ def _animation_filter_sql(animated: Optional[bool]) -> str:
 # rather than by copying the whole statement per combination: `genre` and
 # `animated` are independent, so branching would mean four near-identical
 # 45-line queries drifting apart.
+#
+# The WHERE half is split out so the Recommended pool count can reuse the exact
+# same predicates without dragging the two correlated subqueries (unique_words,
+# cefr_distribution) along — a COUNT does not need them, and they are the
+# expensive part of this projection.
+_BY_CEFR_WHERE = """
+            FROM movies m
+            WHERE m.difficulty_score >= $1
+              AND m.difficulty_score <= $2
+              AND COALESCE(m.tmdb_vote_count, 0) >= 50"""
+
 _BY_CEFR_SELECT = """
             SELECT m.id                AS movie_id,
                    m.title             AS title,
@@ -259,11 +318,12 @@ _BY_CEFR_SELECT = """
                        WHERE ms.movie_id = m.id
                        GROUP BY wc.cefr_level
                      ) sub
-                   )                   AS cefr_distribution
-            FROM movies m
-            WHERE m.difficulty_score >= $1
-              AND m.difficulty_score <= $2
-              AND COALESCE(m.tmdb_vote_count, 0) >= 50"""
+                   )                   AS cefr_distribution""" + _BY_CEFR_WHERE
+
+# Same predicates, no projection — "how many films would the quality floor
+# leave at this level, for this caller".
+_RECOMMENDED_POOL_COUNT = """
+            SELECT COUNT(*) AS n""" + _BY_CEFR_WHERE
 
 
 @router.get("/by-cefr")
@@ -280,8 +340,20 @@ async def list_movies_by_cefr(
     ),
     limit: int = Query(15, ge=1, le=100),
     offset: int = Query(0, ge=0, description="Pagination offset for infinite scroll"),
-    sort: str = Query("rating", description="Sort key: rating | popularity | level"),
+    sort: str = Query(
+        "recommended",
+        description="Sort key: recommended | rating | popularity | level",
+    ),
     order: str = Query("desc", description="Sort direction: asc | desc"),
+    seed: Optional[int] = Query(
+        None,
+        description=(
+            "Which recommendation draw to page through (sort=recommended only). "
+            "Omit on the first page — the response carries the seed that was "
+            "used — then send it back on every subsequent page. Ignored by the "
+            "column sorts."
+        ),
+    ),
     db: Prisma = Depends(get_db),
     current_user=Depends(get_current_user_optional),
 ):
@@ -296,20 +368,20 @@ async def list_movies_by_cefr(
     Optional auth: when a valid token is supplied, movies the user has marked
     "watched" or "not interested" (swipe actions on the home feed) are excluded
     server-side so they never resurface and pagination stays consistent.
-    Anonymous callers get the unfiltered feed.
+    Anonymous callers get the unfiltered feed. That exclusion applies to
+    `sort=recommended` too, so a rotation never re-serves a film the user
+    already swiped away.
     """
     key = normalize_level(level)
     if key is None:
         raise HTTPException(status_code=400, detail=f"Invalid CEFR level: {level}")
 
-    sort_col = CEFR_SORT_COLUMNS.get(sort.lower())
-    if sort_col is None:
+    sort_key = sort.lower()
+    recommended = sort_key == "recommended"
+    sort_col = CEFR_SORT_COLUMNS.get(sort_key)
+    if sort_col is None and not recommended:
         raise HTTPException(status_code=400, detail=f"Invalid sort: {sort}")
     direction = "ASC" if order.lower() == "asc" else "DESC"
-    # `m.id ASC` is a stable tiebreaker — without it, rows with equal sort
-    # values can shuffle between pages and cause OFFSET pagination to skip or
-    # duplicate movies.
-    order_by = f"ORDER BY {sort_col} {direction} NULLS LAST, m.id ASC"
     # Over-fetch by one row to detect whether another page exists, then trim.
     fetch_limit = limit + 1
 
@@ -323,17 +395,67 @@ async def list_movies_by_cefr(
     # Positional placeholders are numbered as the params list grows, so an
     # optional filter can be dropped in without renumbering everything after
     # it — which is what made the old two-branch copy hard to extend.
-    params: List[Any] = [lo, hi]
+    #
+    # The level + genre + animation predicates are built once and shared with
+    # the pool count below, so the count can never be measuring a different
+    # shelf from the one the page reads.
+    filter_params: List[Any] = [lo, hi]
     filters = ""
 
     if genre:
-        params.append(genre)
+        filter_params.append(genre)
         filters += (
             "\n              AND m.genre IS NOT NULL"
-            f"\n              AND m.genre ILIKE '%' || ${len(params)} || '%'"
+            f"\n              AND m.genre ILIKE '%' || ${len(filter_params)} || '%'"
         )
 
     filters += _animation_filter_sql(animated)
+
+    active_seed: Optional[int] = None
+    quality = ""
+
+    if recommended:
+        # A caller paging through an existing draw sends its seed back; a first
+        # page does not, and gets the current window. Deriving it per request
+        # is what makes the rotation free of any stored state.
+        active_seed = seed if seed is not None else current_seed()
+
+        # Ask what the quality floor would leave *before* applying it. A shuffle
+        # with a floor over a 30-film shelf is a shorter shelf, and Recommended
+        # being emptier than Top rated is a worse outcome than a couple of
+        # obscure films in the deck. Counted with the caller's own exclusions,
+        # because those are part of what makes a shelf thin.
+        count_params: List[Any] = [*filter_params, user_id]
+        count_rows = await db.query_raw(
+            _RECOMMENDED_POOL_COUNT
+            + filters
+            + _RECOMMENDED_QUALITY_SQL
+            + _exclude_seen_sql(f"${len(count_params)}")
+            + "\n",
+            *count_params,
+        )
+        pool = int(count_rows[0]["n"]) if count_rows else 0
+        if pool >= RECOMMENDED_MIN_POOL:
+            quality = _RECOMMENDED_QUALITY_SQL
+
+    params: List[Any] = list(filter_params)
+
+    if recommended:
+        # Bound as text, not as an int, so the parameter's type is unambiguous
+        # to the query engine — it is only ever concatenated into a hash input.
+        params.append(str(active_seed))
+        # Hashing (id, seed) is a permutation: fixed for a given seed, so the
+        # three pages a user scrolls are slices of ONE ordering, and unrelated
+        # to the next seed's. The seed is a bound parameter, never interpolated
+        # — it arrives straight off the query string.
+        order_by = (
+            f"ORDER BY md5(m.id::text || '-' || ${len(params)}::text) ASC, m.id ASC"
+        )
+    else:
+        # `m.id ASC` is a stable tiebreaker — without it, rows with equal sort
+        # values can shuffle between pages and cause OFFSET pagination to skip
+        # or duplicate movies.
+        order_by = f"ORDER BY {sort_col} {direction} NULLS LAST, m.id ASC"
 
     params.append(fetch_limit)
     limit_ph = f"${len(params)}"
@@ -345,6 +467,7 @@ async def list_movies_by_cefr(
     rows = await db.query_raw(
         _BY_CEFR_SELECT
         + filters
+        + quality
         + _exclude_seen_sql(user_ph)
         + order_by
         + f"\n            LIMIT {limit_ph} OFFSET {offset_ph}\n",
@@ -356,6 +479,10 @@ async def list_movies_by_cefr(
 
     return {
         "level": key,
+        # Null on the column sorts: they are not draws and have nothing to
+        # page consistently through or to expire.
+        "seed": active_seed,
+        "next_rotation_at": next_rotation_at(active_seed) if recommended else None,
         "movies": [
             {
                 "movie_id": r["movie_id"],

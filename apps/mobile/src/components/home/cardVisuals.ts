@@ -224,10 +224,15 @@ export const CARD_PAD_START = 14;
 /** Gap between the ring and the title block. */
 export const CARD_ROW_GAP = 13;
 
-// ── Level ring ─────────────────────────────────────────────────────────────
-// One 44pt ring, gold arc drawn to the comprehension percentage, CEFR band and
-// percent stacked inside. r=20 with a 4pt stroke spans 18–22, so the hole is
-// exactly 36pt across and the stock-filled disc that covers it is too.
+// ── Comprehension ring ─────────────────────────────────────────────────────
+// One 44pt ring: an arc drawn to the share of the film's dialogue vocabulary
+// at or below the reader's level (see ./comprehension), with that percent and
+// the word KNOWN stacked inside. r=20 with a 4pt stroke spans 18–22, so the
+// hole is exactly 36pt across and the stock-filled disc that covers it is too.
+//
+// The arc used to be fed `difficulty_score` while the hole printed
+// `scoreToCefr()` of the same number — one value shown twice, and neither half
+// about the reader. The geometry below is unchanged; only its input is.
 
 export const RING_SIZE = 44;
 export const RING_STROKE = 4;
@@ -235,9 +240,9 @@ export const RING_R = 20;
 export const RING_HOLE = 2 * (RING_R - RING_STROKE / 2);
 export const RING_C = 2 * Math.PI * RING_R;
 
-/** Dash offset for the progress arc. A null score leaves the track bare. */
-export function ringDashOffset(score: number | null | undefined): number {
-  if (score == null || !Number.isFinite(score)) return RING_C;
-  const pct = Math.max(0, Math.min(100, score));
-  return RING_C * (1 - pct / 100);
+/** Dash offset for the progress arc. A null percentage leaves the track bare. */
+export function ringDashOffset(pct: number | null | undefined): number {
+  if (pct == null || !Number.isFinite(pct)) return RING_C;
+  const clamped = Math.max(0, Math.min(100, pct));
+  return RING_C * (1 - clamped / 100);
 }

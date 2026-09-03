@@ -2,9 +2,11 @@ import {
   DEFAULT_FEED_FILTERS,
   LEVEL_OPTIONS,
   MOVIE_TYPE_OPTIONS,
+  RECOMMENDED_ROTATION_HOURS,
   SORT_OPTIONS,
   activeFilterCount,
   animatedParam,
+  sortHasDirection,
 } from '../filterOptions';
 import { LEVEL_DOT_COLORS } from '../../ui/icons';
 
@@ -20,7 +22,7 @@ describe('LEVEL_OPTIONS (CEFR level picker)', () => {
   });
 
   it('carries no icon field at all', () => {
-    // It held 🟢🟡🟠🔴 and nothing rendered it — `LevelSheet` passes
+    // It held 🟢🟡🟠🔴 and nothing rendered it — the level picker passes
     // `swatch={cefrColors[value]}`, the real CEFR palette. Six emoji nobody
     // could see, kept alive by a test asserting they existed.
     LEVEL_OPTIONS.forEach((o) => {
@@ -78,8 +80,21 @@ describe('animatedParam (chip state → /movies/by-cefr query)', () => {
 });
 
 describe('SORT_OPTIONS (feed ordering)', () => {
-  it('offers the three server-side sorts, rating first', () => {
-    expect(SORT_OPTIONS.map((o) => o.value)).toEqual(['rating', 'popularity', 'level']);
+  it('offers the four server-side sorts, recommended first', () => {
+    expect(SORT_OPTIONS.map((o) => o.value)).toEqual([
+      'recommended',
+      'rating',
+      'popularity',
+      'level',
+    ]);
+  });
+
+  it('opens on the rotating shelf, not on a column order', () => {
+    // The three column sorts are near-static per level: the top of a B1 shelf
+    // was the same six films every day. Defaulting to `rating` is what made
+    // that the experience for everyone who never opens the sheet.
+    expect(DEFAULT_FEED_FILTERS.sort).toBe('recommended');
+    expect(SORT_OPTIONS[0].value).toBe('recommended');
   });
 
   it('carries i18n keys, not literal labels', () => {
@@ -95,6 +110,37 @@ describe('SORT_OPTIONS (feed ordering)', () => {
   });
 });
 
+describe('sortHasDirection (which sorts get an ↑/↓)', () => {
+  it('is false for the shuffle', () => {
+    // "Ascending random" is not a thing. A flip on Recommended would change
+    // the query string and nothing the user can see — a control that lies.
+    expect(sortHasDirection('recommended')).toBe(false);
+  });
+
+  it('is true for every sort that names a column', () => {
+    (['rating', 'popularity', 'level'] as const).forEach((k) => {
+      expect(sortHasDirection(k)).toBe(true);
+    });
+  });
+
+  it('agrees with SORT_OPTIONS about which sorts exist', () => {
+    // A sort added to the picker but not considered here would silently get a
+    // direction arrow it cannot honour.
+    expect(SORT_OPTIONS.filter((o) => !sortHasDirection(o.value)).map((o) => o.value)).toEqual([
+      'recommended',
+    ]);
+  });
+});
+
+describe('RECOMMENDED_ROTATION_HOURS', () => {
+  it('is a whole number of hours the copy can print', () => {
+    // Interpolated straight into "A fresh set every {{hours}} hours"; a
+    // fractional value would read as "every 6.5 hours".
+    expect(Number.isInteger(RECOMMENDED_ROTATION_HOURS)).toBe(true);
+    expect(RECOMMENDED_ROTATION_HOURS).toBeGreaterThan(0);
+  });
+});
+
 describe('activeFilterCount (the filter button badge)', () => {
   it('is 0 for the untouched feed, so the button stays neutral', () => {
     expect(activeFilterCount(DEFAULT_FEED_FILTERS)).toBe(0);
@@ -102,6 +148,26 @@ describe('activeFilterCount (the filter button badge)', () => {
 
   it('counts a changed sort key', () => {
     expect(activeFilterCount({ ...DEFAULT_FEED_FILTERS, sort: 'popularity' })).toBe(1);
+  });
+
+  it('counts leaving Recommended, which is now what "changed sort" means', () => {
+    expect(activeFilterCount({ ...DEFAULT_FEED_FILTERS, sort: 'rating' })).toBe(1);
+  });
+
+  it('takes no level at all, so a learner is never badged for their own level', () => {
+    // The level shares the filter *button* now, but it is the feed's scope,
+    // not a filter: it is seeded from `proficiency_level`, so it has no "off"
+    // position, and counting it would badge every learner who isn't
+    // DEFAULT_LEVEL. The type is what enforces this — the runtime check is
+    // that nothing snuck a level in through a spread.
+    expect(Object.keys(DEFAULT_FEED_FILTERS).sort()).toEqual([
+      'movieType',
+      'sort',
+      'sortAsc',
+    ]);
+    expect(
+      activeFilterCount({ ...DEFAULT_FEED_FILTERS, level: 'C2' } as never),
+    ).toBe(0);
   });
 
   it('counts a flipped direction even when the sort key is the default', () => {

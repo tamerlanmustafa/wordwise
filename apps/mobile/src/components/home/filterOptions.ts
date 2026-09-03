@@ -12,11 +12,16 @@
 
 /**
  * The `icon` field is gone. It held 🟢🟡🟠🔴 — coloured-circle emoji standing
- * in for the difficulty ramp — and nothing ever rendered it: `LevelSheet`
+ * in for the difficulty ramp — and nothing ever rendered it: the level picker
  * passes `swatch={cefrColors[value]}` instead, which is the real CEFR palette
  * and the same colour the badges use elsewhere. Six emoji nobody could see.
  * `LEVEL_DOT_COLORS` in `ui/icons` carries the ramp for anywhere that wants a
  * dot rather than a full swatch.
+ *
+ * `label` is the prose form ("B1 Intermediate"). The LEVEL group in
+ * `FeedFilterSheet` is a six-cell ladder — 52pt per cell — so it prints
+ * `value` and keeps `label` as the cell's accessibility label, which is the
+ * only place the prose still fits.
  */
 export const LEVEL_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'A1', label: 'A1 Beginner' },
@@ -77,18 +82,44 @@ export function animatedParam(type: MovieType): boolean | undefined {
  * How the feed is ordered. Server-side (`/movies/by-cefr` sorts the whole
  * catalog, not the page), so these values travel to the API — same reason the
  * labels are i18n keys and the values are not.
+ *
+ * `recommended` is the odd one out: the other three name a real column, and
+ * that is exactly the problem they had. Rating and popularity are near-static
+ * per level, and `level` only spreads a band 10 points wide, so the top of a
+ * B1 shelf was the same six films every day and anything newly classified sat
+ * behind pagination nobody reaches. `recommended` is a seeded shuffle over a
+ * quality floor instead — deterministic within a rotation window, different
+ * between them.
  */
-export type LevelSort = 'rating' | 'popularity' | 'level';
+export type LevelSort = 'recommended' | 'rating' | 'popularity' | 'level';
 
 export const SORT_OPTIONS: Array<{ value: LevelSort; labelKey: string }> = [
-  { value: 'rating',     labelKey: 'home:filters.sort.rating' },
-  { value: 'popularity', labelKey: 'home:filters.sort.popularity' },
-  { value: 'level',      labelKey: 'home:filters.sort.level' },
+  { value: 'recommended', labelKey: 'home:filters.sort.recommended' },
+  { value: 'rating',      labelKey: 'home:filters.sort.rating' },
+  { value: 'popularity',  labelKey: 'home:filters.sort.popularity' },
+  { value: 'level',       labelKey: 'home:filters.sort.level' },
 ];
 
+/**
+ * How long one recommendation draw lasts. The server owns the real clock
+ * (`RECOMMENDED_ROTATION_SECONDS` in `routes/movies.py`); this copy only
+ * writes the sheet's "a fresh set every 6 hours" line, so a drift between the
+ * two is cosmetic rather than a feed that pages wrong.
+ */
+export const RECOMMENDED_ROTATION_HOURS = 6;
+
+/**
+ * Whether a sort has an ↑/↓ to flip. A shuffle does not: "ascending random"
+ * is not a thing, and letting the row toggle would give the user a control
+ * that changes the query string and nothing they can see.
+ */
+export function sortHasDirection(sort: LevelSort): boolean {
+  return sort !== 'recommended';
+}
+
 /** The feed as it arrives before anyone touches a filter. */
-export const DEFAULT_SORT: LevelSort = 'rating';
-/** Descending — the highest rated first. */
+export const DEFAULT_SORT: LevelSort = 'recommended';
+/** Descending — the highest rated first, where a direction applies at all. */
 export const DEFAULT_SORT_ASC = false;
 export const DEFAULT_MOVIE_TYPE: MovieType = 'all';
 
@@ -109,10 +140,15 @@ export const DEFAULT_FEED_FILTERS: FeedFilters = {
  * badges, and what turns it gold.
  *
  * Groups, not values: flipping the direction of the active sort is still one
- * change to "how this is ordered", so it counts once. The CEFR level is
- * deliberately absent — it isn't a filter but the feed's scope, it lives on
- * its own control, and it defaults to the user's profile rather than to a
- * constant, so there is no "off" position for it to deviate from.
+ * change to "how this is ordered", so it counts once. Since Recommended became
+ * the default, "sort ≠ recommended" is what that one change usually is — a
+ * direction flip only exists on the three column sorts.
+ *
+ * The CEFR level is deliberately absent — it isn't a filter but the feed's
+ * scope, it now shares the filter *button* but not this count, and it defaults
+ * to the user's profile rather than to a constant, so there is no "off"
+ * position for it to deviate from. Counting it would badge the button for
+ * every learner whose level isn't `DEFAULT_LEVEL`.
  */
 export function activeFilterCount(f: FeedFilters): number {
   const sortChanged = f.sort !== DEFAULT_SORT || f.sortAsc !== DEFAULT_SORT_ASC;

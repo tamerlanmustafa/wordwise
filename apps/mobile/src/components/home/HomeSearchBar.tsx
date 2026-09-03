@@ -13,13 +13,18 @@
  *     Each row = 40×60 poster + serif title + year. Footer
  *     `SEE ALL {n} RESULTS` in goldOnSurface.
  *   • Recently-viewed dropdown reuses the same row treatment.
- *   • A 48pt square filter button on the trailing edge, opening
- *     `FeedFilterSheet` — the same "wide control + square button" pairing the
- *     Lists tab uses for its sort sheet. Neutral at defaults, gold with a
- *     count once something is filtered, so hidden state stays visible.
+ *   • A 64pt filter button on the trailing edge, opening `FeedFilterSheet` —
+ *     the same "wide control + square button" pairing the Lists tab uses for
+ *     its sort sheet. Neutral at defaults, gold with a count once something is
+ *     filtered, so hidden state stays visible.
+ *
+ * That button also prints the CEFR level the feed is graded for. The level
+ * used to have a 46pt header row of its own holding one gold chip; the chip
+ * deserves to be permanently on screen (it is the feed's *scope*), the row did
+ * not. It is not part of the filter count — see `activeFilterCount`.
  *
  * The field shrinks to make room for the button, but the dropdown stays
- * anchored to the full-width wrapper — narrowing it by 56pt would crop the
+ * anchored to the full-width wrapper — narrowing it by 72pt would crop the
  * poster rows for no reason.
  */
 
@@ -34,6 +39,7 @@ import {
   View,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './HomeIcons';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -58,6 +64,8 @@ interface Props {
   onFilterPress?: () => void;
   /** How many filter groups are off-default — badge count, and gold when > 0. */
   activeFilters?: number;
+  /** CEFR code the whole feed is graded for, printed on the filter button. */
+  level: string;
 }
 
 function Row({
@@ -105,6 +113,7 @@ export function HomeSearchBar({
   onSeeAll,
   onFilterPress,
   activeFilters = 0,
+  level,
 }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -145,12 +154,16 @@ export function HomeSearchBar({
               onPress={onFilterPress}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={
-                filtered
-                  ? t('home:filters.a11yActive', { count: activeFilters })
-                  : t('home:filters.a11y')
-              }
+              // One label for one button. It now does two jobs — it says what
+              // the feed is scoped to and it opens the filters — and a screen
+              // reader that announced only "Filters" would leave the level
+              // unreadable anywhere in the app.
+              accessibilityLabel={t('home:filters.a11yWithLevel', {
+                level,
+                count: activeFilters,
+              })}
             >
+              <Text style={[s.levelCode, filtered && s.levelCodeOn]}>{level}</Text>
               <HomeIcon
                 name="filter"
                 size={19}
@@ -206,6 +219,9 @@ const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     wrap: {
       paddingHorizontal: 18,
+      // The search row is the screen's first child now that the level's header
+      // row is gone, so it carries the small breath that row used to give it.
+      paddingTop: 6,
       paddingBottom: 12,
     },
     fieldWrap: {
@@ -243,17 +259,20 @@ const makeStyles = (tc: ThemeColors) =>
     clearBtn: {
       padding: 2,
     },
-    // Square, same 48pt height as the field so the two read as one control
-    // pair — the treatment ListDetailScreen uses for its sort button.
+    // Same 48pt height as the field so the two read as one control pair — the
+    // treatment ListDetailScreen uses for its sort button. 64 wide rather than
+    // square, because it carries the CEFR code as well as the glyph.
     filterBtn: {
-      width: 48,
+      width: 64,
       height: 48,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: tc.border,
       backgroundColor: tc.paper,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 6,
       shadowColor: '#000',
       shadowOpacity: 0.08,
       shadowRadius: 14,
@@ -263,6 +282,18 @@ const makeStyles = (tc: ThemeColors) =>
     filterBtnOn: {
       backgroundColor: tc.gold,
       borderColor: tc.gold,
+    },
+    // Mono, so B1 and C2 are the same width and the glyph never shifts.
+    levelCode: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: -0.2,
+      color: tc.goldOnSurface,
+    },
+    // On the gold fill, goldOnSurface would sit on its own colour.
+    levelCodeOn: {
+      color: tc.goldDeep,
     },
     badge: {
       position: 'absolute',

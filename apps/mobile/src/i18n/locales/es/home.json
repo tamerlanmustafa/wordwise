@@ -5,7 +5,9 @@
     "empty": "Aún no se han encontrado películas clasificadas para este nivel.",
     "endOfLevel": "Esto es todo en este nivel",
     "tapToClose": "Toca para cerrar",
-    "emptyFiltered": "Aún no hay películas de {{type}} en este nivel."
+    "emptyFiltered": "Aún no hay películas de {{type}} en este nivel.",
+    "knownCaption": "SABES",
+    "filmBand": "NIVEL {{band}}"
   },
   "search": {
     "placeholder": "Busca películas, palabras o actores…",
@@ -33,18 +35,29 @@
     "done": "Listo",
     "sortLabel": "Ordenar por",
     "typeLabel": "Mostrar",
-    "a11y": "Filtros",
-    "a11yActive": "Filtros, {{count}} activos",
     "sort": {
       "rating": "Valoración",
       "popularity": "Popularidad",
       "level": "Coincidencia de nivel",
-      "tapToFlip": "Toca de nuevo para invertir el orden"
-    }
+      "tapToFlip": "Toca de nuevo para invertir el orden",
+      "recommended": "Recomendadas",
+      "recommendedNote": "Una selección nueva cada {{hours}} horas"
+    },
+    "resetSortAndType": "Restablecer orden y películas",
+    "a11yWithLevel": "Nivel {{level}}. Filtros, {{count}} activos."
   },
   "level": {
-    "title": "Tu nivel",
-    "subtitle": "Las películas se clasifican para este nivel.",
-    "a11y": "Nivel {{value}}. Toca para cambiar."
+    "label": "Nivel",
+    "scopeNote": "El nivel para el que está calibrado todo el feed. El tuyo por defecto: Restablecer no lo cambia."
+  },
+  "feed": {
+    "recommendedEyebrow": "Recomendadas para {{level}} · selección nueva en {{hours}} h"
+  },
+  "comprehension": {
+    "title": "Qué significa el {{pct}}%",
+    "body": "En {{title}} se hablan {{total}} palabras distintas. {{atOrBelow}} de ellas —el {{pct}}%— están en {{level}} o por debajo. El resto es lo que esta película te enseñaría.",
+    "factShare": "Parte del vocabulario hablado de esta película que ya deberías conocer, en tu nivel.",
+    "factBand": "El nivel de la propia película, según todo su vocabulario.",
+    "caveat": "Se cuenta por palabra distinta, no por línea de diálogo: las palabras más comunes se repiten toda la película, así que en la práctica entiendes más del {{pct}}% de lo que se dice."
   }
 }

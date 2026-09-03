@@ -9,7 +9,9 @@
     "endOfLevel": "That's everything at this level",
     "empty": "No classified movies found for this level yet.",
     "tapToClose": "Tap to close",
-    "emptyFiltered": "No {{type}} films at this level yet."
+    "emptyFiltered": "No {{type}} films at this level yet.",
+    "knownCaption": "KNOWN",
+    "filmBand": "LEVEL {{band}}"
   },
   "swipe": {
     "seenIt": "Seen it",
@@ -33,18 +35,29 @@
     "done": "Done",
     "sortLabel": "Sort by",
     "typeLabel": "Show",
-    "a11y": "Filters",
-    "a11yActive": "Filters, {{count}} active",
     "sort": {
       "rating": "Rating",
       "popularity": "Popularity",
       "level": "Level match",
-      "tapToFlip": "Tap again to reverse the order"
-    }
+      "tapToFlip": "Tap again to reverse the order",
+      "recommended": "Recommended",
+      "recommendedNote": "A fresh set every {{hours}} hours"
+    },
+    "resetSortAndType": "Reset sort & films",
+    "a11yWithLevel": "Level {{level}}. Filters, {{count}} active."
   },
   "level": {
-    "title": "Your level",
-    "subtitle": "Films are graded and ranked for this level.",
-    "a11y": "Level {{value}}. Tap to change."
+    "label": "Level",
+    "scopeNote": "What the whole feed is graded for. Yours by default — Reset leaves it alone."
+  },
+  "feed": {
+    "recommendedEyebrow": "Recommended for {{level}} · new set in {{hours}}h"
+  },
+  "comprehension": {
+    "title": "What {{pct}}% means",
+    "body": "{{total}} different words are spoken in {{title}}. {{atOrBelow}} of them — {{pct}}% — sit at {{level}} or below. The rest are what this film would teach you.",
+    "factShare": "Share of this film's dialogue vocabulary you should already know, at your level.",
+    "factBand": "The film's own level, from its whole vocabulary.",
+    "caveat": "Counted per distinct word, not per line of dialogue — the commonest words repeat all film, so in practice you follow more than {{pct}}% of what is said."
   }
 }

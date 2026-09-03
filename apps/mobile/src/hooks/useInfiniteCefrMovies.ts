@@ -10,12 +10,32 @@
  * Changing `level`, `sort`, `order`, or `movieType` resets the feed to page 0.
  * A request-id guard discards responses from a superseded filter so a slow
  * in-flight page can't clobber a newer one.
+ *
+ * ## The recommendation seed
+ *
+ * `sort=recommended` is a seeded shuffle, not a column order, and OFFSET
+ * pagination over a shuffle is only coherent if every page is drawn from the
+ * *same* shuffle. The server hands back the `seed` it used on the first page;
+ * every append must send that seed back. Let an append re-derive it — by
+ * omitting it, or by reading the clock again — and page 2 is a slice of a
+ * different ordering than page 1, which silently duplicates some films and
+ * skips others. That is the one rule here that corrupts the feed rather than
+ * erroring, so it is pinned by a test.
+ *
+ * A *reset* clears the seed, because a reset is a new draw by definition.
+ * Pull-to-refresh is not a reset — it re-reads the same draw.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../services/api';
-import { animatedParam, type MovieType } from '../components/home/filterOptions';
+import {
+  animatedParam,
+  type LevelSort,
+  type MovieType,
+} from '../components/home/filterOptions';
 
-export type MovieSort = 'rating' | 'popularity' | 'level';
+/** The sort values `/movies/by-cefr` accepts. Same union the picker uses —
+ *  a second copy is how a picker and a query drift apart. */
+export type MovieSort = LevelSort;
 export type SortOrder = 'asc' | 'desc';
 
 const PAGE_SIZE = 10;
@@ -41,11 +61,17 @@ export function useInfiniteCefrMovies(
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [nextRotationAt, setNextRotationAt] = useState<string | null>(null);
+
   const offsetRef = useRef(0);
   const hasMoreRef = useRef(true);
   const loadingRef = useRef(false);
   // Bumped on every request; only the latest request is allowed to write state.
   const reqIdRef = useRef(0);
+  // The recommendation draw this feed is paging through — see the docblock.
+  // A ref, not state: an append reads it in the same tick it was written by
+  // the reset, and a state update would not have committed yet.
+  const seedRef = useRef<number | null>(null);
 
   const fetchPage = useCallback(
     async (reset: boolean) => {
@@ -57,6 +83,9 @@ export function useInfiniteCefrMovies(
       if (reset) {
         offsetRef.current = 0;
         hasMoreRef.current = true;
+        // A reset is a new draw. Clearing it is what lets a level change (or a
+        // rotation boundary crossed while Home was mounted) actually reshuffle.
+        seedRef.current = null;
         setLoading(true);
       } else {
         setLoadingMore(true);
@@ -68,6 +97,9 @@ export function useInfiniteCefrMovies(
           sort,
           order,
           animated: animatedParam(movieType),
+          // Only Recommended is seeded; the column sorts are already stable
+          // and a seed on them would be a param the server has to ignore.
+          seed: sort === 'recommended' ? seedRef.current ?? undefined : undefined,
         });
         const raw = (res.movies || []).map((m: any) => ({
           ...m,
@@ -77,6 +109,14 @@ export function useInfiniteCefrMovies(
 
         // A newer filter/reset started while we were awaiting — drop this page.
         if (reqId !== reqIdRef.current) return;
+
+        // Adopt the draw the server picked, before anything appends to it.
+        // Only on a reset: an append echoes back the seed it was sent, and
+        // re-adopting it every page would hide a bug where it did not.
+        if (reset) {
+          seedRef.current = res.seed ?? null;
+          setNextRotationAt(res.next_rotation_at ?? null);
+        }
 
         offsetRef.current += raw.length;
         hasMoreRef.current = !!res.has_more;
@@ -138,5 +178,8 @@ export function useInfiniteCefrMovies(
     reload: () => fetchPage(true),
     removeMovie,
     insertMovie,
+    /** ISO instant this recommendation draw expires. Null on the column
+     *  sorts, and null until the first page lands. */
+    nextRotationAt,
   };
 }

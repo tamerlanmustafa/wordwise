@@ -5,7 +5,9 @@
     "empty": "Bu seviye için henüz sınıflandırılmış film bulunamadı.",
     "endOfLevel": "Bu seviyedeki konular bu kadar",
     "tapToClose": "Kapatmak için dokunun",
-    "emptyFiltered": "Bu seviyede henüz {{type}} filmi yok."
+    "emptyFiltered": "Bu seviyede henüz {{type}} filmi yok.",
+    "knownCaption": "BİLİNEN",
+    "filmBand": "SEVİYE {{band}}"
   },
   "search": {
     "placeholder": "Filmleri, kelimeleri veya oyuncuları ara…",
@@ -33,18 +35,29 @@
     "done": "Tamam",
     "sortLabel": "Sıralama",
     "typeLabel": "Göster",
-    "a11y": "Filtreler",
-    "a11yActive": "Filtreler, {{count}} etkin",
     "sort": {
       "rating": "Puan",
       "popularity": "Popülerlik",
       "level": "Seviye uyumu",
-      "tapToFlip": "Sırayı ters çevirmek için tekrar dokunun"
-    }
+      "tapToFlip": "Sırayı ters çevirmek için tekrar dokunun",
+      "recommended": "Önerilenler",
+      "recommendedNote": "Her {{hours}} saatte bir yeni seçki"
+    },
+    "resetSortAndType": "Sıralamayı ve filmleri sıfırla",
+    "a11yWithLevel": "Seviye {{level}}. Filtreler, {{count}} etkin."
   },
   "level": {
-    "title": "Seviyeniz",
-    "subtitle": "Filmler bu seviyeye göre sıralanır.",
-    "a11y": "Seviye {{value}}. Değiştirmek için dokunun."
+    "label": "Seviye",
+    "scopeNote": "Tüm akışın hangi seviyeye göre derecelendirildiği. Varsayılan olarak seninki — Sıfırla buna dokunmaz."
+  },
+  "feed": {
+    "recommendedEyebrow": "{{level}} için öneriler · yeni seçki {{hours}} sa sonra"
+  },
+  "comprehension": {
+    "title": "%{{pct}} ne demek",
+    "body": "{{title}} filminde {{total}} farklı kelime konuşuluyor. Bunların {{atOrBelow}} tanesi — %{{pct}} — {{level}} veya altında. Geri kalanı bu filmin sana öğreteceği kelimeler.",
+    "factShare": "Bu filmin diyalog kelime dağarcığının, kendi seviyende zaten bilmen gereken kısmı.",
+    "factBand": "Filmin kendi seviyesi, tüm kelime dağarcığından.",
+    "caveat": "Diyalog satırı başına değil, farklı kelime başına sayılır — en yaygın kelimeler film boyunca tekrarlanır, bu yüzden pratikte söylenenlerin %{{pct}}'inden fazlasını anlarsın."
   }
 }

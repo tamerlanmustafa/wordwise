@@ -28,14 +28,16 @@ import { RankedMovieList } from '../home/RankedMovieList';
 import { SnapPager } from '../home/SnapPager';
 import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
-import { HomeHeader } from '../home/HomeHeader';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { FeedFilterSheet } from '../home/FeedFilterSheet';
-import { LevelSheet } from '../home/LevelSheet';
+import { ComprehensionSheet } from '../home/ComprehensionSheet';
+import type { KnownShare } from '../home/comprehension';
+import { scoreToCefr } from '../../utils/formatting';
 import {
   DEFAULT_FEED_FILTERS,
   MOVIE_TYPE_OPTIONS,
   activeFilterCount,
+  sortHasDirection,
   type LevelSort,
   type MovieType,
 } from '../home/filterOptions';
@@ -102,8 +104,19 @@ export const HomeScreen = ({
   // The level is not in that group: it's owned by the profile, so it re-syncs
   // when `proficiency_level` changes instead of freezing at its mount value.
   const [selectedLevel, setSelectedLevel] = useFeedLevel(user?.proficiency_level);
-  // Which sheet is up, if any — they share the screen, so only one at a time.
-  const [openSheet, setOpenSheet] = useState<'none' | 'filters' | 'level'>('none');
+  // One sheet now — the level was absorbed into it, so the old
+  // 'none' | 'filters' | 'level' tri-state had nothing left to arbitrate.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // The card whose ring was tapped, with the share already computed by the
+  // cell that drew it. Held here, not in the list, because BottomSheet is an
+  // absolute overlay and a 116pt recycled cell would clip it.
+  const [ringDetail, setRingDetail] = useState<{ movie: any; share: KnownShare } | null>(null);
+  // Stable, so MovieCard's React.memo survives — an inline arrow here would
+  // hand every recycled cell a new prop on every HomeScreen render.
+  const handleRingPress = useCallback(
+    (movie: any, share: KnownShare) => setRingDetail({ movie, share }),
+    [],
+  );
 
   // Server-sorted, paginated CEFR feed for the ranked list. The backend does
   // the ordering, so each sort/level reflects the full catalog (not a reshuffle
@@ -116,6 +129,7 @@ export const HomeScreen = ({
     loadMore: loadMoreLevel,
     removeMovie: removeLevelMovie,
     insertMovie: insertLevelMovie,
+    nextRotationAt,
   } = useInfiniteCefrMovies(
     selectedLevel,
     levelSort,
@@ -354,6 +368,13 @@ export const HomeScreen = ({
   );
 
   const handleSortPress = (key: LevelSort) => {
+    // A shuffle has no direction, so re-tapping Recommended must not flip
+    // anything — it would change the query string and nothing on screen.
+    if (!sortHasDirection(key)) {
+      setLevelSort(key);
+      setLevelSortAsc(false);
+      return;
+    }
     if (levelSort === key) {
       setLevelSortAsc((v) => !v);
     } else {
@@ -361,6 +382,15 @@ export const HomeScreen = ({
       setLevelSortAsc(false);
     }
   };
+
+  // Whole hours until this recommendation draw expires. Rounded up so it never
+  // reads "new set in 0h" for the last 59 minutes of a window.
+  const hoursToRotation = useMemo(() => {
+    if (!nextRotationAt) return null;
+    const ms = Date.parse(nextRotationAt) - Date.now();
+    if (!Number.isFinite(ms)) return null;
+    return Math.max(1, Math.ceil(ms / 3_600_000));
+  }, [nextRotationAt]);
 
   const dropdownOpen = (showSuggestions && suggestions.length > 0) ||
     (searchFocused && !searchQuery && recentlyViewed.length > 0);
@@ -375,10 +405,10 @@ export const HomeScreen = ({
         pointerEvents="none"
       />
 
-      <HomeHeader
-        level={selectedLevel}
-        onLevelPress={() => setOpenSheet('level')}
-      />
+      {/* No header row. It held one gold level chip in 46pt of screen; the
+          chip now prints on the filter button beside the search field, which
+          was already there. The search block is the first child under the
+          glow — HomeSearchBar's own paddingTop keeps it off the safe area. */}
 
       {/* The header stack (search + ad + collapsible word card + filters) is
           pinned; the movie feed below is the page's sole scroller. Scrolling
@@ -407,7 +437,8 @@ export const HomeScreen = ({
             recentlyViewed={recentlyViewed}
             onMoviePress={onSearchMoviePress}
             onSeeAll={submitSearch}
-            onFilterPress={() => setOpenSheet('filters')}
+            onFilterPress={() => setFiltersOpen(true)}
+            level={selectedLevel}
             activeFilters={activeFilterCount({
               sort: levelSort,
               sortAsc: levelSortAsc,
@@ -474,6 +505,19 @@ export const HomeScreen = ({
 
       </View>
 
+      {/* Says what the feed is and when it turns over — the two things a
+          shuffled order has to declare, or it just looks like a broken sort.
+          Hidden unless the server actually gave us a rotation instant, so a
+          column sort (or a page that hasn't landed) shows nothing. */}
+      {levelSort === 'recommended' && hoursToRotation != null ? (
+        <Text style={s.feedEyebrow}>
+          {t('home:feed.recommendedEyebrow', {
+            level: selectedLevel,
+            hours: hoursToRotation,
+          })}
+        </Text>
+      ) : null}
+
       {/* Ranked feed — the sole full-height scroller. It owns pull-to-refresh
           and keyboard-dismiss now that the outer ScrollView is gone, and its
           scroll offset drives the Word-of-the-Hour collapse above. The cards
@@ -485,6 +529,8 @@ export const HomeScreen = ({
           <RankedMovieList
             movies={levelMovies}
             onMoviePress={handleMoviePress}
+            level={selectedLevel}
+            onRingPress={handleRingPress}
             onEndReached={loadMoreLevel}
             loadingMore={levelLoadingMore}
             hasMore={levelHasMore}
@@ -521,30 +567,43 @@ export const HomeScreen = ({
 
       {/* Both sheets render here, at the screen root, rather than inside the
           controls that open them: BottomSheet is an absolute overlay, so from
-          inside the 46pt header row or the search block it would be clipped to
-          that row instead of covering the screen. */}
-      <LevelSheet
-        visible={openSheet === 'level'}
-        onClose={() => setOpenSheet('none')}
+          inside the search block or a 116pt feed cell it would be clipped to
+          that box instead of covering the screen. */}
+      <FeedFilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
         bottomOffset={bottomOffset}
         level={selectedLevel}
+        // Writes straight through `useFeedLevel`, so a later profile change
+        // still wins over a hand-picked level. The sheet stays open: it is one
+        // of three groups now, not a picker with its own dismiss.
         onLevelChange={setSelectedLevel}
-      />
-      <FeedFilterSheet
-        visible={openSheet === 'filters'}
-        onClose={() => setOpenSheet('none')}
-        bottomOffset={bottomOffset}
         sort={levelSort}
         sortAsc={levelSortAsc}
         onSortPress={handleSortPress}
         movieType={movieType}
         onMovieTypeChange={setMovieType}
+        // Deliberately does not touch `selectedLevel`. Resetting to a constant
+        // would throw away the level the user's profile chose, which is not
+        // "back to default" — it is a different learner's feed.
         onReset={() => {
           setLevelSort(DEFAULT_FEED_FILTERS.sort);
           setLevelSortAsc(DEFAULT_FEED_FILTERS.sortAsc);
           setMovieType(DEFAULT_FEED_FILTERS.movieType);
         }}
       />
+      {ringDetail ? (
+        <ComprehensionSheet
+          visible
+          onClose={() => setRingDetail(null)}
+          bottomOffset={bottomOffset}
+          title={ringDetail.movie.title}
+          dist={ringDetail.movie.cefr_distribution}
+          level={selectedLevel}
+          share={ringDetail.share}
+          band={scoreToCefr(ringDetail.movie.difficulty_score ?? null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -590,6 +649,18 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 2,
       color: tc.textFaint,
       textTransform: 'uppercase',
+    },
+    // One mono line between the ad slot and the feed. Same treatment as the
+    // other eyebrows in the app, at the feed's own gutter (18) rather than the
+    // list's narrower one, so it lines up with the search field above it.
+    feedEyebrow: {
+      fontSize: 9.5,
+      fontWeight: '700',
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+      color: tc.goldOnSurface,
+      paddingHorizontal: 18,
+      paddingBottom: 9,
     },
     feedSection: {
       // Takes the rest of the screen below the pinned header so the movie list

@@ -1,30 +1,40 @@
 /**
- * FeedFilterSheet — everything that shapes the Home feed *except* the CEFR
- * level: how it's ordered (rating / popularity / level %) and which films are
- * in it (all / animation / live action).
+ * FeedFilterSheet — everything that shapes the Home feed: what it is graded
+ * for (the CEFR level), how it's ordered (recommended / rating / popularity /
+ * level %) and which films are in it (all / animation / live action).
  *
  * Replaces the four chips that used to sit in their own row under the search
- * bar (`LevelSortControls`). They cost a whole row — two rows on a 375pt
- * phone, where they wrapped — to show four controls that are mostly left at
- * their defaults; behind one button they cost nothing until they're wanted.
- * The level is *not* here on purpose: it's the feed's scope rather than a
- * filter, it's seeded from the user's profile rather than from a constant, and
- * it keeps its own always-visible chip in the header (see `HomeHeader`).
+ * bar (`LevelSortControls`), and — since the level moved onto the filter
+ * button — the separate `LevelSheet` behind the header chip too. Three groups
+ * behind one button cost nothing until they're wanted, where the chips cost a
+ * whole row (two on a 375pt phone, where they wrapped) to show controls that
+ * are mostly left alone.
  *
- * Selecting an option does NOT close the sheet — unlike the old dropdowns,
- * this is two groups and people change both — so there's an explicit Done.
+ * The level is here but it is **not a filter**: it is the feed's scope, it is
+ * seeded from the user's `proficiency_level` rather than from a constant, and
+ * so it has no "off" position. That is why Reset says "sort & films" and why
+ * `activeFilterCount` never counts it — a count that did would badge the
+ * button for every learner whose level isn't `DEFAULT_LEVEL`.
+ *
+ * Selecting an option does NOT close the sheet — three groups, and people
+ * change more than one — so there's an explicit Done. (The old LevelSheet did
+ * close on pick; it was one group with one choice.)
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { MONO_FAMILY } from '../../theme/fonts';
 import { BottomSheet } from '../common/BottomSheet';
 import { SheetOptionRow, SheetSectionLabel } from './SheetOptionRow';
 import {
+  LEVEL_OPTIONS,
   MOVIE_TYPE_OPTIONS,
+  RECOMMENDED_ROTATION_HOURS,
   SORT_OPTIONS,
   activeFilterCount,
+  sortHasDirection,
   type LevelSort,
   type MovieType,
 } from './filterOptions';
@@ -34,13 +44,18 @@ interface Props {
   onClose: () => void;
   /** Height of GlobalBottomBar — sheet and scrim stop above it. */
   bottomOffset?: number;
+  /** The feed's scope, not one of the filters — see the docblock. */
+  level: string;
+  onLevelChange: (level: string) => void;
   sort: LevelSort;
   sortAsc: boolean;
-  /** Tap a sort: the same one flips direction, a new one selects it (desc). */
+  /** Tap a sort: the same one flips direction, a new one selects it (desc).
+   *  A directionless sort (Recommended) never flips. */
   onSortPress: (key: LevelSort) => void;
   movieType: MovieType;
   onMovieTypeChange: (type: MovieType) => void;
-  /** Back to rating ↓ / all films. Only offered when something is off-default. */
+  /** Back to recommended / all films. Leaves the level alone, and is only
+   *  offered when something in those two groups is off-default. */
   onReset: () => void;
 }
 
@@ -48,6 +63,8 @@ export function FeedFilterSheet({
   visible,
   onClose,
   bottomOffset,
+  level,
+  onLevelChange,
   sort,
   sortAsc,
   onSortPress,
@@ -67,9 +84,39 @@ export function FeedFilterSheet({
         <Text style={s.title}>{t('home:filters.title')}</Text>
         {count > 0 ? (
           <TouchableOpacity onPress={onReset} activeOpacity={0.6} hitSlop={8}>
-            <Text style={s.reset}>{t('home:filters.reset')}</Text>
+            {/* Names the two groups it touches. "Reset" alone, in a sheet that
+                now contains the level, would read as a promise to reset that
+                too — and the level is the one thing it must not move. */}
+            <Text style={s.reset}>{t('home:filters.resetSortAndType')}</Text>
           </TouchableOpacity>
         ) : null}
+      </View>
+
+      <SheetSectionLabel>{t('home:level.label')}</SheetSectionLabel>
+      <Text style={s.caption}>{t('home:level.scopeNote')}</Text>
+      {/* A ladder, not six rows: six SheetOptionRows are 288pt, and a CEFR
+          level is a scale — six cells side by side say that, a menu does not.
+          `flexDirection: 'row'` mirrors under RTL along with everything else,
+          so A1 stays on the leading edge. */}
+      <View style={s.ladder} accessibilityRole="radiogroup">
+        {LEVEL_OPTIONS.map((opt) => {
+          const active = opt.value === level;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[s.rung, active && s.rungOn]}
+              onPress={() => onLevelChange(opt.value)}
+              activeOpacity={0.8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active }}
+              // The prose label ("B1 Intermediate") does not fit a 52pt cell,
+              // so it lives here — the cell prints the code alone.
+              accessibilityLabel={opt.label}
+            >
+              <Text style={[s.rungLabel, active && s.rungLabelOn]}>{opt.value}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <SheetSectionLabel>{t('home:filters.sortLabel')}</SheetSectionLabel>
@@ -81,10 +128,21 @@ export function FeedFilterSheet({
           onPress={() => onSortPress(opt.value)}
           // No leading glyph — the empty swatch column keeps these labels
           // aligned with the film-type rows below, which do have one.
-          trailing={sortAsc ? '↑' : '↓'}
+          trailing={
+            sortHasDirection(opt.value) ? (sortAsc ? '↑' : '↓') : undefined
+          }
+          note={
+            opt.value === 'recommended'
+              ? t('home:filters.sort.recommendedNote', {
+                  hours: RECOMMENDED_ROTATION_HOURS,
+                })
+              : undefined
+          }
           divider={i < SORT_OPTIONS.length - 1}
           accessibilityHint={
-            opt.value === sort ? t('home:filters.sort.tapToFlip') : undefined
+            opt.value === sort && sortHasDirection(opt.value)
+              ? t('home:filters.sort.tapToFlip')
+              : undefined
           }
         />
       ))}
@@ -131,6 +189,41 @@ const makeStyles = (tc: ThemeColors) =>
       fontSize: 13,
       fontWeight: '800',
       color: tc.goldOnSurface,
+    },
+    caption: {
+      fontSize: 11.5,
+      lineHeight: 16,
+      color: tc.textSecondary,
+      paddingHorizontal: 12,
+      marginBottom: 8,
+    },
+    ladder: {
+      flexDirection: 'row',
+      gap: 6,
+      paddingHorizontal: 12,
+    },
+    rung: {
+      flex: 1,
+      height: 44,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tc.border,
+      backgroundColor: tc.chipBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rungOn: {
+      backgroundColor: tc.gold,
+      borderColor: tc.gold,
+    },
+    rungLabel: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: tc.textSecondary,
+    },
+    rungLabelOn: {
+      color: tc.goldDeep,
     },
     doneBtn: {
       marginTop: 16,

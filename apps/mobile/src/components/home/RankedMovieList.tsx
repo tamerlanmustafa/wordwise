@@ -17,7 +17,15 @@
  * behind the type, easing to nothing by the trailing edge where the still
  * reads at full strength. Text is ink on paper, which is what lets one set of
  * colours survive both themes. The leading margin carries the one thing the
- * row is actually judged by: its level ring.
+ * row is actually judged by: its comprehension ring.
+ *
+ * That ring reads `<pct>% / KNOWN` — the share of the film's dialogue
+ * vocabulary at or below the reader's level (`./comprehension`). It used to
+ * draw `difficulty_score` with `scoreToCefr()` of the *same number* stacked
+ * inside it, which said one thing twice and said nothing about the reader; on
+ * a B1 shelf every card read `B1` with a percentage inside the 10-point-wide
+ * B1 band. The film's own band still appears — on the meta line, beside the
+ * year, where it is plainly a fact about the film.
  *
  * The maths (gradient stops, ring geometry, plus-ink contrast) lives in
  * ./cardVisuals so it is testable and can be hoisted out of the row.
@@ -55,6 +63,7 @@ import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
 import { SwipeableRow } from './SwipeableRow';
+import { knownShare, type KnownShare } from './comprehension';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
@@ -157,6 +166,15 @@ function prefetchMovieImages(movie: any) {
 interface Props {
   movies: any[];
   onMoviePress: (movie: any) => void;
+  /** The reader's CEFR level — what each ring's percentage is measured
+   *  against. Passed down rather than read from a store inside the cell: these
+   *  cells are recycled, and a store subscription per row is a subscription
+   *  per *recycled* row. */
+  level: string;
+  /** Tapping a ring opens the "what does 86% mean" sheet. The sheet is the
+   *  parent's to render — an absolute overlay inside a 116pt cell would be
+   *  clipped to it. Rings on films with no distribution don't fire. */
+  onRingPress?: (movie: any, share: KnownShare) => void;
   /** Called when the user scrolls near the bottom — load the next page. */
   onEndReached?: () => void;
   /** True while the next page is being fetched (drives the footer spinner). */
@@ -283,21 +301,30 @@ const AddToReelPlus = React.memo(({
   );
 });
 
-// ── Level ring ──────────────────────────────────────────────────────────────
-// Replaces the old standalone "B2 – 62%" text line: a gold arc drawn to the
-// comprehension percentage with the CEFR band and percent stacked inside. The
+// ── Comprehension ring ──────────────────────────────────────────────────────
+// A gold arc drawn to the share of this film's dialogue vocabulary at or below
+// the reader's level, with that percent and the word KNOWN stacked inside. The
 // hole is filled with card stock, not left transparent, so the backdrop can't
 // show through it. The percent is deliberately ink rather than gold — two
-// golds at that size failed contrast, and the pairing is what makes the
-// percent read as belonging to the band.
+// golds at that size failed contrast.
+//
+// KNOWN is one word of caption and it is the whole point: without it the
+// number reads as "how B1 this film is", which is what the ring used to mean
+// and is precisely the confusion this change exists to end.
+//
+// Geometry, RING_*, and the stock-filled hole are unchanged; only what feeds
+// the arc changed.
 const LevelRing = React.memo(({
-  score,
-  band,
+  share,
+  caption,
   tc,
   s,
 }: {
-  score: number | null;
-  band: string | null;
+  share: KnownShare | null;
+  /** The word under the percent, already translated. Passed in rather than
+   *  looked up here so a cell that FlashList recycles doesn't take an i18n
+   *  context subscription per row. */
+  caption: string;
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
 }) => (
@@ -311,7 +338,7 @@ const LevelRing = React.memo(({
         stroke={tc.cardRingTrack}
         fill="none"
       />
-      {score != null ? (
+      {share ? (
         <Circle
           cx={RING_MID}
           cy={RING_MID}
@@ -320,7 +347,7 @@ const LevelRing = React.memo(({
           stroke={tc.cardMeta}
           fill="none"
           strokeDasharray={RING_C}
-          strokeDashoffset={ringDashOffset(score)}
+          strokeDashoffset={ringDashOffset(share.pct)}
           strokeLinecap="butt"
           transform={`rotate(-90 ${RING_MID} ${RING_MID})`}
         />
@@ -328,8 +355,12 @@ const LevelRing = React.memo(({
     </Svg>
     <View style={s.ringHoleWrap} pointerEvents="none">
       <View style={s.ringHole}>
-        {band ? <Text style={s.ringBand}>{band}</Text> : null}
-        <Text style={s.ringPct}>{score != null ? `${Math.round(score)}%` : '—'}</Text>
+        {/* No distribution → bare track and an em dash. 0% would read as
+            "you know none of this film", which is a claim; the dash is not. */}
+        <Text style={s.ringPct}>{share ? `${share.pct}%` : '—'}</Text>
+        {share ? (
+          <Text style={s.ringCaption} numberOfLines={1}>{caption}</Text>
+        ) : null}
       </View>
     </View>
   </View>
@@ -339,9 +370,18 @@ const LevelRing = React.memo(({
 const MovieCard = React.memo(({
   movie,
   onPress,
+  level,
+  onRingPress,
+  knownCaption,
+  bandLabel,
 }: {
   movie: any;
   onPress: () => void;
+  level: string;
+  onRingPress?: (movie: any, share: KnownShare) => void;
+  knownCaption: string;
+  /** `LEVEL {{band}}`, already translated — see `knownCaption`. */
+  bandLabel: (band: string) => string;
 }) => {
   const tc = useThemeColors();
   const scheme = useColorScheme();
@@ -352,8 +392,19 @@ const MovieCard = React.memo(({
     : null;
   const rating = movie.vote_average > 0 ? Number(movie.vote_average).toFixed(1) : null;
   const year   = movie.release_date ? String(movie.release_date).slice(0, 4) : null;
-  const score  = movie.difficulty_score ?? null;
-  const band   = scoreToCefr(score);
+  // The film's own band, from `difficulty_score`. Still shown — it just is not
+  // the ring any more, because it says nothing about the reader.
+  const band   = scoreToCefr(movie.difficulty_score ?? null);
+  // A pure function of the payload and the reader's level, so it is computed
+  // per render rather than stored: a cached copy is exactly the staleness
+  // `services/movie_cefr.py` exists to prevent.
+  const share = useMemo(
+    () => knownShare(movie.cefr_distribution ?? movie.cefrDistribution, level),
+    [movie.cefr_distribution, movie.cefrDistribution, level],
+  );
+  // Same single meta line as before — the year gains a suffix, it does not
+  // gain a row, so the card is still exactly CARD_H tall.
+  const meta = year && band ? `${year} · ${bandLabel(band)}` : year ?? (band ? bandLabel(band) : null);
 
   // Ref to the ring so the add glyph can measure it and launch the global
   // poster-flight animation from this exact position — it's the row's
@@ -414,14 +465,31 @@ const MovieCard = React.memo(({
 
       <View style={s.row}>
         {/* collapsable={false} keeps the wrapper in the native view tree so
-            measureInWindow always returns a real rect. */}
+            measureInWindow always returns a real rect — the add-to-reel glyph
+            launches its poster flight from this exact node. */}
         <View ref={ringRef as any} collapsable={false}>
-          <LevelRing score={score} band={band} tc={tc} s={s} />
+          {/* Tappable, with stopPropagation, so the ring explains itself
+              without navigating — the pattern AddToReelPlus already uses to
+              keep the card's own onPress → MovieDetail everywhere else. A ring
+              with no distribution has nothing to explain, so it isn't a
+              button at all rather than a button that does nothing. */}
+          <TouchableOpacity
+            onPress={(e: any) => {
+              e?.stopPropagation?.();
+              if (share) onRingPress?.(movie, share);
+            }}
+            disabled={!share || !onRingPress}
+            activeOpacity={0.75}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole={share && onRingPress ? 'button' : undefined}
+          >
+            <LevelRing share={share} caption={knownCaption} tc={tc} s={s} />
+          </TouchableOpacity>
         </View>
 
         <View style={s.info}>
           <Text style={s.title} numberOfLines={2}>{movie.title}</Text>
-          {year ? <Text style={s.year}>{year}</Text> : null}
+          {meta ? <Text style={s.year}>{meta}</Text> : null}
           {rating ? (
             <View style={s.ratingRow}>
               <Text style={s.rating}>{rating}</Text>
@@ -461,8 +529,14 @@ const ListFooter = ({ loadingMore, hasMore, count }: { loadingMore?: boolean; ha
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction, emptyMessage, bottomInset = 0 }: Props) => {
+export const RankedMovieList = ({ movies: data, onMoviePress, level, onRingPress, onEndReached, loadingMore, hasMore, onScrollOffset, fillHeight, refreshControl, onScrollBeginDrag, onSwipeAction, emptyMessage, bottomInset = 0 }: Props) => {
   const { t } = useTranslation();
+  // Resolved once here, not per cell — see LevelRing's `caption`.
+  const knownCaption = t('home:rankedList.knownCaption');
+  const bandLabel = useMemo(
+    () => (band: string) => t('home:rankedList.filmBand', { band }),
+    [t],
+  );
   // The lightbox machinery is intact but currently has no trigger: the card
   // that used to open it no longer carries a poster. Kept rather than removed
   // so a future entry point (long-press, detail hand-off) can wire straight
@@ -501,6 +575,10 @@ export const RankedMovieList = ({ movies: data, onMoviePress, onEndReached, load
               <MovieCard
                 movie={item}
                 onPress={() => onMoviePress(item)}
+                level={level}
+                onRingPress={onRingPress}
+                knownCaption={knownCaption}
+                bandLabel={bandLabel}
               />
             );
             const rowId = String(item.id ?? item.movie_id);
@@ -684,21 +762,25 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       justifyContent: 'center',
       gap: 2,
     },
-    ringBand: {
+    // The percent is the headline now (it was the 9.5pt understudy to the
+    // band), so it takes the size the band used to have.
+    ringPct: {
       fontFamily: MONO_FAMILY,
       fontSize: 12,
       fontWeight: '700',
       letterSpacing: -0.36,
       lineHeight: 12,
-      color: tc.cardMeta,
-    },
-    ringPct: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 9.5,
-      fontWeight: '700',
-      letterSpacing: -0.19,
-      lineHeight: 9.5,
       color: tc.cardInk,
+    },
+    // Small enough to read as a unit label rather than as a second value —
+    // it has to fit the 36pt hole in every locale, hence numberOfLines={1}.
+    ringCaption: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 6.5,
+      fontWeight: '700',
+      letterSpacing: 0.65,
+      lineHeight: 8,
+      color: tc.cardMeta,
     },
 
     // paddingEnd clears the add glyph in the trailing corner.

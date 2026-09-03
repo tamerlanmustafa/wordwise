@@ -2,12 +2,16 @@
  * SheetOptionRow — one selectable row inside the Home sheets, plus the small
  * uppercase section label above a group of them.
  *
- * Extracted rather than duplicated because the level picker and the filter
- * sheet are two sheets showing the same kind of list: a leading swatch or
- * glyph, a label, a gold check on the active row. This is the descendant of
- * the old `FilterDropdown` inside LevelSortControls — same treatment, but as
- * sheet rows with real 48pt touch targets instead of an absolutely-positioned
- * paper menu that had to fight the search dropdown for z-index.
+ * Extracted rather than duplicated because the sheet holds several groups of
+ * the same kind of list: a leading swatch or glyph, a label, a gold check on
+ * the active row. This is the descendant of the old `FilterDropdown` inside
+ * LevelSortControls — same treatment, but as sheet rows with real 48pt touch
+ * targets instead of an absolutely-positioned paper menu that had to fight the
+ * search dropdown for z-index.
+ *
+ * The CEFR level is the one group that does *not* use these rows: six of them
+ * cost 288pt, and the level is a scale rather than a menu, so `FeedFilterSheet`
+ * draws it as a 44pt ladder instead.
  */
 
 import { useMemo } from 'react';
@@ -27,8 +31,14 @@ interface Props {
    *  emoji glyph in a `<Text>`, which sat on the text baseline rather than in
    *  the row's layout box and was drawn by the OS in a font we don't control. */
   icon?: MovieTypeIcon;
-  /** Shown just before the check on the active row — the sort direction. */
+  /** Shown just before the check on the active row — the sort direction.
+   *  Omit for a sort that has no direction (see `sortHasDirection`). */
   trailing?: string;
+  /** A quiet second line under the label, for a row whose behaviour isn't
+   *  obvious from its name ("Recommended" → "a fresh set every 6 hours").
+   *  One line only: the row grows to fit it, and a paragraph here would make
+   *  three sort rows taller than the sheet's whole type group. */
+  note?: string;
   /** Hairline under the row; omit on the last row of a group. */
   divider?: boolean;
   accessibilityHint?: string;
@@ -41,6 +51,7 @@ export function SheetOptionRow({
   swatch,
   icon,
   trailing,
+  note,
   divider = true,
   accessibilityHint,
 }: Props) {
@@ -67,7 +78,10 @@ export function SheetOptionRow({
           )}
         </View>
       ) : null}
-      <Text style={[s.label, active && s.labelActive]}>{label}</Text>
+      <View style={s.labelCol}>
+        <Text style={[s.label, active && s.labelActive]}>{label}</Text>
+        {note ? <Text style={s.note}>{note}</Text> : null}
+      </View>
       {active && trailing ? <Text style={s.trailing}>{trailing}</Text> : null}
       {active ? (
         <HomeIcon name="check" size={17} color={tc.goldOnSurface} sw={2.6} />
@@ -117,11 +131,22 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    label: {
+    // The label owns the flex now, not the Text — the note has to sit under
+    // the label, and a `flex: 1` Text with a sibling below it would put the
+    // two side by side.
+    labelCol: {
       flex: 1,
+      minWidth: 0,
+    },
+    label: {
       fontSize: 15,
       fontWeight: '600',
       color: tc.text,
+    },
+    note: {
+      fontSize: 11.5,
+      color: tc.textSecondary,
+      marginTop: 2,
     },
     labelActive: {
       fontWeight: '800',

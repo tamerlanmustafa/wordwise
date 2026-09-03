@@ -5,7 +5,9 @@
     "empty": "Ainda não foram encontrados filmes classificados para este nível.",
     "endOfLevel": "Isso é tudo neste nível",
     "tapToClose": "Toque para fechar",
-    "emptyFiltered": "Ainda não há filmes de {{type}} neste nível."
+    "emptyFiltered": "Ainda não há filmes de {{type}} neste nível.",
+    "knownCaption": "SABE",
+    "filmBand": "NÍVEL {{band}}"
   },
   "search": {
     "placeholder": "Pesquise filmes, palavras ou atores…",
@@ -33,18 +35,29 @@
     "done": "Concluído",
     "sortLabel": "Ordenar por",
     "typeLabel": "Mostrar",
-    "a11y": "Filtros",
-    "a11yActive": "Filtros, {{count}} ativos",
     "sort": {
       "rating": "Avaliação",
       "popularity": "Popularidade",
       "level": "Correspondência de nível",
-      "tapToFlip": "Toque novamente para inverter a ordem"
-    }
+      "tapToFlip": "Toque novamente para inverter a ordem",
+      "recommended": "Recomendados",
+      "recommendedNote": "Uma seleção nova a cada {{hours}} horas"
+    },
+    "resetSortAndType": "Redefinir ordem e filmes",
+    "a11yWithLevel": "Nível {{level}}. Filtros, {{count}} ativos."
   },
   "level": {
-    "title": "Seu nível",
-    "subtitle": "Os filmes são classificados para este nível.",
-    "a11y": "Nível {{value}}. Toque para alterar."
+    "label": "Nível",
+    "scopeNote": "O nível para o qual todo o feed é classificado. O seu, por padrão — Redefinir não o altera."
+  },
+  "feed": {
+    "recommendedEyebrow": "Recomendados para {{level}} · seleção nova em {{hours}} h"
+  },
+  "comprehension": {
+    "title": "O que significa {{pct}}%",
+    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{atOrBelow}} delas — {{pct}}% — estão em {{level}} ou abaixo. O resto é o que este filme lhe ensinaria.",
+    "factShare": "Parte do vocabulário falado deste filme que você já deveria conhecer, no seu nível.",
+    "factBand": "O nível do próprio filme, a partir de todo o seu vocabulário.",
+    "caveat": "Contado por palavra distinta, não por linha de diálogo — as palavras mais comuns se repetem o filme todo, então na prática você acompanha mais de {{pct}}% do que é dito."
   }
 }

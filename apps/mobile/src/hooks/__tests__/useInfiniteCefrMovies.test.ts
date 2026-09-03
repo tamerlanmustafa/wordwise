@@ -11,13 +11,29 @@ import type { MovieType } from '../../components/home/filterOptions';
 
 const mockGet = wordwiseApi.getMoviesByCefr as jest.Mock;
 
-const page = (movies: Array<{ tmdb_id?: number; movie_id?: number; title: string }>, has_more: boolean) => ({
+const page = (
+  movies: Array<{ tmdb_id?: number; movie_id?: number; title: string }>,
+  has_more: boolean,
+  extra: Record<string, unknown> = {},
+) => ({
   level: 'B1',
   total: 99,
   offset: 0,
   has_more,
   movies,
+  ...extra,
 });
+
+/** A `sort=recommended` page, as the server answers it. */
+const draw = (
+  movies: Array<{ tmdb_id?: number; movie_id?: number; title: string }>,
+  has_more: boolean,
+  seed: number,
+) =>
+  page(movies, has_more, {
+    seed,
+    next_rotation_at: new Date(Date.now() + 4 * 3600_000).toISOString(),
+  });
 
 describe('useInfiniteCefrMovies', () => {
   beforeEach(() => {
@@ -169,6 +185,132 @@ describe('useInfiniteCefrMovies', () => {
       // `animated` is still set, so the server keeps narrowing.
       expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 1, animated: true });
       expect(result.current.movies.map((m) => m.id)).toEqual([1, 2]);
+    });
+  });
+
+  // ── Recommended: the rotation seed ────────────────────────────────────────
+  // `sort=recommended` is a seeded shuffle, so OFFSET pagination is only
+  // coherent while every page is a slice of the SAME shuffle. This is the one
+  // rule in the feature that fails silently — the user just sees a film twice
+  // and never sees another — so it is pinned rather than eyeballed.
+  describe('recommendation seed', () => {
+    it('asks for no particular draw on the first page', async () => {
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'A' }], true, 77));
+      renderHook(() => useInfiniteCefrMovies('B1', 'recommended', 'desc'));
+      await flushAsync();
+      // The server picks the current window and tells us which it used.
+      expect(mockGet.mock.calls[0][2].seed).toBeUndefined();
+    });
+
+    it('sends the first page’s seed back on every append', async () => {
+      mockGet
+        .mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'A' }], true, 77))
+        .mockResolvedValueOnce(draw([{ tmdb_id: 2, title: 'B' }], true, 77))
+        .mockResolvedValueOnce(draw([{ tmdb_id: 3, title: 'C' }], false, 77));
+
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      for (let i = 0; i < 2; i++) {
+        await act(async () => {
+          result.current.loadMore();
+          await Promise.resolve();
+        });
+        await flushAsync();
+      }
+
+      expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 1, seed: 77 });
+      expect(mockGet.mock.calls[2][2]).toMatchObject({ offset: 2, seed: 77 });
+      // Three pages, no repeat and nothing dropped.
+      expect(result.current.movies.map((m) => m.id)).toEqual([1, 2, 3]);
+    });
+
+    it('clears the seed on a reset, so a new level is a new draw', async () => {
+      // Reusing the old seed across a level change would page a B2 shelf
+      // through an ordering computed for B1 — not wrong exactly, but it makes
+      // "the rotation" mean nothing, and a level change is the clearest signal
+      // the user wants a different set.
+      mockGet
+        .mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'A' }], true, 77))
+        .mockResolvedValueOnce(draw([{ tmdb_id: 5, title: 'E' }], true, 78));
+
+      let level = 'B1';
+      const { rerender } = renderHook(() =>
+        useInfiniteCefrMovies(level, 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      level = 'B2';
+      await act(async () => {
+        rerender();
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 0 });
+      expect(mockGet.mock.calls[1][2].seed).toBeUndefined();
+    });
+
+    it('adopts the new seed the reset came back with, for its own appends', async () => {
+      mockGet
+        .mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'A' }], true, 77))
+        .mockResolvedValueOnce(draw([{ tmdb_id: 5, title: 'E' }], true, 78))
+        .mockResolvedValueOnce(draw([{ tmdb_id: 6, title: 'F' }], false, 78));
+
+      let level = 'B1';
+      const { result, rerender } = renderHook(() =>
+        useInfiniteCefrMovies(level, 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      level = 'B2';
+      await act(async () => {
+        rerender();
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      await act(async () => {
+        result.current.loadMore();
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(mockGet.mock.calls[2][2]).toMatchObject({ offset: 1, seed: 78 });
+    });
+
+    it('sends no seed on the column sorts, which are already stable', async () => {
+      mockGet
+        .mockResolvedValueOnce(page([{ tmdb_id: 1, title: 'A' }], true))
+        .mockResolvedValueOnce(page([{ tmdb_id: 2, title: 'B' }], false));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+      await act(async () => {
+        result.current.loadMore();
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(mockGet.mock.calls[0][2].seed).toBeUndefined();
+      expect(mockGet.mock.calls[1][2].seed).toBeUndefined();
+    });
+
+    it('exposes when the draw expires, and nothing when the sort has no draw', async () => {
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'A' }], false, 77));
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+      expect(typeof result.current.nextRotationAt).toBe('string');
+
+      mockGet.mockResolvedValueOnce(page([{ tmdb_id: 1, title: 'A' }], false));
+      const plain = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+      // Null hides the "new set in 4h" line rather than printing a stale one.
+      expect(plain.result.current.nextRotationAt).toBeNull();
     });
   });
 });
