@@ -482,7 +482,7 @@ export const wordwiseApi = {
       vote_count: number | null;
       unique_words?: number | null;
       /** Distinct classified words per CEFR band — what the card's ring is
-       *  measured from (`components/home/comprehension.ts`). */
+       *  measured from (`components/home/filmVocabulary.ts`). */
       cefr_distribution?: Record<string, number> | null;
     }>;
   }> => {

@@ -6,7 +6,7 @@
     "endOfLevel": "Isso é tudo neste nível",
     "tapToClose": "Toque para fechar",
     "emptyFiltered": "Ainda não há filmes de {{type}} neste nível.",
-    "knownCaption": "APRENDER",
+    "knownCaption": "PALAVRAS",
     "filmBand": "NÍVEL {{band}}"
   },
   "search": {
@@ -53,10 +53,10 @@
   "feed": {
     "recommendedEyebrow": "Recomendados para {{level}} · seleção nova em {{hours}} h"
   },
-  "comprehension": {
-    "title": "O que este filme pode lhe ensinar",
-    "body": "Em {{title}} são faladas {{total}} palavras diferentes. {{count}} delas estão em {{level}} ou um passo acima — é esse o baralho que este filme monta para você. O resto você já deveria conhecer.",
-    "factShare": "Palavras no seu nível ou no seguinte — exatamente o que a lista deste filme vai lhe oferecer.",
+  "vocabSheet": {
+    "title": "O que há neste filme",
+    "body": "{{title}} usa {{total}} palavras diferentes. Todos os filmes do nível {{level}} são tão difíceis quanto este — mas nem todos são tão grandes.",
+    "factWords": "Palavras distintas faladas neste filme.",
     "factBand": "O nível do próprio filme, a partir de todo o seu vocabulário.",
     "caveat": "Contado por palavra distinta, não por linha de diálogo — uma palavra dita uma vez conta o mesmo que outra repetida o filme todo."
   }

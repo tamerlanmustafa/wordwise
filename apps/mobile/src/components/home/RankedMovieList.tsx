@@ -16,19 +16,22 @@
  * horizontal gradient scrim in the card's own stock colour — near-opaque
  * behind the type, easing to nothing by the trailing edge where the still
  * reads at full strength. Text is ink on paper, which is what lets one set of
- * colours survive both themes. The leading margin carries the one thing the
- * row is actually judged by: its learning-payload ring.
+ * colours survive both themes. The leading margin carries the row's size mark:
+ * its vocabulary ring.
  *
- * That ring reads `<n> / TO LEARN` — how many of the film's distinct words sit
- * at or above the reader's level (`./comprehension`). Two earlier metrics
- * failed here and the docblock in that module explains both: `difficulty_score`
- * said one thing twice and nothing about the reader, and coverage ("share at
- * or below your level") saturated at 100% for every film above B1. A count is
- * the one form that varies at every level, because shares are normalised by
- * film length and the shelf is selected on exactly that.
+ * That ring reads `<n> / WORDS` — how many distinct words the film speaks. It
+ * is a fact about the *film*, labelled as one. `./filmVocabulary` records the
+ * four reader-facing metrics that were tried here first and why the category
+ * itself is unavailable: the only reader signal a feed card has is the CEFR
+ * band, one value out of six, and the shelf has already been selected by it.
+ * Even real learned-word data moves the number by 2.6%.
  *
- * The film's own band still appears — on the meta line, beside the year, where
- * it is plainly a fact about the film.
+ * Size is what the shelf leaves free — it selects on ratios, not on length —
+ * so it varies 4.6x to 10x inside every shelf and answers the question that is
+ * actually still open once you are looking at a shelf graded for you: big film
+ * or light one tonight?
+ *
+ * The film's band appears on the meta line beside the year.
  *
  * The maths (gradient stops, ring geometry, plus-ink contrast) lives in
  * ./cardVisuals so it is testable and can be hoisted out of the row.
@@ -61,12 +64,13 @@ import { colors } from '../../theme/palette';
 import { useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
 import { isRTL } from '../../i18n/rtl';
+import { getFormattingLocale } from '../../i18n';
 import { scoreToCefr } from '../../utils/formatting';
 import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
 import { SwipeableRow } from './SwipeableRow';
-import { learningPayload, type LearningPayload } from './comprehension';
+import { filmVocabulary, type FilmVocabulary } from './filmVocabulary';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
@@ -177,7 +181,7 @@ interface Props {
   /** Tapping a ring opens the "what this film can teach you" sheet. The sheet is the
    *  parent's to render — an absolute overlay inside a 116pt cell would be
    *  clipped to it. Rings on films with no distribution don't fire. */
-  onRingPress?: (movie: any, payload: LearningPayload) => void;
+  onRingPress?: (movie: any, vocab: FilmVocabulary) => void;
   /** Called when the user scrolls near the bottom — load the next page. */
   onEndReached?: () => void;
   /** True while the next page is being fetched (drives the footer spinner). */
@@ -304,30 +308,28 @@ const AddToReelPlus = React.memo(({
   );
 });
 
-// ── Learning-payload ring ───────────────────────────────────────────────────
-// How many of this film's distinct words sit at or above the reader's level —
-// what it has left to teach them — with a one-word caption under it. The hole
-// is filled with card stock, not left transparent, so the backdrop can't show
-// through it. The number is deliberately ink rather than gold: two golds at
-// this size failed contrast.
+// ── Vocabulary ring ─────────────────────────────────────────────────────────
+// How many distinct words this film speaks, with a one-word caption under it.
+// The hole is filled with card stock, not left transparent, so the backdrop
+// can't show through it. The number is deliberately ink rather than gold: two
+// golds at this size failed contrast.
 //
-// The caption is the whole point. Without it the number reads as a runtime, a
-// rank, or the film's own level — and the two metrics this ring has already
-// been through both failed by being mistaken for something about the film
-// rather than about the reader.
+// The caption is load-bearing. Without it a bare four-digit number in a circle
+// reads as a runtime, a rank or a score — and every metric this ring has held
+// has failed by being mistaken for something it was not.
 //
 // The arc is NOT the count: a count has no natural 0-100. It fills against a
 // typical film on the same shelf (`SHELF_FULL_RING`), so a full ring means
-// "unusually rich for this level" rather than "100% of anything".
+// "wordy for this level" rather than "100% of anything".
 //
 // Geometry, RING_*, and the stock-filled hole are unchanged.
 const LevelRing = React.memo(({
-  payload,
+  vocab,
   caption,
   tc,
   s,
 }: {
-  payload: LearningPayload | null;
+  vocab: FilmVocabulary | null;
   /** The word under the percent, already translated. Passed in rather than
    *  looked up here so a cell that FlashList recycles doesn't take an i18n
    *  context subscription per row. */
@@ -345,7 +347,7 @@ const LevelRing = React.memo(({
         stroke={tc.cardRingTrack}
         fill="none"
       />
-      {payload ? (
+      {vocab ? (
         <Circle
           cx={RING_MID}
           cy={RING_MID}
@@ -354,7 +356,7 @@ const LevelRing = React.memo(({
           stroke={tc.cardMeta}
           fill="none"
           strokeDasharray={RING_C}
-          strokeDashoffset={ringDashOffset(payload.fill)}
+          strokeDashoffset={ringDashOffset(vocab.fill)}
           strokeLinecap="butt"
           transform={`rotate(-90 ${RING_MID} ${RING_MID})`}
         />
@@ -364,8 +366,10 @@ const LevelRing = React.memo(({
       <View style={s.ringHole}>
         {/* No distribution → bare track and an em dash. `0` would read as
             "this film has nothing for you", which is a claim; the dash is not. */}
-        <Text style={s.ringPct}>{payload ? payload.count : '—'}</Text>
-        {payload ? (
+        <Text style={s.ringPct} numberOfLines={1} adjustsFontSizeToFit>
+          {vocab ? vocab.words.toLocaleString(getFormattingLocale()) : '—'}
+        </Text>
+        {vocab ? (
           // adjustsFontSizeToFit, because this word is translated into six
           // languages and the hole is a fixed 36pt: "TO LEARN" fits, but a
           // longer locale must shrink rather than truncate to "TO LEA…".
@@ -390,7 +394,7 @@ const MovieCard = React.memo(({
   movie: any;
   onPress: () => void;
   level: string;
-  onRingPress?: (movie: any, payload: LearningPayload) => void;
+  onRingPress?: (movie: any, vocab: FilmVocabulary) => void;
   knownCaption: string;
   /** `LEVEL {{band}}`, already translated — see `knownCaption`. */
   bandLabel: (band: string) => string;
@@ -412,8 +416,8 @@ const MovieCard = React.memo(({
   // A pure function of the payload and the reader's level, so it is computed
   // per render rather than stored: a cached copy is exactly the staleness
   // `services/movie_cefr.py` exists to prevent.
-  const payload = useMemo(
-    () => learningPayload(movie.cefr_distribution ?? movie.cefrDistribution, level),
+  const vocab = useMemo(
+    () => filmVocabulary(movie.cefr_distribution ?? movie.cefrDistribution, level),
     [movie.cefr_distribution, movie.cefrDistribution, level],
   );
   // Same single meta line as before — the year gains a suffix, it does not
@@ -490,14 +494,14 @@ const MovieCard = React.memo(({
           <TouchableOpacity
             onPress={(e: any) => {
               e?.stopPropagation?.();
-              if (payload) onRingPress?.(movie, payload);
+              if (vocab) onRingPress?.(movie, vocab);
             }}
-            disabled={!payload || !onRingPress}
+            disabled={!vocab || !onRingPress}
             activeOpacity={0.75}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityRole={payload && onRingPress ? 'button' : undefined}
+            accessibilityRole={vocab && onRingPress ? 'button' : undefined}
           >
-            <LevelRing payload={payload} caption={knownCaption} tc={tc} s={s} />
+            <LevelRing vocab={vocab} caption={knownCaption} tc={tc} s={s} />
           </TouchableOpacity>
         </View>
 

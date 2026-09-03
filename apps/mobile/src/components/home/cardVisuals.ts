@@ -224,15 +224,14 @@ export const CARD_PAD_START = 14;
 /** Gap between the ring and the title block. */
 export const CARD_ROW_GAP = 13;
 
-// ── Comprehension ring ─────────────────────────────────────────────────────
-// One 44pt ring: an arc drawn to the share of the film's dialogue vocabulary
-// at or below the reader's level (see ./comprehension), with that percent and
-// the word KNOWN stacked inside. r=20 with a 4pt stroke spans 18–22, so the
-// hole is exactly 36pt across and the stock-filled disc that covers it is too.
+// ── Vocabulary ring ────────────────────────────────────────────────────────
+// One 44pt ring: the count of distinct words the film speaks, over the word
+// WORDS, with the arc drawn against a typical film on the same shelf (see
+// ./filmVocabulary). r=20 with a 4pt stroke spans 18–22, so the hole is
+// exactly 36pt across and the stock-filled disc that covers it is too.
 //
-// The arc used to be fed `difficulty_score` while the hole printed
-// `scoreToCefr()` of the same number — one value shown twice, and neither half
-// about the reader. The geometry below is unchanged; only its input is.
+// The geometry has now outlived four different metrics in the hole — that is
+// the point of keeping it here, decoupled from whatever the ring means today.
 
 export const RING_SIZE = 44;
 export const RING_STROKE = 4;

@@ -1,19 +1,16 @@
 /**
- * ComprehensionSheet — "what this film can teach you", opened by tapping a
- * home card's ring.
+ * VocabularySheet — "what's in this film", opened by tapping a home card's
+ * vocabulary ring.
  *
- * The ring shows a count and the meta line shows a CEFR band, and the two are
- * easy to conflate: one is about the *reader* (how many words are still at or
- * above your level), the other is about the *film* (what its whole vocabulary
- * grades out at). They were once literally the same number rendered twice,
- * which is why they need saying apart, once, plainly.
+ * The ring gives one number, the film's distinct-word count. This sheet gives
+ * the thing a single number never can: the *shape* of that vocabulary, and
+ * where the reader's own level falls inside it.
  *
- * This sheet previously read "What 86% means" over a coverage percentage. On
- * every film above B1 that percentage was 100 — see `./comprehension` for the
- * measurements — so the body sentence ended "the rest are what this film would
- * teach you" when there was no rest. The bar survived the rewrite because it
- * was always the honest part: it shows the whole band spread, which is what
- * a single number can never do.
+ * The bar is the oldest surviving part of this screen and the only part that
+ * never had to be rewritten, through four different ring metrics. That is not
+ * a coincidence — it does not compress the film to one figure, so there was
+ * never a figure to be wrong. Worth remembering the next time the temptation
+ * is to replace it with a headline statistic.
  *
  * Built on the shared `BottomSheet` with the vocabulary `FeedFilterSheet`
  * established — grabber, 17/'800' title, gold Done, `bottomOffset` so no row
@@ -32,7 +29,7 @@ import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens'
 import { MONO_FAMILY } from '../../theme/fonts';
 import { CEFR_LEVELS } from '../../types/constants';
 import { BottomSheet } from '../common/BottomSheet';
-import type { LearningPayload } from './comprehension';
+import type { FilmVocabulary } from './filmVocabulary';
 
 interface Props {
   visible: boolean;
@@ -42,21 +39,21 @@ interface Props {
   title: string;
   /** Distinct classified words per band, straight off the movie payload. */
   dist: Record<string, number> | null | undefined;
-  /** The reader's level — the cut point the gold half of the bar starts at. */
+  /** The reader's level — where the bar's gold half stops. */
   level: string;
-  payload: LearningPayload;
+  vocab: FilmVocabulary;
   /** The film's own CEFR band, from its whole vocabulary. Null if ungraded. */
   band: string | null;
 }
 
-export function ComprehensionSheet({
+export function VocabularySheet({
   visible,
   onClose,
   bottomOffset,
   title,
   dist,
   level,
-  payload,
+  vocab,
   band,
 }: Props) {
   const { t } = useTranslation();
@@ -75,15 +72,13 @@ export function ComprehensionSheet({
         return {
           code,
           count: Number.isFinite(n) && n > 0 ? n : 0,
-          // Gold marks exactly the bands the RING counts — the reader's own
-          // level and the one above it. Not "everything above": that is what
-          // the ring used to count, and it promised words the "For you" deck
-          // would never offer. Bands below are behind the reader; bands two or
-          // more above are out of reach for now. Both are quiet ink, because
-          // neither is what this film is going to teach them next.
-          payload: i === cut || i === cut + 1,
-          color: i === cut || i === cut + 1
-            ? withAlpha(tc.gold, 0.95 - (i - cut) * 0.25)
+          // Gold is the part of this film's vocabulary already within reach at
+          // the reader's level. The ring no longer claims anything about the
+          // reader, so this is the only place the two meet — and it is a
+          // shape, not a headline figure, which is why it can say it honestly.
+          known: i <= cut,
+          color: i <= cut
+            ? withAlpha(tc.gold, 0.95 - i * 0.2)
             : withAlpha(tc.text, 0.16),
         };
       }).filter((seg) => seg.count > 0),
@@ -95,21 +90,18 @@ export function ComprehensionSheet({
   return (
     <BottomSheet visible={visible} onClose={onClose} bottomOffset={bottomOffset}>
       <View style={s.pad}>
-        <Text style={s.title}>{t('home:comprehension.title')}</Text>
+        <Text style={s.title}>{t('home:vocabSheet.title')}</Text>
         <Text style={s.body}>
-          {t('home:comprehension.body', {
-            total: num(payload.total),
+          {t('home:vocabSheet.body', {
+            total: num(vocab.words),
             title,
-            count: num(payload.count),
             level,
           })}
         </Text>
 
         {/* One stacked bar rather than six meters: the question is where the
             reader's level falls inside *one* vocabulary, and a stacked bar is
-            the only form where that cut is a place you can point at. It is
-            also the only thing here that still works when the count is small —
-            12 words out of 1,479 is a sliver, and the sliver is the truth. */}
+            the only form where that cut is a place you can point at. */}
         <View style={s.bar}>
           {segments.map((seg, i) => (
             <View
@@ -131,23 +123,24 @@ export function ComprehensionSheet({
           {segments.map((seg) => (
             <View key={seg.code} style={s.legendItem}>
               <View style={[s.swatch, { backgroundColor: seg.color }]} />
-              <Text style={[s.legendText, !seg.payload && s.legendTextAbove]}>
+              <Text style={[s.legendText, !seg.known && s.legendTextAbove]}>
                 {`${seg.code} ${num(seg.count)}`}
               </Text>
             </View>
           ))}
         </View>
 
-        {/* The pair the old ring conflated. Said once, side by side, with the
-            value in a fixed leading column so the two read as one table. */}
+        {/* Two facts about the film, said apart. They were once the same
+            number rendered twice, which is why they are still listed
+            separately even though nothing conflates them today. */}
         <View style={s.factRow}>
-          <Text style={s.factValue}>{num(payload.count)}</Text>
-          <Text style={s.factLabel}>{t('home:comprehension.factShare')}</Text>
+          <Text style={s.factValue}>{num(vocab.words)}</Text>
+          <Text style={s.factLabel}>{t('home:vocabSheet.factWords')}</Text>
         </View>
         {band ? (
           <View style={[s.factRow, s.factRowLast]}>
             <Text style={s.factValue}>{band}</Text>
-            <Text style={s.factLabel}>{t('home:comprehension.factBand')}</Text>
+            <Text style={s.factLabel}>{t('home:vocabSheet.factBand')}</Text>
           </View>
         ) : null}
 
@@ -155,7 +148,7 @@ export function ComprehensionSheet({
             words (types), not spoken words (tokens), so a word said once
             counts the same as one repeated through the whole film. Without
             this line the count reads as an amount of listening. */}
-        <Text style={s.caveat}>{t('home:comprehension.caveat')}</Text>
+        <Text style={s.caveat}>{t('home:vocabSheet.caveat')}</Text>
 
         <TouchableOpacity
           style={s.doneBtn}

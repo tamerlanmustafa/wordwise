@@ -30,8 +30,8 @@ import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeSearchBar } from '../home/HomeSearchBar';
 import { FeedFilterSheet } from '../home/FeedFilterSheet';
-import { ComprehensionSheet } from '../home/ComprehensionSheet';
-import type { LearningPayload } from '../home/comprehension';
+import { VocabularySheet } from '../home/VocabularySheet';
+import type { FilmVocabulary } from '../home/filmVocabulary';
 import { scoreToCefr } from '../../utils/formatting';
 import {
   DEFAULT_FEED_FILTERS,
@@ -107,14 +107,14 @@ export const HomeScreen = ({
   // One sheet now — the level was absorbed into it, so the old
   // 'none' | 'filters' | 'level' tri-state had nothing left to arbitrate.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // The card whose ring was tapped, with the share already computed by the
+  // The card whose ring was tapped, with the count already computed by the
   // cell that drew it. Held here, not in the list, because BottomSheet is an
   // absolute overlay and a 116pt recycled cell would clip it.
-  const [ringDetail, setRingDetail] = useState<{ movie: any; payload: LearningPayload } | null>(null);
+  const [ringDetail, setRingDetail] = useState<{ movie: any; vocab: FilmVocabulary } | null>(null);
   // Stable, so MovieCard's React.memo survives — an inline arrow here would
   // hand every recycled cell a new prop on every HomeScreen render.
   const handleRingPress = useCallback(
-    (movie: any, payload: LearningPayload) => setRingDetail({ movie, payload }),
+    (movie: any, vocab: FilmVocabulary) => setRingDetail({ movie, vocab }),
     [],
   );
 
@@ -593,14 +593,14 @@ export const HomeScreen = ({
         }}
       />
       {ringDetail ? (
-        <ComprehensionSheet
+        <VocabularySheet
           visible
           onClose={() => setRingDetail(null)}
           bottomOffset={bottomOffset}
           title={ringDetail.movie.title}
           dist={ringDetail.movie.cefr_distribution}
           level={selectedLevel}
-          payload={ringDetail.payload}
+          vocab={ringDetail.vocab}
           band={
             ringDetail.movie.cefr_level ??
             scoreToCefr(ringDetail.movie.difficulty_score ?? null)

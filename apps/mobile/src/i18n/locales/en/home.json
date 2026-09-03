@@ -10,7 +10,7 @@
     "empty": "No classified movies found for this level yet.",
     "tapToClose": "Tap to close",
     "emptyFiltered": "No {{type}} films at this level yet.",
-    "knownCaption": "TO LEARN",
+    "knownCaption": "WORDS",
     "filmBand": "LEVEL {{band}}"
   },
   "swipe": {
@@ -53,10 +53,10 @@
   "feed": {
     "recommendedEyebrow": "Recommended for {{level}} · new set in {{hours}}h"
   },
-  "comprehension": {
-    "title": "What this film can teach you",
-    "body": "{{total}} different words are spoken in {{title}}. {{count}} of them sit at {{level}} or one step above — that is the deck this film builds for you. The rest you should already know.",
-    "factShare": "Words at your level or the next one — exactly what this film's word list will offer you.",
+  "vocabSheet": {
+    "title": "What's in this film",
+    "body": "{{title}} speaks {{total}} different words. Every film on the {{level}} shelf is about as hard as this one — they are not all this big.",
+    "factWords": "Distinct words spoken in this film.",
     "factBand": "The film's own level, from its whole vocabulary.",
     "caveat": "Counted per distinct word, not per line of dialogue — a word said once counts the same as one repeated all film."
   }
