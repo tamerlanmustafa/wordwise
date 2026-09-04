@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -27,6 +28,7 @@ import {
   type ReportStatus,
   type VocabCoverageReport,
   type WordReport,
+  type ProcessedSort,
 } from '../services/api';
 import {
   useEntitlementsStore,
@@ -35,13 +37,19 @@ import {
 import type { Entitlements } from '../types';
 import { CEFR_LEVELS } from '../types/constants';
 import { cefrColors } from '../theme/palette';
-import { COLORS, STATUS_LABEL as COVERAGE_STATUS_LABEL, STATUS_TOKENS } from './admin/adminTheme';
+import {
+  STATUS_LABEL as COVERAGE_STATUS_LABEL,
+  type AdminColors,
+  useAdminColors,
+  useStatusTokens,
+} from './admin/adminTheme';
 import { ClientIpView } from './admin/ClientIpView';
 import { EventLoopView } from './admin/EventLoopView';
 import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
 import { StarIcon } from './ui/icons';
+import { BarChart, DonutChart, type ChartSlice } from './admin/LevelCharts';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
@@ -52,12 +60,45 @@ import { useBottomBarInset } from '../hooks/useBottomBarInset';
 //   2. Filter chips for report status (All, Pending, Reviewed, ...)
 //   3. Scrollable list of reports with quick actions and a details modal
 
-const STATUS_COLOR: Record<ReportStatus, string> = {
-  PENDING: COLORS.warning,
-  REVIEWED: COLORS.info,
-  RESOLVED: COLORS.success,
-  DISMISSED: COLORS.textTertiary,
-};
+// A function of the palette rather than a module constant: the palette now
+// follows the theme, so a frozen map here would keep painting light-mode
+// status chips onto a dark screen.
+/**
+ * The browser's sort tabs, each with the plain-English reason you'd pick it.
+ * `processed` leads because it is the default and the question the screen
+ * usually answers: did the job I just started actually land?
+ */
+const PROCESSED_SORT_TABS: ReadonlyArray<{ id: ProcessedSort; label: string; blurb: string }> = [
+  { id: 'processed', label: 'Newest', blurb: 'Most recently processed first — what the workers just finished.' },
+  { id: 'votes',     label: 'Popular', blurb: 'Most-rated on TMDB first — the films the most people have seen.' },
+  { id: 'rating',    label: 'Best',    blurb: 'Highest TMDB score first.' },
+  { id: 'level',     label: 'Hardest', blurb: 'Hardest vocabulary first, by difficulty score.' },
+  { id: 'year',      label: 'Latest',  blurb: 'Newest release year first.' },
+  { id: 'title',     label: 'A–Z',     blurb: 'Alphabetical by title.' },
+];
+
+/**
+ * "3d ago" for a processed timestamp. Deliberately coarse: the exact minute a
+ * script finished is never the question, and a relative day is readable at a
+ * glance in a list where every other number is already right-aligned.
+ */
+function relativeDay(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const days = Math.floor(ms / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return months < 12 ? `${months}mo ago` : `${Math.floor(days / 365)}y ago`;
+}
+
+const statusColors = (c: AdminColors): Record<ReportStatus, string> => ({
+  PENDING: c.warning,
+  REVIEWED: c.info,
+  RESOLVED: c.success,
+  DISMISSED: c.textTertiary,
+});
 
 const STATUS_TABS: Array<ReportStatus | 'ALL'> = [
   'ALL',
@@ -91,6 +132,11 @@ type AdminView =
   | 'clientIp';
 
 export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const STATUS_COLOR = useMemo(() => statusColors(c), [c]);
+
   // The tab bar is an absolute overlay, so every scroller reserves its height
   // itself or its last rows sit behind the floating capsule.
   const barInset = useBottomBarInset();
@@ -108,7 +154,37 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const [processedMovies, setProcessedMovies] = useState<ProcessedMovie[] | null>(null);
   const [processedLoading, setProcessedLoading] = useState(false);
   const [processedFilter, setProcessedFilter] = useState<string | null>(null);
+  const [processedSort, setProcessedSort] = useState<ProcessedSort>('processed');
+  const [processedHasMore, setProcessedHasMore] = useState(false);
+  const [processedPaging, setProcessedPaging] = useState(false);
+  // Mirrors the list length for the append guard: `processedMovies` is state
+  // and a rapid second onEndReached would read the pre-commit value.
+  const processedCountRef = useRef(0);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  // Chart inputs. Built here rather than inside the chart so the donut and the
+  // tappable tiles below it read the same numbers off the same object.
+  const movieSlices = useMemo<ChartSlice[]>(
+    () =>
+      LEVEL_ORDER.map((lv) => ({
+        label: lv,
+        value: adminStats?.movies_by_level?.[lv] ?? 0,
+        color: cefrColors[lv],
+      })),
+    [adminStats],
+  );
+  const wordSlices = useMemo<ChartSlice[]>(
+    () => [
+      ...LEVEL_ORDER.map((lv) => ({
+        label: lv,
+        value: adminStats?.words_by_level?.[lv] ?? 0,
+        color: cefrColors[lv],
+      })),
+      // Not a CEFR band, so it gets the neutral ink rather than a colour that
+      // would imply it sits on the difficulty ramp.
+      { label: 'UNKNOWN', value: adminStats?.words_by_level?.UNKNOWN ?? 0, color: c.textTertiary },
+    ],
+    [adminStats, c.textTertiary],
+  );
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [reports, setReports] = useState<WordReport[]>([]);
   const [activeTab, setActiveTab] = useState<ReportStatus | 'ALL'>('ALL');
@@ -274,33 +350,85 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     }
   }, [deadJobs]);
 
-  const openProcessed = useCallback(async (level?: string) => {
-    setView('processed');
-    setProcessedFilter(level ?? null);
-    setProcessedMovies(null);
-    setProcessedLoading(true);
-    try {
-      const movies = await adminApi.processedMovies(level);
-      setProcessedMovies(movies);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load processed movies');
-      setProcessedMovies([]);
-    } finally {
-      setProcessedLoading(false);
-    }
-  }, []);
+  /** Page 0 for a given level+sort. Every filter change comes through here. */
+  const loadProcessed = useCallback(
+    async (level: string | null, sort: ProcessedSort) => {
+      setProcessedMovies(null);
+      processedCountRef.current = 0;
+      setProcessedLoading(true);
+      try {
+        const page = await adminApi.processedMovies({
+          level: level ?? undefined,
+          sort,
+        });
+        setProcessedMovies(page.movies);
+        processedCountRef.current = page.movies.length;
+        setProcessedHasMore(page.has_more);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load processed movies');
+        setProcessedMovies([]);
+        setProcessedHasMore(false);
+      } finally {
+        setProcessedLoading(false);
+      }
+    },
+    [],
+  );
 
-  const refreshProcessed = useCallback(async () => {
-    setProcessedLoading(true);
+  const openProcessed = useCallback(
+    async (level?: string) => {
+      setView('processed');
+      setProcessedFilter(level ?? null);
+      setProcessedSort('processed');
+      await loadProcessed(level ?? null, 'processed');
+    },
+    [loadProcessed],
+  );
+
+  const refreshProcessed = useCallback(
+    () => loadProcessed(processedFilter, processedSort),
+    [loadProcessed, processedFilter, processedSort],
+  );
+
+  /** Appends the next page. The offset is the list we already hold, read from
+   *  a ref so two quick end-reaches cannot both request the same page. */
+  const loadMoreProcessed = useCallback(async () => {
+    if (processedPaging || processedLoading || !processedHasMore) return;
+    setProcessedPaging(true);
+    const offset = processedCountRef.current;
     try {
-      const movies = await adminApi.processedMovies(processedFilter ?? undefined);
-      setProcessedMovies(movies);
+      const page = await adminApi.processedMovies({
+        level: processedFilter ?? undefined,
+        sort: processedSort,
+        offset,
+      });
+      // A filter change while this was in flight makes the page stale.
+      if (processedCountRef.current !== offset) return;
+      setProcessedMovies((prev) => [...(prev ?? []), ...page.movies]);
+      processedCountRef.current = offset + page.movies.length;
+      setProcessedHasMore(page.has_more);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load processed movies');
+      setError(e?.message || 'Failed to load more movies');
     } finally {
-      setProcessedLoading(false);
+      setProcessedPaging(false);
     }
-  }, [processedFilter]);
+  }, [processedPaging, processedLoading, processedHasMore, processedFilter, processedSort]);
+
+  const changeProcessedSort = useCallback(
+    (sort: ProcessedSort) => {
+      setProcessedSort(sort);
+      void loadProcessed(processedFilter, sort);
+    },
+    [loadProcessed, processedFilter],
+  );
+
+  const changeProcessedLevel = useCallback(
+    (level: string | null) => {
+      setProcessedFilter(level);
+      void loadProcessed(level, processedSort);
+    },
+    [loadProcessed, processedSort],
+  );
 
   const refreshDeadJobs = useCallback(async () => {
     setDeadLoading(true);
@@ -424,24 +552,108 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           </View>
         ) : null}
 
+        {/* Filters. Level scopes the shelf; sort answers "ordered how".
+            Both re-request page 0 rather than re-sorting what is in memory —
+            the list is a window onto 4,400 films, not the whole set. */}
+        <View style={styles.filterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            <TouchableOpacity
+              style={[styles.filterChip, processedFilter === null && styles.filterChipOn]}
+              onPress={() => changeProcessedLevel(null)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  processedFilter === null && styles.filterChipTextOn,
+                ]}
+              >
+                All levels
+              </Text>
+            </TouchableOpacity>
+            {CEFR_LEVELS.map((lv) => (
+              <TouchableOpacity
+                key={lv}
+                style={[styles.filterChip, processedFilter === lv && styles.filterChipOn]}
+                onPress={() => changeProcessedLevel(lv)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    processedFilter === lv && styles.filterChipTextOn,
+                  ]}
+                >
+                  {lv}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {PROCESSED_SORT_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.sortChip, processedSort === tab.id && styles.sortChipOn]}
+                onPress={() => changeProcessedSort(tab.id)}
+              >
+                <Text
+                  style={[
+                    styles.sortChipText,
+                    processedSort === tab.id && styles.sortChipTextOn,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {processedLoading && processedMovies === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !processedMovies || processedMovies.length === 0 ? (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyText}>No movies</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
-            <Text style={styles.deadIntro}>
-              {processedMovies.length} movie{processedMovies.length === 1 ? '' : 's'}, ordered by TMDB vote count (most-rated first).
-            </Text>
-            {processedMovies.map((m) => {
-              const lvColor = m.difficulty_level ? cefrColors[m.difficulty_level] : COLORS.textTertiary;
+          // FlatList, not a ScrollView of every row: the old screen mapped up
+          // to 1,000 cards into memory before the first one appeared.
+          <FlatList
+            data={processedMovies}
+            keyExtractor={(m) => String(m.movie_id)}
+            contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}
+            onEndReached={loadMoreProcessed}
+            onEndReachedThreshold={0.6}
+            ListHeaderComponent={
+              <Text style={styles.deadIntro}>
+                {PROCESSED_SORT_TABS.find((t) => t.id === processedSort)?.blurb}
+              </Text>
+            }
+            ListFooterComponent={
+              processedPaging ? (
+                <View style={styles.pageFooter}>
+                  <ActivityIndicator size="small" color={c.primary} />
+                </View>
+              ) : !processedHasMore ? (
+                <Text style={styles.pageFooterText}>
+                  End of list — {processedMovies.length} loaded
+                </Text>
+              ) : null
+            }
+            renderItem={({ item: m }) => {
+              const lvColor = m.difficulty_level ? cefrColors[m.difficulty_level] : c.textTertiary;
               const lvLabel = m.difficulty_level ?? '—';
               return (
-                <View key={m.movie_id} style={[styles.deadCard, { borderStartColor: lvColor }]}>
+                <View style={[styles.deadCard, { borderStartColor: lvColor }]}>
                   <View style={styles.deadTopRow}>
                     <Text style={styles.deadTitle} numberOfLines={2}>
                       {m.title}
@@ -459,13 +671,18 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                       </View>
                     ) : null}
                     {m.vote_count != null ? (
-                      <Text style={styles.processedMetaText}>{m.vote_count.toLocaleString()} votes</Text>
+                      <Text style={styles.processedMetaText}>
+                        {m.vote_count.toLocaleString()} votes
+                      </Text>
+                    ) : null}
+                    {m.processed_at ? (
+                      <Text style={styles.processedMetaText}>{relativeDay(m.processed_at)}</Text>
                     ) : null}
                   </View>
                 </View>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         )}
       </SafeAreaView>
     );
@@ -499,7 +716,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
         {deadLoading && deadJobs === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !deadJobs || deadJobs.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -568,7 +785,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
         {coverageLoading && coverage === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !coverage ? (
           <View style={styles.emptyBox}>
@@ -609,7 +826,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
         {latencyLoading && latency === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !latency ? (
           <View style={styles.emptyBox}>
@@ -650,7 +867,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
         {eventLoopLoading && eventLoop === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !eventLoop ? (
           <View style={styles.emptyBox}>
@@ -691,7 +908,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
         {clientIpLoading && clientIp === null ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : !clientIp ? (
           <View style={styles.emptyBox}>
@@ -736,13 +953,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             label="Movies processed"
             value={adminStats ? `${adminStats.movies_processed}` : '—'}
             sublabel={adminStats ? `of ${adminStats.movies_total} total` : undefined}
-            color={COLORS.primary}
+            color={c.primary}
             onPress={() => openProcessed()}
           />
           <StatCard
             label="Users"
             value={adminStats ? `${adminStats.users_total}` : '—'}
-            color={COLORS.info}
+            color={c.info}
           />
         </View>
 
@@ -756,28 +973,28 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             label="Vocab coverage"
             value={coverage ? COVERAGE_STATUS_LABEL[coverage.overall_status] : 'View →'}
             sublabel={coverage ? undefined : 'words → sentences → translations'}
-            color={coverage ? STATUS_TOKENS[coverage.overall_status].mark : COLORS.primary}
+            color={coverage ? statusTokens[coverage.overall_status].mark : c.primary}
             onPress={openCoverage}
           />
           <StatCard
             label="API latency"
             value={latency ? COVERAGE_STATUS_LABEL[latency.overall_status] : 'View →'}
             sublabel={latency ? undefined : 'how fast the app’s requests answer'}
-            color={latency ? STATUS_TOKENS[latency.overall_status].mark : COLORS.primary}
+            color={latency ? statusTokens[latency.overall_status].mark : c.primary}
             onPress={openLatency}
           />
           <StatCard
             label="Event loop"
             value={eventLoop ? COVERAGE_STATUS_LABEL[eventLoop.overall_status] : 'View →'}
             sublabel={eventLoop ? undefined : 'whether one request freezes the rest'}
-            color={eventLoop ? STATUS_TOKENS[eventLoop.overall_status].mark : COLORS.primary}
+            color={eventLoop ? statusTokens[eventLoop.overall_status].mark : c.primary}
             onPress={openEventLoop}
           />
           <StatCard
             label="Attempt limits"
             value={clientIp ? COVERAGE_STATUS_LABEL[clientIp.overall_status] : 'View →'}
             sublabel={clientIp ? undefined : 'whether sign-in caps count per person'}
-            color={clientIp ? STATUS_TOKENS[clientIp.overall_status].mark : COLORS.primary}
+            color={clientIp ? statusTokens[clientIp.overall_status].mark : c.primary}
             onPress={openClientIp}
           />
         </View>
@@ -822,7 +1039,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         <TextInput
           style={styles.grantInput}
           placeholder="Search email or username…"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor={c.textTertiary}
           value={grantQuery}
           onChangeText={searchUsers}
           autoCapitalize="none"
@@ -880,10 +1097,21 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           );
         })}
 
-        {/* By difficulty level */}
+        {/* Films by level — donut for the shape, tappable tiles to browse. */}
         {adminStats?.movies_by_level && Object.keys(adminStats.movies_by_level).length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>Movies by difficulty</Text>
+            <Text style={styles.sectionLabel}>Films by level</Text>
+            <Text style={styles.sectionHint}>
+              How the graded catalogue splits across the six CEFR bands. Every film sits in
+              exactly one, decided by its difficulty score. Tap a band to browse it.
+            </Text>
+            <View style={styles.chartCard}>
+              <DonutChart
+                slices={movieSlices}
+                total={movieSlices.reduce((n, sl) => n + sl.value, 0)}
+                caption="films"
+              />
+            </View>
             <View style={styles.statsGrid}>
               {LEVEL_ORDER.filter((lv) => (adminStats.movies_by_level[lv] ?? 0) > 0).map((lv) => (
                 <StatCard
@@ -898,18 +1126,34 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           </>
         )}
 
+        {/* Words by level — bars, not a donut: UNKNOWN dwarfs the rest, and a
+            donut of one huge wedge says less than a ranked comparison. */}
+        {adminStats?.words_by_level && Object.keys(adminStats.words_by_level).length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Words by level</Text>
+            <Text style={styles.sectionHint}>
+              Distinct words in the dictionary, by the band we graded them into. Counted once
+              each — a word in 500 films still counts once. UNKNOWN is the pile we could not
+              grade; it should be shrinking.
+            </Text>
+            <View style={styles.chartCard}>
+              <BarChart slices={wordSlices} />
+            </View>
+          </>
+        )}
+
         {/* Worker queue */}
         {adminStats?.queue?.done != null && (
           <>
             <Text style={styles.sectionLabel}>Worker queue</Text>
             <View style={styles.statsGrid}>
-              <StatCard label="Done" value={`${adminStats.queue.done ?? 0}`} color={COLORS.success} />
-              <StatCard label="Pending" value={`${adminStats.queue.pending ?? 0}`} color={COLORS.warning} />
-              <StatCard label="Running" value={`${adminStats.queue.running ?? 0}`} color={COLORS.info} />
+              <StatCard label="Done" value={`${adminStats.queue.done ?? 0}`} color={c.success} />
+              <StatCard label="Pending" value={`${adminStats.queue.pending ?? 0}`} color={c.warning} />
+              <StatCard label="Running" value={`${adminStats.queue.running ?? 0}`} color={c.info} />
               <StatCard
                 label="Dead"
                 value={`${adminStats.queue.dead ?? 0}`}
-                color={COLORS.error}
+                color={c.error}
                 onPress={(adminStats.queue.dead ?? 0) > 0 ? openDeadJobs : undefined}
               />
             </View>
@@ -949,7 +1193,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {/* Reports list */}
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={c.primary} />
           </View>
         ) : reports.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -1065,7 +1309,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                 <Text style={styles.actionBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: COLORS.primary, flex: 1 }]}
+                style={[styles.actionBtn, { backgroundColor: c.primary, flex: 1 }]}
                 onPress={handleSaveDetails}
                 disabled={detailsSaving}
               >
@@ -1096,6 +1340,8 @@ function StatCard({
   color: string;
   onPress?: () => void;
 }) {
+  const c = useAdminColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const body = (
     <>
       <Text style={styles.statValue}>{value}</Text>
@@ -1118,6 +1364,8 @@ function StatCard({
 }
 
 function DetailRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  const c = useAdminColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -1126,10 +1374,11 @@ function DetailRow({ label, value, bold }: { label: string; value: string; bold?
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: AdminColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
   },
   viewModeRow: {
     flexDirection: 'row',
@@ -1140,18 +1389,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     alignItems: 'center',
   },
   viewModeBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   viewModeBtnText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     fontWeight: '600',
   },
   viewModeBtnTextActive: {
@@ -1159,32 +1408,32 @@ const styles = StyleSheet.create({
   },
   viewModeHint: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginBottom: 16,
     lineHeight: 16,
   },
   grantInput: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: COLORS.text,
+    color: c.text,
     marginBottom: 8,
   },
   grantHint: {
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     marginBottom: 8,
   },
   grantRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     borderRadius: 8,
     padding: 10,
     marginBottom: 6,
@@ -1193,16 +1442,16 @@ const styles = StyleSheet.create({
   grantRowName: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
   },
   grantRowEmail: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
   grantRowLocked: {
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     fontStyle: 'italic',
   },
   grantBtn: {
@@ -1210,9 +1459,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
   },
-  grantBtnGrant: { backgroundColor: COLORS.success },
-  grantBtnTrial: { backgroundColor: COLORS.info },
-  grantBtnRevoke: { backgroundColor: COLORS.error },
+  grantBtnGrant: { backgroundColor: c.success },
+  grantBtnTrial: { backgroundColor: c.info },
+  grantBtnRevoke: { backgroundColor: c.error },
   grantBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
@@ -1224,26 +1473,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: c.border,
   },
   backButton: {
     minWidth: 60,
   },
   backText: {
     fontSize: 16,
-    color: COLORS.primary,
+    color: c.primary,
     fontWeight: '500',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
   },
   refreshText: {
     fontSize: 22,
-    color: COLORS.primary,
+    color: c.primary,
     minWidth: 60,
     textAlign: alignEnd,
   },
@@ -1256,11 +1505,11 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     flex: 1,
-    color: COLORS.error,
+    color: c.error,
     fontSize: 13,
   },
   errorBannerClose: {
-    color: COLORS.error,
+    color: c.error,
     fontSize: 16,
     paddingHorizontal: 4,
   },
@@ -1271,7 +1520,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginTop: 20,
@@ -1286,7 +1535,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: '45%',
     minWidth: 140,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderRadius: 12,
@@ -1300,18 +1549,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 26,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
   },
   statLabel: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   statSublabel: {
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     marginTop: 2,
   },
   reportsHeader: {
@@ -1321,7 +1570,7 @@ const styles = StyleSheet.create({
   },
   reportsHeaderCount: {
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     marginTop: 20,
   },
   tabRow: {
@@ -1332,17 +1581,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
   tabActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   tabText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   tabTextActive: {
@@ -1358,11 +1607,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     fontSize: 14,
   },
   reportCard: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginTop: 10,
@@ -1380,7 +1629,7 @@ const styles = StyleSheet.create({
   reportWord: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
     flex: 1,
     marginEnd: 8,
   },
@@ -1397,18 +1646,18 @@ const styles = StyleSheet.create({
   reportMeta: {
     marginTop: 4,
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   reportDetails: {
     marginTop: 6,
     fontSize: 13,
     fontStyle: 'italic',
-    color: COLORS.text,
+    color: c.text,
   },
   reportFooter: {
     marginTop: 6,
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
   },
   reportActions: {
     flexDirection: 'row',
@@ -1425,10 +1674,10 @@ const styles = StyleSheet.create({
   actionBtnGhost: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
   actionBtnGhostText: {
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1441,12 +1690,12 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: c.overlay,
     justifyContent: 'center',
     padding: 20,
   },
   modalCard: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 16,
     maxHeight: '85%',
     overflow: 'hidden',
@@ -1459,16 +1708,16 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: c.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
   },
   modalClose: {
     fontSize: 20,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   modalBody: {
     paddingHorizontal: 20,
@@ -1476,19 +1725,19 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 11,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
   },
   detailValue: {
     fontSize: 14,
-    color: COLORS.text,
+    color: c.text,
   },
   modalFieldLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 8,
@@ -1505,12 +1754,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.paper,
+    borderColor: c.border,
+    backgroundColor: c.paper,
   },
   statusButtonText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   statusButtonTextActive: {
@@ -1519,14 +1768,14 @@ const styles = StyleSheet.create({
   },
   notesInput: {
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     borderRadius: 10,
     padding: 12,
     fontSize: 14,
-    color: COLORS.text,
+    color: c.text,
     minHeight: 80,
     textAlignVertical: 'top',
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     marginBottom: 16,
   },
   modalFooter: {
@@ -1534,23 +1783,23 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: c.border,
   },
   deadIntro: {
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     lineHeight: 19,
     marginBottom: 12,
   },
   deadCard: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     borderStartWidth: 4,
-    borderStartColor: COLORS.error,
+    borderStartColor: c.error,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
   deadTopRow: {
     flexDirection: 'row',
@@ -1562,20 +1811,94 @@ const styles = StyleSheet.create({
   deadTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
     flex: 1,
   },
   deadYear: {
     fontSize: 13,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     marginTop: 2,
   },
   deadMeta: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginBottom: 6,
   },
-  processedMetaRow: {
+  chartCard: {
+      backgroundColor: c.paper,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+      marginBottom: 12,
+    },
+    sectionHint: {
+      fontSize: 12.5,
+      lineHeight: 18,
+      color: c.textSecondary,
+      marginBottom: 10,
+      marginTop: -4,
+    },
+    filterBar: {
+      paddingTop: 10,
+      paddingBottom: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      gap: 8,
+    },
+    filterRow: {
+      paddingHorizontal: 16,
+      gap: 8,
+      alignItems: 'center',
+    },
+    filterChip: {
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.paper,
+    },
+    filterChipOn: {
+      backgroundColor: c.primary,
+      borderColor: c.primary,
+    },
+    filterChipText: {
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: c.textSecondary,
+    },
+    filterChipTextOn: {
+      color: '#FFFFFF',
+    },
+    sortChip: {
+      paddingHorizontal: 11,
+      paddingVertical: 5,
+      borderRadius: 8,
+      backgroundColor: c.inset,
+    },
+    sortChipOn: {
+      backgroundColor: c.text,
+    },
+    sortChipText: {
+      fontSize: 11.5,
+      fontWeight: '700',
+      color: c.textSecondary,
+    },
+    sortChipTextOn: {
+      color: c.background,
+    },
+    pageFooter: {
+      paddingVertical: 18,
+      alignItems: 'center',
+    },
+    pageFooterText: {
+      paddingVertical: 18,
+      textAlign: 'center',
+      fontSize: 12,
+      color: c.textTertiary,
+    },
+    processedMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -1585,13 +1908,13 @@ const styles = StyleSheet.create({
   processedRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   processedMetaText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
   },
   deadError: {
     fontSize: 12,
-    color: COLORS.error,
+    color: c.error,
     fontFamily: 'Menlo',
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     padding: 8,
     borderRadius: 6,
   },

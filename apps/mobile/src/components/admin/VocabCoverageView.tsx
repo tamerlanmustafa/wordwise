@@ -19,7 +19,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { VocabCoverageReport, VocabCoverageStatus } from '../../services/api';
-import { COLORS, STATUS_LABEL, STATUS_MEANING, STATUS_TOKENS } from './adminTheme';
+import { STATUS_LABEL, STATUS_MEANING, type AdminColors, useAdminColors, useStatusTokens } from './adminTheme';
 import { HealthMetricCard } from './HealthMetricCard';
 import { statusCounts, worstStatus } from './healthMetricContent';
 import {
@@ -34,6 +34,8 @@ type TabId = CoverageCategoryId | 'overview';
 const STATUS_ORDER: VocabCoverageStatus[] = ['ok', 'warn', 'fail'];
 
 export function VocabCoverageView({ report }: { report: VocabCoverageReport }) {
+  const c = useAdminColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [tab, setTab] = useState<TabId>('overview');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -119,8 +121,11 @@ function Overview({
   sections: ReturnType<typeof groupMetricsByCategory>;
   onJump: (id: CoverageCategoryId) => void;
 }) {
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const overall = report.overall_status;
-  const tokens = STATUS_TOKENS[overall];
+  const tokens = statusTokens[overall];
   const checkedAt = new Date(report.generated_at).toLocaleString();
 
   return (
@@ -159,7 +164,7 @@ function Overview({
                 key={s}
                 style={[
                   styles.stackSeg,
-                  { flex: counts[s], backgroundColor: STATUS_TOKENS[s].mark },
+                  { flex: counts[s], backgroundColor: statusTokens[s].mark },
                 ]}
               />
             ) : null
@@ -170,7 +175,7 @@ function Overview({
         <View style={styles.legend}>
           {STATUS_ORDER.map((s) => (
             <View key={s} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: STATUS_TOKENS[s].mark }]} />
+              <View style={[styles.legendDot, { backgroundColor: statusTokens[s].mark }]} />
               <Text style={styles.legendText}>
                 {counts[s]} {STATUS_MEANING[s].toLowerCase()}
               </Text>
@@ -182,7 +187,7 @@ function Overview({
       {/* Category jump list. */}
       {sections.map((s) => {
         const worst = worstStatus(s.metrics);
-        const t = STATUS_TOKENS[worst];
+        const t = statusTokens[worst];
         return (
           <TouchableOpacity
             key={s.category.id}
@@ -216,20 +221,21 @@ function Overview({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: AdminColors) =>
+  StyleSheet.create({
   flex: { flex: 1 },
-  tabBar: { borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.paper },
+  tabBar: { borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.paper },
   tabRow: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  tabActive: { backgroundColor: c.primary, borderColor: c.primary },
+  tabText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
   tabTextActive: { color: '#FFFFFF' },
 
   scroll: { padding: 16, paddingBottom: 48 },
@@ -237,24 +243,24 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   heroChipText: { fontSize: 15, fontWeight: '800', letterSpacing: 0.4 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  heroSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  heroTitle: { fontSize: 18, fontWeight: '700', color: c.text },
+  heroSub: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
   heroExplain: {
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginTop: 12,
   },
 
   card: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: c.text },
   chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 
@@ -263,19 +269,19 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 12, color: COLORS.textSecondary },
+  legendText: { fontSize: 12, color: c.textSecondary },
 
   catRow: { flexDirection: 'row', alignItems: 'center' },
   catTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  catBlurb: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4, lineHeight: 17 },
-  catCount: { fontSize: 12, color: COLORS.primary, fontWeight: '600', marginTop: 8 },
+  catBlurb: { fontSize: 12, color: c.textSecondary, marginTop: 4, lineHeight: 17 },
+  catCount: { fontSize: 12, color: c.primary, fontWeight: '600', marginTop: 8 },
 
   sectionBlurb: {
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.textSecondary,
+    color: c.textSecondary,
     marginBottom: 2,
   },
 
-  footnote: { fontSize: 11, color: COLORS.textTertiary, marginTop: 16, lineHeight: 16 },
+  footnote: { fontSize: 11, color: c.textTertiary, marginTop: 16, lineHeight: 16 },
 });

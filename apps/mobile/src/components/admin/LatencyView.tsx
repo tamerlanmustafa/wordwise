@@ -19,7 +19,7 @@
 import { useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { LatencyReport, LatencyRoute } from '../../services/api';
-import { COLORS, STATUS_LABEL, STATUS_MEANING, STATUS_TOKENS } from './adminTheme';
+import { STATUS_LABEL, STATUS_MEANING, type AdminColors, useAdminColors, useStatusTokens } from './adminTheme';
 import { HealthMetricCard } from './HealthMetricCard';
 import { statusCounts } from './healthMetricContent';
 import {
@@ -36,6 +36,9 @@ import {
 type TabId = 'overview' | 'endpoints';
 
 export function LatencyView({ report }: { report: LatencyReport }) {
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [tab, setTab] = useState<TabId>('overview');
   const [sort, setSort] = useState<RouteSortId>('p95');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -50,7 +53,7 @@ export function LatencyView({ report }: { report: LatencyReport }) {
     [report.routes]
   );
 
-  const tokens = STATUS_TOKENS[report.overall_status];
+  const tokens = statusTokens[report.overall_status];
   const activeSort = ROUTE_SORTS.find((s) => s.id === sort) ?? ROUTE_SORTS[0];
 
   return (
@@ -167,6 +170,9 @@ function Endpoints({
   expandedRoute: string | null;
   onToggleRoute: (key: string) => void;
 }) {
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
   if (routes.length === 0) {
     return (
       <Text style={styles.sectionBlurb}>
@@ -197,7 +203,7 @@ function Endpoints({
 
       {routes.map((r) => {
         const key = `${r.method} ${r.route}`;
-        const t = STATUS_TOKENS[r.status];
+        const t = statusTokens[r.status];
         const expanded = expandedRoute === key;
         return (
           <TouchableOpacity
@@ -238,7 +244,7 @@ function Endpoints({
                 {formatCount(r.count)} req
               </Text>
               {r.server_errors > 0 ? (
-                <Text style={[styles.routeStat, { color: STATUS_TOKENS.fail.chipInk }]}>
+                <Text style={[styles.routeStat, { color: statusTokens.fail.chipInk }]}>
                   {r.server_errors} failed
                 </Text>
               ) : null}
@@ -270,20 +276,21 @@ function Endpoints({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: AdminColors) =>
+  StyleSheet.create({
   flex: { flex: 1 },
-  tabBar: { borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.paper },
+  tabBar: { borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.paper },
   tabRow: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  tabActive: { backgroundColor: c.primary, borderColor: c.primary },
+  tabText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
   tabTextActive: { color: '#FFFFFF' },
 
   scroll: { padding: 16, paddingBottom: 48 },
@@ -291,46 +298,46 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   heroChipText: { fontSize: 15, fontWeight: '800', letterSpacing: 0.4 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  heroSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
-  heroExplain: { fontSize: 13, lineHeight: 19, color: COLORS.textSecondary, marginTop: 12 },
+  heroTitle: { fontSize: 18, fontWeight: '700', color: c.text },
+  heroSub: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
+  heroExplain: { fontSize: 13, lineHeight: 19, color: c.textSecondary, marginTop: 12 },
 
   card: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: c.text },
   chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 
   jumpRow: { flexDirection: 'row', alignItems: 'center' },
-  catBlurb: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4, lineHeight: 17 },
-  catCount: { fontSize: 12, color: COLORS.primary, fontWeight: '600', marginTop: 8 },
+  catBlurb: { fontSize: 12, color: c.textSecondary, marginTop: 4, lineHeight: 17 },
+  catCount: { fontSize: 12, color: c.primary, fontWeight: '600', marginTop: 8 },
 
   sortRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   sortBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  sortBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  sortText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
+  sortBtnActive: { backgroundColor: c.primary, borderColor: c.primary },
+  sortText: { fontSize: 12, fontWeight: '600', color: c.textSecondary },
   sortTextActive: { color: '#FFFFFF' },
 
-  sectionBlurb: { fontSize: 13, lineHeight: 19, color: COLORS.textSecondary },
+  sectionBlurb: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
 
   routeTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   routeMethod: {
     fontSize: 11,
     fontWeight: '800',
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     letterSpacing: 0.5,
     marginTop: 1,
   },
@@ -338,7 +345,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
     // Templates read as code; a mono face keeps {movie_id} legible. iOS has no
     // "monospace" alias, so name a real face there.
     fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
@@ -347,22 +354,22 @@ const styles = StyleSheet.create({
   barTrack: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     overflow: 'hidden',
     marginTop: 10,
   },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 999 },
 
   routeStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 },
-  routeStat: { fontSize: 12, color: COLORS.textSecondary },
-  routeStatValue: { fontWeight: '700', color: COLORS.text },
+  routeStat: { fontSize: 12, color: c.textSecondary },
+  routeStatValue: { fontWeight: '700', color: c.text },
 
-  explainPrompt: { fontSize: 11, color: COLORS.textTertiary, marginTop: 10 },
-  explainBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
-  explainRow: { fontSize: 12, lineHeight: 18, color: COLORS.text, marginBottom: 6 },
-  explainMeaning: { fontSize: 11, color: COLORS.textTertiary, fontStyle: 'italic' },
+  explainPrompt: { fontSize: 11, color: c.textTertiary, marginTop: 10 },
+  explainBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.border },
+  explainRow: { fontSize: 12, lineHeight: 18, color: c.text, marginBottom: 6 },
+  explainMeaning: { fontSize: 11, color: c.textTertiary, fontStyle: 'italic' },
 
-  footnote: { fontSize: 11, color: COLORS.textTertiary, marginTop: 16, lineHeight: 16 },
+  footnote: { fontSize: 11, color: c.textTertiary, marginTop: 16, lineHeight: 16 },
 });

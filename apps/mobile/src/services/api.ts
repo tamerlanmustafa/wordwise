@@ -714,6 +714,19 @@ export interface ProcessedMovie {
   popularity: number | null;
   vote_average: number | null;
   vote_count: number | null;
+  /** ISO instant the script was last (re)processed — the browser's default
+   *  sort. Null on rows written before the column was projected. */
+  processed_at?: string | null;
+}
+
+/** How the admin browser can order the processed list. Must match
+ *  `PROCESSED_SORTS` in `backend/src/routes/admin.py`. */
+export type ProcessedSort = 'processed' | 'votes' | 'rating' | 'level' | 'title' | 'year';
+
+export interface ProcessedMoviesPage {
+  movies: ProcessedMovie[];
+  has_more: boolean;
+  offset: number;
 }
 
 export interface DeadJob {
@@ -731,6 +744,9 @@ export interface AdminStats {
   movies_processed: number;
   users_total: number;
   movies_by_level: Record<string, number>;
+  /** Distinct lemmas per CEFR band. Includes an `UNKNOWN` key — on this
+   *  screen the size of that bucket is the point, not noise to hide. */
+  words_by_level: Record<string, number>;
   queue: {
     done: number | null;
     pending: number | null;
@@ -1467,17 +1483,36 @@ export const adminApi = {
     return res.json();
   },
 
-  // Processed movie browser, ordered by TMDB popularity desc. Pass `level`
-  // to scope to a single CEFR difficulty bucket.
-  processedMovies: async (level?: string): Promise<ProcessedMovie[]> => {
-    const qs = level ? `?level=${encodeURIComponent(level)}` : '';
-    const res = await authFetch(`${API_BASE_URL}/admin/movies/processed${qs}`);
+  /**
+   * One page of the processed-movie browser.
+   *
+   * Paged rather than "everything at once": the catalogue is 4,400 processed
+   * films and the screen used to fetch and render up to 1,000 of them before
+   * showing anything. Defaults match the endpoint's own — most recently
+   * processed first, which is what you want right after kicking off a job.
+   */
+  processedMovies: async (opts?: {
+    level?: string;
+    sort?: ProcessedSort;
+    offset?: number;
+    limit?: number;
+  }): Promise<ProcessedMoviesPage> => {
+    const qs = new URLSearchParams();
+    if (opts?.level) qs.set('level', opts.level);
+    if (opts?.sort) qs.set('sort', opts.sort);
+    if (opts?.offset != null) qs.set('offset', String(opts.offset));
+    qs.set('limit', String(opts?.limit ?? 40));
+    const res = await authFetch(`${API_BASE_URL}/admin/movies/processed?${qs}`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/movies/processed → ${res.status} ${body.slice(0, 120)}`);
     }
     const data = await res.json();
-    return data.movies || [];
+    return {
+      movies: data.movies || [],
+      has_more: Boolean(data.has_more),
+      offset: data.offset ?? 0,
+    };
   },
 
   // Jobs that exhausted all script sources or crashed past the retry cap.

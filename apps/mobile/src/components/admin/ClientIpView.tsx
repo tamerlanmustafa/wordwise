@@ -18,7 +18,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { ClientIpReport } from '../../services/api';
-import { COLORS, STATUS_LABEL, STATUS_TOKENS } from './adminTheme';
+import { STATUS_LABEL, type AdminColors, useAdminColors, useStatusTokens } from './adminTheme';
 import { HealthMetricCard } from './HealthMetricCard';
 import {
   MEASUREMENT_NOTE,
@@ -29,9 +29,12 @@ import {
 } from './clientIpContent';
 
 export function ClientIpView({ report }: { report: ClientIpReport }) {
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const rows = useMemo(() => traceRows(report.observed), [report.observed]);
-  const tokens = STATUS_TOKENS[report.overall_status];
+  const tokens = statusTokens[report.overall_status];
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
@@ -91,24 +94,25 @@ export function ClientIpView({ report }: { report: ClientIpReport }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: AdminColors) =>
+  StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 48 },
 
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   heroChipText: { fontSize: 15, fontWeight: '800', letterSpacing: 0.4 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  heroSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
-  heroExplain: { fontSize: 13, lineHeight: 19, color: COLORS.textSecondary, marginTop: 12 },
+  heroTitle: { fontSize: 18, fontWeight: '700', color: c.text },
+  heroSub: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
+  heroExplain: { fontSize: 13, lineHeight: 19, color: c.textSecondary, marginTop: 12 },
 
   card: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
   chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
@@ -116,29 +120,29 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginTop: 24,
     marginBottom: 8,
   },
-  sectionBlurb: { fontSize: 13, lineHeight: 19, color: COLORS.textSecondary },
+  sectionBlurb: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
 
   traceRow: { marginBottom: 12 },
   traceHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  traceLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textTertiary },
-  traceValue: { fontSize: 14, color: COLORS.text, marginTop: 2 },
+  traceLabel: { fontSize: 12, fontWeight: '700', color: c.textTertiary },
+  traceValue: { fontSize: 14, color: c.text, marginTop: 2 },
 
   noteBox: {
     marginTop: 24,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  noteTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
-  noteText: { fontSize: 12, lineHeight: 18, color: COLORS.textSecondary },
+  noteTitle: { fontSize: 14, fontWeight: '700', color: c.text, marginBottom: 6 },
+  noteText: { fontSize: 12, lineHeight: 18, color: c.textSecondary },
 
-  footnote: { fontSize: 11, color: COLORS.textTertiary, marginTop: 16, lineHeight: 16 },
+  footnote: { fontSize: 11, color: c.textTertiary, marginTop: 16, lineHeight: 16 },
 });

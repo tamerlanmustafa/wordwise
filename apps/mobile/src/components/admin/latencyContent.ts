@@ -13,18 +13,22 @@
 
 import type { LatencyRoute } from '../../services/api';
 
-/** High-level, jargon-free: what does this number actually tell me? */
+/**
+ * What each number means, in the plainest words that are still true. Same
+ * house style as the coverage report: one sentence on what it is, one on what
+ * good and bad look like.
+ */
 export const LATENCY_EXPLANATIONS: Readonly<Record<string, string>> = {
   overall_p95_ms:
-    'How long the slowest 1 in 20 requests takes. Half the requests are faster than the p50; only 5% are slower than this. It is the number that matches how the app feels, because an average hides the stalls a user actually notices.',
+    'How long the slowest 1 request in 20 takes. Lower is better. Averages hide stalls — this is the number that matches how slow the app actually feels.',
   slowest_route_p95_ms:
-    'The single worst endpoint right now, and how slow its slowest 1 in 20 requests is. The app-wide number can look fine while one screen is unusable — this names that screen.',
+    'The single worst screen right now, and how slow it is. The whole-app number can look fine while one screen is unusable; this names it.',
   routes_over_budget:
-    'How many endpoints are slower than our budget, not just the worst one. One slow endpoint is a bug; several at once usually means something shared is struggling, like the database or a worker hogging the server.',
+    'How many screens are slower than we allow, not just the worst. One is a bug in that screen. Several at once usually means something shared is struggling — the database, or a worker hogging the server.',
   server_error_rate:
-    'The share of requests that failed with a server error. A fast crash is still a broken screen, so this sits alongside the timings rather than on its own page.',
+    'How often a request fails outright. A fast crash is still a broken screen, so it belongs next to the timings.',
   requests_observed:
-    'How many requests these numbers are based on. Percentiles over a handful of requests mean very little, so a green dashboard on a tiny sample is not yet evidence of anything.',
+    'How many requests these numbers come from. A green dashboard built on twenty requests proves nothing — check this before trusting the rest.',
 };
 
 export function explanationForLatencyMetric(key: string): string {
@@ -54,9 +58,9 @@ export function formatCount(n: number): string {
 export type RouteSortId = 'p95' | 'traffic' | 'errors';
 
 export const ROUTE_SORTS: ReadonlyArray<{ id: RouteSortId; label: string; blurb: string }> = [
-  { id: 'p95', label: 'Slowest', blurb: 'Endpoints ranked by their p95 — the worst offenders first.' },
-  { id: 'traffic', label: 'Busiest', blurb: 'Endpoints ranked by traffic — where a slowdown hurts the most people.' },
-  { id: 'errors', label: 'Failing', blurb: 'Endpoints ranked by how often they answer with a server error.' },
+  { id: 'p95', label: 'Slowest', blurb: 'Worst screens first, by how slow their slow requests are.' },
+  { id: 'traffic', label: 'Busiest', blurb: 'Most-used screens first — where a slowdown hurts the most people.' },
+  { id: 'errors', label: 'Failing', blurb: 'Screens that break most often, first.' },
 ];
 
 /** Sorted copy of the route table. Ties fall back to p95 so order is stable. */

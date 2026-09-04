@@ -10,9 +10,10 @@
  * label, and the value is always printed rather than hidden behind a tap.
  */
 
+import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { HealthMetric } from '../../services/api';
-import { COLORS, STATUS_LABEL, STATUS_TOKENS } from './adminTheme';
+import { STATUS_LABEL, type AdminColors, useAdminColors, useStatusTokens } from './adminTheme';
 import { formatMetricValue, meterGeometry } from './healthMetricContent';
 
 export interface MetricTrend {
@@ -33,7 +34,10 @@ export function HealthMetricCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const tokens = STATUS_TOKENS[metric.status];
+  const c = useAdminColors();
+  const statusTokens = useStatusTokens();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const tokens = statusTokens[metric.status];
   const geo = meterGeometry(metric);
 
   return (
@@ -60,7 +64,7 @@ export function HealthMetricCard({
         <Text
           style={[
             styles.metricTrend,
-            { color: trend.good ? STATUS_TOKENS.ok.chipInk : STATUS_TOKENS.warn.chipInk },
+            { color: trend.good ? statusTokens.ok.chipInk : statusTokens.warn.chipInk },
           ]}
         >
           {trend.text}
@@ -105,30 +109,31 @@ export function HealthMetricCard({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: AdminColors) =>
+  StyleSheet.create({
   card: {
-    backgroundColor: COLORS.paper,
+    backgroundColor: c.paper,
     borderRadius: 12,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: c.text },
 
   metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
-  metricValue: { fontSize: 26, fontWeight: '700', color: COLORS.text, marginTop: 8 },
+  metricValue: { fontSize: 26, fontWeight: '700', color: c.text, marginTop: 8 },
   metricTrend: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
   meterWrap: { marginTop: 12 },
   meterTrack: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     overflow: 'hidden',
     justifyContent: 'center',
   },
@@ -138,25 +143,25 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 2,
-    backgroundColor: COLORS.text,
+    backgroundColor: c.text,
     opacity: 0.35,
   },
   meterScale: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  meterScaleText: { fontSize: 10, color: COLORS.textTertiary },
+  meterScaleText: { fontSize: 10, color: c.textTertiary },
 
-  metricDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 10, lineHeight: 17 },
+  metricDetail: { fontSize: 12, color: c.textSecondary, marginTop: 10, lineHeight: 17 },
 
-  explainPrompt: { fontSize: 11, color: COLORS.textTertiary, marginTop: 10 },
+  explainPrompt: { fontSize: 11, color: c.textTertiary, marginTop: 10 },
   explainBox: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: c.border,
   },
-  explainText: { fontSize: 13, lineHeight: 20, color: COLORS.text },
+  explainText: { fontSize: 13, lineHeight: 20, color: c.text },
   explainThreshold: {
     fontSize: 11,
-    color: COLORS.textTertiary,
+    color: c.textTertiary,
     marginTop: 8,
     fontStyle: 'italic',
   },
