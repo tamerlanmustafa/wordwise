@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { useAuthStore } from '../stores/authStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
 import {
@@ -74,17 +75,24 @@ export function PracticeScreen({
     if (!dailyHydrated) void hydrateDaily();
   }, [dailyHydrated, hydrateDaily]);
 
-  // Practice-path cursor — drives which tile is active.
+  // Practice-path cursor — drives which tile is active. Keyed on the account:
+  // the lesson number lives on the user now, not on the phone, so signing in
+  // as someone else has to re-read it rather than keep the number on screen.
+  // `hydrate` is a no-op when it has already run for this account.
   const cursor = usePracticePathStore((st) => st.cursor);
-  const pathHydrated = usePracticePathStore((st) => st.hydrated);
   const hydratePath = usePracticePathStore((st) => st.hydrate);
+  const userId = useAuthStore((st) => st.user?.id ?? null);
   useEffect(() => {
-    if (!pathHydrated) void hydratePath();
-  }, [pathHydrated, hydratePath]);
+    void hydratePath();
+  }, [userId, hydratePath]);
 
   // Authoritative server state — streak + freezes for the header chip.
   const [serverState, setServerState] = useState<DailyState | null>(null);
   const refreshServerState = useCallback(async () => {
+    // The lesson number is account state now, exactly like the streak beside
+    // it, so it rides the same refresh: a phone that was behind catches up
+    // when the tab is opened rather than only on the next cold start.
+    void usePracticePathStore.getState().resync();
     try {
       const next = await dailyApi.state();
       setServerState(next);

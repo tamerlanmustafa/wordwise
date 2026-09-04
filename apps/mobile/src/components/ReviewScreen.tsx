@@ -393,6 +393,11 @@ export function ReviewScreen({
                 justHitGoal: prev?.justHitGoal ?? false,
               }));
             }
+            // Same correction for the lesson number. The optimistic advance
+            // above is this install's count; the server keeps the account's,
+            // which is what a second phone will see. `adopt` only ever raises,
+            // so a reply that is merely equal — the normal case — is a no-op.
+            usePracticePathStore.getState().adopt(res.lessons_completed);
             // v0.6 W10 — queue any newly-crossed milestones for celebration.
             // We don't markSeen here; that happens when the user dismisses
             // each modal so a crash mid-queue doesn't lose the unlock.

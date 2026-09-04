@@ -1122,6 +1122,10 @@ interface CompleteSessionResponse {
   correct_count: number;
   total_count: number;
   streak: number;
+  /** The Practice path's lesson number *on the account*, after this session.
+   *  Optional because an older server does not send it — the store then keeps
+   *  its local count rather than snapping back to zero. */
+  lessons_completed?: number;
   /** v0.6 W10 — full inventory of unlocked milestone slugs
    *  ("opening_weekend" / "box_office" / "cult_classic" /
    *  "criterion_collection"). Diff against AsyncStorage last-seen
@@ -1241,6 +1245,29 @@ export const srsApi = {
       throw new Error(`POST /srs/session/complete → ${res.status} ${text.slice(0, 120)}`);
     }
     return res.json();
+  },
+
+  /** Merge this install's Practice lesson number into the account's and get
+   *  the account's back.
+   *
+   *  The server merges with GREATEST rather than taking what is sent, so this
+   *  is safe to call on every launch: a reinstall reporting 0 cannot erase an
+   *  account, and a device that is ahead pulls the account forward. The reply
+   *  is always ≥ what was sent, which is what lets the caller adopt it
+   *  unconditionally without ever moving a user backwards. */
+  syncPracticeProgress: async (lessonsCompleted: number): Promise<number> => {
+    const res = await authFetch(`${API_BASE_URL}/srs/practice-progress`, {
+      method: 'POST',
+      body: JSON.stringify({ lessons_completed: lessonsCompleted }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`POST /srs/practice-progress → ${res.status} ${text.slice(0, 120)}`);
+    }
+    const body = (await res.json()) as { lessons_completed?: number };
+    return typeof body.lessons_completed === 'number'
+      ? body.lessons_completed
+      : lessonsCompleted;
   },
 
   todaysWord: async (skip = 0, targetLang?: string): Promise<TodaysWord | null> => {

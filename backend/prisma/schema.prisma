@@ -52,6 +52,11 @@ model User {
   // (100d), "criterion_collection" (365d). Frontend diffs against a
   // local last-seen list to fire MilestoneUnlockModal on new entries.
   unlockedCosmetics       Json?                    @default("[]") @map("unlocked_cosmetics")
+  // Practice path cursor — how many lessons this ACCOUNT has completed.
+  // Lived only in AsyncStorage until 2026-09-04, so it was a per-install
+  // counter: the same login read 34 on one phone and 8 on another. Merged
+  // with GREATEST on sync so neither device loses progress.
+  practiceLessonsCompleted Int?                    @default(0) @map("practice_lessons_completed")
   srsTotalReviews         Int?                     @default(0) @map("srs_total_reviews")
   srsTotalCorrect         Int?                     @default(0) @map("srs_total_correct")
   // Dormant (2026-07-16): email verification was removed in favor of

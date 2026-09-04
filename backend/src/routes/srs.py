@@ -247,6 +247,10 @@ class CompleteSessionResponse(BaseModel):
     correct_count: int
     total_count: int
     streak: int
+    # The Practice path's lesson number, after this session. Returned so the
+    # client can adopt the authoritative value instead of trusting its own
+    # local counter — which is exactly how the two devices drifted apart.
+    lessons_completed: int = 0
     # v0.6 W10: full inventory; client diffs against an AsyncStorage
     # last-seen list to fire MilestoneUnlockModal for new entries.
     unlocked_cosmetics: list[str] = []
@@ -255,6 +259,16 @@ class CompleteSessionResponse(BaseModel):
 class CompleteSessionBody(BaseModel):
     correct_count: int = 0
     total_count: int = 0
+
+
+class PracticeProgressBody(BaseModel):
+    """What this install thinks the lesson number is."""
+
+    lessons_completed: int = 0
+
+
+class PracticeProgressResponse(BaseModel):
+    lessons_completed: int
 
 
 class StatsResponse(BaseModel):
@@ -1126,11 +1140,25 @@ async def complete_session(
 
     if body.total_count > 0:
         await record_session_day(db, user_id=current_user.id, today=today)
+        # Same guard as the streak, for the same reason: a deck whose every
+        # card turned out to be unrenderable "finishes" without asking the
+        # user anything, and that is no more a lesson than it is a streak day.
+        #
+        # Raw SQL rather than a read-modify-write: two devices finishing a
+        # session at the same moment would both read N and both write N+1,
+        # losing one. `+ 1` in the database is atomic. COALESCE because the
+        # column is nullable for rows written before it existed.
+        await db.execute_raw(
+            "UPDATE users SET practice_lessons_completed = "
+            "COALESCE(practice_lessons_completed, 0) + 1 WHERE id = $1",
+            current_user.id,
+        )
 
     # Read after the write, so the streak we return is the one the done
     # screen should show rather than the one from before this session.
     user = await db.user.find_unique(where={"id": current_user.id})
     streak = (user.srsCurrentStreak or 0) if user else 0
+    lessons = (user.practiceLessonsCompleted or 0) if user else 0
     last_chest = user.srsLastChestDate if user else None
     unlocked = parse_unlocked(user.unlockedCosmetics) if user else []
 
@@ -1141,6 +1169,7 @@ async def complete_session(
             correct_count=body.correct_count,
             total_count=body.total_count,
             streak=streak,
+            lessons_completed=lessons,
             unlocked_cosmetics=unlocked,
         )
 
@@ -1157,8 +1186,50 @@ async def complete_session(
         correct_count=body.correct_count,
         total_count=body.total_count,
         streak=streak,
+        lessons_completed=lessons,
         unlocked_cosmetics=unlocked,
     )
+
+
+@router.post("/practice-progress", response_model=PracticeProgressResponse)
+async def sync_practice_progress(
+    body: PracticeProgressBody,
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """Merge this install's lesson number with the account's, and return the
+    account's.
+
+    The Practice cursor lived only in AsyncStorage, which is per install, so
+    the same login read 34 lessons on one phone and 8 on another — two
+    counters that had never met. The column that now holds it starts at 0 for
+    everyone, and simply adopting that would tell a long-standing user their
+    progress was gone.
+
+    So the merge is `GREATEST`. A monotonic counter is the one shape that
+    reconciles safely without a real sync protocol: GREATEST is commutative
+    and idempotent, so the result does not depend on which device syncs first,
+    how many times it retries, or whether two arrive at once. The higher
+    number wins and nothing is lost, which also means no backfill had to be
+    written — the devices heal the column themselves on next launch.
+
+    Deliberately not a PUT of the client's value: a fresh install reporting 0
+    would then erase an account's real progress, and a reinstall is a much
+    more common event than the one this endpoint is fixing.
+    """
+    submitted = max(0, body.lessons_completed)
+    await db.execute_raw(
+        "UPDATE users SET practice_lessons_completed = "
+        "GREATEST(COALESCE(practice_lessons_completed, 0), $2) WHERE id = $1",
+        current_user.id,
+        submitted,
+    )
+    # Read back rather than RETURNING: the merge is monotonic, so a concurrent
+    # bump landing between the two statements can only make this number larger,
+    # never wrong.
+    user = await db.user.find_unique(where={"id": current_user.id})
+    stored = (user.practiceLessonsCompleted or 0) if user else 0
+    return PracticeProgressResponse(lessons_completed=max(stored, submitted))
 
 
 _CEFR_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]

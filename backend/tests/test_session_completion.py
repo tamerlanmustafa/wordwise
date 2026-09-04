@@ -71,6 +71,7 @@ def _user(**overrides):
         srsTotalCorrect=0,
         srsLastChestDate=None,
         unlockedCosmetics=None,
+        practiceLessonsCompleted=0,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -95,6 +96,23 @@ class _FakeUserTable:
 class _FakeDb:
     def __init__(self, user):
         self.user = _FakeUserTable(user)
+        self.raw: list[tuple[str, tuple]] = []
+
+    async def execute_raw(self, sql: str, *args):
+        """Just enough Postgres for the Practice lesson counter.
+
+        `complete_session` bumps that counter in SQL rather than with a
+        read-modify-write, so two devices finishing at the same moment cannot
+        both read N and both write N+1. That makes it raw, and a fake has to
+        stand in for the arithmetic here — the statement itself is exercised
+        in `test_practice_lesson_sync.py` and in prod.
+        """
+        self.raw.append((sql, args))
+        u = self.user._user
+        if u is None or args[0] != u.id:
+            return 0
+        u.practiceLessonsCompleted = (u.practiceLessonsCompleted or 0) + 1
+        return 1
 
 
 @pytest.fixture(autouse=True)
