@@ -1136,7 +1136,6 @@ export default function App() {
           <QuizLessonScreen
             session={quizSession.session}
             level={quizSession.level}
-            movieTitle={quizSession.movieTitle}
             onExit={handleQuizExit}
             onComplete={handleQuizComplete}
           />

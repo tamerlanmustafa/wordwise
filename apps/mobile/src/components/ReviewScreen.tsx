@@ -101,6 +101,9 @@ export function ReviewScreen({
   const [cards, setCards] = useState<SrsReviewCard[]>([]);
   const [index, setIndex] = useState(0);
   const [stats, setStats] = useState({ got: 0, forgot: 0 });
+  // Per-question results, in order, for the header's segmented bar. `stats`
+  // only totals them, and the bar has to colour each segment individually.
+  const [outcomes, setOutcomes] = useState<boolean[]>([]);
   const [previewsRemaining, setPreviewsRemaining] = useState<number | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -170,6 +173,7 @@ export function ReviewScreen({
     setPhase('loading');
     setIndex(0);
     setStats({ got: 0, forgot: 0 });
+    setOutcomes([]);
 
     // v0.7 §7 — try resuming a cached in-flight session before hitting
     // the server. The cache is scoped by kind (+ listId for the Lists
@@ -189,6 +193,14 @@ export function ReviewScreen({
       setIsPreview(false);
       setPreviewsRemaining(null);
       setStats({ got: resumable.got, forgot: resumable.forgot });
+      // A resumed deck knows its totals but not the order they came in, so the
+      // recovered segments are grouped rather than interleaved. The count is
+      // right, which is what the bar is for; pretending to know the sequence
+      // would be inventing data.
+      setOutcomes([
+        ...Array(resumable.got).fill(true),
+        ...Array(resumable.forgot).fill(false),
+      ]);
       // `totalCards` is the whole session; `remaining` is what's left. The
       // difference is what the header has to add back so a resumed deck
       // reads "4 / 10" rather than restarting the count at "1 / 7".
@@ -327,6 +339,7 @@ export function ReviewScreen({
           got: s.got + (correct ? 1 : 0),
           forgot: s.forgot + (correct ? 0 : 1),
         }));
+        setOutcomes((prev) => [...prev, correct]);
         cache.consume(correct);
       } else {
         cache.skip();
@@ -467,7 +480,7 @@ export function ReviewScreen({
             the counter and progress bar, which have nothing left to report.
             This used to be a paper bar with a "← Back" text label, which
             read as a different screen from the deck it ends. */}
-        <QuizHeader movie={t('quiz:review.todaysDone')} onBack={onBack} />
+        <QuizHeader onBack={onBack} />
         <SessionComplete
           eyebrow={t('quiz:review.dailyReview')}
           title={
@@ -488,6 +501,7 @@ export function ReviewScreen({
           onPrimary={isPracticePath ? startNextTile : onBack}
           secondaryLabel={isPracticePath ? t('quiz:review.finishForNow') : undefined}
           onSecondary={isPracticePath ? onBack : undefined}
+          outcomes={outcomes}
           celebrate
         >
           {isPreview && previewsRemaining === 0 ? (
@@ -544,6 +558,7 @@ export function ReviewScreen({
       // you answered — it read as a property of the session.
       index={pos.index}
       total={pos.total}
+      outcomes={outcomes}
       onBack={onBack}
     />
   );

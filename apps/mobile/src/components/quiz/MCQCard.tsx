@@ -36,12 +36,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { feedback } from '../../utils/feedback';
 import { WordCard } from './WordCard';
 import { MCQChoice } from './MCQChoice';
+import { QuizBackdrop } from './QuizBackdrop';
+import { useEntryAnimation } from './quizMotion';
+import { MONO_FAMILY } from '../../theme/fonts';
 import {
   choiceIsDimmed,
   choiceStateFor,
@@ -94,6 +98,7 @@ export function MCQCard({
   // waiting on you. It used to double as an auto-advance timer for correct
   // answers; now it only draws the eye, and the tap is always the user's.
   const ctaScale = useRef(new Animated.Value(1)).current;
+  const ctaPress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (phase !== 'answered') return;
     const timer = setTimeout(() => {
@@ -120,6 +125,9 @@ export function MCQCard({
     [phase, choices],
   );
 
+  // The screen's mood, which the backdrop tints to. Neutral while answering.
+  const mood = phase !== 'answered' ? 'neutral' : userWasCorrect ? 'correct' : 'wrong';
+
   const handleAdvance = useCallback(() => {
     if (phase !== 'answered' || pickedIdx == null) return;
     onAnswer(userWasCorrect);
@@ -130,9 +138,14 @@ export function MCQCard({
     : userWasCorrect
       ? tc.success
       : tc.error;
-  const ctaFg = phase === 'idle'
-    ? tc.textFaint
-    : '#fff';
+  // Dark ink on a coloured fill, never white: `success` and `error` are light
+  // enough in dark mode that white text on them lands near 2:1.
+  const ctaFg = phase === 'idle' ? tc.textFaint : tc.textInverse;
+  const ctaEdge = phase === 'idle'
+    ? 'transparent'
+    : userWasCorrect
+      ? tc.quizCorrectEdge
+      : tc.quizWrongEdge;
   // One label throughout. The button's *state* (ghost vs filled, disabled vs
   // not) already says whether it is ready; changing its words as well made it
   // read as a different control appearing.
@@ -141,42 +154,94 @@ export function MCQCard({
 
   return (
     <View style={s.root}>
-      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        <WordCard word={word} pos={pos} example={example} size={36} level={level} />
+      <QuizBackdrop mood={mood} />
 
-        {/* Answer list — one full-width row per choice. */}
+      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+        {/* Index 0 leads; the options follow on a 60ms stagger. `entryKey` is
+            the question's identity, so a new card re-runs the arrival rather
+            than only the first one animating. */}
+        <Arriving index={0} entryKey={word}>
+          <WordCard word={word} pos={pos} example={example} level={level} />
+        </Arriving>
+
         <View style={s.choicesList}>
           {choices.map((c, i) => (
-            <MCQChoice
-              key={`${c.word}-${i}`}
-              label={c.word}
-              state={choiceStateFor(i, answerState)}
-              disabled={choiceIsDimmed(i, answerState)}
-              onPress={() => handleChoicePress(i)}
-            />
+            <Arriving key={`${c.word}-${i}`} index={i + 1} entryKey={word}>
+              <MCQChoice
+                label={c.word}
+                position={i + 1}
+                state={choiceStateFor(i, answerState)}
+                disabled={choiceIsDimmed(i, answerState)}
+                // Only the row the reader tapped pops. The revealed answer
+                // arrives by its colour change alone, 180ms later, so the eye
+                // lands on the miss before the correction.
+                popIn={phase === 'answered' && i === pickedIdx}
+                onPress={() => handleChoicePress(i)}
+              />
+            </Arriving>
           ))}
         </View>
-
       </ScrollView>
 
-      {/* Sticky CTA bar */}
-      <View style={[s.ctaBar, { paddingBottom: barInset }]}>
+      {/* Sticky CTA. `barInset` is the reserved height of the floating glass
+          tab bar (see useBottomBarInset) — on iOS 26 the bar is a capsule that
+          hovers clear of the screen edge, so a footer padded only by the safe
+          area sits underneath it. */}
+      <LinearGradient
+        colors={['transparent', tc.background]}
+        locations={[0, 0.45]}
+        style={[s.ctaBar, { paddingBottom: barInset + 10, borderTopColor: tc.divider }]}
+      >
         <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
           <Pressable
             onPress={ctaEnabled ? handleAdvance : undefined}
-            style={({ pressed }) => [
-              s.cta,
-              { backgroundColor: ctaBg },
-              !ctaEnabled && s.ctaGhost,
-              pressed && ctaEnabled && { opacity: 0.9 },
-            ]}
+            onPressIn={() => ctaEnabled && ctaPress.setValue(1)}
+            onPressOut={() => ctaPress.setValue(0)}
+            disabled={!ctaEnabled}
           >
-            <Text style={[s.ctaText, { color: ctaFg }]}>{ctaLabel}</Text>
+            {/* The CTA carries the same lip as the answer tiles, so the whole
+                surface shares one physical language. */}
+            <Animated.View
+              style={[
+                s.ctaEdge,
+                { backgroundColor: ctaEdge, transform: [{ scaleY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] }) }] },
+              ]}
+            />
+            <Animated.View
+              style={[
+                s.cta,
+                { backgroundColor: ctaBg },
+                !ctaEnabled && s.ctaGhost,
+                { transform: [{ translateY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [0, 3] }) }] },
+              ]}
+            >
+              <Text style={[s.ctaText, { color: ctaFg }]}>{ctaLabel} →</Text>
+            </Animated.View>
           </Pressable>
         </Animated.View>
-      </View>
+      </LinearGradient>
     </View>
   );
+}
+
+/**
+ * One arriving element.
+ *
+ * A thin wrapper so the choreography stays in `quizMotion` and the card's JSX
+ * reads as layout rather than as animation plumbing. Extracted rather than
+ * inlined because a hook cannot be called inside `choices.map`.
+ */
+function Arriving({
+  index,
+  entryKey,
+  children,
+}: {
+  index: number;
+  entryKey: string | number;
+  children: React.ReactNode;
+}) {
+  const style = useEntryAnimation(index, entryKey);
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 const makeStyles = (tc: ThemeColors) =>
@@ -198,21 +263,12 @@ const makeStyles = (tc: ThemeColors) =>
       paddingTop: 4,
       paddingBottom: 24,
     },
-    eyebrow: {
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1.8,
-      color: tc.goldOnSurface,
-      textTransform: 'uppercase',
-      textAlign: 'center',
-      marginTop: 6,
-    },
     // One choice per row. A 2x2 grid packed four tiles into the width and
     // paid for it in height — each tile needed 92pt so a two-word gloss had
     // somewhere to wrap. Four rows read top-to-bottom in one pass, fit a
     // longer translation on a single line, and leave the card shorter.
     choicesList: {
-      gap: 10,
+      gap: 11,
       marginTop: 6,
     },
     notQuiteCard: {
@@ -243,36 +299,41 @@ const makeStyles = (tc: ThemeColors) =>
     },
     // `paddingBottom` is applied inline from `useBottomBarInset` — the bar
     // floats over this surface, so the room it needs is device-dependent.
+    // The footer fades the page out behind it rather than sitting on a flat
+    // band, so content scrolling under it dissolves instead of colliding.
     ctaBar: {
       paddingHorizontal: 18,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: tc.divider,
-      backgroundColor: tc.background,
+      paddingTop: 18,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    // Reserves the lip's depth so pressing the button doesn't shift the bar.
+    ctaEdge: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: -5,
+      height: 5,
+      borderRadius: 16,
     },
     cta: {
-      paddingVertical: 14,
+      height: 54,
       paddingHorizontal: 16,
-      borderRadius: 14,
+      borderRadius: 16,
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.25,
-      shadowRadius: 24,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 6,
+      justifyContent: 'center',
     },
     ctaGhost: {
-      // No shadow when the button is the idle hint pill — it shouldn't
-      // compete with the choice tiles for attention.
-      shadowOpacity: 0,
-      elevation: 0,
-      borderWidth: 1,
-      borderColor: tc.border,
+      // The disabled state is a hairline surface, not a dimmed button: a faded
+      // filled button still reads as pressable and invites a tap that does
+      // nothing.
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: tc.divider,
     },
     ctaText: {
-      fontSize: 14,
+      fontFamily: MONO_FAMILY,
+      fontSize: 13.5,
       fontWeight: '900',
-      letterSpacing: 0.6,
+      letterSpacing: 1.4,
       textTransform: 'uppercase',
     },
   });

@@ -19,53 +19,66 @@
  * either way.
  */
 
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
-import { cefrColors } from '../../theme/palette';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { quizHeaderProgress } from './quizHeaderLayout';
+import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
+import { MONO_FAMILY } from '../../theme/fonts';
+import { quizHeaderProgress, quizSegments } from './quizHeaderLayout';
 
 // Spec §7: 62px total clearance from the device top to the first row.
 // Parents wrap in `SafeAreaView edges={['top']}`, which already pushes
 // content down by `insets.top`. We add whatever's needed to reach 62.
 const HEADER_TOP_TARGET = 62;
 
-const SERIF_FAMILY = 'Source Serif 4';
-const MONO_FAMILY = 'JetBrains Mono';
-
 export interface QuizHeaderProps {
-  /** Movie title for the center chip. */
-  /** Title chip text. Omit to drop the chip entirely — Practice has no film
-   *  to name and a standing "Daily review" label is chrome, not information:
-   *  the user knows what they opened. The CEFR badge still shows when a
-   *  `level` is given, so the chip only disappears when there is nothing in
-   *  it. */
-  movie?: string | null;
-  /** CEFR level for the mini-badge inside the chip. */
-  level?: keyof typeof cefrColors | null;
   /** 1-indexed position in the card stack. Omit on a surface with no deck
-   *  behind it (the done screen) to drop the counter and progress bar. */
+   *  behind it (the done screen) to drop the counter and the segments. */
   index?: number;
   /** Total card count. Omit alongside `index`. */
   total?: number;
+  /** What has been answered so far, in order. Drives the segment colours —
+   *  the bar is the round's scorecard, not just a position indicator. */
+  outcomes?: readonly boolean[];
   onBack: () => void;
 }
 
-export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderProps) {
+export function QuizHeader({ index, total, outcomes, onBack }: QuizHeaderProps) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const { showProgress, pct } = quizHeaderProgress(index, total);
-  const cefrColor = level ? cefrColors[level] : tc.gold;
+  const { showProgress } = quizHeaderProgress(index, total);
+  const segments = useMemo(
+    () => quizSegments(outcomes ?? [], index ?? 0, total ?? 0),
+    [outcomes, index, total],
+  );
+
+  // The sweep across the live segment. A loop rather than a one-shot, so the
+  // bar keeps a pulse while you think about the answer.
+  const sweep = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!showProgress) return;
+    const loop = Animated.loop(
+      Animated.timing(sweep, {
+        toValue: 1,
+        duration: 2600,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [sweep, showProgress]);
   // Clears the dynamic island on every device. Floor at 12 so non-notch
   // devices (where insets.top can be 20) still get breathing room.
   const extraTop = Math.max(12, HEADER_TOP_TARGET - insets.top);
 
   return (
     <View style={showProgress ? null : s.bareBottom}>
-      {/* Top row: back · movie chip · counter */}
+      {/* Top row: back · exercise type · counter */}
       <View style={[s.row, { paddingTop: extraTop }]}>
         <Pressable
           onPress={onBack}
@@ -86,24 +99,12 @@ export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderPro
           </Svg>
         </Pressable>
 
-        {movie || level ? (
-          <View style={s.movieChip}>
-            {level ? (
-              <View style={[s.cefrMini, { backgroundColor: cefrColor }]}>
-                <Text style={s.cefrMiniText}>{level}</Text>
-              </View>
-            ) : null}
-            {movie ? (
-              <Text style={s.movieTitle} numberOfLines={1}>
-                {movie}
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          // Keeps the back button and counter in their corners with nothing
-          // between them, instead of letting them drift toward the centre.
-          <View style={s.chipSpacer} />
-        )}
+        {/* Names the exercise, not the content. There is no film behind a
+            Practice deck, and the one thing worth saying about the card is
+            what it is asking you to do. */}
+        <View style={[s.typeChip, { borderColor: withAlpha(tc.gold, 0.35) }]}>
+          <Text style={s.typeChipText}>{t('quiz:mcq.exerciseType')}</Text>
+        </View>
 
         {showProgress ? (
           <View style={s.counter}>
@@ -118,12 +119,44 @@ export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderPro
         )}
       </View>
 
-      {/* Progress bar */}
+      {/* One segment per question. Answered segments carry their outcome, so
+          the bar reports the round as well as your place in it — the same
+          scorecard the end screen repeats. */}
       {showProgress ? (
         <View style={s.progressWrap}>
-          <View style={[s.progressTrack, { backgroundColor: tc.divider }]}>
-            <View style={[s.progressFill, { width: `${pct}%`, backgroundColor: tc.gold }]} />
-          </View>
+          {segments.map((seg, i) => (
+            <View
+              key={i}
+              style={[
+                s.segment,
+                {
+                  backgroundColor:
+                    seg === 'correct'
+                      ? tc.success
+                      : seg === 'wrong'
+                        ? tc.error
+                        : seg === 'current'
+                          ? withAlpha(tc.gold, 0.3)
+                          : tc.divider,
+                },
+              ]}
+            >
+              {seg === 'current' ? (
+                <Animated.View
+                  style={[
+                    s.sweep,
+                    {
+                      backgroundColor: tc.gold,
+                      opacity: sweep.interpolate({
+                        inputRange: [0, 0.5, 1],
+                        outputRange: [0.15, 0.9, 0.15],
+                      }),
+                    },
+                  ]}
+                />
+              ) : null}
+            </View>
+          ))}
         </View>
       ) : null}
     </View>
@@ -155,47 +188,20 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    /** Placeholder when the chip is dropped — see the `movie` prop. */
-    chipSpacer: {
-      flex: 1,
-    },
-    movieChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
+    typeChip: {
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
-      backgroundColor: tc.paper,
-      borderWidth: 1.5,
-      borderColor: tc.gold,
-      maxWidth: 240,
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 2,
+      borderWidth: 1,
+      backgroundColor: tc.quizRaisedTop,
     },
-    cefrMini: {
-      width: 16,
-      height: 16,
-      borderRadius: 3,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cefrMiniText: {
-      color: '#fff',
-      fontSize: 8,
-      fontWeight: '900',
-      letterSpacing: 0.3,
-    },
-    movieTitle: {
-      flexShrink: 1,
-      fontFamily: SERIF_FAMILY,
-      fontSize: 17,
-      fontWeight: '600',
-      color: tc.text,
-      letterSpacing: -0.3,
+    typeChipText: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 10.5,
+      fontWeight: '800',
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      color: tc.goldOnSurface,
     },
     counter: {
       minWidth: 36,
@@ -219,16 +225,20 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.textSecondary,
     },
     progressWrap: {
+      flexDirection: 'row',
+      gap: 4,
       paddingHorizontal: 18,
       paddingBottom: 14,
     },
-    progressTrack: {
-      height: 4,
+    // `flex: 1` per segment, so a five-card deck and a ten-card deck both fill
+    // the width — the bar reports proportion, not absolute length.
+    segment: {
+      flex: 1,
+      height: 5,
       borderRadius: 999,
       overflow: 'hidden',
     },
-    progressFill: {
-      height: '100%',
-      borderRadius: 999,
+    sweep: {
+      ...StyleSheet.absoluteFillObject,
     },
   });

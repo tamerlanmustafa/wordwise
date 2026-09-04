@@ -12,6 +12,37 @@
  * setup — same reasoning as `mcqLogic` and `navBarMetrics`.
  */
 
+/**
+ * Outcome of each question so far, for the segmented progress bar. The bar
+ * doubles as the round's scorecard, so it needs per-question results rather
+ * than the single percentage the old bar filled to.
+ */
+export type QuizSegment = 'correct' | 'wrong' | 'current' | 'pending';
+
+/**
+ * One segment per question.
+ *
+ * `outcomes` is what has been answered, in order; `index` is the 1-based
+ * position of the card on screen. Anything past the answers and before the
+ * end is pending, and exactly one segment is `current` — the card you are
+ * looking at. A resumed deck answers this correctly for free: `index` already
+ * counts the cards answered before the resume, so the current marker lands on
+ * the right segment without the outcomes array needing to know.
+ */
+export function quizSegments(
+  outcomes: readonly boolean[],
+  index: number,
+  total: number,
+): QuizSegment[] {
+  if (total <= 0) return [];
+  const answered = outcomes.length;
+  return Array.from({ length: total }, (_, i) => {
+    if (i < answered) return outcomes[i] ? 'correct' : 'wrong';
+    if (i === index - 1) return 'current';
+    return 'pending';
+  });
+}
+
 export interface QuizHeaderProgress {
   /** Render the N/total pill and the gold progress bar. */
   showProgress: boolean;

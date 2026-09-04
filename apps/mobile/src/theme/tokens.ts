@@ -93,6 +93,34 @@ export interface ThemeColors {
   successTint:        string;  // correct-flash bg on choices + input
   successBorder:      string;  // correct-flash border
   errorBorder:        string;  // wrong-choice border (errorTint already exists)
+
+  // Quiz surfaces (v0.9 redesign). The quiz is the one screen built out of
+  // *depth* rather than flat cards: the word sits in a recessed panel that
+  // reads as a lit screen, and the answers are raised tiles with a solid
+  // bottom edge you can watch compress when you press them. Two gradient
+  // stops each, because a single fill on a 60pt tile reads as a rectangle
+  // while a 4-point vertical shift reads as a surface catching light.
+  //
+  // `success` / `error` are reused for the answered states — they already
+  // carry the exact values the design asks for — but the *edges* are new:
+  // an edge is a darker relative of the fill, not a tint of it, so it cannot
+  // be derived with withAlpha() without going muddy on a coloured ground.
+  quizRecessedTop:    string;  // recessed panel, top stop
+  quizRecessedBottom: string;  // recessed panel, bottom stop
+  quizRaisedTop:      string;  // raised tile, top stop
+  quizRaisedBottom:   string;  // raised tile, bottom stop
+  quizRaisedEdge:     string;  // the 4px lip under an idle tile
+  quizCorrectEdge:    string;  // lip under a correct tile / CTA
+  quizWrongEdge:      string;  // lip under a wrong tile / CTA
+  /** Ink on a solid CEFR chip. The ramp runs through yellows and greens that
+   *  are far too light for white text, so every chip takes one dark ink. */
+  cefrChipInk:        string;
+  /** Two festive one-offs for the celebration burst, so it is not a
+   *  monochrome gold shower. Same in both themes: confetti falls over a
+   *  tinted vignette, not over the page. */
+  confettiViolet:     string;
+  confettiCoral:      string;
+  confettiCream:      string;
   warningTint:        string;  // "showed you" reveal callout bg (yellow per §7.2)
   warningBorder:      string;  // "showed you" reveal callout border
 
@@ -210,6 +238,17 @@ const light: ThemeColors = {
   successTint:        'rgba(63,139,123,0.14)',
   successBorder:      'rgba(63,139,123,0.55)',
   errorBorder:        'rgba(214,106,106,0.55)',
+  quizRecessedTop:    '#FFFDF7',
+  quizRecessedBottom: '#FAF6EB',
+  quizRaisedTop:      '#FFFFFF',
+  quizRaisedBottom:   '#FBF8F0',
+  quizRaisedEdge:     '#E3D9C0',
+  quizCorrectEdge:    '#BEDCD5',
+  quizWrongEdge:      '#E5C4C4',
+  cefrChipInk:        '#1A1206',
+  confettiViolet:     '#9B7ED9',
+  confettiCoral:      '#E07A5F',
+  confettiCream:      '#FFF6E0',
   warningTint:        'rgba(244,162,97,0.16)',
   warningBorder:      'rgba(244,162,97,0.55)',
 
@@ -305,6 +344,17 @@ const dark: ThemeColors = {
   successTint:        'rgba(76,175,154,0.20)',
   successBorder:      'rgba(76,175,154,0.55)',
   errorBorder:        'rgba(229,115,115,0.55)',
+  quizRecessedTop:    '#0B0A0E',
+  quizRecessedBottom: '#131220',
+  quizRaisedTop:      '#23222F',
+  quizRaisedBottom:   '#1A1A24',
+  quizRaisedEdge:     '#100F16',
+  quizCorrectEdge:    '#1A4A42',
+  quizWrongEdge:      '#5C2222',
+  cefrChipInk:        '#1A1206',
+  confettiViolet:     '#9B7ED9',
+  confettiCoral:      '#E07A5F',
+  confettiCream:      '#FFF6E0',
   warningTint:        'rgba(244,162,97,0.20)',
   warningBorder:      'rgba(244,162,97,0.55)',
 

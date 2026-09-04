@@ -34,7 +34,6 @@ export interface QuizLessonScreenProps {
   /** v0.7 §7 — movie title for the shared QuizHeader. Optional so
    *  legacy callers don't have to change all at once; falls back to
    *  the level label when absent. */
-  movieTitle?: string;
   onExit: () => void;
   onComplete: (
     result: QuizCompleteResponse,
@@ -46,7 +45,6 @@ export interface QuizLessonScreenProps {
 export function QuizLessonScreen({
   session,
   level,
-  movieTitle,
   onExit,
   onComplete,
 }: QuizLessonScreenProps) {
@@ -187,7 +185,6 @@ export function QuizLessonScreen({
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <QuizHeader
-        movie={movieTitle ?? `${level} session`}
         index={idx + 1}
         total={total}
         onBack={onExit}

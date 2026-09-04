@@ -3,6 +3,8 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
+import { ConfettiBurst } from './ConfettiBurst';
+import { QuizBackdrop } from './QuizBackdrop';
 
 /**
  * SessionFinishing — the "elevator button trick" for quiz completion.
@@ -56,10 +58,16 @@ export function SessionFinishing() {
 
   // Gold on dark, success-green on light — mirrors the result-screen CTA rule.
   const badgeBg = scheme === 'dark' ? tc.gold : tc.success;
+  const badgeEdge = scheme === 'dark' ? tc.goldDeep : tc.quizCorrectEdge;
   const checkColor = scheme === 'dark' ? tc.goldDeep : tc.textInverse;
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
+      {/* Correct-tinted, because reaching this screen means the deck is done —
+          the backdrop should have already settled to green behind the last
+          answer, and this continues it rather than flashing back to accent. */}
+      <QuizBackdrop mood="correct" />
+      <ConfettiBurst />
       <View style={s.center}>
         <View style={s.badgeWrap}>
           <Animated.View
@@ -71,6 +79,9 @@ export function SessionFinishing() {
           <Animated.View
             style={[s.badge, { backgroundColor: badgeBg, opacity: pop, transform: [{ scale: pop }] }]}
           >
+            {/* The same lip the answer tiles wear, so the disc reads as part
+                of the same physical surface rather than a flat sticker. */}
+            <View style={[s.badgeEdge, { backgroundColor: badgeEdge }]} />
             <Text style={[s.check, { color: checkColor }]}>✓</Text>
           </Animated.View>
         </View>
@@ -88,7 +99,7 @@ export function SessionFinishing() {
   );
 }
 
-const BADGE = 96;
+const BADGE = 104;
 
 const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') =>
   StyleSheet.create({
@@ -113,6 +124,15 @@ const makeStyles = (tc: ThemeColors, _scheme: 'light' | 'dark') =>
       borderRadius: BADGE / 2,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    badgeEdge: {
+      position: 'absolute',
+      left: BADGE * 0.16,
+      right: BADGE * 0.16,
+      bottom: -8,
+      height: 10,
+      borderRadius: BADGE / 2,
+      zIndex: -1,
     },
     check: { fontSize: 52, fontWeight: '900', marginTop: -2 },
     title: { fontSize: 26, fontWeight: '800', color: tc.text, textAlign: 'center' },

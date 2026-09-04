@@ -1,119 +1,197 @@
 /**
- * WordCard — shared word display used by both quiz card types.
+ * WordCard — the word under test, in a recessed panel.
  *
- * Spec: `tabs2/quiz.jsx` word-card block. Radius 18, bg `tc.wordBoxBg`,
- * 1px `tc.border`, soft shadow, centered. The word renders in Source
- * Serif 4 36px (MCQ) or 34px (typing); we expose `size` so callers
- * can pass either. Subtitle is `${pos} · "${example}"` italic — both
- * fields are optional so the card degrades cleanly when the backend
- * payload only ships one of them.
+ * Recessed rather than raised: the answers are the things you press, so they
+ * are the tiles that stand up. The word sits *into* the page with an accent
+ * hairline along its top edge, which reads as a lit screen you are reading
+ * from rather than another button.
  *
- * The CEFR chip sits here rather than in `QuizHeader` because the level is a
- * fact about *this word*, and the header is a fact about the session. In a
- * deck that mixes levels — which every Practice deck does, since the server
- * composes it from due recalls, saved words and fresh words at your level —
- * a single level in the top bar was describing whichever card happened to be
- * on screen, and it changed as you answered. Beside the word it is simply
- * true.
+ * The chips carry the two facts about the word that are not the word: its CEFR
+ * band (solid, from the real ramp) and its part of speech (outlined, quiet).
+ * The level chip lives here rather than in the top bar because a Practice deck
+ * mixes bands by construction — one level in the header described whichever
+ * card happened to be on screen.
+ *
+ * ## The example sentence has no film
+ *
+ * It used to be labelled as coming from a movie. Practice words are drawn from
+ * due recalls, saved words and fresh words at the reader's level — the deck has
+ * no film behind it, so any "in the film" framing was decoration that happened
+ * to be false. The sentence keeps its `EXAMPLE` micro-label and highlights the
+ * target word inside it, which is the part that actually helps.
+ *
+ * Note the fonts come from `theme/fonts`. Eleven components in this app used to
+ * declare `const SERIF_FAMILY = 'Source Serif 4'` locally — a family the app
+ * has never loaded, so every one of them silently rendered in the platform
+ * sans. This file was one of them.
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { cefrColors } from '../../theme/palette';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-
-const SERIF_FAMILY = 'Source Serif 4';
+import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
+import { MONO_FAMILY, SERIF_FAMILY, SERIF_ITALIC_FAMILY } from '../../theme/fonts';
+import { splitAroundWord } from './wordCardText';
 
 export interface WordCardProps {
   word: string;
   /** Optional part-of-speech label (e.g. "verb"). Hidden when absent. */
   pos?: string | null;
-  /** Optional in-movie example sentence — italicized in the subtitle. */
+  /** Optional example sentence. Not from a film — see the docblock. */
   example?: string | null;
-  /** 36 for MCQ headlines, 34 for the longer translation words. Default 36. */
+  /** 42 by default; callers can shrink it for longer words. */
   size?: number;
-  /** This word's CEFR band. Hidden when absent or unrecognised — the chip is
-   *  only worth drawing when we can colour it from the real ramp. */
+  /** This word's CEFR band. Hidden when absent or off the ramp. */
   level?: string | null;
 }
 
-export function WordCard({ word, pos, example, size = 36, level }: WordCardProps) {
+export function WordCard({ word, pos, example, size = 42, level }: WordCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const band = level && level in cefrColors ? level : null;
-
-  // Compose `${pos} · "${example}"` per §7. The separator only appears
-  // when both halves are present so we don't emit a trailing " · ".
-  const posLabel = pos ? `${pos.replace(/\.$/, '')}.` : '';
-  const exampleQuoted = example ? `"${example}"` : '';
-  const subtitle =
-    posLabel && exampleQuoted ? `${posLabel} · ${exampleQuoted}`
-    : posLabel || exampleQuoted;
+  const posLabel = pos ? pos.replace(/\.$/, '') : null;
+  const parts = useMemo(
+    () => (example ? splitAroundWord(example, word) : null),
+    [example, word],
+  );
 
   return (
-    <View style={s.card}>
-      {band ? (
-        <View style={[s.levelChip, { backgroundColor: cefrColors[band] }]}>
-          <Text style={s.levelChipText}>{band}</Text>
+    <LinearGradient
+      colors={[tc.quizRecessedTop, tc.quizRecessedBottom]}
+      style={s.card}
+    >
+      {/* The lit top edge. A border on the card would paint all four sides;
+          this is one hairline, which is what makes it read as light falling on
+          the panel rather than as a frame around it. */}
+      <View style={[s.litEdge, { backgroundColor: withAlpha(tc.gold, 0.3) }]} />
+
+      {band || posLabel ? (
+        <View style={s.chips}>
+          {band ? (
+            <View style={[s.levelChip, { backgroundColor: cefrColors[band] }]}>
+              <Text style={s.levelChipText}>{band}</Text>
+            </View>
+          ) : null}
+          {posLabel ? (
+            <View style={[s.posChip, { borderColor: tc.divider }]}>
+              <Text style={s.posChipText}>{posLabel}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
-      <Text style={[s.word, { fontSize: size }]} allowFontScaling>
+
+      <Text style={[s.word, { fontSize: size }]} allowFontScaling numberOfLines={2}>
         {word}
       </Text>
-      {subtitle ? (
-        <Text style={s.subtitle} numberOfLines={3}>
-          {subtitle}
-        </Text>
+
+      {example ? (
+        <>
+          <View style={[s.divider, { backgroundColor: tc.divider }]} />
+          <Text style={[s.exampleLabel, { color: withAlpha(tc.gold, 0.6) }]}>EXAMPLE</Text>
+          <Text style={s.example} numberOfLines={4}>
+            {parts ? (
+              <>
+                {parts.before}
+                <Text style={s.exampleTarget}>{parts.match}</Text>
+                {parts.after}
+              </>
+            ) : (
+              example
+            )}
+          </Text>
+        </>
       ) : null}
-    </View>
+    </LinearGradient>
   );
 }
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
-    // Solid CEFR fill with dark ink — the ramp's yellows and greens are far
-    // too light to carry white text.
+    card: {
+      marginVertical: 14,
+      paddingHorizontal: 20,
+      paddingVertical: 22,
+      borderRadius: 20,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: tc.divider,
+      alignItems: 'center',
+      overflow: 'hidden',
+    },
+    litEdge: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 1,
+    },
+    chips: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      marginBottom: 12,
+    },
+    // Solid CEFR fill with dark ink — the ramp's yellows are far too light to
+    // carry white text.
     levelChip: {
       paddingHorizontal: 9,
       paddingVertical: 3,
       borderRadius: 999,
-      marginBottom: 10,
     },
     levelChipText: {
+      fontFamily: MONO_FAMILY,
       fontSize: 10.5,
       fontWeight: '900',
       letterSpacing: 0.8,
-      color: '#1A1206',
+      color: tc.cefrChipInk,
     },
-    card: {
-      marginVertical: 16,
-      paddingHorizontal: 20,
-      paddingVertical: 28,
-      borderRadius: 18,
-      backgroundColor: tc.wordBoxBg,
-      borderWidth: 1,
-      borderColor: tc.border,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 3,
+    posChip: {
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+      borderRadius: 999,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    posChipText: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: tc.textSecondary,
     },
     word: {
       fontFamily: SERIF_FAMILY,
       fontWeight: '600',
+      letterSpacing: -1,
+      textAlign: 'center',
       color: tc.text,
-      letterSpacing: -0.6,
-      textAlign: 'center',
     },
-    subtitle: {
-      fontSize: 12,
-      color: tc.textFaint,
+    divider: {
+      alignSelf: 'stretch',
+      height: StyleSheet.hairlineWidth,
+      marginTop: 18,
+      marginBottom: 14,
+    },
+    exampleLabel: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 8.5,
+      fontWeight: '800',
+      letterSpacing: 2.2,
+      marginBottom: 7,
+    },
+    example: {
+      fontFamily: SERIF_ITALIC_FAMILY,
       fontStyle: 'italic',
-      fontWeight: '600',
-      marginTop: 8,
+      fontSize: 15,
+      lineHeight: 22,
       textAlign: 'center',
-      lineHeight: 17,
+      color: tc.textSecondary,
+    },
+    // A wash rather than a colour swap: the word stays readable prose and the
+    // highlight sits behind it, so the sentence still reads as a sentence.
+    exampleTarget: {
+      color: tc.goldOnSurface,
+      backgroundColor: withAlpha(tc.gold, 0.16),
+      fontWeight: '700',
     },
   });

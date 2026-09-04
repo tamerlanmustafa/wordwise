@@ -44,6 +44,10 @@ export interface SessionCompleteProps {
   celebrate?: boolean;
   /** Per-surface extras rendered between the stat grid and the CTA. */
   children?: ReactNode;
+  /** The round's per-question outcomes, repeated here as a scorecard row —
+   *  the same segments the quiz header showed while you were answering, so
+   *  the summary is recognisably the bar you just filled. */
+  outcomes?: readonly boolean[];
 }
 
 export function SessionComplete({
@@ -57,6 +61,7 @@ export function SessionComplete({
   onSecondary,
   celebrate,
   children,
+  outcomes,
 }: SessionCompleteProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -75,6 +80,20 @@ export function SessionComplete({
         </View>
         <Text style={s.eyebrow}>{eyebrow}</Text>
         <Text style={s.title}>{title}</Text>
+
+        {outcomes && outcomes.length > 0 ? (
+          <View style={s.scorecard}>
+            {outcomes.map((ok, i) => (
+              <View
+                key={i}
+                style={[
+                  s.scoreSegment,
+                  { backgroundColor: ok ? tc.success : tc.error },
+                ]}
+              />
+            ))}
+          </View>
+        ) : null}
 
         {comprehension ? (
           <View style={s.compCard}>
@@ -112,10 +131,16 @@ export function SessionComplete({
         {children}
       </ScrollView>
 
-      <View style={[s.footer, { paddingBottom: barInset }]}>
-        <PressableScale style={s.primaryBtn} onPress={onPrimary} accessibilityRole="button" accessibilityLabel={primaryLabel}>
-          <Text style={s.primaryBtnText}>{primaryLabel}</Text>
-        </PressableScale>
+      {/* `barInset` covers the floating iOS glass capsule, which hovers clear
+          of the screen edge — a footer padded only by the safe area sits
+          underneath it. */}
+      <View style={[s.footer, { paddingBottom: barInset + 10 }]}>
+        <View>
+          <View style={[s.primaryEdge, { backgroundColor: tc.quizCorrectEdge }]} />
+          <PressableScale style={s.primaryBtn} onPress={onPrimary} accessibilityRole="button" accessibilityLabel={primaryLabel}>
+            <Text style={s.primaryBtnText}>{primaryLabel}</Text>
+          </PressableScale>
+        </View>
         {secondaryLabel && onSecondary ? (
           <PressableScale style={s.secondaryBtn} onPress={onSecondary} accessibilityRole="button" accessibilityLabel={secondaryLabel}>
             <Text style={s.secondaryBtnText}>{secondaryLabel}</Text>
@@ -149,9 +174,22 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.goldOnSurface,
       textTransform: 'uppercase',
     },
+    // The round's outcome, repeated as the same segments the header carried.
+    scorecard: {
+      flexDirection: 'row',
+      gap: 5,
+      marginTop: 16,
+      alignSelf: 'stretch',
+      paddingHorizontal: 8,
+    },
+    scoreSegment: {
+      flex: 1,
+      height: 6,
+      borderRadius: 999,
+    },
     title: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 24,
+      fontSize: 32,
       fontWeight: '700',
       letterSpacing: -0.4,
       color: tc.text,
@@ -200,9 +238,26 @@ const makeStyles = (tc: ThemeColors) =>
     statValueAccent: { color: tc.goldOnSurface },
     statLabel: { fontSize: 12, color: tc.textSecondary, marginTop: 2 },
     // Footer. `paddingBottom` is applied inline from `useBottomBarInset`.
-    footer: { paddingHorizontal: 24, paddingTop: 8, gap: 10 },
-    primaryBtn: { backgroundColor: tc.gold, paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
-    primaryBtnText: { color: tc.goldDeep, fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
+    footer: { paddingHorizontal: 24, paddingTop: 8, gap: 12 },
+    // The same lip the answer tiles and the in-deck CTA wear, so the end
+    // screen belongs to the surface the user just came through.
+    primaryEdge: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: -5,
+      height: 5,
+      borderRadius: 16,
+    },
+    primaryBtn: { backgroundColor: tc.gold, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    primaryBtnText: {
+      fontFamily: MONO_FAMILY,
+      color: tc.goldDeep,
+      fontSize: 13.5,
+      fontWeight: '900',
+      letterSpacing: 1.4,
+      textTransform: 'uppercase',
+    },
     secondaryBtn: { alignItems: 'center', paddingVertical: 6 },
     secondaryBtnText: { color: tc.textSecondary, fontSize: 13, fontWeight: '700' },
   });

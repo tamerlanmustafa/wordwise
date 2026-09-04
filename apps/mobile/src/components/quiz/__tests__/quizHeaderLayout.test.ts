@@ -5,7 +5,7 @@
  * that used to sit inline in the component.
  */
 
-import { quizHeaderProgress, sessionPosition } from '../quizHeaderLayout';
+import { quizSegments, quizHeaderProgress, sessionPosition } from '../quizHeaderLayout';
 
 describe('quizHeaderProgress — mid-deck', () => {
   it('reports progress and fills proportionally', () => {
@@ -79,5 +79,51 @@ describe('sessionPosition — a resumed deck counts from where it left off', () 
 
   it('ignores a negative offset rather than counting below one', () => {
     expect(sessionPosition(0, 5, -2)).toEqual({ index: 1, total: 5 });
+  });
+});
+
+describe('quizSegments (the bar doubles as a scorecard)', () => {
+  it('colours each answered question by its own outcome', () => {
+    // The old bar was one fill to a percentage, which said where you were and
+    // nothing about how it had gone.
+    expect(quizSegments([true, false, true], 4, 5)).toEqual([
+      'correct',
+      'wrong',
+      'correct',
+      'current',
+      'pending',
+    ]);
+  });
+
+  it('marks exactly one segment current', () => {
+    const segs = quizSegments([true], 2, 5);
+    expect(segs.filter((x) => x === 'current')).toHaveLength(1);
+  });
+
+  it('is all pending but the first on an untouched deck', () => {
+    expect(quizSegments([], 1, 3)).toEqual(['current', 'pending', 'pending']);
+  });
+
+  it('leaves nothing current once the last answer lands', () => {
+    // At the end `index` still points at the last card, but it is answered —
+    // an answered segment must not be overwritten by the current marker.
+    expect(quizSegments([true, true], 2, 2)).toEqual(['correct', 'correct']);
+  });
+
+  it('returns one segment per question, always', () => {
+    expect(quizSegments([true], 2, 7)).toHaveLength(7);
+    expect(quizSegments([], 1, 1)).toHaveLength(1);
+  });
+
+  it('renders nothing for a deck with no cards', () => {
+    // A zero-card session would otherwise draw an empty bar claiming a deck
+    // that is not there — the same reason `quizHeaderProgress` bails.
+    expect(quizSegments([], 0, 0)).toEqual([]);
+  });
+
+  it('survives a resumed deck reporting more answers than the index', () => {
+    // `index` counts from the resumed position; outcomes are recovered totals.
+    // Neither may push a segment out of range or drop one.
+    expect(quizSegments([true, true, false], 4, 5)).toHaveLength(5);
   });
 });
