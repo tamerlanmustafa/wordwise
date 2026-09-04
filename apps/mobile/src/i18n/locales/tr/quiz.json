@@ -57,6 +57,13 @@
     "todaysDone": "Bugünkü iş bitti",
     "upgradeBody": "Yarın tekrar gelin — ya da sınırsız tekrar için yükseltin.",
     "notReadyTitle": "Kelimelerin hazırlanıyor",
-    "notReadyBody": "Bugünün kartlarını henüz oluşturamadık. Biraz bekleyip tekrar dene — kaydettiğin hiçbir şey kaybolmadı."
+    "notReadyBody": "Bugünün kartlarını henüz oluşturamadık. Biraz bekleyip tekrar dene — kaydettiğin hiçbir şey kaybolmadı.",
+    "done": "Tamam",
+    "nextLesson": "Sonraki ders",
+    "finishForNow": "Şimdilik bitir",
+    "quitTitle": "Bu dersten çıkılsın mı?",
+    "quitBody": "Verdiğin cevaplar kaydedildi, ama destenin kalanı bir dahaki sefere yeniden oluşturulacak.",
+    "quitConfirm": "Çık",
+    "quitCancel": "Devam et"
   }
 }

@@ -57,6 +57,13 @@
     "todaysDone": "Hoje já está feito",
     "upgradeBody": "Volte amanhã — ou faça upgrade para revisões ilimitadas.",
     "notReadyTitle": "Preparando suas palavras",
-    "notReadyBody": "Ainda não conseguimos montar as cartas de hoje. Espere um instante e tente de novo — nada do que você salvou foi perdido."
+    "notReadyBody": "Ainda não conseguimos montar as cartas de hoje. Espere um instante e tente de novo — nada do que você salvou foi perdido.",
+    "done": "Concluído",
+    "nextLesson": "Próxima lição",
+    "finishForNow": "Terminar por agora",
+    "quitTitle": "Sair desta lição?",
+    "quitBody": "Suas respostas ficam salvas, mas o resto do baralho será montado de novo na próxima vez.",
+    "quitConfirm": "Sair",
+    "quitCancel": "Continuar"
   }
 }

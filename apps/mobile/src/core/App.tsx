@@ -56,6 +56,7 @@ import { useWordFeedStore } from '../stores/wordFeedStore';
 import type { Screen, ListFilter, MovieData, ListSummary } from './types';
 import { PARENT_OF, PROFILE_SHEET } from './navParents';
 import { quizReturnScreen, type QuizOriginKind } from './quizReturn';
+import { guardQuizExit, useQuizGuardStore } from '../stores/quizGuardStore';
 import { SwipeBackView } from '../components/common/SwipeBackView';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
@@ -493,7 +494,25 @@ export default function App() {
     else navigateToPractice();
   };
 
+  /** The one wording for "are you sure you want to leave this deck?". */
+  const quizExitCopy = {
+    title: t('quiz:review.quitTitle'),
+    message: t('quiz:review.quitBody'),
+    confirmLabel: t('quiz:review.quitConfirm'),
+    cancelLabel: t('quiz:review.quitCancel'),
+  };
+
   const handleTabPress = (tab: BottomTab) => {
+    // The profile tab opens a sheet *over* the current screen — the deck stays
+    // mounted underneath — so it is not an exit and must not ask.
+    if (tab !== 'profile' && useQuizGuardStore.getState().inProgress) {
+      guardQuizExit(quizExitCopy, () => handleTabPressUnguarded(tab));
+      return;
+    }
+    handleTabPressUnguarded(tab);
+  };
+
+  const handleTabPressUnguarded = (tab: BottomTab) => {
     // Switching to any other tab collapses the profile sheet if it's open.
     if (tab !== 'profile') setShowUserSheet(false);
     // Any tab tap dismisses the notifications sheet.
@@ -804,8 +823,12 @@ export default function App() {
         return navigateToHome;
       case 'addToReel':
         return navigateToSavedMovies;
-      case 'review':
-        return reviewLaunch.listId ? navigateToLists : navigateToHome;
+      case 'review': {
+        // Chevron, Android hardware back and the edge swipe all resolve here,
+        // so guarding this one place covers all three.
+        const leave = reviewLaunch.listId ? navigateToLists : navigateToHome;
+        return () => guardQuizExit(quizExitCopy, leave);
+      }
       case 'paywall':
         return leavePaywall;
       // Orphaned by the v0.7 nav and unreachable, but if anything ever lands

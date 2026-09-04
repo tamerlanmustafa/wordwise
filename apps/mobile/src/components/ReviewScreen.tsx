@@ -16,6 +16,7 @@ import {
 } from '../services/api';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
+import { useQuizGuardStore } from '../stores/quizGuardStore';
 import { useTipDismissalsStore } from '../stores/tipDismissalsStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
@@ -152,6 +153,20 @@ export function ReviewScreen({
 
   const fade = useRef(new Animated.Value(1)).current;
 
+  /**
+   * The Practice tab is a path of tiles; a Lists deck is a one-off. Only the
+   * former gets the "Next" loop — offering it on a list would either replay
+   * the same deck or silently start a *practice* session from inside Lists.
+   */
+  const isPracticePath = (kind ?? 'practice') === 'practice' && listId == null;
+
+  /**
+   * `initialSession` is a deck the caller already started (Lists). It must be
+   * adopted exactly once: reusing it on a later load would serve the same
+   * cards forever, which is precisely what a "Next" button would trigger.
+   */
+  const initialSessionSpent = useRef(false);
+
   const loadSession = useCallback(async () => {
     setPhase('loading');
     setIndex(0);
@@ -187,7 +202,9 @@ export function ReviewScreen({
     try {
       // `kind` picks the queue composer. Undefined hits the backend's
       // `practice` default, which is what the Practice tab wants.
-      const session = initialSession ?? await srsApi.startSession({ kind });
+      const adopt = initialSessionSpent.current ? null : initialSession;
+      initialSessionSpent.current = true;
+      const session = adopt ?? await srsApi.startSession({ kind });
       setCards(session.cards);
       setIsPreview(session.is_preview);
       setPreviewsRemaining(session.previews_remaining);
@@ -221,6 +238,36 @@ export function ReviewScreen({
 
   useEffect(() => {
     loadSession();
+  }, [loadSession]);
+
+  // The guard tracks "a deck is on screen and answerable", which is exactly
+  // the `card` phase. The unmount clear is the important half: a paywall
+  // redirect or a parent-driven navigation can take this screen away without
+  // ever passing through the done screen, and a flag left raised would make
+  // the *next* unrelated back press ask about a quiz that no longer exists.
+  useEffect(() => {
+    useQuizGuardStore.getState().setInProgress(phase === 'card');
+  }, [phase]);
+  useEffect(() => () => useQuizGuardStore.getState().setInProgress(false), []);
+
+  /**
+   * Finish this tile and open the next one without leaving the screen.
+   *
+   * Everything the finished session left behind has to be cleared by hand:
+   * the streak card, the chest, the milestone queue. `loadSession` resets the
+   * deck itself but knows nothing about the done screen's state, so skipping
+   * this shows the next tile carrying the last one's celebration.
+   */
+  const startNextTile = useCallback(() => {
+    setDailySummary(null);
+    setChest(null);
+    setChestVisible(false);
+    setMilestoneQueue([]);
+    setSpacingTipVisible(false);
+    setAnsweredBefore(0);
+    setDeckStatus(undefined);
+    setErrorMessage(null);
+    void loadSession();
   }, [loadSession]);
 
   const currentCard = cards[index];
@@ -305,6 +352,9 @@ export function ReviewScreen({
         // becomes active. The store debounces against accidental
         // double-fires within the same completion.
         usePracticePathStore.getState().advance();
+        // The deck is finished, so leaving is no longer destructive — drop the
+        // guard before the done screen renders, or its own CTAs would prompt.
+        useQuizGuardStore.getState().setInProgress(false);
         // Award the variable-reward chest. Fire and forget — if the
         // network is flaky we still show the done screen; the chest
         // simply won't appear. Server enforces one-per-day so a retry
@@ -431,8 +481,14 @@ export function ReviewScreen({
             { value: stats.got, label: 'remembered' },
             { value: total, label: 'reviewed' },
           ]}
-          primaryLabel="Done"
-          onPrimary={onBack}
+          // The loop: finishing a tile opens the next one, so the path keeps
+          // going until the user says otherwise. The secondary button is that
+          // "otherwise" — an explicit exit, so staying in is the default but
+          // leaving is never more than one tap.
+          primaryLabel={isPracticePath ? t('quiz:review.nextLesson') : t('quiz:review.done')}
+          onPrimary={isPracticePath ? startNextTile : onBack}
+          secondaryLabel={isPracticePath ? t('quiz:review.finishForNow') : undefined}
+          onSecondary={isPracticePath ? onBack : undefined}
           celebrate
         >
           {isPreview && previewsRemaining === 0 ? (

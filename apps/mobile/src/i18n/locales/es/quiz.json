@@ -57,6 +57,13 @@
     "todaysDone": "Ya he terminado por hoy",
     "upgradeBody": "Vuelve mañana, o mejora tu plan para repasos ilimitados.",
     "notReadyTitle": "Preparando tus palabras",
-    "notReadyBody": "Todavía no hemos podido crear las tarjetas de hoy. Espera un momento e inténtalo de nuevo: no has perdido nada de lo que guardaste."
+    "notReadyBody": "Todavía no hemos podido crear las tarjetas de hoy. Espera un momento e inténtalo de nuevo: no has perdido nada de lo que guardaste.",
+    "done": "Listo",
+    "nextLesson": "Siguiente lección",
+    "finishForNow": "Terminar por ahora",
+    "quitTitle": "¿Salir de esta lección?",
+    "quitBody": "Tus respuestas se guardan, pero el resto del mazo se creará de nuevo la próxima vez.",
+    "quitConfirm": "Salir",
+    "quitCancel": "Seguir"
   }
 }
