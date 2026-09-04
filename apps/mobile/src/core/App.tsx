@@ -110,7 +110,10 @@ export default function App() {
   const onboardingDone = useOnboardingStore((s) => s.completed);
 
   // Navigation state
-  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  // The word feed. It is the first tab and the one now labelled "Home", so it
+  // is what a launch lands on — a tab bar whose leftmost cell says Home while
+  // the app opens on the one beside it reads as a bug.
+  const [currentScreen, setCurrentScreen] = useState<Screen>('explore');
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const rootTabForSheet = useRef<Screen>('home');

@@ -81,9 +81,25 @@ type NavIconKind = 'home' | 'explore' | 'spark' | 'list' | 'user';
 
 // Labels live in `common:nav.*` and are resolved at render — this array is
 // module-level, so a literal label here would freeze at the launch language.
+//
+// ## The word feed is Home now
+//
+// The first tab shows the **word feed** and is called Home; the second shows
+// the **film feed** and is called Explore. That is the swap, and it is why
+// `id` and `labelKey` no longer match on the first two rows.
+//
+// The ids are internal route names and deliberately were NOT renamed with the
+// labels. `home` still routes to `HomeScreen` (the film feed) and `explore` to
+// `ExploreScreen` (the word feed); renaming those would mean renaming the two
+// screen components, every `navigateToX`, `PARENT_OF`, `resolveBack` and
+// `quizReturn` — a large blast radius across the navigation, for a change that
+// is about what the tabs are *called*. The divergence is confined to these two
+// lines and pinned by `globalBottomBar.test.ts`, which is the trade: one
+// documented mismatch in one array, rather than a rename touching every
+// navigation path in the app.
 export const TABS: TabItem[] = [
-  { id: 'home',     labelKey: 'home',     icon: 'home' },
-  { id: 'explore',  labelKey: 'explore',  icon: 'explore' },
+  { id: 'explore',  labelKey: 'home',     icon: 'home' },
+  { id: 'home',     labelKey: 'explore',  icon: 'explore' },
   { id: 'practice', labelKey: 'practice', icon: 'spark' },
   { id: 'lists',    labelKey: 'lists',    icon: 'list' },
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },

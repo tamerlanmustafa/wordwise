@@ -37,7 +37,12 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
       <StepHeader
         step={3}
         total={ONBOARDING_TOTAL_STEPS}
-        eyebrow={t('onboarding:languageStep.eyebrow', { step: 2, total: 6 })}
+        // `onboarding:stepOf`, the shared key every other step uses. This
+        // called `languageStep.eyebrow`, which exists in no locale — i18next
+        // falls back to rendering the key, so the first line of the language
+        // step read "onboarding:languageStep.eyebrow" to every new user. It
+        // also claimed step 2 of 6 while telling the header it was step 3.
+        eyebrow={t('onboarding:stepOf', { step: 3, total: ONBOARDING_TOTAL_STEPS })}
         title={t('onboarding:languageStep.title')}
         onBack={onBack}
       />

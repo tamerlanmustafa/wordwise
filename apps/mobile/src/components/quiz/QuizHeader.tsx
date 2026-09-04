@@ -22,7 +22,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
@@ -46,7 +45,6 @@ export interface QuizHeaderProps {
 }
 
 export function QuizHeader({ index, total, outcomes, onBack }: QuizHeaderProps) {
-  const { t } = useTranslation();
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -99,12 +97,11 @@ export function QuizHeader({ index, total, outcomes, onBack }: QuizHeaderProps) 
           </Svg>
         </Pressable>
 
-        {/* Names the exercise, not the content. There is no film behind a
-            Practice deck, and the one thing worth saying about the card is
-            what it is asking you to do. */}
-        <View style={[s.typeChip, { borderColor: withAlpha(tc.gold, 0.35) }]}>
-          <Text style={s.typeChipText}>{t('quiz:mcq.exerciseType')}</Text>
-        </View>
+        {/* Nothing in the middle. The pill named the exercise type, which is
+            the one thing the four translations under it already make obvious
+            — the same reason the "PICK THE TRANSLATION" prompt went. The slot
+            stays so the back button and counter keep their corners. */}
+        <View style={s.centreSpacer} />
 
         {showProgress ? (
           <View style={s.counter}>
@@ -188,20 +185,8 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    typeChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 999,
-      borderWidth: 1,
-      backgroundColor: tc.quizRaisedTop,
-    },
-    typeChipText: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 10.5,
-      fontWeight: '800',
-      letterSpacing: 2,
-      textTransform: 'uppercase',
-      color: tc.goldOnSurface,
+    centreSpacer: {
+      flex: 1,
     },
     counter: {
       minWidth: 36,

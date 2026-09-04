@@ -29,10 +29,29 @@ function estimatedLabelWidth(label: string): number {
 const LOCALES = Object.keys(resources);
 
 describe('tab order', () => {
-  it('is Home · Explore · Practice · Lists · Profile', () => {
-    expect(TABS.map((t) => t.id)).toEqual([
+  it('reads Home · Explore · Practice · Lists · Profile to the user', () => {
+    expect(TABS.map((t) => t.labelKey)).toEqual([
       'home', 'explore', 'practice', 'lists', 'profile',
     ]);
+  });
+
+  it('routes the first tab to the word feed and the second to the film feed', () => {
+    // The labels swapped; the route ids did not. `home` is still the film
+    // feed's screen and `explore` still the word feed's — renaming those would
+    // have meant renaming both screen components and every navigation path
+    // that names them. This is the one place the two diverge, so this is where
+    // it gets written down.
+    expect(TABS.map((t) => t.id)).toEqual([
+      'explore', 'home', 'practice', 'lists', 'profile',
+    ]);
+  });
+
+  it('gives the Home-labelled tab the house icon', () => {
+    // The icon has to follow the label, not the route id, or the first cell
+    // shows a compass under the word "Home".
+    const first = TABS[0];
+    expect(first.labelKey).toBe('home');
+    expect(first.icon).toBe('home');
   });
 
   it('puts Lists fourth, before Profile', () => {
