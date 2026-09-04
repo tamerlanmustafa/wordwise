@@ -35,11 +35,38 @@
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_ITALIC_FAMILY, opticalSize } from '../../theme/fonts';
 import { glossLine } from '../../utils/glossLine';
+import { pronounce } from '../../utils/pronunciation';
+import { useIsPremium } from '../../stores/entitlementsStore';
+import { showToast } from '../../stores/toastStore';
+import { SpeakerIcon } from '../ui/icons';
 import type { FeedItem } from '../../services/api';
+
+/** The display word's size and leading — the speaker is centred against it. */
+const WORD_SIZE = 46;
+const WORD_LINE_HEIGHT = WORD_SIZE * 1.05;
+/** Big enough to read beside 46pt type without competing with it. */
+const SPEAKER_SIZE = 22;
+
+/**
+ * Pads the 22pt glyph out to a ~44pt target. Uncapped on every side, unlike
+ * the vocabulary rows' slop: this speaker has no icon neighbours to steal taps
+ * from, only the card-wide reveal Pressable underneath it, and that is exactly
+ * what the slop is protecting the user from hitting by accident.
+ */
+const SPEAKER_HIT_SLOP = { top: 11, bottom: 11, left: 11, right: 11 };
 
 // Not a font the app ships or loads, so every line using it resolves to the
 // platform's default face. Left alone here because changing it would restyle
@@ -86,8 +113,13 @@ function WordCardBase({
   liftDistance,
   lane,
 }: Props) {
+  const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  // Premium-gated, matching the vocabulary rows and the card deck — the
+  // speaker is one feature with one entitlement, not three.
+  const isPremium = useIsPremium();
+  const [playing, setPlaying] = useState(false);
 
   // Height needs a real measurement to animate to; until we have one the
   // block renders off-screen once to be measured.
@@ -126,6 +158,17 @@ function WordCardBase({
   const hasTranslation = Boolean(item.translated_word || item.translated_sentence);
   const gloss = glossLine(item.pos, item.definition);
 
+  const handlePronounce = async () => {
+    if (playing) return;
+    setPlaying(true);
+    // Shared with the vocabulary rows and the card deck: the bearer token this
+    // endpoint requires is decided in one place, not per component.
+    const result = await pronounce(item.word);
+    setPlaying(false);
+    if (result === 'failed') showToast({ tone: 'error', message: t('vocabulary:pronounceFailed') });
+    else if (result === 'muted') showToast({ message: t('vocabulary:pronounceMuted') });
+  };
+
   return (
     <Pressable
       style={[s.card, { height, paddingEnd: lane }]}
@@ -149,9 +192,36 @@ function WordCardBase({
 
       {/* 3. Lifting group. */}
       <Animated.View style={liftStyle}>
-        <Text style={s.word} allowFontScaling={false}>
-          {item.word}
-        </Text>
+        {/* Word + speaker on one row. The word takes its natural width and
+            only shrinks when it has to (`flexShrink`, not `flex`), so the
+            speaker sits beside the word itself rather than out at the card's
+            edge — but a 21-character word like "electroencephalograph" still
+            wraps instead of pushing the glyph off screen. */}
+        <View style={s.wordRow}>
+          <Text style={s.word} allowFontScaling={false}>
+            {item.word}
+          </Text>
+          {isPremium ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                // The whole card is the reveal target; without this a tap on
+                // the speaker would also flip the translation.
+                e.stopPropagation();
+                void handlePronounce();
+              }}
+              hitSlop={SPEAKER_HIT_SLOP}
+              style={s.speaker}
+              accessibilityRole="button"
+              accessibilityLabel={t('vocabulary:row.pronounce')}
+            >
+              <SpeakerIcon
+                size={SPEAKER_SIZE}
+                playing={playing}
+                color={playing ? tc.gold : tc.textFaint}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         {item.ipa ? <Text style={s.ipa}>{item.ipa}</Text> : null}
 
@@ -311,13 +381,29 @@ const makeStyles = (tc: ThemeColors) =>
     },
     spacerTop: { flex: 1, minHeight: 12 },
     spacerBottom: { flex: 1, minHeight: 14 },
+    wordRow: {
+      flexDirection: 'row',
+      // Top, not centre: a wrapped word must not drag the speaker down to the
+      // middle of a two-line block. Pinned to the first line, it sits in the
+      // same place whether the word wraps or not.
+      alignItems: 'flex-start',
+    },
     word: {
+      // Shrink, don't grow. `flex: 1` would push the speaker to the card's
+      // trailing edge and break the "beside the word" reading.
+      flexShrink: 1,
       fontFamily: SERIF_FAMILY,
-      fontSize: 46,
+      fontSize: WORD_SIZE,
       fontWeight: '700',
       letterSpacing: -1.2,
-      lineHeight: 46 * 1.05,
+      lineHeight: WORD_LINE_HEIGHT,
       color: tc.text,
+    },
+    speaker: {
+      marginStart: 12,
+      // Optically centred on the first line's box rather than its baseline —
+      // close enough at this size, and it survives a font swap.
+      marginTop: (WORD_LINE_HEIGHT - SPEAKER_SIZE) / 2,
     },
     ipa: {
       marginTop: 7,
