@@ -22,9 +22,7 @@
     "saveFailed": "No se han podido guardar los resultados. Pulsa en «Reintentar»."
   },
   "mcq": {
-    "continue": "Continuar →",
-    "gotItContinue": "Entendido · Continuar →",
-    "notQuite": "NO DEL TODO"
+    "next": "Siguiente"
   },
   "result": {
     "comprehension": "COMPRENSIÓN",

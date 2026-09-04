@@ -44,12 +44,12 @@ export function choiceIsDimmed(i: number, a: MCQAnswerState): boolean {
   return true;
 }
 
-/** Card copy (a single object since the synonym variant was retired). */
-export const MCQ_COPY: { eyebrow: string; idleCta: string; notQuiteSuffix: string } = {
-  eyebrow: 'PICK THE TRANSLATION',
-  idleCta: 'Pick the translation',
-  notQuiteSuffix: ' is the translation.',
-};
+// `MCQ_COPY` is gone. It held the "PICK THE TRANSLATION" eyebrow, the same
+// sentence again as the idle button label, and the " is the translation."
+// suffix for the wrong-answer callout. All three said what the four rows of
+// translations underneath them already said, and the callout additionally
+// pushed the choices up the screen the moment you got one wrong. The card's
+// only string now is its CTA, which comes from i18n like everything else.
 
 // ── Card geometry ──────────────────────────────────────────────────────────
 // Shared between the real card and the skeleton shown while the deck loads.

@@ -1,8 +1,6 @@
 {
   "mcq": {
-    "notQuite": "NOT QUITE",
-    "continue": "Continue →",
-    "gotItContinue": "Got it · Continue →"
+    "next": "Next"
   },
   "finishing": {
     "title": "Nice work!",

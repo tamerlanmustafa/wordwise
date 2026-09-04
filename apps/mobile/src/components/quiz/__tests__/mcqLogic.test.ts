@@ -3,8 +3,8 @@
  * Pure logic, no React: covers the tile states (picked/reveal/dim)
  * that MCQCard renders.
  */
+import * as mcqLogic from '../mcqLogic';
 import {
-  MCQ_COPY,
   choiceIsDimmed,
   choiceStateFor,
   type MCQAnswerState,
@@ -75,10 +75,20 @@ describe('choiceIsDimmed', () => {
   });
 });
 
-describe('MCQ_COPY', () => {
-  it('carries the translation-card eyebrow, idle CTA, and callout suffix', () => {
-    expect(MCQ_COPY.eyebrow).toBe('PICK THE TRANSLATION');
-    expect(MCQ_COPY.idleCta).toBe('Pick the translation');
-    expect(MCQ_COPY.notQuiteSuffix).toBe(' is the translation.');
+describe('the card carries no hardcoded copy', () => {
+  it('exports no MCQ_COPY object', () => {
+    // It held "PICK THE TRANSLATION", the same sentence again as the idle
+    // button, and " is the translation." for the wrong-answer callout — three
+    // strings restating the four translations already on screen, none of them
+    // translatable. The card's only string is its CTA, from i18n.
+    expect(Object.keys(mcqLogic)).not.toContain('MCQ_COPY');
+  });
+
+  it('still highlights the right answer, which is what the callout said', () => {
+    // Removing the prose must not remove the information. The correct row
+    // turns green next to the user's red one whether or not they got it.
+    const pickedWrong = { phase: 'answered' as const, pickedIdx: 0, correctIdx: 2, userWasCorrect: false };
+    expect(choiceStateFor(2, pickedWrong)).toBe('reveal-correct');
+    expect(choiceIsDimmed(2, pickedWrong)).toBe(false);
   });
 });

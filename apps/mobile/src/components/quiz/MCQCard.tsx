@@ -3,25 +3,30 @@
  * (choices are translations in the user's native language; replaced
  * the retired typed-translation card).
  *
- * Self-contained: renders eyebrow, WordCard, a stack of four full-width
- * MCQChoice rows, post-answer NOT QUITE callout (when wrong), and a
- * sticky bottom CTA bar. Calls `onAnswer(correct)` once when the user
- * finishes a card (either via Continue tap, or via auto-advance on
- * correct after 600ms).
+ * Self-contained: renders the WordCard, a stack of four full-width
+ * MCQChoice rows, and a sticky bottom CTA bar. Calls `onAnswer(correct)`
+ * exactly once, when the user taps Next.
  *
- * Behaviour (cf. CLAUDE_PROMPT §7.1):
+ * Behaviour:
  *   • Tap on a row in `idle` → the row flips to correct/wrong
  *     immediately. The actual right answer is always highlighted in
  *     green (`reveal-correct` state) even when the user picked wrong.
  *     Other rows fade to opacity 0.4.
- *   • 600ms after a correct tap, `onAnswer(true)` fires automatically
- *     (the CTA also pulses + becomes "Continue →" in case the user
- *     wants to advance manually before then; either path is fine).
- *   • On a wrong tap the CTA flips to "Got it · Continue →" and
- *     stays there until the user taps it — we don't auto-advance on
- *     misses so they can read the NOT QUITE callout.
- *   • Idle CTA is a ghost pill ("Pick the translation") — never
- *     "Check", because the tap on a row IS the answer (no Check step).
+ *   • **Nothing advances on its own.** A correct answer used to fire
+ *     `onAnswer(true)` 600ms later, which meant the card was taken away
+ *     mid-glance: the user had no time to read which answer was right,
+ *     and on a fast streak the deck scrolled past faster than they could
+ *     follow. The pacing belongs to the reader, so both outcomes now wait
+ *     for the same tap.
+ *   • One CTA label, "Next", in every phase — disabled until an answer is
+ *     picked. Two labels that swap on answer ("Continue" / "Got it ·
+ *     Continue") made the button look like two different controls.
+ *
+ * There is deliberately no written explanation of a wrong answer. The
+ * correct row is already highlighted green next to the user's red one,
+ * which says the same thing in the place the eye is already looking; the
+ * callout under it repeated that in prose and pushed the choices up the
+ * screen the moment you got one wrong.
  *
  * The card relies on `card.choices` where each choice has
  * `{ word, is_correct }`. The first `is_correct: true` entry is the
@@ -38,7 +43,6 @@ import { feedback } from '../../utils/feedback';
 import { WordCard } from './WordCard';
 import { MCQChoice } from './MCQChoice';
 import {
-  MCQ_COPY,
   choiceIsDimmed,
   choiceStateFor,
   type MCQAnswerState,
@@ -69,7 +73,6 @@ export function MCQCard({
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const copy = MCQ_COPY;
   // The global tab bar is an absolute overlay, so the sticky CTA has to
   // reserve its height or the button sits underneath it.
   const barInset = useBottomBarInset();
@@ -82,27 +85,22 @@ export function MCQCard({
     [choices],
   );
   const userWasCorrect = pickedIdx != null && choices[pickedIdx]?.is_correct === true;
-  const correctChoice = correctIdx >= 0 ? choices[correctIdx] : null;
   const answerState: MCQAnswerState = { phase, pickedIdx, correctIdx, userWasCorrect };
 
-  // CTA pulse + auto-advance. 600ms after the user picks we either
-  // (a) auto-advance if they got it right (no point making them tap
-  // twice), or (b) pulse the manual CTA so the eye lands on it.
+  // A pulse on the CTA once an answer is in — the cue that the card is
+  // waiting on you. It used to double as an auto-advance timer for correct
+  // answers; now it only draws the eye, and the tap is always the user's.
   const ctaScale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (phase !== 'answered') return;
-    const t = setTimeout(() => {
-      if (userWasCorrect) {
-        onAnswer(true);
-        return;
-      }
+    const timer = setTimeout(() => {
       Animated.sequence([
         Animated.timing(ctaScale, { toValue: 1.04, duration: 150, useNativeDriver: true }),
         Animated.timing(ctaScale, { toValue: 1.0, duration: 150, useNativeDriver: true }),
       ]).start();
     }, 600);
-    return () => clearTimeout(t);
-  }, [phase, ctaScale, userWasCorrect, onAnswer]);
+    return () => clearTimeout(timer);
+  }, [phase, ctaScale]);
 
   const handleChoicePress = useCallback(
     (idx: number) => {
@@ -132,17 +130,15 @@ export function MCQCard({
   const ctaFg = phase === 'idle'
     ? tc.textFaint
     : '#fff';
-  const ctaLabel = phase === 'idle'
-    ? copy.idleCta
-    : userWasCorrect
-      ? t('quiz:mcq.continue')
-      : t('quiz:mcq.gotItContinue');
+  // One label throughout. The button's *state* (ghost vs filled, disabled vs
+  // not) already says whether it is ready; changing its words as well made it
+  // read as a different control appearing.
+  const ctaLabel = t('quiz:mcq.next');
   const ctaEnabled = phase === 'answered';
 
   return (
     <View style={s.root}>
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        <Text style={s.eyebrow}>{copy.eyebrow}</Text>
         <WordCard word={word} pos={pos} example={example} size={36} />
 
         {/* Answer list — one full-width row per choice. */}
@@ -158,15 +154,6 @@ export function MCQCard({
           ))}
         </View>
 
-        {phase === 'answered' && !userWasCorrect && correctChoice ? (
-          <View style={s.notQuiteCard}>
-            <Text style={s.notQuiteEyebrow}>{t('quiz:mcq.notQuite')}</Text>
-            <Text style={s.notQuiteBody}>
-              <Text style={s.notQuiteAnswer}>{correctChoice.word}</Text>
-              {copy.notQuiteSuffix}
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
 
       {/* Sticky CTA bar */}

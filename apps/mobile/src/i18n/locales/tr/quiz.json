@@ -22,9 +22,7 @@
     "saveFailed": "Sonuçlar kaydedilemedi. “Tekrar dene” seçeneğine dokunun."
   },
   "mcq": {
-    "continue": "Devam et →",
-    "gotItContinue": "Anladım · Devam et →",
-    "notQuite": "HEMEN DEĞİL"
+    "next": "Sonraki"
   },
   "result": {
     "comprehension": "ANLAMA",

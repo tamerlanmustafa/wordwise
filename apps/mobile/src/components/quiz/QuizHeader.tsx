@@ -37,7 +37,12 @@ const MONO_FAMILY = 'JetBrains Mono';
 
 export interface QuizHeaderProps {
   /** Movie title for the center chip. */
-  movie: string;
+  /** Title chip text. Omit to drop the chip entirely — Practice has no film
+   *  to name and a standing "Daily review" label is chrome, not information:
+   *  the user knows what they opened. The CEFR badge still shows when a
+   *  `level` is given, so the chip only disappears when there is nothing in
+   *  it. */
+  movie?: string | null;
   /** CEFR level for the mini-badge inside the chip. */
   level?: keyof typeof cefrColors | null;
   /** 1-indexed position in the card stack. Omit on a surface with no deck
@@ -81,16 +86,24 @@ export function QuizHeader({ movie, level, index, total, onBack }: QuizHeaderPro
           </Svg>
         </Pressable>
 
-        <View style={s.movieChip}>
-          {level ? (
-            <View style={[s.cefrMini, { backgroundColor: cefrColor }]}>
-              <Text style={s.cefrMiniText}>{level}</Text>
-            </View>
-          ) : null}
-          <Text style={s.movieTitle} numberOfLines={1}>
-            {movie}
-          </Text>
-        </View>
+        {movie || level ? (
+          <View style={s.movieChip}>
+            {level ? (
+              <View style={[s.cefrMini, { backgroundColor: cefrColor }]}>
+                <Text style={s.cefrMiniText}>{level}</Text>
+              </View>
+            ) : null}
+            {movie ? (
+              <Text style={s.movieTitle} numberOfLines={1}>
+                {movie}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          // Keeps the back button and counter in their corners with nothing
+          // between them, instead of letting them drift toward the centre.
+          <View style={s.chipSpacer} />
+        )}
 
         {showProgress ? (
           <View style={s.counter}>
@@ -141,6 +154,10 @@ const makeStyles = (tc: ThemeColors) =>
       borderColor: tc.border,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    /** Placeholder when the chip is dropped — see the `movie` prop. */
+    chipSpacer: {
+      flex: 1,
     },
     movieChip: {
       flexDirection: 'row',

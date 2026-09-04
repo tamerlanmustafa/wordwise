@@ -1,8 +1,6 @@
 {
   "mcq": {
-    "notQuite": "ليس تمامًا",
-    "continue": "متابعة ←",
-    "gotItContinue": "أحسنت · متابعة ←"
+    "next": "التالي"
   },
   "finishing": {
     "title": "عمل رائع!",

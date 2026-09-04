@@ -411,7 +411,7 @@ export function ReviewScreen({
     // loading gains those two pieces rather than being replaced.
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizHeader onBack={onBack} />
         <QuizCardSkeleton />
       </SafeAreaView>
     );
@@ -420,7 +420,7 @@ export function ReviewScreen({
   if (phase === 'error') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizHeader onBack={onBack} />
         <EmptyState
           icon="cloud-offline-outline"
           tone="error"
@@ -441,7 +441,7 @@ export function ReviewScreen({
     const copy = emptyDeckCopy(deckStatus);
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizHeader onBack={onBack} />
         <EmptyState
           icon={copy.icon}
           tone={copy.tone}
@@ -528,7 +528,7 @@ export function ReviewScreen({
     // is coming" using the shape that is actually coming.
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <QuizHeader movie={t('quiz:review.dailyReview')} onBack={onBack} />
+        <QuizHeader onBack={onBack} />
         <QuizCardSkeleton />
       </SafeAreaView>
     );
@@ -541,10 +541,11 @@ export function ReviewScreen({
   const pos = sessionPosition(index, cards.length, answeredBefore);
   const sharedHeader = (
     <QuizHeader
-      // Practice is about the word, not where it came from. The payload
-      // still carries movie_title for words saved from a film (and for
-      // older builds that render it); this screen deliberately doesn't.
-      movie={t('quiz:review.dailyReview')}
+      // No title chip. Practice is about the word, not where it came from —
+      // the payload still carries movie_title for words saved from a film —
+      // and "Daily review" was a label restating the screen you just opened.
+      // The CEFR badge stays; that is the one thing the chip carried that the
+      // user could not already infer.
       level={lvl}
       index={pos.index}
       total={pos.total}
