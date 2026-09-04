@@ -7,6 +7,9 @@
  * on a screen with no quiz, or *not* being asked on one with a live deck.
  */
 
+import fs from 'fs';
+import path from 'path';
+
 import { useConfirmStore } from '../confirmStore';
 import { guardQuizExit, useQuizGuardStore } from '../quizGuardStore';
 
@@ -103,6 +106,34 @@ describe('guardQuizExit', () => {
     guardQuizExit(COPY, toLists);
     useConfirmStore.getState().handleConfirm();
     expect(toLists).toHaveBeenCalled();
+  });
+});
+
+describe('App wires every quiz exit through one resolver', () => {
+  // Not a behavioural test — App.tsx cannot be rendered here — but the bug it
+  // pins was real and silent: `onBack` was a *second* copy of the review
+  // screen's destination. When the resolver moved from Home to Practice this
+  // prop kept saying Home, and because the header chevron calls it directly
+  // it also skipped the quit guard, so the one exit the user actually taps
+  // was the one exit that never asked.
+  const app = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'core', 'App.tsx'),
+    'utf8',
+  );
+
+  it('gives ReviewScreen the resolver, not a hardcoded destination', () => {
+    expect(app).toMatch(/onBack=\{\(\) => resolveBack\('review'\)\?\.\(\)\}/);
+  });
+
+  it('resolves review back to the tile path, never Home', () => {
+    const branch = app.slice(app.indexOf("case 'review': {"));
+    expect(branch.slice(0, 800)).toMatch(/navigateToPractice/);
+    expect(branch.slice(0, 800)).not.toMatch(/navigateToHome/);
+  });
+
+  it('puts the guard in front of that resolution', () => {
+    const branch = app.slice(app.indexOf("case 'review': {"));
+    expect(branch.slice(0, 800)).toMatch(/guardQuizExit/);
   });
 });
 

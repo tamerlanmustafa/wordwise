@@ -59,6 +59,8 @@ export interface MCQCardProps {
   pos?: string | null;
   example?: string | null;
   choices: MCQChoicePayload[];
+  /** This word's CEFR band, shown as a chip on the word card. */
+  level?: string | null;
   /** Called exactly once when the user advances past this card. */
   onAnswer: (correct: boolean) => void;
 }
@@ -68,6 +70,7 @@ export function MCQCard({
   pos,
   example,
   choices,
+  level,
   onAnswer,
 }: MCQCardProps) {
   const { t } = useTranslation();
@@ -139,7 +142,7 @@ export function MCQCard({
   return (
     <View style={s.root}>
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        <WordCard word={word} pos={pos} example={example} size={36} />
+        <WordCard word={word} pos={pos} example={example} size={36} level={level} />
 
         {/* Answer list — one full-width row per choice. */}
         <View style={s.choicesList}>

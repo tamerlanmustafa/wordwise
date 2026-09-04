@@ -29,7 +29,6 @@ import { QuizCardSkeleton } from './quiz/QuizCardSkeleton';
 import { sessionPosition } from './quiz/quizHeaderLayout';
 import { emptyDeckCopy } from './quiz/emptyDeck';
 import { feedback } from '../utils/feedback';
-import { cefrColors } from '../theme/palette';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import type { PaywallReason } from './paywallPricing';
@@ -533,20 +532,16 @@ export function ReviewScreen({
       </SafeAreaView>
     );
   }
-  const lvl = (currentCard.cefr_level && currentCard.cefr_level in cefrColors)
-    ? (currentCard.cefr_level as keyof typeof cefrColors)
-    : null;
+
   // Count across the whole session, not just the cards still loaded — a
   // resumed deck holds only what's left (see `sessionPosition`).
   const pos = sessionPosition(index, cards.length, answeredBefore);
   const sharedHeader = (
     <QuizHeader
-      // No title chip. Practice is about the word, not where it came from —
-      // the payload still carries movie_title for words saved from a film —
-      // and "Daily review" was a label restating the screen you just opened.
-      // The CEFR badge stays; that is the one thing the chip carried that the
-      // user could not already infer.
-      level={lvl}
+      // No title chip and no level badge. The level moved onto the word card
+      // (see quiz/WordCard): a Practice deck mixes bands, so a level in the
+      // top bar was describing whichever card was on screen and changed as
+      // you answered — it read as a property of the session.
       index={pos.index}
       total={pos.total}
       onBack={onBack}
@@ -579,6 +574,7 @@ export function ReviewScreen({
             pos={currentCard.pos ?? undefined}
             example={currentCard.example_sentence}
             choices={currentCard.choices}
+            level={currentCard.cefr_level}
             onAnswer={(correct) => advance(correct)}
           />
         </Animated.View>

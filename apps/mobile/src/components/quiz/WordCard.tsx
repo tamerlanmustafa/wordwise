@@ -7,10 +7,19 @@
  * can pass either. Subtitle is `${pos} · "${example}"` italic — both
  * fields are optional so the card degrades cleanly when the backend
  * payload only ships one of them.
+ *
+ * The CEFR chip sits here rather than in `QuizHeader` because the level is a
+ * fact about *this word*, and the header is a fact about the session. In a
+ * deck that mixes levels — which every Practice deck does, since the server
+ * composes it from due recalls, saved words and fresh words at your level —
+ * a single level in the top bar was describing whichever card happened to be
+ * on screen, and it changed as you answered. Beside the word it is simply
+ * true.
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { cefrColors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 
 const SERIF_FAMILY = 'Source Serif 4';
@@ -23,11 +32,15 @@ export interface WordCardProps {
   example?: string | null;
   /** 36 for MCQ headlines, 34 for the longer translation words. Default 36. */
   size?: number;
+  /** This word's CEFR band. Hidden when absent or unrecognised — the chip is
+   *  only worth drawing when we can colour it from the real ramp. */
+  level?: string | null;
 }
 
-export function WordCard({ word, pos, example, size = 36 }: WordCardProps) {
+export function WordCard({ word, pos, example, size = 36, level }: WordCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  const band = level && level in cefrColors ? level : null;
 
   // Compose `${pos} · "${example}"` per §7. The separator only appears
   // when both halves are present so we don't emit a trailing " · ".
@@ -39,6 +52,11 @@ export function WordCard({ word, pos, example, size = 36 }: WordCardProps) {
 
   return (
     <View style={s.card}>
+      {band ? (
+        <View style={[s.levelChip, { backgroundColor: cefrColors[band] }]}>
+          <Text style={s.levelChipText}>{band}</Text>
+        </View>
+      ) : null}
       <Text style={[s.word, { fontSize: size }]} allowFontScaling>
         {word}
       </Text>
@@ -53,6 +71,20 @@ export function WordCard({ word, pos, example, size = 36 }: WordCardProps) {
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
+    // Solid CEFR fill with dark ink — the ramp's yellows and greens are far
+    // too light to carry white text.
+    levelChip: {
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+      borderRadius: 999,
+      marginBottom: 10,
+    },
+    levelChipText: {
+      fontSize: 10.5,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      color: '#1A1206',
+    },
     card: {
       marginVertical: 16,
       paddingHorizontal: 20,

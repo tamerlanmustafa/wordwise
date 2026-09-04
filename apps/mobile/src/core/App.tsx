@@ -824,9 +824,15 @@ export default function App() {
       case 'addToReel':
         return navigateToSavedMovies;
       case 'review': {
+        // Back goes to the tile path you launched from, not Home. Home was
+        // the old default from before Practice had a path, and it made
+        // leaving a lesson feel like leaving the app — you had to find your
+        // way back to the tiles to carry on. A list session still returns to
+        // its list.
+        //
         // Chevron, Android hardware back and the edge swipe all resolve here,
         // so guarding this one place covers all three.
-        const leave = reviewLaunch.listId ? navigateToLists : navigateToHome;
+        const leave = reviewLaunch.listId ? navigateToLists : navigateToPractice;
         return () => guardQuizExit(quizExitCopy, leave);
       }
       case 'paywall':
@@ -1021,7 +1027,14 @@ export default function App() {
             kind={reviewLaunch.kind}
             listId={reviewLaunch.listId}
             initialSession={reviewLaunch.session}
-            onBack={reviewLaunch.listId ? navigateToLists : navigateToHome}
+            // Routed through `resolveBack`, not a second copy of the
+            // destination. This prop *was* that second copy — it still said
+            // `navigateToHome` after the resolver moved to Practice, and
+            // because the header chevron calls it directly it also skipped
+            // the quit guard entirely. One resolver, so the chevron, hardware
+            // back, the swipe and a tab tap cannot disagree about either
+            // where they go or whether they ask first.
+            onBack={() => resolveBack('review')?.()}
             onPaywall={navigateToPaywall}
           />
         ) : currentScreen === 'paywall' ? (

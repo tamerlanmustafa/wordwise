@@ -7,7 +7,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import {
   quizApi,
@@ -85,11 +84,6 @@ export function QuizLessonScreen({
   // use the old styles. The new card components key off `tc.gold` /
   // `tc.success` etc. directly.
   const accent = tc.primaryOnSurface;
-  // CEFR level for the QuizHeader badge — only render the badge when
-  // the level is one we recognize from the palette.
-  const headerLevel = (level && level in cefrColors)
-    ? (level as keyof typeof cefrColors)
-    : null;
 
   if (!card) {
     return (
@@ -194,7 +188,6 @@ export function QuizLessonScreen({
     <SafeAreaView style={s.container} edges={['top']}>
       <QuizHeader
         movie={movieTitle ?? `${level} session`}
-        level={headerLevel}
         index={idx + 1}
         total={total}
         onBack={onExit}
@@ -209,6 +202,9 @@ export function QuizLessonScreen({
             pos={card.pos}
             example={card.example_sentence}
             choices={card.choices}
+            // Per-card, falling back to the lesson's own level: this deck is
+            // built for one band, but the card knows its own.
+            level={card.cefr_level ?? level}
             onAnswer={handleMcqAnswer}
           />
         ) : (
