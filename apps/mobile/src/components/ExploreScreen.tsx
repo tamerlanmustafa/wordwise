@@ -113,9 +113,18 @@ export function ExploreScreen({
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
-  // The off-screen share card. One instance, re-rendered for whichever word is
-  // current, rather than one per feed item — the feed is virtualised and a
-  // capture surface per row would be 60 hidden SVG canvases.
+  // The share card is mounted ONLY while a share is in flight.
+  //
+  // It used to be mounted permanently, re-rendering for whichever word was
+  // current. That put a 1080x1350 SVG — gradients, wrapped text, a dozen
+  // nodes — inside the re-render that `setActiveIndex` triggers on every
+  // viewability change, i.e. once per word while the feed is being flicked
+  // through. The rows themselves were never the problem (`renderItem` does
+  // not depend on `current`); the parent was rebuilding a poster-sized canvas
+  // between every card.
+  //
+  // Nothing needs it before the tap, so nothing renders it before the tap.
+  const [shareTarget, setShareTarget] = useState<FeedItem | null>(null);
   const shareCardRef = useRef<unknown>(null);
   const panelAnim = useRef(new Animated.Value(0)).current;
   const listAnim = useRef(new Animated.Value(0)).current;
@@ -255,24 +264,53 @@ export function ExploreScreen({
     [],
   );
 
-  const handleShare = useCallback(async () => {
+  // Tapping share only *asks* for the card. The capture happens in the effect
+  // below, once React has actually mounted and drawn it.
+  const handleShare = useCallback(() => {
     if (!current) return;
-    // A `wordwise://word/<id>` link is deliberately NOT used: the app has no
-    // inbound URL routing yet, so it would open to whatever screen for people
-    // who have the app and do nothing at all for everyone else. The public
-    // site is the honest destination until a word route exists.
-    //
-    // `shareCardRef` points at the off-screen SVG below. It may be null on the
-    // very first frame after a card change; `shareWordCard` treats that the
-    // same as any other capture failure and falls back to text, so the button
-    // is never dead.
-    const outcome = await shareWordCard({
-      word: current.word,
-      sentence: current.sentence,
-      node: shareCardRef.current as unknown as Rasterisable | null,
-    });
-    if (outcome === 'failed') showToast("Couldn't open the share sheet");
-  }, [current, showToast]);
+    setShareTarget(current);
+  }, [current]);
+
+  // Mount → draw → capture → share → unmount.
+  //
+  // Two frames of wait, not one. `toDataURL` can only capture a surface the
+  // platform has drawn, and a freshly mounted view has been laid out but not
+  // necessarily painted by the next tick — capturing too early returns an
+  // empty image, which reads as the share button silently doing the wrong
+  // thing. Two `requestAnimationFrame`s is the cheapest reliable "it is on the
+  // screen now", and it costs the user ~32ms they spend watching a share sheet
+  // open anyway.
+  //
+  // A `wordwise://word/<id>` link is deliberately NOT used in the text half:
+  // the app has no inbound URL routing yet, so it would open to whatever
+  // screen for people who have the app and do nothing for everyone else. The
+  // public site is the honest destination until a word route exists.
+  useEffect(() => {
+    if (!shareTarget) return;
+    let cancelled = false;
+
+    const run = async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      if (cancelled) return;
+
+      const outcome = await shareWordCard({
+        word: shareTarget.word,
+        sentence: shareTarget.sentence,
+        node: shareCardRef.current as unknown as Rasterisable | null,
+      });
+      if (cancelled) return;
+      // Unmount before reporting, so the canvas is gone the moment the sheet
+      // closes rather than lingering into the next scroll.
+      setShareTarget(null);
+      if (outcome === 'failed') showToast("Couldn't open the share sheet");
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [shareTarget, showToast]);
 
   const handleDone = useCallback(() => {
     setOpenPanel(null);
@@ -433,20 +471,19 @@ export function ExploreScreen({
         lane={m.railLane}
       />
 
-      {/* The share card, mounted off-screen at full canvas size so it can be
-          rasterised on demand. `position: absolute` with a large negative
-          offset rather than `display: none` or zero opacity: react-native-svg
-          can only capture a surface that is actually laid out and drawn, and
-          an unmounted or collapsed view returns nothing. It is inert —
-          pointerEvents none, and it is never inside the scroller. */}
-      {current ? (
+      {/* Present only while a share is in flight — see `shareTarget`. Parked
+          off-screen rather than hidden: `display:none` and `opacity:0` both
+          stop the surface being drawn, and the rasteriser can only capture
+          what the platform actually rendered. Inert, and never inside the
+          scroller. */}
+      {shareTarget ? (
         <View style={s.shareCanvas} pointerEvents="none" collapsable={false}>
           <ShareCard
             ref={shareCardRef as never}
-            word={current.word}
-            sentence={current.sentence}
-            level={current.cefr}
-            pos={current.pos}
+            word={shareTarget.word}
+            sentence={shareTarget.sentence}
+            level={shareTarget.cefr}
+            pos={shareTarget.pos}
           />
         </View>
       ) : null}
