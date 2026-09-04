@@ -47,9 +47,11 @@ import { ClientIpView } from './admin/ClientIpView';
 import { EventLoopView } from './admin/EventLoopView';
 import { LatencyView } from './admin/LatencyView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
-import { alignEnd, BACK_ARROW } from '../i18n/rtl';
+import { getFormattingLocale } from '../i18n';
+import { alignEnd } from '../i18n/rtl';
 import { StarIcon } from './ui/icons';
 import { BarChart, DonutChart, type ChartSlice } from './admin/LevelCharts';
+import { ScreenHeader } from './common/ScreenHeader';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
@@ -78,19 +80,40 @@ const PROCESSED_SORT_TABS: ReadonlyArray<{ id: ProcessedSort; label: string; blu
 ];
 
 /**
- * "3d ago" for a processed timestamp. Deliberately coarse: the exact minute a
- * script finished is never the question, and a relative day is readable at a
- * glance in a list where every other number is already right-aligned.
+ * When a script was processed, as a real date plus how long ago.
+ *
+ * Both halves, because they answer different questions and the list is sorted
+ * by this column: "2 Sep" is what you match against a deploy or an incident,
+ * "yesterday" is what you scan for when you just want to know whether the
+ * batch you kicked off has landed. A relative age alone loses the day, which
+ * is exactly what you need when correlating with anything else.
+ *
+ * The year is only printed when it is not the current one — the catalogue runs
+ * from April, so on this screen almost every row would otherwise repeat 2026.
  */
-function relativeDay(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return '';
+function processedOn(iso: string): string {
+  const then = new Date(iso);
+  const ms = Date.now() - then.getTime();
+  if (!Number.isFinite(ms) || Number.isNaN(then.getTime())) return '';
+
+  const locale = getFormattingLocale();
+  const sameYear = then.getFullYear() === new Date().getFullYear();
+  const date = then.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+
   const days = Math.floor(ms / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return months < 12 ? `${months}mo ago` : `${Math.floor(days / 365)}y ago`;
+  let ago: string;
+  if (days <= 0) ago = 'today';
+  else if (days === 1) ago = 'yesterday';
+  else if (days < 30) ago = `${days}d ago`;
+  else {
+    const months = Math.floor(days / 30);
+    ago = months < 12 ? `${months}mo ago` : `${Math.floor(days / 365)}y ago`;
+  }
+  return `${date} · ${ago}`;
 }
 
 const statusColors = (c: AdminColors): Record<ReportStatus, string> => ({
@@ -527,21 +550,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
       : 'Processed movies';
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {headerLabel}
-          </Text>
-          <TouchableOpacity onPress={refreshProcessed} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title={headerLabel}
+          right={
+            <TouchableOpacity onPress={refreshProcessed} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -676,7 +694,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                       </Text>
                     ) : null}
                     {m.processed_at ? (
-                      <Text style={styles.processedMetaText}>{relativeDay(m.processed_at)}</Text>
+                      <Text style={styles.processedDate}>{processedOn(m.processed_at)}</Text>
                     ) : null}
                   </View>
                 </View>
@@ -691,19 +709,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   if (view === 'dead') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Dead jobs</Text>
-          <TouchableOpacity onPress={refreshDeadJobs} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title={'Dead jobs'}
+          right={
+            <TouchableOpacity onPress={refreshDeadJobs} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -760,19 +775,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   if (view === 'coverage') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Vocab coverage</Text>
-          <TouchableOpacity onPress={loadCoverage} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title={'Vocab coverage'}
+          right={
+            <TouchableOpacity onPress={loadCoverage} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -801,19 +813,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   if (view === 'latency') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>API latency</Text>
-          <TouchableOpacity onPress={loadLatency} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title="API latency"
+          right={
+            <TouchableOpacity onPress={loadLatency} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -842,19 +851,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   if (view === 'eventLoop') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Event loop</Text>
-          <TouchableOpacity onPress={loadEventLoop} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title="Event loop"
+          right={
+            <TouchableOpacity onPress={loadEventLoop} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -883,19 +889,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   if (view === 'clientIp') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setView('main')}
-            style={styles.backButton}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backText}>← Admin</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Attempt limits</Text>
-          <TouchableOpacity onPress={loadClientIp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title="Attempt limits"
+          right={
+            <TouchableOpacity onPress={loadClientIp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
 
         {error ? (
           <View style={styles.errorBanner}>
@@ -923,15 +926,16 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? 'Back'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin</Text>
-        <TouchableOpacity onPress={() => fetchAll()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.refreshText}>↻</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        onBack={onBack}
+        backLabel={backLabel}
+        title="Admin"
+        right={
+          <TouchableOpacity onPress={() => fetchAll()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {error ? (
         <View style={styles.errorBanner}>
@@ -1395,7 +1399,7 @@ const makeStyles = (c: AdminColors) =>
     alignItems: 'center',
   },
   viewModeBtnActive: {
-    backgroundColor: c.primary,
+    backgroundColor: c.accentFill,
     borderColor: c.primary,
   },
   viewModeBtnText: {
@@ -1403,8 +1407,9 @@ const makeStyles = (c: AdminColors) =>
     color: c.textSecondary,
     fontWeight: '600',
   },
+  // Gold fill takes the deep ink, never white — see `accentInk`.
   viewModeBtnTextActive: {
-    color: '#FFFFFF',
+    color: c.accentInk,
   },
   viewModeHint: {
     fontSize: 12,
@@ -1462,8 +1467,11 @@ const makeStyles = (c: AdminColors) =>
   grantBtnGrant: { backgroundColor: c.success },
   grantBtnTrial: { backgroundColor: c.info },
   grantBtnRevoke: { backgroundColor: c.error },
+  // These three fills are status colours, which darken in light mode and
+  // lighten in dark — so the ink on them has to flip with the scheme rather
+  // than being a fixed white that fails on half of them.
   grantBtnText: {
-    color: '#FFFFFF',
+    color: c.onStatusFill,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1824,7 +1832,14 @@ const makeStyles = (c: AdminColors) =>
     color: c.textSecondary,
     marginBottom: 6,
   },
-  chartCard: {
+  // The sort column, so it reads as the row's timestamp rather than as one
+  // more grey stat next to the vote count.
+  processedDate: {
+      fontSize: 11.5,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    chartCard: {
       backgroundColor: c.paper,
       borderRadius: 14,
       borderWidth: 1,
@@ -1860,16 +1875,17 @@ const makeStyles = (c: AdminColors) =>
       backgroundColor: c.paper,
     },
     filterChipOn: {
-      backgroundColor: c.primary,
-      borderColor: c.primary,
+      backgroundColor: c.accentFill,
+      borderColor: c.accentFill,
     },
     filterChipText: {
       fontSize: 12.5,
       fontWeight: '700',
       color: c.textSecondary,
     },
+    // Gold-on-gold needs the deep ink, never white — white on gold is ~2:1.
     filterChipTextOn: {
-      color: '#FFFFFF',
+      color: c.accentInk,
     },
     sortChip: {
       paddingHorizontal: 11,

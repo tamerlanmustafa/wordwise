@@ -37,6 +37,14 @@ export interface AdminColors {
   overlay: string;
   /** One step off `paper` — nested rows inside an already-raised card. */
   inset: string;
+  /** Solid accent for a filled control (selected chip, primary button). */
+  accentFill: string;
+  /** The only ink readable on `accentFill`. White on gold is ~2:1. */
+  accentInk: string;
+  /** Ink for text sitting on a saturated `success`/`warning`/`error` fill.
+   *  Those fills darken in light mode and lighten in dark, so a fixed white
+   *  fails on one of the two schemes. */
+  onStatusFill: string;
 }
 
 /**
@@ -52,7 +60,10 @@ export function useAdminColors(): AdminColors {
 
   return useMemo(
     () => ({
-      primary: tc.primaryOnSurface,
+      // Gold, not the older `primary` purple. Every surface a learner spends
+      // time in — Home, Explore, Practice — is gold, so a purple admin reads
+      // as a different app bolted onto the side of this one.
+      primary: tc.goldOnSurface,
       background: tc.background,
       paper: tc.paper,
       text: tc.text,
@@ -65,6 +76,9 @@ export function useAdminColors(): AdminColors {
       info: scheme === 'dark' ? '#7FB2F0' : '#2C6BB5',
       overlay: 'rgba(0, 0, 0, 0.55)',
       inset: tc.chipBg,
+      accentFill: tc.gold,
+      accentInk: tc.goldDeep,
+      onStatusFill: scheme === 'dark' ? '#10131A' : '#FFFFFF',
     }),
     [tc, scheme],
   );

@@ -36,8 +36,9 @@ import {
   type WordReminderMode,
 } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
-import { BACK_ARROW, FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
+import { FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { ScreenHeader } from '../common/ScreenHeader';
 import {
   SELECTABLE_UI_LANGUAGES,
   clearExplicitAppLanguage,
@@ -384,13 +385,11 @@ export const SettingsScreen = ({
 
   return (
     <SafeAreaView style={settingsStyles.container} edges={['top']}>
-      <View style={settingsStyles.header}>
-        <TouchableOpacity onPress={handleBack} style={settingsStyles.backButton}>
-          <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
-        </TouchableOpacity>
-        <Text style={settingsStyles.headerTitle}>{t('settings:title')}</Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <ScreenHeader
+        onBack={handleBack}
+        backLabel={backLabel}
+        title={t('settings:title')}
+      />
 
       {/* The avatar + email block that used to open this screen is gone. You
           can only arrive here from the profile sheet, which has just shown you
