@@ -34,7 +34,6 @@ import {
   Animated,
   FlatList,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -47,6 +46,8 @@ import { useWordFeedStore, PREFETCH_THRESHOLD, logFeedFlip } from '../stores/wor
 import { dominantLevel } from '../utils/levelMix';
 import type { FeedItem, LevelMix } from '../services/api';
 import { WordCard, EXPLORE_EASING } from './explore/WordCard';
+import { ShareCard } from './explore/ShareCard';
+import { shareWordCard, type Rasterisable } from '../utils/shareWordCard';
 import { exploreMetrics } from './explore/metrics';
 import { ActionRail } from './explore/ActionRail';
 import { MixPanel } from './explore/MixPanel';
@@ -112,6 +113,10 @@ export function ExploreScreen({
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
+  // The off-screen share card. One instance, re-rendered for whichever word is
+  // current, rather than one per feed item — the feed is virtualised and a
+  // capture surface per row would be 60 hidden SVG canvases.
+  const shareCardRef = useRef<unknown>(null);
   const panelAnim = useRef(new Animated.Value(0)).current;
   const listAnim = useRef(new Animated.Value(0)).current;
   const liftAnim = useRef(new Animated.Value(0)).current;
@@ -256,13 +261,17 @@ export function ExploreScreen({
     // inbound URL routing yet, so it would open to whatever screen for people
     // who have the app and do nothing at all for everyone else. The public
     // site is the honest destination until a word route exists.
-    try {
-      await Share.share({
-        message: `${current.word}\n\n"${current.sentence}"\n\nhttps://getwordwise.us`,
-      });
-    } catch {
-      showToast("Couldn't open the share sheet");
-    }
+    //
+    // `shareCardRef` points at the off-screen SVG below. It may be null on the
+    // very first frame after a card change; `shareWordCard` treats that the
+    // same as any other capture failure and falls back to text, so the button
+    // is never dead.
+    const outcome = await shareWordCard({
+      word: current.word,
+      sentence: current.sentence,
+      node: shareCardRef.current as unknown as Rasterisable | null,
+    });
+    if (outcome === 'failed') showToast("Couldn't open the share sheet");
   }, [current, showToast]);
 
   const handleDone = useCallback(() => {
@@ -423,6 +432,24 @@ export function ExploreScreen({
         bottom={m.railBottom}
         lane={m.railLane}
       />
+
+      {/* The share card, mounted off-screen at full canvas size so it can be
+          rasterised on demand. `position: absolute` with a large negative
+          offset rather than `display: none` or zero opacity: react-native-svg
+          can only capture a surface that is actually laid out and drawn, and
+          an unmounted or collapsed view returns nothing. It is inert —
+          pointerEvents none, and it is never inside the scroller. */}
+      {current ? (
+        <View style={s.shareCanvas} pointerEvents="none" collapsable={false}>
+          <ShareCard
+            ref={shareCardRef as never}
+            word={current.word}
+            sentence={current.sentence}
+            level={current.cefr}
+            pos={current.pos}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -448,6 +475,15 @@ type Styles = ReturnType<typeof makeStyles>;
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
+    // Parked off-screen rather than hidden. `display: none` and `opacity: 0`
+    // both stop the surface being drawn, and react-native-svg can only
+    // rasterise what the platform has actually rendered — a hidden canvas
+    // captures as nothing at all.
+    shareCanvas: {
+      position: 'absolute',
+      top: -10000,
+      start: 0,
+    },
     // One flat surface, status bar to tab bar — no card, no border, no glow.
     root: { flex: 1, backgroundColor: tc.feedBg },
     listArea: { flex: 1 },
