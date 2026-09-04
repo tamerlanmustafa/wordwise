@@ -69,6 +69,24 @@ async def get_admin_stats(
         if level is not None:
             movies_by_level[level] += r["n"]
 
+    # The same shape one level down: how the *vocabulary* is spread across the
+    # bands, counted per distinct lemma rather than per row. Per-row would be a
+    # popularity contest — "the" appears in every script — where the dashboard's
+    # question is how much of the registry sits in each band.
+    #
+    # UNKNOWN is kept here, unlike on the learner-facing surfaces: this is the
+    # screen where "how much have we failed to classify" is the whole point
+    # (it is the largest bucket, #91), so hiding it would flatter the chart.
+    word_rows = await db.query_raw(
+        "SELECT cefr_level::text AS level, COUNT(DISTINCT lemma)::int AS n "
+        "FROM word_classifications GROUP BY 1"
+    )
+    words_by_level = {lvl: 0 for lvl in CEFR_LEVELS}
+    words_by_level["UNKNOWN"] = 0
+    for r in word_rows:
+        if r["level"] in words_by_level:
+            words_by_level[r["level"]] = r["n"]
+
     # Worker queue progress (best-effort — table may not exist if the worker
     # subsystem hasn't been bootstrapped yet on this environment).
     queue_done = None
@@ -92,6 +110,7 @@ async def get_admin_stats(
         "movies_processed": movies_processed,
         "users_total": users_total,
         "movies_by_level": movies_by_level,
+        "words_by_level": words_by_level,
         "queue": {
             "done": queue_done,
             "pending": queue_pending,
@@ -203,19 +222,49 @@ async def client_ip_health(
     return build_client_ip_report(client_ip_observation(request))
 
 
+# How the admin browser can order the processed list. A whitelist, so the
+# column can be f-stringed into ORDER BY — the same rule `/movies/by-cefr`
+# follows, and the reason nothing caller-controlled reaches the SQL text.
+#
+# `processed` is the default because the question this screen is usually
+# answering is "did the thing I just kicked off actually land", and popularity
+# (the old default) buries a freshly-processed film behind 4,000 blockbusters.
+# Written against the OUTER query's column names (the `d` sub-select below),
+# not the base tables: `s.updated_at` is projected as `processed_at`, so a
+# naive alias rewrite would emit `d.updated_at` and fail at runtime.
+PROCESSED_SORTS = {
+    "processed": "d.processed_at DESC NULLS LAST",
+    "votes": "d.vote_count DESC NULLS LAST",
+    "rating": "d.vote_average DESC NULLS LAST",
+    "level": "d.difficulty_score DESC NULLS LAST",
+    "title": "d.title ASC",
+    "year": "d.year DESC NULLS LAST",
+}
+
+
 @router.get("/movies/processed")
 async def list_processed_movies(
     level: str | None = None,
-    limit: int = 500,
+    sort: str = "processed",
+    limit: int = 40,
+    offset: int = 0,
     admin_user = Depends(get_admin_user),
     db: Prisma = Depends(get_db),
 ):
     """
-    Admin browser: every fully-processed movie (has a preprocessed script)
-    with TMDB metadata, ordered by popularity desc. Optionally filtered by
-    CEFR level (A1..C2).
+    Admin browser: every fully-processed movie (has a preprocessed script) with
+    TMDB metadata. Optionally filtered by CEFR level, ordered by `sort`.
+
+    Paginated. It used to return up to 1,000 rows in one response and the
+    client rendered every one of them — on a catalogue of 4,400 processed
+    films that is a multi-megabyte payload and a list the phone builds in full
+    before showing anything. `offset` + `has_more` let the screen page.
     """
-    where_sql = "WHERE EXISTS (SELECT 1 FROM movie_scripts s WHERE s.movie_id = m.id AND s.is_preprocessed = true)"
+    order_by = PROCESSED_SORTS.get(sort.lower())
+    if order_by is None:
+        raise HTTPException(status_code=400, detail=f"Invalid sort: {sort}")
+
+    where_sql = "WHERE s.is_preprocessed = true"
     args: list = []
     if level:
         # #103: the level is a band of `difficulty_score`, so this filters on a
@@ -226,29 +275,51 @@ async def list_processed_movies(
         lo, hi = CEFR_SCORE_RANGES[key]
         where_sql += " AND m.difficulty_score >= $1 AND m.difficulty_score <= $2"
         args.extend([lo, hi])
-    args.append(min(max(limit, 1), 1000))
-    limit_pos = len(args)
 
+    # Over-fetch one row to answer `has_more` without a second COUNT query.
+    take = min(max(limit, 1), 100)
+    args.append(take + 1)
+    limit_pos = len(args)
+    args.append(max(offset, 0))
+    offset_pos = len(args)
+
+    # A JOIN rather than the old EXISTS subquery: the sort needs the script's
+    # own `updated_at`, which an EXISTS cannot project. `is_preprocessed` is
+    # unique per movie in practice, but DISTINCT ON keeps one row per film even
+    # if a movie ever carries two script rows.
     rows = await db.query_raw(
         f"""
-        SELECT m.id                AS movie_id,
-               m.tmdb_id           AS tmdb_id,
-               m.title             AS title,
-               m.year              AS year,
-               m.difficulty_score  AS difficulty_score,
-               m.tmdb_popularity   AS popularity,
-               m.tmdb_vote_average AS vote_average,
-               m.tmdb_vote_count   AS vote_count
-          FROM movies m
-          {where_sql}
-         ORDER BY m.tmdb_vote_count DESC NULLS LAST, m.id DESC
-         LIMIT ${limit_pos}
+        SELECT * FROM (
+          SELECT DISTINCT ON (m.id)
+                 m.id                AS movie_id,
+                 m.tmdb_id           AS tmdb_id,
+                 m.title             AS title,
+                 m.year              AS year,
+                 m.difficulty_score  AS difficulty_score,
+                 m.tmdb_popularity   AS popularity,
+                 m.tmdb_vote_average AS vote_average,
+                 m.tmdb_vote_count   AS vote_count,
+                 s.updated_at        AS processed_at
+            FROM movies m
+            JOIN movie_scripts s ON s.movie_id = m.id
+            {where_sql}
+           ORDER BY m.id, s.updated_at DESC
+        ) d
+        ORDER BY {order_by}, d.movie_id DESC
+        LIMIT ${limit_pos} OFFSET ${offset_pos}
         """,
         *args,
     )
+
+    has_more = len(rows) > take
+    rows = rows[:take]
+
     return {
         "level": normalize_level(level) if level else None,
+        "sort": sort.lower(),
+        "offset": max(offset, 0),
         "total": len(rows),
+        "has_more": has_more,
         "movies": [
             {
                 "movie_id": r["movie_id"],
@@ -260,6 +331,11 @@ async def list_processed_movies(
                 "popularity": r["popularity"],
                 "vote_average": r["vote_average"],
                 "vote_count": r["vote_count"],
+                "processed_at": (
+                    r["processed_at"].isoformat()
+                    if hasattr(r.get("processed_at"), "isoformat")
+                    else r.get("processed_at")
+                ),
             }
             for r in rows
         ],
