@@ -110,7 +110,20 @@ describe('activeKind', () => {
     expect(useListsStore.getState().activeKind).toBe('words');
   });
 
-  it('falls back to films when nothing is stored', async () => {
+  it('opens on words when nothing is stored', async () => {
+    // The Lists tab is where saved vocabulary lives; the film lists group
+    // those words rather than being the point of the screen.
+    mockList.mockResolvedValue([]);
+    await useListsStore.getState().hydrate();
+    expect(useListsStore.getState().activeKind).toBe('words');
+  });
+
+  it('keeps a deliberately chosen films segment across the default change', async () => {
+    // The storage key is written only by `setActiveKind` — a tap. So a stored
+    // 'films' is a real preference and must survive a change of default;
+    // bumping the key to force the new one would overwrite a user's choice to
+    // win an argument about a default.
+    await AsyncStorage.setItem('lists.activeKind.v1', 'films');
     mockList.mockResolvedValue([]);
     await useListsStore.getState().hydrate();
     expect(useListsStore.getState().activeKind).toBe('films');

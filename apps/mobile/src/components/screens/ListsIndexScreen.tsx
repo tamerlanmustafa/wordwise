@@ -105,8 +105,8 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
       <View style={s.segmentWrap}>
         <SegmentedControl
           segments={[
-            { key: 'films', label: t('segment.films'), count: films.length },
             { key: 'words', label: t('segment.words'), count: words.length },
+            { key: 'films', label: t('segment.films'), count: films.length },
           ]}
           value={activeKind}
           onChange={onSegmentChange}

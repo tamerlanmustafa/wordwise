@@ -81,18 +81,26 @@ export const useListsStore = create<ListsState>((set, get) => ({
   status: 'idle',
   loadError: false,
   error: null,
-  activeKind: 'films',
+  // Words, not films. The Lists tab is where saved vocabulary lives — the
+  // film lists are a way of grouping the words, not the point of the screen.
+  activeKind: 'words',
   hydrated: false,
 
   hydrate: async () => {
     if (get().hydrated) return;
-    let activeKind: ListKind = 'films';
+    let activeKind: ListKind = 'words';
     try {
       const stored = await AsyncStorage.getItem(ACTIVE_KIND_KEY);
       if (stored === 'films' || stored === 'words') activeKind = stored;
     } catch {
-      // A lost preference just reopens on Films — not worth surfacing.
+      // A lost preference just reopens on the default — not worth surfacing.
     }
+    // Note the storage key is NOT bumped along with this default. It is only
+    // ever written by `setActiveKind`, i.e. when the user taps a segment, so
+    // a stored 'films' is a deliberate choice and keeps working; anyone who
+    // never touched the switch has nothing stored and gets the new default.
+    // Bumping the key would overwrite a real preference to win an argument
+    // about a default.
     set({ activeKind, hydrated: true });
     await get().fetchLists();
   },
