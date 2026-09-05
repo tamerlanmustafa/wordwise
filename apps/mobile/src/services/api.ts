@@ -755,6 +755,106 @@ export interface AdminStats {
   };
 }
 
+/**
+ * The admin hub's landing call, and the only one it makes on open.
+ *
+ * The screen used to fetch everything it could ever show from one endpoint,
+ * which is why opening it took five seconds: `/admin/stats` answered the CEFR
+ * word split — a `COUNT(DISTINCT lemma)` over millions of per-script rows —
+ * whether or not you were looking at that chart. Each section is its own page
+ * with its own call now, and this is deliberately the cheap one.
+ */
+export interface AdminOverview {
+  movies_total: number;
+  movies_processed: number;
+  lemmas_total: number;
+  users_total: number;
+  reports_pending: number;
+  queue: {
+    done: number | null;
+    pending: number | null;
+    running: number | null;
+    dead: number | null;
+  };
+}
+
+export interface AdminFilms {
+  movies_total: number;
+  movies_processed: number;
+  movies_scored: number;
+  movies_unprocessed: number;
+  movies_by_level: Record<string, number>;
+}
+
+export interface AdminWords {
+  lemmas_total: number;
+  /** Six CEFR bands plus UNKNOWN, counted off the lemma registry. */
+  words_by_level: Record<string, number>;
+  definitions_written: number;
+  definitions_missing: number;
+  definitions_skipped: number;
+  sentences_skipped: number;
+  multi_word: number;
+  frequency_ranked: number;
+  hidden_words: number;
+}
+
+export interface AdminUsers {
+  users_total: number;
+  admins: number;
+  active_accounts: number;
+  premium: number;
+  trial: number;
+  comped: number;
+  free: number;
+  signups_7d: number;
+  signups_30d: number;
+  studied_7d: number;
+  studied_30d: number;
+  onboarded: number;
+  saved_words: number;
+  users_with_saved_words: number;
+}
+
+/** One worker's LLM spend over the last 24h, keyed by the `context` string
+ *  that worker writes to the usage ledger. */
+export interface AdminWorkerSpend {
+  calls: number;
+  cost_usd: number;
+  last_at: string | null;
+}
+
+export interface AdminWorkers {
+  queue: {
+    done: number;
+    pending: number;
+    running: number;
+    failed: number;
+    dead: number;
+    done_24h: number;
+    last_done_at: string | null;
+    last_queued_at: string | null;
+    next_run_at: string | null;
+  };
+  fetcher: {
+    events_1h: number;
+    failures_1h: number;
+    p95_ms: number;
+    target_qps: number | null;
+    max_qps: number | null;
+  };
+  llm_24h: Record<string, AdminWorkerSpend>;
+  /** Last ledger entry per context, of all time — so a worker that has been
+   *  quiet for a week reports *when* it went quiet, not just a zero. */
+  llm_last_seen: Record<string, string | null>;
+  backlog: {
+    definitions_missing: number;
+    definitions_retryable: number;
+    sentences_skipped: number;
+  };
+  active_window_hours: number;
+}
+
 export type VocabCoverageStatus = 'ok' | 'warn' | 'fail';
 
 export interface VocabCoverageMetric {
@@ -788,6 +888,13 @@ export interface VocabCoverageReport {
   previous_snapshot_at: string | null;
   llm_cost_cap_usd: number;
   metrics: VocabCoverageMetric[];
+  /** True when the report came from the sentence worker's daily snapshot
+   *  rather than a live recompute. Recomputing costs ~5s of serial counts over
+   *  multi-million-row tables, so the screen opens on the stored one and
+   *  refreshes on demand. Absent on builds older than 2026-09-05. */
+  from_snapshot?: boolean;
+  /** When that snapshot was taken. Null on a live recompute. */
+  captured_at?: string | null;
 }
 
 /** Every /admin/health/* report returns metrics in this one shape, so the admin
@@ -1513,11 +1620,65 @@ export const adminApi = {
   },
 
   // Aggregate platform stats: movies/users/queue progress.
+  //
+  // Superseded by the per-page calls below. Kept because the endpoint is, for
+  // installed builds that predate the split.
   stats: async (): Promise<AdminStats> => {
     const res = await authFetch(`${API_BASE_URL}/admin/stats`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/stats → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // The hub's landing tiles. Cheap by construction — see AdminOverview.
+  overview: async (): Promise<AdminOverview> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/overview`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/overview → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Films page: catalogue size and the CEFR split. The browsable list is
+  // processedMovies() above.
+  films: async (): Promise<AdminFilms> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/films`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/films → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Words page: the lemma registry and how far the definition worker has got.
+  words: async (): Promise<AdminWords> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/words`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/words → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Users page: accounts, tiers, and rolling signup/activity windows.
+  users: async (): Promise<AdminUsers> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/users`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/users → ${res.status} ${body.slice(0, 120)}`);
+    }
+    return res.json();
+  },
+
+  // Workers page: recent activity, spend and backlog per background process.
+  workers: async (): Promise<AdminWorkers> => {
+    const res = await authFetch(`${API_BASE_URL}/admin/workers`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/workers → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
   },
@@ -1568,8 +1729,12 @@ export const adminApi = {
   // Health/coverage of the vocab pipeline (words → sentences → senses →
   // translations). Each metric carries an ok/warn/fail status; trend metrics
   // are diffed against the sentence worker's most recent daily snapshot.
-  vocabCoverage: async (): Promise<VocabCoverageReport> => {
-    const res = await authFetch(`${API_BASE_URL}/admin/health/vocab-coverage`);
+  //
+  // Reads the sentence worker's daily snapshot by default; `fresh` forces the
+  // ~5s recompute. The screen opens on the snapshot and refreshes on pull.
+  vocabCoverage: async (opts?: { fresh?: boolean }): Promise<VocabCoverageReport> => {
+    const qs = opts?.fresh ? '?fresh=1' : '';
+    const res = await authFetch(`${API_BASE_URL}/admin/health/vocab-coverage${qs}`);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`GET /admin/health/vocab-coverage → ${res.status} ${body.slice(0, 120)}`);

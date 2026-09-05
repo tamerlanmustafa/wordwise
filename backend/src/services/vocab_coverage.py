@@ -494,6 +494,79 @@ async def _latest_snapshot(db: Prisma) -> Optional[dict]:
     return {"captured_at": snap.capturedAt, "values": values}
 
 
+async def read_vocab_coverage(db: Prisma, *, fresh: bool = False) -> dict:
+    """The report the admin screen opens with.
+
+    Serves the newest persisted snapshot by default and only recomputes when
+    asked. The gather behind `compute_vocab_coverage` is ~3.2s of deliberately
+    de-parallelised counts across multi-million-row tables (see `_gather_raw`),
+    and it measured **4,934 ms p95** on prod as the endpoint — the second
+    slowest route the app has, and one of the two that made opening admin feel
+    broken. It is also work nobody asked for: the sentence worker already
+    computes this exact report once a day and stores it whole, so the fast path
+    is to read what has already been paid for.
+
+    The tradeoff is that the numbers are up to a day old, which is the right
+    trade for a report whose own metrics are daily trends — but only if the
+    screen cannot mistake old numbers for current ones. Two things guarantee
+    that: `from_snapshot`/`captured_at` are on the response, and
+    `vocab_snapshot_age` is **recomputed against now** rather than served as
+    stored. Without that second step the one metric whose whole job is to
+    notice that the snapshot writer has died (#154) would be served *from* the
+    dead writer's last snapshot, permanently reporting the ~24h it was true
+    when written. A cache that reports its own freshness from inside the cache
+    is not a freshness check.
+
+    `fresh=True` runs the real gather; the pull-to-refresh on the screen uses
+    it, and so does anything that needs the number to reflect a backfill that
+    just landed.
+    """
+    if not fresh:
+        snap = await _latest_snapshot_report(db)
+        if snap is not None:
+            return snap
+    return await compute_vocab_coverage(db)
+
+
+async def _latest_snapshot_report(db: Prisma) -> Optional[dict]:
+    """The newest stored report, re-aged. None when nothing has been written."""
+    snap = await db.vocabcoveragesnapshot.find_first(order={"capturedAt": "desc"})
+    if snap is None or not isinstance(snap.metrics, dict):
+        return None
+
+    report = dict(snap.metrics)
+    metrics = report.get("metrics")
+    if not isinstance(metrics, list):
+        return None
+
+    age_hours = (datetime.now(timezone.utc) - snap.capturedAt).total_seconds() / 3600.0
+    report["metrics"] = [
+        _reaged_snapshot_metric(m, age_hours) if isinstance(m, dict) else m
+        for m in metrics
+    ]
+    report["overall_status"] = _overall_status(
+        [m for m in report["metrics"] if isinstance(m, dict) and "status" in m]
+    )
+    report["from_snapshot"] = True
+    report["captured_at"] = snap.capturedAt.isoformat()
+    return report
+
+
+def _reaged_snapshot_metric(m: dict, age_hours: float) -> dict:
+    """Rewrite the snapshot-age metric to now; pass everything else through."""
+    if m.get("key") != "vocab_snapshot_age":
+        return m
+    value = round(age_hours, 2)
+    return {
+        **m,
+        "value": value,
+        "status": _status_max(
+            value, warn=_SNAPSHOT_AGE_WARN_HOURS, fail=_SNAPSHOT_AGE_FAIL_HOURS
+        ),
+        "detail": "since the sentence worker last wrote a coverage snapshot",
+    }
+
+
 async def compute_vocab_coverage(db: Prisma) -> dict:
     """Live report: gather counts, diff against the last snapshot, classify."""
     raw = await _gather_raw(db)
@@ -510,6 +583,11 @@ async def compute_vocab_coverage(db: Prisma) -> dict:
         "overall_status": _overall_status(metrics),
         "previous_snapshot_at": prev["captured_at"].isoformat() if prev else None,
         "llm_cost_cap_usd": cap,
+        # Always present, so the screen never has to guess which path it got.
+        # A stored snapshot is re-served with this flipped to True by
+        # `_latest_snapshot_report`, along with the time it was captured.
+        "from_snapshot": False,
+        "captured_at": None,
         "metrics": metrics,
     }
 

@@ -154,6 +154,23 @@ function Overview({
         words → example sentences → translations. Each check below watches one step.
       </Text>
 
+      {/* Where these numbers came from.
+          Computing them live is ~5 seconds of counting across the largest
+          tables we have, and the sentence worker already does exactly that
+          once a day — so this opens on the stored answer. Saying so is not
+          optional: the difference between "healthy" and "was healthy at 3am"
+          is the whole value of the screen, and one metric here (snapshot age)
+          exists precisely because a writer once died unnoticed for five days. */}
+      {report.from_snapshot ? (
+        <Text style={styles.provenance}>
+          Measured{' '}
+          {report.captured_at ? new Date(report.captured_at).toLocaleString() : 'earlier'}, when the
+          sentence worker last checked. Pull to refresh to recount now — it takes a few seconds.
+        </Text>
+      ) : (
+        <Text style={styles.provenance}>Counted just now, at {checkedAt}.</Text>
+      )}
+
       {/* Part-to-whole: how the checks split across statuses. */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Check health</Text>
@@ -250,6 +267,12 @@ const makeStyles = (c: AdminColors) =>
     lineHeight: 19,
     color: c.textSecondary,
     marginTop: 12,
+  },
+  provenance: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: c.textTertiary,
+    marginTop: 8,
   },
 
   card: {

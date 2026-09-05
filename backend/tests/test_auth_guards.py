@@ -173,6 +173,20 @@ class TestRouteGuards:
         calls = _dependency_calls(router, "/admin/reprocess-all-scripts", "POST")
         assert get_admin_user in calls
 
+    @pytest.mark.parametrize(
+        "path", ["/admin/overview", "/admin/films", "/admin/words", "/admin/users",
+                 "/admin/workers"]
+    )
+    def test_every_admin_page_endpoint_requires_admin(self, path):
+        """The admin screen was split into per-page endpoints so that opening it
+        stops paying for every question on it at once. Each new page is a new
+        route, and a new route is a new chance to ship one with no guard — which
+        is how POST /movies shipped admin-only in its docstring and
+        active-user-only in its dependencies (#102)."""
+        from src.routes.admin import router
+
+        assert get_admin_user in _dependency_calls(router, path, "GET")
+
     def test_create_movie_requires_admin(self):
         """#102: POST /movies shipped with a docstring saying "admin only" over
         a TODO and a plain active-user check, so any signed-in account could

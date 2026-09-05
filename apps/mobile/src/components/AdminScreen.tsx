@@ -18,7 +18,11 @@ import {
   reportsApi,
   REPORT_REASON_LABELS,
   REPORT_STATUS_LABELS,
-  type AdminStats,
+  type AdminFilms,
+  type AdminOverview,
+  type AdminUsers,
+  type AdminWords,
+  type AdminWorkers,
   type ClientIpReport,
   type DeadJob,
   type EventLoopReport,
@@ -43,14 +47,19 @@ import {
   useAdminColors,
   useStatusTokens,
 } from './admin/adminTheme';
+import { ADMIN_PAGES, adminPage, type AdminPageId } from './admin/adminPages';
+import { PageLoading, Section, StatGrid, StatTile } from './admin/AdminUI';
 import { ClientIpView } from './admin/ClientIpView';
 import { EventLoopView } from './admin/EventLoopView';
+import { FilmsView } from './admin/FilmsView';
 import { LatencyView } from './admin/LatencyView';
+import { UsersView } from './admin/UsersView';
 import { VocabCoverageView } from './admin/VocabCoverageView';
+import { WordsView } from './admin/WordsView';
+import { WorkersView } from './admin/WorkersView';
 import { getFormattingLocale } from '../i18n';
 import { alignEnd } from '../i18n/rtl';
 import { StarIcon } from './ui/icons';
-import { BarChart, DonutChart, type ChartSlice } from './admin/LevelCharts';
 import { ScreenHeader } from './common/ScreenHeader';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 
@@ -131,28 +140,39 @@ const STATUS_TABS: Array<ReportStatus | 'ALL'> = [
   'DISMISSED',
 ];
 
-// Difficulty buckets. These were the six long `difficultylevel` enum names
-// until #103 retired that column — the backend now reports CEFR codes, banded
-// off `difficulty_score` the same way every learner-facing screen does, so the
-// admin counts can no longer disagree with the shelves. `CEFR_LEVELS` is
-// already ordered easiest → hardest, which is how the grid should read, and
-// `cefrColors` already carries these exact six colours.
-const LEVEL_ORDER = CEFR_LEVELS;
-
 export interface AdminScreenProps {
   onBack: () => void;
   /** Names where Back lands (e.g. "Profile"). Defaults to a plain "Back". */
   backLabel?: string;
 }
 
+/**
+ * Every screen this component can show.
+ *
+ * The six in `ADMIN_PAGES` are the hub's pages; the rest are leaves reached
+ * from one of them (the film browser from Films, dead jobs from Workers, the
+ * four health reports from Health). `PARENT_OF` below is what makes Back land
+ * where you came from rather than always on the hub — the same pattern the
+ * profile stack uses.
+ */
 type AdminView =
   | 'main'
+  | AdminPageId
   | 'dead'
   | 'processed'
   | 'coverage'
   | 'latency'
   | 'eventLoop'
   | 'clientIp';
+
+const PARENT_OF: Partial<Record<AdminView, AdminView>> = {
+  processed: 'films',
+  dead: 'workers',
+  coverage: 'health',
+  latency: 'health',
+  eventLoop: 'health',
+  clientIp: 'health',
+};
 
 export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const c = useAdminColors();
@@ -183,31 +203,14 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   // Mirrors the list length for the append guard: `processedMovies` is state
   // and a rapid second onEndReached would read the pre-commit value.
   const processedCountRef = useRef(0);
-  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
-  // Chart inputs. Built here rather than inside the chart so the donut and the
-  // tappable tiles below it read the same numbers off the same object.
-  const movieSlices = useMemo<ChartSlice[]>(
-    () =>
-      LEVEL_ORDER.map((lv) => ({
-        label: lv,
-        value: adminStats?.movies_by_level?.[lv] ?? 0,
-        color: cefrColors[lv],
-      })),
-    [adminStats],
-  );
-  const wordSlices = useMemo<ChartSlice[]>(
-    () => [
-      ...LEVEL_ORDER.map((lv) => ({
-        label: lv,
-        value: adminStats?.words_by_level?.[lv] ?? 0,
-        color: cefrColors[lv],
-      })),
-      // Not a CEFR band, so it gets the neutral ink rather than a colour that
-      // would imply it sits on the difficulty ramp.
-      { label: 'UNKNOWN', value: adminStats?.words_by_level?.UNKNOWN ?? 0, color: c.textTertiary },
-    ],
-    [adminStats, c.textTertiary],
-  );
+  // The hub's own data. Cheap by construction — see AdminOverview.
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  // One slot per page, each filled the first time that page is opened.
+  const [films, setFilms] = useState<AdminFilms | null>(null);
+  const [words, setWords] = useState<AdminWords | null>(null);
+  const [usersData, setUsersData] = useState<AdminUsers | null>(null);
+  const [workers, setWorkers] = useState<AdminWorkers | null>(null);
+  const [pageLoading, setPageLoading] = useState<AdminPageId | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [reports, setReports] = useState<WordReport[]>([]);
   const [activeTab, setActiveTab] = useState<ReportStatus | 'ALL'>('ALL');
@@ -285,48 +288,100 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     }
   }, []);
 
-  const fetchAll = useCallback(
-    async (showSpinner = true) => {
-      if (showSpinner) setLoading(true);
-      setError(null);
-      try {
-        const statusFilter = activeTab === 'ALL' ? undefined : activeTab;
-        const [admin, rs, list] = await Promise.all([
-          adminApi.stats().catch((e) => {
-            console.warn('[AdminScreen] adminApi.stats failed:', e?.message);
-            setError(`Stats: ${e?.message || 'failed'}`);
-            return null;
-          }),
-          reportsApi.stats().catch((e) => {
-            console.warn('[AdminScreen] reportsApi.stats failed:', e?.message);
-            return null;
-          }),
-          reportsApi.listAdmin(statusFilter).catch((e) => {
-            console.warn('[AdminScreen] reportsApi.listAdmin failed:', e?.message);
-            return [];
-          }),
-        ]);
-        setAdminStats(admin);
-        setReportStats(rs);
-        setReports(list);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load admin data');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [activeTab]
-  );
+  /**
+   * The hub's only call.
+   *
+   * This used to be `/admin/stats` + both report calls, in parallel — and
+   * `/admin/stats` measured 5,487 ms p95 on prod because it answered every
+   * question the whole screen could ask, including the CEFR word split over a
+   * multi-million-row table. Opening admin paid for charts nobody had scrolled
+   * to yet. Now the hub fetches counts for its own tiles and nothing else.
+   */
+  const fetchOverview = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const data = await adminApi.overview();
+      setOverview(data);
+    } catch (e: any) {
+      console.warn('[AdminScreen] adminApi.overview failed:', e?.message);
+      setError(`Overview: ${e?.message || 'failed'}`);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    fetchOverview();
+  }, [fetchOverview]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchAll(false);
-  }, [fetchAll]);
+    fetchOverview(false);
+  }, [fetchOverview]);
+
+  /** The reports list, which is now the Reports page's own load rather than
+   *  part of opening admin. Re-runs when the status filter changes. */
+  const fetchReports = useCallback(async () => {
+    setPageLoading('reports');
+    try {
+      const statusFilter = activeTab === 'ALL' ? undefined : activeTab;
+      const [rs, list] = await Promise.all([
+        reportsApi.stats().catch((e) => {
+          console.warn('[AdminScreen] reportsApi.stats failed:', e?.message);
+          return null;
+        }),
+        reportsApi.listAdmin(statusFilter).catch((e) => {
+          console.warn('[AdminScreen] reportsApi.listAdmin failed:', e?.message);
+          return [];
+        }),
+      ]);
+      setReportStats(rs);
+      setReports(list);
+    } finally {
+      setPageLoading(null);
+    }
+  }, [activeTab]);
+
+  // The filter chips re-query the server, so this has to run on every change —
+  // but only while the Reports page is actually open. Fetching a filtered list
+  // for a page nobody is looking at is exactly the cost this split removed.
+  useEffect(() => {
+    if (view === 'reports') void fetchReports();
+  }, [view, fetchReports]);
+
+  /**
+   * Open a page, fetching its data the first time.
+   *
+   * `force` is the page's own refresh control. Everything else is
+   * fetch-once-per-session: these numbers move on the timescale of a worker
+   * cycle, and re-fetching on every back-and-forth would undo the point of
+   * splitting them out.
+   */
+  const openPage = useCallback(
+    async (id: AdminPageId, force = false) => {
+      setView(id);
+      const already = { films, words, users: usersData, workers, reports: reportStats, health: true }[id];
+      if (already != null && !force) return;
+      if (id === 'health') return;      // a hub of reports; each fetches itself
+      if (id === 'reports') return;     // driven by its own effect above
+
+      setPageLoading(id);
+      try {
+        if (id === 'films') setFilms(await adminApi.films());
+        else if (id === 'words') setWords(await adminApi.words());
+        else if (id === 'users') setUsersData(await adminApi.users());
+        else if (id === 'workers') setWorkers(await adminApi.workers());
+      } catch (e: any) {
+        console.warn(`[AdminScreen] ${id} failed:`, e?.message);
+        setError(`${id}: ${e?.message || 'failed'}`);
+      } finally {
+        setPageLoading(null);
+      }
+    },
+    [films, words, usersData, workers, reportStats],
+  );
 
   const openDetails = (report: WordReport) => {
     setSelected(report);
@@ -350,7 +405,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
       });
       setSelected(null);
       setDetailsNotes('');
-      fetchAll(false);
+      void fetchReports();
     } catch (e: any) {
       setError(e?.message || 'Failed to update report');
     } finally {
@@ -465,10 +520,20 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     }
   }, []);
 
-  const loadCoverage = useCallback(async () => {
+  /**
+   * Opening this reads the sentence worker's daily snapshot; the refresh
+   * button recounts.
+   *
+   * The recount is ~5 seconds of serial counting across the largest tables we
+   * have, which is what made this the second-slowest endpoint in the app. It
+   * is worth paying deliberately — right after a backfill lands, say — and not
+   * worth paying every time somebody opens the screen to see whether anything
+   * is red.
+   */
+  const loadCoverage = useCallback(async (fresh = false) => {
     setCoverageLoading(true);
     try {
-      const report = await adminApi.vocabCoverage();
+      const report = await adminApi.vocabCoverage({ fresh });
       setCoverage(report);
     } catch (e: any) {
       setError(e?.message || 'Failed to load vocab coverage');
@@ -479,7 +544,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
 
   const openCoverage = useCallback(() => {
     setView('coverage');
-    if (coverage === null) loadCoverage();
+    if (coverage === null) void loadCoverage();
   }, [coverage, loadCoverage]);
 
   const loadLatency = useCallback(async () => {
@@ -544,6 +609,215 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     [reportStats]
   );
 
+  /**
+   * The one number worth putting on a hub tile, from the overview call.
+   *
+   * Deliberately sparse. A badge on every row would turn the hub back into the
+   * dashboard it just stopped being — and the numbers that matter most here
+   * are the ones that mean *something needs doing*, not the ones that are
+   * merely large. Films shows how much of the catalogue is ready; Reports
+   * shows only an unread count, and only when there is one.
+   */
+  const hubBadge = (id: AdminPageId): string | null => {
+    // No number until there is one. A dash where a count will appear is a
+    // layout shift waiting to happen, and the rows are readable without it.
+    if (loading || !overview) return null;
+    switch (id) {
+      case 'films':
+        return `${overview.movies_processed.toLocaleString()} ready`;
+      case 'words':
+        return `${overview.lemmas_total.toLocaleString()} words`;
+      case 'users':
+        return `${overview.users_total.toLocaleString()}`;
+      case 'reports':
+        return overview.reports_pending > 0 ? `${overview.reports_pending} pending` : null;
+      case 'workers': {
+        const pending = overview.queue.pending;
+        return pending ? `${pending.toLocaleString()} queued` : null;
+      }
+      default:
+        return null;
+    }
+  };
+
+  /** What Back is called on a leaf view — the page it came from, not always
+   *  "Admin". Landing two levels up from a film browser you opened from Films
+   *  is the kind of small wrongness that makes a screen feel improvised. */
+  const parentView = PARENT_OF[view] ?? 'main';
+  const parentLabel = parentView === 'main' ? 'Admin' : adminPage(parentView as AdminPageId).label;
+
+  /** The error banner, identical on every view. */
+  const errorBanner = error ? (
+    <View style={styles.errorBanner}>
+      <Text style={styles.errorBannerText}>{error}</Text>
+      <TouchableOpacity onPress={() => setError(null)}>
+        <Text style={styles.errorBannerClose}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
+  // ── the hub's pages ───────────────────────────────────────────────────────
+
+  /**
+   * The grant/revoke Plus tool, rendered at the bottom of the Users page.
+   *
+   * Built here rather than inside UsersView because its state (the query, the
+   * results, which row is busy) already lives in this component and moving it
+   * would mean six props threaded through a presentational view for no gain.
+   */
+  const grantPlusPanel = (
+    <>
+        {/* Grant/Revoke Plus */}
+        <Text style={styles.sectionLabel}>Grant Plus</Text>
+        <TextInput
+          style={styles.grantInput}
+          placeholder="Search email or username…"
+          placeholderTextColor={c.textTertiary}
+          value={grantQuery}
+          onChangeText={searchUsers}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {grantSearching && (
+          <Text style={styles.grantHint}>Searching…</Text>
+        )}
+        {grantResults.map((u) => {
+          const tier = u.entitlements.tier;
+          const isPlus = u.entitlements.is_premium && !u.is_admin;
+          return (
+            <View key={u.id} style={styles.grantRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.grantRowName}>
+                  {u.username} {u.is_admin ? '· admin' : ''}
+                </Text>
+                <Text style={styles.grantRowEmail} numberOfLines={1}>
+                  {u.email} · tier: {tier}
+                </Text>
+              </View>
+              {u.is_admin ? (
+                <Text style={styles.grantRowLocked}>admin</Text>
+              ) : isPlus ? (
+                <TouchableOpacity
+                  style={[styles.grantBtn, styles.grantBtnRevoke]}
+                  disabled={grantBusy === u.id}
+                  onPress={() => handleRevoke(u.id)}
+                >
+                  <Text style={styles.grantBtnText}>
+                    {grantBusy === u.id ? '…' : 'Revoke'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.grantBtn, styles.grantBtnTrial]}
+                    disabled={grantBusy === u.id}
+                    onPress={() => handleGrant(u.id, 'trial')}
+                  >
+                    <Text style={styles.grantBtnText}>7d trial</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.grantBtn, styles.grantBtnGrant]}
+                    disabled={grantBusy === u.id}
+                    onPress={() => handleGrant(u.id, 'comped')}
+                  >
+                    <Text style={styles.grantBtnText}>
+                      {grantBusy === u.id ? '…' : 'Comp'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          );
+        })}
+
+    </>
+  );
+
+  if (view === 'workers' || view === 'films' || view === 'words' || view === 'users') {
+    const page = adminPage(view);
+    const busy = pageLoading === view;
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title={page.label}
+          right={
+            <TouchableOpacity
+              onPress={() => void openPage(view, true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.refreshText}>↻</Text>
+            </TouchableOpacity>
+          }
+        />
+        {errorBanner}
+        <View style={{ flex: 1, paddingBottom: barInset }}>
+          {busy ? (
+            <PageLoading />
+          ) : view === 'workers' ? (
+            <WorkersView data={workers} onOpenDead={() => void openDeadJobs()} />
+          ) : view === 'films' ? (
+            <FilmsView data={films} onBrowse={(lv) => void openProcessed(lv)} />
+          ) : view === 'words' ? (
+            <WordsView data={words} />
+          ) : (
+            <UsersView data={usersData}>{grantPlusPanel}</UsersView>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (view === 'health') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader onBack={() => setView('main')} backLabel="Admin" title="Health" />
+        {errorBanner}
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
+          {/* Four reports, each fetched only when opened. Latency and Event
+              loop are a pair: latency says which endpoint is slow, the event
+              loop says whether one of them is freezing the rest. */}
+          <Section
+            title="Reports"
+            hint="Each of these is measured live by the API. They load when you open them."
+          >
+            <StatGrid>
+              <StatTile
+                label="Vocab coverage"
+                value={coverage ? COVERAGE_STATUS_LABEL[coverage.overall_status] : 'View →'}
+                sublabel={coverage ? undefined : 'words → sentences → translations'}
+                color={coverage ? statusTokens[coverage.overall_status].mark : c.primary}
+                onPress={openCoverage}
+              />
+              <StatTile
+                label="API latency"
+                value={latency ? COVERAGE_STATUS_LABEL[latency.overall_status] : 'View →'}
+                sublabel={latency ? undefined : 'how fast the app’s requests answer'}
+                color={latency ? statusTokens[latency.overall_status].mark : c.primary}
+                onPress={openLatency}
+              />
+              <StatTile
+                label="Event loop"
+                value={eventLoop ? COVERAGE_STATUS_LABEL[eventLoop.overall_status] : 'View →'}
+                sublabel={eventLoop ? undefined : 'whether one request freezes the rest'}
+                color={eventLoop ? statusTokens[eventLoop.overall_status].mark : c.primary}
+                onPress={openEventLoop}
+              />
+              <StatTile
+                label="Attempt limits"
+                value={clientIp ? COVERAGE_STATUS_LABEL[clientIp.overall_status] : 'View →'}
+                sublabel={clientIp ? undefined : 'whether sign-in caps count per person'}
+                color={clientIp ? statusTokens[clientIp.overall_status].mark : c.primary}
+                onPress={openClientIp}
+              />
+            </StatGrid>
+          </Section>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (view === 'processed') {
     const headerLabel = processedFilter
       ? `${processedFilter} movies`
@@ -551,8 +825,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title={headerLabel}
           right={
             <TouchableOpacity onPress={refreshProcessed} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -710,8 +984,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title={'Dead jobs'}
           right={
             <TouchableOpacity onPress={refreshDeadJobs} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -776,11 +1050,14 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title={'Vocab coverage'}
           right={
-            <TouchableOpacity onPress={loadCoverage} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => void loadCoverage(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Text style={styles.refreshText}>↻</Text>
             </TouchableOpacity>
           }
@@ -814,8 +1091,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title="API latency"
           right={
             <TouchableOpacity onPress={loadLatency} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -852,8 +1129,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title="Event loop"
           right={
             <TouchableOpacity onPress={loadEventLoop} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -890,8 +1167,8 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader
-          onBack={() => setView('main')}
-          backLabel="Admin"
+          onBack={() => setView(PARENT_OF[view] ?? 'main')}
+          backLabel={parentLabel}
           title="Attempt limits"
           right={
             <TouchableOpacity onPress={loadClientIp} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -924,255 +1201,32 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader
-        onBack={onBack}
-        backLabel={backLabel}
-        title="Admin"
-        right={
-          <TouchableOpacity onPress={() => fetchAll()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.refreshText}>↻</Text>
-          </TouchableOpacity>
-        }
-      />
-
-      {error ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>{error}</Text>
-          <TouchableOpacity onPress={() => setError(null)}>
-            <Text style={styles.errorBannerClose}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Platform stats */}
-        <Text style={styles.sectionLabel}>Platform</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Movies processed"
-            value={adminStats ? `${adminStats.movies_processed}` : '—'}
-            sublabel={adminStats ? `of ${adminStats.movies_total} total` : undefined}
-            color={c.primary}
-            onPress={() => openProcessed()}
-          />
-          <StatCard
-            label="Users"
-            value={adminStats ? `${adminStats.users_total}` : '—'}
-            color={c.info}
-          />
-        </View>
-
-        {/* Health surfaces — each opens its own /admin/health/* view. All show
-            their overall status once loaded at least once this session.
-            Latency and Event loop are a pair: latency says which endpoint is
-            slow, the event loop says whether one of them is freezing the rest. */}
-        <Text style={styles.sectionLabel}>Health</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Vocab coverage"
-            value={coverage ? COVERAGE_STATUS_LABEL[coverage.overall_status] : 'View →'}
-            sublabel={coverage ? undefined : 'words → sentences → translations'}
-            color={coverage ? statusTokens[coverage.overall_status].mark : c.primary}
-            onPress={openCoverage}
-          />
-          <StatCard
-            label="API latency"
-            value={latency ? COVERAGE_STATUS_LABEL[latency.overall_status] : 'View →'}
-            sublabel={latency ? undefined : 'how fast the app’s requests answer'}
-            color={latency ? statusTokens[latency.overall_status].mark : c.primary}
-            onPress={openLatency}
-          />
-          <StatCard
-            label="Event loop"
-            value={eventLoop ? COVERAGE_STATUS_LABEL[eventLoop.overall_status] : 'View →'}
-            sublabel={eventLoop ? undefined : 'whether one request freezes the rest'}
-            color={eventLoop ? statusTokens[eventLoop.overall_status].mark : c.primary}
-            onPress={openEventLoop}
-          />
-          <StatCard
-            label="Attempt limits"
-            value={clientIp ? COVERAGE_STATUS_LABEL[clientIp.overall_status] : 'View →'}
-            sublabel={clientIp ? undefined : 'whether sign-in caps count per person'}
-            color={clientIp ? statusTokens[clientIp.overall_status].mark : c.primary}
-            onPress={openClientIp}
-          />
-        </View>
-
-        {/* Admin tier preview toggle — see docs/MONETIZATION_PLAN.md §6.
-            Lets admins simulate free/premium views for QA. Client-side
-            override only — does NOT change server-side subscription_tier. */}
-        <Text style={styles.sectionLabel}>View mode (QA preview)</Text>
-        <View style={styles.viewModeRow}>
-          {(['admin', 'premium', 'free'] as AdminViewMode[]).map((mode) => {
-            const active = adminViewMode === mode;
-            const label =
-              mode === 'admin' ? 'Admin' : mode === 'premium' ? 'Premium' : 'Free';
-            return (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.viewModeBtn, active && styles.viewModeBtnActive]}
-                onPress={() => setAdminViewMode(mode)}
-              >
-                <Text
-                  style={[
-                    styles.viewModeBtnText,
-                    active && styles.viewModeBtnTextActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <Text style={styles.viewModeHint}>
-          {adminViewMode === 'admin'
-            ? 'Full admin access. Ads hidden, all Plus features unlocked.'
-            : adminViewMode === 'premium'
-              ? 'Simulating a premium user. Ads hidden, Plus unlocked, paywalls skipped.'
-              : 'Simulating a free user. Ads will show, paywalls will trigger. Admin tools still work.'}
+  if (view === 'reports') {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader
+          onBack={() => setView('main')}
+          backLabel="Admin"
+          title="Reports"
+          right={
+            <TouchableOpacity
+              onPress={() => void fetchReports()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.refreshText}>{'\u21bb'}</Text>
+            </TouchableOpacity>
+          }
+        />
+        {errorBanner}
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
+        <Text style={styles.sectionHint}>
+          What users have flagged as wrong on a word — a bad translation, a definition that does
+          not match, a word that should not be taught at all.
+          {reportStats ? ` ${reportStats.total} in total.` : ''}
         </Text>
 
-        {/* Grant/Revoke Plus */}
-        <Text style={styles.sectionLabel}>Grant Plus</Text>
-        <TextInput
-          style={styles.grantInput}
-          placeholder="Search email or username…"
-          placeholderTextColor={c.textTertiary}
-          value={grantQuery}
-          onChangeText={searchUsers}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {grantSearching && (
-          <Text style={styles.grantHint}>Searching…</Text>
-        )}
-        {grantResults.map((u) => {
-          const tier = u.entitlements.tier;
-          const isPlus = u.entitlements.is_premium && !u.is_admin;
-          return (
-            <View key={u.id} style={styles.grantRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.grantRowName}>
-                  {u.username} {u.is_admin ? '· admin' : ''}
-                </Text>
-                <Text style={styles.grantRowEmail} numberOfLines={1}>
-                  {u.email} · tier: {tier}
-                </Text>
-              </View>
-              {u.is_admin ? (
-                <Text style={styles.grantRowLocked}>admin</Text>
-              ) : isPlus ? (
-                <TouchableOpacity
-                  style={[styles.grantBtn, styles.grantBtnRevoke]}
-                  disabled={grantBusy === u.id}
-                  onPress={() => handleRevoke(u.id)}
-                >
-                  <Text style={styles.grantBtnText}>
-                    {grantBusy === u.id ? '…' : 'Revoke'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={[styles.grantBtn, styles.grantBtnTrial]}
-                    disabled={grantBusy === u.id}
-                    onPress={() => handleGrant(u.id, 'trial')}
-                  >
-                    <Text style={styles.grantBtnText}>7d trial</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.grantBtn, styles.grantBtnGrant]}
-                    disabled={grantBusy === u.id}
-                    onPress={() => handleGrant(u.id, 'comped')}
-                  >
-                    <Text style={styles.grantBtnText}>
-                      {grantBusy === u.id ? '…' : 'Comp'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          );
-        })}
-
-        {/* Films by level — donut for the shape, tappable tiles to browse. */}
-        {adminStats?.movies_by_level && Object.keys(adminStats.movies_by_level).length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Films by level</Text>
-            <Text style={styles.sectionHint}>
-              How the graded catalogue splits across the six CEFR bands. Every film sits in
-              exactly one, decided by its difficulty score. Tap a band to browse it.
-            </Text>
-            <View style={styles.chartCard}>
-              <DonutChart
-                slices={movieSlices}
-                total={movieSlices.reduce((n, sl) => n + sl.value, 0)}
-                caption="films"
-              />
-            </View>
-            <View style={styles.statsGrid}>
-              {LEVEL_ORDER.filter((lv) => (adminStats.movies_by_level[lv] ?? 0) > 0).map((lv) => (
-                <StatCard
-                  key={lv}
-                  label={lv}
-                  value={`${adminStats.movies_by_level[lv] ?? 0}`}
-                  color={cefrColors[lv]}
-                  onPress={() => openProcessed(lv)}
-                />
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Words by level — bars, not a donut: UNKNOWN dwarfs the rest, and a
-            donut of one huge wedge says less than a ranked comparison. */}
-        {adminStats?.words_by_level && Object.keys(adminStats.words_by_level).length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Words by level</Text>
-            <Text style={styles.sectionHint}>
-              Distinct words in the dictionary, by the band we graded them into. Counted once
-              each — a word in 500 films still counts once. UNKNOWN is the pile we could not
-              grade; it should be shrinking.
-            </Text>
-            <View style={styles.chartCard}>
-              <BarChart slices={wordSlices} />
-            </View>
-          </>
-        )}
-
-        {/* Worker queue */}
-        {adminStats?.queue?.done != null && (
-          <>
-            <Text style={styles.sectionLabel}>Worker queue</Text>
-            <View style={styles.statsGrid}>
-              <StatCard label="Done" value={`${adminStats.queue.done ?? 0}`} color={c.success} />
-              <StatCard label="Pending" value={`${adminStats.queue.pending ?? 0}`} color={c.warning} />
-              <StatCard label="Running" value={`${adminStats.queue.running ?? 0}`} color={c.info} />
-              <StatCard
-                label="Dead"
-                value={`${adminStats.queue.dead ?? 0}`}
-                color={c.error}
-                onPress={(adminStats.queue.dead ?? 0) > 0 ? openDeadJobs : undefined}
-              />
-            </View>
-          </>
-        )}
-
-        {/* Reports */}
-        <View style={styles.reportsHeader}>
-          <Text style={styles.sectionLabel}>Reports</Text>
-          {reportStats ? (
-            <Text style={styles.reportsHeaderCount}>{reportStats.total} total</Text>
-          ) : null}
-        </View>
-
-        {/* Filter tabs */}
+        {/* Filter tabs. Each one re-queries the server, so the counts come from
+            the stats call rather than from the list in hand. */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1195,7 +1249,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         </ScrollView>
 
         {/* Reports list */}
-        {loading ? (
+        {pageLoading === 'reports' ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={c.primary} />
           </View>
@@ -1236,8 +1290,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             </View>
           ))
         )}
-      </ScrollView>
-
+        </ScrollView>
       {/* Details modal */}
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={closeDetails}>
         <View style={styles.modalOverlay}>
@@ -1328,43 +1381,103 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         </View>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sublabel,
-  color,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  sublabel?: string;
-  color: string;
-  onPress?: () => void;
-}) {
-  const c = useAdminColors();
-  const styles = useMemo(() => makeStyles(c), [c]);
-  const body = (
-    <>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-      {sublabel ? <Text style={styles.statSublabel}>{sublabel}</Text> : null}
-    </>
-  );
-  if (onPress) {
-    return (
-      <TouchableOpacity
-        style={[styles.statCard, { borderStartColor: color }]}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
-        {body}
-      </TouchableOpacity>
     );
   }
-  return <View style={[styles.statCard, { borderStartColor: color }]}>{body}</View>;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenHeader
+        onBack={onBack}
+        backLabel={backLabel}
+        title="Admin"
+        right={
+          <TouchableOpacity onPress={() => fetchOverview()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.refreshText}>↻</Text>
+          </TouchableOpacity>
+        }
+      />
+
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{error}</Text>
+          <TouchableOpacity onPress={() => setError(null)}>
+            <Text style={styles.errorBannerClose}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* The hub. Six pages, each fetching its own data when opened —
+            see admin/adminPages.ts for why this stopped being one long scroll. */}
+        <Section
+          title="Sections"
+          hint="Each opens its own page and loads only what that page shows."
+        >
+          {ADMIN_PAGES.map((page) => (
+            <TouchableOpacity
+              key={page.id}
+              style={styles.pageRow}
+              onPress={() => void openPage(page.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${page.label}. ${page.blurb}`}
+            >
+              <View style={styles.pageRowText}>
+                <Text style={styles.pageRowTitle}>{page.label}</Text>
+                <Text style={styles.pageRowBlurb}>{page.blurb}</Text>
+              </View>
+              <View style={styles.pageRowEnd}>
+                {hubBadge(page.id) ? (
+                  <Text style={styles.pageRowBadge}>{hubBadge(page.id)}</Text>
+                ) : null}
+                <Text style={styles.pageRowChevron}>{'\u203A'}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </Section>
+
+        {/* Admin tier preview toggle — see docs/MONETIZATION_PLAN.md §6.
+            Lets admins simulate free/premium views for QA. Client-side
+            override only — does NOT change server-side subscription_tier.
+            Stays on the hub rather than moving to Users: it is a thing you
+            flip constantly while testing, not a thing you read. */}
+        <Text style={styles.sectionLabel}>View mode (QA preview)</Text>
+        <View style={styles.viewModeRow}>
+          {(['admin', 'premium', 'free'] as AdminViewMode[]).map((mode) => {
+            const active = adminViewMode === mode;
+            const label =
+              mode === 'admin' ? 'Admin' : mode === 'premium' ? 'Premium' : 'Free';
+            return (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.viewModeBtn, active && styles.viewModeBtnActive]}
+                onPress={() => setAdminViewMode(mode)}
+              >
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    active && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={styles.viewModeHint}>
+          {adminViewMode === 'admin'
+            ? 'Full admin access. Ads hidden, all Plus features unlocked.'
+            : adminViewMode === 'premium'
+              ? 'Simulating a premium user. Ads hidden, Plus unlocked, paywalls skipped.'
+              : 'Simulating a free user. Ads will show, paywalls will trigger. Admin tools still work.'}
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 function DetailRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
@@ -1383,6 +1496,51 @@ const makeStyles = (c: AdminColors) =>
   container: {
     flex: 1,
     backgroundColor: c.background,
+  },
+  // ── the hub's page list ──────────────────────────────────────────────────
+  // A list rather than a grid of tiles: six destinations with a sentence of
+  // explanation each read as rows, and a two-up grid would either truncate the
+  // blurb or make every tile as tall as the longest one.
+  pageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: c.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  pageRowText: {
+    flex: 1,
+  },
+  pageRowTitle: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: c.text,
+  },
+  pageRowBlurb: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: c.textSecondary,
+    marginTop: 2,
+  },
+  pageRowEnd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pageRowBadge: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: c.textSecondary,
+  },
+  pageRowChevron: {
+    fontSize: 20,
+    lineHeight: 22,
+    color: c.textTertiary,
   },
   viewModeRow: {
     flexDirection: 'row',
@@ -1570,16 +1728,6 @@ const makeStyles = (c: AdminColors) =>
     fontSize: 11,
     color: c.textTertiary,
     marginTop: 2,
-  },
-  reportsHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  reportsHeaderCount: {
-    fontSize: 12,
-    color: c.textTertiary,
-    marginTop: 20,
   },
   tabRow: {
     paddingVertical: 6,

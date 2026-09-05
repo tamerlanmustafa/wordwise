@@ -523,6 +523,128 @@ async def test_maybe_write_daily_snapshot_respects_interval(monkeypatch):
     assert len(db2.vocabcoveragesnapshot.created) == 1
 
 
+# ── serving the report from the daily snapshot ───────────────────────────────
+
+class TestReadServesTheSnapshot:
+    """`compute_vocab_coverage` is ~3.2s of deliberately serial counts across
+    multi-million-row tables, and measured 4,934 ms p95 as an endpoint on prod
+    (2026-09-05) — the second-slowest route the app has. The sentence worker
+    already computes the identical report once a day and stores it whole, so
+    the screen reads that and recomputes only when asked.
+    """
+
+    def _stored(self, hours_old: float, *, metrics=None):
+        return SimpleNamespace(
+            capturedAt=datetime.now(timezone.utc) - timedelta(hours=hours_old),
+            metrics={
+                "generated_at": "2026-09-04T00:00:00+00:00",
+                "overall_status": vc.OK,
+                "llm_cost_cap_usd": 60.0,
+                "metrics": metrics if metrics is not None else [
+                    {"key": "vocab_snapshot_age", "label": "Coverage snapshot age",
+                     "value": 24.0, "unit": "hours", "status": vc.OK},
+                    {"key": "orphan_sentences", "value": 0, "status": vc.OK},
+                ],
+            },
+        )
+
+    async def test_the_stored_report_is_served_without_running_a_single_count(self):
+        db = _FakeDb(_BASELINE_RAW, snapshot=self._stored(2))
+
+        report = await vc.read_vocab_coverage(db)
+
+        assert report["from_snapshot"] is True
+        # The gather is the whole cost. Not one query, not one SET LOCAL.
+        assert db.events == []
+
+    async def test_fresh_forces_the_real_gather(self, monkeypatch):
+        monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+        db = _FakeDb(_BASELINE_RAW, snapshot=self._stored(2))
+
+        report = await vc.read_vocab_coverage(db, fresh=True)
+
+        assert report["from_snapshot"] is False
+        assert db.events, "fresh=True must actually recompute"
+
+    async def test_a_database_with_no_snapshot_yet_computes_live(self, monkeypatch):
+        monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+        db = _FakeDb(_BASELINE_RAW, snapshot=None)
+
+        report = await vc.read_vocab_coverage(db)
+
+        assert report["from_snapshot"] is False
+        assert db.events, "a cold system has nothing to serve and must gather"
+
+    async def test_the_age_metric_is_recomputed_against_now_not_served_as_stored(self):
+        """The one metric that must never come out of the cache.
+
+        `vocab_snapshot_age` exists to notice that the snapshot writer has died
+        — it went unnoticed for five days once (#154). Serving it from inside
+        the dead writer's last snapshot would report the ~24h that was true
+        when it was written, for ever. A cache that reports its own freshness
+        from inside the cache is not a freshness check.
+        """
+        db = _FakeDb(_BASELINE_RAW, snapshot=self._stored(100))
+
+        report = await vc.read_vocab_coverage(db)
+        age = _by_key(report["metrics"])["vocab_snapshot_age"]
+
+        assert age["value"] == pytest.approx(100.0, abs=0.1)
+        assert age["status"] == vc.FAIL          # stored value said ok
+        assert report["overall_status"] == vc.FAIL
+
+    async def test_a_fresh_snapshot_keeps_its_own_overall_status(self):
+        db = _FakeDb(_BASELINE_RAW, snapshot=self._stored(2))
+
+        report = await vc.read_vocab_coverage(db)
+
+        assert _by_key(report["metrics"])["vocab_snapshot_age"]["status"] == vc.OK
+        assert report["overall_status"] == vc.OK
+
+    async def test_every_other_metric_passes_through_untouched(self):
+        stored = self._stored(3, metrics=[
+            {"key": "orphan_sentences", "value": 825, "status": vc.FAIL, "detail": "as stored"},
+        ])
+        db = _FakeDb(_BASELINE_RAW, snapshot=stored)
+
+        by_key = _by_key((await vc.read_vocab_coverage(db))["metrics"])
+
+        assert by_key["orphan_sentences"] == {
+            "key": "orphan_sentences", "value": 825, "status": vc.FAIL, "detail": "as stored",
+        }
+
+    async def test_the_capture_time_is_reported_so_the_screen_can_say_how_old(self):
+        db = _FakeDb(_BASELINE_RAW, snapshot=self._stored(5))
+
+        report = await vc.read_vocab_coverage(db)
+
+        assert report["captured_at"] is not None
+
+    async def test_a_corrupt_snapshot_falls_back_to_computing(self, monkeypatch):
+        # A row whose JSON is not a report at all (a half-written snapshot, a
+        # schema that has moved on) must not be served as one.
+        monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+        broken = SimpleNamespace(
+            capturedAt=datetime.now(timezone.utc), metrics={"not": "a report"}
+        )
+        db = _FakeDb(_BASELINE_RAW, snapshot=broken)
+
+        report = await vc.read_vocab_coverage(db)
+
+        assert report["from_snapshot"] is False
+        assert db.events
+
+    async def test_the_live_path_still_labels_itself(self, monkeypatch):
+        # Both paths carry the same two keys, so the screen never has to guess
+        # which one it got by looking for a missing field.
+        monkeypatch.setattr(vc, "get_settings", lambda: SimpleNamespace(llm_cost_cap_usd=50.0))
+
+        report = await vc.compute_vocab_coverage(_FakeDb(_BASELINE_RAW))
+
+        assert report["from_snapshot"] is False
+        assert report["captured_at"] is None
+
+
 # ── route-level guard (mirrors tests/test_auth_guards.py) ─────────────────────
 
 def _dependency_calls(router, path: str, method: str) -> set:

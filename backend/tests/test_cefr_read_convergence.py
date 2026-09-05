@@ -27,7 +27,11 @@ No Postgres and no Prisma engine: the fakes replay a fixed registry.
 """
 from __future__ import annotations
 
+import ast
+import io
 import re
+import tempfile
+import tokenize
 from pathlib import Path
 
 import pytest
@@ -266,6 +270,88 @@ async def test_journey_deck_still_drops_hidden_profane_and_international():
 # unique_words). Revisit if a client starts rendering it.
 _ALLOWED_READERS = {"movies.py"}
 
+# How far either side of a `word_classifications` mention to look for a level
+# read. Both directions, because SQL puts the SELECT list before the FROM:
+#
+#     SELECT cefr_level::text AS level, COUNT(DISTINCT lemma)::int AS n
+#       FROM word_classifications GROUP BY 1
+#
+# A forward-only window misses that entirely, and it missed it in prod — that
+# statement was `/admin/stats`, it shipped in September 2026, and this guard
+# read straight past it for the two days it was live. The endpoint measured
+# 5,487 ms p95 as a bonus, since the table is millions of rows.
+_SCAN_WINDOW = 400
+
+
+def _code_only(path) -> str:
+    """The file with comments and docstrings blanked out.
+
+    Prose has to be excluded or the rule cannot be explained anywhere it is
+    enforced: the docstring on `/admin/stats` says, in as many words, that it
+    no longer reads cefr_level from word_classifications — and a naive scan
+    counts that sentence as the thing it is warning about. Ordinary string
+    literals are kept, because that is where the SQL lives.
+    """
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+
+    # Comments, via the tokenizer rather than a regex, so a `#` inside a string
+    # is not mistaken for one.
+    stripped: list[str] = []
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return source
+    blanks: list[tuple[int, int, int, int]] = [
+        (t.start[0], t.start[1], t.end[0], t.end[1])
+        for t in tokens
+        if t.type == tokenize.COMMENT
+    ]
+
+    # Docstrings, via the AST — the only reliable way to tell one from a SQL
+    # string, since both are just string literals to the tokenizer.
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        tree = None
+    if tree is not None:
+        for node in ast.walk(tree):
+            if not isinstance(
+                node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                continue
+            body = getattr(node, "body", None)
+            if not body:
+                continue
+            first = body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+                and first.end_lineno is not None
+            ):
+                blanks.append(
+                    (first.lineno, first.col_offset, first.end_lineno, first.end_col_offset)
+                )
+
+    for start_line, start_col, end_line, end_col in blanks:
+        for lineno in range(start_line, end_line + 1):
+            line = lines[lineno - 1]
+            lo = start_col if lineno == start_line else 0
+            hi = end_col if lineno == end_line else len(line)
+            keep_tail = line[hi:] if lineno == end_line else ""
+            lines[lineno - 1] = line[:lo] + " " * (hi - lo) + keep_tail
+    stripped = lines
+    return "".join(stripped)
+
+
+def _reads_level_from_word_classifications(text: str) -> bool:
+    for match in re.finditer(r"word_classifications", text):
+        lo = max(0, match.start() - _SCAN_WINDOW)
+        if "cefr_level" in text[lo: match.end() + _SCAN_WINDOW]:
+            return True
+    return False
+
 
 def test_no_route_badges_a_word_from_word_classifications():
     """
@@ -273,22 +359,60 @@ def test_no_route_badges_a_word_from_word_classifications():
     level. This is the guard that stops the next reader from reintroducing
     the divergence #127 closed.
     """
-    offenders = []
-    for path in sorted((_SRC / "routes").glob("*.py")):
-        if path.name in _ALLOWED_READERS:
-            continue
-        text = path.read_text()
-        for match in re.finditer(r"word_classifications", text):
-            window = text[match.start(): match.start() + 400]
-            if "cefr_level" in window:
-                offenders.append(path.name)
-                break
+    offenders = [
+        path.name
+        for path in sorted((_SRC / "routes").glob("*.py"))
+        if path.name not in _ALLOWED_READERS
+        and _reads_level_from_word_classifications(_code_only(path))
+    ]
 
     assert offenders == [], (
         f"{offenders} select cefr_level from word_classifications. That table "
         "stores one row per (script, surface word); use cefr_registry's "
         "registry_levels / trusted_registry_sql so every surface agrees (#127)."
     )
+
+
+def test_the_guard_catches_a_level_named_before_the_table():
+    """The statement this guard read straight past for two days.
+
+    SQL names its columns before its tables, so scanning only forwards from
+    `word_classifications` is scanning the wrong way. This is `/admin/stats` as
+    it actually shipped.
+    """
+    assert _reads_level_from_word_classifications(
+        'SELECT cefr_level::text AS level, COUNT(DISTINCT lemma)::int AS n '
+        'FROM word_classifications GROUP BY 1'
+    )
+
+
+def test_the_guard_does_not_fire_on_prose_explaining_it():
+    """A comment saying "we stopped doing X" must not read as doing X.
+
+    Otherwise the rule can never be documented next to the code it governs,
+    and the next person removes the explanation instead of the violation.
+    """
+    source = (
+        '"""It no longer answers this from word_classifications.cefr_level."""\n'
+        '# nor from word_classifications, whose cefr_level is per-script\n'
+        'rows = db.query_raw("SELECT count(*) FROM lemmas")\n'
+    )
+    path = Path(tempfile.mkdtemp()) / "sample.py"
+    path.write_text(source)
+
+    assert not _reads_level_from_word_classifications(_code_only(path))
+
+
+def test_stripping_prose_leaves_the_sql_alone():
+    """The blanking must not eat ordinary string literals — that is where every
+    statement this guard inspects lives."""
+    path = Path(tempfile.mkdtemp()) / "sample.py"
+    path.write_text(
+        '"""A docstring."""\n'
+        'SQL = "SELECT cefr_level FROM word_classifications"\n'
+    )
+
+    assert _reads_level_from_word_classifications(_code_only(path))
 
 
 def test_srs_badges_through_the_registry():

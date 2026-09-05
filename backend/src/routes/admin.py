@@ -12,12 +12,17 @@ from src.services.difficulty_scorer import compute_difficulty
 from src.services.event_loop_lag import compute_event_loop_report
 from src.services.latency_stats import compute_latency_report
 from src.services.movie_cefr import (
-    CEFR_LEVELS,
     CEFR_SCORE_RANGES,
     cefr_from_score,
     normalize_level,
 )
-from src.services.vocab_coverage import compute_vocab_coverage
+from src.services.admin_panels import (
+    films_panel,
+    users_panel,
+    words_panel,
+    workers_panel,
+)
+from src.services.vocab_coverage import read_vocab_coverage
 from src.utils.offload import run_nlp
 from src.utils.rate_limit import client_ip_observation, rate_limit
 from src.utils.subscription import entitlements_payload
@@ -41,87 +46,150 @@ _event_loop_health_throttle = rate_limit(30, 60.0, scope="admin-event-loop-healt
 _client_ip_health_throttle = rate_limit(60, 60.0, scope="admin-client-ip-health")
 
 
+@router.get("/overview")
+async def admin_overview(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """The landing page's tiles: enough to know what needs attention, and
+    nothing that costs more than a few milliseconds to find out.
+
+    The admin screen is a hub of pages now, and this is the only call it makes
+    on open. Everything expensive belongs to the page that shows it — see
+    services/admin_panels.py for why, and `/admin/stats` below for what this
+    replaced.
+    """
+    row = await db.query_raw(
+        """
+        SELECT
+          (SELECT count(*)::int FROM movies) AS movies_total,
+          (SELECT count(*)::int FROM movie_scripts WHERE is_preprocessed = true) AS movies_processed,
+          (SELECT count(*)::int FROM lemmas) AS lemmas_total,
+          (SELECT count(*)::int FROM users) AS users_total,
+          (SELECT count(*)::int FROM word_reports WHERE status = 'PENDING') AS reports_pending
+        """
+    )
+    counts = row[0] if row else {}
+
+    # Best-effort: movie_jobs is created by the worker's own bootstrap, so on
+    # an environment where the worker has never run it simply is not there.
+    queue = {}
+    try:
+        rows = await db.query_raw(
+            "SELECT status, count(*)::int AS n FROM movie_jobs GROUP BY status"
+        )
+        queue = {r["status"]: r["n"] for r in rows}
+    except Exception as e:
+        logger.debug(f"movie_jobs not available: {e}")
+
+    return {
+        "movies_total": counts.get("movies_total", 0),
+        "movies_processed": counts.get("movies_processed", 0),
+        "lemmas_total": counts.get("lemmas_total", 0),
+        "users_total": counts.get("users_total", 0),
+        "reports_pending": counts.get("reports_pending", 0),
+        "queue": {
+            "done": queue.get("done"),
+            "pending": queue.get("pending"),
+            "running": queue.get("running"),
+            "dead": queue.get("dead"),
+        },
+    }
+
+
+@router.get("/films")
+async def admin_films(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """The Films page: catalogue size, how much of it is usable, and the CEFR
+    split. The browsable list itself is `/admin/movies/processed`."""
+    return await films_panel(db)
+
+
+@router.get("/words")
+async def admin_words(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """The Words page: the lemma registry, its CEFR split, and how far the
+    definition worker has got through it."""
+    return await words_panel(db)
+
+
+@router.get("/users")
+async def admin_users(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """The Users page: accounts, tiers, and rolling signup/activity windows."""
+    return await users_panel(db)
+
+
+@router.get("/workers")
+async def admin_workers(
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """The Workers page: what each background process has done lately, what it
+    has spent, and whether it is awake."""
+    return await workers_panel(db)
+
+
 @router.get("/stats")
 async def get_admin_stats(
     admin_user = Depends(get_admin_user),
     db: Prisma = Depends(get_db),
 ):
-    """Aggregate counts for the admin dashboard."""
-    # "Processed" means we have a script row tied to the movie. Movies that
-    # exist but never got their script fetched don't count yet.
-    movies_total = await db.movie.count()
-    movies_processed = await db.moviescript.count(where={"isPreprocessed": True})
-    users_total = await db.user.count()
+    """Aggregate counts for the admin dashboard.
 
-    # Distribution across CEFR buckets. Any movie with a non-null
-    # difficulty_score has been fully scored by our classifier, so this doubles
-    # as "how many are actually usable". Since #103 the bucket is banded off
-    # the score in Python rather than read from a stored enum, so the admin
-    # dashboard and the learner-facing shelves can no longer drift apart.
-    score_rows = await db.query_raw(
-        "SELECT difficulty_score AS score, COUNT(*)::int AS n "
-        "FROM movies WHERE difficulty_score IS NOT NULL "
-        "GROUP BY difficulty_score"
-    )
-    movies_by_level = {lvl: 0 for lvl in CEFR_LEVELS}
-    for r in score_rows:
-        level = cefr_from_score(r["score"])
-        if level is not None:
-            movies_by_level[level] += r["n"]
+    Superseded by the per-page endpoints above, and kept because an installed
+    build that predates them still calls it — a mobile app is not a browser
+    tab you can reload out from under. It is now a thin composition of the
+    films and words panels rather than its own set of queries.
 
-    # The same shape one level down: how the *vocabulary* is spread across the
-    # bands, counted per distinct lemma rather than per row. Per-row would be a
-    # popularity contest — "the" appears in every script — where the dashboard's
-    # question is how much of the registry sits in each band.
-    #
-    # UNKNOWN is kept here, unlike on the learner-facing surfaces: this is the
-    # screen where "how much have we failed to classify" is the whole point
-    # (it is the largest bucket, #91), so hiding it would flatter the chart.
-    word_rows = await db.query_raw(
-        "SELECT cefr_level::text AS level, COUNT(DISTINCT lemma)::int AS n "
-        "FROM word_classifications GROUP BY 1"
-    )
-    words_by_level = {lvl: 0 for lvl in CEFR_LEVELS}
-    words_by_level["UNKNOWN"] = 0
-    for r in word_rows:
-        if r["level"] in words_by_level:
-            words_by_level[r["level"]] = r["n"]
+    It also no longer answers `words_by_level` from `word_classifications`.
+    That query was `COUNT(DISTINCT lemma) ... GROUP BY cefr_level` over
+    millions of per-script rows and measured **5,487 ms p95** on prod — the
+    slowest route in the app, and most of why opening admin felt broken. The
+    question it was written to answer ("how much of the registry sits in each
+    band") is a question about `lemmas`, which holds one row per lemma. The
+    counts will therefore have moved: the registry is a superset of what the
+    scripts happen to mention, and its levels are the ones the backfills
+    correct. See services/admin_panels.py.
+    """
+    films = await films_panel(db)
+    words = await words_panel(db)
 
-    # Worker queue progress (best-effort — table may not exist if the worker
-    # subsystem hasn't been bootstrapped yet on this environment).
-    queue_done = None
-    queue_pending = None
-    queue_running = None
-    queue_dead = None
+    queue = {}
     try:
         rows = await db.query_raw(
-            "SELECT status, COUNT(*)::int AS n FROM movie_jobs GROUP BY status"
+            "SELECT status, count(*)::int AS n FROM movie_jobs GROUP BY status"
         )
-        counts = {r["status"]: r["n"] for r in rows}
-        queue_done = counts.get("done", 0)
-        queue_pending = counts.get("pending", 0)
-        queue_running = counts.get("running", 0)
-        queue_dead = counts.get("dead", 0)
+        queue = {r["status"]: r["n"] for r in rows}
     except Exception as e:
         logger.debug(f"movie_jobs not available: {e}")
 
+    users_total = await db.user.count()
+
     return {
-        "movies_total": movies_total,
-        "movies_processed": movies_processed,
+        "movies_total": films["movies_total"],
+        "movies_processed": films["movies_processed"],
         "users_total": users_total,
-        "movies_by_level": movies_by_level,
-        "words_by_level": words_by_level,
+        "movies_by_level": films["movies_by_level"],
+        "words_by_level": words["words_by_level"],
         "queue": {
-            "done": queue_done,
-            "pending": queue_pending,
-            "running": queue_running,
-            "dead": queue_dead,
+            "done": queue.get("done"),
+            "pending": queue.get("pending"),
+            "running": queue.get("running"),
+            "dead": queue.get("dead"),
         },
     }
 
 
 @router.get("/health/vocab-coverage")
 async def vocab_coverage_health(
+    fresh: bool = False,
     admin_user=Depends(get_admin_user),
     _: None = Depends(_vocab_health_throttle),
     db: Prisma = Depends(get_db),
@@ -130,8 +198,13 @@ async def vocab_coverage_health(
     senses → translations). Each metric carries a value, threshold and
     ok/warn/fail status; trend/regression metrics are diffed against the most
     recent daily snapshot written by the sentence worker. See
-    src/services/vocab_coverage.py for the metric definitions and thresholds."""
-    return await compute_vocab_coverage(db)
+    src/services/vocab_coverage.py for the metric definitions and thresholds.
+
+    Served from that daily snapshot by default — recomputing it live measured
+    4.9s p95 on prod and is work the sentence worker has already done. `fresh=1`
+    forces the recompute; `from_snapshot` and `captured_at` on the response say
+    which one you got."""
+    return await read_vocab_coverage(db, fresh=fresh)
 
 
 @router.get("/health/translation-cache")
