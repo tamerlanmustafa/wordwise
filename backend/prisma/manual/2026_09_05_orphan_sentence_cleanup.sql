@@ -42,12 +42,18 @@
 --    re-work rather than damage — population is idempotent — but it is
 --    surprising, and it is avoided entirely by not touching those rows.
 --
--- The global LLM rows have neither problem. Since 2026-09-05 they are written
--- with their link inside one transaction (`llm_sentence_service.
--- _persist_global_sentence`), so a global row is never visible un-linked to
--- another session: an uncommitted transaction's rows are invisible under READ
--- COMMITTED, and once it commits both rows are there. That is what makes this
--- delete race-free, and it is the reason it had to wait for that fix.
+-- The global LLM rows have neither problem. Since 2026-09-05 every writer goes
+-- through `sentence_bank_service.persist_sentence_with_links`, which puts the
+-- sentence and its links in one transaction, so a global row is never visible
+-- un-linked to another session: an uncommitted transaction's rows are
+-- invisible under READ COMMITTED, and once it commits both rows are there.
+-- That is what makes this delete race-free, and it is why it had to wait for
+-- that fix — running it a day earlier could have deleted a sentence the worker
+-- was about to link.
+--
+-- No need to pause the workers for this one, for the same reason. (Deleting
+-- movie-tied rows WOULD need the film worker stopped first, which is the other
+-- reason they are out of scope.)
 --
 --
 -- WHY NOT JUST LEAVE THEM
@@ -80,11 +86,14 @@ ORDER BY 1;
 
 -- 2. THE DELETE. Scoped to global LLM orphans only.
 --
---    Wrapped so you can see the count before committing: run it, read the
---    RETURNING count, then COMMIT (or ROLLBACK if the number is nothing like
---    what section 1 reported).
-BEGIN;
-
+--    ⚠ Run this statement ON ITS OWN, deliberately — do not `psql -f` this
+--    file. There is no BEGIN wrapping it on purpose: psql COMMITS an open
+--    transaction block when it exits normally, so a `BEGIN` with a
+--    commented-out `COMMIT` reads like a safety net and is not one. Section 1
+--    is the dry run; this is the commit.
+--
+--    RETURNING gives the count back, so compare it against section 1's
+--    "global llm (in scope)" row before you walk away.
 WITH gone AS (
     DELETE FROM sentence_bank sb
      WHERE sb.movie_id IS NULL
@@ -95,8 +104,6 @@ WITH gone AS (
     RETURNING sb.id
 )
 SELECT count(*) AS deleted FROM gone;
-
--- COMMIT;
 
 
 -- 3. AFTERWARDS
