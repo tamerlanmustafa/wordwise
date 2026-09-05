@@ -92,6 +92,19 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
     const next: PersistShape = { completed: true, ...payload };
     await save(next);
     set({ ...next, hydrated: true });
+    // Onto the account too, so the user's next device doesn't ask again. This
+    // flag was local-only, which is why a reinstall replayed the whole
+    // first-run flow. Inline require keeps this module free of a static
+    // dependency on the api layer, which imports back into stores.
+    try {
+      const { authApi } = require('../services/api') as typeof import('../services/api');
+      const { useAuthStore } = require('./authStore') as typeof import('./authStore');
+      const fresh = await authApi.updateProfile({ onboarding_completed: true });
+      useAuthStore.getState().setUser(fresh);
+    } catch {
+      // Best-effort. The local flag already lets this install through, and
+      // App.tsx retries the push on the next launch.
+    }
   },
 
   setDailyGoalMinutes: async (mins) => {

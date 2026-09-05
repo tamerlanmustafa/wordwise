@@ -26,6 +26,14 @@ export interface User {
    *  install inherits it and emails go out in it. Optional because the user
    *  objects the login screens assemble by hand don't carry it. */
   language_preference?: string | null;
+  /** Whether this ACCOUNT has finished onboarding. Was an AsyncStorage flag,
+   *  so a second device replayed the whole first-run flow. Optional because
+   *  the login screens assemble user objects by hand and an older server does
+   *  not send it — both read as "no opinion", never as "not onboarded". */
+  onboarding_completed?: boolean;
+  /** Explore CEFR mix chosen on this account: six bands summing to 100.
+   *  `null`/absent means never set, so the client derives one from the level. */
+  feed_level_mix?: Record<string, number> | null;
   entitlements?: Entitlements | null;
 }
 

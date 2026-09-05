@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CefrLevel, User } from '../types';
 import { tokenStorage } from '../services/auth/tokenStorage';
+// Safe to import statically: accountState reaches the stores through `require`
+// at call time precisely so this direction of the cycle stays open.
+import { resetAccountState } from '../services/accountState';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'offline_authenticated';
 
@@ -67,7 +70,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await tokenStorage.clearTokens();
-    await AsyncStorage.removeItem('user');
+    // Everything the account wrote — storage and in-memory stores alike. This
+    // used to be `removeItem('user')` and nothing else, so the next account to
+    // sign in on this phone inherited the previous one's review deck, streak,
+    // saved-word state and viewing history. See services/accountState.ts for
+    // what counts as the account's and what stays with the device.
+    await resetAccountState();
     set({ user: null, status: 'unauthenticated' });
   },
 
@@ -78,7 +86,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { authApi } = require('../services/api') as typeof import('../services/api');
     await authApi.deleteAccount();
     await tokenStorage.clearTokens();
-    await AsyncStorage.removeItem('user');
+    // Same wipe as sign-out, and more obviously required here: the account is
+    // gone from the server, so leaving its data readable on the phone is the
+    // one outcome "delete my account" must not have.
+    await resetAccountState();
     set({ user: null, status: 'unauthenticated' });
   },
 

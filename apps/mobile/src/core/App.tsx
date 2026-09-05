@@ -50,7 +50,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { showToast } from '../stores/toastStore';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
-import { quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
+import { authApi, quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import { useWordFeedStore } from '../stores/wordFeedStore';
 import type { Screen, ListFilter, MovieData, ListSummary } from './types';
@@ -107,7 +107,14 @@ export default function App() {
   // First-run onboarding gate (Launch §A). We hold the app behind a loader
   // until the store hydrates so a returning user never flashes the flow.
   const onboardingHydrated = useOnboardingStore((s) => s.hydrated);
-  const onboardingDone = useOnboardingStore((s) => s.completed);
+  const onboardingDoneLocally = useOnboardingStore((s) => s.completed);
+  // Merged at render rather than written into the store, so a returning user
+  // on a new phone never sees a frame of the first-run flow. The flag used to
+  // be local-only, which meant a reinstall — or simply signing in on a second
+  // device — replayed the whole thing, placement quiz included. Either source
+  // saying "done" is done: the local one is all an older account has, and the
+  // account one is all a fresh install has.
+  const onboardingDone = onboardingDoneLocally || user?.onboarding_completed === true;
 
   // Navigation state
   // The word feed. It is the first tab and the one now labelled "Home", so it
@@ -131,6 +138,17 @@ export default function App() {
     AsyncStorage.setItem('targetLanguage', lang).catch((e) =>
       console.warn('Failed to persist targetLanguage:', e)
     );
+    // …and onto the account. `users.learning_language` already existed; the
+    // picker simply never wrote to it, so the choice was a property of the
+    // phone and a second device kept its own. The column is lowercase ISO,
+    // the picker's codes are uppercase.
+    authApi
+      .updateProfile({ learning_language: lang.toLowerCase() })
+      .then((fresh) => useAuthStore.getState().setUser(fresh))
+      .catch(() => {
+        // Best-effort: the language already applies locally, and the next
+        // change retries. Never block the header picker on the network.
+      });
   }, []);
 
   // When a token refresh fails (refresh token expired/revoked), tear the
@@ -224,8 +242,25 @@ export default function App() {
   // mount effect becomes a no-op when this wins the race.
   useEffect(() => {
     if (!targetLanguageLoaded || !user) return;
-    void useWordFeedStore.getState().hydrate(user.proficiency_level, targetLanguage);
+    void useWordFeedStore
+      .getState()
+      .hydrate(user.proficiency_level, targetLanguage, user.feed_level_mix ?? null);
   }, [targetLanguageLoaded, user?.proficiency_level, targetLanguage, user]);
+
+  // Carry an already-onboarded install up to the account, once. Existing users
+  // have the local flag and a NULL column, and nothing else would ever write
+  // it — so without this they would keep getting onboarding on every new
+  // device. The server only ever sets the flag, never clears it, which is what
+  // makes re-sending it safe on a failure.
+  useEffect(() => {
+    if (!user || !onboardingDoneLocally || user.onboarding_completed === true) return;
+    authApi
+      .updateProfile({ onboarding_completed: true })
+      .then((fresh) => useAuthStore.getState().setUser(fresh))
+      .catch(() => {
+        // Retried on the next launch; nothing depends on it landing now.
+      });
+  }, [user, onboardingDoneLocally]);
 
   const handleLogin = async (user: any, token: string, refreshToken: string) => {
     await login(user, token, refreshToken);

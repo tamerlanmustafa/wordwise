@@ -27,7 +27,8 @@
 
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
+import { authApi, srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
+import { useAuthStore } from './authStore';
 import { useListsStore } from './listsStore';
 import { cutsToMix, defaultMixForLevel, isBalanced, mixToCuts, sameMix } from '../utils/levelMix';
 import { randomToken, shuffle } from '../utils/random';
@@ -87,7 +88,14 @@ interface WordFeedState {
    *  case of a stale local set is a redundant add, never a wrong one. */
   listMembership: Record<number, number[]>;
 
-  hydrate: (proficiencyLevel?: string | null, targetLang?: string | null) => Promise<void>;
+  hydrate: (
+    proficiencyLevel?: string | null,
+    targetLang?: string | null,
+    /** The mix stored on the account, when it has one. Wins over the local
+     *  cache: the mix is a setting the user dialled in, and it used to live
+     *  only in AsyncStorage, so each phone held a different one. */
+    accountMix?: LevelMix | null,
+  ) => Promise<void>;
   fetchNext: () => Promise<void>;
   setMix: (mix: LevelMix) => Promise<void>;
   setActiveIndex: (index: number) => void;
@@ -188,7 +196,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   openPanel: null,
   listMembership: {},
 
-  hydrate: async (proficiencyLevel, targetLang) => {
+  hydrate: async (proficiencyLevel, targetLang, accountMix) => {
     if (hydrating || get().hydrated) return;
     hydrating = true;
 
@@ -196,24 +204,31 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     // A new launch is a new deck.
     sessionSeed = randomToken();
 
+    // Precedence: the account's mix, then this device's last one, then a
+    // default derived from the user's level. The account comes first because
+    // it is the only copy a second phone can see.
     let mix = defaultMixForLevel(proficiencyLevel);
-    try {
-      const stored = await AsyncStorage.getItem(MIX_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as LevelMix;
-        if (parsed && typeof parsed === 'object') {
-          // A four-level mix written by the previous build arrives with A1 and
-          // C2 simply absent. Those read as 0, so it already totals 100 and
-          // passes through untouched — falling back to the default because two
-          // keys are missing would silently reset the mix of every existing
-          // user. Anything that *doesn't* total 100 (the old panel's
-          // half-assigned state, a torn write) is scaled and snapped through
-          // the cuts instead of discarded, so its shape survives too.
-          mix = isBalanced(parsed) ? parsed : cutsToMix(mixToCuts(parsed));
+    if (accountMix && isBalanced(accountMix)) {
+      mix = accountMix;
+    } else {
+      try {
+        const stored = await AsyncStorage.getItem(MIX_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as LevelMix;
+          if (parsed && typeof parsed === 'object') {
+            // A four-level mix written by the previous build arrives with A1
+            // and C2 simply absent. Those read as 0, so it already totals 100
+            // and passes through untouched — falling back to the default
+            // because two keys are missing would silently reset the mix of
+            // every existing user. Anything that *doesn't* total 100 (the old
+            // panel's half-assigned state, a torn write) is scaled and snapped
+            // through the cuts instead of discarded, so its shape survives too.
+            mix = isBalanced(parsed) ? parsed : cutsToMix(mixToCuts(parsed));
+          }
         }
+      } catch {
+        // Fall through to the default.
       }
-    } catch {
-      // Fall through to the default.
     }
 
     // Paint last launch's cards, in a new order, before the request is sent.
@@ -279,6 +294,14 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     } catch {
       // Persisting is best-effort; the mix still applies this session.
     }
+    // …and onto the account, so the user's other phone gets the same feed.
+    // Fire-and-forget for the same reason the local write is best-effort: the
+    // mix already applies to this session, and a failed sync is retried by the
+    // next change rather than blocking the panel's Done button on the network.
+    authApi
+      .updateProfile({ feed_level_mix: mix })
+      .then((fresh) => useAuthStore.getState().setUser(fresh))
+      .catch(() => {});
 
     // Opening the panel, changing nothing, and tapping Done must not cost the
     // user their place. Everything below throws the deck away and refetches,

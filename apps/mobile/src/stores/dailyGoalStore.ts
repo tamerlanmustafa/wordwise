@@ -39,6 +39,10 @@ interface DailyState {
    *  decide whether to celebrate the goal (`justHitGoal === true` on the
    *  bump that pushed `done` from < DAILY_GOAL to >= DAILY_GOAL). */
   bump: () => { done: number; streak: number; justHitGoal: boolean };
+  /** Forget this account's state. Called on sign-out — these stores are
+   *  singletons that outlive the session, so without it the next account
+   *  reads the previous one's data straight from memory. */
+  reset: () => void;
 }
 
 const KEY = 'journey.dailyGoal.v1';
@@ -101,6 +105,9 @@ export const useDailyGoalStore = create<DailyState>((set, get) => ({
   streak: 0,
   lastHitDate: null,
   hydrated: false,
+
+  reset: () =>
+    set({ date: todayLocal(), done: 0, streak: 0, lastHitDate: null, hydrated: false }),
 
   hydrate: async () => {
     const today = todayLocal();

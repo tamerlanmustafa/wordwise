@@ -26,6 +26,10 @@ interface MilestoneTrackerState {
   /** Add slugs to the seen set + persist. Safe to call with already-seen
    *  values; idempotent. */
   markSeen: (slugs: readonly string[]) => Promise<void>;
+  /** Forget this account's state. Called on sign-out — these stores are
+   *  singletons that outlive the session, so without it the next account
+   *  reads the previous one's data straight from memory. */
+  reset: () => void;
 }
 
 async function load(): Promise<string[]> {
@@ -51,6 +55,8 @@ export const useMilestoneTrackerStore = create<MilestoneTrackerState>(
   (set, get) => ({
     seen: new Set<string>(),
     hydrated: false,
+
+    reset: () => set({ seen: new Set<string>(), hydrated: false }),
 
     hydrate: async () => {
       const list = await load();

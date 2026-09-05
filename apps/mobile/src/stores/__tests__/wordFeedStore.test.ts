@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// The store touches exactly two API surfaces: the feed page and the word
-// save/interaction log.
+// The store touches three API surfaces: the feed page, the word
+// save/interaction log, and the profile — the level mix is account state now,
+// not a per-phone preference, so changing it PATCHes /auth/me.
 jest.mock('../../services/api', () => ({
   srsApi: { feed: jest.fn() },
   wordwiseApi: { saveWord: jest.fn(), logInteraction: jest.fn() },
+  authApi: { updateProfile: jest.fn().mockResolvedValue({ id: 1 }) },
 }));
 
 import {

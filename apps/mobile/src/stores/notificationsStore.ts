@@ -47,6 +47,10 @@ interface NotificationsState {
   refresh: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
+  /** Forget this account's state. Called on sign-out — these stores are
+   *  singletons that outlive the session, so without it the next account
+   *  reads the previous one's data straight from memory. */
+  reset: () => void;
 }
 
 function todayLocal(): string {
@@ -92,6 +96,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   items: [],
   hydrated: false,
   readIds: new Set<string>(),
+
+  reset: () => set({ items: [], readIds: new Set<string>(), hydrated: false }),
 
   hydrate: async () => {
     const readIds = await loadReadIds();

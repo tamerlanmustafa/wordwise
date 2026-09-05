@@ -37,6 +37,44 @@ def _reject_non_learner_level(
     return v
 
 
+# The Explore feed's CEFR mix, as stored on the account. Same six bands and
+# same "must total 100" rule /srs/feed already enforces — validated here too
+# because this column is what the client hydrates from on a fresh device, and
+# a mix that does not total 100 would come back as a feed the server rejects.
+MIX_BANDS: tuple[str, ...] = ("A1", "A2", "B1", "B2", "C1", "C2")
+MIX_TOTAL = 100
+
+
+def _validate_mix(mix: Optional[dict[str, int]]) -> Optional[dict[str, int]]:
+    """Reject a mix the feed could not serve, rather than storing it."""
+    if mix is None:
+        return None
+    unknown = sorted(set(mix) - set(MIX_BANDS))
+    if unknown:
+        raise ValueError(f"Unknown CEFR bands in mix: {unknown}")
+    if any(not isinstance(v, int) or v < 0 or v > MIX_TOTAL for v in mix.values()):
+        raise ValueError(f"Each band must be an integer between 0 and {MIX_TOTAL}.")
+    total = sum(mix.values())
+    if total != MIX_TOTAL:
+        raise ValueError(f"Mix must total {MIX_TOTAL}, got {total}.")
+    return {band: int(mix.get(band, 0)) for band in MIX_BANDS}
+
+
+def _clean_mix(stored: object) -> Optional[dict[str, int]]:
+    """Read a stored mix back defensively.
+
+    JSONB holds whatever was written, including by an older build, so a row
+    that does not parse is treated as "never set" — the client then derives a
+    mix from the user's level, which is a working feed rather than an error.
+    """
+    if not isinstance(stored, dict):
+        return None
+    try:
+        return _validate_mix({k: int(v) for k, v in stored.items()})
+    except (ValueError, TypeError):
+        return None
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
@@ -105,6 +143,12 @@ class UserResponse(BaseModel):
     profile_picture_url: Optional[str] = None
     oauth_provider: Optional[str] = None
     entitlements: Optional[Entitlements] = None
+    # Client state that used to live only in AsyncStorage, i.e. on one phone.
+    # Exposed as a boolean rather than the timestamp: the client's only
+    # question is "has this account onboarded", and sending the date invites
+    # someone to compute with a clock we don't control.
+    onboarding_completed: bool = False
+    feed_level_mix: Optional[dict[str, int]] = None
 
     class Config:
         from_attributes = True
@@ -131,6 +175,8 @@ class UserResponse(BaseModel):
                 'profile_picture_url': obj.profilePictureUrl,
                 'oauth_provider': obj.oauthProvider,
                 'entitlements': entitlements_payload(obj),
+                'onboarding_completed': getattr(obj, 'onboardingCompletedAt', None) is not None,
+                'feed_level_mix': _clean_mix(getattr(obj, 'feedLevelMix', None)),
             }
             return super().model_validate(data)
         return super().model_validate(obj)
@@ -147,6 +193,13 @@ class UserUpdate(BaseModel):
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
     default_tab: Optional[str] = None  # "movies" or "books"
+    # Only `True` does anything. The flag is monotonic on purpose: a fresh
+    # install has no local record and would report False, and honouring that
+    # would push an existing user back through the placement quiz.
+    onboarding_completed: Optional[bool] = None
+    feed_level_mix: Optional[dict[str, int]] = None
+
+    _check_mix = field_validator("feed_level_mix")(_validate_mix)
 
     # Unlike signup, which drops a bad `language_preference` rather than fail
     # account creation, PATCH rejects: this is where a client finds out it sent
@@ -183,9 +236,19 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
-# Supported languages with their names
+# Supported languages with their names.
+#
+# This gates `native_language` / `learning_language` on register and PATCH.
+# It has to be a superset of what the app's picker offers, or a language the
+# user can select is one the account cannot store — which used to be harmless
+# (the choice lived on the phone) and stopped being harmless on 2026-09-04,
+# when the picker started writing to the account so a second device could see
+# it. `az` is the app's Azerbaijani (Beta) target, offered in
+# apps/mobile/src/types/constants.ts and previously the one option whose sync
+# would have failed silently.
 SUPPORTED_LANGUAGES = {
     "en": "English",
+    "az": "Azerbaijani",
     "es": "Spanish",
     "fr": "French",
     "de": "German",

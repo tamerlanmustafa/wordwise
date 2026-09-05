@@ -29,6 +29,10 @@ interface TipDismissalsState {
   markShown: (key: string) => void;
   /** Persist a "don't show again" decision. */
   dismiss: (key: string) => Promise<void>;
+  /** Forget this account's state. Called on sign-out — these stores are
+   *  singletons that outlive the session, so without it the next account
+   *  reads the previous one's data straight from memory. */
+  reset: () => void;
 }
 
 async function load(): Promise<string[]> {
@@ -54,6 +58,13 @@ export const useTipDismissalsStore = create<TipDismissalsState>((set, get) => ({
   dismissed: new Set<string>(),
   shownThisSession: new Set<string>(),
   hydrated: false,
+
+  reset: () =>
+    set({
+      dismissed: new Set<string>(),
+      shownThisSession: new Set<string>(),
+      hydrated: false,
+    }),
 
   hydrate: async () => {
     const keys = await load();

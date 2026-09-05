@@ -1,8 +1,8 @@
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
-from prisma import Prisma
-from datetime import timedelta
+from prisma import Prisma, Json
+from datetime import datetime, timedelta, timezone
 from ..database import get_db
 from ..schemas.user import (
     UserCreate, UserResponse, UserLogin, AuthResponse, UserUpdate,
@@ -302,6 +302,19 @@ async def update_user_profile(
                 detail=f"Invalid default_tab: {user_update.default_tab}. Must be 'movies' or 'books'"
             )
         update_data["defaultTab"] = user_update.default_tab
+
+    # Set once, never cleared. The client merges with a plain OR, so the only
+    # thing this has to guarantee is that the flag never goes back down: a
+    # reinstall reports False because it has no local record, not because the
+    # user un-onboarded. Re-sending True is a no-op rather than a new date, so
+    # "when did they onboard" stays the first answer.
+    if user_update.onboarding_completed and current_user.onboardingCompletedAt is None:
+        update_data["onboardingCompletedAt"] = datetime.now(timezone.utc)
+
+    if user_update.feed_level_mix is not None:
+        # Validated by the schema — bands, ranges and the total-100 rule the
+        # feed itself enforces.
+        update_data["feedLevelMix"] = Json(user_update.feed_level_mix)
 
     if not update_data:
         return UserResponse.model_validate(current_user)
