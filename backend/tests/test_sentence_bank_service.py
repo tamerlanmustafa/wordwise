@@ -165,7 +165,7 @@ def _fake_db(*, populated: bool = False, classifications=(("aborted", "abort"),)
     async def lemma_find_many(where):
         return [SimpleNamespace(lemma=lem, id=i) for i, lem in enumerate(lemmas, 1)]
 
-    return SimpleNamespace(
+    db = SimpleNamespace(
         state=state,
         sentencebank=SimpleNamespace(
             find_first=sentencebank_find_first, create=sentencebank_create
@@ -175,6 +175,26 @@ def _fake_db(*, populated: bool = False, classifications=(("aborted", "abort"),)
         wordclassification=SimpleNamespace(find_many=classification_find_many),
         lemma=SimpleNamespace(find_many=lemma_find_many),
     )
+
+    # A sentence and its links are written in one transaction now, so the
+    # double needs one. Rolling back on an exception is the behaviour under
+    # test everywhere else — see tests/test_sentence_bank_atomicity.py — so it
+    # is modelled here rather than stubbed away.
+    class _Tx:
+        async def __aenter__(self):
+            state.tx_depth = getattr(state, "tx_depth", 0) + 1
+            self._marks = (len(state.sentences), len(state.links))
+            return db
+
+        async def __aexit__(self, exc_type, *_):
+            state.tx_depth -= 1
+            if exc_type is not None:
+                del state.sentences[self._marks[0]:]
+                del state.links[self._marks[1]:]
+            return False
+
+    db.tx = lambda **_kwargs: _Tx()
+    return db
 
 
 def _stub_extraction(monkeypatch, result=None, *, before=None):

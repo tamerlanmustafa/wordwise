@@ -12,6 +12,7 @@ from functools import partial
 from typing import Dict, List, Optional, Set, Tuple
 
 from prisma import Prisma
+from prisma.errors import UniqueViolationError
 
 from src.utils.nlp_executor import nlp_slot, run_nlp
 
@@ -29,6 +30,110 @@ def hash_sentence(sentence: str) -> str:
     # Strip trailing punctuation variance ("Hello." == "Hello!" for dedup)
     normalized = normalized.rstrip(".!?;:,")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+async def persist_sentence_with_links(
+    db: Prisma,
+    *,
+    sentence: str,
+    links: List[dict],
+    movie_id: Optional[int] = None,
+    source: Optional[str] = None,
+    label: str = "",
+) -> Optional[int]:
+    """Write a sentence and every lemma link it needs, or write nothing.
+
+    The one place either pipeline is allowed to create a `sentence_bank` row,
+    because a sentence without a `sentence_lemma_links` row is unreachable.
+    Every study surface finds a sentence *through* its link, so an unlinked one
+    is an **orphan**: text that has been extracted or paid for and that nobody
+    can ever be shown. Nothing looks broken on screen — the only trace is
+    `orphan_sentences` climbing on /admin/health/vocab-coverage.
+
+    Both pipelines used to write the two rows independently, and both made
+    orphans the same two ways:
+
+    * **the process died between the writes.** A Railway deploy restarts the
+      workers, and main was pushed six times on 2026-09-05 alone;
+    * **the link insert caught `Exception` and did nothing with it.** That
+      handler was written for the duplicate-key case, where a no-op is exactly
+      right, but it also swallowed connection resets, foreign-key failures and
+      timeouts — and left the sentence behind, in silence.
+
+    Orphans do not self-heal, which is why this is worth a transaction. The
+    lemma stays in the backlog because it still has no link, so it is retried —
+    and the retry produces a *different* sentence, which hashes differently and
+    becomes a *different* row. The first one is stranded for good.
+
+    `links` are dicts without `sentenceId`; this fills that in. Returns the
+    sentence id, or None when nothing could be written.
+
+    Note `isGlobal` must never appear in a link: a trigger derives it from the
+    sentence row (#120), and setting it here would create a second source of
+    truth for the flag every study surface filters on.
+    """
+    if not links:
+        # Refusing to write an unlinkable sentence is half the fix. The
+        # subtitle path used to write every sentence it had extracted and then
+        # skip the link for any word whose lemma was not in the registry —
+        # manufacturing orphans on every ingestion, by design.
+        return None
+
+    sent_hash = hash_sentence(sentence)
+    where = {"sentenceHash": sent_hash, "movieId": movie_id}
+    data = {"sentenceHash": sent_hash, "sentence": sentence, "movieId": movie_id}
+    if source is not None:
+        data["source"] = source
+
+    try:
+        existing = await db.sentencebank.find_first(where=where)
+        if existing is not None:
+            return existing.id if await _create_links(db, existing.id, links, label) else None
+
+        # A new sentence and its links go together. Nothing inside may catch an
+        # error and carry on: a failed statement aborts the whole transaction
+        # in Postgres, so the retry for a lost race has to happen out here,
+        # after the rollback.
+        async with db.tx() as tx:
+            row = await tx.sentencebank.create(data=data)
+            for link in links:
+                await tx.sentencelemmalink.create(data={"sentenceId": row.id, **link})
+        return row.id
+
+    except UniqueViolationError:
+        # Another writer created the same sentence between the lookup and the
+        # insert. The transaction rolled back, so there is no orphan to clean
+        # up — link to the winner's row instead.
+        existing = await db.sentencebank.find_first(where=where)
+        if existing is None:
+            logger.warning(
+                "[sentence-bank] lost the insert race for %s but the winning row "
+                "is not there either; skipping", label or sent_hash[:8]
+            )
+            return None
+        return existing.id if await _create_links(db, existing.id, links, label) else None
+
+    except Exception as e:
+        logger.warning("[sentence-bank] persist failed for %s: %s", label or sent_hash[:8], e)
+        return None
+
+
+async def _create_links(db: Prisma, sentence_id: int, links: List[dict], label: str) -> bool:
+    """Attach an existing sentence to its lemmas. Each insert is one statement,
+    so each is atomic on its own; the sentence is already durable."""
+    ok = True
+    for link in links:
+        try:
+            await db.sentencelemmalink.create(data={"sentenceId": sentence_id, **link})
+        except UniqueViolationError:
+            # (sentence_id, lemma_id) is unique and already present — the row we
+            # wanted exists, from an earlier run or a concurrent writer. The one
+            # failure that is really the desired end state.
+            continue
+        except Exception as e:
+            logger.warning("[sentence-bank] link failed for %s: %s", label or sentence_id, e)
+            ok = False
+    return ok
 
 
 async def populate_sentence_bank(
@@ -52,88 +157,65 @@ async def populate_sentence_bank(
         Dict of sentence_hash -> sentence_bank_id
     """
     sentence_id_map: Dict[str, int] = {}
-    links_created = 0
-    sentences_created = 0
-    sentences_reused = 0
 
-    # Collect all unique sentences first
-    all_sentences: Dict[str, Tuple[str, str, int]] = {}  # hash -> (sentence, word, position)
-    for word, sent_list in word_sentences.items():
-        for sentence, position in sent_list:
-            h = hash_sentence(sentence)
-            if h not in all_sentences:
-                all_sentences[h] = (sentence, word, position)
-
-    # Batch upsert sentences into SentenceBank, scoped per-movie. Two
-    # different movies that share a sentence ("I love you") each get their
-    # own row so the per-movie batch endpoint query stays simple.
-    for sent_hash, (sentence, word, position) in all_sentences.items():
-        existing = await db.sentencebank.find_first(
-            where={"sentenceHash": sent_hash, "movieId": movie_id}
-        )
-
-        if existing:
-            sentence_id_map[sent_hash] = existing.id
-            sentences_reused += 1
-        else:
-            try:
-                created = await db.sentencebank.create(
-                    data={
-                        "sentenceHash": sent_hash,
-                        "sentence": sentence,
-                        "movieId": movie_id,
-                    }
-                )
-                sentence_id_map[sent_hash] = created.id
-                sentences_created += 1
-            except Exception:
-                # Race: another worker created (sentenceHash, movieId)
-                existing = await db.sentencebank.find_first(
-                    where={"sentenceHash": sent_hash, "movieId": movie_id}
-                )
-                if existing:
-                    sentence_id_map[sent_hash] = existing.id
-                    sentences_reused += 1
-
-    # Create SentenceLemmaLink entries
+    # Plan every link BEFORE writing a single sentence.
+    #
+    # This ordering is the fix. The old shape wrote all the sentences in one
+    # loop and linked them in a second, so a word whose lemma was missing from
+    # the registry (`if not lemma_id: continue`) left its sentence written and
+    # unreachable — an orphan manufactured on every ingestion, by design, on
+    # top of the ones a mid-write crash left behind. A sentence nothing will
+    # link to is now simply never written.
+    #
+    # Sentences are scoped per movie: two films that share a line ("I love
+    # you") each get their own row, so the per-movie batch endpoint query stays
+    # simple.
+    planned: Dict[str, Tuple[str, List[dict]]] = {}   # hash -> (sentence, links)
+    unlinkable: Set[str] = set()
     for word, sent_list in word_sentences.items():
         lemma_str = word_to_lemma.get(word.lower(), word.lower())
         lemma_id = lemma_id_map.get(lemma_str)
-
-        if not lemma_id:
-            continue
-
         for sentence, position in sent_list:
-            sent_hash = hash_sentence(sentence)
-            sentence_id = sentence_id_map.get(sent_hash)
-
-            if not sentence_id:
+            h = hash_sentence(sentence)
+            if not lemma_id:
+                unlinkable.add(h)
                 continue
+            entry = planned.setdefault(h, (sentence, []))
+            # One row per (sentence, lemma) — the pair is unique, and the same
+            # lemma can legitimately reach one sentence through two surface
+            # forms.
+            if any(link["lemmaId"] == lemma_id for link in entry[1]):
+                continue
+            entry[1].append({
+                "lemmaId": lemma_id,
+                "wordPosition": position,
+                # Stored so /sentences can highlight the token without
+                # re-running spaCy on every cached sentence per request.
+                # extract_word_sentences matches by literal token equality,
+                # so the dict key (`word`) IS the surface form in the sentence.
+                "matchedForm": word.lower(),
+                "score": 1.0,          # Default score; Phase 3 will refine
+                "isRepresentative": False,  # Phase 3 sets representatives
+            })
 
-            try:
-                await db.sentencelemmalink.create(
-                    data={
-                        "sentenceId": sentence_id,
-                        "lemmaId": lemma_id,
-                        "wordPosition": position,
-                        # Stored so /sentences can highlight the token without
-                        # re-running spaCy on every cached sentence per request.
-                        # extract_word_sentences matches by literal token equality,
-                        # so the dict key (`word`) IS the surface form in the sentence.
-                        "matchedForm": word.lower(),
-                        "score": 1.0,  # Default score; Phase 3 will refine
-                        "isRepresentative": False,  # Phase 3 sets representatives
-                    }
-                )
-                links_created += 1
-            except Exception:
-                # Unique constraint (sentenceId, lemmaId) — already linked
-                pass
+    links_planned = 0
+    for sent_hash, (sentence, links) in planned.items():
+        sentence_id = await persist_sentence_with_links(
+            db,
+            sentence=sentence,
+            links=links,
+            movie_id=movie_id,
+            label=f"movie={movie_id}",
+        )
+        if sentence_id is not None:
+            sentence_id_map[sent_hash] = sentence_id
+            links_planned += len(links)
 
+    skipped = len(unlinkable - set(planned))
     logger.info(
-        f"SentenceBank: movie {movie_id} — "
-        f"{sentences_created} new sentences, {sentences_reused} reused, "
-        f"{links_created} lemma links created"
+        "SentenceBank: movie %s — %s sentences stored, %s links, "
+        "%s sentences skipped (no lemma in the registry to link them to)",
+        movie_id, len(sentence_id_map), links_planned, skipped,
     )
 
     return sentence_id_map
@@ -220,47 +302,27 @@ async def fill_movie_sentence_bank_gaps(
         if best is None:
             continue
 
-        # Write SentenceBank row (or reuse) + link, scoped per-movie.
-        h = hash_sentence(best)
-        existing = await db.sentencebank.find_first(
-            where={"sentenceHash": h, "movieId": movie_id}
-        )
-        if existing:
-            sentence_id = existing.id
-            sentences_reused += 1
-        else:
-            try:
-                created = await db.sentencebank.create(
-                    data={"sentenceHash": h, "sentence": best, "movieId": movie_id}
-                )
-                sentence_id = created.id
-                sentences_created += 1
-            except Exception:
-                existing = await db.sentencebank.find_first(
-                    where={"sentenceHash": h, "movieId": movie_id}
-                )
-                if existing is None:
-                    continue
-                sentence_id = existing.id
-                sentences_reused += 1
-
+        # Write SentenceBank row (or reuse) + link together, scoped per-movie.
         tokens = sentence_service.tokenize_sentence(best)
         pos = next((i for i, t in enumerate(tokens) if t == word), 0)
-        try:
-            await db.sentencelemmalink.create(
-                data={
-                    "sentenceId": sentence_id,
-                    "lemmaId": lemma_id_map[lemma],
-                    "wordPosition": pos,
-                    "matchedForm": word,
-                    "score": 0.5,  # lower than spaCy-matched (1.0) so prefer those
-                    "isRepresentative": False,
-                }
-            )
-            links_created += 1
-            lemmas_with_links.add(lemma)
-        except Exception:
-            pass
+        sentence_id = await persist_sentence_with_links(
+            db,
+            sentence=best,
+            movie_id=movie_id,
+            label=f"movie={movie_id} lemma={lemma}",
+            links=[{
+                "lemmaId": lemma_id_map[lemma],
+                "wordPosition": pos,
+                "matchedForm": word,
+                "score": 0.5,  # lower than spaCy-matched (1.0) so prefer those
+                "isRepresentative": False,
+            }],
+        )
+        if sentence_id is None:
+            continue
+        sentences_created += 1
+        links_created += 1
+        lemmas_with_links.add(lemma)
 
     return {
         "status": "filled",
@@ -435,65 +497,45 @@ async def populate_movie_sentence_bank(
     sentences_created = 0
     sentences_reused = 0
 
-    unique_sentences: Dict[str, str] = {}  # hash -> sentence text
-    for sents in lemma_sentences.values():
-        for sent_text, _pos, _form in sents:
-            h = hash_sentence(sent_text)
-            if h not in unique_sentences:
-                unique_sentences[h] = sent_text
-
-    for h, sent_text in unique_sentences.items():
-        existing = await db.sentencebank.find_first(
-            where={"sentenceHash": h, "movieId": movie_id}
-        )
-        if existing:
-            sentence_id_by_hash[h] = existing.id
-            sentences_reused += 1
-            continue
-        try:
-            created = await db.sentencebank.create(
-                data={"sentenceHash": h, "sentence": sent_text, "movieId": movie_id}
-            )
-            sentence_id_by_hash[h] = created.id
-            sentences_created += 1
-        except Exception:
-            # Race: another worker created (sentenceHash, movieId) for this movie.
-            existing = await db.sentencebank.find_first(
-                where={"sentenceHash": h, "movieId": movie_id}
-            )
-            if existing:
-                sentence_id_by_hash[h] = existing.id
-                sentences_reused += 1
-
-    links_created = 0
+    # Plan the links first, then write each sentence together with its own —
+    # same ordering, and for the same reason, as populate_sentence_bank above.
+    # A sentence whose lemma is not in the registry is not written at all,
+    # rather than written and left unreachable.
+    planned: Dict[str, Tuple[str, List[dict]]] = {}   # hash -> (sentence, links)
     for lemma, sents in lemma_sentences.items():
         lemma_id = lemma_id_map.get(lemma)
         if lemma_id is None:
             continue
         for sent_text, pos, matched_form in sents:
-            sentence_id = sentence_id_by_hash.get(hash_sentence(sent_text))
-            if sentence_id is None:
+            h = hash_sentence(sent_text)
+            entry = planned.setdefault(h, (sent_text, []))
+            if any(link["lemmaId"] == lemma_id for link in entry[1]):
                 continue
-            try:
-                await db.sentencelemmalink.create(
-                    data={
-                        "sentenceId": sentence_id,
-                        "lemmaId": lemma_id,
-                        "wordPosition": pos,
-                        "matchedForm": matched_form,
-                        "score": 1.0,
-                        "isRepresentative": False,
-                    }
-                )
-                links_created += 1
-            except Exception:
-                # Unique constraint (sentenceId, lemmaId) already exists
-                pass
+            entry[1].append({
+                "lemmaId": lemma_id,
+                "wordPosition": pos,
+                "matchedForm": matched_form,
+                "score": 1.0,
+                "isRepresentative": False,
+            })
+
+    links_created = 0
+    for h, (sent_text, links) in planned.items():
+        sentence_id = await persist_sentence_with_links(
+            db,
+            sentence=sent_text,
+            links=links,
+            movie_id=movie_id,
+            label=f"movie={movie_id}",
+        )
+        if sentence_id is not None:
+            sentence_id_by_hash[h] = sentence_id
+            sentences_created += 1
+            links_created += len(links)
 
     logger.info(
-        f"SentenceBank: movie {movie_id} — "
-        f"{sentences_created} new sentences, {sentences_reused} reused, "
-        f"{links_created} lemma links created"
+        "SentenceBank: movie %s — %s sentences stored, %s lemma links",
+        movie_id, len(sentence_id_by_hash), links_created,
     )
 
     return {
