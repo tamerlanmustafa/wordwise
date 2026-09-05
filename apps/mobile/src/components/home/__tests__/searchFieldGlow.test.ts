@@ -181,18 +181,56 @@ describe('the recently-viewed panel', () => {
 
 describe('tapping away closes the panel instead of opening a film', () => {
   const src = () => fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+  const overlay = () => read('SearchDimOverlay.tsx');
 
-  it('renders a scrim while the panel is open', () => {
-    expect(src()).toMatch(/searchScrim/);
-    expect(src()).toMatch(/dropdownOpen \? \(/);
+  it('the overlay is keyed on focus, not on the panel having rows', () => {
+    // Tying it to the panel meant the screen only dimmed once suggestions
+    // arrived, so it flickered on as you typed the first character. Focus is
+    // what puts the app in search mode.
+    expect(src()).toMatch(/<SearchDimOverlay active=\{searchFocused\}/);
   });
 
-  it('the scrim sits over the feed and under the header', () => {
-    // feed 0 < scrim 5 < headerStack 10. Any other order either lets the feed
-    // take the tap or makes the search field itself untappable.
-    const styles = src();
-    expect(styles).toMatch(/searchScrim:\s*\{[^}]*zIndex:\s*5/);
-    expect(styles).toMatch(/headerStack:\s*\{[^}]*zIndex:\s*10/);
+  it('the overlay sits over the feed and under the header', () => {
+    // feed 0 < overlay 5 < headerStack 10. Any other order either lets the
+    // feed take the tap or makes the search field itself untappable.
+    expect(overlay()).toMatch(/zIndex:\s*5/);
+    expect(src()).toMatch(/headerStack:\s*\{[^}]*zIndex:\s*10/);
+  });
+
+  it('never blocks a touch while it is invisible', () => {
+    // It stays mounted so it can fade out; an always-live hit area over the
+    // whole feed would make the app look frozen.
+    expect(overlay()).toMatch(/pointerEvents=\{active \? 'auto' : 'none'\}/);
+  });
+
+  it('dims faster on the way out than on the way in', () => {
+    // A slow fade on dismissal reads as lag rather than as polish.
+    const o = overlay();
+    expect(o).toMatch(/FADE_IN_MS = 220/);
+    expect(o).toMatch(/FADE_OUT_MS = 160/);
+  });
+
+  it('animates opacity only, so it does not fight the keyboard', () => {
+    expect(overlay()).not.toMatch(/useNativeDriver:\s*false/);
+  });
+
+  it('lightens the dim in light mode', () => {
+    // The alpha that reads as "behind something" on a dark ground reads as
+    // broken on a pale one.
+    expect(overlay()).toMatch(/scheme === 'dark' \? 'rgba\(0,0,0,0\.46\)' : /);
+  });
+
+  it('the filter button is not reachable while searching', () => {
+    // Opening a sheet from under the search panel is never what the tap meant.
+    const bar = read('HomeSearchBar.tsx');
+    expect(bar).toMatch(/onPress=\{focused \? onDismiss \?\? onFilterPress : onFilterPress\}/);
+    expect(bar).toMatch(/focused && s\.filterBtnDimmed/);
+  });
+
+  it('the filter button dismisses rather than doing nothing', () => {
+    // A control that looks present and answers to nothing is the dead zone
+    // this field just got rid of.
+    expect(read('HomeSearchBar.tsx')).toMatch(/onDismiss \?\? onFilterPress/);
   });
 
   it('dismissing clears focus, the suggestions and the keyboard', () => {

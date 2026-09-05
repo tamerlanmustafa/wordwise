@@ -3,7 +3,6 @@ import {
   Animated,
   Easing,
   Keyboard,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -30,6 +29,7 @@ import { SnapPager } from '../home/SnapPager';
 import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
 import { HomeSearchBar } from '../home/HomeSearchBar';
+import { SearchDimOverlay } from '../home/SearchDimOverlay';
 import { FeedFilterSheet } from '../home/FeedFilterSheet';
 import { VocabularySheet } from '../home/VocabularySheet';
 import type { FilmVocabulary } from '../home/filmVocabulary';
@@ -421,22 +421,21 @@ export const HomeScreen = ({
           pinned; the movie feed below is the page's sole scroller. Scrolling
           the feed collapses the Word-of-the-Hour card away and springs it back
           at the top — so the whole view becomes search + filters + movies. */}
-      {/* Catches the tap that closes the search panel.
+      {/* Dims the rest of the screen while you are searching, and catches the
+          tap that closes the panel.
+
+          Keyed on `searchFocused`, not on whether the panel has rows: focus is
+          what puts the app in search mode, and a field that is focused with no
+          suggestions yet is still search mode. Tying it to the panel meant the
+          screen only dimmed once results arrived, so it flickered on as you
+          typed the first character.
+
           A sibling at the root rather than a child of the header: an
           absolutely-positioned child that spills past its parent's bounds does
-          not receive touches on Android, so a scrim parented to the header
+          not receive touches on Android, so an overlay parented to the header
           would work on iOS and silently do nothing on the other half of the
-          installs. zIndex 5 puts it over the feed (0) and under the header
-          (10), so the field and its panel stay live while everything the panel
-          floats over stops being tappable. */}
-      {dropdownOpen ? (
-        <Pressable
-          style={s.searchScrim}
-          onPress={dismissSearch}
-          accessibilityRole="button"
-          accessibilityLabel={t('common:action.close')}
-        />
-      ) : null}
+          installs. */}
+      <SearchDimOverlay active={searchFocused} onPress={dismissSearch} />
 
       <View style={s.headerStack}>
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the
@@ -462,6 +461,7 @@ export const HomeScreen = ({
             onMoviePress={onSearchMoviePress}
             onSeeAll={submitSearch}
             onFilterPress={() => setFiltersOpen(true)}
+            onDismiss={dismissSearch}
             level={selectedLevel}
             activeFilters={activeFilterCount({
               sort: levelSort,
@@ -634,10 +634,6 @@ const makeStyles = (tc: ThemeColors) =>
       left: 0,
       right: 0,
       height: 240,
-    },
-    searchScrim: {
-      ...StyleSheet.absoluteFillObject,
-      zIndex: 5,
     },
     headerStack: {
       // Pinned above the feed. The raised zIndex lets the search autocomplete

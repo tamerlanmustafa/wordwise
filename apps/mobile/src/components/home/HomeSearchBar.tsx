@@ -74,6 +74,9 @@ interface Props {
   onSeeAll: () => void;
   /** Opens FeedFilterSheet. Omit to hide the button entirely. */
   onFilterPress?: () => void;
+  /** Closes the search. While the field is focused the filter button calls
+   *  this instead of opening the sheet — see the button below. */
+  onDismiss?: () => void;
   /** How many filter groups are off-default — badge count, and gold when > 0. */
   activeFilters?: number;
   /** CEFR code the whole feed is graded for, printed on the filter button. */
@@ -124,6 +127,7 @@ export function HomeSearchBar({
   onMoviePress,
   onSeeAll,
   onFilterPress,
+  onDismiss,
   activeFilters = 0,
   level,
 }: Props) {
@@ -209,8 +213,13 @@ export function HomeSearchBar({
 
           {onFilterPress ? (
             <TouchableOpacity
-              style={[s.filterBtn, filtered && s.filterBtnOn]}
-              onPress={onFilterPress}
+              // Dimmed with the rest of the screen while searching, and not
+              // reachable: opening a sheet from under the search panel is
+              // never what the tap meant. It dismisses instead of doing
+              // nothing, because a button that looks present and answers to
+              // nothing is the dead zone this control just got rid of.
+              style={[s.filterBtn, filtered && s.filterBtnOn, focused && s.filterBtnDimmed]}
+              onPress={focused ? onDismiss ?? onFilterPress : onFilterPress}
               activeOpacity={0.8}
               accessibilityRole="button"
               // One label for one button. It now does two jobs — it says what
@@ -345,6 +354,12 @@ const makeStyles = (tc: ThemeColors) =>
     filterBtnOn: {
       backgroundColor: tc.gold,
       borderColor: tc.gold,
+    },
+    // Matches the overlay over everything else on screen, so the button reads
+    // as part of the dimmed background rather than as the one live control
+    // beside the field.
+    filterBtnDimmed: {
+      opacity: 0.35,
     },
     // Mono, so B1 and C2 are the same width and the glyph never shifts.
     levelCode: {
