@@ -16,7 +16,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { BACK_ARROW } from '../../i18n/rtl';
+import { BackButton } from '../common/BackButton';
 import { SortSheet } from '../lists/SortSheet';
 import { FilmItemRow, ListItemsSkeleton, WordItemRow } from '../lists/ListItemRows';
 import { useListDisplayName } from '../lists/ListRow';
@@ -149,14 +149,9 @@ export function ListDetailScreen({
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.topRow}>
-        <TouchableOpacity
-          style={s.circleBtn}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('common:action.back')}
-        >
-          <Text style={s.circleGlyph}>{BACK_ARROW}</Text>
-        </TouchableOpacity>
+        {/* The app's one back control — a circle with a text arrow in it was
+            a fourth variant of the same affordance. */}
+        <BackButton onPress={onBack} />
 
         {/* Absent, not disabled, on the pinned lists. */}
         {isSystem ? <View style={{ width: METRICS.circleBtn }} /> : (

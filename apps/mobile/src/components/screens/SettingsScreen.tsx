@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import { CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
-import { useFeedbackPrefsStore } from '../../stores/feedbackPrefsStore';
 import { authApi } from '../../services/api';
 import { showConfirm } from '../../stores/confirmStore';
 import {
@@ -26,12 +25,10 @@ import { makeSettingsStyles } from './settingsStyles';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { ScreenHeader } from '../common/ScreenHeader';
 import {
-  Avatar,
   Rows,
   Section,
   Segmented,
   SelectRow,
-  SwitchRow,
 } from './settings/SettingsUI';
 
 interface Props {
@@ -66,13 +63,6 @@ export const SettingsScreen = ({
   const tc = useThemeColors();
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
-  // Sound/haptics live in a store rather than this screen's local state: the
-  // fire path reads them synchronously from anywhere in the app, and Settings
-  // is only one of the places that can change them.
-  const soundEnabled = useFeedbackPrefsStore((s) => s.soundEnabled);
-  const hapticsEnabled = useFeedbackPrefsStore((s) => s.hapticsEnabled);
-  const setSoundEnabled = useFeedbackPrefsStore((s) => s.setSoundEnabled);
-  const setHapticsEnabled = useFeedbackPrefsStore((s) => s.setHapticsEnabled);
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
   // The tab bar is an absolute overlay, so this screen has to reserve its
   // height itself. Without it the last section — Legal — scrolled under the
@@ -258,20 +248,7 @@ export const SettingsScreen = ({
       >
         {/* ── Profile ───────────────────────────────────────────────────── */}
         <Section title={t('settings:profile')}>
-          <View style={settingsStyles.identityRow}>
-            <Avatar uri={user?.profile_picture_url} name={user?.username || user?.email} />
-            <View style={settingsStyles.identityText}>
-              <Text style={settingsStyles.identityName} numberOfLines={1}>
-                {user?.username || t('settings:usernamePlaceholder')}
-              </Text>
-              {user?.email ? (
-                <Text style={settingsStyles.identityEmail} numberOfLines={1}>
-                  {user.email}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-          <View style={settingsStyles.fieldBlock}>
+          <View style={settingsStyles.fieldBlockOnly}>
             <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>
             <TextInput
               style={settingsStyles.textInput}
@@ -347,24 +324,6 @@ export const SettingsScreen = ({
               label: t(`settings:theme.${opt}`),
             }))}
           />
-        </Section>
-
-        {/* ── Sound & haptics ───────────────────────────────────────────── */}
-        <Section title={t('settings:soundAndHaptics')}>
-          <Rows>
-            <SwitchRow
-              label={t('settings:soundEffects')}
-              description={t('settings:soundEffectsDesc')}
-              value={soundEnabled}
-              onValueChange={setSoundEnabled}
-            />
-            <SwitchRow
-              label={t('settings:haptics')}
-              description={t('settings:hapticsDesc')}
-              value={hapticsEnabled}
-              onValueChange={setHapticsEnabled}
-            />
-          </Rows>
         </Section>
 
       </ScrollView>

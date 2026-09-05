@@ -104,13 +104,15 @@ describe('the storage keyspace is classified', () => {
     // A scanner that matches nothing passes every assertion above it. This is
     // the canary: if a regex here is broken by a refactor, the guard goes
     // quiet rather than red, which is the one way a source guard fails
-    // uselessly. 30 is comfortably below the ~34 in the app today.
+    // uselessly. The floor tracks the real count, which fell to 30 when the
+    // Word of the Hour and review reminders were retired and the auto-collapse
+    // toggle removed — four keys nothing writes any more.
     const seen = new Set<string>();
     for (const file of sourceFiles()) {
       if (file.endsWith('accountState.ts')) continue;
       keysDeclaredIn(fs.readFileSync(file, 'utf8')).forEach((k) => seen.add(k));
     }
-    expect(seen.size).toBeGreaterThan(30);
+    expect(seen.size).toBeGreaterThanOrEqual(30);
     expect(seen).toContain('srs.reviewSession.v2');
     expect(seen).toContain('movie_bookmark_'); // the template-built family
   });

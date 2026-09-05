@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import { t } from '../i18n';
 
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
@@ -72,25 +71,21 @@ export async function cancelWordReminder(): Promise<void> {
   } catch {}
 }
 
-export async function scheduleReviewReminder(): Promise<void> {
+/**
+ * Cancel the retired review reminder.
+ *
+ * Same shape as `cancelWordReminder` above, and for the same reason: the
+ * toggle never held (App.tsx scheduled it on every launch regardless of the
+ * stored preference), and a repeating local notification lives in the OS, not
+ * the bundle — so deleting the scheduler does not stop the triggers already
+ * out there. Runs at launch; cheap, idempotent, and a no-op once gone. Keep it
+ * until no installs predate the removal.
+ */
+export async function cancelReviewReminder(): Promise<void> {
   if (!Notifications) return;
   try {
     await Notifications.cancelScheduledNotificationAsync('review-reminder');
-    await Notifications.scheduleNotificationAsync({
-      identifier: 'review-reminder',
-      content: {
-        title: t('notifications:reminder.reviewTitle'),
-        body: t('notifications:reminder.reviewBody'),
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 18,
-        minute: 0,
-      },
-    });
-  } catch (e) {
-    console.warn('[notifications] schedule review reminder failed:', e);
-  }
+  } catch {}
 }
 
 export async function cancelAllReminders(): Promise<void> {

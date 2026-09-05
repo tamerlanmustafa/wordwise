@@ -43,16 +43,24 @@ const CONVERTED = [
 ];
 
 describe('ScreenHeader', () => {
-  it('exists and owns the back-arrow markup', () => {
+  it('delegates the back control to the shared BackButton', () => {
+    // The header used to draw the arrow itself, as `BACK_ARROW` plus a label
+    // naming the previous screen. That is now BackButton — the circular
+    // chevron chip the film detail screen already used — so there is exactly
+    // one back affordance in the app instead of three.
     const src = read(path.join(COMPONENTS, 'common', 'ScreenHeader.tsx'));
-    expect(src).toMatch(/BACK_ARROW/);
-    // The accent is gold. Purple is the app's older `primary` token and a
-    // purple back link reads as a different app. Checked against the style
-    // body rather than the whole file — the docblock explains the purple it
-    // replaced, and matching prose would fail on the explanation itself.
-    const styles = src.slice(src.indexOf('const makeStyles'));
-    expect(styles).toMatch(/color: tc\.goldOnSurface/);
-    expect(styles).not.toMatch(/primaryOnSurface/);
+    expect(src).toMatch(/<BackButton/);
+    expect(src).not.toMatch(/BACK_ARROW/);
+  });
+
+  it('BackButton is a fixed-size chip, not a text link', () => {
+    // A text label changed width with the locale, which is why the title was
+    // never quite centred and why the RTL builds wrapped it.
+    const src = read(path.join(COMPONENTS, 'common', 'BackButton.tsx'));
+    expect(src).toMatch(/BACK_BUTTON_SIZE/);
+    expect(src).toMatch(/chevron-back/);
+    // Direction is resolved, not hard-coded: "back" points the other way in RTL.
+    expect(src).toMatch(/directionalIcon/);
   });
 
   it.each(CONVERTED)('%s renders ScreenHeader', (f) => {
@@ -73,12 +81,10 @@ describe('ScreenHeader', () => {
       'NotebookScreen.tsx',
       'StatsScreen.tsx',
       'AchievementsScreen.tsx',
-      'PrivacyScreen.tsx',
       'FamilyPlanScreen.tsx',
       'SavedMoviesScreen.tsx',
       'LeaderboardScreen.tsx',
       path.join('screens', 'WatchedScreen.tsx'),
-      path.join('screens', 'ListDetailScreen.tsx'),
       path.join('screens', 'LearnedWordsScreen.tsx'),
       path.join('screens', 'VocabularyScreen.tsx'),
     ];

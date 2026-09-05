@@ -94,10 +94,10 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     color: tc.textSecondary,
     marginTop: 2,
   },
-  // The editable username, below the identity block inside the same card.
-  fieldBlock: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: tc.divider,
+  // The username field, now the whole of the Profile card — the avatar / name
+  // / email block that sat above it moved to the Profile page, where the user
+  // has just seen it, so restating it here was showing you yourself twice.
+  fieldBlockOnly: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,

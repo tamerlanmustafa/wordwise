@@ -19,7 +19,7 @@ import { PaywallScreen } from '../components/PaywallScreen';
 import type { PaywallReason } from '../components/paywallPricing';
 import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
-import { registerForPushNotifications, cancelWordReminder, scheduleReviewReminder } from '../services/notifications';
+import { registerForPushNotifications, cancelWordReminder, cancelReviewReminder } from '../services/notifications';
 import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
@@ -186,7 +186,7 @@ export default function App() {
         // trigger the old build left in the OS — it outlives the code that
         // created it, so removing the scheduler was not enough to stop it.
         cancelWordReminder();
-        scheduleReviewReminder();
+        cancelReviewReminder();
       }).catch(() => {});
     });
     return () => task.cancel();

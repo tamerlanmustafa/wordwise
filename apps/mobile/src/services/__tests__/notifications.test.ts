@@ -5,7 +5,7 @@
 import {
   registerForPushNotifications,
   cancelWordReminder,
-  scheduleReviewReminder,
+  cancelReviewReminder,
   cancelAllReminders,
 } from '../notifications';
 
@@ -20,8 +20,10 @@ describe('notifications — safe no-ops without the native module', () => {
     await expect(cancelWordReminder()).resolves.toBeUndefined();
   });
 
-  it('scheduleReviewReminder does not throw', async () => {
-    await expect(scheduleReviewReminder()).resolves.toBeUndefined();
+  it('cancelReviewReminder does not throw', async () => {
+    // Runs on every launch to clear the retired review reminder, so "safe on a
+    // device with no native module" is the whole contract.
+    await expect(cancelReviewReminder()).resolves.toBeUndefined();
   });
 
   it('cancelAllReminders does not throw', async () => {

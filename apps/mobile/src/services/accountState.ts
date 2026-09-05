@@ -95,7 +95,6 @@ export const DEVICE_KEYS: readonly string[] = [
   'vocab_view_mode',
   'lists.activeKind.v1',           // which tab of Lists was last open
   'has_opened_before',
-  'notif_review',                  // local notification scheduling is per device
   'journey.rtwShelf.dismissedDate',
 ];
 

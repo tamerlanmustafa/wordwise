@@ -150,13 +150,15 @@ const makeStyles = (tc: ThemeColors) =>
       flex: 1,
       backgroundColor: tc.background,
     },
+    // No fill and no rule. A paper-coloured bar across the top read as a
+    // banner sitting on the page rather than as the page's own title, and it
+    // was the only header in the account area with nothing in it but text.
+    // `SafeAreaView edges={['top']}` already clears the notch and the Dynamic
+    // Island; the padding here is breathing room below that, not the inset.
     header: {
       paddingHorizontal: 16,
-      paddingTop: 4,
-      paddingBottom: 12,
-      backgroundColor: tc.paper,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: tc.border,
+      paddingTop: 10,
+      paddingBottom: 6,
     },
     headerTitle: {
       fontSize: 18,

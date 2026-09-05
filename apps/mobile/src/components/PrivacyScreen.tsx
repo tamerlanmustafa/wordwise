@@ -1,16 +1,9 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { createContext, useContext, useMemo } from 'react';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BACK_ARROW } from '../i18n/rtl';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
-
-const COLORS = {
-  primary: '#7C5CBF',
-  background: '#FAFAF8',
-  paper: '#FFFFFF',
-  text: '#2D3142',
-  textSecondary: '#5C6378',
-  border: '#E8E8EC',
-};
+import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { ScreenHeader } from './common/ScreenHeader';
 
 export interface PrivacyScreenProps {
   onBack: () => void;
@@ -19,29 +12,31 @@ export interface PrivacyScreenProps {
   mode: 'privacy' | 'terms';
 }
 
-export function PrivacyScreen({ onBack, backLabel, mode }: PrivacyScreenProps) {
+export function PrivacyScreen({ onBack, mode }: PrivacyScreenProps) {
   // The tab bar is an absolute overlay, so every scroller reserves its height
   // itself or its last rows sit behind the floating capsule.
   const barInset = useBottomBarInset();
+  const tc = useThemeColors();
+  const styles = useMemo(() => makeStyles(tc), [tc]);
   const isPrivacy = mode === 'privacy';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} hitSlop={8}>
-          <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? 'Back'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isPrivacy ? 'Privacy Policy' : 'Terms of Service'}</Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <ScreenHeader
+        onBack={onBack}
+        title={isPrivacy ? 'Privacy Policy' : 'Terms of Service'}
+      />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barInset + 24 }]}>
-        {isPrivacy ? <PrivacyContent /> : <TermsContent />}
+        <StyleContext.Provider value={styles}>
+          {isPrivacy ? <PrivacyContent /> : <TermsContent />}
+        </StyleContext.Provider>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 function PrivacyContent() {
+  const styles = useDocStyles();
   return (
     <>
       <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
@@ -99,6 +94,7 @@ function PrivacyContent() {
 }
 
 function TermsContent() {
+  const styles = useDocStyles();
   return (
     <>
       <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
@@ -159,17 +155,30 @@ function TermsContent() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.paper,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '500', width: 60 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  content: { padding: 20, paddingBottom: 40 },
-  lastUpdated: { fontSize: 12, color: COLORS.textSecondary, fontStyle: 'italic', marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginTop: 20, marginBottom: 8 },
-  body: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 22, marginBottom: 8 },
-});
+/**
+ * These two documents rendered from a frozen light-only palette — a white slab
+ * with purple links, in an app that has had a dark theme for months. The
+ * content components are plain functions rather than a component tree that
+ * takes props, so the themed sheet reaches them through a context rather than
+ * threading `styles` through every paragraph.
+ */
+const makeStyles = (tc: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: tc.background },
+    content: { padding: 20, paddingBottom: 40 },
+    lastUpdated: { fontSize: 12, color: tc.textSecondary, fontStyle: 'italic', marginBottom: 20 },
+    sectionTitle: { fontSize: 16, fontWeight: '700', color: tc.text, marginTop: 20, marginBottom: 8 },
+    body: { fontSize: 14, color: tc.textSecondary, lineHeight: 22, marginBottom: 8 },
+  });
+
+type DocStyles = ReturnType<typeof makeStyles>;
+const StyleContext = createContext<DocStyles | null>(null);
+
+/** The themed sheet for the document body. Throws rather than falling back to
+ *  a default, so a content block rendered outside the provider is a test
+ *  failure and not an invisible paragraph. */
+function useDocStyles(): DocStyles {
+  const value = useContext(StyleContext);
+  if (!value) throw new Error('PrivacyScreen content rendered outside its style provider');
+  return value;
+}

@@ -9,10 +9,10 @@
  * which is exactly the kind of difference you notice only by walking between
  * two screens.
  *
- * The accent is **gold**, not purple. Purple is the app's older `primary`
- * token and survives in a few places, but every surface a learner actually
- * spends time in — Home, Explore, Practice — is gold, so a purple back link
- * reads as belonging to a different app.
+ * The back control is `BackButton` — the circular chevron chip the film detail
+ * screen already used. It replaced a text link that named the previous screen
+ * ("← Profile", "← Admin"), which changed width with the label and the locale
+ * and read as a link rather than a button.
  *
  * The trailing slot is a fixed 60pt whether or not anything is in it, matching
  * the leading link's width, so the title stays optically centred instead of
@@ -21,18 +21,19 @@
 
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { BACK_ARROW } from '../../i18n/rtl';
+import { StyleSheet, Text, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { BackButton } from './BackButton';
 
 /** Both side slots reserve this, so the title sits centred. */
-export const HEADER_SIDE_WIDTH = 60;
+export const HEADER_SIDE_WIDTH = 44;
 
 interface Props {
   onBack: () => void;
-  /** What the back link names — the screen you came *from*. Falls back to a
-   *  plain "Back" when the caller has nothing more specific. */
+  /** Accepted so callers can keep passing it, but no longer rendered: the back
+   *  control is an icon chip of fixed size, the same one the film detail screen
+   *  uses. A text label changed width with the locale and read as a link
+   *  rather than a button. */
   backLabel?: string;
   title: string;
   /** Optional trailing control (refresh, filter…). The slot is reserved
@@ -40,18 +41,15 @@ interface Props {
   right?: ReactNode;
 }
 
-export function ScreenHeader({ onBack, backLabel, title, right }: Props) {
-  const { t } = useTranslation();
+export function ScreenHeader({ onBack, title, right }: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   return (
     <View style={s.header}>
-      <TouchableOpacity onPress={onBack} hitSlop={8} style={s.side} accessibilityRole="button">
-        <Text style={s.backText} numberOfLines={1}>
-          {BACK_ARROW} {backLabel ?? t('action.back')}
-        </Text>
-      </TouchableOpacity>
+      <View style={s.side}>
+        <BackButton onPress={onBack} />
+      </View>
 
       <Text style={s.title} numberOfLines={1}>
         {title}
@@ -69,21 +67,17 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: tc.paper,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: tc.border,
+      paddingVertical: 10,
+      // Transparent, so the header is part of the page rather than a bar laid
+      // over it — and so Profile (which has no back button) and its sub-pages
+      // read as one surface when you move between them.
+      backgroundColor: 'transparent',
     },
     side: {
       width: HEADER_SIDE_WIDTH,
     },
     rightSlot: {
       alignItems: 'flex-end',
-    },
-    backText: {
-      fontSize: 16,
-      fontWeight: '500',
-      color: tc.goldOnSurface,
     },
     title: {
       flex: 1,
