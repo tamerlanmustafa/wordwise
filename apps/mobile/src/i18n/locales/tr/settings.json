@@ -65,5 +65,8 @@
   "hapticsDesc": "Dokunuşlarda ve cevaplarda hafif titreşim",
   "unsavedTitle": "Yeni kullanıcı adın silinsin mi?",
   "unsavedBody": "Yeni bir kullanıcı adı yazdın ama henüz kaydetmedin. Şimdi çıkarsan eskisi kalır.",
-  "discardChanges": "Vazgeç"
+  "discardChanges": "Vazgeç",
+  "account": "Hesap",
+  "nativeLanguageFooter": "Kelimeler ve cümleler İngilizceden bu dile çevrilir.",
+  "deleteAccountFooter": "Hesabını ve kayıtlı her şeyi kalıcı olarak siler. Bu işlem geri alınamaz."
 }

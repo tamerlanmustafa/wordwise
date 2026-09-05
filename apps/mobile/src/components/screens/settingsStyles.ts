@@ -72,14 +72,35 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     color: tc.success,
     fontSize: 14,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: tc.text,
-    marginBottom: 12,
+
+  // Avatar + name + email, at the top of the Profile card.
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  inputContainer: {
-    marginBottom: 4,
+  identityText: {
+    flex: 1,
+  },
+  identityName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: tc.text,
+  },
+  identityEmail: {
+    fontSize: 13,
+    color: tc.textSecondary,
+    marginTop: 2,
+  },
+  // The editable username, below the identity block inside the same card.
+  fieldBlock: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: tc.divider,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   inputLabel: {
     fontSize: 13,
@@ -142,19 +163,22 @@ export const makeSettingsStyles = (tc: ThemeColors) => StyleSheet.create({
     color: tc.textInverse,
   },
   saveButton: {
-    backgroundColor: tc.primary,
+    // Gold, like every other primary action in the app. `primary` is the older
+    // purple and reads as a different product next to Home/Explore/Practice.
+    backgroundColor: tc.gold,
     borderRadius: 10,
-    paddingVertical: 16,
+    paddingVertical: 13,
     alignItems: 'center',
-    marginTop: 28,
+    marginTop: 14,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: tc.textInverse,
-    fontSize: 16,
-    fontWeight: '600',
+    // Never white on gold — that measures about 2:1.
+    color: tc.goldDeep,
+    fontSize: 15.5,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,

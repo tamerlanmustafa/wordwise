@@ -33,11 +33,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAuthStore } from '../stores/authStore';
 import { useNotificationsStore, selectHasUnread } from '../stores/notificationsStore';
 import { showConfirm } from '../stores/confirmStore';
 import {
-  Alert,
   Animated,
   Image,
   StyleSheet,
@@ -249,37 +247,9 @@ export function UserMenuSheet({
           <Text style={[styles.rowLabel, { color: tc.error }]}>{t('settings:menu.logout')}</Text>
         </TouchableOpacity>
 
-        {/* App Store 5.1.1(v): account deletion must be reachable in-app.
-            Double-confirm, then the store deletes server-side and signs out
-            (auth status flips → app returns to the login screen). */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => {
-            onClose();
-            showConfirm({
-              title: t('settings:menu.deleteAccountTitle'),
-              message: t('settings:menu.deleteAccountBody'),
-              confirmLabel: t('settings:menu.delete'),
-              tone: 'destructive',
-              onConfirm: () => {
-                useAuthStore.getState().deleteAccount().catch(() => {
-                  // Rare error path — native Alert so it stays until the user
-                  // acknowledges (it carries a support email to copy).
-                  Alert.alert(
-                    t('settings:menu.deleteFailedTitle'),
-                    t('settings:menu.deleteFailedBody'),
-                  );
-                });
-              },
-            });
-          }}
-          activeOpacity={0.6}
-        >
-          <View style={[styles.iconChip, styles.iconChipDanger]}>
-            <MenuIcon name="trash" size={18} color={tc.error} />
-          </View>
-          <Text style={[styles.rowLabel, { color: tc.error }]}>{t('settings:menu.deleteAccount')}</Text>
-        </TouchableOpacity>
+        {/* Account deletion moved to the end of Settings (2026-09-05). It is
+            still reachable in-app as App Store 5.1.1(v) requires — just not one
+            tap from every other menu item, next to Log out, in the same red. */}
       </Animated.View>
     </View>
   );

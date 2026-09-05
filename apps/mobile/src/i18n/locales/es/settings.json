@@ -65,5 +65,8 @@
   "hapticsDesc": "Una vibración ligera al tocar y al responder",
   "unsavedTitle": "¿Descartar tu nuevo nombre de usuario?",
   "unsavedBody": "Has escrito un nombre de usuario nuevo pero aún no lo has guardado. Si sales ahora, se mantendrá el anterior.",
-  "discardChanges": "Descartar"
+  "discardChanges": "Descartar",
+  "account": "Cuenta",
+  "nativeLanguageFooter": "Las palabras y frases se traducen del inglés a este idioma.",
+  "deleteAccountFooter": "Elimina permanentemente tu cuenta y todo lo guardado en ella. Esto no se puede deshacer."
 }
