@@ -17,6 +17,7 @@ shared httpx client, and loops forever:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -31,7 +32,7 @@ from ..services.admin_alerts import ConsecutiveFailureAlerter
 from . import queue as q
 from .db import close_pool, get_pool
 from .processor import PermanentError, TransientError, process_job
-from .seed import seed_discover_until
+from .seed import seed_discover_until, seed_recent_releases
 
 logger = logging.getLogger("wordwise.worker")
 
@@ -50,6 +51,20 @@ EMPTY_QUEUE_SLEEP = float(os.environ.get("WORKER_IDLE_SLEEP", "5"))
 # queue drain, then scale back down and clear the env var.
 WORKER_SEED_ON_START = int(os.environ.get("WORKER_SEED_ON_START", "0"))
 
+# How often to re-check TMDB for films released since the last look, in hours.
+# 0 disables it.
+#
+# Separate from WORKER_SEED_ON_START because the two answer different
+# questions. That one grows the *back* catalogue and is a burst you turn on
+# deliberately, because classifying a few hundred films needs ~2 GB. This one
+# is a small, standing window on new releases: three TMDB pages, deduped on
+# tmdb_id, so a pass that finds nothing costs three requests and inserts
+# nothing. Twelve hours because cinema does not move faster than that, and a
+# film needs a few days to pick up the votes and the subtitles the pipeline
+# wants anyway.
+RECENT_SEED_INTERVAL_HOURS = float(os.environ.get("WORKER_RECENT_SEED_HOURS", "12"))
+RECENT_SEED_MONTHS = int(os.environ.get("WORKER_RECENT_SEED_MONTHS", "6"))
+
 
 async def run_worker() -> None:
     worker_id = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
@@ -67,6 +82,38 @@ async def run_worker() -> None:
             logger.info("[worker] auto-seeded %d new jobs", n)
         except Exception as exc:
             logger.warning("[worker] auto-seed failed (continuing anyway): %s", exc)
+
+    async def _recent_seed_loop() -> None:
+        """Keep an eye on new releases for as long as the worker runs.
+
+        The catalogue walk only ran at startup, so "check for new films" meant
+        "redeploy" — and since the cursor did not survive a deploy either, it
+        did not even mean that. A film released this month has too few votes
+        for the vote_count pass to ever see it.
+
+        Failures are logged and slept off rather than raised: this loop must
+        never be the reason the container exits, because the process that
+        actually drains the queue is running beside it.
+        """
+        while not stop.is_set():
+            try:
+                n = await seed_recent_releases(months=RECENT_SEED_MONTHS)
+                if n:
+                    logger.info("[worker] recent-release seed queued %d new films", n)
+            except Exception as exc:
+                logger.warning("[worker] recent-release seed failed: %s", exc)
+            try:
+                await asyncio.wait_for(
+                    stop.wait(), timeout=RECENT_SEED_INTERVAL_HOURS * 3600
+                )
+            except asyncio.TimeoutError:
+                pass
+
+    recent_task = (
+        asyncio.create_task(_recent_seed_loop())
+        if RECENT_SEED_INTERVAL_HOURS > 0
+        else None
+    )
 
     def _handle_signal(*_):
         logger.info("[worker] shutdown signal received")
@@ -141,6 +188,14 @@ async def run_worker() -> None:
                     await q.mark_failed(pool, job.id, attempts_so_far=job.attempts, error=str(exc))
             finally:
                 request_id_ctx.reset(token)
+
+    if recent_task is not None:
+        # `stop` is already set, so the loop is on its way out; cancel covers
+        # the case where it is mid-sleep and would otherwise hold the process
+        # open for up to RECENT_SEED_INTERVAL_HOURS.
+        recent_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await recent_task
 
     await close_pool()
     logger.info("[worker] stopped id=%s", worker_id)

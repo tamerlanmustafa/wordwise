@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import Iterable
 
 import asyncpg
@@ -34,26 +34,45 @@ import httpx
 
 from .db import close_pool, get_pool
 
-# Persistent cursor for the discover walk. Lives alongside the backend so it
-# survives restarts but is not checked into git. Each entry keeps the next
-# page to fetch for a given (endpoint, filter) key — lets us grow the catalog
-# incrementally across worker restarts without re-hitting pages we've already
-# drained.
-_CURSOR_PATH = Path(__file__).resolve().parent.parent.parent / ".seed_cursor.json"
+# The walk's position now lives in `seed_cursor` (see _load_page). It was a
+# file here, which a container throws away on every deploy.
 
 
-def _load_cursor() -> dict:
+async def _load_page(pool, key: str) -> int:
+    """Where this walk got to, from the database.
+
+    It used to be a JSON file next to the code. The worker container has no
+    volume, so every deploy — several a day, since the Worker redeploys on
+    each push to main — reset the walk to page 1, whose films have all been
+    queued for months. The insert deduped them to nothing and prod logged
+    "auto-seeded 0 new jobs" for ever; the catalogue could not grow.
+    """
     try:
-        return json.loads(_CURSOR_PATH.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+        row = await pool.fetchrow(
+            "SELECT next_page FROM seed_cursor WHERE key = $1", key
+        )
+        return max(1, int(row["next_page"])) if row else 1
+    except Exception as exc:
+        # A missing cursor costs a re-walk of already-queued pages, which is
+        # wasted TMDB calls and nothing worse. Never a reason to stop seeding.
+        logger.warning("[seed] could not read cursor %s: %s", key, exc)
+        return 1
 
 
-def _save_cursor(cursor: dict) -> None:
+async def _save_page(pool, key: str, next_page: int) -> None:
     try:
-        _CURSOR_PATH.write_text(json.dumps(cursor, indent=2))
-    except OSError as exc:
-        logger.warning("[seed] failed to persist cursor: %s", exc)
+        await pool.execute(
+            """
+            INSERT INTO seed_cursor (key, next_page, updated_at)
+            VALUES ($1, $2, now())
+            ON CONFLICT (key) DO UPDATE
+               SET next_page = EXCLUDED.next_page, updated_at = now()
+            """,
+            key,
+            int(next_page),
+        )
+    except Exception as exc:
+        logger.warning("[seed] failed to persist cursor %s: %s", key, exc)
 
 logger = logging.getLogger("wordwise.seed")
 
@@ -89,6 +108,46 @@ async def _fetch_discover_page(client: httpx.AsyncClient, page: int) -> list[dic
             "with_original_language": "en",
             "include_adult": "false",
             "vote_count.gte": 1000,
+            "page": page,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("results", [])
+
+
+async def _fetch_recent_page(client: httpx.AsyncClient, page: int, months: int) -> list[dict]:
+    """
+    Recently released English films, most popular first.
+
+    The reason this exists as a second walk rather than a tweak to the first:
+    `vote_count.desc` with `vote_count.gte=1000` is a *lifetime* popularity
+    order, and a film released last month has almost no votes yet. A new
+    blockbuster is the case it misses hardest — enormous future popularity,
+    single-digit votes today — so it stays invisible to the pipeline for the
+    months it takes to cross the threshold, which is exactly the window when
+    people are searching for it.
+
+    So: order by `popularity.desc` (TMDB's own trending signal, which reacts
+    in days rather than years) and bound it by release date instead of votes.
+    A small `vote_count.gte` still keeps out films with no audience at all —
+    dropping it entirely would queue every unreleased festival entry with a
+    TMDB page and no subtitles to fetch.
+    """
+    if not TMDB_API_KEY:
+        raise RuntimeError("TMDB_API_KEY not set")
+    since = (datetime.now(timezone.utc) - timedelta(days=30 * months)).date().isoformat()
+    resp = await client.get(
+        "https://api.themoviedb.org/3/discover/movie",
+        params={
+            "api_key": TMDB_API_KEY,
+            "language": "en-US",
+            "sort_by": "popularity.desc",
+            "with_original_language": "en",
+            "include_adult": "false",
+            "primary_release_date.gte": since,
+            "primary_release_date.lte": datetime.now(timezone.utc).date().isoformat(),
+            "vote_count.gte": 25,
             "page": page,
         },
         timeout=30,
@@ -175,9 +234,8 @@ async def seed_discover_until(
     pool = await get_pool()
     await _ensure_unique_constraint(pool)
 
-    cursor = _load_cursor()
     key = "discover_en_vote_count_desc_gte1000"
-    start_page = max(1, int(cursor.get(key, 1)))
+    start_page = await _load_page(pool, key)
 
     inserted = 0
     page = start_page
@@ -209,10 +267,53 @@ async def seed_discover_until(
             pages_walked += 1
 
             # Persist after each page so a crash doesn't redo the walk.
-            cursor[key] = page
-            _save_cursor(cursor)
+            await _save_page(pool, key, page)
 
     logger.info("[seed] auto-seed done. %d new jobs queued (target=%d).", inserted, target)
+    return inserted
+
+
+async def seed_recent_releases(
+    *,
+    months: int = 6,
+    max_pages: int = 3,
+    priority: int = 1,
+) -> int:
+    """
+    Queue films released in the last `months`, most popular first.
+
+    Deliberately NOT cursor-walked, unlike the vote_count catalogue pass. That
+    one walks forward through a fixed historical ordering and must remember
+    where it stopped. This one is a *window on the present*: the first page of
+    "popular films from the last six months" is different today than it was
+    last week, so the interesting rows are always at the front and a cursor
+    would walk away from them. Re-reading page 1 every time is the point.
+
+    Cheap to repeat because `_insert_jobs` dedupes on tmdb_id — a pass that
+    finds nothing new inserts nothing and costs three TMDB calls.
+
+    Priority 1, above the discover backlog (2) and below the curated top 250
+    (0): a film people are searching for right now is worth processing before
+    the long tail of the catalogue, but not before the canon.
+    """
+    pool = await get_pool()
+    await _ensure_unique_constraint(pool)
+
+    inserted = 0
+    async with httpx.AsyncClient() as client:
+        for page in range(1, max_pages + 1):
+            try:
+                movies = await _fetch_recent_page(client, page, months)
+            except Exception as exc:
+                logger.warning("[seed] recent page %d failed: %s", page, exc)
+                continue
+            if not movies:
+                break
+            n = await _insert_jobs(pool, movies, priority)
+            inserted += n
+            logger.info("[seed] recent page=%d +%d new", page, n)
+
+    logger.info("[seed] recent-release pass done. %d new jobs queued.", inserted)
     return inserted
 
 

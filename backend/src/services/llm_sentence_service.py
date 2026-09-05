@@ -296,6 +296,21 @@ class LLMSentenceService:
                 if isinstance(raw_def, str)
                 else None
             )
+
+        if usage.get("stop_reason") == "max_tokens":
+            # The reply ran out of room. Every lemma past the cut is absent
+            # because the answer stopped, not because the model had nothing to
+            # say — so say nothing about them and let the caller ask again.
+            # A key that is simply missing is the caller's signal to retry;
+            # a key mapped to None is a durable refusal.
+            logger.warning(
+                "[llm-define] reply truncated at max_tokens; %d of %d lemmas "
+                "unanswered and left for a retry",
+                len(requests) - len(out),
+                len(requests),
+            )
+            return out
+
         for r in requests:
             out.setdefault(r.lemma.lower(), None)
         return out
@@ -345,6 +360,19 @@ class LLMSentenceService:
             sentence = entry.get("sentence")
             valid = self._validate(sentence, wreq) if isinstance(sentence, str) else None
             out[wreq.lemma.lower()] = valid
+
+        if usage.get("stop_reason") == "max_tokens":
+            # Same rule as define_words: the words past the cut are missing
+            # because the reply stopped, and `mark_refusals` would otherwise
+            # write them off permanently under this model signature.
+            logger.warning(
+                "[llm-sentences] reply truncated at max_tokens; %d of %d words "
+                "unanswered and left for a retry",
+                len(words) - len(out),
+                len(words),
+            )
+            return out
+
         for w in words:
             out.setdefault(w.lemma.lower(), None)
         return out
@@ -617,6 +645,14 @@ class LLMSentenceService:
                     "cache_read_input_tokens": getattr(usage_obj, "cache_read_input_tokens", 0),
                     "cache_creation_input_tokens": getattr(usage_obj, "cache_creation_input_tokens", 0),
                 }
+        # Why the caller needs this: a reply cut off at `max_tokens` is valid
+        # JSON-ish text that simply stops early, so the words after the cut are
+        # missing for a reason that has nothing to do with the words. Without
+        # it, "the model declined this lemma" and "the model never got to this
+        # lemma" are the same observation — and both workers record the first
+        # as permanent. Measured 2026-09-05: 2,460 lemmas were marked
+        # permanently undefinable this way.
+        usage_dict["stop_reason"] = getattr(resp, "stop_reason", None)
         return text, usage_dict
 
     def _parse_response(self, raw: str, key: str = "sentences") -> List[dict]:

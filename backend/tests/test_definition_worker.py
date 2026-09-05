@@ -63,11 +63,17 @@ class _FakeLLM:
         cap_on_call: int | None = None,
         unreachable_on_call: int | None = None,
         definition_version: str = DEF_VERSION,
+        answer_first: int | None = None,
     ):
         self.fail_lemmas = fail_lemmas or set()
         self.cap_on_call = cap_on_call
         self.unreachable_on_call = unreachable_on_call
         self.definition_version = definition_version
+        # Truncation: the real service omits every lemma the reply never
+        # reached, so the dict comes back SHORT rather than padded with None.
+        # `answer_first=N` answers the first N and drops the rest, and only on
+        # the first call — a shorter retry has room the first one did not.
+        self.answer_first = answer_first
         self.calls: list[list] = []
 
     async def define_words(self, db, requests, context="definition_worker"):
@@ -79,11 +85,14 @@ class _FakeLLM:
                 "Error code: 400 - Your credit balance is too low to access "
                 "the Anthropic API."
             )
+        answered = list(requests)
+        if self.answer_first is not None and len(self.calls) == 1:
+            answered = answered[: self.answer_first]
         return {
             r.lemma.lower(): (
                 None if r.lemma in self.fail_lemmas else f"to deal with {r.lemma[:3]}xyz"
             )
-            for r in requests
+            for r in answered
         }
 
 
@@ -146,7 +155,7 @@ def test_backlog_sql_uses_is_distinct_from_not_inequality():
     would start life permanently idle. #153 hit exactly this trap.
     """
     sql = dw.build_backlog_sql(limit=100)
-    assert "l.definition_version IS DISTINCT FROM $1::varchar" in sql
+    assert "l.definition_skip_version IS DISTINCT FROM $1::varchar" in sql
     assert "definition_version <>" not in sql
 
 
@@ -191,7 +200,11 @@ async def test_cycle_stamps_refusals_so_they_are_never_re_bought():
 
     assert result.stored == 1
     assert result.refused == 1
-    refusal_writes = [w for w in db.writes if "definition = NULL" in w[0]]
+    # A refusal is now recorded in its own column. `definition_version` means
+    # "this lemma has a definition"; writing it for a failure was what made
+    # 2,460 blank glosses permanent, retryable only by re-buying every
+    # definition that already worked.
+    refusal_writes = [w for w in db.writes if "definition_skip_version = $1" in w[0]]
     assert len(refusal_writes) == 1
     sql, args = refusal_writes[0]
     assert "WHERE id IN (2)" in sql
@@ -274,3 +287,79 @@ async def test_empty_backlog_is_idle_not_an_error():
     assert result.outcome == "idle"
     assert llm.calls == []
     assert db.writes == []
+
+
+# ─── truncation is not refusal ──────────────────────────────────────────────
+#
+# A reply cut off at `max_tokens` is missing its tail for a reason that has
+# nothing to do with the words in it. Treating those as refusals is what left
+# 2,330 of 27,113 cardable lemmas (8.6%) showing a blank gloss line on the
+# Explore card, unretryable except by re-buying every definition that worked.
+#
+# The opposite mistake is the expensive one: a lemma that is never recorded at
+# all comes back in the next cycle's backlog, and the cycle after that, paying
+# each time. So the retry is bounded at exactly one, and whatever is still
+# unanswered afterwards is written off.
+
+class TestTruncatedReply:
+    async def test_unanswered_lemmas_are_retried_not_written_off(self):
+        db = _FakeDb([[_row(1, "abandon"), _row(2, "belittle")]])
+        llm = _FakeLLM(answer_first=1)
+
+        result = await dw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+        # Two calls: the truncated batch, then the remainder on its own.
+        assert len(llm.calls) == 2
+        assert [r.lemma for r in llm.calls[1]] == ["belittle"]
+        assert result.stored == 2
+        assert result.refused == 0
+
+    async def test_the_retry_happens_once_and_only_once(self):
+        # The floor that makes this safe to ship. Three lemmas the model never
+        # answers must cost two calls, not an unbounded chain of them.
+        db = _FakeDb([[_row(1, "aaaa"), _row(2, "bbbb"), _row(3, "cccc")]])
+
+        class _NeverAnswers(_FakeLLM):
+            async def define_words(self, db, requests, context="definition_worker"):
+                self.calls.append(list(requests))
+                return {}
+
+        llm = _NeverAnswers()
+        result = await dw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+        assert len(llm.calls) == 2
+        assert result.refused == 3
+
+    async def test_a_cap_during_the_retry_records_nothing_for_the_remainder(self):
+        # A cap is not the lemma's fault. Those rows stay in the backlog rather
+        # than being marked undefinable by an accident of budget.
+        db = _FakeDb([[_row(1, "abandon"), _row(2, "belittle")]])
+        llm = _FakeLLM(answer_first=1, cap_on_call=2)
+
+        result = await dw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+        assert result.outcome == "cap"
+        assert [w for w in db.writes if "definition_skip_version = $1" in w[0]] == []
+
+    async def test_a_success_clears_any_earlier_skip(self):
+        # A lemma written off under an older prompt should not keep its skip
+        # once a newer one manages to define it.
+        db = _FakeDb([[_row(1, "abandon")]])
+        llm = _FakeLLM()
+
+        await dw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+        stores = [w for w in db.writes if "SET definition = $1" in w[0]]
+        assert "definition_skip_version = NULL" in stores[0][0]
+
+
+# ─── the backlog only wants lemmas that actually lack a definition ──────────
+
+def test_backlog_requires_a_missing_definition():
+    """
+    Previously the backlog asked only "has this version been stamped?", so a
+    version bump — the documented way to retry a refusal — also re-bought the
+    27,150 definitions that were fine.
+    """
+    sql = dw.build_backlog_sql(limit=100)
+    assert "l.definition IS NULL OR l.definition = ''" in sql

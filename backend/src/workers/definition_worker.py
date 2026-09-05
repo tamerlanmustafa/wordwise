@@ -167,7 +167,8 @@ def build_backlog_sql(limit: int) -> str:
                      sll.sentence_id ASC
             LIMIT 1
         ) s ON TRUE
-        WHERE l.definition_version IS DISTINCT FROM $1::varchar
+        WHERE (l.definition IS NULL OR l.definition = '')
+          AND l.definition_skip_version IS DISTINCT FROM $1::varchar
           AND l.cefr_level <> 'UNKNOWN'
           AND {hidden_word_exclusion_sql("l.lemma")}
         ORDER BY l.priority_score DESC, l.id
@@ -184,38 +185,54 @@ async def record_results(
     definitions: dict,
     chunk: List[dict],
     definition_version: str,
-) -> tuple[int, int]:
+) -> tuple[int, int, List[dict]]:
     """
-    Write one completed batch: the definitions that passed validation, and the
-    signature on every lemma in the batch — including the refusals, so no
-    future cycle or process pays for them again.
+    Write one completed batch. Returns (stored, refused, unanswered).
 
-    Returns (stored, refused).
+    Three outcomes, and keeping them apart is the whole point:
 
-    Called once per chunk rather than once per cycle for the same reason
-    mark_refusals is: a cycle can end early at the cost cap, and what the model
-    already answered should survive that.
+      * **stored** — a definition that passed validation. Gets
+        `definition_version`, which is what "this lemma is done" means.
+      * **refused** — the model answered *about this lemma* and had nothing
+        usable. Gets `definition_skip_version`, so no future cycle buys it
+        again while the same model and prompt are in use.
+      * **unanswered** — the lemma is not in the reply at all, because the
+        reply was truncated before reaching it. Nothing is written; it is
+        handed back to the caller to retry.
 
-    Callers must only reach here for a call that actually completed. See the
-    module docstring — writing this signature for a batch the model never saw
-    marks those lemmas permanently done with no definition.
+    The third case used to be folded into the second, and one column carried
+    both "succeeded" and "declined". So a truncated batch marked its tail
+    permanently undefinable, and the only way to retry one was to bump the
+    version — which also re-bought all 27,150 definitions that were fine.
+    Measured 2026-09-05: 2,330 of 27,113 cardable lemmas had a blank gloss.
+
+    Called once per chunk rather than once per cycle: a cycle can end early at
+    the cost cap, and what the model already answered should survive that.
+
+    Callers must only reach here for a call that actually completed — writing
+    anything for a batch the model never saw is the mistake this docstring and
+    #153 both exist to prevent.
     """
     stored = 0
     refused_ids: List[int] = []
+    unanswered: List[dict] = []
     for row in chunk:
-        lemma_id = int(row["lemma_id"])
-        definition = definitions.get(row["lemma"].lower())
+        key = row["lemma"].lower()
+        if key not in definitions:
+            unanswered.append(row)
+            continue
+        definition = definitions[key]
         if definition:
             await db.execute_raw(
-                "UPDATE lemmas SET definition = $1, definition_version = $2 "
-                "WHERE id = $3",
+                "UPDATE lemmas SET definition = $1, definition_version = $2, "
+                "definition_skip_version = NULL WHERE id = $3",
                 definition,
                 definition_version,
-                lemma_id,
+                int(row["lemma_id"]),
             )
             stored += 1
         else:
-            refused_ids.append(lemma_id)
+            refused_ids.append(int(row["lemma_id"]))
 
     if refused_ids:
         # Ids are server-side integers from the rows we just fetched and there
@@ -223,11 +240,10 @@ async def record_results(
         # of array parameters — same call the sentence worker makes.
         ids_sql = ", ".join(str(i) for i in sorted(set(refused_ids)))
         await db.execute_raw(
-            "UPDATE lemmas SET definition = NULL, definition_version = $1 "
-            f"WHERE id IN ({ids_sql})",
+            f"UPDATE lemmas SET definition_skip_version = $1 WHERE id IN ({ids_sql})",
             definition_version,
         )
-    return stored, len(refused_ids)
+    return stored, len(refused_ids), unanswered
 
 
 @dataclass
@@ -297,11 +313,66 @@ async def run_cycle(
                 refused=refused_total,
             )
 
-        stored, refused = await record_results(
+        stored, refused, unanswered = await record_results(
             db, definitions, chunk, definition_version
         )
         stored_total += stored
         refused_total += refused
+
+        # The reply was cut off before it reached these. Ask once more, for
+        # the remainder only — a shorter list needs fewer output tokens, so
+        # the retry has room the first call did not.
+        #
+        # ONE retry, never a loop. Whatever is still unanswered after it is
+        # recorded as a refusal, which takes it out of the backlog for good.
+        # Without that floor a lemma the model can never fit would be re-asked
+        # on every cycle, for ever, and each attempt is money — exactly the
+        # runaway the translation warm worker was disabled for.
+        if unanswered:
+            logger.info(
+                "[definition-worker] %d unanswered after truncation; retrying once",
+                len(unanswered),
+            )
+            try:
+                retry_defs = await llm.define_words(
+                    db,
+                    [
+                        DefinitionRequest(
+                            lemma=r["lemma"],
+                            cefr=(str(r["cefr_level"]) if r.get("cefr_level") else None),
+                            sentence=r["sentence"],
+                        )
+                        for r in unanswered
+                    ],
+                    context="definition_worker",
+                )
+            except (CostCapExceeded, ModelCallFailed) as retry_err:
+                # Nothing recorded for these — they stay in the backlog, which
+                # is the right answer for a cap or an outage.
+                logger.warning(
+                    "[definition-worker] retry abandoned (%s); %d lemmas left "
+                    "for a later cycle",
+                    retry_err,
+                    len(unanswered),
+                )
+                return CycleResult(
+                    outcome="cap" if isinstance(retry_err, CostCapExceeded) else "unavailable",
+                    fetched=len(rows),
+                    stored=stored_total,
+                    refused=refused_total,
+                )
+            # Anything the retry still did not answer is treated as a refusal:
+            # `definitions.get(...)` yields None for a missing key, so the
+            # floor is applied here rather than left to another round.
+            retry_defs = {
+                r["lemma"].lower(): retry_defs.get(r["lemma"].lower())
+                for r in unanswered
+            }
+            r_stored, r_refused, _ = await record_results(
+                db, retry_defs, unanswered, definition_version
+            )
+            stored_total += r_stored
+            refused_total += r_refused
 
         if batch_sleep > 0 and i + batch_size < len(rows):
             await asyncio.sleep(batch_sleep)
