@@ -19,11 +19,24 @@ What is protected here:
 from __future__ import annotations
 
 import asyncio
+import io
+import re
+import tokenize
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 from src.routes.srs import _assemble_box_stats, srs_stats
 from src.services.srs_engine import MAX_BOX
+
+
+#: Columns that hold a timestamp. A comparison against any of these needs a
+#: cast on the parameter side.
+TIME_COLUMNS = (
+    "srs_due_at", "created_at", "updated_at", "finished_at", "occurred_at",
+    "ts", "captured_at", "unlocked_at", "verified_at", "run_after",
+    "claimed_at", "expires_at", "last_at",
+)
 
 
 def _row(box, in_box, due_now=0, due_today=0):
@@ -134,3 +147,107 @@ class TestStatsRoundTrips:
         assert end_of_day >= now
         assert end_of_day - now < timedelta(days=1)
         assert end_of_day.date() == datetime.now(timezone.utc).date()
+
+
+class TestDatetimeParametersAreCast:
+    """A `datetime` compared to a timestamp column must carry an explicit cast.
+
+    Found in prod on 2026-09-05: `GET /srs/stats` answered **500 to every
+    request** and had done since 8833a00 landed on 2026-08-21 — a fortnight of
+    the HomeScreen's review CTA quietly rendering nothing, because the screen
+    catches its own errors and a 500 there looks like an empty deck.
+
+        prisma.errors.RawQueryError:
+        operator does not exist: timestamp with time zone <= text
+
+    Prisma's Python client sends a `datetime` parameter as an ISO **string**.
+    In an INSERT that is harmless — the target column tells Postgres what to
+    parse it as, which is why `student_discount.py` gets away with it — but a
+    comparison has no target type to infer from, the parameter stays `text`,
+    and inside a prepared statement there is no implicit cast to rescue it.
+
+    Nothing else could have caught this. The suite has no database, so the SQL
+    string is never executed; the tests above assert the *arguments* are right
+    and the fold is right, and both were. Only the statement was wrong, and the
+    only place it ran was production. So the guard is a static one: it reads
+    the SQL rather than running it.
+    """
+
+    #: `<column> <op> $n` with no `::` after the placeholder. Assignment is
+    #: excluded below rather than here, because `=` is both operators in SQL.
+    PATTERN = re.compile(
+        r"\b(" + "|".join(TIME_COLUMNS) + r")\s*(<=|>=|<|>|=|!=|<>)\s*(\$\d+)(?!\s*::)"
+    )
+
+    @staticmethod
+    def _sql_only(text: str) -> str:
+        """Just the string literals — which is to say, just the SQL.
+
+        Scanning the raw file would mean this rule could never be explained
+        beside the code it governs: the comment on `_STATS_ROLLUP_SQL` spells
+        out the broken comparison in as many words, and a naive scan reads that
+        sentence as the bug. Tokenizing and keeping only STRING tokens drops
+        every comment while keeping every statement, which is exactly the split
+        that matters here.
+        """
+        try:
+            tokens = tokenize.generate_tokens(io.StringIO(text).readline)
+            return "\n".join(t.string for t in tokens if t.type == tokenize.STRING)
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            return text
+
+    def _offenders(self, text: str) -> list[str]:
+        found = []
+        for m in self.PATTERN.finditer(self._sql_only(text)):
+            # `verified_at = $3` inside `DO UPDATE SET ...` is an assignment,
+            # and an assignment is safe: the target column tells Postgres what
+            # to parse the string as. Only a comparison lacks that.
+            preceding = self._sql_only(text)[max(0, m.start() - 60): m.start()]
+            if m.group(2) == "=" and re.search(r"\bset\b", preceding, re.I):
+                continue
+            found.append(f"{m.group(1)} {m.group(2)} {m.group(3)}")
+        return found
+
+    def test_the_rollup_casts_both_due_windows(self):
+        from src.routes.srs import _STATS_ROLLUP_SQL
+
+        assert _STATS_ROLLUP_SQL.count("::timestamptz") == 2
+
+    def test_the_guard_would_have_failed_on_the_statement_that_shipped(self):
+        # `_offenders` takes Python source, not bare SQL — it reads the string
+        # literals out of a module. This is the statement exactly as it was
+        # written when it shipped.
+        assert self._offenders(
+            'SQL = """COUNT(*) FILTER (WHERE srs_due_at <= $2) AS due_now"""'
+        ) == ["srs_due_at <= $2"]
+
+    def test_the_guard_passes_the_statement_as_fixed(self):
+        assert self._offenders(
+            'SQL = """COUNT(*) FILTER (WHERE srs_due_at <= $2::timestamptz) AS due_now"""'
+        ) == []
+
+    def test_the_guard_ignores_a_comment_describing_the_bug(self):
+        # Otherwise the fix cannot be documented next to the code it fixed, and
+        # the next reader deletes the explanation instead of the violation.
+        assert self._offenders('# an uncast `srs_due_at <= $2` compares to text\n') == []
+
+    def test_the_guard_allows_an_assignment(self):
+        # `SET verified_at = $3` is safe: the target column tells Postgres what
+        # to parse the string as. Only a comparison has no type to infer from.
+        assert self._offenders(
+            'SQL = """DO UPDATE SET email = $2, verified = true, verified_at = $3"""'
+        ) == []
+
+    def test_no_route_or_service_compares_a_timestamp_column_to_a_bare_parameter(self):
+        src = Path(__file__).resolve().parents[1] / "src"
+        offenders: dict[str, list[str]] = {}
+        for path in sorted(src.rglob("*.py")):
+            found = self._offenders(path.read_text())
+            if found:
+                offenders[str(path.relative_to(src))] = found
+
+        assert offenders == {}, (
+            f"{offenders} compare a timestamp column to an uncast parameter. "
+            "Prisma sends a datetime as text, and a prepared statement will not "
+            "coerce it — add ::timestamptz to the placeholder."
+        )

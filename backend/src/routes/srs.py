@@ -293,11 +293,23 @@ class StatsResponse(BaseModel):
 #: One row per Leitner box, with the two due-window counts computed in the same
 #: pass. `FILTER` is a per-aggregate WHERE, so all three counts come off a
 #: single scan of the user's rows instead of one query each (issue #134).
+#:
+#: The `::timestamptz` casts are load-bearing, not decoration. Prisma's Python
+#: client serialises a `datetime` parameter as an ISO **string**, so an
+#: uncast `srs_due_at <= $2` asks Postgres to compare `timestamp with time zone`
+#: to `text` — and inside a prepared statement there is no implicit cast for
+#: that, so the whole statement raises rather than coercing. Without them this
+#: endpoint answered 500 to every single request, which is what it did in prod
+#: from 2026-08-21 (8833a00, when this query replaced eight `count()` calls)
+#: until 2026-09-05. Nothing caught it: the endpoint is wrapped in the
+#: HomeScreen's own error handling so the review CTA just showed nothing, and
+#: the test below fakes the database, so the SQL was never executed by anything
+#: except production.
 _STATS_ROLLUP_SQL = """
     SELECT srs_box,
-           COUNT(*)                                  AS in_box,
-           COUNT(*) FILTER (WHERE srs_due_at <= $2)  AS due_now,
-           COUNT(*) FILTER (WHERE srs_due_at <= $3)  AS due_today
+           COUNT(*)                                                 AS in_box,
+           COUNT(*) FILTER (WHERE srs_due_at <= $2::timestamptz)    AS due_now,
+           COUNT(*) FILTER (WHERE srs_due_at <= $3::timestamptz)    AS due_today
     FROM user_words
     WHERE user_id = $1
     GROUP BY srs_box
