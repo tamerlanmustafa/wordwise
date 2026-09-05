@@ -42,6 +42,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -52,21 +53,32 @@ import { pronounce } from '../../utils/pronunciation';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { showToast } from '../../stores/toastStore';
 import { SpeakerIcon } from '../ui/icons';
+import { CARD_PADDING_START, SPEAKER_GAP, wordRowLayout } from './wordRowLayout';
 import type { FeedItem } from '../../services/api';
 
-/** The display word's size and leading — the speaker is centred against it. */
-const WORD_SIZE = 46;
-const WORD_LINE_HEIGHT = WORD_SIZE * 1.05;
-/** Big enough to read beside 46pt type without competing with it. */
+/** Big enough to read beside display type without competing with it. */
 const SPEAKER_SIZE = 22;
 
 /**
- * Pads the 22pt glyph out to a ~44pt target. Uncapped on every side, unlike
- * the vocabulary rows' slop: this speaker has no icon neighbours to steal taps
- * from, only the card-wide reveal Pressable underneath it, and that is exactly
- * what the slop is protecting the user from hitting by accident.
+ * Extra margin around the chip.
+ *
+ * Small now, and deliberately so: the chip is already a 44pt target, and the
+ * slop used to be the *only* thing making the 22pt glyph tappable. Uncapped on
+ * every side — this speaker has no icon neighbours to steal taps from, only the
+ * card-wide reveal Pressable underneath it, which is exactly what it is
+ * protecting the user from hitting by accident.
  */
-const SPEAKER_HIT_SLOP = { top: 11, bottom: 11, left: 11, right: 11 };
+const SPEAKER_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
+/**
+ * How far the renderer may shrink the word past our own floor.
+ *
+ * The computed size does the work; this is the backstop for the pathological
+ * case — a 21-letter lemma on a 4.7" screen, where even `WORD_SIZE_MIN`
+ * overflows the lane. Truncating is not an option the design allows, so the
+ * last few points come from the platform.
+ */
+const WORD_MIN_SCALE = 0.8;
 
 // Not a font the app ships or loads, so every line using it resolves to the
 // platform's default face. Left alone here because changing it would restyle
@@ -120,6 +132,15 @@ function WordCardBase({
   // speaker is one feature with one entitlement, not three.
   const isPremium = useIsPremium();
   const [playing, setPlaying] = useState(false);
+
+  // The headword's size is a function of the string and the device, not a
+  // constant: the usable width is the screen minus the card's padding and the
+  // action rail's lane, and both the word and the lane vary.
+  const { width } = useWindowDimensions();
+  const wordRow = useMemo(
+    () => wordRowLayout({ word: item.word, width, lane, hasSpeaker: isPremium }),
+    [item.word, width, lane, isPremium],
+  );
 
   // Height needs a real measurement to animate to; until we have one the
   // block renders off-screen once to be measured.
@@ -192,13 +213,28 @@ function WordCardBase({
 
       {/* 3. Lifting group. */}
       <Animated.View style={liftStyle}>
-        {/* Word + speaker on one row. The word takes its natural width and
-            only shrinks when it has to (`flexShrink`, not `flex`), so the
-            speaker sits beside the word itself rather than out at the card's
-            edge — but a 21-character word like "electroencephalograph" still
-            wraps instead of pushing the glyph off screen. */}
+        {/* Word + speaker, always on one line. The size is computed from the
+            string and the device (see wordRowLayout) rather than fixed, so a
+            21-character lemma shrinks instead of wrapping and dragging the
+            speaker away from the word it belongs to. `adjustsFontSizeToFit` is
+            only the backstop for the pathological case, and it needs the
+            explicit `maxWidth` to have anything to shrink against. */}
         <View style={s.wordRow}>
-          <Text style={s.word} allowFontScaling={false}>
+          <Text
+            style={[
+              s.word,
+              {
+                fontSize: wordRow.fontSize,
+                lineHeight: wordRow.lineHeight,
+                letterSpacing: wordRow.letterSpacing,
+                maxWidth: wordRow.available,
+              },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={WORD_MIN_SCALE}
+            allowFontScaling={false}
+          >
             {item.word}
           </Text>
           {isPremium ? (
@@ -210,14 +246,18 @@ function WordCardBase({
                 void handlePronounce();
               }}
               hitSlop={SPEAKER_HIT_SLOP}
-              style={s.speaker}
+              style={[
+                s.speaker,
+                { width: wordRow.chipSize, height: wordRow.chipSize, borderRadius: wordRow.chipSize / 2 },
+                playing && s.speakerPlaying,
+              ]}
               accessibilityRole="button"
               accessibilityLabel={t('vocabulary:row.pronounce')}
             >
               <SpeakerIcon
                 size={SPEAKER_SIZE}
                 playing={playing}
-                color={playing ? tc.gold : tc.textFaint}
+                color={playing ? tc.goldDeep : tc.goldOnSurface}
               />
             </TouchableOpacity>
           ) : null}
@@ -358,7 +398,9 @@ const makeStyles = (tc: ThemeColors) =>
       // text never runs underneath the glyphs.
       paddingTop: 18,
       paddingBottom: 20,
-      paddingStart: 24,
+      // From wordRowLayout, which subtracts it when sizing the headword —
+      // stated once so the maths and the padding cannot drift apart.
+      paddingStart: CARD_PADDING_START,
       backgroundColor: tc.feedBg,
     },
     metaRow: {
@@ -383,27 +425,44 @@ const makeStyles = (tc: ThemeColors) =>
     spacerBottom: { flex: 1, minHeight: 14 },
     wordRow: {
       flexDirection: 'row',
-      // Top, not centre: a wrapped word must not drag the speaker down to the
-      // middle of a two-line block. Pinned to the first line, it sits in the
-      // same place whether the word wraps or not.
-      alignItems: 'flex-start',
+      // Centre, now that the word is guaranteed to be one line: the chip sits
+      // on the word's optical middle at every size, with no offset to keep in
+      // step with a font size that is no longer a constant.
+      alignItems: 'center',
     },
     word: {
       // Shrink, don't grow. `flex: 1` would push the speaker to the card's
       // trailing edge and break the "beside the word" reading.
       flexShrink: 1,
       fontFamily: SERIF_FAMILY,
-      fontSize: WORD_SIZE,
       fontWeight: '700',
-      letterSpacing: -1.2,
-      lineHeight: WORD_LINE_HEIGHT,
       color: tc.text,
+      // fontSize, lineHeight, letterSpacing and maxWidth are supplied per
+      // render — they are functions of the word and the screen.
     },
     speaker: {
-      marginStart: 12,
-      // Optically centred on the first line's box rather than its baseline —
-      // close enough at this size, and it survives a font swap.
-      marginTop: (WORD_LINE_HEIGHT - SPEAKER_SIZE) / 2,
+      marginStart: SPEAKER_GAP,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // The word yields, never the tap target: the whole point of the chip is
+      // a size a thumb can hit, and a squeezed one would put us back where we
+      // started.
+      flexShrink: 0,
+      // A filled chip, not a bare glyph on the card ground. It was `textFaint`,
+      // which is the app's quietest ink — nearly invisible in both themes on a
+      // card whose whole job is one loud word — and it read as decoration
+      // rather than as something to press. Gold is the app's one accent, and
+      // both tokens are theme-aware: the wash and the hairline invert with the
+      // ground while the ink stays legible on either.
+      backgroundColor: tc.goldWash,
+      borderWidth: 1,
+      borderColor: tc.goldLine,
+    },
+    speakerPlaying: {
+      // Filled while it speaks, so the state is visible from across the room
+      // rather than only in the icon's own animation.
+      backgroundColor: tc.gold,
+      borderColor: tc.gold,
     },
     ipa: {
       marginTop: 7,

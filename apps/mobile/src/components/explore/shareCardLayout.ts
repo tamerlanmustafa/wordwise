@@ -10,7 +10,11 @@
  * Everything is in canvas units. The card renders at a fixed pixel size and is
  * never laid out by flexbox, so there is no device scaling to reason about —
  * the numbers below *are* the output image.
+ *
+ * The one-line fitting itself is shared with the Explore word card, which has
+ * the same problem for a different reason — see utils/fitText.
  */
+import { DEFAULT_CHAR_RATIO, estimateTextWidth, fitFontSize } from '../../utils/fitText';
 
 /**
  * 4:5 portrait at 1080 wide.
@@ -45,10 +49,10 @@ export const SENTENCE_MAX_LINES = 4;
  * unrecoverable in a shared image; erring short only leaves a little more
  * margin than intended.
  */
-const AVG_CHAR_RATIO = 0.5;
+const AVG_CHAR_RATIO = DEFAULT_CHAR_RATIO;
 
 export function estimateWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * AVG_CHAR_RATIO;
+  return estimateTextWidth(text, fontSize, { charRatio: AVG_CHAR_RATIO });
 }
 
 /**
@@ -59,9 +63,13 @@ export function estimateWidth(text: string, fontSize: number): number {
  * lemma still reads as the card's subject.
  */
 export function wordFontSize(word: string): number {
-  if (!word) return WORD_SIZE_MAX;
-  const ideal = CONTENT_W / (word.length * AVG_CHAR_RATIO);
-  return Math.max(WORD_SIZE_MIN, Math.min(WORD_SIZE_MAX, Math.floor(ideal)));
+  return fitFontSize({
+    text: word,
+    maxWidth: CONTENT_W,
+    max: WORD_SIZE_MAX,
+    min: WORD_SIZE_MIN,
+    charRatio: AVG_CHAR_RATIO,
+  });
 }
 
 /**
