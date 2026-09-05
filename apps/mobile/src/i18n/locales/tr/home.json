@@ -50,9 +50,7 @@
     "label": "Seviye",
     "scopeNote": "Tüm akışın hangi seviyeye göre derecelendirildiği. Varsayılan olarak seninki — Sıfırla buna dokunmaz."
   },
-  "feed": {
-    "recommendedEyebrow": "{{level}} için öneriler · yeni seçki {{hours}} sa sonra"
-  },
+  "feed": {},
   "vocabSheet": {
     "title": "Bu filmde ne var",
     "body": "{{title}} filminde {{total}} farklı kelime konuşuluyor. {{level}} rafındaki filmlerin hepsi bunun kadar zor — ama hepsi bu kadar büyük değil.",

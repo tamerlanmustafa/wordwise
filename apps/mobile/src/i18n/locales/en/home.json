@@ -50,9 +50,7 @@
     "label": "Level",
     "scopeNote": "What the whole feed is graded for. Yours by default — Reset leaves it alone."
   },
-  "feed": {
-    "recommendedEyebrow": "Recommended for {{level}} · new set in {{hours}}h"
-  },
+  "feed": {},
   "vocabSheet": {
     "title": "What's in this film",
     "body": "{{title}} speaks {{total}} different words. Every film on the {{level}} shelf is about as hard as this one — they are not all this big.",

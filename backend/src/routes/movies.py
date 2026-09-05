@@ -187,7 +187,19 @@ CEFR_SORT_COLUMNS = {
 # what makes OFFSET pagination coherent over it — and different for the next
 # one. The seed is a wall-clock bucket, so the shelf turns over on its own
 # without any per-user state, a cron, or a stored ordering to invalidate.
-RECOMMENDED_ROTATION_SECONDS = 6 * 3600
+#
+# Three hours, down from six (2026-09-05). The window has to divide the day
+# evenly or the rotation drifts against the clock and "the morning set" stops
+# meaning anything, which leaves 1, 2, 3, 4, 6, 8 or 12. Three is the shortest
+# of those that still keeps a film **findable**: someone who spots something on
+# the shelf and comes back for it after lunch can still get to it, which an
+# hourly reshuffle would not allow. It also means a morning, an afternoon and
+# an evening visit are three different shelves rather than two.
+#
+# Shortening it is safe for pagination because a scroll already in progress
+# echoes its own seed back (see `seed` below) — only a fresh mount or a filter
+# reset picks up the new window.
+RECOMMENDED_ROTATION_SECONDS = 3 * 3600
 
 # Quality is a **sort key, not a filter**.
 #
@@ -224,14 +236,18 @@ _RECOMMENDED_TIER_SQL = """CASE
 
 def current_seed() -> int:
     """The rotation window we are in. Integer division of the epoch, so every
-    caller in the same six hours derives the same value with no shared state.
+    caller in the same window derives the same value with no shared state.
     """
     return int(time.time()) // RECOMMENDED_ROTATION_SECONDS
 
 
 def next_rotation_at(seed: int) -> str:
-    """When `seed`'s window ends, ISO-8601 UTC. The client turns this into
-    "new set in 4h"; it is not a cache directive.
+    """When `seed`'s window ends, ISO-8601 UTC. It is not a cache directive.
+
+    The app printed this as "new set in 4h" until 2026-09-05; the shelf now
+    rotates without announcing it. The field stays because it is the only way
+    to tell from outside when a draw expires, which is what you want when a
+    shelf looks wrong and you need to know whether you are on a stale one.
     """
     return datetime.fromtimestamp(
         (seed + 1) * RECOMMENDED_ROTATION_SECONDS, tz=timezone.utc

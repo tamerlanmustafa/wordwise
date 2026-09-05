@@ -50,9 +50,7 @@
     "label": "Nível",
     "scopeNote": "O nível para o qual todo o feed é classificado. O seu, por padrão — Redefinir não o altera."
   },
-  "feed": {
-    "recommendedEyebrow": "Recomendados para {{level}} · seleção nova em {{hours}} h"
-  },
+  "feed": {},
   "vocabSheet": {
     "title": "O que há neste filme",
     "body": "{{title}} usa {{total}} palavras diferentes. Todos os filmes do nível {{level}} são tão difíceis quanto este — mas nem todos são tão grandes.",

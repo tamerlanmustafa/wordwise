@@ -55,12 +55,6 @@ const SHOW_WORD_OF_THE_HOUR: boolean = false;
 // lets the feed below slide up to fill the reclaimed space.
 const WORD_BLOCK_H = 172;
 
-// The "recommended for B1 · new set in 4h" line, and the slot it sits in.
-// Stated as constants rather than left to the type's own metrics because the
-// slot has to be exactly as tall when it is empty as when it is full — that
-// is the entire point of reserving it.
-const FEED_EYEBROW_LINE_H = 12;
-const FEED_EYEBROW_ROW_H = FEED_EYEBROW_LINE_H + 9;
 
 interface Props {
   onMoviePress: (movie: MovieData) => void;
@@ -136,7 +130,6 @@ export const HomeScreen = ({
     loadMore: loadMoreLevel,
     removeMovie: removeLevelMovie,
     insertMovie: insertLevelMovie,
-    nextRotationAt,
   } = useInfiniteCefrMovies(
     selectedLevel,
     levelSort,
@@ -390,15 +383,6 @@ export const HomeScreen = ({
     }
   };
 
-  // Whole hours until this recommendation draw expires. Rounded up so it never
-  // reads "new set in 0h" for the last 59 minutes of a window.
-  const hoursToRotation = useMemo(() => {
-    if (!nextRotationAt) return null;
-    const ms = Date.parse(nextRotationAt) - Date.now();
-    if (!Number.isFinite(ms)) return null;
-    return Math.max(1, Math.ceil(ms / 3_600_000));
-  }, [nextRotationAt]);
-
   const dropdownOpen = (showSuggestions && suggestions.length > 0) ||
     (searchFocused && !searchQuery && recentlyViewed.length > 0);
 
@@ -511,30 +495,6 @@ export const HomeScreen = ({
         ) : null}
 
       </View>
-
-      {/* Says what the feed is and when it turns over — the two things a
-          shuffled order has to declare, or it just looks like a broken sort.
-
-          The row is reserved for the whole of the recommended sort, not just
-          for the moment the text is known. `hoursToRotation` comes off the
-          first page, so it arrives *after* the list has painted: rendering
-          the row conditionally meant the list drew at the top of the screen
-          and was then shoved down by a line of 9pt type appearing above it.
-          A fixed-height slot that fills in is the difference between a screen
-          that settles and one that twitches. The column sorts have no
-          rotation to declare, so they reserve nothing. */}
-      {levelSort === 'recommended' ? (
-        <View style={s.feedEyebrowRow}>
-          {hoursToRotation != null ? (
-            <Text style={s.feedEyebrow} numberOfLines={1}>
-              {t('home:feed.recommendedEyebrow', {
-                level: selectedLevel,
-                hours: hoursToRotation,
-              })}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
 
       {/* Ranked feed — the sole full-height scroller. It owns pull-to-refresh
           and keyboard-dismiss now that the outer ScrollView is gone, and its
@@ -670,25 +630,6 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 2,
       color: tc.textFaint,
       textTransform: 'uppercase',
-    },
-    // One mono line between the ad slot and the feed. Same treatment as the
-    // other eyebrows in the app, at the feed's own gutter (18) rather than the
-    // list's narrower one, so it lines up with the search field above it.
-    // The slot, sized once so it is the same height empty or full. An
-    // explicit lineHeight on the text inside it keeps that true across the
-    // two platforms' font metrics.
-    feedEyebrowRow: {
-      height: FEED_EYEBROW_ROW_H,
-      justifyContent: 'flex-start',
-      paddingHorizontal: 18,
-    },
-    feedEyebrow: {
-      fontSize: 9.5,
-      lineHeight: FEED_EYEBROW_LINE_H,
-      fontWeight: '700',
-      letterSpacing: 1.5,
-      textTransform: 'uppercase',
-      color: tc.goldOnSurface,
     },
     feedSection: {
       // Takes the rest of the screen below the pinned header so the movie list

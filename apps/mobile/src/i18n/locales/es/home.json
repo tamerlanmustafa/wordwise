@@ -50,9 +50,7 @@
     "label": "Nivel",
     "scopeNote": "El nivel para el que está calibrado todo el feed. El tuyo por defecto: Restablecer no lo cambia."
   },
-  "feed": {
-    "recommendedEyebrow": "Recomendadas para {{level}} · selección nueva en {{hours}} h"
-  },
+  "feed": {},
   "vocabSheet": {
     "title": "Qué hay en esta película",
     "body": "{{title}} usa {{total}} palabras distintas. Todas las películas del nivel {{level}} son igual de difíciles que esta, pero no todas son así de grandes.",

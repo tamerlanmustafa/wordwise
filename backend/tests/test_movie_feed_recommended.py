@@ -131,8 +131,20 @@ class TestPermutation:
 
 # ── Rotation clock ──────────────────────────────────────────────────────────
 class TestRotationClock:
-    def test_the_window_is_six_hours(self):
-        assert RECOMMENDED_ROTATION_SECONDS == 6 * 3600
+    def test_the_window_is_three_hours(self):
+        assert RECOMMENDED_ROTATION_SECONDS == 3 * 3600
+
+    def test_the_window_divides_the_day_evenly(self):
+        # Otherwise the rotation drifts against the clock — the boundary walks
+        # a little further into the day each time, and "the morning set" stops
+        # being a thing that exists. This is the constraint on the value, not
+        # the value itself, so it survives the next time somebody tunes it.
+        assert 86_400 % RECOMMENDED_ROTATION_SECONDS == 0
+
+    def test_the_window_is_long_enough_to_come_back_to_a_film(self):
+        # The floor on shortening it. A shelf that reshuffles hourly means a
+        # film you noticed and meant to return to is gone by the time you do.
+        assert RECOMMENDED_ROTATION_SECONDS >= 2 * 3600
 
     def test_the_seed_is_derived_not_stored(self):
         # No table, no cron, no per-user row: two processes in the same window

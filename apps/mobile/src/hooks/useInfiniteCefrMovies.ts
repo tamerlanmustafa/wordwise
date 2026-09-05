@@ -70,8 +70,8 @@ const PAGE_SIZE = 10;
  * already in flight beside it — so this only decides whether a stale list is
  * better than a skeleton for the ~400ms before the real one lands. A day-old
  * list of films is still a list of films; a skeleton is nothing. The
- * `recommended` draw rotates every 6 hours, and showing yesterday's draw for
- * a moment is a far smaller cost than showing a grey rectangle every time.
+ * `recommended` draw rotates every 3 hours, and showing an older draw for a
+ * moment is a far smaller cost than showing a grey rectangle every time.
  */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
