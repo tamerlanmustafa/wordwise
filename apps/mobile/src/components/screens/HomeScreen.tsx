@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -386,6 +387,21 @@ export const HomeScreen = ({
   const dropdownOpen = (showSuggestions && suggestions.length > 0) ||
     (searchFocused && !searchQuery && recentlyViewed.length > 0);
 
+  /**
+   * Dismiss the search panel without acting on whatever was underneath it.
+   *
+   * The panel floats over the movie feed, so a tap meant to close it landed on
+   * a film card and opened that film — which is the worst possible outcome for
+   * "never mind": it takes you somewhere instead of taking you back. The scrim
+   * below swallows that first tap; this is what it does with it.
+   */
+  const dismissSearch = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    Keyboard.dismiss();
+    setSearchFocused(false);
+    setShowSuggestions(false);
+  };
+
   return (
     <SafeAreaView style={s.root} edges={['top']}>
       {/* Warm hero glow behind the top ~240px, matching the other tabs. */}
@@ -405,6 +421,23 @@ export const HomeScreen = ({
           pinned; the movie feed below is the page's sole scroller. Scrolling
           the feed collapses the Word-of-the-Hour card away and springs it back
           at the top — so the whole view becomes search + filters + movies. */}
+      {/* Catches the tap that closes the search panel.
+          A sibling at the root rather than a child of the header: an
+          absolutely-positioned child that spills past its parent's bounds does
+          not receive touches on Android, so a scrim parented to the header
+          would work on iOS and silently do nothing on the other half of the
+          installs. zIndex 5 puts it over the feed (0) and under the header
+          (10), so the field and its panel stay live while everything the panel
+          floats over stops being tappable. */}
+      {dropdownOpen ? (
+        <Pressable
+          style={s.searchScrim}
+          onPress={dismissSearch}
+          accessibilityRole="button"
+          accessibilityLabel={t('common:action.close')}
+        />
+      ) : null}
+
       <View style={s.headerStack}>
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the
             dropdown above the ad slot / controls below it. */}
@@ -601,6 +634,10 @@ const makeStyles = (tc: ThemeColors) =>
       left: 0,
       right: 0,
       height: 240,
+    },
+    searchScrim: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 5,
     },
     headerStack: {
       // Pinned above the feed. The raised zIndex lets the search autocomplete

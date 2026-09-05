@@ -28,9 +28,10 @@
  * poster rows for no reason.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Animated,
   Image,
   StyleSheet,
   Text,
@@ -41,6 +42,15 @@ import {
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './HomeIcons';
+import { SearchFieldGlow } from './SearchFieldGlow';
+
+/** The field's corner radius, shared with the glow ring so the two agree. */
+const FIELD_RADIUS = 12;
+
+/** How many recent films the panel offers. Three, not five: this is a
+ *  shortcut back to something you just looked at, and past the third row it
+ *  stops being a shortcut and starts being a list to read. */
+const RECENT_LIMIT = 3;
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -119,6 +129,21 @@ export function HomeSearchBar({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
+  // A short lift on focus, not a pulse: the field settles at rest, so the
+  // motion says "this is now the thing you are typing into" and then stops.
+  // Scale is a native-driver transform, so it runs off the JS thread while the
+  // keyboard animates in — the one moment the JS thread is busiest.
+  const lift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(lift, {
+      toValue: focused ? 1 : 0,
+      useNativeDriver: true,
+      friction: 5,
+      tension: 180,
+    }).start();
+  }, [focused, lift]);
+  const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.022] });
+
   const showAutocomplete = showSuggestions && suggestions.length > 0;
   const showRecent = focused && !query && recentlyViewed.length > 0;
   const filtered = activeFilters > 0;
@@ -127,7 +152,11 @@ export function HomeSearchBar({
     <View style={s.wrap}>
       <View style={s.fieldWrap}>
         <View style={s.fieldRow}>
-          <View style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}>
+          <Animated.View style={[s.fieldStack, { transform: [{ scale }] }]}>
+            {/* Under the field, so the field's own background clips it to a
+                rim. See SearchFieldGlow. */}
+            <SearchFieldGlow active={focused} radius={FIELD_RADIUS} />
+            <View style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}>
             <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
             <TextInput
               style={s.input}
@@ -146,7 +175,8 @@ export function HomeSearchBar({
                 <HomeIcon name="close" size={16} color={tc.textFaint} sw={2.4} />
               </TouchableOpacity>
             ) : null}
-          </View>
+            </View>
+          </Animated.View>
 
           {onFilterPress ? (
             <TouchableOpacity
@@ -180,7 +210,7 @@ export function HomeSearchBar({
         </View>
 
         {showAutocomplete ? (
-          <View style={s.dropdown}>
+          <View style={[s.dropdown, onFilterPress ? s.dropdownInset : null]}>
             {suggestions.map((movie: any) => (
               <Row
                 key={movie.id}
@@ -197,9 +227,9 @@ export function HomeSearchBar({
             ) : null}
           </View>
         ) : showRecent ? (
-          <View style={s.dropdown}>
+          <View style={[s.dropdown, onFilterPress ? s.dropdownInset : null]}>
             <Text style={s.recentLabel}>{t('home:search.recentlyViewed')}</Text>
-            {recentlyViewed.slice(0, 5).map((movie: any) => (
+            {recentlyViewed.slice(0, RECENT_LIMIT).map((movie: any) => (
               <Row
                 key={movie.id}
                 movie={movie}
@@ -233,11 +263,15 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       gap: 8,
     },
-    field: {
+    // The field and its glow ring share a stacking context. `flex: 1` moved
+    // here from the field so the ring measures the same box the field fills.
+    fieldStack: {
       flex: 1,
       minWidth: 0,
+    },
+    field: {
       height: 48,
-      borderRadius: 12,
+      borderRadius: FIELD_RADIUS,
       borderWidth: 1,
       backgroundColor: tc.paper,
       flexDirection: 'row',
@@ -328,6 +362,14 @@ const makeStyles = (tc: ThemeColors) =>
       shadowRadius: 28,
       shadowOffset: { width: 0, height: 18 },
       elevation: 14,
+    },
+    // Aligned to the field rather than to the wrapper. The panel used to span
+    // the full width, including the 64pt filter button beside the field, so it
+    // hung off the end of the control it belongs to. 72 = the button's 64 plus
+    // the 8pt gap; the poster rows have ~285pt left at that width, which is
+    // ample for a 40pt poster and a title.
+    dropdownInset: {
+      end: 72,
     },
     row: {
       flexDirection: 'row',
