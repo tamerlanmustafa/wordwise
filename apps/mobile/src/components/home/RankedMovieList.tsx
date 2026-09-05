@@ -58,6 +58,7 @@ import type { RefreshControlProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
+import { withTap } from '../../utils/feedback';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/palette';
@@ -292,7 +293,7 @@ const AddToReelPlus = React.memo(({
   return (
     <Animated.View style={{ transform: [{ scale: tapScale }] }}>
       <TouchableOpacity
-        onPress={onPress}
+        onPress={withTap(onPress)}
         activeOpacity={0.85}
         disabled={busy}
         // The visual target is now ~19pt, so the touch target has to be
@@ -442,7 +443,7 @@ const MovieCard = React.memo(({
   return (
     <TouchableOpacity
       style={s.card}
-      onPress={onPress}
+      onPress={withTap(onPress)}
       onPressIn={() => prefetchMovieImages(movie)}
       activeOpacity={0.9}
     >
@@ -491,10 +492,10 @@ const MovieCard = React.memo(({
               with no distribution has nothing to explain, so it isn't a
               button at all rather than a button that does nothing. */}
           <TouchableOpacity
-            onPress={(e: any) => {
+            onPress={withTap((e: any) => {
               e?.stopPropagation?.();
               if (vocab) onRingPress?.(movie, vocab);
-            }}
+            })}
             disabled={!vocab || !onRingPress}
             activeOpacity={0.75}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -591,7 +592,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, level, onRingPress
             const card = (
               <MovieCard
                 movie={item}
-                onPress={() => onMoviePress(item)}
+                onPress={withTap(() => onMoviePress(item))}
                 level={level}
                 onRingPress={onRingPress}
                 knownCaption={knownCaption}
@@ -640,7 +641,7 @@ export const RankedMovieList = ({ movies: data, onMoviePress, level, onRingPress
 
       {/* Poster lightbox */}
       <Modal visible={!!zoomed} transparent animationType="fade" onRequestClose={() => setZoomed(null)}>
-        <TouchableOpacity style={s.lightbox} activeOpacity={1} onPress={() => setZoomed(null)}>
+        <TouchableOpacity style={s.lightbox} activeOpacity={1} onPress={withTap(() => setZoomed(null))}>
           {zoomed && (
             <Image
               source={{ uri: zoomed.uri.replace('w185', 'w500') }}

@@ -44,7 +44,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './HomeIcons';
 import { FocusGlow } from './FocusGlow';
-import { feedback } from '../../utils/feedback';
+import { feedback, withTap } from '../../utils/feedback';
 
 /** The field's corner radius, shared with the glow ring so the two agree. */
 const FIELD_RADIUS = 12;
@@ -95,7 +95,7 @@ function Row({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={s.row} onPress={withTap(onPress)} activeOpacity={0.7}>
       {movie.poster_path ? (
         <Image
           source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
@@ -205,7 +205,7 @@ export function HomeSearchBar({
             <FocusGlow active={focused} radius={FIELD_RADIUS} />
             <Pressable
               style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}
-              onPress={focusField}
+              onPress={withTap(focusField)}
               accessible={false}
             >
             <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
@@ -223,7 +223,7 @@ export function HomeSearchBar({
               selectionColor={tc.gold}
             />
             {query.length > 0 ? (
-              <TouchableOpacity onPress={onClear} hitSlop={8} style={s.clearBtn}>
+              <TouchableOpacity onPress={withTap(onClear)} hitSlop={8} style={s.clearBtn}>
                 <HomeIcon name="close" size={16} color={tc.textFaint} sw={2.4} />
               </TouchableOpacity>
             ) : null}
@@ -240,7 +240,7 @@ export function HomeSearchBar({
               // nothing, because a button that looks present and answers to
               // nothing is the dead zone this control just got rid of.
               style={[s.filterBtn, filtered && s.filterBtnOn, focused && s.filterBtnDimmed]}
-              onPress={focused ? onDismiss ?? onFilterPress : onFilterPress}
+              onPress={withTap(focused ? onDismiss ?? onFilterPress : onFilterPress)}
               activeOpacity={0.8}
               accessibilityRole="button"
               // One label for one button. It now does two jobs — it says what
@@ -277,7 +277,7 @@ export function HomeSearchBar({
                 movie={movie}
                 tc={tc}
                 s={s}
-                onPress={() => onMoviePress(movie)}
+                onPress={withTap(() => onMoviePress(movie))}
               />
             ))}
           </View>
@@ -290,7 +290,7 @@ export function HomeSearchBar({
                 movie={movie}
                 tc={tc}
                 s={s}
-                onPress={() => onMoviePress(movie)}
+                onPress={withTap(() => onMoviePress(movie))}
               />
             ))}
           </View>

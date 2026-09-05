@@ -38,6 +38,7 @@ import {
   type LevelSort,
   type MovieType,
 } from './filterOptions';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   visible: boolean;
@@ -83,7 +84,7 @@ export function FeedFilterSheet({
       <View style={s.titleRow}>
         <Text style={s.title}>{t('home:filters.title')}</Text>
         {count > 0 ? (
-          <TouchableOpacity onPress={onReset} activeOpacity={0.6} hitSlop={8}>
+          <TouchableOpacity onPress={withTap(onReset)} activeOpacity={0.6} hitSlop={8}>
             {/* Names the two groups it touches. "Reset" alone, in a sheet that
                 now contains the level, would read as a promise to reset that
                 too — and the level is the one thing it must not move. */}
@@ -105,7 +106,7 @@ export function FeedFilterSheet({
             <TouchableOpacity
               key={opt.value}
               style={[s.rung, active && s.rungOn]}
-              onPress={() => onLevelChange(opt.value)}
+              onPress={withTap(() => onLevelChange(opt.value))}
               activeOpacity={0.8}
               accessibilityRole="radio"
               accessibilityState={{ selected: active }}
@@ -125,7 +126,7 @@ export function FeedFilterSheet({
           key={opt.value}
           label={t(opt.labelKey)}
           active={opt.value === sort}
-          onPress={() => onSortPress(opt.value)}
+          onPress={withTap(() => onSortPress(opt.value))}
           // No leading glyph — the empty swatch column keeps these labels
           // aligned with the film-type rows below, which do have one.
           trailing={
@@ -153,7 +154,7 @@ export function FeedFilterSheet({
           key={opt.value}
           label={t(opt.labelKey)}
           active={opt.value === movieType}
-          onPress={() => onMovieTypeChange(opt.value)}
+          onPress={withTap(() => onMovieTypeChange(opt.value))}
           icon={opt.icon}
           divider={i < MOVIE_TYPE_OPTIONS.length - 1}
         />
@@ -161,7 +162,7 @@ export function FeedFilterSheet({
 
       <TouchableOpacity
         style={s.doneBtn}
-        onPress={onClose}
+        onPress={withTap(onClose)}
         activeOpacity={0.85}
         accessibilityRole="button"
       >

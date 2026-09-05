@@ -13,6 +13,7 @@ import { useDoubleTap } from '../../hooks/useDoubleTap';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { Skeleton } from '../ui/Skeleton';
 import { HomeIcon } from './HomeIcons';
+import { withTap } from '../../utils/feedback';
 
 /**
  * TodayWordCard — "Today's Word" on the redesigned Home.
@@ -134,11 +135,11 @@ const TodayWordCardBase = ({ word, targetLanguage }: Props) => {
           <Text style={s.eyebrow}>{t('home:todayWord.eyebrow')}</Text>
         </View>
         <View style={s.wordRow}>
-          <Pressable onPress={onDoubleTapFlip} style={s.wordPressable}>
+          <Pressable onPress={withTap(onDoubleTapFlip)} style={s.wordPressable}>
             <Text style={s.word} numberOfLines={1}>{word.word}</Text>
           </Pressable>
           <Pressable
-            onPress={handleSave}
+            onPress={withTap(handleSave)}
             hitSlop={14}
             style={s.starBtn}
             accessibilityRole="button"
@@ -147,7 +148,7 @@ const TodayWordCardBase = ({ word, targetLanguage }: Props) => {
             <HomeIcon name="star" size={24} color={saved ? tc.gold : tc.textFaint} />
           </Pressable>
         </View>
-        <Pressable onPress={onDoubleTapFlip} style={s.flipZone} />
+        <Pressable onPress={withTap(onDoubleTapFlip)} style={s.flipZone} />
         <View style={s.frontFooter}>
           {word.cefr_level ? <Text style={s.level}>{word.cefr_level}</Text> : <View />}
           <Text style={s.hint}>{t('home:todayWord.doubleTapToFlip')}</Text>
@@ -162,7 +163,7 @@ const TodayWordCardBase = ({ word, targetLanguage }: Props) => {
         <View style={s.header}>
           <Text style={s.eyebrow}>{t('home:todayWord.eyebrow')}</Text>
         </View>
-        <Pressable onPress={onDoubleTapFlip} style={s.flipZone}>
+        <Pressable onPress={withTap(onDoubleTapFlip)} style={s.flipZone}>
           {translating ? (
             <View style={s.loadingBox}>
               <ActivityIndicator size="small" color={tc.goldOnSurface} />

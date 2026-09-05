@@ -45,6 +45,7 @@ import {
 import { useFeedLevel } from '../../hooks/useFeedLevel';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
+import { withTap } from '../../utils/feedback';
 
 // The Word-of-the-Hour card is HIDDEN on Home but kept intact so we can bring
 // it back: flip this to true to restore the card, its hourly re-fetch and the
@@ -439,7 +440,7 @@ export const HomeScreen = ({
           not receive touches on Android, so an overlay parented to the header
           would work on iOS and silently do nothing on the other half of the
           installs. */}
-      <SearchDimOverlay active={searchFocused} onPress={dismissSearch} />
+      <SearchDimOverlay active={searchFocused} onPress={withTap(dismissSearch)} />
 
       <View style={s.headerStack}>
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the

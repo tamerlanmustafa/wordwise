@@ -21,6 +21,13 @@
 - The ~17 web pages that duplicate mobile features (reader, search, saved words, watched, lists, …) are **not maintained**. Leave them alone; don't fix, extend, or refactor them unless asked.
 - If a task seems to need a web change, say so and ask first rather than assuming parity is wanted.
 
+## Every button taps back
+- **A new pressable gets a haptic.** Wrap its handler: `onPress={withTap(handleThing)}` from `apps/mobile/src/utils/feedback`. Anything a user presses — a button, a card, a row, a chip, a sheet option, a tap-to-flip zone — counts.
+- Wrap in the JSX rather than calling `feedback.tap()` inside the handler. A reviewer looking at a new button can then see the feedback on the element that owns it, and it can be grepped for; a call buried on line 4 of a handler can be neither.
+- **Wrap at one level only.** If a parent already wraps the callback it passes down, the child must not wrap it again — two wrappers is two buzzes for one press. `FeedFilterSheet` wraps before handing `onPress` to `SheetOptionRow`, which is why that row is bare.
+- `utils/feedback` is the single owner of haptics and sound, and a source guard fails the build on anything else importing the native module. Never call `expo-haptics` directly — and do not name it in a comment either, because the guard scans source text.
+- Don't add one to scroll, swipe-in-progress, or anything that fires repeatedly while a finger moves. Haptics mark a decision, not a movement.
+
 ## Before making changes
 - For multi-file changes or unfamiliar code, present a short plan before editing. For one-sentence changes (typo, log line, rename), just do it.
 - Read the nearest existing example first and follow its patterns (naming, file layout, imports) instead of inventing new ones.

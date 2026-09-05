@@ -190,3 +190,29 @@ export const feedback = {
   /** A button press. Haptic only — see SOUND_FOR_MOMENT. */
   tap: () => fire('tap'),
 };
+
+/**
+ * Wrap a press handler so it taps back.
+ *
+ *     onPress={withTap(handleSave)}
+ *
+ * Every button in the app is supposed to do this (see CLAUDE.md), and a rule
+ * that has to be remembered at ~200 call sites needs to be cheap at each one.
+ * Wrapping rather than firing inside the handler keeps the feedback visible in
+ * the JSX, where a reviewer looking at a new button can see whether it is
+ * there — a `feedback.tap()` buried on line 4 of a handler cannot be spotted
+ * from the element that owns it, and cannot be grepped for either.
+ *
+ * The haptic fires first and the handler runs regardless of whether it
+ * succeeded: feedback is a garnish on an interaction, never a gate in front of
+ * one. Arguments and return value pass straight through, so this is safe on
+ * handlers that take an event or return a value.
+ */
+export function withTap<A extends unknown[], R>(
+  handler?: (...args: A) => R,
+): (...args: A) => R | undefined {
+  return (...args: A) => {
+    feedback.tap();
+    return handler?.(...args);
+  };
+}

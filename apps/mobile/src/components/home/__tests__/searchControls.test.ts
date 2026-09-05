@@ -173,7 +173,7 @@ describe('every point inside the border takes a tap', () => {
     // TextInput — a slice of the middle — actually took a tap.
     const s = src();
     expect(s).toMatch(/<Pressable\n\s*style=\{\[s\.field/);
-    expect(s).toMatch(/onPress=\{focusField\}/);
+    expect(s).toMatch(/onPress=\{withTap\(focusField\)\}/);
     expect(s).toMatch(/inputRef\.current\?\.focus\(\)/);
     expect(s).toMatch(/ref=\{inputRef\}/);
   });
@@ -266,6 +266,59 @@ describe('the panel is the whole of search', () => {
   });
 });
 
+describe('every pressable on Home taps back', () => {
+  // CLAUDE.md: a new pressable gets a haptic, wrapped in the JSX so it is
+  // visible on the element that owns it and greppable from outside.
+  const FILES = [
+    ['screens/HomeScreen.tsx', 1],
+    ['home/HomeSearchBar.tsx', 6],
+    ['home/RankedMovieList.tsx', 5],
+    ['home/TodayWordCard.tsx', 4],
+    ['home/FeedFilterSheet.tsx', 5],
+  ] as const;
+
+  const componentsDir = path.join(HOME, '..');
+  const readRel = (rel: string) => fs.readFileSync(path.join(componentsDir, rel), 'utf8');
+
+  it.each(FILES)('%s wraps its handlers', (rel, count) => {
+    const wrapped = readRel(rel).match(/withTap\(/g) ?? [];
+    expect(wrapped.length).toBe(count);
+  });
+
+  it.each(FILES)('%s leaves no bare onPress behind', (rel) => {
+    // Every `onPress=` on these screens should be going through the wrapper.
+    // `onPressIn` is deliberately excluded — it fires on touch-down, before
+    // there is a decision to acknowledge.
+    const src = readRel(rel);
+    const bare = (src.match(/onPress=\{(?!withTap)/g) ?? []).length;
+    expect(bare).toBe(0);
+  });
+
+  it('the wrapper passes arguments and the return value through', () => {
+    // The ring handler takes an event and calls stopPropagation on it; a
+    // wrapper that swallowed arguments would make the ring open the film.
+    const src = fs.readFileSync(
+      path.join(componentsDir, '..', 'utils', 'feedback.ts'), 'utf8',
+    );
+    expect(src).toMatch(/return handler\?\.\(\.\.\.args\)/);
+  });
+
+  it('fires the haptic before the handler, never gated on it', () => {
+    // Feedback is a garnish on an interaction, not a gate in front of one.
+    const src = fs.readFileSync(
+      path.join(componentsDir, '..', 'utils', 'feedback.ts'), 'utf8',
+    );
+    const body = src.slice(src.indexOf('export function withTap'));
+    expect(body.indexOf('feedback.tap()')).toBeLessThan(body.indexOf('handler?.('));
+  });
+
+  it('the sheet option row is NOT wrapped, because its parent already is', () => {
+    // Two wrappers is two buzzes for one press.
+    expect(readRel('home/SheetOptionRow.tsx')).not.toMatch(/withTap/);
+    expect(readRel('home/FeedFilterSheet.tsx')).toMatch(/onPress=\{withTap\(\(\) => onSortPress/);
+  });
+});
+
 describe('the recently-viewed panel', () => {
   const src = () => read('HomeSearchBar.tsx');
 
@@ -347,7 +400,7 @@ describe('tapping away closes the panel instead of opening a film', () => {
   it('the filter button is not reachable while searching', () => {
     // Opening a sheet from under the search panel is never what the tap meant.
     const bar = read('HomeSearchBar.tsx');
-    expect(bar).toMatch(/onPress=\{focused \? onDismiss \?\? onFilterPress : onFilterPress\}/);
+    expect(bar).toMatch(/onPress=\{withTap\(focused \? onDismiss \?\? onFilterPress : onFilterPress\)\}/);
     expect(bar).toMatch(/focused && s\.filterBtnDimmed/);
   });
 
