@@ -62,7 +62,7 @@ import { quizReturnScreen, type QuizOriginKind } from './quizReturn';
 import { guardQuizExit, useQuizGuardStore } from '../stores/quizGuardStore';
 import { SwipeBackView } from '../components/common/SwipeBackView';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
-import { SearchResultsScreen } from '../components/screens/SearchResultsScreen';
+import { AddFilmSearchScreen } from '../components/screens/AddFilmSearchScreen';
 import { LoginScreen } from '../components/screens/LoginScreen';
 import { VocabularyScreen } from '../components/screens/VocabularyScreen';
 import { LearnedWordsScreen } from '../components/screens/LearnedWordsScreen';
@@ -127,7 +127,6 @@ export default function App() {
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
-  const [searchQueryNav, setSearchQueryNav] = useState('');
   const [listFilter, setListFilter] = useState<ListFilter>('saved');
   // Header dropdown's chosen translation language. Persisted to AsyncStorage
   // (key: targetLanguage) so the user's last pick survives app restarts
@@ -304,7 +303,6 @@ export default function App() {
 
   const navigateToHome = () => {
     setSelectedMovie(null);
-    setSearchQueryNav('');
     setResolvedMovieId(null);
     setCurrentScreen('home');
     // Home stays mounted under KeepAlive, so its mount-time refresh won't
@@ -313,9 +311,13 @@ export default function App() {
     void useNotificationsStore.getState().refresh();
   };
 
-  const navigateToSearch = (query: string) => {
-    setSearchQueryNav(query);
-    setCurrentScreen('searchResults');
+  /** The saved reel's "find films" CTA. Goes to the add-to-reel search, which
+   *  is what that button has always meant — it used to open the generic search
+   *  results screen with an empty query, so tapping a film there opened its
+   *  detail page instead of adding it to the reel you were just looking at.
+   *  That screen is gone; this route existed already and nothing reached it. */
+  const navigateToAddToReel = () => {
+    setCurrentScreen('addToReel');
   };
 
   const navigateToSettings = () => {
@@ -836,8 +838,6 @@ export default function App() {
         return handleHubBack;
       case 'movieDetail':
         return handleMovieDetailBack;
-      case 'searchResults':
-        return navigateToHome;
       case 'addToReel':
         return navigateToSavedMovies;
       case 'review': {
@@ -939,7 +939,6 @@ export default function App() {
   const activeTab: BottomTab | null = (() => {
     switch (currentScreen) {
       case 'home':
-      case 'searchResults':
         return 'home';
       case 'explore':
         return 'explore';
@@ -1004,7 +1003,7 @@ export default function App() {
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
         <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onMoviePress={navigateToMovie} onSearch={navigateToSearch} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
+          <HomeScreen onMoviePress={navigateToMovie} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Explore keeps its place in KeepAlive so the feed doesn't lose
             its scroll position when the user dips into Profile. */}
@@ -1108,7 +1107,7 @@ export default function App() {
           <SavedMoviesScreen
             onBack={backFrom('savedMovies')}
             backLabel={backLabelFor('savedMovies')}
-            onSearchPress={() => navigateToSearch('')}
+            onSearchPress={navigateToAddToReel}
             onOpenMoviePreview={handleOpenMoviePreview}
           />
         ) : currentScreen === 'watched' ? (
@@ -1147,12 +1146,7 @@ export default function App() {
             onStart={handleSetIntroStart}
           />
         ) : currentScreen === 'addToReel' ? (
-          <SearchResultsScreen
-            query=""
-            mode="addToReel"
-            onBack={navigateToSavedMovies}
-            onMoviePress={() => {}}
-          />
+          <AddFilmSearchScreen onBack={navigateToSavedMovies} />
         ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
           <QuizJourneyScreen
             movieId={resolvedMovieId}
@@ -1194,8 +1188,6 @@ export default function App() {
             targetLanguage={targetLanguage}
             onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
           />
-        ) : currentScreen === 'searchResults' && searchQueryNav ? (
-          <SearchResultsScreen query={searchQueryNav} onBack={navigateToHome} onMoviePress={navigateToMovie} />
         ) : (
           // Home, My Movies and Practice are rendered by the persistent
           // KeepAlive layer above, so the deep-screen ternary renders

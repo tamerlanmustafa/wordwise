@@ -9,7 +9,6 @@ export type Screen =
   | 'account'
   | 'legal'
   | 'movieDetail'
-  | 'searchResults'
   | 'settings'
   | 'admin'
   | 'review'

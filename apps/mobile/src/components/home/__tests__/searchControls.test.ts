@@ -203,6 +203,69 @@ describe('every point inside the border takes a tap', () => {
   });
 });
 
+describe('the panel is the whole of search', () => {
+  const bar = () => read('HomeSearchBar.tsx');
+  const home = () =>
+    fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+  const app = () => fs.readFileSync(path.join(HOME, '..', '..', 'core', 'App.tsx'), 'utf8');
+
+  it('caps matches at three', () => {
+    const h = home();
+    expect(h).toMatch(/SUGGESTION_LIMIT = 3/);
+    expect(h).toMatch(/results\.slice\(0, SUGGESTION_LIMIT\)/);
+  });
+
+  it('has no "see all" footer and nothing to count for one', () => {
+    const b = bar();
+    expect(b).not.toMatch(/SEE ALL/);
+    expect(b).not.toMatch(/allResultsCount/);
+    expect(b).not.toMatch(/onSeeAll/);
+  });
+
+  it('keeps no full result set in state', () => {
+    // `allResults` existed only to feed the count on that footer and the page
+    // behind it. Holding every TMDB match for a list of three is dead weight.
+    expect(home()).not.toMatch(/allResults/);
+  });
+
+  it('the results screen and its route are gone', () => {
+    expect(fs.existsSync(path.join(HOME, '..', 'screens', 'SearchResultsScreen.tsx'))).toBe(false);
+    const a = app();
+    expect(a).not.toMatch(/searchResults/);
+    expect(a).not.toMatch(/navigateToSearch/);
+    expect(a).not.toMatch(/searchQueryNav/);
+  });
+
+  it("'searchResults' is off the Screen union", () => {
+    const types = fs.readFileSync(path.join(HOME, '..', '..', 'core', 'types.ts'), 'utf8');
+    expect(types).not.toMatch(/'searchResults'/);
+  });
+
+  it('the add-to-reel search survived, and is reachable again', () => {
+    // The same component served both jobs behind a `mode` prop, so deleting
+    // the file would have taken Add Film with it. Nothing navigated to the
+    // addToReel route before this — the saved reel's "find films" CTA opened
+    // the generic results page with an empty query instead, where tapping a
+    // film opened its detail page rather than adding it to the reel you were
+    // looking at.
+    expect(fs.existsSync(path.join(HOME, '..', 'screens', 'AddFilmSearchScreen.tsx'))).toBe(true);
+    expect(app()).toMatch(/onSearchPress=\{navigateToAddToReel\}/);
+    expect(app()).toMatch(/setCurrentScreen\('addToReel'\)/);
+  });
+
+  it('that screen no longer branches on a mode it cannot be in', () => {
+    const screen = fs.readFileSync(
+      path.join(HOME, '..', 'screens', 'AddFilmSearchScreen.tsx'), 'utf8',
+    );
+    expect(screen).not.toMatch(/mode === 'addToReel'/);
+    expect(screen).not.toMatch(/onMoviePress/);
+  });
+
+  it('the keyboard Search key closes the panel rather than pretending', () => {
+    expect(home()).toMatch(/onSubmit=\{dismissSearch\}/);
+  });
+});
+
 describe('the recently-viewed panel', () => {
   const src = () => read('HomeSearchBar.tsx');
 

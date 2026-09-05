@@ -13,21 +13,27 @@ import { useTranslation } from 'react-i18next';
 import { colors } from '../../theme/palette';
 import { wordwiseApi, tmdbApi } from '../../services/api';
 import { styles } from '../../core/styles';
-import type { MovieData } from '../../core/types';
 import { useReelStore } from '../../stores/reelStore';
 import { requestAddFilm } from '../../stores/addFilmStore';
 import { Skeleton } from '../ui/Skeleton';
 import { StarIcon } from '../ui/icons';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { ScreenHeader } from '../common/ScreenHeader';
 
+/**
+ * AddFilmSearchScreen — search TMDB and add what you find to your reel.
+ *
+ * Was SearchResultsScreen, which served two jobs behind a `mode` prop: this
+ * one, and a generic "results for <query>" page reached from the Home search
+ * bar. That page is gone — the Home search panel now shows its three matches
+ * and there is nothing behind it — so the mode split went with it and the file
+ * is named for the one thing it does.
+ *
+ * Tapping a row adds the film to the reel (through the branded analysing
+ * overlay, which owns `reelStore.add`); tapping an added row removes it.
+ */
 interface Props {
-  query: string;
   onBack: () => void;
-  onMoviePress: (movie: MovieData) => void;
-  /** When 'addToReel', tapping a row adds the movie to the user's reel
-      instead of opening movie detail. The row shows a checkmark once
-      added; tapping again removes it. */
-  mode?: 'open' | 'addToReel';
 }
 
 // Routing prefixes:
@@ -35,15 +41,14 @@ interface Props {
 //  - `level:<LEVEL>:<displayName>` → our backend `/movies/by-cefr` (CEFR levels)
 //    or `/movies/by-level` (old enum), with per-row TMDB enrichment.
 //  - anything else → TMDB title text search.
-export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open' }: Props) => {
+export const AddFilmSearchScreen = ({ onBack }: Props) => {
   // The tab bar is an absolute overlay, so every scroller reserves its height
   // itself or its last rows sit behind the floating capsule.
   const barInset = useBottomBarInset();
   const { t } = useTranslation();
-  // In addToReel mode the user types into an inline search box; we
-  // re-run the query whenever `liveQuery` changes (debounced).
-  const [liveQuery, setLiveQuery] = useState(query);
-  const effectiveQuery = mode === 'addToReel' ? liveQuery : query;
+  // The user types into an inline search box; the query re-runs (debounced)
+  // whenever it changes.
+  const [effectiveQuery, setLiveQuery] = useState('');
 
   const reelTiles = useReelStore((s) => s.tiles);
   const reelRemove = useReelStore((s) => s.remove);
@@ -69,9 +74,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
     ? `${levelMatch![2]} movies`
     : isGenre
     ? genreMatch![2]
-    : mode === 'addToReel'
-    ? 'Add Movies'
-    : `Results for "${effectiveQuery}"`;
+    : 'Add Movies';
 
   const searchPage = async (pageNum: number) => {
     try {
@@ -124,7 +127,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
   };
 
   useEffect(() => {
-    if (mode === 'addToReel' && !effectiveQuery.trim()) {
+    if (!effectiveQuery.trim()) {
       // No query yet — just clear and wait for user input.
       setResults([]);
       setLoading(false);
@@ -140,9 +143,9 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
       setHasMore(1 < totalPages);
       setPage(1);
       setLoading(false);
-    }, mode === 'addToReel' ? 250 : 0);
+    }, 250);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [effectiveQuery, mode]);
+  }, [effectiveQuery]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -156,50 +159,28 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
   };
 
   const handlePress = (movie: any) => {
-    if (mode === 'addToReel') {
-      if (isInReel(movie.id)) {
-        reelRemove(movie.id);
-      } else {
-        const year = movie.release_date ? Number(movie.release_date.slice(0, 4)) || null : null;
-        // Route through the branded analyzing → reel-ready overlay (§B)
-        // instead of an instant add. The overlay owns reelStore.add.
-        requestAddFilm({
-          tmdb_id: movie.id,
-          title: movie.title,
-          poster_path: movie.poster_path ?? null,
-          year,
-        });
-      }
+    if (isInReel(movie.id)) {
+      reelRemove(movie.id);
       return;
     }
-    onMoviePress({
-      id: movie.id,
+    const year = movie.release_date ? Number(movie.release_date.slice(0, 4)) || null : null;
+    // Through the branded analysing → reel-ready overlay (§B) rather than an
+    // instant add. The overlay owns reelStore.add.
+    requestAddFilm({
+      tmdb_id: movie.id,
       title: movie.title,
-      poster_path: movie.poster_path,
-      release_date: movie.release_date,
-      overview: movie.overview,
-      genre_ids: movie.genre_ids,
-      vote_average: movie.vote_average,
-      original_language: movie.original_language,
+      poster_path: movie.poster_path ?? null,
+      year,
     });
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.detailHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-          {displayTitle}
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <ScreenHeader onBack={onBack} title={displayTitle} />
 
-      {mode === 'addToReel' ? (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
           <TextInput
-            value={liveQuery}
+            value={effectiveQuery}
             onChangeText={setLiveQuery}
             placeholder={t('movies:search.placeholder')}
             placeholderTextColor="#9aa"
@@ -215,8 +196,7 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
               backgroundColor: '#fff',
             }}
           />
-        </View>
-      ) : null}
+      </View>
 
       {loading ? (
         /* Rows at the real result row's measurements — 46x69 poster, 8pt
@@ -278,11 +258,9 @@ export const SearchResultsScreen = ({ query, onBack, onMoviePress, mode = 'open'
                   <Text style={styles.searchResultOverview} numberOfLines={2}>{item.overview}</Text>
                 ) : null}
               </View>
-              {mode === 'addToReel' ? (
-                <Text style={{ fontSize: 22, color: isInReel(item.id) ? colors.primary : '#C5C5D0', marginStart: 8 }}>
-                  {isInReel(item.id) ? '✓' : '+'}
-                </Text>
-              ) : null}
+              <Text style={{ fontSize: 22, color: isInReel(item.id) ? colors.primary : '#C5C5D0', marginStart: 8 }}>
+                {isInReel(item.id) ? '✓' : '+'}
+              </Text>
             </TouchableOpacity>
           )}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: barInset + 24 }}

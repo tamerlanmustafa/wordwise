@@ -59,7 +59,6 @@ const WORD_BLOCK_H = 172;
 
 interface Props {
   onMoviePress: (movie: MovieData) => void;
-  onSearch: (query: string) => void;
   user: any;
   targetLanguage: string;
   /** Height the floating bottom bar reserves, so the feed's last row can
@@ -71,9 +70,12 @@ interface Props {
 // the Profile sheet (UserMenuSheet), not a Home menu — the pre-v0.7 Home menu
 // was removed in the 4-tab refactor, so those callbacks were dead here and have
 // been dropped (UX audit F-030).
+/** How many films the search panel offers. Three, because the panel is now the
+ *  whole of search — there is no "see all" behind it. */
+const SUGGESTION_LIMIT = 3;
+
 export const HomeScreen = ({
   onMoviePress,
-  onSearch,
   user,
   targetLanguage,
   bottomOffset = 0,
@@ -93,7 +95,6 @@ export const HomeScreen = ({
   const [homeTab] = useState<'level' | 'trending'>('level');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [allResults, setAllResults] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
@@ -266,8 +267,12 @@ export const HomeScreen = ({
     debounceRef.current = setTimeout(async () => {
       try {
         const results = await tmdbApi.searchMovies(text.trim());
-        setSuggestions(results.slice(0, 5));
-        setAllResults(results);
+        // Three, and there is nowhere else to go from here. The panel used to
+        // show five and offer "SEE ALL n RESULTS", which opened a whole second
+        // screen listing the same search — a screen whose only job was to be
+        // longer. Typing another word narrows a search faster than scrolling
+        // a page of near-misses does.
+        setSuggestions(results.slice(0, SUGGESTION_LIMIT));
         setShowSuggestions(true);
       } catch (err) {
         console.error('Autocomplete failed:', err);
@@ -278,15 +283,7 @@ export const HomeScreen = ({
   const clearSearch = () => {
     setSearchQuery('');
     setSuggestions([]);
-    setAllResults([]);
     setShowSuggestions(false);
-  };
-
-  const submitSearch = () => {
-    if (searchQuery.trim()) {
-      onSearch(searchQuery.trim());
-      clearSearch();
-    }
   };
 
   const handleMoviePress = (movie: any) => {
@@ -451,7 +448,10 @@ export const HomeScreen = ({
           <HomeSearchBar
             query={searchQuery}
             onChangeText={onSearchTextChange}
-            onSubmit={submitSearch}
+            // The keyboard's Search key has nowhere to go now — the panel is
+            // the whole of search — so it closes the panel rather than
+            // pretending there is a results page behind it.
+            onSubmit={dismissSearch}
             onClear={clearSearch}
             focused={searchFocused}
             onFocus={() => {
@@ -468,11 +468,9 @@ export const HomeScreen = ({
               blurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
             }}
             suggestions={suggestions}
-            allResultsCount={allResults.length}
             showSuggestions={showSuggestions}
             recentlyViewed={recentlyViewed}
             onMoviePress={onSearchMoviePress}
-            onSeeAll={submitSearch}
             onFilterPress={openFilters}
             onDismiss={dismissSearch}
             filtersOpen={filtersOpen}

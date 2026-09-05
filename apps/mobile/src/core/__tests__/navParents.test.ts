@@ -71,7 +71,6 @@ describe('PARENT_OF', () => {
     // rather than being short-circuited by this map.
     const bespoke: Screen[] = [
       'movieDetail',
-      'searchResults',
       'review',
       'paywall',
       'quizJourney',

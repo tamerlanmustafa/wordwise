@@ -10,8 +10,8 @@
  *     (native, via selectionColor). Trailing stroked ✕ clear icon when
  *     there's a query.
  *   • Autocomplete dropdown: paper, radius 12, 1px border, big soft shadow.
- *     Each row = 40×60 poster + serif title + year. Footer
- *     `SEE ALL {n} RESULTS` in goldOnSurface.
+ *     Each row = 40×60 poster + serif title + year. No footer — the panel is
+ *     the whole of search now; there is no results page behind it.
  *   • Recently-viewed dropdown reuses the same row treatment.
  *   • A 64pt filter button on the trailing edge, opening `FeedFilterSheet` —
  *     the same "wide control + square button" pairing the Lists tab uses for
@@ -64,14 +64,11 @@ interface Props {
   focused: boolean;
   onFocus: () => void;
   onBlur: () => void;
-  /** Up-to-5 autocomplete rows. */
+  /** The autocomplete rows. Capped by the caller — see SUGGESTION_LIMIT. */
   suggestions: any[];
-  /** Total results (drives the "SEE ALL {n}" footer; footer shows when > 5). */
-  allResultsCount: number;
   showSuggestions: boolean;
   recentlyViewed: any[];
   onMoviePress: (movie: any) => void;
-  onSeeAll: () => void;
   /** Opens FeedFilterSheet. Omit to hide the button entirely. */
   onFilterPress?: () => void;
   /** Closes the search. While the field is focused the filter button calls
@@ -124,11 +121,9 @@ export function HomeSearchBar({
   onFocus,
   onBlur,
   suggestions,
-  allResultsCount,
   showSuggestions,
   recentlyViewed,
   onMoviePress,
-  onSeeAll,
   onFilterPress,
   onDismiss,
   activeFilters = 0,
@@ -285,11 +280,6 @@ export function HomeSearchBar({
                 onPress={() => onMoviePress(movie)}
               />
             ))}
-            {allResultsCount > 5 ? (
-              <TouchableOpacity style={s.seeAll} onPress={onSeeAll} activeOpacity={0.7}>
-                <Text style={s.seeAllText}>SEE ALL {allResultsCount} RESULTS</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
         ) : showRecent ? (
           <View style={[s.dropdown, onFilterPress ? s.dropdownInset : null]}>

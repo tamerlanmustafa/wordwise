@@ -172,7 +172,7 @@ describe('content loads behind skeletons, not spinners', () => {
    *     to draw yet.
    */
   const CONVERTED = [
-    'components/screens/SearchResultsScreen.tsx',
+    'components/screens/AddFilmSearchScreen.tsx',
     'components/onboarding/PickFirstFilmStep.tsx',
     'components/explore/ListPanel.tsx',
     'components/ReviewScreen.tsx',
