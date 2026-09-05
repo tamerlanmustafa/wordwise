@@ -4,6 +4,8 @@ jest.mock('../../services/api', () => ({
   enrichMoviesWithTmdb: jest.fn(async (rows: unknown[]) => rows),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../../services/api';
 import { renderHook, flushAsync, act, cleanupHooks } from '../../test-utils/renderHook';
@@ -36,9 +38,13 @@ const draw = (
   });
 
 describe('useInfiniteCefrMovies', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     (enrichMoviesWithTmdb as jest.Mock).mockImplementation(async (rows: unknown[]) => rows);
+    // The hook caches page 0 to AsyncStorage now, and the mock persists across
+    // tests in a file. Without this, one test's successful load paints the
+    // next test's list and the suite passes or fails on ordering.
+    await AsyncStorage.clear();
   });
 
   afterEach(() => cleanupHooks());
@@ -311,6 +317,128 @@ describe('useInfiniteCefrMovies', () => {
       await flushAsync();
       // Null hides the "new set in 4h" line rather than printing a stale one.
       expect(plain.result.current.nextRotationAt).toBeNull();
+    });
+  });
+  // ── Cached first page ────────────────────────────────────────────────────
+  //
+  // The tab is lazily mounted, so before this the user tapped it and then
+  // watched a skeleton while a request went out and every film was enriched
+  // from TMDB. The cache paints last session's page immediately and lets the
+  // live request replace it.
+  //
+  // The rule that matters is that the cache is **paint only**: it must never
+  // supply an offset or a seed. `sort=recommended` pages through a seeded
+  // shuffle, so a cached seed would page through a draw the server has since
+  // rotated away from — duplicating some films and skipping others, silently.
+  describe('the cached first page', () => {
+    /** Load once so a page 0 is cached, then throw the hook away. */
+    const seedCache = async (movies = [{ tmdb_id: 1, title: 'Cached' }]) => {
+      mockGet.mockResolvedValueOnce(page(movies, true));
+      renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+      cleanupHooks();
+      jest.clearAllMocks();
+      (enrichMoviesWithTmdb as jest.Mock).mockImplementation(async (rows: unknown[]) => rows);
+    };
+
+    it('shows the last page before the network answers', async () => {
+      await seedCache();
+      // A request that never settles: whatever is on screen came from disk.
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Cached']);
+      expect(result.current.loading).toBe(false); // no skeleton
+    });
+
+    it('replaces the cached page with the fresh one', async () => {
+      await seedCache();
+      mockGet.mockResolvedValueOnce(page([{ tmdb_id: 9, title: 'Fresh' }], false));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Fresh']);
+    });
+
+    it('keeps the cached page when the network fails', async () => {
+      // Offline resilience, and the reason the cache is worth having beyond
+      // the first 400ms: a stale list of films beats an empty screen.
+      await seedCache();
+      mockGet.mockRejectedValueOnce(new Error('offline'));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Cached']);
+    });
+
+    it('does not paint another filter’s cache', async () => {
+      // A cached page from a different level or sort is the wrong list, not a
+      // stale one — showing it would look like the filter had failed.
+      await seedCache();
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('C1', 'rating', 'desc'));
+      await flushAsync();
+
+      expect(result.current.movies).toEqual([]);
+      expect(result.current.loading).toBe(true); // skeleton, correctly
+    });
+
+    it('never sends a seed or an offset it read from disk', async () => {
+      // The corruption guard. The cached page is pixels, not pagination.
+      await seedCache();
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 5, title: 'Fresh' }], true, 42));
+
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      expect(mockGet.mock.calls[0][2]).toMatchObject({ offset: 0 });
+      expect(mockGet.mock.calls[0][2].seed).toBeUndefined();
+
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 6, title: 'Next' }], false, 42));
+      await act(async () => {
+        result.current.loadMore();
+        await Promise.resolve();
+      });
+      // The append pages through the draw the *server* just handed us.
+      expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 1, seed: 42 });
+    });
+
+    it('cannot append while only the cache has painted', async () => {
+      // `loading` is false so the skeleton is gone, but the live request still
+      // owns the offset and the seed. An append here would page a draw the
+      // hook does not have yet.
+      await seedCache();
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+      await act(async () => {
+        result.current.loadMore();
+        await Promise.resolve();
+      });
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a cache older than its lifetime', async () => {
+      await seedCache();
+      // A day and a bit later.
+      const now = Date.now();
+      jest.spyOn(Date, 'now').mockReturnValue(now + 25 * 60 * 60 * 1000);
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
+      await flushAsync();
+
+      expect(result.current.movies).toEqual([]);
+      (Date.now as jest.Mock).mockRestore();
     });
   });
 });

@@ -24,9 +24,32 @@
  *
  * A *reset* clears the seed, because a reset is a new draw by definition.
  * Pull-to-refresh is not a reset — it re-reads the same draw.
+ *
+ * ## Why page 0 is cached
+ *
+ * This tab is lazily mounted, so nothing happens until the user taps it — and
+ * then they watch a skeleton while a request goes out and every film in the
+ * page is enriched from TMDB. The word feed has not had that problem for
+ * months because it keeps its last cards on disk and paints them before its
+ * request is sent; this is the same trick, through the generic `swrCache`.
+ *
+ * Cache-first rather than prefetch-at-boot, deliberately. A prefetch removes
+ * the wait only on the first tap of a *warm* session, spends a request on
+ * every app open whether or not the tab is ever opened — on a single-process
+ * API where speculative load is not free — and still shows a skeleton on a
+ * cold start. Painting from disk removes the skeleton on every launch, works
+ * offline, and costs the backend nothing: it is the same one request, just
+ * issued behind the pixels instead of in front of them.
+ *
+ * The cache is **paint only**. It never advances `offset` and never supplies a
+ * seed, so the pagination state stays owned by the live request — restoring a
+ * seed from disk would page through a draw the server has since rotated away
+ * from, which is the one failure mode here that corrupts the feed silently
+ * rather than erroring.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../services/api';
+import { readCache, writeCache } from '../services/swrCache';
 import {
   animatedParam,
   type LevelSort,
@@ -39,6 +62,24 @@ export type MovieSort = LevelSort;
 export type SortOrder = 'asc' | 'desc';
 
 const PAGE_SIZE = 10;
+
+/**
+ * How old a cached page may be and still be worth painting.
+ *
+ * Generous on purpose. The cache is never the answer — a fresh request is
+ * already in flight beside it — so this only decides whether a stale list is
+ * better than a skeleton for the ~400ms before the real one lands. A day-old
+ * list of films is still a list of films; a skeleton is nothing. The
+ * `recommended` draw rotates every 6 hours, and showing yesterday's draw for
+ * a moment is a far smaller cost than showing a grey rectangle every time.
+ */
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** One entry per filter combination — a cached page from another level or
+ *  sort is the wrong list, not a stale one. */
+function cacheKey(level: string, sort: MovieSort, order: SortOrder, movieType: MovieType): string {
+  return `movies.byCefr.${level}.${sort}.${order}.${movieType}`;
+}
 
 export function useInfiniteCefrMovies(
   level: string,
@@ -72,12 +113,41 @@ export function useInfiniteCefrMovies(
   // A ref, not state: an append reads it in the same tick it was written by
   // the reset, and a state update would not have committed yet.
   const seedRef = useRef<number | null>(null);
+  // The request id whose *network* answer has landed. A cache read that
+  // resolves after it must not repaint the stale list over the fresh one —
+  // disk is usually faster than the network, but not always.
+  const answeredRef = useRef(0);
+  // The request id the cache has painted for. On a failed load this is what
+  // decides between "show the list we had" and "show nothing": without it the
+  // outcome depends on whether the disk read or the network error arrived
+  // first, which is the definition of a flaky screen.
+  const paintedRef = useRef(0);
+
+  /**
+   * Show the last page 0 we stored for this filter, if it beats the network.
+   *
+   * Three guards, each for a different way this could show the wrong thing:
+   * the filter may have changed since the read started; the live page may have
+   * already landed; and a cache written before a schema change may hold
+   * something that is not a list.
+   */
+  const paintFromCache = useCallback(async (reqId: number, key: string) => {
+    const cached = await readCache<any[]>(key, CACHE_TTL_MS);
+    if (!Array.isArray(cached) || cached.length === 0) return;
+    if (reqId !== reqIdRef.current || answeredRef.current === reqId) return;
+    paintedRef.current = reqId;
+    setMovies(cached);
+    // The skeleton goes away, but `loadingRef` stays set, so an append cannot
+    // start against a draw whose seed and offset the live request still owns.
+    setLoading(false);
+  }, []);
 
   const fetchPage = useCallback(
     async (reset: boolean) => {
       // A reset always supersedes whatever is in flight; an append defers to it.
       if (!reset && (loadingRef.current || !hasMoreRef.current)) return;
 
+      const key = cacheKey(level, sort, order, movieType);
       const reqId = ++reqIdRef.current;
       loadingRef.current = true;
       if (reset) {
@@ -87,6 +157,10 @@ export function useInfiniteCefrMovies(
         // rotation boundary crossed while Home was mounted) actually reshuffle.
         seedRef.current = null;
         setLoading(true);
+        // Paint last session's page while this request is in flight. Not
+        // awaited: the whole point is that the disk read and the network
+        // request race, and whichever arrives first shows something.
+        void paintFromCache(reqId, key);
       } else {
         setLoadingMore(true);
       }
@@ -109,6 +183,9 @@ export function useInfiniteCefrMovies(
 
         // A newer filter/reset started while we were awaiting — drop this page.
         if (reqId !== reqIdRef.current) return;
+        // Claim this request before writing, so a slower cache read for the
+        // same request knows it has been beaten and stays quiet.
+        answeredRef.current = reqId;
 
         // Adopt the draw the server picked, before anything appends to it.
         // Only on a reset: an append echoes back the seed it was sent, and
@@ -116,6 +193,11 @@ export function useInfiniteCefrMovies(
         if (reset) {
           seedRef.current = res.seed ?? null;
           setNextRotationAt(res.next_rotation_at ?? null);
+          // Store the enriched page, posters and all, so the next launch
+          // paints a finished list rather than one that fills in.
+          // Fire-and-forget: caching is an optimisation, never a step the
+          // user waits behind.
+          void writeCache(key, enriched);
         }
 
         offsetRef.current += raw.length;
@@ -126,7 +208,12 @@ export function useInfiniteCefrMovies(
       } catch (e: any) {
         if (reqId !== reqIdRef.current) return;
         setError(e?.message || 'Failed to load movies');
-        if (reset) setMovies([]);
+        // Empty the list only when there is nothing better to show. If the
+        // cache painted, the user keeps last session's films — which is the
+        // whole point of caching a read: on a plane or a bad connection, a
+        // slightly stale list beats an empty screen. `paintedRef` makes that
+        // independent of whether the disk or the error arrived first.
+        if (reset && paintedRef.current !== reqId) setMovies([]);
       } finally {
         // Only the current request owns the loading flags / lock.
         if (reqId === reqIdRef.current) {
@@ -136,7 +223,7 @@ export function useInfiniteCefrMovies(
         }
       }
     },
-    [level, sort, order, movieType],
+    [level, sort, order, movieType, paintFromCache],
   );
 
   // Reset to page 0 whenever the filter or sort changes.
