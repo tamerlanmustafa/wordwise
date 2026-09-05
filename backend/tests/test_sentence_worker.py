@@ -45,6 +45,11 @@ class _FakeLLM:
     mirroring the real service (invalid sentences are silently dropped).
     `unreachable_on_call` mirrors the other failure mode: the API call never
     completed, so the model formed no opinion about any of the words.
+
+    `unstorable_words` is the third: the model wrote a sentence and the
+    database would not take it. Those words are absent from the result *and*
+    reported in `persist_failures`, because the two are different facts and
+    only one of them is about the word.
     """
 
     def __init__(
@@ -53,14 +58,18 @@ class _FakeLLM:
         cap_on_call: int | None = None,
         unreachable_on_call: int | None = None,
         skip_version: str = SKIP_VERSION,
+        unstorable_words: set[str] | None = None,
     ):
         self.fail_words = fail_words or set()
+        self.unstorable_words = unstorable_words or set()
         self.cap_on_call = cap_on_call
         self.unreachable_on_call = unreachable_on_call
         self.skip_version = skip_version
         self.calls: list[list] = []
 
-    async def generate_and_store(self, db, *, words, lemma_id_map, context):
+    async def generate_and_store(
+        self, db, *, words, lemma_id_map, context, persist_failures=None
+    ):
         self.calls.append(list(words))
         if self.cap_on_call is not None and len(self.calls) >= self.cap_on_call:
             raise CostCapExceeded("spent $50.00 ≥ cap $50.00")
@@ -69,11 +78,15 @@ class _FakeLLM:
                 "Error code: 400 - Your credit balance is too low to access "
                 "the Anthropic API."
             )
+        if persist_failures is not None:
+            persist_failures.update(
+                w.lemma.lower() for w in words if w.word in self.unstorable_words
+            )
         return {
             w.word: {"sentence": f"A sentence with {w.word}.", "word_position": 4,
                      "matched_form": w.word}
             for w in words
-            if w.word not in self.fail_words
+            if w.word not in self.fail_words and w.word not in self.unstorable_words
         }
 
 
@@ -226,6 +239,54 @@ async def test_refusals_are_persisted_against_the_running_version():
     assert "sentence_skip_at = NOW()" in sql
     assert "WHERE id IN (2)" in sql          # beta only — alpha and gamma stored
     assert args == (SKIP_VERSION,)
+
+
+async def test_a_word_the_database_would_not_store_is_not_recorded_as_refused():
+    """The third outcome, and the one that used to be invisible.
+
+    `mark_refusals` stamps `sentence_skip_version`, which is permanent under
+    the running prompt — the word is never asked about again. That is the right
+    answer when the *model* declined it, and completely wrong when a connection
+    reset dropped the insert: the word is fine, our write was not.
+
+    Before this split the two were indistinguishable at this layer, and the
+    service papered over it by swallowing every persistence error and reporting
+    the word as stored — which is where the orphan sentences came from.
+    """
+    rows = [_row(1, "alpha"), _row(2, "beta"), _row(3, "gamma")]
+    db = _FakeDb(pages=[rows])
+    llm = _FakeLLM(fail_words={"beta"}, unstorable_words={"gamma"})
+
+    result = await sw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+    assert result.stored == 1          # alpha
+    assert result.refused == 1         # beta — the model declined it
+    (sql, _args), = db.writes
+    assert "WHERE id IN (2)" in sql    # gamma is left alone for the next cycle
+    assert "3" not in sql.split("WHERE id IN")[1]
+
+
+async def test_a_page_that_will_not_persist_stops_instead_of_re_buying_it():
+    """The cost loop this closes.
+
+    A lemma whose write failed still has no sentence link, so the backlog hands
+    it straight back on the next cycle — and the retry asks the model for a new
+    sentence, which is a new charge. If persistence is broken for the whole
+    page that repeats for ever, once per cycle, paying every time.
+
+    Reporting nothing as stored is what stops it: the cycle's existing "nothing
+    stored, we are spinning on hopeless words" backoff was already there and
+    only needed to be told the truth.
+    """
+    rows = [_row(1, "alpha"), _row(2, "beta")]
+    db = _FakeDb(pages=[rows])
+    llm = _FakeLLM(unstorable_words={"alpha", "beta"})
+
+    result = await sw.run_cycle(db, llm, page_size=10, batch_size=10, batch_sleep=0)
+
+    assert result.stored == 0
+    assert result.refused == 0        # nothing was the word's fault
+    assert db.writes == []            # and nothing was written off
 
 
 async def test_a_model_that_never_answered_records_no_refusals():

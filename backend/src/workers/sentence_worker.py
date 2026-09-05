@@ -223,12 +223,18 @@ async def run_cycle(
             )
             for r in chunk
         ]
+        # Lemmas the model wrote a sentence for that the database would not
+        # store. They are neither stored nor refused: a write failure is not a
+        # fact about the word, and stamping `sentence_skip_version` on one
+        # would retire it permanently over a connection blip. See below.
+        persist_failures: set[str] = set()
         try:
             results = await llm.generate_and_store(
                 db,
                 words=word_reqs,
                 lemma_id_map=lemma_id_map,
                 context="sentence_worker",
+                persist_failures=persist_failures,
             )
         except CostCapExceeded as cap_err:
             logger.warning("[sentence-worker] %s", cap_err)
@@ -253,9 +259,33 @@ async def run_cycle(
 
         stored_lemmas = {w.lower() for w in results}
         stored_total += len(stored_lemmas)
+
+        # A lemma missing from `results` is refused — *unless* it is missing
+        # because the write failed rather than because the model declined. Both
+        # look identical from here, which is why the service reports them
+        # apart: `mark_refusals` stamps `sentence_skip_version`, and that is
+        # permanent under the running prompt, so a database blip would retire a
+        # perfectly good word for good.
+        #
+        # Excluding them from `stored_total` as well as from the refusals is
+        # what keeps the cost loop shut. If persistence is failing for the whole
+        # page, `stored` reaches 0, and the cycle's own "nothing stored, stop
+        # spinning on hopeless words" backoff takes over instead of the worker
+        # re-buying the same page from the model for ever.
+        if persist_failures:
+            logger.warning(
+                "[sentence-worker] %d sentence(s) generated but not stored; "
+                "left unmarked for the next cycle",
+                len(persist_failures),
+            )
         refused_total += await mark_refusals(
             db,
-            (r["lemma_id"] for r in chunk if r["lemma"].lower() not in stored_lemmas),
+            (
+                r["lemma_id"]
+                for r in chunk
+                if r["lemma"].lower() not in stored_lemmas
+                and r["lemma"].lower() not in persist_failures
+            ),
             skip_version,
         )
 

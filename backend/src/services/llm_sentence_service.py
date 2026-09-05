@@ -32,6 +32,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from prisma import Prisma
+from prisma.errors import UniqueViolationError
 
 from src.config import get_settings
 from src.services.llm_cost_ledger import LedgerSpendTracker, spend_tracker
@@ -383,6 +384,8 @@ class LLMSentenceService:
         words: Sequence[WordRequest],
         lemma_id_map: Dict[str, int],
         context: str = "unknown",
+        *,
+        persist_failures: Optional[set] = None,
     ) -> Dict[str, dict]:
         """
         Generate sentences and persist them as GLOBAL SentenceBank rows
@@ -394,6 +397,13 @@ class LLMSentenceService:
         spend cap has been reached, and ModelCallFailed if the API call itself
         did not complete — a word absent from the result is only a refusal
         when this returns normally.
+
+        Pass `persist_failures` to be told which lemmas the model *did* write a
+        sentence for but which could not be stored. That set is the difference
+        between "the model declined this word" and "our database refused it",
+        and the caller must not treat the second as the first — see the
+        sentence worker, which stamps a permanent refusal on every lemma
+        missing from the result.
         """
         if not words:
             return {}
@@ -408,36 +418,17 @@ class LLMSentenceService:
                 continue
 
             matched_form, word_position = self._locate_word(sentence, w)
-            try:
-                sentence_row = await self._get_or_create_global_sentence(
-                    db, sentence
-                )
-                if sentence_row is None:
-                    continue
-                # Race-tolerant link insert. Unique (sentenceId, lemmaId)
-                # — duplicates are a no-op.
-                #
-                # `isGlobal` is deliberately absent: a trigger derives it from
-                # the sentence row (#120). Setting it here would create a
-                # second source of truth for the flag every study surface
-                # filters on, and the drift would be silent.
-                try:
-                    await db.sentencelemmalink.create(
-                        data={
-                            "sentenceId": sentence_row.id,
-                            "lemmaId": lemma_id,
-                            "wordPosition": word_position,
-                            "matchedForm": matched_form,
-                            "score": 1.0,
-                            "isRepresentative": True,
-                        }
-                    )
-                except Exception:
-                    pass
-            except Exception as e:
-                logger.warning(
-                    f"[llm-sentence] persist failed word='{w.word}': {e}"
-                )
+            stored = await self._persist_global_sentence(
+                db,
+                sentence=sentence,
+                lemma_id=lemma_id,
+                word_position=word_position,
+                matched_form=matched_form,
+                word=w.word,
+            )
+            if not stored:
+                if persist_failures is not None:
+                    persist_failures.add(w.lemma.lower())
                 continue
 
             results[w.word] = {
@@ -446,6 +437,113 @@ class LLMSentenceService:
                 "matched_form": matched_form,
             }
         return results
+
+    async def _persist_global_sentence(
+        self,
+        db: Prisma,
+        *,
+        sentence: str,
+        lemma_id: int,
+        word_position,
+        matched_form,
+        word: str,
+    ) -> bool:
+        """Write the sentence and its lemma link, or write neither.
+
+        These are two rows and they are worthless apart. A `sentence_bank` row
+        with no `sentence_lemma_links` row is an **orphan**: every study surface
+        reaches a sentence through its lemma link, so an orphan is LLM output
+        that has been paid for and can never be shown to anybody. Nothing is
+        broken on screen, which is why it went unnoticed — the only trace is the
+        `orphan_sentences` count on /admin/health/vocab-coverage climbing.
+
+        It used to be written as two independent statements, so two things made
+        orphans:
+
+        1. **The process died between them.** A Railway deploy restarts the
+           worker, and main was pushed six times on 2026-09-05 alone.
+        2. **The link insert swallowed every exception.** The `except` was
+           written for the duplicate-key case, where doing nothing really is
+           correct — but it caught connection resets and constraint failures
+           too, and left the sentence behind without a word to reach it, in
+           silence.
+
+        Both are fixed here: one transaction, so a crash leaves neither row, and
+        an `except` narrowed to the one error that is genuinely a no-op.
+
+        Orphans do not self-heal, which is why this matters more than it looks.
+        The lemma stays in the backlog (it still has no link) and is retried —
+        but the retry asks the model for a *new* sentence, which hashes
+        differently and becomes a *new* row. The old one is stranded for good.
+        """
+        sent_hash = hash_sentence(sentence)
+        link = {
+            "lemmaId": lemma_id,
+            "wordPosition": word_position,
+            "matchedForm": matched_form,
+            "score": 1.0,
+            "isRepresentative": True,
+            # `isGlobal` is deliberately absent: a trigger derives it from the
+            # sentence row (#120). Setting it here would create a second source
+            # of truth for the flag every study surface filters on, and the
+            # drift would be silent.
+        }
+
+        try:
+            existing = await db.sentencebank.find_first(
+                where={"sentenceHash": sent_hash, "movieId": None}
+            )
+            if existing is not None:
+                return await self._link_sentence(db, existing.id, link, word)
+
+            # New sentence: both rows go in one transaction. Note that nothing
+            # inside it may catch an error and carry on — a failed statement
+            # aborts the whole transaction in Postgres, so the retry for a lost
+            # race has to happen out here, after the rollback.
+            async with db.tx() as tx:
+                row = await tx.sentencebank.create(
+                    data={
+                        "sentenceHash": sent_hash,
+                        "sentence": sentence,
+                        "movieId": None,
+                        "source": "llm",
+                    }
+                )
+                await tx.sentencelemmalink.create(data={"sentenceId": row.id, **link})
+            return True
+
+        except UniqueViolationError:
+            # Another worker wrote the same sentence between the lookup and the
+            # insert. The transaction rolled back, so there is no orphan to
+            # clean up — find the winner's row and link to that instead.
+            row = await db.sentencebank.find_first(
+                where={"sentenceHash": sent_hash, "movieId": None}
+            )
+            if row is None:
+                logger.warning(
+                    "[llm-sentence] lost the insert race for word='%s' but the "
+                    "winning row is not there either; skipping", word
+                )
+                return False
+            return await self._link_sentence(db, row.id, link, word)
+
+        except Exception as e:
+            logger.warning("[llm-sentence] persist failed word='%s': %s", word, e)
+            return False
+
+    async def _link_sentence(self, db: Prisma, sentence_id: int, link: dict, word: str) -> bool:
+        """Attach an existing sentence to a lemma. One statement, so atomic."""
+        try:
+            await db.sentencelemmalink.create(data={"sentenceId": sentence_id, **link})
+            return True
+        except UniqueViolationError:
+            # (sentence_id, lemma_id) is unique and already present — the row we
+            # wanted exists, written by an earlier cycle or a concurrent worker.
+            # This is the one failure that is really a success.
+            return True
+        except Exception as e:
+            logger.warning("[llm-sentence] link failed word='%s': %s", word, e)
+            return False
 
     async def align_word_translation(
         self,
@@ -572,28 +670,6 @@ class LLMSentenceService:
         ) / 1_000_000.0
 
     # ─── Internals ──────────────────────────────────────────────────────────
-
-    async def _get_or_create_global_sentence(self, db: Prisma, sentence: str):
-        """Race-tolerant upsert of a global SentenceBank row (movieId=NULL, source='llm')."""
-        sent_hash = hash_sentence(sentence)
-        existing = await db.sentencebank.find_first(
-            where={"sentenceHash": sent_hash, "movieId": None}
-        )
-        if existing:
-            return existing
-        try:
-            return await db.sentencebank.create(
-                data={
-                    "sentenceHash": sent_hash,
-                    "sentence": sentence,
-                    "movieId": None,
-                    "source": "llm",
-                }
-            )
-        except Exception:
-            return await db.sentencebank.find_first(
-                where={"sentenceHash": sent_hash, "movieId": None}
-            )
 
     def _build_user_payload(self, words: Sequence[WordRequest]) -> str:
         items = []
