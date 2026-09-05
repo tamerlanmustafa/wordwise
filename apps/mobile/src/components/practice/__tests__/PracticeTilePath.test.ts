@@ -134,3 +134,38 @@ describe('section checkpoints', () => {
     }
   });
 });
+
+// ── Why the screen waits for the cursor ────────────────────────────────────
+//
+// The store starts at 0 and hydrates from AsyncStorage a few milliseconds
+// later. PracticeScreen holds the path back until then, and these are the
+// assertions that say why: the first paint would not be a slightly different
+// path, it would be a different set of tiles with the section dividers in
+// different rows — a visible re-layout every time the tab is opened.
+describe('the window before and after the cursor is known', () => {
+  it('shows entirely different tiles', () => {
+    const cold = buildWindow(0).map((t) => t.index);
+    const real = buildWindow(34).map((t) => t.index);
+
+    expect(cold).not.toEqual(real);
+    expect(cold.filter((i) => real.includes(i))).toEqual([]);
+  });
+
+  it('puts the section dividers in different rows', () => {
+    // Each divider is its own row, so one landing a slot earlier shifts every
+    // tile below it — this is the part that reads as the header shoving the
+    // path down.
+    const dividerSlots = (cursor: number) =>
+      buildWindow(cursor)
+        .map((t, slot) => (isSectionStart(t.index) ? slot : -1))
+        .filter((slot) => slot >= 0);
+
+    expect(dividerSlots(0)).not.toEqual(dividerSlots(34));
+  });
+
+  it('starts the window at a different offset once there is progress', () => {
+    // cursor 0 has nothing completed to show above it; a returning user does.
+    expect(buildWindow(0)[0].index).toBe(0);
+    expect(buildWindow(34)[0].index).toBeGreaterThan(0);
+  });
+});

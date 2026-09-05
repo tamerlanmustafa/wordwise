@@ -43,6 +43,11 @@ import { StreakFlame } from './ui/StreakFlame';
 
 const MONO_FAMILY = 'JetBrains Mono';
 
+// The header's height, stated rather than derived. Its tallest child is the
+// 20pt streak flame inside 8pt of vertical padding and a 1pt border.
+const CHIP_H = 38;
+const HEADER_H = CHIP_H + 8;
+
 export interface PracticeScreenProps {
   /** Open the ReviewScreen on a new practice session. */
   onStartDailyReview: () => void;
@@ -80,6 +85,7 @@ export function PracticeScreen({
   // as someone else has to re-read it rather than keep the number on screen.
   // `hydrate` is a no-op when it has already run for this account.
   const cursor = usePracticePathStore((st) => st.cursor);
+  const pathHydrated = usePracticePathStore((st) => st.hydrated);
   const hydratePath = usePracticePathStore((st) => st.hydrate);
   const userId = useAuthStore((st) => st.user?.id ?? null);
   useEffect(() => {
@@ -141,15 +147,20 @@ export function PracticeScreen({
         <View style={s.headerChips}>
           <View style={s.streakChip}>
             <Ionicons name="shield-checkmark" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
-            <Text style={s.streakNumber}>{serverState?.freezes_held ?? 0}</Text>
-            <Text style={s.streakLabel}>
+            <Text style={s.streakNumber} numberOfLines={1}>
+              {serverState?.freezes_held ?? 0}
+            </Text>
+            <Text style={s.streakLabel} numberOfLines={1}>
               {t('practice:freeze', { count: serverState?.freezes_held ?? 0 })}
             </Text>
           </View>
           <View style={s.streakChip}>
             <StreakFlame size={20} lit={effectiveStreak > 0} style={s.streakIcon} />
-            <Text style={s.streakNumber}>{effectiveStreak}</Text>
-            <Text style={s.streakLabel}>{t('practice:dayLabel', { count: effectiveStreak })}</Text>
+            <Text style={s.streakNumber} numberOfLines={1}>{effectiveStreak}</Text>
+            <Text style={s.streakLabel} numberOfLines={1}>
+              {t('practice:dayLabel', { count: effectiveStreak })}
+            </Text>
+
           </View>
         </View>
       </View>
@@ -168,11 +179,20 @@ export function PracticeScreen({
               the tab, so a label saying so was telling the user where they
               already were, and the lesson count was a number with nothing to
               compare it against — the coins themselves say how far along the
-              road you are. */}
-          <PracticeTilePath
-            cursor={cursor}
-            onTilePress={handleTilePress}
-          />
+              road you are.
+
+              Held until the cursor is known. The store starts at 0, so the
+              first paint used to be lesson 1's window — a different set of
+              tiles, with the section dividers falling in different rows —
+              and it re-laid-out the moment the real cursor arrived a few
+              milliseconds later. That jump read as the header shoving the
+              tiles down. The wait is an AsyncStorage read, not a request. */}
+          {pathHydrated ? (
+            <PracticeTilePath
+              cursor={cursor}
+              onTilePress={handleTilePress}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -196,12 +216,15 @@ const makeStyles = (tc: ThemeColors) =>
     // a serif "Practice" title, which named the tab the user had just tapped
     // and cost ~60pt of the path's vertical room to do it.
     header: {
+      // Fixed, not content-sized. Everything in it arrives from the network —
+      // freeze count, streak, singular vs plural label — and anything above
+      // the path that changes height after first paint moves every tile below
+      // it. The numbers are free to change; the box they sit in is not.
+      height: HEADER_H,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
       paddingHorizontal: 18,
-      paddingTop: 4,
-      paddingBottom: 4,
     },
     headerChips: {
       flexDirection: 'row',
@@ -209,11 +232,11 @@ const makeStyles = (tc: ThemeColors) =>
       gap: 8,
     },
     streakChip: {
+      height: CHIP_H,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: 14,
-      paddingVertical: 8,
       borderRadius: 999,
       backgroundColor: tc.paper,
       borderWidth: 1,

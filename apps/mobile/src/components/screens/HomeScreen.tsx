@@ -55,6 +55,13 @@ const SHOW_WORD_OF_THE_HOUR: boolean = false;
 // lets the feed below slide up to fill the reclaimed space.
 const WORD_BLOCK_H = 172;
 
+// The "recommended for B1 · new set in 4h" line, and the slot it sits in.
+// Stated as constants rather than left to the type's own metrics because the
+// slot has to be exactly as tall when it is empty as when it is full — that
+// is the entire point of reserving it.
+const FEED_EYEBROW_LINE_H = 12;
+const FEED_EYEBROW_ROW_H = FEED_EYEBROW_LINE_H + 9;
+
 interface Props {
   onMoviePress: (movie: MovieData) => void;
   onSearch: (query: string) => void;
@@ -507,15 +514,26 @@ export const HomeScreen = ({
 
       {/* Says what the feed is and when it turns over — the two things a
           shuffled order has to declare, or it just looks like a broken sort.
-          Hidden unless the server actually gave us a rotation instant, so a
-          column sort (or a page that hasn't landed) shows nothing. */}
-      {levelSort === 'recommended' && hoursToRotation != null ? (
-        <Text style={s.feedEyebrow}>
-          {t('home:feed.recommendedEyebrow', {
-            level: selectedLevel,
-            hours: hoursToRotation,
-          })}
-        </Text>
+
+          The row is reserved for the whole of the recommended sort, not just
+          for the moment the text is known. `hoursToRotation` comes off the
+          first page, so it arrives *after* the list has painted: rendering
+          the row conditionally meant the list drew at the top of the screen
+          and was then shoved down by a line of 9pt type appearing above it.
+          A fixed-height slot that fills in is the difference between a screen
+          that settles and one that twitches. The column sorts have no
+          rotation to declare, so they reserve nothing. */}
+      {levelSort === 'recommended' ? (
+        <View style={s.feedEyebrowRow}>
+          {hoursToRotation != null ? (
+            <Text style={s.feedEyebrow} numberOfLines={1}>
+              {t('home:feed.recommendedEyebrow', {
+                level: selectedLevel,
+                hours: hoursToRotation,
+              })}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
       {/* Ranked feed — the sole full-height scroller. It owns pull-to-refresh
@@ -656,14 +674,21 @@ const makeStyles = (tc: ThemeColors) =>
     // One mono line between the ad slot and the feed. Same treatment as the
     // other eyebrows in the app, at the feed's own gutter (18) rather than the
     // list's narrower one, so it lines up with the search field above it.
+    // The slot, sized once so it is the same height empty or full. An
+    // explicit lineHeight on the text inside it keeps that true across the
+    // two platforms' font metrics.
+    feedEyebrowRow: {
+      height: FEED_EYEBROW_ROW_H,
+      justifyContent: 'flex-start',
+      paddingHorizontal: 18,
+    },
     feedEyebrow: {
       fontSize: 9.5,
+      lineHeight: FEED_EYEBROW_LINE_H,
       fontWeight: '700',
       letterSpacing: 1.5,
       textTransform: 'uppercase',
       color: tc.goldOnSurface,
-      paddingHorizontal: 18,
-      paddingBottom: 9,
     },
     feedSection: {
       // Takes the rest of the screen below the pinned header so the movie list

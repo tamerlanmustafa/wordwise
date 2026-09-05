@@ -25,10 +25,29 @@ import type {
   ListSort,
   ListSummary,
 } from '../core/types';
+import { readCache, writeCache } from '../services/swrCache';
 import { useReelStore } from './reelStore';
 import { showToast } from './toastStore';
 
 const ACTIVE_KIND_KEY = 'lists.activeKind.v1';
+
+/**
+ * The index, kept on disk so opening the tab shows lists instead of skeleton
+ * rows while a request is in flight.
+ *
+ * The tab is lazily mounted, so before this the first tap of every cold start
+ * bought a full round trip of grey rectangles. `fetchLists` already refused to
+ * blank a populated list on a failed refresh — this simply gives it something
+ * to be populated *with* on the first load, which is the one time it had
+ * nothing.
+ *
+ * Longer-lived than the film feed's 24h cache, because this is the user's own
+ * data rather than a server draw that rotates: their lists are almost always
+ * exactly what they were when they last looked, and the refresh lands moments
+ * later either way.
+ */
+const LISTS_CACHE_KEY = 'lists.index.v1';
+const LISTS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Temp ids for optimistic rows are negative so they can never collide with
  *  a real server id, and so a stray render keys cleanly. */
@@ -101,7 +120,17 @@ export const useListsStore = create<ListsState>((set, get) => ({
     // never touched the switch has nothing stored and gets the new default.
     // Bumping the key would overwrite a real preference to win an argument
     // about a default.
-    set({ activeKind, hydrated: true });
+    // Paint the last known index before the request goes out. Guarded on
+    // `lists.length` so a cache read that loses a race to the network — the
+    // store is a singleton and `hydrate` is not the only caller of
+    // `fetchLists` — cannot repaint stale rows over fresh ones.
+    const cached = await readCache<ListSummary[]>(LISTS_CACHE_KEY, LISTS_CACHE_TTL_MS);
+    const paint =
+      Array.isArray(cached) && cached.length > 0 && get().lists.length === 0
+        ? { lists: cached, status: 'ready' as Status }
+        : {};
+
+    set({ activeKind, hydrated: true, ...paint });
     await get().fetchLists();
   },
 
@@ -112,6 +141,9 @@ export const useListsStore = create<ListsState>((set, get) => ({
     try {
       const lists = await listsApi.list();
       set({ lists, status: 'ready', loadError: false, error: null });
+      // Fire-and-forget: caching is an optimisation, never a step the user
+      // waits behind.
+      void writeCache(LISTS_CACHE_KEY, lists);
     } catch (e) {
       console.warn('[listsStore] fetchLists failed:', e);
       set({ status: 'ready', loadError: true });

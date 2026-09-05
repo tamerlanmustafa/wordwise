@@ -330,3 +330,106 @@ describe('reorder', () => {
     expect(useListsStore.getState().lists.map((l) => l.id)).toEqual([1, 2, 3]);
   });
 });
+
+// ── The cached index ───────────────────────────────────────────────────────
+//
+// The Lists tab is lazily mounted, so the first tap of every cold start used
+// to buy a full round trip of skeleton rows. `fetchLists` already refused to
+// blank a populated list on a failed refresh; the cache is what gives it
+// something to be populated with on the one load where it had nothing.
+describe('the cached index', () => {
+  const cacheKey = 'swr_lists.index.v1';
+  const wrapped = (data: unknown, savedAt = Date.now()) =>
+    JSON.stringify({ data, savedAt });
+
+  it('stores the index after a successful fetch', async () => {
+    mockList.mockResolvedValue([REEL, FAVS]);
+
+    await useListsStore.getState().fetchLists();
+    await flush();
+
+    const raw = await AsyncStorage.getItem(cacheKey);
+    expect(JSON.parse(raw!).data).toHaveLength(2);
+  });
+
+  it('shows the cached index before the request lands', async () => {
+    await AsyncStorage.setItem(cacheKey, wrapped([REEL, FAVS]));
+    // A request that never settles: whatever is on screen came from disk.
+    mockList.mockReturnValue(new Promise(() => {}));
+
+    // Not awaited: `hydrate` awaits `fetchLists`, and this request never
+    // settles. The cache paint happens before that, which is the point.
+    void useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().lists).toHaveLength(2);
+    // 'ready', not 'loading' — that flag is what draws the skeleton rows.
+    expect(useListsStore.getState().status).toBe('ready');
+  });
+
+  it('replaces the cached index with the fetched one', async () => {
+    await AsyncStorage.setItem(cacheKey, wrapped([REEL, FAVS]));
+    mockList.mockResolvedValue([REEL]);
+
+    await useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().lists).toHaveLength(1);
+  });
+
+  it('keeps the cached index when the request fails', async () => {
+    // Offline resilience: an empty Lists tab reads as "you have no lists",
+    // which is a different and much worse statement than "we could not ask".
+    await AsyncStorage.setItem(cacheKey, wrapped([REEL, FAVS]));
+    mockList.mockRejectedValue(new Error('offline'));
+
+    await useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().lists).toHaveLength(2);
+    expect(useListsStore.getState().loadError).toBe(true);
+  });
+
+  it('ignores a cache older than its lifetime', async () => {
+    const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    await AsyncStorage.setItem(cacheKey, wrapped([REEL, FAVS], eightDaysAgo));
+    mockList.mockReturnValue(new Promise(() => {}));
+
+    // Not awaited: `hydrate` awaits `fetchLists`, and this request never
+    // settles. The cache paint happens before that, which is the point.
+    void useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().lists).toEqual([]);
+  });
+
+  it('does not paint over lists that are already loaded', async () => {
+    // `hydrate` is not the only caller of `fetchLists`, and the store is a
+    // singleton — a cache read that loses the race must stay quiet rather
+    // than putting stale rows back on screen.
+    await AsyncStorage.setItem(cacheKey, wrapped([REEL, FAVS]));
+    useListsStore.setState({ lists: [REEL] });
+    mockList.mockReturnValue(new Promise(() => {}));
+
+    // Not awaited: `hydrate` awaits `fetchLists`, and this request never
+    // settles. The cache paint happens before that, which is the point.
+    void useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().lists).toEqual([REEL]);
+  });
+
+  it('does not paint an empty cached index', async () => {
+    // An empty array is indistinguishable from "never cached", and painting
+    // it would flip `status` to ready and show the empty state for a moment.
+    await AsyncStorage.setItem(cacheKey, wrapped([]));
+    mockList.mockReturnValue(new Promise(() => {}));
+
+    // Not awaited: `hydrate` awaits `fetchLists`, and this request never
+    // settles. The cache paint happens before that, which is the point.
+    void useListsStore.getState().hydrate();
+    await flush();
+
+    expect(useListsStore.getState().status).toBe('loading');
+  });
+});
