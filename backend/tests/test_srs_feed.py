@@ -19,9 +19,12 @@ from src.routes.srs import (
     _allocate_mix,
     _eligible_lemma_candidates,
     _fallback_mix,
+    _draw_feed_rows,
     _feed_seed,
-    _page_plan,
+    _parse_cursors,
     _parse_mix,
+    _proportional_quota,
+    _spread_deficit,
     _sentence_match,
 )
 from src.services.feed_pool import FEED_MIX_LEVELS
@@ -174,56 +177,149 @@ class TestFallbackMix:
         assert _fallback_mix(list(FEED_MIX_LEVELS)) == ([], {})
 
 
-class TestPagePlan:
-    def test_proportions_hold_across_three_pages(self):
-        requested = {"B1": 70, "B2": 20, "C1": 10}
-        stock = {"B1": 500, "B2": 500, "C1": 500}
-        for page in range(3):
-            cursors, applied = _page_plan(requested, 20, stock, page)
-            assert applied == {"B1": 14, "B2": 4, "C1": 2}
-            # Each page starts exactly where the previous one stopped.
-            assert cursors == {"B1": 14 * page, "B2": 4 * page, "C1": 2 * page}
+class TestProportionalQuota:
+    """Round one of a page: shares only, no stock count.
 
-    def test_pages_do_not_overlap(self):
-        requested = {"B1": 70, "B2": 20, "C1": 10}
-        stock = {"B1": 500, "B2": 500, "C1": 500}
-        seen: set[tuple[str, int]] = set()
-        for page in range(5):
-            cursors, applied = _page_plan(requested, 20, stock, page)
-            for lvl, n in applied.items():
-                for i in range(cursors[lvl], cursors[lvl] + n):
-                    assert (lvl, i) not in seen, f"{lvl}#{i} served twice"
-                    seen.add((lvl, i))
-        assert len(seen) == 100
+    Asking "how many B1 words are left for this user" is precisely the
+    4,000-row scan the keyset rewrite exists to delete, so the first draw
+    allocates blind and `_spread_deficit` handles whatever came back short.
+    """
 
-    def test_page_plan_is_stable_for_the_same_inputs(self):
-        # Same user + same day = same stock, so re-requesting a page must
-        # return the identical slice (the feed pages, it doesn't re-roll).
-        requested = {"B1": 70, "B2": 20, "C1": 10}
-        stock = {"B1": 40, "B2": 9, "C1": 3}
-        first = _page_plan(requested, 20, stock, 2)
-        second = _page_plan(requested, 20, stock, 2)
-        assert first == second
+    def test_default_mix_page_of_twenty(self):
+        assert _proportional_quota({"B1": 70, "B2": 20, "C1": 10}, 20) == {
+            "B1": 14, "B2": 4, "C1": 2,
+        }
 
-    def test_later_pages_absorb_a_bucket_that_ran_dry(self):
-        # C1 holds 3: page 0 takes 2, page 1 takes the last 1 and tops up
-        # from B1 to stay a full page.
-        requested = {"B1": 70, "B2": 20, "C1": 10}
-        stock = {"B1": 500, "B2": 500, "C1": 3}
-        _, page0 = _page_plan(requested, 20, stock, 0)
-        cursors, page1 = _page_plan(requested, 20, stock, 1)
-        assert page0["C1"] == 2
-        assert cursors["C1"] == 2
-        assert page1["C1"] == 1
-        assert sum(page1.values()) == 20
+    def test_always_totals_the_limit(self):
+        # Largest-remainder, so a mix that does not divide evenly still fills
+        # the page rather than handing back nineteen cards.
+        assert sum(_proportional_quota({"A2": 33, "B1": 33, "B2": 34}, 20).values()) == 20
+
+    def test_drops_levels_with_no_share(self):
+        assert "A2" not in _proportional_quota({"A2": 0, "B1": 100}, 10)
+
+    def test_does_not_clamp_to_anything(self):
+        # The distinction from `_allocate_mix`: nothing here knows or cares
+        # how deep a level is.
+        assert _proportional_quota({"C2": 100}, 50) == {"C2": 50}
+
+
+class TestSpreadDeficit:
+    """Round two: a level came back short, so its slots go to the others."""
+
+    def test_hands_every_unfilled_slot_out(self):
+        assert sum(_spread_deficit(6, ["B1", "B2"]).values()) == 6
+
+    def test_deals_round_robin_from_the_largest_share_first(self):
+        # Receivers arrive ordered by share, so an odd slot lands on the
+        # dominant level rather than a thin one.
+        assert _spread_deficit(3, ["B1", "B2"]) == {"B1": 2, "B2": 1}
+
+    def test_nobody_to_receive_means_a_short_page(self):
+        # Every level dry. A short page is the honest answer; looping to find
+        # more would not find any.
+        assert _spread_deficit(5, []) == {}
+
+    def test_nothing_to_spread_is_a_no_op(self):
+        assert _spread_deficit(0, ["B1"]) == {}
+
+
+class TestParseCursors:
+    """The keyset position, one hash per level."""
+
+    def test_parses_a_cursor_per_level(self):
+        assert _parse_cursors("B1:9f3a,B2:41c0") == {"B1": "9f3a", "B2": "41c0"}
+
+    def test_tolerates_whitespace_and_case(self):
+        assert _parse_cursors(" b1 : 9f3a ") == {"B1": "9f3a"}
+
+    def test_absent_means_start_from_the_beginning(self):
+        assert _parse_cursors(None) == {}
+        assert _parse_cursors("") == {}
+
+    def test_drops_junk_rather_than_rejecting_the_request(self):
+        # A cursor is a position, not an instruction. The worst a bad one can
+        # do is restart that level, and a 400 would strand a client that has
+        # no way to build a valid cursor except by asking us for one.
+        assert _parse_cursors("B1:zzz,B2:41c0") == {"B2": "41c0"}
+        assert _parse_cursors("NOPE:41c0") == {}
+        assert _parse_cursors("B1:") == {}
+
+    def test_survives_a_malformed_string_entirely(self):
+        assert _parse_cursors("garbage") == {}
+
+
+class TestDrawFeedRows:
+    """The SQL the page is actually drawn with."""
+
+    class _Db:
+        def __init__(self):
+            self.sql = ""
+            self.args: tuple = ()
+
+        async def query_raw(self, sql, *args):
+            self.sql, self.args = sql, args
+            return []
+
+    async def _draw(self, quota, cursors=None):
+        db = self._Db()
+        await _draw_feed_rows(
+            db, quota=quota, order_seed="7:tok", cursors=cursors or {}, user_id=7
+        )
+        return db
+
+    async def test_one_branch_per_level_with_its_own_limit(self):
+        db = await self._draw({"B1": 14, "B2": 4})
+
+        assert db.sql.count("UNION ALL") == 1
+        assert "LIMIT 14" in db.sql and "LIMIT 4" in db.sql
+
+    async def test_orders_and_seeks_by_the_same_hash_expression(self):
+        # If the ORDER BY and the keyset predicate ever disagree, the cursor
+        # stops naming a position in the ordering and pages start overlapping.
+        db = await self._draw({"B1": 14})
+
+        assert "ORDER BY md5(l.id::text || ':' || $2)" in db.sql
+        assert "md5(l.id::text || ':' || $2) > $3" in db.sql
+
+    async def test_seeds_cursors_and_user_are_all_parameterised(self):
+        db = await self._draw({"B1": 14}, {"B1": "9f3a"})
+
+        assert db.args == (7, "7:tok", "9f3a")
+        assert "9f3a" not in db.sql
+
+    async def test_a_level_with_no_cursor_starts_from_the_beginning(self):
+        db = await self._draw({"B1": 14})
+        assert db.args[2] == ""
+
+    async def test_never_offsets(self):
+        # The whole point. An OFFSET would reintroduce both the cost that
+        # grows with depth and the instability under a shrinking pool.
+        db = await self._draw({"B1": 14, "C1": 2})
+        assert "OFFSET" not in db.sql.upper()
+
+    async def test_still_excludes_the_user_s_own_words(self):
+        db = await self._draw({"B1": 14})
+        assert "user_words uw" in db.sql and "uw.user_id = $1" in db.sql
+
+    async def test_zero_quota_levels_are_not_queried(self):
+        db = await self._draw({"B1": 20, "C2": 0})
+        assert "'C2'" not in db.sql
+
+    async def test_an_empty_quota_asks_nothing_at_all(self):
+        db = self._Db()
+        rows = await _draw_feed_rows(
+            db, quota={}, order_seed="7:tok", cursors={}, user_id=7
+        )
+        assert rows == [] and db.sql == ""
 
 
 class TestFeedSeed:
     """The client mints a token per cold start; the feed's order follows it."""
 
     def test_same_token_gives_the_same_order(self):
-        # Paging depends on this: `offset` addresses a stable sequence only
-        # while every page of a session hashes to the same seed.
+        # Paging depends on this: a cursor addresses a stable sequence only
+        # while every page of a session is ordered by the same key.
         assert _feed_seed(7, "abc123") == _feed_seed(7, "abc123")
 
     def test_a_new_token_deals_a_new_deck(self):
@@ -241,13 +337,10 @@ class TestFeedSeed:
     def test_empty_token_is_treated_as_absent(self):
         assert _feed_seed(7, "") == _feed_seed(7, None)
 
-    def test_is_seedable_by_random(self):
-        # The route feeds this straight into random.Random(...), which needs
-        # a hashable, deterministic value.
-        seed = _feed_seed(7, "abc123")
-        first = random.Random(f"{seed}:B1")
-        second = random.Random(f"{seed}:B1")
-        assert first.random() == second.random()
+    def test_is_a_string_postgres_can_concatenate(self):
+        # It is interpolated into `md5(l.id::text || ':' || $2)` as a bound
+        # parameter, so it has to survive as text rather than an int.
+        assert isinstance(_feed_seed(7, "abc123"), str)
 
 
 class TestSentenceMatch:

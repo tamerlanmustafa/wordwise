@@ -222,6 +222,11 @@ class FeedResponse(BaseModel):
     mix_applied: dict[str, int]
     # False once every bucket is drained, so the client stops paging.
     has_more: bool
+    # Where this page stopped, per level: the ordering hash of the last row
+    # drawn from each. The client echoes them on the next request. This is a
+    # *keyset* cursor, not a count — see `word_feed` for why the feed cannot
+    # use an offset.
+    cursors: dict[str, str] = {}
 
 
 class ReviewBody(BaseModel):
@@ -1272,6 +1277,28 @@ def _parse_mix(raw: str) -> dict[str, int]:
     return mix
 
 
+def _parse_cursors(raw: Optional[str]) -> dict[str, str]:
+    """Parse `B1:9f3a…,B2:41c…` into {level: hash}.
+
+    Unparseable entries are dropped rather than rejected. A cursor is a
+    position, not an instruction: the worst a bad one can do is start that
+    level from the beginning, and a 400 here would strand a client that has
+    no way to construct a valid cursor except by asking us for one.
+    """
+    out: dict[str, str] = {}
+    if not raw:
+        return out
+    for part in raw.split(","):
+        level, _, value = part.strip().partition(":")
+        level = level.strip().upper()
+        value = value.strip()
+        # Hex only — the value is interpolated nowhere, but it is compared
+        # against an md5 in SQL and anything else can only mean a bug.
+        if level in _FEED_MIX_LEVELS and value and all(c in "0123456789abcdef" for c in value):
+            out[level] = value
+    return out
+
+
 def _allocate_mix(
     mix: dict[str, int],
     limit: int,
@@ -1360,47 +1387,117 @@ def _fallback_mix(levels: list[str]) -> tuple[list[str], dict[str, int]]:
     return spare, requested
 
 
-def _page_plan(
-    requested: dict[str, int],
-    limit: int,
-    stock: dict[str, int],
-    page_index: int,
-) -> tuple[dict[str, int], dict[str, int]]:
-    """Where page `page_index` starts in each bucket, and what it draws.
+def _proportional_quota(requested: dict[str, int], limit: int) -> dict[str, int]:
+    """Split `limit` across levels purely by share, ignoring stock.
 
-    Replays every earlier page so the cursors account for buckets that ran
-    dry along the way — allocation is pure arithmetic, so this is cheap
-    even deep into a feed. Returns `(cursors, applied)`.
+    The stock-aware version (`_allocate_mix`) needs to know how many rows each
+    level has left, which the keyset draw deliberately does not compute — the
+    whole point is to stop counting a pool in order to serve twenty rows from
+    it. So the first pass allocates blind and `_spread_deficit` picks up
+    whatever came back short.
     """
-    cursors = {lvl: 0 for lvl in stock}
-    applied: dict[str, int] = {}
-    for page in range(page_index + 1):
-        remaining = {lvl: stock[lvl] - cursors[lvl] for lvl in stock}
-        applied = _allocate_mix(requested, limit, remaining)
-        if page < page_index:
-            for lvl, n in applied.items():
-                cursors[lvl] += n
-    return cursors, applied
+    return _allocate_mix(requested, limit, {lvl: limit for lvl in requested})
 
 
-def _feed_seed(user_id: int, token: Optional[str]) -> int:
-    """The shuffle seed for one user's feed ordering.
+def _spread_deficit(
+    deficit: int,
+    receivers: list[str],
+) -> dict[str, int]:
+    """Hand `deficit` unfilled slots to levels that might still have rows.
+
+    Round-robin over the receivers, which are passed in largest-share-first,
+    rather than another proportional split. This is the rare path — a level
+    only runs short once a user has read most of it — and a second
+    apportionment would need shares renormalised over an arbitrary subset for
+    no visible gain over dealing them out one at a time.
+    """
+    out: dict[str, int] = {}
+    if not receivers:
+        return out
+    i = 0
+    while deficit > 0:
+        out[receivers[i % len(receivers)]] = out.get(receivers[i % len(receivers)], 0) + 1
+        deficit -= 1
+        i += 1
+    return out
+
+
+async def _draw_feed_rows(
+    db: Prisma,
+    *,
+    quota: dict[str, int],
+    order_seed: str,
+    cursors: dict[str, str],
+    user_id: int,
+) -> list[dict]:
+    """Draw one page: `quota[level]` rows per level, after that level's cursor.
+
+    One statement, a UNION ALL of per-level keyset reads. Each branch seeks
+    into its own level's ordering and stops at its own LIMIT, so the work is
+    proportional to the page, not to the catalogue — and unlike an OFFSET it
+    does not grow as the user reads further, it shrinks.
+
+    The level names are interpolated because they come from FEED_MIX_LEVELS,
+    never from the request; the seed, the cursors and the user id are all
+    parameterised.
+    """
+    parts: list[str] = []
+    args: list = [user_id, order_seed]
+    for level, take in quota.items():
+        if take <= 0:
+            continue
+        args.append(cursors.get(level) or "")
+        cursor_ref = f"${len(args)}"
+        key = "md5(l.id::text || ':' || $2)"
+        parts.append(
+            f"""
+            (
+                SELECT l.id               AS lemma_id,
+                       l.lemma            AS word,
+                       l.pos              AS pos,
+                       l.cefr_level::text AS cefr_level,
+                       l.definition       AS definition,
+                       {key}              AS feed_key
+                FROM lemmas l
+                WHERE l.cefr_level = '{level}'
+                  AND {feed_eligibility_sql("l")}
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_words uw
+                      WHERE uw.user_id = $1 AND uw.word = l.lemma
+                  )
+                  AND {key} > {cursor_ref}
+                ORDER BY {key}
+                LIMIT {int(take)}
+            )
+            """
+        )
+    if not parts:
+        return []
+    return await db.query_raw(" UNION ALL ".join(parts), *args)
+
+
+def _feed_seed(user_id: int, token: Optional[str]) -> str:
+    """The ordering key for one user's feed.
+
+    Concatenated with each lemma id and hashed *in Postgres*, so the feed's
+    order is a property of a SQL expression rather than of a list Python holds
+    in memory. That is what lets a page be drawn with a LIMIT instead of by
+    materialising the pool and slicing it.
 
     `token` comes from the client, which mints a fresh one on every cold
     start, so each launch deals a different deck. It must be echoed back on
-    every page of that launch: `offset` only addresses a stable sequence if
-    every page hashes to the same seed, and a seed that drifted mid-session
-    would make page 2 overlap page 1.
+    every page of that launch: a cursor only addresses a stable sequence if
+    every page is ordered by the same key.
 
     Older clients send nothing. They fall back to the UTC day, which is the
     behaviour the feed shipped with — stable for a day, reshuffled overnight.
 
-    The user id stays in the hash so two users passing the same token still
+    The user id stays in the key so two users passing the same token still
     get different orders.
     """
     if not token:
         token = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return int(hashlib.md5(f"{user_id}:{token}".encode()).hexdigest()[:8], 16)
+    return f"{user_id}:{token}"
 
 
 def _sentence_match(
@@ -1622,6 +1719,7 @@ async def todays_word(
 async def word_feed(
     limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0),
+    cursors: Optional[str] = Query(None, max_length=512),
     target_lang: Optional[str] = None,
     mix: Optional[str] = None,
     seed: Optional[str] = Query(None, max_length=64),
@@ -1631,20 +1729,58 @@ async def word_feed(
     """
     The Explore feed — an endless, level-mixed stream of single words.
 
-    Same candidate pool as /today (real-word shape, hidden_words filtered,
-    guaranteed global LLM sentence) plus an exclusion for anything already
-    in the user's user_words, so saved and known words never come back.
+    Real-word shape, hidden_words filtered, guaranteed global LLM sentence,
+    minus anything already in the user's user_words so saved and known words
+    never come back.
 
     `mix` (e.g. `A1:0,A2:0,B1:70,B2:20,C1:10,C2:0`, must sum to 100) sets how
     much of each page comes from each CEFR level, over the full A1–C2 range.
-    Omit it to get the /today behaviour: the user's level plus one above.
+    Omit it to get /today's band: the user's level plus one above.
 
     `seed` is an opaque client token that fixes the pick order. The app mints
     one per cold start and echoes it on every page, so each launch is a fresh
-    shuffle while paging within a launch stays coherent. Omit it and the
-    order falls back to being seeded per user per UTC day — see `_feed_seed`.
+    deal while paging within a launch stays coherent.
+
+    ## Why this pages by cursor and not by offset
+
+    It used to load up to 4,000 candidate rows, shuffle them in Python and
+    slice out twenty. Three things were wrong with that, and they were the
+    same thing:
+
+      • **The pool was capped.** 4,000 rows split evenly across the levels in
+        the mix meant 1,333 each for a three-level mix — 15% of C1's 8,608
+        eligible lemmas. The rest of the catalogue was unreachable, always the
+        same rest, because the cap took the top of `frequency_rank`.
+      • **Saving a word re-dealt the deck.** The `user_words` exclusion is
+        inside the query, so each save shrank a bucket by one — and a seeded
+        shuffle of N-1 rows is an unrelated permutation, not the old one minus
+        an element. Meanwhile `offset` kept advancing into it. Saving is the
+        primary action on this screen, so this fired constantly.
+      • **Every page cost the same scan.** Page 50 rebuilt the whole pool to
+        serve twenty rows, and the cost grew with the catalogue.
+
+    Ordering by `md5(lemma_id || seed)` in SQL and paging by *keyset* — "the
+    rows after this hash" rather than "skip this many" — fixes all three. The
+    cursor names a position in an ordering instead of a count from the start,
+    so rows vanishing behind it are irrelevant; the draw is a LIMIT into an
+    ordered scan, so nothing is materialised and there is no reason to cap the
+    pool; and the work shrinks as the user reads further instead of growing.
+
+    `cursors` is that position, one hash per level, as `B1:<hash>,B2:<hash>`.
+    A request without it starts from the beginning of the deal. An older
+    client sending `offset` gets one page and then `has_more=False` — it
+    cannot be served correctly, and ending the feed is a better failure than
+    silently looping over page one.
     """
-    shuffle_seed = _feed_seed(current_user.id, seed)
+    order_seed = _feed_seed(current_user.id, seed)
+    level_cursors = _parse_cursors(cursors)
+
+    # A build from before keyset paging. It has no cursor to send and its
+    # `offset` addresses an ordering that no longer exists, so serving it a
+    # second page would repeat the first. End its feed instead: one page of
+    # real words, then a clean stop.
+    if offset > 0 and not level_cursors:
+        return FeedResponse(items=[], mix_applied={}, has_more=False)
 
     raw_level = current_user.proficiencyLevel
     user_level = (raw_level.value if hasattr(raw_level, "value") else str(raw_level or "B1")).upper()
@@ -1672,73 +1808,86 @@ async def word_feed(
     if not levels:
         return FeedResponse(items=[], mix_applied={}, has_more=False)
 
-    candidates = await _eligible_lemma_candidates(
-        db, levels, exclude_user_id=current_user.id, limit=4000
+    # Round one: allocate the page by share alone and draw it. No stock count
+    # anywhere — asking "how many B1 words are left for this user" is the
+    # 4,000-row scan this rewrite exists to delete.
+    quota = _proportional_quota(requested, limit)
+    rows = await _draw_feed_rows(
+        db,
+        quota=quota,
+        order_seed=order_seed,
+        cursors=level_cursors,
+        user_id=current_user.id,
     )
 
-    if not candidates and mix:
-        # Last resort: every level this user's mix names is empty *for them* —
-        # a single-level mix whose pool they have read out, or a thin level with
-        # nothing left after their user_words exclusion. An empty Explore tab is
-        # a worse answer than a page off-mix, so draw from the levels they did
-        # not ask for and say so honestly in `mix_applied`.
-        #
-        # The trigger is deliberately "no stock at all in the requested levels",
-        # not "this page came back short". A bucket that merely runs dry
-        # mid-page is _allocate_mix's redistribution to handle, and a page that
-        # comes back empty deep into a feed is the genuine end of it — falling
-        # back there would turn "you've seen them all" into an endless stream
-        # that quietly ignores the mix.
-        #
-        # It is also a second query rather than widening the first: the 4,000
-        # row budget is split evenly across `levels`, so always querying all six
-        # would cut a single-level mix's depth from 4,000 to 666 on every
-        # request to serve a case that, on current stock, no user reaches.
-        spare, spare_mix = _fallback_mix(levels)
-        if spare:
-            logger.warning(
-                f"[feed] mix levels exhausted user={current_user.id} "
-                f"levels={levels}; falling back to {spare}"
-            )
-            candidates = await _eligible_lemma_candidates(
-                db, spare, exclude_user_id=current_user.id, limit=4000
-            )
-            levels, requested = spare, spare_mix
-
-    if not candidates:
-        logger.warning(f"[feed] no eligible lemmas user={current_user.id} levels={levels}")
-        return FeedResponse(items=[], mix_applied={}, has_more=False)
-
-    # Bucket by level, then shuffle each bucket with the session seed. Same
-    # user + same seed = same order, so `offset` addresses a stable sequence
-    # for as long as the client keeps sending that seed.
-    buckets: dict[str, list[dict]] = {lvl: [] for lvl in levels}
-    for row in candidates:
-        bucket = buckets.get((row.get("cefr_level") or "").upper())
+    drawn: dict[str, list[dict]] = {lvl: [] for lvl in levels}
+    for row in rows:
+        bucket = drawn.get((row.get("cefr_level") or "").upper())
         if bucket is not None:
             bucket.append(row)
-    for lvl, rows in buckets.items():
-        rng = random.Random(f"{shuffle_seed}:{lvl}")
-        rng.shuffle(rows)
 
-    page_index = offset // limit
-    stock = {lvl: len(buckets[lvl]) for lvl in levels}
-    cursors, applied = _page_plan(requested, limit, stock, page_index)
+    # Round two, only when a level came back short: it has run dry, so its
+    # share goes to the levels that filled their quota and may still have
+    # rows. `_allocate_mix` used to do this from a stock count; here the
+    # shortfall is observed rather than predicted.
+    deficit = limit - sum(len(v) for v in drawn.values())
+    if deficit > 0:
+        receivers = [
+            lvl
+            for lvl in sorted(levels, key=lambda l: (-requested.get(l, 0), _CEFR_ORDER.index(l)))
+            if len(drawn[lvl]) >= quota.get(lvl, 0) > 0
+        ]
+        top_up = _spread_deficit(deficit, receivers)
+        if top_up:
+            # Each receiver resumes after the row it just reached, so the
+            # second draw cannot re-serve the first one's rows.
+            second_cursors = dict(level_cursors)
+            for lvl, bucket in drawn.items():
+                if bucket:
+                    second_cursors[lvl] = bucket[-1]["feed_key"]
+            more = await _draw_feed_rows(
+                db,
+                quota=top_up,
+                order_seed=order_seed,
+                cursors=second_cursors,
+                user_id=current_user.id,
+            )
+            for row in more:
+                bucket = drawn.get((row.get("cefr_level") or "").upper())
+                if bucket is not None:
+                    bucket.append(row)
 
-    picks: list[dict] = []
-    for lvl, n in applied.items():
-        start = cursors[lvl]
-        picks.extend(buckets[lvl][start:start + n])
-        cursors[lvl] += n
+    picks = [row for bucket in drawn.values() for row in bucket]
 
     if not picks:
-        return FeedResponse(items=[], mix_applied={}, has_more=False)
+        # Nothing after the cursor in any level: the user has read the deal
+        # out. Not an error, and not a reason to fall back to another mix —
+        # that would turn "you have seen them all" into an endless stream
+        # that quietly ignores what they asked for.
+        return FeedResponse(
+            items=[], mix_applied={}, has_more=False, cursors=level_cursors
+        )
 
-    # Interleave so a page doesn't read as blocks of one level.
-    rng = random.Random(f"{shuffle_seed}:page:{page_index}")
+    # Where each level stopped. Levels not drawn from keep the cursor they
+    # came in with, so a mix change mid-session cannot rewind them.
+    next_cursors = dict(level_cursors)
+    for lvl, bucket in drawn.items():
+        if bucket:
+            next_cursors[lvl] = bucket[-1]["feed_key"]
+
+    applied = {lvl: len(bucket) for lvl, bucket in drawn.items() if bucket}
+
+    # Interleave so a page doesn't read as blocks of one level. Seeded on the
+    # cursor rather than a page number: there is no page number any more, and
+    # the same page must shuffle the same way if it is ever re-requested.
+    rng = random.Random(f"{order_seed}:{next_cursors}")
     rng.shuffle(picks)
 
-    has_more = any(len(buckets[lvl]) - cursors[lvl] > 0 for lvl in levels)
+    # A full page means there is probably more; a short one means at least one
+    # level ran dry and the top-up could not cover it. The boundary case — a
+    # last page that happens to fill exactly — costs one empty request, which
+    # the branch above answers honestly.
+    has_more = len(picks) >= limit
 
     # One query for every pick's best sentence. is_representative wins, then
     # score — matching the ordering /today uses for its single lemma. The tie
@@ -1833,7 +1982,9 @@ async def word_feed(
         )
 
     logger.info(
-        f"[feed] user={current_user.id} page={page_index} items={len(items)} "
+        f"[feed] user={current_user.id} items={len(items)} "
         f"mix_applied={applied} has_more={has_more}"
     )
-    return FeedResponse(items=items, mix_applied=applied, has_more=has_more)
+    return FeedResponse(
+        items=items, mix_applied=applied, has_more=has_more, cursors=next_cursors
+    )

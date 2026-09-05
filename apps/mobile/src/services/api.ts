@@ -1087,6 +1087,10 @@ export interface FeedResponse {
    *  level runs dry. */
   mix_applied: LevelMix;
   has_more: boolean;
+  /** Where this page stopped, per level — a keyset position, not a count.
+   *  Send it back to get the next page. Absent from an older server, which
+   *  the store reads as "there is no next page". */
+  cursors?: Record<string, string>;
 }
 
 export interface SrsStats {
@@ -1297,18 +1301,26 @@ export const srsApi = {
    *  instantly, and a second cache layer keyed by URL would fight both the
    *  per-launch `seed` and the reset-on-mix-change flow.
    *
-   *  `seed` fixes the server's shuffle. Pass the same one for every page of
-   *  a session: `offset` indexes into a sequence that only holds still while
-   *  the seed does. */
+   *  `seed` fixes the server's order. Pass the same one for every page of a
+   *  session: a cursor names a position in a sequence that only holds still
+   *  while the seed does. */
   feed: async (params: {
     limit?: number;
-    offset?: number;
+    /** Where the last page stopped, per level. Echo the `cursors` the server
+     *  returned; omit for the first page of a deal. */
+    cursors?: Record<string, string>;
     targetLang?: string;
     mix?: LevelMix;
     seed?: string;
   } = {}): Promise<FeedResponse> => {
-    const { limit = 20, offset = 0, targetLang, mix, seed } = params;
-    const qs = [`limit=${limit}`, `offset=${offset}`];
+    const { limit = 20, cursors, targetLang, mix, seed } = params;
+    const qs = [`limit=${limit}`];
+    const cursorParam = cursors
+      ? Object.entries(cursors)
+          .map(([level, hash]) => `${level}:${hash}`)
+          .join(',')
+      : '';
+    if (cursorParam) qs.push(`cursors=${encodeURIComponent(cursorParam)}`);
     if (targetLang) qs.push(`target_lang=${encodeURIComponent(targetLang)}`);
     if (mix) {
       const encoded = Object.entries(mix)

@@ -64,7 +64,6 @@ interface BufferedFeed {
 
 interface WordFeedState {
   items: FeedItem[];
-  page: number;
   loading: boolean;
   /** True once the server says there are no more pages. */
   exhausted: boolean;
@@ -109,9 +108,17 @@ interface WordFeedState {
  *  putting them in state would re-render every card when they resolve. */
 let targetLanguage: string | null = null;
 
-/** Fixes the server's shuffle for this launch. Re-minted on hydrate and on
+/** Fixes the server's order for this launch. Re-minted on hydrate and on
  *  any mix change — both are moments the deck should be dealt again. */
 let sessionSeed: string = randomToken();
+
+/** Where the last page stopped, per CEFR level. Kept outside the store for
+ *  the same reason as the seed: it is a request parameter, and putting it in
+ *  state would re-render every card each time a page lands.
+ *
+ *  Reset wherever `sessionSeed` is, because a cursor only means anything
+ *  against the order the seed produced. */
+let feedCursors: Record<string, string> = {};
 
 /** Synchronous re-entry guard for `hydrate`. `hydrated` can't do this job on
  *  its own: it is only set after two awaits, so two callers arriving in the
@@ -184,7 +191,6 @@ async function readBuffer(): Promise<FeedItem[]> {
 
 export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   items: [],
-  page: 0,
   loading: false,
   exhausted: false,
   loadError: false,
@@ -201,8 +207,10 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     hydrating = true;
 
     targetLanguage = targetLang ?? null;
-    // A new launch is a new deck.
+    // A new launch is a new deck, and a cursor into the old one means
+    // nothing against the new order.
     sessionSeed = randomToken();
+    feedCursors = {};
 
     // Precedence: the account's mix, then this device's last one, then a
     // default derived from the user's level. The account comes first because
@@ -243,14 +251,18 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   },
 
   fetchNext: async () => {
-    const { loading, exhausted, page, mix, items } = get();
+    const { loading, exhausted, mix, items } = get();
     if (loading || exhausted) return;
 
     set({ loading: true, loadError: false });
     try {
       const res = await srsApi.feed({
         limit: FEED_PAGE_SIZE,
-        offset: page * FEED_PAGE_SIZE,
+        // A keyset position, not a page number: the server orders by a hash
+        // of (lemma, seed) and returns where each level stopped. An offset
+        // would slide every time the user saves a word, because saving
+        // removes that word from the pool the offset is counting into.
+        cursors: feedCursors,
         targetLang: targetLanguage ?? undefined,
         mix,
         seed: sessionSeed,
@@ -265,11 +277,24 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       const fresh = res.items.filter((i) => !known.has(i.lemma_id));
       const next = [...items, ...fresh];
 
+      // Advance before anything can early-return, so a page that was entirely
+      // deduped still moves the cursor forward instead of asking for the same
+      // rows again.
+      if (res.cursors) feedCursors = res.cursors;
+
       set({
         items: next,
-        page: page + 1,
         mixApplied: res.mix_applied ?? {},
-        exhausted: !res.has_more,
+        // An empty page means the deal is read out, whatever `has_more` says.
+        // Without this the prefetch effect would keep firing against a server
+        // that has nothing left to give.
+        //
+        // A response with no `cursors` at all is a server from before keyset
+        // paging — a rollback, or an OTA that landed ahead of its deploy. It
+        // cannot advance us, so every page would be page one, deduped to
+        // nothing, forever. Stop instead: one page of real words beats a
+        // silent request loop.
+        exhausted: !res.has_more || res.items.length === 0 || !res.cursors,
         loading: false,
       });
 
@@ -315,13 +340,13 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     // makes this a genuinely new deck rather than the old one re-cut.
     AsyncStorage.removeItem(BUFFER_KEY).catch(() => {});
     sessionSeed = randomToken();
+    feedCursors = {};
 
     // Reset to page 0 so the new proportions are visible immediately
     // rather than after the current page drains.
     set({
       mix,
       items: [],
-      page: 0,
       activeIndex: 0,
       exhausted: false,
       loading: false,
@@ -411,7 +436,6 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     hydrating = false;
     set({
       items: [],
-      page: 0,
       loading: false,
       exhausted: false,
       loadError: false,

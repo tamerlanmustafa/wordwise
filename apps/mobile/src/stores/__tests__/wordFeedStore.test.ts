@@ -45,10 +45,11 @@ const item = (id: number, cefr = 'B1'): FeedItem => ({
   translation_source: 'deepl',
 });
 
-const page = (items: FeedItem[], has_more = true) => ({
+const page = (items: FeedItem[], has_more = true, cursors: Record<string, string> = { B1: 'ff' }) => ({
   items,
   mix_applied: { B1: items.length },
   has_more,
+  cursors,
 });
 
 /** What `persistBuffer` writes. `lang` must match what hydrate was handed. */
@@ -70,28 +71,74 @@ describe('wordFeedStore', () => {
   });
 
   describe('paging', () => {
-    it('appends a page and advances the cursor', async () => {
+    it('appends a page and asks for the first one with no cursor', async () => {
       mockFeed.mockResolvedValue(page([item(1), item(2)]));
 
       await useWordFeedStore.getState().fetchNext();
 
       expect(useWordFeedStore.getState().items).toHaveLength(2);
-      expect(useWordFeedStore.getState().page).toBe(1);
       expect(mockFeed).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: FEED_PAGE_SIZE, offset: 0 }),
+        expect.objectContaining({ limit: FEED_PAGE_SIZE, cursors: {} }),
       );
     });
 
-    it('requests the next offset on the following page', async () => {
-      mockFeed.mockResolvedValue(page([item(1)]));
+    it('sends back the cursor the server returned', async () => {
+      // The whole point of the keyset rewrite: the next page is "after this
+      // hash", not "skip twenty". An offset would slide every time the user
+      // saves a word, because saving removes it from the pool being counted.
+      mockFeed.mockResolvedValue(page([item(1)], true, { B1: 'a1', C1: 'b2' }));
       await useWordFeedStore.getState().fetchNext();
       mockFeed.mockResolvedValue(page([item(2)]));
       await useWordFeedStore.getState().fetchNext();
 
       expect(mockFeed).toHaveBeenLastCalledWith(
-        expect.objectContaining({ offset: FEED_PAGE_SIZE }),
+        expect.objectContaining({ cursors: { B1: 'a1', C1: 'b2' } }),
       );
       expect(useWordFeedStore.getState().items.map((i) => i.lemma_id)).toEqual([1, 2]);
+    });
+
+    it('never sends an offset', async () => {
+      mockFeed.mockResolvedValue(page([item(1)]));
+      await useWordFeedStore.getState().fetchNext();
+
+      expect(mockFeed.mock.calls[0][0]).not.toHaveProperty('offset');
+    });
+
+    it('advances the cursor even when the whole page was deduped', async () => {
+      // Otherwise the next request asks for the same rows again and the feed
+      // deadlocks on a page it has already seen.
+      mockFeed.mockResolvedValue(page([item(1)], true, { B1: 'a1' }));
+      await useWordFeedStore.getState().fetchNext();
+      mockFeed.mockResolvedValue(page([item(1)], true, { B1: 'a2' }));
+      await useWordFeedStore.getState().fetchNext();
+      mockFeed.mockResolvedValue(page([item(2)]));
+      await useWordFeedStore.getState().fetchNext();
+
+      expect(mockFeed).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cursors: { B1: 'a2' } }),
+      );
+    });
+
+    it('stops when a page comes back empty, whatever has_more says', async () => {
+      // A server that says "more" but returns nothing would otherwise have
+      // the prefetch effect firing forever.
+      mockFeed.mockResolvedValue(page([], true));
+
+      await useWordFeedStore.getState().fetchNext();
+
+      expect(useWordFeedStore.getState().exhausted).toBe(true);
+    });
+
+    it('stops rather than looping against a server with no cursors', async () => {
+      // A rollback, or an OTA that landed ahead of its deploy. Without a
+      // cursor every page is page one, deduped to nothing, and the prefetch
+      // effect asks again forever.
+      mockFeed.mockResolvedValue({ items: [item(1)], mix_applied: {}, has_more: true });
+
+      await useWordFeedStore.getState().fetchNext();
+
+      expect(useWordFeedStore.getState().items).toHaveLength(1);
+      expect(useWordFeedStore.getState().exhausted).toBe(true);
     });
 
     it('drops duplicates so the list never gets two identical keys', async () => {
@@ -305,7 +352,8 @@ describe('wordFeedStore', () => {
       expect(JSON.parse((await AsyncStorage.getItem(MIX_KEY))!)).toEqual({
         A2: 0, B1: 0, B2: 0, C1: 100,
       });
-      expect(mockFeed).toHaveBeenCalledWith(expect.objectContaining({ offset: 0 }));
+      // A new mix is a new deal, so the cursor into the old one is dropped.
+      expect(mockFeed).toHaveBeenCalledWith(expect.objectContaining({ cursors: {} }));
       // The old page is discarded, not appended to.
       expect(useWordFeedStore.getState().items.map((i) => i.lemma_id)).toEqual([9]);
     });
@@ -355,7 +403,7 @@ describe('wordFeedStore', () => {
         A1: 0, A2: 0, B1: 69, B2: 21, C1: 10, C2: 0,
       });
 
-      expect(mockFeed).toHaveBeenCalledWith(expect.objectContaining({ offset: 0 }));
+      expect(mockFeed).toHaveBeenCalledWith(expect.objectContaining({ cursors: {} }));
       expect(ids()).toEqual([9]);
     });
 
