@@ -2,6 +2,12 @@
 
 export type Screen =
   | 'home'
+  /** The account area's front door. Was a bottom sheet until 2026-09-05; it is
+   *  a tab root now, which is why `PROFILE_SHEET` no longer exists. */
+  | 'profile'
+  | 'notificationSettings'
+  | 'account'
+  | 'legal'
   | 'movieDetail'
   | 'searchResults'
   | 'settings'

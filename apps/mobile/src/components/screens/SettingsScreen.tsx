@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Text,
@@ -11,7 +10,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
@@ -24,14 +22,11 @@ import {
   normalizeUsername,
   usernameState,
 } from './profileForm';
-import { scheduleReviewReminder } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { ScreenHeader } from '../common/ScreenHeader';
-import { useAuthStore } from '../../stores/authStore';
 import {
   Avatar,
-  LinkRow,
   Rows,
   Section,
   Segmented,
@@ -47,9 +42,6 @@ interface Props {
   backLabel?: string;
   user: any;
   onUserUpdated: (user: any) => void;
-  onNavigateToFamilyPlan: () => void;
-  onNavigateToPrivacy: () => void;
-  onNavigateToTerms: () => void;
   targetLanguage: string;
   setTargetLanguage: (lang: string) => void;
 }
@@ -58,9 +50,6 @@ export const SettingsScreen = ({
   onBack,
   user,
   onUserUpdated,
-  onNavigateToFamilyPlan,
-  onNavigateToPrivacy,
-  onNavigateToTerms,
   targetLanguage,
   setTargetLanguage,
 }: Props) => {
@@ -72,7 +61,6 @@ export const SettingsScreen = ({
 
   const [showNativeLangPicker, setShowNativeLangPicker] = useState(false);
   const [showProficiencyPicker, setShowProficiencyPicker] = useState(false);
-  const [reviewNotif, setReviewNotif] = useState(true);
 
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -92,7 +80,6 @@ export const SettingsScreen = ({
   const barInset = useBottomBarInset();
 
   useEffect(() => {
-    AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
   }, []);
 
   /**
@@ -109,54 +96,6 @@ export const SettingsScreen = ({
       .updateProfile({ native_language: code.toLowerCase() })
       .then(onUserUpdated)
       .catch(() => {});
-  };
-
-  const handleRestorePurchases = async () => {
-    const { restorePurchases } = require('../../services/billing');
-    const result = await restorePurchases();
-    Alert.alert(
-      result.restored
-        ? t('billing:paywall.restoredTitle')
-        : t('billing:paywall.notFoundTitle'),
-      result.message,
-    );
-  };
-
-  /**
-   * Account deletion, moved here from the profile sheet so it sits at the end
-   * of Settings rather than one tap from every other menu item. Still
-   * double-confirmed, and the confirmation is still `destructive` — the row is
-   * quiet, the commitment is not.
-   */
-  const handleDeleteAccount = () => {
-    showConfirm({
-      title: t('settings:menu.deleteAccountTitle'),
-      message: t('settings:menu.deleteAccountBody'),
-      confirmLabel: t('settings:menu.delete'),
-      tone: 'destructive',
-      onConfirm: () => {
-        useAuthStore.getState().deleteAccount().catch(() => {
-          Alert.alert(
-            t('settings:menu.deleteFailedTitle'),
-            t('settings:menu.deleteFailedBody'),
-          );
-        });
-      },
-    });
-  };
-
-  const toggleReview = async () => {
-    const next = !reviewNotif;
-    setReviewNotif(next);
-    await AsyncStorage.setItem('notif_review', next ? 'on' : 'off');
-    if (next) {
-      scheduleReviewReminder();
-    } else {
-      try {
-        const Notif = require('expo-notifications');
-        await Notif.cancelScheduledNotificationAsync('review-reminder');
-      } catch {}
-    }
   };
 
   /**
@@ -428,41 +367,6 @@ export const SettingsScreen = ({
           </Rows>
         </Section>
 
-        {/* ── Notifications ─────────────────────────────────────────────── */}
-        <Section title={t('settings:notifications')}>
-          <SwitchRow
-            label={t('settings:reviewReminder')}
-            description={t('settings:reviewReminderDesc')}
-            value={reviewNotif}
-            onValueChange={toggleReview}
-          />
-        </Section>
-
-        {/* ── Subscription ──────────────────────────────────────────────── */}
-        <Section title={t('settings:subscription')}>
-          <Rows>
-            <LinkRow label={t('settings:familyPlan')} onPress={onNavigateToFamilyPlan} />
-            <LinkRow label={t('settings:restorePurchases')} onPress={handleRestorePurchases} />
-          </Rows>
-        </Section>
-
-        {/* ── Legal ─────────────────────────────────────────────────────── */}
-        <Section title={t('settings:legal')}>
-          <Rows>
-            <LinkRow label={t('settings:privacyPolicy')} onPress={onNavigateToPrivacy} />
-            <LinkRow label={t('settings:termsOfService')} onPress={onNavigateToTerms} />
-          </Rows>
-        </Section>
-
-        {/* ── Account ───────────────────────────────────────────────────────
-            Deletion has to be reachable in-app (App Store 5.1.1(v)), and it is
-            the one row nobody should reach by accident. Last section, muted
-            rather than red: red is an alarm colour and an alarm draws the eye,
-            which is the opposite of what this row wants. The confirmation still
-            carries the destructive tone. */}
-        <Section title={t('settings:account')} footer={t('settings:deleteAccountFooter')}>
-          <LinkRow label={t('settings:menu.deleteAccount')} muted onPress={handleDeleteAccount} />
-        </Section>
       </ScrollView>
 
       {/* Over AVAILABLE_LANGUAGES, not SUPPORTED_LANGUAGES: this sets what

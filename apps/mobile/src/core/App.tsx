@@ -37,7 +37,10 @@ import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
 import type { ReelTile, SrsSessionStart } from '../services/api';
 import type { NodeLevel } from '../components/journey/JourneyNode';
-import { UserMenuSheet } from '../components/UserMenuSheet';
+import { ProfileScreen } from '../components/screens/ProfileScreen';
+import { AccountScreen } from '../components/screens/AccountScreen';
+import { LegalScreen } from '../components/screens/LegalScreen';
+import { NotificationSettingsScreen } from '../components/screens/NotificationSettingsScreen';
 import { NotificationsSheet } from '../components/NotificationsSheet';
 import { useNotificationsStore, type NotificationTarget } from '../stores/notificationsStore';
 import { SplashIntro } from '../components/SplashIntro';
@@ -54,7 +57,7 @@ import { authApi, quizApi, setOnSessionExpired, type QuizStartSessionResponse, t
 import { useReelStore } from '../stores/reelStore';
 import { useWordFeedStore } from '../stores/wordFeedStore';
 import type { Screen, ListFilter, MovieData, ListSummary } from './types';
-import { PARENT_OF, PROFILE_SHEET } from './navParents';
+import { PARENT_OF } from './navParents';
 import { quizReturnScreen, type QuizOriginKind } from './quizReturn';
 import { guardQuizExit, useQuizGuardStore } from '../stores/quizGuardStore';
 import { SwipeBackView } from '../components/common/SwipeBackView';
@@ -123,7 +126,6 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('explore');
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
-  const rootTabForSheet = useRef<Screen>('home');
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [searchQueryNav, setSearchQueryNav] = useState('');
   const [listFilter, setListFilter] = useState<ListFilter>('saved');
@@ -274,7 +276,6 @@ export default function App() {
   // Google" silently reuses it instead of showing the account chooser. Guarded
   // because non-Google users (Apple/email) have no Google session to clear.
   const handleLogout = async () => {
-    setShowUserSheet(false);
     try {
       await GoogleSignin.signOut();
     } catch {
@@ -319,6 +320,22 @@ export default function App() {
 
   const navigateToSettings = () => {
     setCurrentScreen('settings');
+  };
+
+  const navigateToProfile = () => {
+    setCurrentScreen('profile');
+  };
+
+  const navigateToNotificationSettings = () => {
+    setCurrentScreen('notificationSettings');
+  };
+
+  const navigateToAccount = () => {
+    setCurrentScreen('account');
+  };
+
+  const navigateToLegal = () => {
+    setCurrentScreen('legal');
   };
 
   const navigateToAdmin = () => {
@@ -384,9 +401,6 @@ export default function App() {
 
   const leavePaywall = () => setCurrentScreen(paywallProps.origin);
 
-  const navigateToStats = () => {
-    setCurrentScreen('stats');
-  };
 
   // Back from a Profile-sheet-launched screen returns to the sheet (its
   // origin) rather than teleporting to Home (UX audit F-006). We drop back to
@@ -396,11 +410,6 @@ export default function App() {
   // movie/search resets and notification refresh, which caused that flash.
   // Stable identity (it only touches setters and a ref) so the hardware-back
   // effect below can depend on it without re-subscribing every render.
-  const backToProfile = useCallback(() => {
-    setCurrentScreen(rootTabForSheet.current);
-    setShowUserSheet(true);
-  }, []);
-
   const navigateToNotebook = (filter: ListFilter = 'saved') => {
     setListFilter(filter);
     setCurrentScreen('notebook');
@@ -419,17 +428,8 @@ export default function App() {
     setCurrentScreen('listDetail');
   };
 
-  const navigateToWatched = () => {
-    setCurrentScreen('watched');
-  };
 
-  const navigateToAchievements = () => {
-    setCurrentScreen('achievements');
-  };
 
-  const navigateToLeaderboard = () => {
-    setCurrentScreen('leaderboard');
-  };
 
   const navigateToFamilyPlan = () => {
     setCurrentScreen('familyPlan');
@@ -447,9 +447,6 @@ export default function App() {
     setCurrentScreen('learnedWords');
   };
 
-  const navigateToVocabulary = () => {
-    setCurrentScreen('vocabulary');
-  };
 
   // ── Back navigation for the account area ──────────────────────────
   // On-screen Back and Android's hardware back both resolve through
@@ -459,10 +456,9 @@ export default function App() {
   const goToParent = useCallback((from: Screen): boolean => {
     const parent = PARENT_OF[from];
     if (!parent) return false;
-    if (parent === PROFILE_SHEET) backToProfile();
-    else setCurrentScreen(parent);
+    setCurrentScreen(parent);
     return true;
-  }, [backToProfile]);
+  }, []);
 
   /** `onBack` handler for a screen, derived from its parent. */
   const backFrom = (from: Screen) => () => {
@@ -472,7 +468,7 @@ export default function App() {
   /** Back-button label — names the destination so Back is never a guess. */
   const backLabelFor = (from: Screen): string => {
     switch (PARENT_OF[from]) {
-      case PROFILE_SHEET:
+      case 'profile':
         return t('nav.profile');
       case 'settings':
         return t('settings:title');
@@ -525,7 +521,6 @@ export default function App() {
 
   // Single dispatcher for the global 4-tab bar. Every screen feeds its
   // taps through here so navigation stays consistent.
-  const [showUserSheet, setShowUserSheet] = useState(false);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
   const [barHeight, setBarHeight] = useState(0);
 
@@ -544,9 +539,7 @@ export default function App() {
   };
 
   const handleTabPress = (tab: BottomTab) => {
-    // The profile tab opens a sheet *over* the current screen — the deck stays
-    // mounted underneath — so it is not an exit and must not ask.
-    if (tab !== 'profile' && useQuizGuardStore.getState().inProgress) {
+    if (useQuizGuardStore.getState().inProgress) {
       guardQuizExit(quizExitCopy, () => handleTabPressUnguarded(tab));
       return;
     }
@@ -554,26 +547,13 @@ export default function App() {
   };
 
   const handleTabPressUnguarded = (tab: BottomTab) => {
-    // Switching to any other tab collapses the profile sheet if it's open.
-    if (tab !== 'profile') setShowUserSheet(false);
     // Any tab tap dismisses the notifications sheet.
     setShowNotifSheet(false);
     if (tab === 'home') navigateToHome();
     else if (tab === 'explore') navigateToExplore();
     else if (tab === 'practice') navigateToPractice();
     else if (tab === 'lists') navigateToLists();
-    else if (tab === 'profile') {
-      setShowUserSheet((prev) => {
-        // Remember what the sheet is opening over, so backToProfile can
-        // return there rather than to Home.
-        if (!prev) {
-          rootTabForSheet.current = (['home', 'explore', 'practice', 'lists'] as Screen[]).includes(currentScreen)
-            ? currentScreen
-            : 'home';
-        }
-        return !prev;
-      });
-    }
+    else if (tab === 'profile') navigateToProfile();
   };
 
   // Android hardware back — map it to in-app navigation so it never exits the
@@ -585,12 +565,8 @@ export default function App() {
         setShowNotifSheet(false);
         return true;
       }
-      if (showUserSheet) {
-        setShowUserSheet(false);
-        return true;
-      }
       // An open Explore panel swallows the first back press, exactly as the
-      // profile/notification sheets above do.
+      // notification sheet above does.
       if (currentScreen === 'explore' && useWordFeedStore.getState().openPanel) {
         useWordFeedStore.getState().setPanelOpen(null);
         return true;
@@ -613,7 +589,7 @@ export default function App() {
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
     return () => sub.remove();
-  }, [currentScreen, showUserSheet, showNotifSheet, status]);
+  }, [currentScreen, showNotifSheet, status]);
 
   const handleBatchBuilt = (ids: number[], title: string) => {
     setBatch({ ids, title });
@@ -961,7 +937,6 @@ export default function App() {
   // highlighted correctly regardless of where the user navigates.
   // v0.7 4-tab map: Home · My Movies · Practice · Profile.
   const activeTab: BottomTab | null = (() => {
-    if (showUserSheet) return 'profile';
     switch (currentScreen) {
       case 'home':
       case 'searchResults':
@@ -973,8 +948,8 @@ export default function App() {
       case 'listDetail':
         return 'lists';
       // The preview hub is only reachable through the saved reel, which now
-      // hangs off the Profile sheet — so Profile keeps the highlight. It used
-      // to light Home, from a Home entry point that no longer exists.
+      // hangs off Profile — so Profile keeps the highlight. It used to light
+      // Home, from a Home entry point that no longer exists.
       case 'moviePreview':
         return 'profile';
       // Practice tab owns the daily SRS habit.
@@ -984,8 +959,12 @@ export default function App() {
       // Set intro / lesson / result are a full-screen flow reached from either
       // the preview hub or a film's detail screen, so no single tab owns them.
       // Lighting Practice was a leftover from when the path started there.
-      // Account / profile-area screens are all reached from the Profile sheet,
-      // so keep the Profile tab lit while they're open (UX audit F-006).
+      // Account-area screens all hang off the Profile hub, so keep the Profile
+      // tab lit while they're open (UX audit F-006).
+      case 'profile':
+      case 'notificationSettings':
+      case 'account':
+      case 'legal':
       case 'settings':
       case 'stats':
       case 'achievements':
@@ -1056,7 +1035,28 @@ export default function App() {
             goes inert on a root tab, where the ternary renders nothing. */}
         <SwipeBackView screenKey={currentScreen} onBack={resolveBack(currentScreen)}>
         {currentScreen === 'settings' ? (
-          <SettingsScreen onBack={backFrom('settings')} backLabel={backLabelFor('settings')} user={user} onUserUpdated={handleUserUpdated} onNavigateToFamilyPlan={navigateToFamilyPlan} onNavigateToPrivacy={navigateToPrivacy} onNavigateToTerms={navigateToTerms} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
+          <SettingsScreen onBack={backFrom('settings')} user={user} onUserUpdated={handleUserUpdated} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
+        ) : currentScreen === 'profile' ? (
+          <ProfileScreen
+            user={user}
+            isAdmin={!!user?.is_admin}
+            onNavigateToSettings={navigateToSettings}
+            onNavigateToNotifications={navigateToNotificationSettings}
+            onNavigateToAccount={navigateToAccount}
+            onNavigateToLegal={navigateToLegal}
+            onNavigateToAdmin={navigateToAdmin}
+            onLogout={handleLogout}
+          />
+        ) : currentScreen === 'notificationSettings' ? (
+          <NotificationSettingsScreen onBack={backFrom('notificationSettings')} />
+        ) : currentScreen === 'account' ? (
+          <AccountScreen onBack={backFrom('account')} onNavigateToFamilyPlan={navigateToFamilyPlan} />
+        ) : currentScreen === 'legal' ? (
+          <LegalScreen
+            onBack={backFrom('legal')}
+            onNavigateToPrivacy={navigateToPrivacy}
+            onNavigateToTerms={navigateToTerms}
+          />
         ) : currentScreen === 'vocabulary' ? (
           <VocabularyScreen onBack={backFrom('vocabulary')} backLabel={backLabelFor('vocabulary')} onNavigateToLearnedWords={navigateToLearnedWords} />
         ) : currentScreen === 'learnedWords' ? (
@@ -1203,24 +1203,6 @@ export default function App() {
           null
         )}
         </SwipeBackView>
-        <UserMenuSheet
-          visible={showUserSheet}
-          onClose={() => setShowUserSheet(false)}
-          user={user}
-          onNavigateToSettings={() => { setShowUserSheet(false); navigateToSettings(); }}
-          onNavigateToAdmin={() => { setShowUserSheet(false); navigateToAdmin(); }}
-          onNavigateToNotebook={() => { setShowUserSheet(false); navigateToNotebook('saved'); }}
-          onNavigateToWatched={() => { setShowUserSheet(false); navigateToWatched(); }}
-          onNavigateToSavedMovies={() => { setShowUserSheet(false); navigateToSavedMovies(); }}
-          onNavigateToVocabulary={() => { setShowUserSheet(false); navigateToVocabulary(); }}
-          onNavigateToStats={() => { setShowUserSheet(false); navigateToStats(); }}
-          onNavigateToAchievements={() => { setShowUserSheet(false); navigateToAchievements(); }}
-          onNavigateToLeaderboard={() => { setShowUserSheet(false); navigateToLeaderboard(); }}
-          onNavigateToNotifications={() => { setShowUserSheet(false); setShowNotifSheet(true); }}
-          onLogout={handleLogout}
-          isAdmin={!!user?.is_admin}
-          bottomOffset={barHeight}
-        />
         <NotificationsSheet
           visible={showNotifSheet}
           onClose={() => setShowNotifSheet(false)}

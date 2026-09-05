@@ -16,34 +16,36 @@
 import type { Screen } from './types';
 
 /**
- * Sentinel parent: return to the base tab the Profile sheet was opened over
- * and slide the sheet back up. It isn't a `Screen` because the sheet is an
- * overlay rather than a screen — it rides on top of whichever tab is showing.
+ * Profile used to be an overlay, which needed a sentinel parent here and a
+ * remembered "tab it opened over" in App.tsx. It is a screen now, so Back is
+ * just another entry in this map and the sentinel is gone.
  */
-export const PROFILE_SHEET = 'profileSheet';
-
-export type BackTarget = Screen | typeof PROFILE_SHEET;
+export type BackTarget = Screen;
 
 export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
-  // Launched from the Profile sheet → Back re-opens the sheet.
-  settings: PROFILE_SHEET,
-  stats: PROFILE_SHEET,
-  achievements: PROFILE_SHEET,
-  leaderboard: PROFILE_SHEET,
-  vocabulary: PROFILE_SHEET,
-  admin: PROFILE_SHEET,
-  // The saved reel lost its tab to Explore and now hangs off the sheet.
-  savedMovies: PROFILE_SHEET,
-  // Opened from inside Settings → Back steps into Settings, not out to Home.
-  familyPlan: 'settings',
-  privacy: 'settings',
-  terms: 'settings',
+  // Launched from the Profile hub.
+  settings: 'profile',
+  notificationSettings: 'profile',
+  account: 'profile',
+  legal: 'profile',
+  stats: 'profile',
+  achievements: 'profile',
+  leaderboard: 'profile',
+  vocabulary: 'profile',
+  admin: 'profile',
+  // The saved reel lost its tab to Explore and now hangs off Profile.
+  savedMovies: 'profile',
+  // Subscription lives on Account; the two documents live on Legal. Back steps
+  // into the page that linked here, not out to Home.
+  familyPlan: 'account',
+  privacy: 'legal',
+  terms: 'legal',
   // Second-level lists, reached from their parent list screen.
   learnedWords: 'vocabulary',
   // Both were reached through the old "My Lists" hub, which the Lists tab
-  // replaced; the Profile sheet now links them directly.
-  notebook: PROFILE_SHEET,
-  watched: PROFILE_SHEET,
+  // replaced; Profile links them directly.
+  notebook: 'profile',
+  watched: 'profile',
   // An open list returns to the Lists tab index.
   listDetail: 'lists',
 };

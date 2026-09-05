@@ -131,8 +131,10 @@ describe('every screen under the bar reserves its height', () => {
 // ---------------------------------------------------------------------------
 
 describe('sheets dim the whole screen, bar included', () => {
+  // UserMenuSheet was the third of these until 2026-09-05, when the profile
+  // sheet became a full screen (ProfileScreen). It is covered by the scroller
+  // rules above now, like every other page.
   const SHEETS = [
-    path.join('components', 'UserMenuSheet.tsx'),
     path.join('components', 'NotificationsSheet.tsx'),
     path.join('components', 'common', 'BottomSheet.tsx'),
   ];

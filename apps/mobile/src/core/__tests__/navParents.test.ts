@@ -1,31 +1,38 @@
-import { PARENT_OF, PROFILE_SHEET } from '../navParents';
+import { PARENT_OF } from '../navParents';
 import type { Screen } from '../types';
 
 describe('PARENT_OF', () => {
-  it('returns sheet-launched screens to the Profile sheet', () => {
-    const fromSheet: Screen[] = [
+  it('returns account-area screens to the Profile hub', () => {
+    // Profile was a bottom sheet until 2026-09-05, which needed a sentinel
+    // parent (`PROFILE_SHEET`) because an overlay is not a screen. It is a
+    // screen now, so these are ordinary parents.
+    const fromProfile: Screen[] = [
       'settings',
+      'notificationSettings',
+      'account',
+      'legal',
       'stats',
       'achievements',
       'leaderboard',
       'vocabulary',
       'admin',
       // The "My Lists" hub was replaced by the Lists tab; the two screens it
-      // uniquely reached are now linked from the sheet directly.
+      // uniquely reached are now linked from Profile directly.
       'notebook',
       'watched',
     ];
-    for (const screen of fromSheet) {
-      expect(PARENT_OF[screen]).toBe(PROFILE_SHEET);
+    for (const screen of fromProfile) {
+      expect(PARENT_OF[screen]).toBe('profile');
     }
   });
 
-  it('returns Settings sub-screens to Settings, not Home', () => {
-    // The reported bug: these three are opened from inside Settings but used
-    // to drop the user on Home.
-    expect(PARENT_OF.familyPlan).toBe('settings');
-    expect(PARENT_OF.privacy).toBe('settings');
-    expect(PARENT_OF.terms).toBe('settings');
+  it('returns each sub-screen to the page that links it, not Home', () => {
+    // The original bug was that these dropped the user on Home. They have
+    // since moved off Settings — subscription onto Account, the two documents
+    // onto Legal — so the parents moved with them.
+    expect(PARENT_OF.familyPlan).toBe('account');
+    expect(PARENT_OF.privacy).toBe('legal');
+    expect(PARENT_OF.terms).toBe('legal');
   });
 
   it('returns second-level lists to the list they were opened from', () => {
@@ -35,14 +42,20 @@ describe('PARENT_OF', () => {
   });
 
   it('leaves the Lists tab itself parentless like every other root tab', () => {
-    // 'lists' used to be a sheet-launched hub screen. As a tab it must not
-    // have a parent, or hardware back would bounce it into the Profile sheet.
+    // 'lists' used to be a hub screen launched from Profile. As a tab it must
+    // not have a parent, or hardware back would bounce it into Profile.
     expect(PARENT_OF.lists).toBeUndefined();
   });
 
-  it('returns the saved reel to the Profile sheet it is now opened from', () => {
-    // My Movies lost its tab to Explore; the reel hangs off the sheet.
-    expect(PARENT_OF.savedMovies).toBe(PROFILE_SHEET);
+  it('leaves Profile parentless — it is a tab root now, not an overlay', () => {
+    // The whole point of the change: Profile is a destination, so hardware
+    // back from it behaves like any other root tab rather than closing a sheet.
+    expect(PARENT_OF.profile).toBeUndefined();
+  });
+
+  it('returns the saved reel to the Profile hub it is opened from', () => {
+    // My Movies lost its tab to Explore; the reel hangs off Profile.
+    expect(PARENT_OF.savedMovies).toBe('profile');
   });
 
   it('leaves root tabs parentless so hardware back can exit the app', () => {
@@ -79,14 +92,14 @@ describe('PARENT_OF', () => {
     for (const key of Object.keys(PARENT_OF) as Screen[]) {
       const seen = new Set<string>([key]);
       let cursor = PARENT_OF[key];
-      while (cursor && cursor !== PROFILE_SHEET) {
+      while (cursor) {
         expect(seen.has(cursor)).toBe(false);
         seen.add(cursor);
         cursor = PARENT_OF[cursor as Screen];
       }
-      // Every chain has to terminate at the sheet or a root tab — otherwise
+      // Every chain has to terminate at a parentless root — otherwise
       // Back would strand the user on a screen with nowhere to go.
-      expect(cursor === PROFILE_SHEET || cursor === undefined).toBe(true);
+      expect(cursor).toBeUndefined();
     }
   });
 });

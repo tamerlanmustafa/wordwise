@@ -68,5 +68,6 @@
   "discardChanges": "Discard",
   "account": "Account",
   "nativeLanguageFooter": "Words and sentences are translated from English into this language.",
-  "deleteAccountFooter": "Permanently removes your account and everything saved to it. This cannot be undone."
+  "deleteAccountFooter": "Permanently removes your account and everything saved to it. This cannot be undone.",
+  "notificationsFooter": "The app decides when to remind you; your device’s own notification settings always win."
 }

@@ -68,5 +68,6 @@
   "discardChanges": "Descartar",
   "account": "Cuenta",
   "nativeLanguageFooter": "Las palabras y frases se traducen del inglés a este idioma.",
-  "deleteAccountFooter": "Elimina permanentemente tu cuenta y todo lo guardado en ella. Esto no se puede deshacer."
+  "deleteAccountFooter": "Elimina permanentemente tu cuenta y todo lo guardado en ella. Esto no se puede deshacer.",
+  "notificationsFooter": "La app decide cuándo recordártelo; los ajustes de notificaciones de tu dispositivo siempre mandan."
 }

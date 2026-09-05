@@ -24,7 +24,6 @@ import path from 'path';
 import { AVAILABLE_LANGUAGES } from '../../types/constants';
 
 const COMPONENTS = path.join(__dirname, '..');
-const SHEET = path.join(COMPONENTS, 'UserMenuSheet.tsx');
 const SETTINGS = path.join(COMPONENTS, 'screens', 'SettingsScreen.tsx');
 
 /**
@@ -42,8 +41,12 @@ const read = (p: string) =>
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('the theme preference has exactly one control', () => {
-  it('the profile sheet does not touch themeStore', () => {
-    expect(read(SHEET)).not.toMatch(/useThemeStore/);
+  it('the profile hub does not touch themeStore', () => {
+    // Was the profile *sheet* until 2026-09-05; it is a screen now, and the
+    // guard follows the surface rather than the file that used to hold it.
+    expect(read(path.join(COMPONENTS, 'screens', 'ProfileScreen.tsx'))).not.toMatch(
+      /useThemeStore/,
+    );
   });
 
   it('Settings still owns it', () => {
