@@ -43,7 +43,7 @@ import {
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './HomeIcons';
-import { SearchFieldGlow } from './SearchFieldGlow';
+import { FocusGlow } from './FocusGlow';
 import { feedback } from '../../utils/feedback';
 
 /** The field's corner radius, shared with the glow ring so the two agree. */
@@ -81,6 +81,9 @@ interface Props {
   activeFilters?: number;
   /** CEFR code the whole feed is graded for, printed on the filter button. */
   level: string;
+  /** Whether FeedFilterSheet is showing. Drives the button's own focus
+   *  treatment, so the two controls in this row behave the same way. */
+  filtersOpen?: boolean;
 }
 
 function Row({
@@ -130,6 +133,7 @@ export function HomeSearchBar({
   onDismiss,
   activeFilters = 0,
   level,
+  filtersOpen = false,
 }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -172,6 +176,26 @@ export function HomeSearchBar({
   const focusField = () => inputRef.current?.focus();
   const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.022] });
 
+  // The filter button wears the identical treatment, driven by its own sheet.
+  // Two controls side by side that announce activation differently look like
+  // two controls from two apps.
+  const filterLift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(filterLift, {
+      toValue: filtersOpen ? 1 : 0,
+      useNativeDriver: true,
+      friction: 5,
+      tension: 180,
+    }).start();
+  }, [filtersOpen, filterLift]);
+  const filterScale = filterLift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.022] });
+
+  const wasFiltersOpen = useRef(filtersOpen);
+  useEffect(() => {
+    if (filtersOpen && !wasFiltersOpen.current) feedback.tap();
+    wasFiltersOpen.current = filtersOpen;
+  }, [filtersOpen]);
+
   const showAutocomplete = showSuggestions && suggestions.length > 0;
   const showRecent = focused && !query && recentlyViewed.length > 0;
   const filtered = activeFilters > 0;
@@ -182,8 +206,8 @@ export function HomeSearchBar({
         <View style={s.fieldRow}>
           <Animated.View style={[s.fieldStack, { transform: [{ scale }] }]}>
             {/* Under the field, so the field's own background clips it to a
-                rim. See SearchFieldGlow. */}
-            <SearchFieldGlow active={focused} radius={FIELD_RADIUS} />
+                rim. See FocusGlow. */}
+            <FocusGlow active={focused} radius={FIELD_RADIUS} />
             <Pressable
               style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}
               onPress={focusField}
@@ -212,6 +236,8 @@ export function HomeSearchBar({
           </Animated.View>
 
           {onFilterPress ? (
+            <Animated.View style={[s.filterStack, { transform: [{ scale: filterScale }] }]}>
+            <FocusGlow active={filtersOpen} radius={FIELD_RADIUS} />
             <TouchableOpacity
               // Dimmed with the rest of the screen while searching, and not
               // reachable: opening a sheet from under the search panel is
@@ -244,6 +270,7 @@ export function HomeSearchBar({
                 </View>
               ) : null}
             </TouchableOpacity>
+            </Animated.View>
           ) : null}
         </View>
 
@@ -330,6 +357,10 @@ const makeStyles = (tc: ThemeColors) =>
     },
     clearBtn: {
       padding: 2,
+    },
+    // Wraps the button with its glow ring, the same pairing the field has.
+    filterStack: {
+      width: 64,
     },
     // Same 48pt height as the field so the two read as one control pair — the
     // treatment ListDetailScreen uses for its sort button. 64 wide rather than

@@ -1,5 +1,6 @@
 /**
- * The search field's focus treatment, and the panel it opens.
+ * The two controls in the Home search row — the field and the filter button —
+ * their shared focus treatment, and the panel each opens.
  *
  * No component-render library in this suite by project rule, so what is pinned
  * here is the geometry and the source contracts — which is where the two real
@@ -25,6 +26,56 @@ const read = (...p: string[]) => fs.readFileSync(path.join(HOME, ...p), 'utf8');
 /** The square that must cover a w×h rounded rect at every angle. */
 const side = (w: number, h: number) => Math.ceil(Math.hypot(w, h));
 
+describe('the two controls behave the same way', () => {
+  const bar = () => read('HomeSearchBar.tsx');
+
+  it('both wear the same glow, from the same component', () => {
+    // It was SearchFieldGlow until the filter button wanted it too. A
+    // component named after one of its two callers is one the next person
+    // copies rather than reuses.
+    const b = bar();
+    expect(b).toMatch(/<FocusGlow active=\{focused\}/);
+    expect(b).toMatch(/<FocusGlow active=\{filtersOpen\}/);
+  });
+
+  it('both lift by the same amount', () => {
+    const b = bar();
+    const lifts = b.match(/outputRange: \[1, 1\.022\]/g) ?? [];
+    expect(lifts.length).toBe(2);
+  });
+
+  it('both tap back on activation', () => {
+    const b = bar();
+    expect(b).toMatch(/if \(focused && !wasFocused\.current\) feedback\.tap\(\)/);
+    expect(b).toMatch(/if \(filtersOpen && !wasFiltersOpen\.current\) feedback\.tap\(\)/);
+  });
+});
+
+describe('the two panels are never open together', () => {
+  const home = () =>
+    fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+
+  it('focusing the field closes the filter sheet', () => {
+    // Enforced on the state, not trusted to the sheet covering the field:
+    // that is a fact about geometry, and geometry is what a later layout
+    // change quietly revises.
+    const h = home();
+    const onFocus = h.slice(h.indexOf('onFocus={() => {'), h.indexOf('onFocus={() => {') + 600);
+    expect(onFocus).toMatch(/setFiltersOpen\(false\)/);
+  });
+
+  it('opening the filter sheet closes the search', () => {
+    const h = home();
+    const body = h.slice(h.indexOf('const openFilters'), h.indexOf('const openFilters') + 200);
+    expect(body).toMatch(/dismissSearch\(\)/);
+    expect(body).toMatch(/setFiltersOpen\(true\)/);
+  });
+
+  it('the filter button goes through that guard rather than setting state raw', () => {
+    expect(home()).toMatch(/onFilterPress=\{openFilters\}/);
+  });
+});
+
 describe('the rotating glow covers the field at every angle', () => {
   it.each([
     [285, 48],
@@ -48,12 +99,12 @@ describe('the rotating glow covers the field at every angle', () => {
   it('sizes the square from both dimensions', () => {
     // `Math.hypot(width, height)`, not `width`. Cheap to get wrong on a later
     // edit, invisible in a still.
-    expect(read('SearchFieldGlow.tsx')).toMatch(/Math\.hypot\(box\.width, box\.height\)/);
+    expect(read('FocusGlow.tsx')).toMatch(/Math\.hypot\(box\.width, box\.height\)/);
   });
 });
 
 describe('the glow stays out of the way', () => {
-  const src = () => read('SearchFieldGlow.tsx');
+  const src = () => read('FocusGlow.tsx');
 
   it('never takes a touch', () => {
     // It sits over a text input. A decoration that eats a tap is worse than
@@ -217,7 +268,17 @@ describe('tapping away closes the panel instead of opening a film', () => {
   it('lightens the dim in light mode', () => {
     // The alpha that reads as "behind something" on a dark ground reads as
     // broken on a pale one.
-    expect(overlay()).toMatch(/scheme === 'dark' \? 'rgba\(0,0,0,0\.46\)' : /);
+    expect(overlay()).toMatch(/scheme === 'dark' \? 'rgba\(0,0,0,0\.62\)' : 'rgba\(20,16,10,0\.38\)'/);
+  });
+
+  it('shares its vignette with every sheet scrim', () => {
+    // A screen that has gone behind something should look the same whichever
+    // thing it is behind.
+    expect(overlay()).toMatch(/from '\.\.\/common\/Vignette'/);
+    const sheet = fs.readFileSync(
+      path.join(HOME, '..', 'common', 'BottomSheet.tsx'), 'utf8',
+    );
+    expect(sheet).toMatch(/<Vignette color=\{SCRIM_EDGE\}/);
   });
 
   it('the filter button is not reachable while searching', () => {

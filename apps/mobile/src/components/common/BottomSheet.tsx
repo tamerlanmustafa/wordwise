@@ -33,6 +33,11 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { Vignette } from './Vignette';
+
+/** Pulls the top and bottom edges down past the flat scrim tint. Deeper than
+ *  the tint itself, or it would not read as an edge at all. */
+const SCRIM_EDGE = 'rgba(0,0,0,0.34)';
 
 interface Props {
   visible: boolean;
@@ -87,6 +92,11 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
       pointerEvents={visible ? 'auto' : 'none'}
     >
+      {/* The scrim carries a vignette as well as the flat tint, matching the
+          search overlay — a screen that has gone behind something should look
+          the same whichever thing it is behind. The gradients are children of
+          the dismiss target rather than siblings, so they ride its fade, and
+          they take no touches of their own. */}
       <TouchableWithoutFeedback onPress={onClose} accessible={false}>
         <Animated.View
           style={[
@@ -97,7 +107,9 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
                 extrapolate: 'clamp',
               }) },
           ]}
-        />
+        >
+          <Vignette color={SCRIM_EDGE} />
+        </Animated.View>
       </TouchableWithoutFeedback>
 
       <Animated.View

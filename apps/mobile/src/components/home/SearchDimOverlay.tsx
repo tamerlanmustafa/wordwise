@@ -19,13 +19,9 @@
  * meaning (that content is behind something). Swapping in `<BlurView>` behind
  * these layers is a small change whenever a native build next goes out.
  *
- * ## The vignette
- *
- * `expo-linear-gradient` has no radial mode, so the vignette is two vertical
- * gradients — one darkening down from the top edge, one darkening up from the
- * bottom — over a flat base tint. On a tall phone screen the vertical axis is
- * most of what a vignette reads as anyway; adding the two horizontal edges
- * costs two more layers to darken 30pt of gutter nobody is looking at.
+ * The vignette itself is `common/Vignette`, shared with every BottomSheet's
+ * scrim so a screen that has gone behind something looks the same whichever
+ * thing it is behind.
  *
  * Opacity is the only animated property, so this runs on the native driver and
  * does not compete with the keyboard animation it arrives alongside.
@@ -33,14 +29,11 @@
 
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from '../../theme/tokens';
+import { Vignette } from '../common/Vignette';
 
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 160;
-
-/** How far the edge gradients reach in from the top and bottom. */
-const VIGNETTE_HEIGHT = 160;
 
 export function SearchDimOverlay({
   active,
@@ -65,9 +58,11 @@ export function SearchDimOverlay({
   }, [active, fade]);
 
   // Light mode needs a lighter hand — the same alpha that reads as "behind
-  // something" on a dark ground reads as "broken" on a pale one.
-  const base = scheme === 'dark' ? 'rgba(0,0,0,0.46)' : 'rgba(20,16,10,0.26)';
-  const edge = scheme === 'dark' ? 'rgba(0,0,0,0.55)' : 'rgba(20,16,10,0.30)';
+  // something" on a dark ground reads as "broken" on a pale one. Both were
+  // raised once seen on a device: the first pass dimmed enough to notice but
+  // not enough to stop the feed competing with the panel over it.
+  const base = scheme === 'dark' ? 'rgba(0,0,0,0.62)' : 'rgba(20,16,10,0.38)';
+  const edge = scheme === 'dark' ? 'rgba(0,0,0,0.72)' : 'rgba(20,16,10,0.46)';
 
   return (
     <Animated.View
@@ -87,16 +82,7 @@ export function SearchDimOverlay({
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, { backgroundColor: base }]}
       />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[edge, 'transparent']}
-        style={[styles.vignette, styles.vignetteTop]}
-      />
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', edge]}
-        style={[styles.vignette, styles.vignetteBottom]}
-      />
+      <Vignette color={edge} />
     </Animated.View>
   );
 }
@@ -106,17 +92,5 @@ const styles = StyleSheet.create({
     // Over the feed (0), under the header (10) — the field and its panel stay
     // at full strength and stay tappable.
     zIndex: 5,
-  },
-  vignette: {
-    position: 'absolute',
-    start: 0,
-    end: 0,
-    height: VIGNETTE_HEIGHT,
-  },
-  vignetteTop: {
-    top: 0,
-  },
-  vignetteBottom: {
-    bottom: 0,
   },
 });

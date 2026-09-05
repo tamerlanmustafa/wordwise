@@ -395,6 +395,13 @@ export const HomeScreen = ({
    * "never mind": it takes you somewhere instead of taking you back. The scrim
    * below swallows that first tap; this is what it does with it.
    */
+  /** Opens the filter sheet, closing the search first. The other half of the
+   *  "never both open" invariant — see the search field's onFocus. */
+  const openFilters = () => {
+    dismissSearch();
+    setFiltersOpen(true);
+  };
+
   const dismissSearch = () => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
     Keyboard.dismiss();
@@ -449,6 +456,12 @@ export const HomeScreen = ({
             focused={searchFocused}
             onFocus={() => {
               if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+              // The two panels are mutually exclusive. Enforced on the state
+              // rather than trusted to the UI: today the filter sheet covers
+              // the screen so the field cannot be reached behind it, but that
+              // is a fact about the sheet's geometry, and geometry is exactly
+              // the kind of thing a later layout change quietly revises.
+              setFiltersOpen(false);
               setSearchFocused(true);
             }}
             onBlur={() => {
@@ -460,8 +473,9 @@ export const HomeScreen = ({
             recentlyViewed={recentlyViewed}
             onMoviePress={onSearchMoviePress}
             onSeeAll={submitSearch}
-            onFilterPress={() => setFiltersOpen(true)}
+            onFilterPress={openFilters}
             onDismiss={dismissSearch}
+            filtersOpen={filtersOpen}
             level={selectedLevel}
             activeFilters={activeFilterCount({
               sort: levelSort,

@@ -1,8 +1,13 @@
 /**
- * SearchFieldGlow — the gold sweep that runs around the search field when you
- * tap it, then settles into the field's ordinary gold border.
+ * FocusGlow — the gold sweep that runs around a control when you activate it,
+ * then settles into that control's ordinary gold border.
  *
- * The field's focus state used to be a border that changed colour on the same
+ * Worn by the search field and by the filter button beside it. It was
+ * SearchFieldGlow until the filter button wanted the same treatment; a
+ * component named after one of its two callers is a component the next person
+ * copies rather than reuses.
+ *
+ * The state it announces used to be a border that changed colour on the same
  * frame as the keyboard appearing, which is easy to miss when your eye is on
  * the keyboard rather than the field. This gives the tap something to point at
  * and then gets out of the way.
@@ -60,15 +65,15 @@ const FADE_IN_MS = 180;
 /** The rim's thickness. Any more and it stops reading as a border. */
 export const GLOW_INSET = 2;
 
-export function SearchFieldGlow({
+export function FocusGlow({
   active,
   radius,
 }: {
   /** True while the field has focus. The sweep runs once per focus, on the
-   *  leading edge — holding focus does not keep it spinning. */
+   *  leading edge — holding it does not keep it spinning. */
   active: boolean;
-  /** The field's corner radius. The ring is drawn `GLOW_INSET` outside it, so
-   *  its own radius is this plus the inset. */
+  /** The control's corner radius. The ring is drawn `GLOW_INSET` outside it,
+   *  so its own radius is this plus the inset. */
   radius: number;
 }) {
   const tc = useThemeColors();
