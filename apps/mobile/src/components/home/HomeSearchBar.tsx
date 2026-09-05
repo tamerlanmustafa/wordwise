@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Image,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -43,6 +44,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './HomeIcons';
 import { SearchFieldGlow } from './SearchFieldGlow';
+import { feedback } from '../../utils/feedback';
 
 /** The field's corner radius, shared with the glow ring so the two agree. */
 const FIELD_RADIUS = 12;
@@ -142,6 +144,28 @@ export function HomeSearchBar({
       tension: 180,
     }).start();
   }, [focused, lift]);
+
+  // The tap-back, fired on the focus *transition* rather than from an onPress.
+  // There are two ways into this field — a tap on the input itself, and a tap
+  // anywhere else inside the border — and hanging the haptic off one of them
+  // would make half the taps feel different from the other half.
+  //
+  // Through `utils/feedback` rather than the native module directly: that file
+  // is the single owner of both channels and of the policy behind them (the
+  // user's two switches, missing hardware, the silent switch), and a source
+  // guard fails the build on a second importer.
+  const wasFocused = useRef(focused);
+  useEffect(() => {
+    if (focused && !wasFocused.current) feedback.tap();
+    wasFocused.current = focused;
+  }, [focused]);
+
+  // Anywhere inside the border focuses the field. The magnifier, the gap
+  // beside it and the padding at the far end were all dead: they look like
+  // part of the control and sit inside its border, but only the input itself —
+  // a slice of the middle — actually took a tap.
+  const inputRef = useRef<TextInput>(null);
+  const focusField = () => inputRef.current?.focus();
   const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.022] });
 
   const showAutocomplete = showSuggestions && suggestions.length > 0;
@@ -156,9 +180,14 @@ export function HomeSearchBar({
             {/* Under the field, so the field's own background clips it to a
                 rim. See SearchFieldGlow. */}
             <SearchFieldGlow active={focused} radius={FIELD_RADIUS} />
-            <View style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}>
+            <Pressable
+              style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}
+              onPress={focusField}
+              accessible={false}
+            >
             <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
             <TextInput
+              ref={inputRef}
               style={s.input}
               placeholder={t('home:search.placeholder')}
               placeholderTextColor={tc.textFaint}
@@ -175,7 +204,7 @@ export function HomeSearchBar({
                 <HomeIcon name="close" size={16} color={tc.textFaint} sw={2.4} />
               </TouchableOpacity>
             ) : null}
-            </View>
+            </Pressable>
           </Animated.View>
 
           {onFilterPress ? (

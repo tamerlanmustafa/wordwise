@@ -113,6 +113,45 @@ describe('the glow stays out of the way', () => {
   });
 });
 
+describe('every point inside the border takes a tap', () => {
+  const src = () => read('HomeSearchBar.tsx');
+
+  it('wraps the field in a Pressable that focuses the input', () => {
+    // The magnifier, the gap beside it and the padding at the far end all sit
+    // inside the border and looked like part of the control, but only the
+    // TextInput — a slice of the middle — actually took a tap.
+    const s = src();
+    expect(s).toMatch(/<Pressable\n\s*style=\{\[s\.field/);
+    expect(s).toMatch(/onPress=\{focusField\}/);
+    expect(s).toMatch(/inputRef\.current\?\.focus\(\)/);
+    expect(s).toMatch(/ref=\{inputRef\}/);
+  });
+
+  it('the wrapper is invisible to screen readers', () => {
+    // It is a hit area over a text input, not a button. Announcing it would
+    // put a second, meaningless stop in front of the field.
+    expect(src()).toMatch(/accessible=\{false\}/);
+  });
+
+  it('goes through the feedback module rather than expo-haptics directly', () => {
+    // That module is the single owner of both channels and of the policy
+    // behind them — the two switches, the silent switch, missing hardware —
+    // and a source guard in utils/__tests__/feedback.test.ts fails the build
+    // on a second importer. I wrote that second importer before finding it.
+    const s = src();
+    expect(s).toMatch(/from '\.\.\/\.\.\/utils\/feedback'/);
+    expect(s).not.toMatch(/expo-haptics/);
+  });
+
+  it('fires the haptic on the focus transition, not from the press handler', () => {
+    // Two ways in — a tap on the input and a tap on the padding. Hanging the
+    // haptic off onPress would make half the taps feel different.
+    const s = src();
+    expect(s).toMatch(/if \(focused && !wasFocused\.current\) feedback\.tap\(\)/);
+    expect(s).toMatch(/wasFocused\.current = focused/);
+  });
+});
+
 describe('the recently-viewed panel', () => {
   const src = () => read('HomeSearchBar.tsx');
 
