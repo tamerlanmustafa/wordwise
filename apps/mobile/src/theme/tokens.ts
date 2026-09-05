@@ -84,7 +84,9 @@ export interface ThemeColors {
   lessonRing:         string;  // dashed ring around the active lesson node
   nodeLocked:         string;  // locked lesson node fill
   nodeLockedBorder:   string;  // locked lesson node border
-  nodeGoldEdge:       string;  // 3D bottom edge under gold (active/completed) tiles
+  nodeGoldEdge:       string;  // 3D bottom edge under the gold (active) tile
+  nodeDone:           string;  // completed practice tile face — green, not gold
+  nodeDoneEdge:       string;  // 3D bottom edge under a completed tile
   nodeLockedEdge:     string;  // 3D bottom edge under locked tiles
   nodeRepairEdge:     string;  // 3D bottom edge under the repair (rescue-streak) tile
 
@@ -230,6 +232,11 @@ const light: ThemeColors = {
   nodeLocked:         '#E5DCC4',
   nodeLockedBorder:   '#D7CCB0',
   nodeGoldEdge:       '#96660A',
+  // The completed tile's own green, deep enough that `shade` still has room
+  // to light its top and darken its bottom — a face already near white or
+  // black loses the gradient that makes the coin read as a solid object.
+  nodeDone:           '#3F8B7B',
+  nodeDoneEdge:       '#2A5F54',
   nodeLockedEdge:     '#CDC0A0',
   nodeRepairEdge:     '#A94B4B',
 
@@ -336,6 +343,8 @@ const dark: ThemeColors = {
   nodeLocked:         '#2a2935',
   nodeLockedBorder:   'rgba(255,255,255,0.06)',
   nodeGoldEdge:       '#C08F21',
+  nodeDone:           '#4CAF9A',
+  nodeDoneEdge:       '#2F7466',
   nodeLockedEdge:     '#1c1b25',
   nodeRepairEdge:     '#B25050',
 

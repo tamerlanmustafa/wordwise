@@ -1,36 +1,46 @@
 /**
  * PracticeTile — v0.7.3 Practice-tab tile (Duolingo-style path).
  *
- * One pressable coin with a glyph. Four visual states, derived by the parent
- * path component from the cursor:
+ * One pressable coin. Four visual states, derived by the parent path
+ * component from the cursor:
  *
- *   • active    → gold coin, lesson glyph, a slowly turning ring of dots,
- *                 START callout. Tappable. Exactly one per render.
+ *   • active    → gold coin, bare face, a slowly turning ring of dots and a
+ *                 gentle bounce. Tappable. Exactly one per render.
  *                 (= cursor position)
- *   • completed → gold coin + check glyph, slightly receded. Past tiles.
- *   • locked    → matte stone coin, lesson glyph, no badge. Future tiles —
- *                 unlocked by walking the path to them.
- *   • repair    → red coin, alarm glyph, RESCUE STREAK callout.
+ *   • completed → green coin, slightly receded. Past tiles.
+ *   • locked    → matte stone coin. Future tiles — unlocked by walking the
+ *                 path to them.
+ *   • repair    → red coin, alarm glyph.
  *                 (Reserved — pseudo-tile injected when
  *                 repair_window_active. Not yet implemented as a
  *                 real tappable flow; v1 just renders the visual.)
  *
- * Every tile is the same lesson, so they share one glyph — a speech
- * bubble, the v0.7 "say it back to me" mark. The path used to give each
- * of three rotating kinds its own glyph (flame for tough words, a film
- * reel for the movie deep-dive); those kinds are gone.
+ * **Colour is the state.** The path used to say everything twice: a check
+ * glyph on completed tiles and a START callout on the active one, on top of
+ * colours that already made both obvious. Every tile carried the same speech
+ * bubble, which meant the glyph distinguished nothing at all — it was
+ * furniture on 3D coins whose whole appeal is the surface. So a done tile is
+ * green, the next one is gold and moving, and the rest are stone; nothing is
+ * labelled. The only glyph left is the alarm on `repair`, which is a genuine
+ * interruption rather than a position on the path.
+ *
+ * The green is not a flat swap. `TileCoin` lights the top of the face and
+ * shades the bottom from the one token it is given, so the completed tile
+ * gets its own three-tone ramp — lit crown, body, shaded base — over a
+ * deeper green lip, and stays the same object the gold one is.
  *
  * The 3D body itself lives in {@link TileCoin} and the ring in
- * {@link TileRing}; this file owns the state → colour mapping, the two
- * animations, and the callout.
+ * {@link TileRing}; this file owns the state → colour mapping and the two
+ * animations.
  */
 
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Path, Rect } from 'react-native-svg';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { COIN_BLOCK, COIN_H, TileCoin } from './TileCoin';
 import { RING_SIZE, TileRing } from './TileRing';
+import { tileVisual } from './tileVisuals';
 
 export type PracticeTileState =
   | 'active'
@@ -109,32 +119,10 @@ export function PracticeTile({
 
   const tappable = state === 'active';
 
-  const isGold = state === 'active' || state === 'completed';
-  const faceColor = state === 'repair'
-    ? tc.error
-    : isGold
-      ? tc.gold
-      : tc.nodeLocked;
-  const edgeColor = state === 'repair'
-    ? tc.nodeRepairEdge
-    : isGold
-      ? tc.nodeGoldEdge
-      : tc.nodeLockedEdge;
-  const fgColor = state === 'repair'
-    ? '#fff'
-    : isGold
-      ? tc.goldDeep
-      : tc.textFaint;
-  // Locked tiles are matte stone: no gloss, barely a rim. Their colours are
-  // already dim, so they keep full opacity — fading them on top of that made
-  // the road ahead disappear rather than recede.
-  const matte = state === 'locked';
-
-  // Glyph shown in the centre of the coin.
-  const glyphKind: TileGlyphKind =
-    state === 'completed' ? 'check'
-  : state === 'repair'    ? 'alarm'
-  : 'lesson';
+  // The tile's entire vocabulary, now that nothing is written on it — kept
+  // pure and tested in `tileVisuals`, because colour is the only thing left
+  // telling the user where on the path they are.
+  const visual = tileVisual(state, tc);
 
   return (
     <Pressable
@@ -157,38 +145,34 @@ export function PracticeTile({
               coin apart; pressing sinks only the face onto its lip. */}
           <Animated.View
             style={[
-              state === 'completed' && { opacity: 0.9 },
+              visual.faded && s.receded,
               state === 'active' && { transform: [{ translateY }] },
             ]}
           >
             <TileCoin
-              face={faceColor}
-              edge={edgeColor}
-              matte={matte}
+              face={visual.face}
+              edge={visual.edge}
+              matte={visual.matte}
               pressed={pressed && tappable}
             >
-              <TileGlyph kind={glyphKind} color={fgColor} />
+              {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
             </TileCoin>
           </Animated.View>
-
-          {state === 'active' ? (
-            <View style={s.startCallout} pointerEvents="none">
-              <View style={[s.startTail, { backgroundColor: tc.text }]} />
-              <View style={[s.startBody, { backgroundColor: tc.text }]}>
-                <Text style={[s.startText, { color: tc.background }]}>START</Text>
-              </View>
-            </View>
-          ) : null}
         </View>
       )}
     </Pressable>
   );
 }
 
-type TileGlyphKind = 'lesson' | 'check' | 'lock' | 'alarm';
+type TileGlyphKind = 'alarm';
 
 /** SVG children, not a standalone <Svg>: the glyph is drawn inside the
- *  coin's face group so it sinks with the face on press. */
+ *  coin's face group so it sinks with the face on press.
+ *
+ *  One kind left. The check, the lock and the speech bubble all went when
+ *  colour became the state — a glyph every tile shares distinguishes nothing,
+ *  and one that repeats what the colour already says is noise on a surface
+ *  the whole design is about. */
 function TileGlyph({
   kind,
   color,
@@ -205,17 +189,6 @@ function TileGlyph({
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   };
-  if (kind === 'check') {
-    return <Path {...p} d="M5 12l4 4 10-10" />;
-  }
-  if (kind === 'lock') {
-    return (
-      <>
-        <Rect {...p} x={5} y={11} width={14} height={9} rx={2} />
-        <Path {...p} d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </>
-    );
-  }
   if (kind === 'alarm') {
     return (
       <>
@@ -223,12 +196,6 @@ function TileGlyph({
         <Path {...p} d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
       </>
     );
-  }
-  if (kind === 'lesson') {
-    // Speech bubble — "say it back to me". Every lesson is the same kind.
-    // Redrawn to fill the glyph box: the old one occupied its top-left
-    // corner with a square shoulder, which at tile size read as a letter P.
-    return <Path {...p} d="M5 4h14a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4h-8l-6 4v-4a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" />;
   }
   return null;
 }
@@ -238,15 +205,18 @@ const makeStyles = (_tc: ThemeColors) =>
     hit: {
       alignItems: 'center',
     },
-    // Exactly the painted height of one coin. The ring and the START callout
-    // overflow it deliberately — reserving space for them would make every
-    // row as tall as the tallest state and stretch the path to half as many
-    // tiles per screen. Both are pointer-transparent, so the overflow costs
-    // nothing but pixels.
+    // Exactly the painted height of one coin. The ring overflows it
+    // deliberately — reserving space for it would make every row as tall as
+    // the tallest state and stretch the path to half as many tiles per
+    // screen. It is pointer-transparent, so the overflow costs nothing but
+    // pixels.
     stack: {
       width: RING_SIZE,
       height: COIN_BLOCK,
       alignItems: 'center',
+    },
+    receded: {
+      opacity: 0.9,
     },
     ringLayer: {
       position: 'absolute',
@@ -254,28 +224,5 @@ const makeStyles = (_tc: ThemeColors) =>
       // the face, and a ring centred on the whole block would sit low.
       top: COIN_H / 2 - RING_SIZE / 2,
       start: 0,
-    },
-    startCallout: {
-      position: 'absolute',
-      top: COIN_BLOCK + 2,
-      start: 0,
-      end: 0,
-      alignItems: 'center',
-    },
-    startTail: {
-      width: 8,
-      height: 8,
-      transform: [{ rotate: '45deg' }],
-      marginBottom: -4,
-    },
-    startBody: {
-      paddingHorizontal: 9,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    startText: {
-      fontSize: 9,
-      fontWeight: '900',
-      letterSpacing: 1.1,
     },
   });

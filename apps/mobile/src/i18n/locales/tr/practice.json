@@ -2,7 +2,5 @@
   "dayLabel_one": "GÜN",
   "dayLabel_other": "GÜN",
   "freeze_one": "DONDURMA",
-  "freeze_other": "DONDURMA",
-  "lesson": "DERS {{number}}",
-  "pathHeading": "PRATİK YOLUNUZ"
+  "freeze_other": "DONDURMA"
 }

@@ -2,7 +2,5 @@
   "dayLabel_one": "DÍA",
   "dayLabel_other": "DÍAS",
   "freeze_one": "CONGELACIÓN",
-  "freeze_other": "CONGELACIONES",
-  "lesson": "LECCIÓN {{number}}",
-  "pathHeading": "TU RUTA DE PRÁCTICA"
+  "freeze_other": "CONGELACIONES"
 }

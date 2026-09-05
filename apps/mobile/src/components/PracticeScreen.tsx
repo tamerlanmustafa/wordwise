@@ -164,8 +164,11 @@ export function PracticeScreen({
             doesn't know about the paywall / daily cap; the parent's
             `handleTilePress` does. */}
         <View style={s.pathWrap}>
-          <Text style={s.pathHeading}>{t('practice:pathHeading')}</Text>
-          <Text style={s.pathLesson}>{t('practice:lesson', { number: cursor + 1 })}</Text>
+          {/* No heading and no lesson number. The path is the only thing on
+              the tab, so a label saying so was telling the user where they
+              already were, and the lesson count was a number with nothing to
+              compare it against — the coins themselves say how far along the
+              road you are. */}
           <PracticeTilePath
             cursor={cursor}
             onTilePress={handleTilePress}
@@ -242,23 +245,6 @@ const makeStyles = (tc: ThemeColors) =>
     pathWrap: {
       paddingHorizontal: 18,
       paddingTop: 8,
-    },
-    pathHeading: {
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1.8,
-      color: tc.textFaint,
-      textTransform: 'uppercase',
-      textAlign: 'center',
-      marginBottom: 4,
-    },
-    pathLesson: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 16,
-      fontWeight: '900',
-      letterSpacing: 1.2,
-      color: tc.goldOnSurface,
-      textAlign: 'center',
     },
   });
 

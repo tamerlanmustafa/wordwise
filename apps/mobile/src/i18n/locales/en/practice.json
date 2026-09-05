@@ -2,7 +2,5 @@
   "dayLabel_one": "DAY",
   "dayLabel_other": "DAYS",
   "freeze_one": "FREEZE",
-  "freeze_other": "FREEZES",
-  "lesson": "LESSON {{number}}",
-  "pathHeading": "YOUR PRACTICE PATH"
+  "freeze_other": "FREEZES"
 }

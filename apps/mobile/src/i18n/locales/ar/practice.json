@@ -10,7 +10,5 @@
   "freeze_one": "تجميد",
   "freeze_other": "تجميد",
   "freeze_two": "تجميد",
-  "freeze_zero": "تجميد",
-  "lesson": "الدرس {{number}}",
-  "pathHeading": "مسار تدريبك"
+  "freeze_zero": "تجميد"
 }

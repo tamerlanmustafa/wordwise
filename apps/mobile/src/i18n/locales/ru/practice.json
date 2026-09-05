@@ -6,7 +6,5 @@
   "freeze_few": "ЗАМОРОЗКИ",
   "freeze_many": "ЗАМОРОЗОК",
   "freeze_one": "ЗАМОРОЗКА",
-  "freeze_other": "ЗАМОРОЗКИ",
-  "lesson": "УРОК {{number}}",
-  "pathHeading": "ВАШ ПУТЬ ПРАКТИКИ"
+  "freeze_other": "ЗАМОРОЗКИ"
 }
