@@ -78,8 +78,38 @@ describe('the glow stays out of the way', () => {
   });
 
   it('settles by fading, so there is no frame where it switches off', () => {
-    // A hard stop reads as a glitch. The sweep keeps turning while it dims.
+    // A hard stop reads as a glitch. The glare keeps travelling while it dims.
     expect(src()).toMatch(/Easing\.in\(Easing\.quad\)/);
+  });
+
+  it('goes round exactly once, slowly', () => {
+    // A second lap turns an acknowledgement into a loading spinner.
+    const s = src();
+    expect(s).toMatch(/const TURN_MS = 2200/);
+    expect(s).toMatch(/toValue: 1,\n\s*duration: TURN_MS,/);
+  });
+
+  it('spins linearly, so the glare does not stick at the corners', () => {
+    expect(src()).toMatch(/easing: Easing\.linear/);
+  });
+
+  it('holds at full strength for most of the lap before fading', () => {
+    // Fading from the start leaves it dim by the far side, so the orbit looks
+    // lopsided — bright on the way out, invisible on the way back.
+    const s = src();
+    expect(s).toMatch(/HOLD_FRACTION = 0\.62/);
+    expect(s).toMatch(/Animated\.delay\(TURN_MS \* HOLD_FRACTION - FADE_IN_MS\)/);
+  });
+
+  it('anchors the highlight at a corner, so there is ONE glare and not two', () => {
+    // The bug in the first version: a gradient bright through the *middle*
+    // crosses the rim in two opposite places, and reads as two glints chasing
+    // each other 180 degrees apart. The first colour stop has to be the bright
+    // one, at location 0.
+    const s = src();
+    const gradient = s.slice(s.indexOf('<LinearGradient'));
+    expect(gradient).toMatch(/colors=\{\[tc\.gold,/);
+    expect(gradient).toMatch(/locations=\{\[0, 0\.18, 0\.45\]\}/);
   });
 });
 

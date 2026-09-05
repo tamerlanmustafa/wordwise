@@ -7,14 +7,23 @@
  * the keyboard rather than the field. This gives the tap something to point at
  * and then gets out of the way.
  *
+ * The effect has a name — it is a **conic-gradient border**, also sold as a
+ * "border beam" or an "animated gradient border". On the web it is one
+ * declaration: a `conic-gradient` whose angle is animated. React Native has no
+ * conic gradient, so it is built here out of the one gradient it does have.
+ *
  * ## How the ring is drawn
  *
- * There is no conic gradient in React Native, so a light does not travel round
- * a border by itself. What travels here is a *rotating linear gradient*
- * (transparent → gold → transparent) on a square large enough to cover the
- * field at any angle — its diagonal. The field's own opaque background is
- * painted on top with a 2pt inset, so all that shows of the square is the rim,
- * and a rotating band read through a rim looks like a light going round it.
+ * A square large enough to cover the field at any angle — its diagonal — spins
+ * once behind it. The field's own opaque background is painted on top with a
+ * 2pt inset, so all that shows of the square is the rim.
+ *
+ * The gradient inside that square is bright at ONE CORNER and transparent
+ * everywhere else. That asymmetry is the whole trick, and it is what the first
+ * version got wrong: a gradient with its bright band through the *middle*
+ * crosses the rim in two opposite places, so it reads as two glints chasing
+ * each other 180° apart rather than as one light going round. Anchoring the
+ * highlight at a corner leaves exactly one.
  *
  * The square has to be measured rather than guessed: the field is `flex: 1`
  * beside a fixed filter button, so its width is only known at layout. A square
@@ -39,11 +48,15 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors } from '../../theme/tokens';
 
-/** One full turn. Two of them run, so the sweep lasts ~1.4s in total — long
- *  enough to read as deliberate, short enough not to become the thing you are
- *  waiting for before you can type. */
-const TURN_MS = 700;
-const TURNS = 2;
+/** One slow orbit. Slow enough that the eye follows the glare the whole way
+ *  round rather than seeing a flicker, and it only goes round once — a second
+ *  lap turns an acknowledgement into a loading spinner. */
+const TURN_MS = 2200;
+/** The glare holds at full strength for this much of the orbit, then fades
+ *  over the rest. Fading from the start would leave it dim by the time it
+ *  reached the far side, so the lap would look lopsided. */
+const HOLD_FRACTION = 0.62;
+const FADE_IN_MS = 180;
 /** The rim's thickness. Any more and it stops reading as a border. */
 export const GLOW_INSET = 2;
 
@@ -87,20 +100,23 @@ export function SearchFieldGlow({
     }
     spin.setValue(0);
     Animated.parallel([
+      // Linear, because a glare that eases is a glare that appears to stick at
+      // the corners it starts and ends on.
       Animated.timing(spin, {
-        toValue: TURNS,
-        duration: TURN_MS * TURNS,
+        toValue: 1,
+        duration: TURN_MS,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
-      // Up fast, then a long taper. The taper is the "calms down" half: the
-      // sweep does not stop, it dims until the ordinary gold border is all
-      // that is left, so there is no frame where the ring visibly switches off.
+      // In fast, hold for most of the lap, then out. The tail is the "calms
+      // down" half: the glare keeps travelling while it dims, so there is no
+      // frame where the ring visibly switches off.
       Animated.sequence([
-        Animated.timing(fade, { toValue: 1, duration: 140, useNativeDriver: true }),
+        Animated.timing(fade, { toValue: 1, duration: FADE_IN_MS, useNativeDriver: true }),
+        Animated.delay(TURN_MS * HOLD_FRACTION - FADE_IN_MS),
         Animated.timing(fade, {
           toValue: 0,
-          duration: TURN_MS * TURNS - 140,
+          duration: TURN_MS * (1 - HOLD_FRACTION),
           easing: Easing.in(Easing.quad),
           useNativeDriver: true,
         }),
@@ -150,9 +166,11 @@ export function SearchFieldGlow({
             ],
           }}
         >
+          {/* Bright at the leading corner, gone by 45% along the diagonal.
+              One highlight, not two — see the note at the top of this file. */}
           <LinearGradient
-            colors={['transparent', tc.gold, tc.goldOnSurface, 'transparent']}
-            locations={[0, 0.42, 0.58, 1]}
+            colors={[tc.gold, tc.goldOnSurface, 'transparent']}
+            locations={[0, 0.18, 0.45]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
