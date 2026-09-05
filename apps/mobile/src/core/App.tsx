@@ -19,7 +19,7 @@ import { PaywallScreen } from '../components/PaywallScreen';
 import type { PaywallReason } from '../components/paywallPricing';
 import { StatsScreen } from '../components/StatsScreen';
 import { NotebookScreen } from '../components/NotebookScreen';
-import { registerForPushNotifications, scheduleWordReminder, scheduleReviewReminder } from '../services/notifications';
+import { registerForPushNotifications, cancelWordReminder, scheduleReviewReminder } from '../services/notifications';
 import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
@@ -180,7 +180,10 @@ export default function App() {
     // render. registerForPushNotifications is a no-op on simulator.
     const task = InteractionManager.runAfterInteractions(() => {
       registerForPushNotifications().then(() => {
-        scheduleWordReminder();
+        // The Word of the Hour reminder is retired. This cancels the repeating
+        // trigger the old build left in the OS — it outlives the code that
+        // created it, so removing the scheduler was not enough to stop it.
+        cancelWordReminder();
         scheduleReviewReminder();
       }).catch(() => {});
     });

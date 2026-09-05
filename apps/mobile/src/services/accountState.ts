@@ -92,13 +92,10 @@ export const DEVICE_KEYS: readonly string[] = [
   'wordwise.appLanguage.v1',       // mirrors users.language_preference; re-derived on login
   'wordwise.splashShown.v1',
   'admin_view_mode',               // inert unless the account is an admin
-  'accordion_mode',
   'vocab_view_mode',
   'lists.activeKind.v1',           // which tab of Lists was last open
   'has_opened_before',
-  'notif_daily_word',              // local notification scheduling is per device
-  'notif_review',
-  'notif_word_mode',
+  'notif_review',                  // local notification scheduling is per device
   'journey.rtwShelf.dismissedDate',
 ];
 

@@ -182,12 +182,11 @@ export const MovieDetailScreen = ({
     currentBookmarkWordRef.current = currentBookmarkWord;
   }, [currentBookmarkWord]);
   const [restoreTrigger, setRestoreTrigger] = useState(0);
-  const [accordionMode, setAccordionMode] = useState(true);
-  useEffect(() => {
-    AsyncStorage.getItem('accordion_mode').then((v) => {
-      if (v === 'off') setAccordionMode(false);
-    });
-  }, []);
+  // Collapsed word rows, always. The Settings toggle that wrote
+  // `accordion_mode` was removed on 2026-09-05, so nothing writes that key any
+  // more — reading it would have pinned anyone who had turned it off to `off`
+  // for ever, with no control left to turn it back on.
+  const accordionMode = true;
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
   const [posterZoomOpen, setPosterZoomOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);

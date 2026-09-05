@@ -1,26 +1,5 @@
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { t } from '../i18n';
-
-/** How often the "Word of the Hour" reminder fires. Defaults to once a day. */
-export type WordReminderMode = 'daily' | 'hourly';
-const WORD_REMINDER_MODE_KEY = 'notif_word_mode';
-
-export async function getWordReminderMode(): Promise<WordReminderMode> {
-  try {
-    return (await AsyncStorage.getItem(WORD_REMINDER_MODE_KEY)) === 'hourly'
-      ? 'hourly'
-      : 'daily';
-  } catch {
-    return 'daily';
-  }
-}
-
-export async function setWordReminderMode(mode: WordReminderMode): Promise<void> {
-  try {
-    await AsyncStorage.setItem(WORD_REMINDER_MODE_KEY, mode);
-  } catch {}
-}
 
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
@@ -73,38 +52,24 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 /**
- * Schedule the "Word of the Hour" reminder. The word itself rotates hourly, but
- * the reminder defaults to once a day at 9 AM so we don't spam the user; pass
- * (or persist via setWordReminderMode) 'hourly' to nudge them every hour.
- * When `mode` is omitted the persisted preference is used.
+ * Cancel the retired "Word of the Hour" reminder.
+ *
+ * The feature is gone — its Settings toggle was removed on 2026-09-05 — but a
+ * repeating local notification lives in the OS, not in the bundle, so deleting
+ * the code that scheduled it does NOT stop it. Every install that ever ran the
+ * old build has a `daily-word` trigger sitting in the notification centre, and
+ * on `hourly` it fires every hour, for ever, with nothing left in the app to
+ * turn it off.
+ *
+ * So this runs at launch instead: cheap, idempotent, and a no-op once the
+ * trigger is gone. It stays until we are confident no installs predate the
+ * removal — deleting it early is what would strand those users.
  */
-export async function scheduleWordReminder(mode?: WordReminderMode): Promise<void> {
+export async function cancelWordReminder(): Promise<void> {
   if (!Notifications) return;
-  const resolved = mode ?? (await getWordReminderMode());
   try {
     await Notifications.cancelScheduledNotificationAsync('daily-word');
-    await Notifications.scheduleNotificationAsync({
-      identifier: 'daily-word',
-      content: {
-        title: t('notifications:reminder.wordTitle'),
-        body: t('notifications:reminder.wordBody'),
-      },
-      trigger:
-        resolved === 'hourly'
-          ? {
-              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-              seconds: 3600,
-              repeats: true,
-            }
-          : {
-              type: Notifications.SchedulableTriggerInputTypes.DAILY,
-              hour: 9,
-              minute: 0,
-            },
-    });
-  } catch (e) {
-    console.warn('[notifications] schedule word reminder failed:', e);
-  }
+  } catch {}
 }
 
 export async function scheduleReviewReminder(): Promise<void> {

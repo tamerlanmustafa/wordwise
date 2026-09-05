@@ -14,8 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPPORTED_LANGUAGES, CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
-import { useOnboardingStore } from '../../stores/onboardingStore';
-import { DAILY_GOAL_OPTIONS } from '../onboarding/placement';
 import { colors } from '../../theme/palette';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
@@ -28,13 +26,7 @@ import {
   normalizeUsername,
   usernameState,
 } from './profileForm';
-import {
-  scheduleWordReminder,
-  scheduleReviewReminder,
-  getWordReminderMode,
-  setWordReminderMode,
-  type WordReminderMode,
-} from '../../services/notifications';
+import { scheduleReviewReminder } from '../../services/notifications';
 import { makeSettingsStyles } from './settingsStyles';
 import { FORWARD_ARROW, reloadForRtl, syncRtlLayout } from '../../i18n/rtl';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
@@ -74,11 +66,8 @@ export const SettingsScreen = ({
 }: Props) => {
   const [username, setUsername] = useState(user?.username || '');
   const [nativeLanguage, setNativeLanguage] = useState(user?.native_language || 'en');
-  const [learningLanguage, setLearningLanguage] = useState(user?.learning_language || 'en');
   const [proficiencyLevel, setProficiencyLevel] = useState(user?.proficiency_level || 'A1');
   const [saving, setSaving] = useState(false);
-  const dailyGoalMinutes = useOnboardingStore((st) => st.dailyGoalMinutes);
-  const setDailyGoalMinutes = useOnboardingStore((st) => st.setDailyGoalMinutes);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -90,10 +79,7 @@ export const SettingsScreen = ({
   // the translation language (which decides if we offer the "reset" affordance).
   const [appLanguage, setAppLanguageState] = useState(getAppLanguage());
   const [appLanguagePinned, setAppLanguagePinned] = useState(false);
-  const [dailyWordNotif, setDailyWordNotif] = useState(true);
-  const [wordReminderMode, setWordReminderModeState] = useState<WordReminderMode>('daily');
   const [reviewNotif, setReviewNotif] = useState(true);
-  const [accordionMode, setAccordionMode] = useState(true);
 
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -114,10 +100,7 @@ export const SettingsScreen = ({
   const barInset = useBottomBarInset();
 
   useEffect(() => {
-    AsyncStorage.getItem('notif_daily_word').then((v) => { if (v === 'off') setDailyWordNotif(false); });
-    getWordReminderMode().then(setWordReminderModeState);
     AsyncStorage.getItem('notif_review').then((v) => { if (v === 'off') setReviewNotif(false); });
-    AsyncStorage.getItem('accordion_mode').then((v) => { if (v === 'off') setAccordionMode(false); });
     hasExplicitAppLanguage().then(setAppLanguagePinned);
   }, []);
 
@@ -187,33 +170,8 @@ export const SettingsScreen = ({
     confirmRtlRestart(resolved);
   };
 
-  const toggleAccordionMode = async () => {
-    const next = !accordionMode;
-    setAccordionMode(next);
-    await AsyncStorage.setItem('accordion_mode', next ? 'on' : 'off');
-  };
 
-  const toggleDailyWord = async () => {
-    const next = !dailyWordNotif;
-    setDailyWordNotif(next);
-    await AsyncStorage.setItem('notif_daily_word', next ? 'on' : 'off');
-    if (next) {
-      scheduleWordReminder(wordReminderMode);
-    } else {
-      try {
-        const Notif = require('expo-notifications');
-        await Notif.cancelScheduledNotificationAsync('daily-word');
-      } catch {}
-    }
-  };
 
-  const toggleWordReminderMode = async () => {
-    const next: WordReminderMode = wordReminderMode === 'hourly' ? 'daily' : 'hourly';
-    setWordReminderModeState(next);
-    await setWordReminderMode(next);
-    // Re-schedule with the new cadence only if the reminder is currently on.
-    if (dailyWordNotif) scheduleWordReminder(next);
-  };
 
   const toggleReview = async () => {
     const next = !reviewNotif;
@@ -314,6 +272,12 @@ export const SettingsScreen = ({
 
   const getLangName = (code: string) =>
     SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code;
+
+  /** The learning/translation language's own name — "Español", not "Spanish".
+   *  A speaker scans for their language in their language, which is why the
+   *  grid this replaced showed nativeName too. */
+  const getTargetLangName = (code: string) =>
+    AVAILABLE_LANGUAGES.find((l) => l.code === code)?.nativeName || code;
 
   // Endonym first (that's what a speaker scans for), English name after —
   // except for English itself, where the two are the same word.
@@ -459,12 +423,21 @@ export const SettingsScreen = ({
           <Text style={settingsStyles.selectValue}>{getLangName(nativeLanguage)} ▼</Text>
         </TouchableOpacity>
 
+        {/* Learning language IS the translation language.
+            They were two controls over one column. `setTargetLanguage` already
+            writes `users.learning_language` (see App.tsx), and `targetLanguage`
+            initialises from it — so the separate "Learning language" picker and
+            the "Translation language" grid could disagree about the same value,
+            and the picker offered every SUPPORTED_LANGUAGES entry including the
+            ones we cannot translate into. Picking one of those set a target
+            language the app had no translations for. One control now, over the
+            list we can actually serve. */}
         <TouchableOpacity
           style={settingsStyles.selectButton}
           onPress={() => setShowLearningLangPicker(true)}
         >
           <Text style={settingsStyles.selectLabel}>{t('settings:learningLanguage')}</Text>
-          <Text style={settingsStyles.selectValue}>{getLangName(learningLanguage)} ▼</Text>
+          <Text style={settingsStyles.selectValue}>{getTargetLangName(targetLanguage)} ▼</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -476,26 +449,6 @@ export const SettingsScreen = ({
         </TouchableOpacity>
 
         <View style={settingsStyles.divider} />
-
-        {/* Daily goal — set once in onboarding, now editable here (F-026). */}
-        <Text style={settingsStyles.sectionTitle}>{t('settings:dailyGoal')}</Text>
-        <View style={appearanceStyles.segmented}>
-          {DAILY_GOAL_OPTIONS.map((g) => {
-            const isActive = dailyGoalMinutes === g.mins;
-            return (
-              <TouchableOpacity
-                key={g.mins}
-                onPress={() => { void setDailyGoalMinutes(g.mins); }}
-                style={[appearanceStyles.segment, isActive && appearanceStyles.segmentActive]}
-                activeOpacity={0.7}
-              >
-                <Text style={[appearanceStyles.segmentText, isActive && appearanceStyles.segmentTextActive]}>
-                  {g.mins}m
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         <View style={settingsStyles.divider} />
 
@@ -553,52 +506,6 @@ export const SettingsScreen = ({
 
         <View style={settingsStyles.divider} />
 
-        {/* Every language we can translate into, labelled. This rendered
-            `AVAILABLE_LANGUAGES.slice(0, 8)` — the list has 12, so Chinese,
-            Dutch, Polish and Azerbaijani were unreachable from Settings
-            entirely, pickable only during onboarding. The chips also showed
-            the raw code ("ZH"), which is not what a speaker scans for. */}
-        <Text style={settingsStyles.sectionTitle}>{t('settings:translationLanguage')}</Text>
-        <View style={appearanceStyles.langGrid}>
-          {AVAILABLE_LANGUAGES.map((lang) => {
-            const isActive = lang.code === targetLanguage;
-            return (
-              <TouchableOpacity
-                key={lang.code}
-                style={[appearanceStyles.langChip, isActive && appearanceStyles.langChipActive]}
-                onPress={() => setTargetLanguage(lang.code)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={lang.name}
-              >
-                <Text
-                  style={[appearanceStyles.langChipText, isActive && appearanceStyles.langChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {lang.nativeName}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={settingsStyles.divider} />
-
-        <Text style={settingsStyles.sectionTitle}>{t('settings:vocabulary')}</Text>
-        <View style={settingsStyles.notifRow}>
-          <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>{t('settings:autoCollapse')}</Text>
-            <Text style={settingsStyles.notifDesc}>{t('settings:autoCollapseDesc')}</Text>
-          </View>
-          <TouchableOpacity
-            style={[settingsStyles.notifToggle, accordionMode && settingsStyles.notifToggleOn]}
-            onPress={toggleAccordionMode}
-          >
-            <Text style={settingsStyles.notifToggleText}>{accordionMode ? 'ON' : 'OFF'}</Text>
-          </TouchableOpacity>
-        </View>
-
         <Text style={settingsStyles.sectionTitle}>{t('settings:soundAndHaptics')}</Text>
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
@@ -626,38 +533,6 @@ export const SettingsScreen = ({
         </View>
 
         <Text style={settingsStyles.sectionTitle}>{t('settings:notifications')}</Text>
-        <View style={settingsStyles.notifRow}>
-          <View style={settingsStyles.notifInfo}>
-            <Text style={settingsStyles.notifLabel}>{t('settings:wordOfTheHour')}</Text>
-            <Text style={settingsStyles.notifDesc}>{t('settings:wordOfTheHourDesc')}</Text>
-          </View>
-          <TouchableOpacity
-            style={[settingsStyles.notifToggle, dailyWordNotif && settingsStyles.notifToggleOn]}
-            onPress={toggleDailyWord}
-          >
-            <Text style={settingsStyles.notifToggleText}>{dailyWordNotif ? 'ON' : 'OFF'}</Text>
-          </TouchableOpacity>
-        </View>
-        {dailyWordNotif && (
-          <View style={settingsStyles.notifRow}>
-            <View style={settingsStyles.notifInfo}>
-              <Text style={settingsStyles.notifLabel}>{t('settings:reminderFrequency')}</Text>
-              <Text style={settingsStyles.notifDesc}>
-                {wordReminderMode === 'hourly'
-                  ? 'Remind me every hour'
-                  : 'Remind me once a day at 9:00 AM'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[settingsStyles.notifToggle, wordReminderMode === 'hourly' && settingsStyles.notifToggleOn]}
-              onPress={toggleWordReminderMode}
-            >
-              <Text style={settingsStyles.notifToggleText}>
-                {wordReminderMode === 'hourly' ? 'HOURLY' : 'DAILY'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
         <View style={settingsStyles.notifRow}>
           <View style={settingsStyles.notifInfo}>
             <Text style={settingsStyles.notifLabel}>{t('settings:reviewReminder')}</Text>
@@ -716,12 +591,16 @@ export const SettingsScreen = ({
         (code) => commitField('native_language', code, setNativeLanguage, nativeLanguage),
         t('settings:nativeLanguage'),
       )}
+      {/* Over AVAILABLE_LANGUAGES, not SUPPORTED_LANGUAGES: this picker now
+          sets what words translate INTO, so it may only offer languages we
+          have translations for. `setTargetLanguage` persists it locally and
+          onto the account's `learning_language`, so no commitField here. */}
       {renderPicker(
         showLearningLangPicker,
         () => setShowLearningLangPicker(false),
-        SUPPORTED_LANGUAGES,
-        learningLanguage,
-        (code) => commitField('learning_language', code, setLearningLanguage, learningLanguage),
+        AVAILABLE_LANGUAGES,
+        targetLanguage,
+        setTargetLanguage,
         t('settings:learningLanguage'),
       )}
       {renderPicker(
