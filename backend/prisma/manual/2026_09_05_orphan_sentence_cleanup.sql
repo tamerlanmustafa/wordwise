@@ -8,6 +8,12 @@
 -- ⚠ DESTRUCTIVE. Read the scoping note below before running it, and run
 -- section 1 first — it only counts.
 --
+-- STATUS 2026-09-05: section 2 APPLIED to prod. 4,424 global LLM orphans
+-- deleted; 2,984,633 linked sentences intact afterwards and 0 dangling links.
+-- Every deleted row is in `orphan_sentence_cleanup_20260905` (see section 0),
+-- so this is reversible. The 58,670 movie-tied orphans are still there — see
+-- the findings at the bottom.
+--
 --
 -- IS IT SAFE TO DELETE THESE?
 -- ---------------------------
@@ -65,8 +71,28 @@
 -- WARN or FAIL permanently, so the metric stops being a signal about today.
 
 
+-- 0. UNDO TABLE. Run before section 2 — same precedent as
+--    backfill_119_unknown_snapshot (#119). A delete you cannot reverse is a
+--    different risk from one you can, and 63k short rows cost nothing to keep.
+--
+--    To reverse: INSERT INTO sentence_bank SELECT (its columns minus
+--    captured_at) FROM orphan_sentence_cleanup_20260905 — though the ids will
+--    be new, so the links would have to be rebuilt too. It is a safety net for
+--    the TEXT, not a transactional undo.
+CREATE TABLE IF NOT EXISTS orphan_sentence_cleanup_20260905 AS
+SELECT sb.*, now() AS captured_at
+  FROM sentence_bank sb
+ WHERE NOT EXISTS (SELECT 1 FROM sentence_lemma_links sll WHERE sll.sentence_id = sb.id);
+
+
 -- 1. COUNT FIRST. Run this on its own and read it before running section 2.
 --    The split matters: only the first row is in scope.
+--
+--    ⚠ Run `SET max_parallel_workers_per_gather = 0;` on the session first.
+--    Without it this dies with "could not resize shared memory segment ... No
+--    space left on device": the planner parallelises the scan of a 3M-row
+--    table and the helpers want a 16 MB segment out of Railway's small
+--    /dev/shm. Same failure, same fix, as the daily coverage snapshot (#154).
 SELECT
     CASE
         WHEN movie_id IS NULL AND source = 'llm' THEN 'global llm  (in scope)'
@@ -106,6 +132,25 @@ WITH gone AS (
 SELECT count(*) AS deleted FROM gone;
 
 
+-- 2b. THE MOVIE-TIED ORPHANS — measured 2026-09-05, NOT deleted.
+--
+--     58,670 of them, created 2026-05-23 to 2026-07-24 and static since. Both
+--     of the objections above were measured and neither survived contact:
+--
+--       * the race is gone. Since the atomic write shipped today, no writer
+--         can leave a sentence unlinked even transiently, and every one of
+--         these predates it by six weeks;
+--       * exactly TWO films out of 4,146 with orphans would lose every
+--         sentence row they have (484 rows between them), which is what would
+--         flip skip_if_exists. Re-ingesting two films is idempotent and those
+--         two evidently have nothing usable anyway.
+--
+--     They are left in place only because this file said it would leave them
+--     and 58,670 rows is not a scope to widen silently. The delete is section
+--     2 with `movie_id IS NULL AND source = 'llm'` swapped for
+--     `movie_id IS NOT NULL`, and the undo table already holds them.
+--
+--
 -- 3. AFTERWARDS
 --    `orphan_sentences` is classified by _status_no_increase: it FAILs on a
 --    rise, WARNs on any non-zero, and is OK at zero. A fall is never a
