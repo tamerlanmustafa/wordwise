@@ -8,11 +8,12 @@
 -- ⚠ DESTRUCTIVE. Read the scoping note below before running it, and run
 -- section 1 first — it only counts.
 --
--- STATUS 2026-09-05: section 2 APPLIED to prod. 4,424 global LLM orphans
--- deleted; 2,984,633 linked sentences intact afterwards and 0 dangling links.
--- Every deleted row is in `orphan_sentence_cleanup_20260905` (see section 0),
--- so this is reversible. The 58,670 movie-tied orphans are still there — see
--- the findings at the bottom.
+-- STATUS 2026-09-05: FULLY APPLIED to prod. 63,094 orphans deleted — 4,424
+-- global LLM (section 2) and 58,670 movie-tied (section 2b) — leaving 0.
+-- Verified afterwards: 2,984,633 linked sentences intact, 0 dangling links,
+-- 4,392 films still carrying sentences. Every deleted row is in
+-- `orphan_sentence_cleanup_20260905` (section 0), so the text is recoverable.
+-- VACUUM ANALYZE run on sentence_bank afterwards: 0 dead tuples.
 --
 --
 -- IS IT SAFE TO DELETE THESE?
@@ -145,10 +146,28 @@ SELECT count(*) AS deleted FROM gone;
 --         flip skip_if_exists. Re-ingesting two films is idempotent and those
 --         two evidently have nothing usable anyway.
 --
---     They are left in place only because this file said it would leave them
---     and 58,670 rows is not a scope to widen silently. The delete is section
---     2 with `movie_id IS NULL AND source = 'llm'` swapped for
---     `movie_id IS NOT NULL`, and the undo table already holds them.
+--     APPLIED 2026-09-05 on that evidence. The two emptied films are #27
+--     "Lincoln" (2000, 249 rows) and #198 "Tokyo Story" (1953, 235 rows);
+--     both now have no sentence_bank row at all, so the next classification
+--     pass will re-populate them instead of skipping. That is the intended
+--     outcome — every sentence they had was unreachable.
+WITH gone AS (
+    DELETE FROM sentence_bank sb
+     WHERE sb.movie_id IS NOT NULL
+       AND NOT EXISTS (
+           SELECT 1 FROM sentence_lemma_links sll WHERE sll.sentence_id = sb.id
+       )
+    RETURNING sb.id
+)
+SELECT count(*) AS deleted FROM gone;
+
+
+-- 2c. AFTER ANY BULK DELETE, reclaim the dead tuples and refresh the planner's
+--     statistics. 63k dead rows in a 3M-row table is not enough to change a
+--     plan on its own, but the hot sentence lookup (#120) reads this table on
+--     every card and stale stats there are not worth risking. ANALYZE alone
+--     would update the statistics and leave the space — VACUUM does both.
+VACUUM ANALYZE sentence_bank;
 --
 --
 -- 3. AFTERWARDS
