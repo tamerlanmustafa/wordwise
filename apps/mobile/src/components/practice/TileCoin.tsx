@@ -1,131 +1,81 @@
 /**
- * TileCoin — the 3D body every practice tile is drawn on.
+ * TileCoin — the pressable body every practice tile is drawn on.
  *
- * A practice tile reads as a physical button you can press, not a flat
- * circle with a drop shadow. Four things together make that illusion, and
- * dropping any one of them flattens it:
+ * Two layers and nothing else: a face, and an edge under it in a darker tone.
+ * Pressing sinks the face onto the edge, so the button physically depresses
+ * instead of dimming. It is the same construction the word deck's buttons use
+ * (`pillFace` / `pillEdge` in WordCardDeck) — one shape, one darker copy of it
+ * offset down — and it is deliberately the same, because two controls in one
+ * app that are both "a button you press down" should be built the same way.
  *
- *   1. **Proportion.** The face is a wide ellipse (72×56), not a circle —
- *      a disc lying at an angle, seen slightly from above.
- *   2. **A lip.** The same ellipse in a darker tone, offset {@link COIN_EDGE}
- *      down, so the disc has visible thickness. Pressing sinks the face onto
- *      it (`pressed`) — the button physically depresses instead of dimming.
- *   3. **A lit surface.** The face is a vertical gradient of *one* token —
- *      bright at the top where the light lands, the token itself in the
- *      middle, shaded at the bottom (see `shade` in theme/tokens).
- *   4. **A rim + gloss.** A white rim highlight that fades out by the
- *      equator, plus a specular oval near the top. Matte states (locked
- *      tiles) skip the gloss and keep only a whisper of rim.
+ * ## Why it stopped being an ellipse
  *
- * Drawn in SVG rather than with `borderRadius` views on purpose: an ellipse
- * with a gradient fill and a fading stroke has no faithful RN-style
- * equivalent, and SVG rasterises identically on iOS and Android — the old
- * hard-offset shadow did not.
+ * The face and the edge used to be ellipses, one offset {@link COIN_EDGE}
+ * below the other, and that produced a visible gap either side. An ellipse
+ * narrows to a point at its left and right extremes: near those points the
+ * face occupies a sliver of height around its own centre line and the edge
+ * occupies a sliver around a centre line 8pt lower, so the two shapes stop
+ * overlapping and the background shows through between them. The result read
+ * as a cave under each side of the coin rather than as thickness.
  *
- * The glyph is passed as `children` and rendered *inside* the face group, so
- * it sinks with the face on press and needs no second transform.
+ * A capsule does not have that failure. Its sides are straight for most of
+ * the height and its end caps are half the height in radius, so an offset
+ * copy still overlaps everywhere and the only thing visible below the face is
+ * an even band — which is exactly what the illusion needs and all it needs.
+ *
+ * ## Why the gradients went
+ *
+ * There were four more effects layered on to sell the depth: a vertical
+ * gradient across the face, a white rim that faded out by the equator, a
+ * specular oval near the top, and a second gradient on the edge. They were
+ * doing the work the offset already does, and each one was a place for the
+ * two shapes to disagree. The whole thing was drawn in SVG to make them
+ * possible; without them it is two views, which also means it costs no SVG
+ * root per tile on a path that mounts a dozen.
  */
 
-import { useId, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Defs, Ellipse, G, LinearGradient, Stop } from 'react-native-svg';
-import { shade } from '../../theme/tokens';
 
-/** Face width — Duolingo-ish proportions, ~1.29:1. */
+/** Face width. */
 export const COIN_W = 72;
-/** Face height. */
+/** Face height. Also the corner radius, twice over — this is a capsule. */
 export const COIN_H = 56;
-/** Depth of the extruded lip under the face. */
+/** Depth of the edge under the face, and how far the face travels on press. */
 export const COIN_EDGE = 8;
-/** Total painted height of one coin, face + lip. */
+/** Total painted height of one tile, face plus the edge showing beneath it. */
 export const COIN_BLOCK = COIN_H + COIN_EDGE;
 /** Side of the square box a glyph is drawn in, centred on the face. */
 export const GLYPH_BOX = 24;
 
 export interface TileCoinProps {
-  /** Base colour of the face. The lit/shaded tones are derived from it. */
+  /** Face colour, flat. */
   face: string;
-  /** Base colour of the lip below the face. */
+  /** Edge colour. Always darker than the face — that difference *is* the
+   *  thickness, now that nothing else is drawing it. */
   edge: string;
-  /** Matte surface — no specular gloss, minimal rim. Locked tiles. */
-  matte?: boolean;
-  /** Face pushed down onto its lip while a finger is on it. */
+  /** Face pushed down onto its edge while a finger is on it. */
   pressed?: boolean;
-  /** SVG glyph, drawn in a {@link GLYPH_BOX}-sided box centred on the face. */
+  /** Centred on the face, and a child of it, so it sinks on press without a
+   *  transform of its own. */
   children?: ReactNode;
 }
 
-export function TileCoin({ face, edge, matte = false, pressed = false, children }: TileCoinProps) {
-  // Gradient ids are resolved per <Svg> root, but two roots on screen with
-  // the same id have collided on Android before — and every tile on the path
-  // mounts one of these. useId keeps each instance's defs its own.
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const faceGrad = `f${uid}`;
-  const rimGrad = `r${uid}`;
-  const lipGrad = `l${uid}`;
-
-  const cx = COIN_W / 2;
-  const cy = COIN_H / 2;
-  const glyphOffset = (COIN_H - GLYPH_BOX) / 2;
-
+export function TileCoin({ face, edge, pressed = false, children }: TileCoinProps) {
   return (
     <View style={styles.body}>
-      {/* The lip: same ellipse, lower and darker. Static — only the face
-          moves when pressed, which is what makes the press read as depth
-          rather than as the whole tile sliding down. */}
-      <View style={styles.lip} pointerEvents="none">
-        <Svg width={COIN_W} height={COIN_H}>
-          <Defs>
-            <LinearGradient id={lipGrad} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={shade(edge, 0.06)} />
-              <Stop offset="1" stopColor={shade(edge, -0.18)} />
-            </LinearGradient>
-          </Defs>
-          <Ellipse cx={cx} cy={cy} rx={cx} ry={cy} fill={`url(#${lipGrad})`} />
-        </Svg>
-      </View>
-
-      <View style={[styles.face, pressed && styles.facePressed]}>
-        <Svg width={COIN_W} height={COIN_H}>
-          <Defs>
-            <LinearGradient id={faceGrad} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={shade(face, matte ? 0.16 : 0.3)} />
-              <Stop offset="0.42" stopColor={face} />
-              <Stop offset="1" stopColor={shade(face, matte ? -0.08 : -0.14)} />
-            </LinearGradient>
-            <LinearGradient id={rimGrad} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#fff" stopOpacity={matte ? 0.16 : 0.55} />
-              <Stop offset="0.5" stopColor="#fff" stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-
-          <Ellipse cx={cx} cy={cy} rx={cx} ry={cy} fill={`url(#${faceGrad})`} />
-          {/* Rim: inset by half the stroke so it sits on the silhouette
-              instead of being clipped by it. */}
-          <Ellipse
-            cx={cx}
-            cy={cy}
-            rx={cx - 1}
-            ry={cy - 1}
-            fill="none"
-            stroke={`url(#${rimGrad})`}
-            strokeWidth={2}
-          />
-          {matte ? null : (
-            <Ellipse
-              cx={cx}
-              cy={COIN_H * 0.26}
-              rx={COIN_W * 0.27}
-              ry={COIN_H * 0.13}
-              fill="#fff"
-              opacity={0.32}
-            />
-          )}
-
-          <G transform={[{ translateX: (COIN_W - GLYPH_BOX) / 2 }, { translateY: glyphOffset }]}>
-            {children}
-          </G>
-        </Svg>
+      {/* Static. Only the face moves, which is what makes the press read as
+          depth rather than as the whole tile sliding down. */}
+      <View style={[styles.layer, styles.edge, { backgroundColor: edge }]} pointerEvents="none" />
+      <View
+        style={[
+          styles.layer,
+          styles.face,
+          { backgroundColor: face },
+          pressed && styles.facePressed,
+        ]}
+      >
+        {children}
       </View>
     </View>
   );
@@ -136,15 +86,22 @@ const styles = StyleSheet.create({
     width: COIN_W,
     height: COIN_BLOCK,
   },
-  lip: {
+  layer: {
     position: 'absolute',
-    top: COIN_EDGE,
     start: 0,
+    width: COIN_W,
+    height: COIN_H,
+    // Half the height: the end caps are semicircles, so an offset copy of
+    // this shape overlaps it everywhere. See the note at the top.
+    borderRadius: COIN_H / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  edge: {
+    top: COIN_EDGE,
   },
   face: {
-    position: 'absolute',
     top: 0,
-    start: 0,
   },
   facePressed: {
     transform: [{ translateY: COIN_EDGE }],

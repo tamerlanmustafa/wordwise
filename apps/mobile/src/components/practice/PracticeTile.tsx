@@ -36,9 +36,9 @@
 
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
-import { Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { COIN_BLOCK, COIN_H, TileCoin } from './TileCoin';
+import { COIN_BLOCK, COIN_H, GLYPH_BOX, TileCoin } from './TileCoin';
 import { RING_SIZE, TileRing } from './TileRing';
 import { tileVisual } from './tileVisuals';
 
@@ -152,7 +152,6 @@ export function PracticeTile({
             <TileCoin
               face={visual.face}
               edge={visual.edge}
-              matte={visual.matte}
               pressed={pressed && tappable}
             >
               {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
@@ -166,8 +165,9 @@ export function PracticeTile({
 
 type TileGlyphKind = 'alarm';
 
-/** SVG children, not a standalone <Svg>: the glyph is drawn inside the
- *  coin's face group so it sinks with the face on press.
+/** Its own <Svg> now, and an ordinary child of the face view: the face is two
+ *  plain views rather than an SVG group, so it sinks on press by carrying its
+ *  children with it.
  *
  *  One kind left. The check, the lock and the speech bubble all went when
  *  colour became the state — a glyph every tile shares distinguishes nothing,
@@ -180,8 +180,6 @@ function TileGlyph({
   kind: TileGlyphKind;
   color: string;
 }) {
-  // Heavier than the 2.4 it was drawn at: on a lit, gradient-filled face a
-  // hairline glyph reads as a smudge rather than as a mark.
   const p = {
     fill: 'none',
     stroke: color,
@@ -189,15 +187,13 @@ function TileGlyph({
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   };
-  if (kind === 'alarm') {
-    return (
-      <>
-        <Path {...p} d="M12 8v4l3 2M4 5l3-2M20 5l-3-2" />
-        <Path {...p} d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
-      </>
-    );
-  }
-  return null;
+  if (kind !== 'alarm') return null;
+  return (
+    <Svg width={GLYPH_BOX} height={GLYPH_BOX} viewBox="0 0 24 24">
+      <Path {...p} d="M12 8v4l3 2M4 5l3-2M20 5l-3-2" />
+      <Path {...p} d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />
+    </Svg>
+  );
 }
 
 const makeStyles = (_tc: ThemeColors) =>

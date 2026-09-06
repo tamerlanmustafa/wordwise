@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 /**
  * Colour is the only thing telling the user where they are on the path.
  *
@@ -66,10 +68,13 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
       expect(tileVisual('completed', tc).faded).toBe(true);
     });
 
-    it('keeps its gloss — a done tile is still a polished coin', () => {
-      // Only the locked tiles are matte. Making the completed ones matte too
-      // would have flattened the entire path behind the cursor.
-      expect(tileVisual('completed', tc).matte).toBe(false);
+    it('is the same object as every other tile, in a different colour', () => {
+      // There is no second surface treatment any more. `TileCoin` draws a flat
+      // face over a darker edge and nothing else, so a state is exactly two
+      // colours — which is what makes this mapping the whole design.
+      const done = tileVisual('completed', tc);
+
+      expect(Object.keys(done).sort()).toEqual(['edge', 'face', 'faded', 'glyph']);
     });
   });
 
@@ -90,15 +95,14 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
   });
 
   describe('locked tiles', () => {
-    it('are matte stone with nothing on them', () => {
+    it('are stone with nothing on them', () => {
       const locked = tileVisual('locked', tc);
 
       expect(locked.face).toBe(tc.nodeLocked);
-      expect(locked.matte).toBe(true);
       expect(locked.glyph).toBeNull();
     });
 
-    it('keep full opacity despite being matte', () => {
+    it('keep full opacity even so', () => {
       // Their colours are already dim; fading them on top of that made the
       // road ahead disappear rather than recede.
       expect(tileVisual('locked', tc).faded).toBe(false);
@@ -128,12 +132,12 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     // as thickness; the gold pair sits around 40, and that is the bar the new
     // green had to clear to look like the same coin.
     //
-    // `locked` is deliberately excluded. Matte tiles are the road *ahead* —
-    // dim, flat and unpressable on purpose — and the dark theme's pair sits
-    // around 14. That is a design decision this change did not touch, and
-    // asserting the lit threshold over it would be a test demanding a
-    // redesign nobody asked for.
-    it.each(states.filter((s) => !tileVisual(s, tc).matte))(
+    // `locked` is deliberately excluded. Those tiles are the road *ahead* —
+    // dim and unpressable on purpose — and the dark theme's pair sits around
+    // 14. That is a design decision this change did not touch, and asserting
+    // the lit threshold over it would be a test demanding a redesign nobody
+    // asked for.
+    it.each(states.filter((s) => s !== 'locked'))(
       '%s has a lip that is visibly darker, not a hairline',
       (state) => {
         const { face, edge } = tileVisual(state, tc);
@@ -149,5 +153,55 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     );
 
     expect(new Set(faces).size).toBe(faces.length);
+  });
+});
+
+describe('the tile is built like the deck buttons', () => {
+  const coin = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'TileCoin.tsx'), 'utf8');
+  const deck = () =>
+    fs.readFileSync(
+      path.join(__dirname, '..', '..', 'vocabulary', 'WordCardDeck.tsx'),
+      'utf8',
+    );
+
+  it('is a capsule, not an ellipse', () => {
+    // The cave: an ellipse narrows to a point at its left and right extremes,
+    // so near those points the face occupies a sliver of height around its own
+    // centre line and the edge occupies one around a centre line 8pt lower.
+    // The two stop overlapping and the background shows through between them.
+    //
+    // A capsule's radius is half its height, so an offset copy still overlaps
+    // everywhere and the only thing visible beneath the face is an even band.
+    const s = coin();
+    expect(s).toMatch(/borderRadius: COIN_H \/ 2/);
+    expect(s).not.toMatch(/<Ellipse|react-native-svg/);
+  });
+
+  it('draws a face over an edge and nothing else', () => {
+    // The gradient, the fading rim, the specular oval and the edge's own
+    // second gradient were all doing the work the offset already does, and
+    // each was a place for the two shapes to disagree.
+    //
+    // Comments stripped: this bans the *names* of those effects, and the file
+    // explains in prose which ones it dropped. Reading the explanation as if
+    // it were code is how a guard fails on the change it was written for.
+    const code = coin().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/LinearGradient|Stop |stopOpacity|specular|gloss|matte/i);
+    expect(code).not.toMatch(/\bshade\(/);
+  });
+
+  it('moves only the face on press, by exactly the edge depth', () => {
+    // Sinking both would read as the whole tile sliding down rather than as a
+    // button depressing. Same rule the deck's pills follow.
+    expect(coin()).toMatch(/facePressed: \{\s*\n\s*transform: \[\{ translateY: COIN_EDGE \}\]/);
+    expect(deck()).toMatch(/pillFacePressed: \{\s*\n\s*transform: \[\{ translateY: PILL_EDGE_PRESSED_DROP \}\]/);
+  });
+
+  it('keeps the edge static under the moving face', () => {
+    const s = coin();
+    const edgeAt = s.indexOf('styles.edge');
+    expect(s.slice(edgeAt - 200, edgeAt)).toMatch(/Static/);
+    expect(s).toMatch(/styles\.edge, \{ backgroundColor: edge \}\] \} pointerEvents="none"|styles\.edge, \{ backgroundColor: edge \}\]\} pointerEvents="none"/);
   });
 });

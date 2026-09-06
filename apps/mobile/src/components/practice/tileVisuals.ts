@@ -21,15 +21,11 @@ import type { ThemeColors } from '../../theme/tokens';
 import type { PracticeTileState } from './PracticeTile';
 
 export interface TileVisual {
-  /** Base colour of the coin's face. `TileCoin` lights the top and shades the
-   *  bottom from this one token, so a state needs exactly one colour to get
-   *  its full three-tone ramp. */
+  /** Flat colour of the tile's face. */
   face: string;
-  /** The extruded lip below the face. Always darker than the face — that
-   *  difference *is* the thickness of the coin. */
+  /** The edge below the face. Always darker than the face — that difference
+   *  *is* the thickness, now that nothing else is drawing it. */
   edge: string;
-  /** Matte surface: no specular gloss, minimal rim. */
-  matte: boolean;
   /** Centre glyph, or null for a bare face. */
   glyph: 'alarm' | null;
   /** Slightly receded, for tiles the user has already walked past. */
@@ -39,16 +35,16 @@ export interface TileVisual {
 export function tileVisual(state: PracticeTileState, tc: ThemeColors): TileVisual {
   switch (state) {
     case 'repair':
-      return { face: tc.error, edge: tc.nodeRepairEdge, matte: false, glyph: 'alarm', faded: false };
+      return { face: tc.error, edge: tc.nodeRepairEdge, glyph: 'alarm', faded: false };
     case 'completed':
-      return { face: tc.nodeDone, edge: tc.nodeDoneEdge, matte: false, glyph: null, faded: true };
+      return { face: tc.nodeDone, edge: tc.nodeDoneEdge, glyph: null, faded: true };
     case 'active':
-      return { face: tc.gold, edge: tc.nodeGoldEdge, matte: false, glyph: null, faded: false };
+      return { face: tc.gold, edge: tc.nodeGoldEdge, glyph: null, faded: false };
     case 'locked':
     default:
-      // Locked tiles keep full opacity despite being matte: their colours are
-      // already dim, and fading them on top of that made the road ahead
-      // disappear rather than recede.
-      return { face: tc.nodeLocked, edge: tc.nodeLockedEdge, matte: true, glyph: null, faded: false };
+      // Locked tiles keep full opacity: their colours are already dim, and
+      // fading them on top of that made the road ahead disappear rather than
+      // recede.
+      return { face: tc.nodeLocked, edge: tc.nodeLockedEdge, glyph: null, faded: false };
   }
 }
