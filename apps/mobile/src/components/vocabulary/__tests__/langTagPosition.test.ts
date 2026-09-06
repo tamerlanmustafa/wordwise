@@ -202,9 +202,14 @@ describe('the three controls under the deck are one family', () => {
     // deck's main action look like it came from somewhere else.
     const s = src();
     expect(styleBlock('nextFace')).toMatch(/backgroundColor: tc\.gold/);
-    expect(styleBlock('nextLabel')).toMatch(/color: tc\.goldDeep/);
+    // The label is white on light and the dark ink on dark. White measures
+    // 2.96:1 on the light theme's #C58B1B — chosen deliberately — but 1.36:1
+    // on the dark theme's brighter gold, where it would be unreadable.
+    expect(styleBlock('nextLabel')).toMatch(/color: light \? '#FFFFFF' : tc\.goldDeep/);
     expect(s).not.toMatch(/LinearGradient/);
-    expect(s).not.toMatch(/#FFD166|#E4B44A|#D89B22|#C58B1B/);
+    // The gradient's four frozen stops. Comments stripped, since the note
+    // above names two of them to explain why the label is conditional.
+    expect(s.replace(/\/\/[^\n]*/g, '')).not.toMatch(/#FFD166|#E4B44A|#D89B22|#C58B1B/);
   });
 
   it('keeps every control in the app’s one accent', () => {
@@ -243,5 +248,38 @@ describe('the three controls under the deck are one family', () => {
     // what makes the ones that DO need mirroring impossible to forget.
     expect(src()).toMatch(/directionalIcon\('reload'\)/);
     expect(src()).not.toMatch(/directionalIcon\('arrow-undo'\)/);
+  });
+});
+
+
+describe('the deck\u2019s smaller controls', () => {
+  it('restarts to the first card rather than stepping back one', () => {
+    // The deck already restores you to a bookmark on every open, so "where you
+    // left off" is a place the app puts you rather than one you chose \u2014 and
+    // the control people reached for was the one that got them out of it.
+    // Twenty presses to reach the top is a chore, not a control.
+    const s = src();
+    expect(s).toMatch(/const doRestart = \(\) => \{/);
+    expect(s).toMatch(/dispatch\(\{ type: 'focus', key: first \}\)/);
+    expect(s).not.toMatch(/undoStackRef|UNDO_STACK_MAX/);
+  });
+
+  it('rewrites the bookmark from the first card, so the restart sticks', () => {
+    // Without this, coming back to the film later snaps forward to the old
+    // position and the restart is undone by the next visit.
+    expect(src()).toMatch(/dispatch\(\{ type: 'focus', key: first \}\);\s*\n\s*onAdvanceBookmark\(first\)/);
+  });
+
+  it('disables itself on the first card instead of doing nothing', () => {
+    expect(src()).toMatch(/const canRestart = displayDeck\.keys\.length > 0 && displayDeck\.keys\[0\] !== currentKey/);
+  });
+
+  it('draws both hearts at one size', () => {
+    // Two faces, one constant: the live card and the fly-away overlay must
+    // measure identically or the heart jumps as the overlay detaches.
+    const s = src();
+    expect(s).toMatch(/const HEART_SIZE = \d+/);
+    expect((s.match(/size=\{HEART_SIZE\}/g) ?? []).length).toBe(2);
+    expect(s).not.toMatch(/<HeartIcon size=\{21\}/);
   });
 });

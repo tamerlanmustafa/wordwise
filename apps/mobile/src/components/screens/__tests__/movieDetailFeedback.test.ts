@@ -85,3 +85,43 @@ describe('MovieDetail feedback', () => {
     expect(screen).not.toMatch(/onSave=\{withTap\(/);
   });
 });
+
+describe('"Knew it" reports itself the way the rest of the app does', () => {
+  const screen = () => read(['screens', 'MovieDetailScreen.tsx']);
+
+  it('uses the global toast, not a bar of its own', () => {
+    // This screen grew its own undo bar — its own view, styles and dismissal —
+    // so the app told you what it had just done in two different places
+    // depending on which screen you were standing on. The film feed's "Seen
+    // it" and "Not interested" already had the shape.
+    const s = screen();
+    expect(s).toMatch(/import \{ showToast \} from '\.\.\/\.\.\/stores\/toastStore'/);
+    expect(s).toMatch(/actionLabel: t\('movies:detail\.undo'\)/);
+    expect(s).not.toMatch(/undoToastInner|undoToastAction/);
+  });
+
+  it('offers the Undo for exactly as long as it works', () => {
+    // The toast's default dwell is 3.6s and the deferred write lands at 5s.
+    // Held apart, the gap between them is a window with nothing on screen to
+    // press and still time to press it.
+    const s = screen();
+    expect(s).toMatch(/const LEARNED_COMMIT_MS = 5000/);
+    expect(s).toMatch(/duration: LEARNED_COMMIT_MS/);
+    expect(s).toMatch(/\}, LEARNED_COMMIT_MS\)/);
+    expect(s).not.toMatch(/\}, 5000\)/);
+  });
+
+  it('says what happened, rather than that something was hidden', () => {
+    // The old bar read `"word" hidden`, which described the row disappearing
+    // from a list view this screen no longer shows.
+    const en = JSON.parse(
+      fs.readFileSync(
+        // SRC is src/components; the locales live a level above it.
+        path.join(SRC, '..', 'i18n', 'locales', 'en', 'vocabulary.json'),
+        'utf8',
+      ),
+    );
+    expect(en.deck.markedKnown).toMatch(/known/i);
+    expect(screen()).toMatch(/t\('vocabulary:deck\.markedKnown', \{ word \}\)/);
+  });
+});

@@ -13,7 +13,9 @@
     "showTranslation": "Çeviriyi göster",
     "tapToHide": "GİZLEMEK İÇİN DOKUN",
     "tapToReveal": "GÖSTERMEK İÇİN DOKUN",
-    "resumedAt": "Yer iminden devam edildi · kart {{card}}"
+    "resumedAt": "Yer iminden devam edildi · kart {{card}}",
+    "restartDeck": "Önceki kartı geri getir",
+    "markedKnown": "“{{word}}” bildiklerine eklendi"
   },
   "learned": {
     "empty": "Henüz öğrenilen kelime yok. Herhangi bir videodaki bir kelimeye sola kaydırarak onu “biliniyor” olarak işaretleyebilirsin.",

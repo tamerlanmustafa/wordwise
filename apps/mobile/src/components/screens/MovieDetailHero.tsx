@@ -47,10 +47,20 @@ import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
 
 /** How far the backdrop haze reaches down the screen. */
 const WASH_HEIGHT = 232;
-/** The plain image sits this faint under the gold; RN has no CSS `filter`, so
- *  the mockup's `sepia(.85) saturate(.7)` is approximated by holding the photo
- *  well back and letting a gold overlay do the grading. */
-const WASH_IMAGE_OPACITY = 0.24;
+/**
+ * How far forward the still comes under the gold.
+ *
+ * RN has no CSS `filter`, so the mockup's `sepia(.85) saturate(.7)` is
+ * approximated by holding the photo back and letting a gold overlay do the
+ * grading. At 0.24 it was held back far enough that the film was barely
+ * legible — the layer had stopped being a grade and become a lid.
+ *
+ * 0.42 keeps every layer that was there (the gold tint, the fade to the page)
+ * and only lets more of the photograph through them. The point of the wash is
+ * that the deck stays the subject; the film still has to be recognisable for
+ * that to be a choice rather than an absence.
+ */
+const WASH_IMAGE_OPACITY = 0.42;
 
 export interface MovieDetailHeroProps {
   backdropPath?: string | null;

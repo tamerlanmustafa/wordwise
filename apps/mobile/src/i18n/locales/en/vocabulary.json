@@ -26,7 +26,9 @@
     "nextCard": "Next card",
     "hideTranslation": "Hide translation",
     "showTranslation": "Show translation",
-    "resumedAt": "Resumed at your bookmark · card {{card}}"
+    "resumedAt": "Resumed at your bookmark · card {{card}}",
+    "restartDeck": "Back to the first card",
+    "markedKnown": "Marked “{{word}}” as known"
   },
   "learned": {
     "empty": "No learned words yet. Swipe left on a word in any movie to mark it as known.",

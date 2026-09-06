@@ -13,7 +13,9 @@
     "showTranslation": "Mostrar tradução",
     "tapToHide": "TOQUE PARA OCULTAR",
     "tapToReveal": "TOQUE PARA VER",
-    "resumedAt": "Retomado no seu marcador · cartão {{card}}"
+    "resumedAt": "Retomado no seu marcador · cartão {{card}}",
+    "restartDeck": "Voltar ao cartão anterior",
+    "markedKnown": "“{{word}}” marcada como conhecida"
   },
   "learned": {
     "empty": "Ainda não há palavras aprendidas. Deslize para a esquerda sobre uma palavra em qualquer filme para marcá-la como conhecida.",

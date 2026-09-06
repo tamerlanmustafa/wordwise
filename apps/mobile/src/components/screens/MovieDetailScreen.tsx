@@ -22,6 +22,7 @@ import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
 import { styles } from '../../core/styles';
 import { withTap } from '../../utils/feedback';
+import { showToast } from '../../stores/toastStore';
 import type { MovieData } from '../../core/types';
 
 import {
@@ -85,6 +86,16 @@ const ROWS_MODE_ENABLED: boolean = false;
 
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
+
+/**
+ * How long "Knew it" stays undoable.
+ *
+ * One number for two things that must agree: the deferred write, and the
+ * toast that offers to cancel it. Held apart they drift into a window where
+ * the Undo is gone and the write has not landed — nothing to press, and still
+ * time to press it.
+ */
+const LEARNED_COMMIT_MS = 5000;
 
 const LEARNED_ROW_ANIM = {
   duration: 260,
@@ -499,6 +510,23 @@ export const MovieDetailScreen = ({
     });
     setPendingLearned(word);
 
+    // The same shape the film feed uses for "Seen it" and "Not interested":
+    // the global toast, carrying its own Undo. This screen used to grow a
+    // bespoke bar pinned above the tab bar — its own view, its own styles, its
+    // own dismissal — which meant the app told you what it had just done in
+    // two different places depending on which screen you were standing on.
+    //
+    // Its duration is the commit window, not the default 3.6s. Those two being
+    // different is a gap where the Undo has gone but the write has not
+    // happened yet: nothing on screen to press, and still time to press it.
+    showToast({
+      message: t('vocabulary:deck.markedKnown', { word }),
+      tone: 'success',
+      duration: LEARNED_COMMIT_MS,
+      actionLabel: t('movies:detail.undo'),
+      onAction: () => undoLearnedRef.current(),
+    });
+
     pendingLearnedTimerRef.current = setTimeout(() => {
       pendingLearnedTimerRef.current = null;
       setPendingLearned((current) => (current === word ? null : current));
@@ -510,10 +538,15 @@ export const MovieDetailScreen = ({
           return next;
         });
       });
-    }, 5000);
+    }, LEARNED_COMMIT_MS);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, pendingLearned]);
 
+  // The toast is raised inside `handleMarkLearned`, which is declared above
+  // the handler it needs. A ref rather than a reorder: the alternative is
+  // moving a hundred lines of unrelated code to satisfy a declaration order,
+  // and the ref is read at press time when the handler certainly exists.
+  const undoLearnedRef = useRef<() => void>(() => {});
   const handleUndoLearned = () => {
     if (!pendingLearned) return;
     if (pendingLearnedTimerRef.current) {
@@ -528,6 +561,7 @@ export const MovieDetailScreen = ({
     });
     setPendingLearned(null);
   };
+  undoLearnedRef.current = handleUndoLearned;
 
   useEffect(() => {
     return () => {
@@ -1454,19 +1488,6 @@ export const MovieDetailScreen = ({
         ) : null}
         </View>
         </View>
-
-      {pendingLearned && (
-        <View style={styles.undoToast} pointerEvents="box-none">
-          <View style={styles.undoToastInner}>
-            <Text style={styles.undoToastText} numberOfLines={1}>
-              "{pendingLearned}" hidden
-            </Text>
-            <TouchableOpacity onPress={withTap(handleUndoLearned)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.undoToastAction}>{t('movies:detail.undo')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       {/* The back button is no longer floating: with nothing to scroll it has
           nothing to fade against, so it is a normal row inside the hero. */}

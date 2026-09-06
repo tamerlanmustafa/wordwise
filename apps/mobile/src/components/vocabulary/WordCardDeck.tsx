@@ -339,8 +339,12 @@ const FLY_DROP = 8;
 const FLY_ROTATE_DEG = 7;
 /** Incoming card settling from the ghost slot to the front. */
 const ARRIVE_DURATION = 250;
+/** The save heart, on both card faces. Bigger than the 21 it was: it shares
+ *  the meta row with a level chip and had to be found by aim rather than by
+ *  eye. Its own hitSlop is unchanged — this is about seeing it. */
+const HEART_SIZE = 25;
+
 const DRAG_CLAMP = 160;
-const UNDO_STACK_MAX = 20;
 /**
  * How long a card must hold focus before the deck warms it and the one behind
  * it. Every focus change re-arms the timer, so flicking through twenty cards
@@ -577,7 +581,6 @@ export const WordCardDeck = ({
 
   // Keys swiped past with "next", most recent last — the undo button walks
   // this back. Learned words keep their own undo (the parent's toast).
-  const undoStackRef = useRef<string[]>([]);
 
   // Reveal state — which card shows its translations, plus a per-word cache
   // so rotating back to a card never refetches.
@@ -624,8 +627,6 @@ export const WordCardDeck = ({
     track('deck_advance', { method });
     const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
     pushOutgoing(1, method === 'swipe' ? lastDragXRef.current : 0);
-    undoStackRef.current.push(currentKey);
-    if (undoStackRef.current.length > UNDO_STACK_MAX) undoStackRef.current.shift();
     nextMountAnimRef.current = 'step';
     setExpandedKey(null);
     dispatch({ type: 'advance' });
@@ -647,25 +648,32 @@ export const WordCardDeck = ({
     if (promoted) onAdvanceBookmark(promoted);
   };
 
-  /** Undo button: bring back the last "next"-swiped card that is still in
-   *  the deck; it flies back in from the right. */
-  const doUndo = () => {
-    const stack = undoStackRef.current;
-    let key: string | undefined;
-    while ((key = stack.pop()) != null) {
-      if (key !== currentKey && displayDeck.keys.includes(key)) break;
-    }
-    if (key == null) return;
-    track('deck_undo', {});
+  /**
+   * Restart: back to the deck's first card, wherever you are.
+   *
+   * It used to step back one card at a time off an undo stack, which made it
+   * the inverse of Next and nothing else. But the deck already restores you to
+   * a bookmark on every open, so "where you left off" is a place the app puts
+   * you rather than one you chose — and the control people actually reached
+   * for was the one that got them out of it and back to the top. Twenty
+   * presses to do that is not a control, it is a chore.
+   *
+   * The bookmark is rewritten from card one, so this sticks: coming back to
+   * the film later starts where the restart left you rather than snapping
+   * forward to the old position.
+   */
+  const doRestart = () => {
+    const first = displayDeck.keys[0];
+    if (first == null || first === currentKey) return;
+    track('deck_restart', {});
     nextMountAnimRef.current = 'return';
     setExpandedKey(null);
-    dispatch({ type: 'focus', key });
-    onAdvanceBookmark(key);
+    dispatch({ type: 'focus', key: first });
+    onAdvanceBookmark(first);
   };
 
-  const canUndo = undoStackRef.current.some(
-    (k) => k !== currentKey && displayDeck.keys.includes(k),
-  );
+  /** Nothing to restart to when the first card is already the one in hand. */
+  const canRestart = displayDeck.keys.length > 0 && displayDeck.keys[0] !== currentKey;
 
   // Refs so the PanResponder (captured once) always sees fresh handlers —
   // same pattern as BookmarkRowWrapper.
@@ -977,7 +985,7 @@ export const WordCardDeck = ({
           ) : null}
           <View style={s.flexSpacer} />
           {isAuthenticated ? (
-            <HeartIcon size={21} filled={savedWords.has(term)} color={savedWords.has(term) ? tc.gold : tc.textFaint} />
+            <HeartIcon size={HEART_SIZE} filled={savedWords.has(term)} color={savedWords.has(term) ? tc.gold : tc.textFaint} />
           ) : null}
         </View>
         <View style={s.wordSlot}>
@@ -1174,7 +1182,7 @@ export const WordCardDeck = ({
                   accessibilityRole="button"
                   accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
                 >
-                  <HeartIcon size={21} filled={isSaved} color={isSaved ? tc.gold : tc.textFaint} />
+                  <HeartIcon size={HEART_SIZE} filled={isSaved} color={isSaved ? tc.gold : tc.textFaint} />
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -1390,15 +1398,15 @@ export const WordCardDeck = ({
         )}
 
         <Pressable
-          onPress={withTap(doUndo)}
-          disabled={!canUndo}
+          onPress={withTap(doRestart)}
+          disabled={!canRestart}
           accessibilityRole="button"
-          accessibilityLabel={t('vocabulary:deck.previousCard')}
+          accessibilityLabel={t('vocabulary:deck.restartDeck')}
         >
           {({ pressed }) => (
-            <View style={[s.undoWrap, !canUndo && s.undoDisabled]}>
+            <View style={[s.undoWrap, !canRestart && s.undoDisabled]}>
               <View style={s.undoEdge} />
-              <View style={[s.undoFace, pressed && canUndo && s.undoFacePressed]}>
+              <View style={[s.undoFace, pressed && canRestart && s.undoFacePressed]}>
                 {/* A circular arrow, not the angular undo hook: this button
                     brings the previous card round again, and the round glyph
                     says "again" where the hook said "revert an edit".
@@ -1851,7 +1859,11 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.gold,
     },
     nextLabel: {
-      color: tc.goldDeep,
+      // White on the light theme's deeper gold (#C58B1B) measures 2.96:1 —
+      // just under the 3:1 that 14pt/900 would want, and chosen deliberately
+      // for the look. The dark theme's gold is #FFD166, where white is 1.36:1
+      // and genuinely unreadable, so that side keeps the dark ink.
+      color: light ? '#FFFFFF' : tc.goldDeep,
       fontSize: 14,
       fontWeight: '900',
       letterSpacing: 0.2,
