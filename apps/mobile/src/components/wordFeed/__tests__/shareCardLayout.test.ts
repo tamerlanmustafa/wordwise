@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 /**
  * Share-card layout.
  *
@@ -109,5 +111,45 @@ describe('shareFileName', () => {
 
   it('bounds the length', () => {
     expect(shareFileName('a'.repeat(300)).length).toBeLessThan(60);
+  });
+});
+
+describe('the headword cannot collapse to a dot', () => {
+  const card = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'WordCard.tsx'), 'utf8');
+
+  it('never asks the renderer to shrink a Text that also has a lineHeight', () => {
+    // The reported bug: a headword rendered as a dot, sometimes, after a
+    // second tap. UIKit turns `lineHeight` into a fixed paragraph line box and
+    // then hunts for a font scale that fits the width; the two constraints
+    // fight, `minimumFontScale` stops being honoured, and the font walks
+    // toward zero. A tap re-renders the card and re-measures the reveal block,
+    // so the fit runs again from the size it had already shrunk to — which is
+    // why it compounds, and why it was not reproducible on demand.
+    const s = card();
+    expect(s).toMatch(/adjustsFontSizeToFit=\{!wordRow\.fits\}/);
+    expect(s).toMatch(/wordRow\.fits \? \{ lineHeight: wordRow\.lineHeight \} : null/);
+  });
+
+  it('does not leave lineHeight in the always-applied style block', () => {
+    // If it moved back into `s.word` the two would be paired again for every
+    // word, and the exclusivity above would be decorative.
+    //
+    // Comments stripped first: this is looking for a *property*, and the block
+    // carries a note that names the ones supplied per render. Scanning the
+    // prose as if it were code is how a guard fails on a file that is right —
+    // which is exactly what the first draft of this did.
+    const s = card();
+    const start = s.indexOf('    word: {');
+    const block = s.slice(start, s.indexOf('\n    },', start));
+    const code = block.replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/lineHeight/);
+  });
+
+  it('keeps the width bound on both paths', () => {
+    // It bounds the deterministic path — a word that beats the estimator
+    // ellipsises rather than running under the action rail — and it is the
+    // only thing the backstop has to shrink against on the other.
+    expect(card()).toMatch(/maxWidth: wordRow\.available/);
   });
 });

@@ -201,22 +201,44 @@ function WordCardBase({
         {/* Word + speaker, always on one line. The size is computed from the
             string and the device (see wordRowLayout) rather than fixed, so a
             21-character lemma shrinks instead of wrapping and dragging the
-            speaker away from the word it belongs to. `adjustsFontSizeToFit` is
-            only the backstop for the pathological case, and it needs the
-            explicit `maxWidth` to have anything to shrink against. */}
+            speaker away from the word it belongs to.
+
+            ## Why the renderer's own shrink is off unless it is needed
+
+            `adjustsFontSizeToFit` and an explicit `lineHeight` must never be
+            set on the same Text. UIKit turns `lineHeight` into a fixed
+            paragraph line box and then tries to find a font scale that fits
+            the width; the two constraints fight, `minimumFontScale` stops
+            being honoured, and the text collapses toward nothing. The bug
+            report was a headword rendered as a dot after a second tap — a
+            tap that re-renders the card and re-measures the reveal block, so
+            UIKit runs the fit again against the size it had already shrunk to.
+
+            The two modes are therefore exclusive, and the computed layout
+            decides which is in force:
+
+              fits   — a deterministic size, our own lineHeight, no shrink.
+                       This is every ordinary word, so the bug cannot occur.
+              !fits  — the pathological string. The renderer's shrink is the
+                       backstop, so `lineHeight` is dropped for that Text and
+                       the font's natural leading is used instead.
+
+            `maxWidth` stays on both: it bounds the deterministic path (a word
+            that beats the estimator ellipsises rather than running under the
+            action rail) and gives the backstop something to shrink against. */}
         <View style={s.wordRow}>
           <Text
             style={[
               s.word,
               {
                 fontSize: wordRow.fontSize,
-                lineHeight: wordRow.lineHeight,
                 letterSpacing: wordRow.letterSpacing,
                 maxWidth: wordRow.available,
               },
+              wordRow.fits ? { lineHeight: wordRow.lineHeight } : null,
             ]}
             numberOfLines={1}
-            adjustsFontSizeToFit
+            adjustsFontSizeToFit={!wordRow.fits}
             minimumFontScale={WORD_MIN_SCALE}
             allowFontScaling={false}
           >
@@ -412,8 +434,10 @@ const makeStyles = (tc: ThemeColors) =>
       fontFamily: SERIF_FAMILY,
       fontWeight: '700',
       color: tc.text,
-      // fontSize, lineHeight, letterSpacing and maxWidth are supplied per
-      // render — they are functions of the word and the screen.
+      // Size, tracking and width bound are supplied per render — they are
+      // functions of the word and the screen. The line box is supplied there
+      // too, and only on the path that does not use the renderer's shrink;
+      // see the note at the call site for why the two cannot coexist.
     },
     // Only the gap to the word belongs to this card; the chip's own size,
     // fill and pressed state live in SpeakerChip so the deck's copy cannot

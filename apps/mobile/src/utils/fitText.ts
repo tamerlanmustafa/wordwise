@@ -66,6 +66,16 @@ export interface FitFontSizeInput extends FitOptions {
  * is better off with a backstop (`adjustsFontSizeToFit`, or a wrap) than with
  * 6pt type. Callers that cannot tolerate any overflow should check with
  * `estimateTextWidth`.
+ *
+ * **If you reach for that backstop, do not also set `lineHeight` on the same
+ * Text.** UIKit turns `lineHeight` into a fixed paragraph line box and then
+ * looks for a font scale that fits the width; the two constraints fight,
+ * `minimumFontScale` stops being honoured, and the text shrinks toward
+ * nothing. It compounds across re-renders, so it shows up as an occasional
+ * headword rendered as a dot rather than as anything reproducible. The whole
+ * point of computing a size here is that the deterministic path needs no
+ * backstop at all — turn it on only where the computation admits it did not
+ * fit, and drop `lineHeight` for that case.
  */
 export function fitFontSize({ text, maxWidth, max, min, ...opts }: FitFontSizeInput): number {
   if (!text || maxWidth <= 0) return max;
