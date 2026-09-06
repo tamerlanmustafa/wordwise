@@ -11,9 +11,9 @@ import path from 'path';
  * they have done from what they have not.
  *
  * The other property here is the one that keeps the tiles looking like
- * *objects*. `TileCoin` builds a lit crown and a shaded base out of the single
+ * *objects*. `TilePill` builds a lit crown and a shaded base out of the single
  * face colour it is handed, and stacks that on a darker lip. A face and lip
- * that are equally bright is a flat circle with a smudge under it, so every
+ * that are equally bright is a flat pill with a smudge under it, so every
  * state's pair is checked rather than eyeballed once and trusted.
  */
 
@@ -69,7 +69,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     });
 
     it('is the same object as every other tile, in a different colour', () => {
-      // There is no second surface treatment any more. `TileCoin` draws a flat
+      // There is no second surface treatment any more. `TilePill` draws a flat
       // face over a darker edge and nothing else, so a state is exactly two
       // colours — which is what makes this mapping the whole design.
       const done = tileVisual('completed', tc);
@@ -157,8 +157,8 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
 });
 
 describe('the tile is built like the deck buttons', () => {
-  const coin = () =>
-    fs.readFileSync(path.join(__dirname, '..', 'TileCoin.tsx'), 'utf8');
+  const pill = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'TilePill.tsx'), 'utf8');
   const deck = () =>
     fs.readFileSync(
       path.join(__dirname, '..', '..', 'vocabulary', 'WordCardDeck.tsx'),
@@ -168,13 +168,13 @@ describe('the tile is built like the deck buttons', () => {
   it('is a capsule, not an ellipse', () => {
     // The cave: an ellipse narrows to a point at its left and right extremes,
     // so near those points the face occupies a sliver of height around its own
-    // centre line and the edge occupies one around a centre line 8pt lower.
-    // The two stop overlapping and the background shows through between them.
+    // centre line and the edge occupies one around a centre line lower. The
+    // two stop overlapping and the background shows through between them.
     //
-    // A capsule's radius is half its height, so an offset copy still overlaps
-    // everywhere and the only thing visible beneath the face is an even band.
-    const s = coin();
-    expect(s).toMatch(/borderRadius: COIN_H \/ 2/);
+    // A capsule's radius is half its height, not its width, so an offset copy
+    // still overlaps everywhere however long the face runs.
+    const s = pill();
+    expect(s).toMatch(/borderRadius: TILE_H \/ 2/);
     expect(s).not.toMatch(/<Ellipse|react-native-svg/);
   });
 
@@ -186,7 +186,7 @@ describe('the tile is built like the deck buttons', () => {
     // Comments stripped: this bans the *names* of those effects, and the file
     // explains in prose which ones it dropped. Reading the explanation as if
     // it were code is how a guard fails on the change it was written for.
-    const code = coin().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    const code = pill().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
     expect(code).not.toMatch(/LinearGradient|Stop |stopOpacity|specular|gloss|matte/i);
     expect(code).not.toMatch(/\bshade\(/);
   });
@@ -194,33 +194,31 @@ describe('the tile is built like the deck buttons', () => {
   it('moves only the face on press, by exactly the edge depth', () => {
     // Sinking both would read as the whole tile sliding down rather than as a
     // button depressing. Same rule the deck's pills follow.
-    expect(coin()).toMatch(/facePressed: \{\s*\n\s*transform: \[\{ translateY: COIN_EDGE \}\]/);
+    expect(pill()).toMatch(/facePressed: \{\s*\n\s*transform: \[\{ translateY: TILE_EDGE \}\]/);
     expect(deck()).toMatch(/pillFacePressed: \{\s*\n\s*transform: \[\{ translateY: PILL_EDGE_PRESSED_DROP \}\]/);
   });
 
   it('keeps the edge static under the moving face', () => {
-    const s = coin();
+    const s = pill();
     const edgeAt = s.indexOf('styles.edge');
     expect(s.slice(edgeAt - 200, edgeAt)).toMatch(/Static/);
     expect(s).toMatch(/styles\.edge, \{ backgroundColor: edge \}\] \} pointerEvents="none"|styles\.edge, \{ backgroundColor: edge \}\]\} pointerEvents="none"/);
   });
 });
 
-describe('the tile is round, alone, and lands when tapped', () => {
-  const coin = () =>
-    fs.readFileSync(path.join(__dirname, '..', 'TileCoin.tsx'), 'utf8');
+describe('the tile is a long pill, alone, and lands when tapped', () => {
+  const pill = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'TilePill.tsx'), 'utf8');
   const tile = () =>
     fs.readFileSync(path.join(__dirname, '..', 'PracticeTile.tsx'), 'utf8');
   const crack = () =>
     fs.readFileSync(path.join(__dirname, '..', 'TileCrack.tsx'), 'utf8');
 
-  it('is a circle', () => {
-    // 72x56 was the footprint of an ellipse "seen slightly from above". Once
-    // the ellipse went, the stadium left behind was wider than tall for a
-    // reason that no longer existed.
-    const s = coin();
-    expect(s).toMatch(/export const COIN_H = COIN_W/);
-    expect(s).toMatch(/borderRadius: COIN_H \/ 2/);
+  it('is wider than it is tall — a rung, not a coin', () => {
+    const s = pill();
+    expect(s).toMatch(/export const TILE_W = 200/);
+    expect(s).toMatch(/export const TILE_H = 56/);
+    expect(s).toMatch(/borderRadius: TILE_H \/ 2/);
   });
 
   it('has no ring turning around it any more', () => {
@@ -246,10 +244,10 @@ describe('the tile is round, alone, and lands when tapped', () => {
   });
 
   it('draws the crack under the tile, so the fissures come out from beneath', () => {
-    // Rendered before the coin and anchored to its baseline: the tile's own
+    // Rendered before the pill and anchored to its baseline: the tile's own
     // body covers every line's origin and only what escapes is visible.
     const s = tile();
-    expect(s.indexOf('<TileCrack')).toBeLessThan(s.indexOf('<TileCoin'));
+    expect(s.indexOf('<TileCrack')).toBeLessThan(s.indexOf('<TilePill'));
     expect(crack()).toMatch(/bottom: 0/);
   });
 

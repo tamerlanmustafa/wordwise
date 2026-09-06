@@ -85,9 +85,10 @@ describe('offsetForIndex (zigzag anchored to absolute index)', () => {
   });
 
   it('stays inside the narrowest phone the app supports', () => {
-    // A tile is 88pt wide including its ring, on a 320pt screen with 18pt of
-    // page padding: an amplitude that clips would only show up on hardware.
-    const halfTile = 44;
+    // The pill is TILE_W (200) wide, on a 320pt screen with 18pt of page
+    // padding on each side: an amplitude that clips would only show up on
+    // hardware.
+    const halfTile = 100;
     const halfScreen = 320 / 2 - 18;
     for (let i = 0; i < 8; i += 1) {
       expect(Math.abs(offsetForIndex(i)) + halfTile).toBeLessThanOrEqual(halfScreen);

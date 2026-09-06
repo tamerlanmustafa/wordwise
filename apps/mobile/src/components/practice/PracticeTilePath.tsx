@@ -19,12 +19,10 @@
  *   • i == cursor → 'active'
  *   • i  > cursor → 'locked'
  *
- * Vertical rhythm: the coins *are* the road. There used to be a trail of
- * three dots drawn between every pair of them, which cost 26pt a row on top
- * of the row's own padding and stretched the path so far that barely four
- * tiles fitted on a phone screen. Tiles now sit {@link ROW_GAP} apart, which
- * puts seven on screen at once — the density the path was designed for, and
- * what makes it read as one continuous route rather than a sparse column.
+ * Vertical rhythm: the pills *are* the road, sitting flush against each
+ * other — no gap between one tile's bottom and the next one's top. Their
+ * rounded ends are the only seam, which is what keeps two adjacent tiles
+ * reading as separate rungs rather than fusing into one long strip.
  *
  * The path itself doesn't know about session APIs or the free-tier daily
  * cap; the parent screen wires the tap of the active tile into the right
@@ -41,9 +39,7 @@ const WINDOW_SIZE = 9;
 /** How many completed tiles to show above the active one (capped by
  *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
 const COMPLETED_ABOVE = 2;
-/** Vertical gap between two coins. Sized so the active tile's START callout
- *  lands *in* the gap rather than on the tile below it. */
-const ROW_GAP = 24;
+// Tiles sit flush against each other now — no vertical gap owned by the row.
 
 /** Horizontal sway of the road, as a smooth wave rather than a jitter: four
  *  steps out and four back, so consecutive tiles lean into each other the way
@@ -117,9 +113,6 @@ export function PracticeTilePath({
             <View
               style={[
                 styles.tileRow,
-                // The divider owns the space above the tile it introduces, so
-                // the row's own gap would double it.
-                slot > 0 && !startsSection && styles.tileGap,
                 { transform: [{ translateX: x }] },
               ]}
             >
@@ -188,14 +181,11 @@ const styles = StyleSheet.create({
   wrap: {
     paddingTop: 6,
     paddingBottom: 24,
-    // No flex gap — the space between rows is owned by `tileGap` (or the
-    // section divider's margins at boundaries).
+    // No flex gap and no per-row margin — tiles sit flush, and a section
+    // divider owns the space above the tile it introduces.
   },
   tileRow: {
     alignItems: 'center',
-  },
-  tileGap: {
-    marginTop: ROW_GAP,
   },
 });
 
@@ -206,10 +196,10 @@ const makeDividerStyles = (_tc: ThemeColors) =>
       alignItems: 'center',
       gap: 10,
       paddingHorizontal: 4,
-      // Owns its own breathing room now that the path has no flex gap. The
-      // active tile's START callout can hang into the space above a divider,
-      // so the top margin is the larger of the two.
-      marginTop: ROW_GAP + 4,
+      // Its own breathing room, unrelated to the (now zero) gap between
+      // tiles — a checkpoint banner still needs room to read as a landmark
+      // rather than a tile squeezed in the chain.
+      marginTop: 28,
       marginBottom: 8,
     },
     wrapFirst: {

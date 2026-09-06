@@ -23,12 +23,12 @@
  * labelled. The only glyph left is the alarm on `repair`, which is a genuine
  * interruption rather than a position on the path.
  *
- * The green is not a flat swap. `TileCoin` lights the top of the face and
+ * The green is not a flat swap. `TilePill` lights the top of the face and
  * shades the bottom from the one token it is given, so the completed tile
  * gets its own three-tone ramp — lit crown, body, shaded base — over a
  * deeper green lip, and stays the same object the gold one is.
  *
- * The body lives in {@link TileCoin} and the impact mark in
+ * The body lives in {@link TilePill} and the impact mark in
  * {@link TileCrack}; this file owns the state → colour mapping and the
  * animations.
  *
@@ -43,7 +43,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { COIN_BLOCK, COIN_W, GLYPH_BOX, TileCoin } from './TileCoin';
+import { TILE_BLOCK, TILE_W, GLYPH_BOX, TilePill } from './TilePill';
 import { TileCrack } from './TileCrack';
 import { tileVisual } from './tileVisuals';
 
@@ -153,13 +153,13 @@ export function PracticeTile({
               state === 'active' && { transform: [{ translateY }] },
             ]}
           >
-            <TileCoin
+            <TilePill
               face={visual.face}
               edge={visual.edge}
               pressed={pressed && tappable}
             >
               {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
-            </TileCoin>
+            </TilePill>
           </Animated.View>
         </View>
       )}
@@ -210,8 +210,8 @@ const makeStyles = (_tc: ThemeColors) =>
     // tile ever shows, and it is pointer-transparent, so the overflow costs
     // nothing but pixels.
     stack: {
-      width: COIN_W,
-      height: COIN_BLOCK,
+      width: TILE_W,
+      height: TILE_BLOCK,
       alignItems: 'center',
     },
     receded: {
