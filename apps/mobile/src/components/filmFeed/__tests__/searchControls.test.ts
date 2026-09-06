@@ -56,12 +56,20 @@ describe('the two panels are never open together', () => {
     fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
 
   it('focusing the field closes the filter sheet', () => {
-    // Enforced on the state, not trusted to the sheet covering the field:
-    // that is a fact about geometry, and geometry is what a later layout
-    // change quietly revises.
+    // Enforced on the state, not trusted to the sheet covering the field —
+    // and that is not belt-and-braces. The scrim carries no zIndex and the
+    // search row sits at 300, so the field paints over it: this line is the
+    // only thing making the two exclusive.
+    //
+    // Sliced to the handler's own closing brace rather than to a fixed
+    // character count. The count version broke the moment someone wrote a
+    // longer comment inside the handler, which is a change that cannot
+    // affect what this is checking.
     const h = home();
-    const onFocus = h.slice(h.indexOf('onFocus={() => {'), h.indexOf('onFocus={() => {') + 600);
+    const start = h.indexOf('onFocus={() => {');
+    const onFocus = h.slice(start, h.indexOf('\n            }}', start));
     expect(onFocus).toMatch(/setFiltersOpen\(false\)/);
+    expect(onFocus).toMatch(/setSearchFocused\(true\)/);
   });
 
   it('opening the filter sheet closes the search', () => {
@@ -174,9 +182,12 @@ describe('every point inside the border takes a tap', () => {
     // Matched on the style *reference* rather than on how it is spelled: the
     // focus border came out of the array, and a guard that pins the JSX
     // formatting fails on a change that cannot affect what it is guarding.
+    // The handler resolves to `focusField` in the ordinary case; while the
+    // filter sheet is open it dismisses that instead, which the symmetry
+    // block below owns. Matched loosely enough to let that branch exist.
     const s = src();
     expect(s).toMatch(/<Pressable[^>]*style=\{\[?s\.field/);
-    expect(s).toMatch(/onPress=\{withTap\(focusField\)\}/);
+    expect(s).toMatch(/onPress=\{withTap\([^)]*focusField\)\}/);
     expect(s).toMatch(/inputRef\.current\?\.focus\(\)/);
     expect(s).toMatch(/ref=\{inputRef\}/);
   });
@@ -437,5 +448,58 @@ describe('tapping away closes the panel instead of opening a film', () => {
     const s = src();
     const body = s.slice(s.indexOf('const dismissSearch'), s.indexOf('const dismissSearch') + 400);
     expect(body).toMatch(/clearTimeout\(blurTimerRef\.current\)/);
+  });
+});
+
+describe('the dim is symmetric', () => {
+  const bar = () => read('SearchBar.tsx');
+  const screen = () =>
+    fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
+
+  it('dims the filter button while the field is focused', () => {
+    expect(bar()).toMatch(/focused && s\.filterBtnDimmed/);
+  });
+
+  it('dims the field while the filter sheet is open', () => {
+    // The half that was missing. The sheet's scrim covers the screen but
+    // carries no zIndex, and this row sits at 300 — so the field painted
+    // straight over it, bright and fully live above a screen that was
+    // otherwise behind a panel.
+    expect(bar()).toMatch(/filtersOpen && s\.fieldDimmed/);
+  });
+
+  it('dims both to the same depth', () => {
+    // Two different opacities would read as two different states rather than
+    // one state seen from either side.
+    const s = bar();
+    const value = (name: string) => {
+      const at = s.indexOf(`    ${name}: {`);
+      return s.slice(at, s.indexOf('\n    },', at)).match(/opacity: ([\d.]+)/)?.[1];
+    };
+    expect(value('filterBtnDimmed')).toBeDefined();
+    expect(value('fieldDimmed')).toBe(value('filterBtnDimmed'));
+  });
+
+  it('makes the dimmed control dismiss rather than do its own job', () => {
+    // Both directions. A control dimmed into the background that still works
+    // normally is worse than either state on its own — and the field needs
+    // `editable` as well, or a tap landing on the input itself takes focus
+    // and steps around the Pressable's dismissal.
+    const s = bar();
+    expect(s).toMatch(/onPress=\{withTap\(focused \? onDismiss \?\? onFilterPress : onFilterPress\)\}/);
+    expect(s).toMatch(/onPress=\{withTap\(filtersOpen \? onDismissFilters \?\? focusField : focusField\)\}/);
+    expect(s).toMatch(/editable=\{!filtersOpen\}/);
+  });
+
+  it('is wired from the screen in both directions', () => {
+    const s = screen();
+    expect(s).toMatch(/onDismiss=\{dismissSearch\}/);
+    expect(s).toMatch(/onDismissFilters=\{\(\) => setFiltersOpen\(false\)\}/);
+  });
+
+  it('keeps the state guard that actually enforces exclusivity', () => {
+    // Not decoration: it is the only thing stopping both panels being open,
+    // because the sheet's geometry never prevented reaching the field.
+    expect(screen()).toMatch(/setFiltersOpen\(false\);\s*\n\s*setSearchFocused\(true\);/);
   });
 });

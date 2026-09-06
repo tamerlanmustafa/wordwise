@@ -457,11 +457,16 @@ export const FilmFeedScreen = ({
             focused={searchFocused}
             onFocus={() => {
               if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-              // The two panels are mutually exclusive. Enforced on the state
-              // rather than trusted to the UI: today the filter sheet covers
-              // the screen so the field cannot be reached behind it, but that
-              // is a fact about the sheet's geometry, and geometry is exactly
-              // the kind of thing a later layout change quietly revises.
+              // The two panels are mutually exclusive, enforced on the state
+              // rather than trusted to the UI.
+              //
+              // This line was justified as a belt-and-braces guard against a
+              // situation the geometry supposedly prevented — the sheet's
+              // scrim covering the field. It never did: the scrim carries no
+              // zIndex and the search row sits at 300, so the field painted
+              // over it, bright and live. The guard was the only thing making
+              // the two panels exclusive, and it has been load-bearing since
+              // the day it was written.
               setFiltersOpen(false);
               setSearchFocused(true);
             }}
@@ -474,6 +479,7 @@ export const FilmFeedScreen = ({
             onMoviePress={onSearchMoviePress}
             onFilterPress={openFilters}
             onDismiss={dismissSearch}
+            onDismissFilters={() => setFiltersOpen(false)}
             filtersOpen={filtersOpen}
             level={selectedLevel}
             activeFilters={activeFilterCount({

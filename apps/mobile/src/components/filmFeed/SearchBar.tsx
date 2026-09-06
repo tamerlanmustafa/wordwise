@@ -82,6 +82,9 @@ interface Props {
   /** Closes the search. While the field is focused the filter button calls
    *  this instead of opening the sheet — see the button below. */
   onDismiss?: () => void;
+  /** Closes the filter sheet. The mirror of `onDismiss`: while the sheet is
+   *  open the field calls this instead of taking focus. */
+  onDismissFilters?: () => void;
   /** How many filter groups are off-default — badge count, and gold when > 0. */
   activeFilters?: number;
   /** CEFR code the whole feed is graded for, printed on the filter button. */
@@ -134,6 +137,7 @@ export function SearchBar({
   onMoviePress,
   onFilterPress,
   onDismiss,
+  onDismissFilters,
   activeFilters = 0,
   level,
   filtersOpen = false,
@@ -207,11 +211,33 @@ export function SearchBar({
     <View style={s.wrap}>
       <View style={s.fieldWrap}>
         <View style={s.fieldRow}>
-          <Animated.View style={[s.fieldStack, { transform: [{ scale }] }]}>
+          {/* The two controls in this row behave identically, in both
+              directions. Focusing the field dims the filter button beside it;
+              opening the filter sheet dims the field, and for the same reason
+              — whichever control owns the open panel stays lit, and the other
+              joins the background it is now part of.
+
+              That symmetry was half-built. The sheet's scrim covers the screen
+              but carries no zIndex, and this row sits at 300, so the field
+              painted straight through it: bright, undimmed and fully live over
+              a screen that was otherwise behind a panel. Raising the scrim
+              instead would have dimmed the filter button too, and the button
+              is the one control that must stay lit while its own sheet is up. */}
+          <Animated.View
+            style={[s.fieldStack, { transform: [{ scale }] }, filtersOpen && s.fieldDimmed]}
+          >
             {/* Under the field, so the field's own background clips it to a
                 rim. See FocusGlow. */}
             <FocusGlow active={focused} radius={FIELD_RADIUS} />
-            <Pressable style={s.field} onPress={withTap(focusField)} accessible={false}>
+            <Pressable
+              style={s.field}
+              // Dismisses rather than focusing while the sheet is up — the
+              // same trade the filter button makes in the other direction. A
+              // control dimmed into the background that still does its own job
+              // is worse than either state on its own.
+              onPress={withTap(filtersOpen ? onDismissFilters ?? focusField : focusField)}
+              accessible={false}
+            >
             <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
             <TextInput
               ref={inputRef}
@@ -219,6 +245,9 @@ export function SearchBar({
               placeholder={t('home:search.placeholder')}
               placeholderTextColor={tc.textFaint}
               value={query}
+              // Not merely dimmed: a direct tap on the input would otherwise
+              // take focus and step around the Pressable's dismissal above.
+              editable={!filtersOpen}
               onChangeText={onChangeText}
               onFocus={onFocus}
               onBlur={onBlur}
@@ -387,6 +416,12 @@ const makeStyles = (tc: ThemeColors) =>
     // as part of the dimmed background rather than as the one live control
     // beside the field.
     filterBtnDimmed: {
+      opacity: 0.35,
+    },
+    // The same value for the other direction, deliberately not a second
+    // number: the two controls dim to the same depth or one of them looks
+    // like it is in a different state rather than the same one.
+    fieldDimmed: {
       opacity: 0.35,
     },
     // Mono, so B1 and C2 are the same width and the glyph never shifts.
