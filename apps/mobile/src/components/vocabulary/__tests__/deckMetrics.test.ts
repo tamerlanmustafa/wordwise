@@ -16,6 +16,7 @@ import {
   ACTIONS_ROW_HEIGHT,
   DECK_SIDE_MARGIN,
   DECK_MIN_SIDE_MARGIN,
+  DECK_EDGE_INSET,
   deckSideMargin,
   ACTIONS_GAP,
   DECK_GAP_TOP,
@@ -212,44 +213,91 @@ describe('the deck uses the width it has', () => {
   // short of room. The gutters either side were the visible symptom.
   const S24_WIDTH = 360;
 
-  it('leaves the inset alone when nothing is being scaled', () => {
-    expect(deckSideMargin(S24_WIDTH, 1)).toBe(DECK_SIDE_MARGIN);
-    expect(deckSideMargin(393, 1)).toBe(DECK_SIDE_MARGIN);
+  /** Where the card's edge actually lands once the transform has run. */
+  const renderedInset = (width: number, scale: number, reclaim: boolean) => {
+    const m = deckSideMargin(width, scale, reclaim);
+    return m + ((width - m * 2) * (1 - scale)) / 2;
+  };
+
+  it.each([true, false])('leaves the inset alone at scale 1 (reclaim=%s)', (reclaim) => {
+    expect(deckSideMargin(S24_WIDTH, 1, reclaim)).toBe(DECK_SIDE_MARGIN);
+    expect(deckSideMargin(393, 1, reclaim)).toBe(DECK_SIDE_MARGIN);
   });
 
-  it('gives back exactly what a mild scale took off the sides', () => {
-    // The post-transform card lands at the width an unscaled one would have:
-    // widen the pre-transform box by 1/scale and the scale returns it.
-    const scale = 0.95;
-    const margin = deckSideMargin(S24_WIDTH, scale);
-    const rendered = (S24_WIDTH - margin * 2) * scale;
-    expect(rendered).toBeCloseTo(S24_WIDTH - DECK_SIDE_MARGIN * 2, 5);
+  it('lands the reclaiming card on the film-edge sprockets, where it can', () => {
+    // The strips occupy x = 6..14 (FilmEdgeBackdrop: left 6, width 8). The
+    // card may reach them and must not cross them.
+    //
+    // "Where it can" is the honest qualifier and the first draft of this test
+    // got it wrong: below about 0.92 on this width the solve wants a negative
+    // margin, which is the one thing it may not have, so the target stops
+    // being reachable and 0 is the best available answer.
+    for (const scale of [0.93, 0.95, 0.98]) {
+      expect(renderedInset(S24_WIDTH, scale, true)).toBeCloseTo(DECK_EDGE_INSET, 5);
+      expect(deckSideMargin(S24_WIDTH, scale, true)).toBeGreaterThan(0);
+    }
   });
 
-  it('never lays the deck out wider than its parent', () => {
-    // The exact compensation goes negative once the scale is small enough, and
-    // on Android a child outside its parent's bounds stops receiving touches —
-    // the card would look right and answer nothing.
-    for (let scale = 0.5; scale <= 1; scale += 0.01) {
+  it('gives everything it has once the target is out of reach', () => {
+    // A hard scale cannot be compensated without laying out wider than the
+    // parent, so the margin goes to 0 and the card is as wide as it can be.
+    for (const scale of [0.6, 0.7, 0.8]) {
+      expect(deckSideMargin(S24_WIDTH, scale, true)).toBe(0);
+      expect(renderedInset(S24_WIDTH, scale, true)).toBeGreaterThan(DECK_EDGE_INSET);
+    }
+  });
+
+  it('holds the non-reclaiming card at its resting inset', () => {
+    // iOS keeps what it has: the solve targets 18 rather than the sprockets,
+    // and stops at the 8pt floor it already had.
+    for (const scale of [0.96, 0.98]) {
+      expect(renderedInset(375, scale, false)).toBeCloseTo(DECK_SIDE_MARGIN, 5);
+    }
+    // Below that the floor takes over, exactly as it does today.
+    expect(deckSideMargin(375, 0.9, false)).toBe(DECK_MIN_SIDE_MARGIN);
+  });
+
+  it('never lets the card cross the sprocket strips', () => {
+    // 14 is a boundary, not a target to overshoot: past it the card sits on
+    // the film edge instead of inside it.
+    for (let scale = 0.55; scale <= 1; scale += 0.01) {
       for (const width of [320, 360, 393, 430]) {
-        const margin = deckSideMargin(width, scale);
-        expect(margin).toBeGreaterThanOrEqual(DECK_MIN_SIDE_MARGIN);
-        expect(width - margin * 2).toBeLessThanOrEqual(width);
+        expect(renderedInset(width, scale, true)).toBeGreaterThanOrEqual(DECK_EDGE_INSET - 1e-6);
       }
     }
   });
 
-  it('reclaims monotonically — a harder squeeze never gives back less', () => {
-    let previous = Infinity;
-    for (let scale = 1; scale >= 0.7; scale -= 0.01) {
-      const margin = deckSideMargin(S24_WIDTH, scale);
-      expect(margin).toBeLessThanOrEqual(previous + 1e-9);
-      previous = margin;
+  it('never lays the deck out wider than its parent', () => {
+    // The solve goes negative once the scale is small enough, and on Android a
+    // child outside its parent's bounds stops receiving touches — the card
+    // would look right and answer nothing.
+    for (let scale = 0.5; scale <= 1; scale += 0.01) {
+      for (const width of [320, 360, 393, 430]) {
+        for (const reclaim of [true, false]) {
+          expect(deckSideMargin(width, scale, reclaim)).toBeGreaterThanOrEqual(0);
+        }
+      }
     }
   });
 
-  it('degrades to the floor rather than to nonsense before layout', () => {
+  it('keeps the floor off the reclaiming path, which is what blocked it', () => {
+    // The exact answer on an S24 is about 4. A floor of 8 raised it, pushing
+    // the card further in than the solve asked for — caution with no failure
+    // behind it, since 0 is the only real constraint.
+    expect(deckSideMargin(S24_WIDTH, 0.92, true)).toBeLessThan(DECK_MIN_SIDE_MARGIN);
+    expect(deckSideMargin(S24_WIDTH, 0.92, false)).toBe(DECK_MIN_SIDE_MARGIN);
+  });
+
+  it('never sits further in than an unscaled card', () => {
+    for (let scale = 0.55; scale <= 1; scale += 0.01) {
+      for (const reclaim of [true, false]) {
+        expect(deckSideMargin(S24_WIDTH, scale, reclaim)).toBeLessThanOrEqual(DECK_SIDE_MARGIN);
+      }
+    }
+  });
+
+  it('degrades to the resting inset before layout', () => {
     // Width is 0 on the first frame, and the deck renders that frame.
-    expect(deckSideMargin(0, 0.8)).toBe(DECK_SIDE_MARGIN);
+    expect(deckSideMargin(0, 0.8, true)).toBe(DECK_SIDE_MARGIN);
   });
 });

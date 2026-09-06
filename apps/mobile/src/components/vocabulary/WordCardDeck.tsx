@@ -4,6 +4,7 @@ import {
   Animated,
   Easing,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -1094,7 +1095,14 @@ export const WordCardDeck = ({
         style={[
           s.deckWrap,
           {
-            marginHorizontal: deckSideMargin(deckWidth, metrics.scale),
+            // Android aims the scaled card at the film-edge sprockets; iOS
+            // keeps the inset it has, which was looked at on a device and
+            // signed off. Same solve, two targets — see `deckSideMargin`.
+            marginHorizontal: deckSideMargin(
+              deckWidth,
+              metrics.scale,
+              Platform.OS === 'android',
+            ),
             transform: [{ scale: metrics.scale }],
             transformOrigin: 'top center',
           },

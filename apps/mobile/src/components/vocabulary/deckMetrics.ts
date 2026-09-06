@@ -101,38 +101,62 @@ export const MIN_SCALE = 0.55;
 
 /** The deck's resting inset from each side of its container. */
 export const DECK_SIDE_MARGIN = 18;
+
 /**
- * How narrow that inset may get while reclaiming width.
+ * How close a *scaled* deck may come to the screen edge.
  *
- * A floor rather than an exact answer: on a phone scaled hard enough the exact
- * compensation goes negative, which would lay the deck out wider than its
- * parent — and on Android a child outside its parent's bounds stops receiving
- * touches, so the card would look right and answer nothing.
+ * The film-edge sprockets sit at x = 6..14 (`FilmEdgeBackdrop`: `left: 6`,
+ * `width: 8`), and they are the real boundary of the content lane — the card
+ * may run up to them and must not run over them. At rest the card sits at 18
+ * and clears them by 4; a scaled card is allowed the extra 4, because on a
+ * device that is scaling at all the alternative is a visibly narrow card with
+ * empty gutters between it and the film edge.
+ */
+export const DECK_EDGE_INSET = 14;
+
+/**
+ * The floor iOS keeps under the solved margin.
+ *
+ * It was applied on both platforms and was the reason the S24's card stayed
+ * inset: the exact answer there is about 4, so a floor of 8 *raised* the
+ * margin and pushed the card further in than the solve asked for. The real
+ * constraint is only that the box must not exceed its parent, which 0 already
+ * guarantees — 8 was caution with no failure behind it.
  */
 export const DECK_MIN_SIDE_MARGIN = 8;
 
 /**
- * The deck's side inset, given the container width and the vertical scale.
+ * The deck's side inset, given its container width and the vertical scale.
  *
- * The scale exists to fit the card *vertically*: the card's slots are fixed
- * heights, so a short viewport shrinks the whole zone rather than re-cutting
- * it. But `transform: scale` is uniform, so a card scaled to fit a shorter
- * screen also comes in off both sides — and on a device that had plenty of
- * width to begin with, that width is simply left empty. A Samsung S24 shows
- * this plainly next to an iPhone: shorter viewport, so a scale under 1, so a
- * visibly narrower card with unused gutters either side of it.
+ * The scale exists to fit the card *vertically*: its slots are fixed heights,
+ * so a short viewport shrinks the whole zone rather than re-cutting it. But
+ * `transform: scale` is uniform, so a card scaled for a shorter screen also
+ * comes in off both sides — and on a device that had plenty of width, that
+ * width is simply left empty. A Samsung S24 beside an iPhone shows it plainly:
+ * shorter viewport, so a scale under 1, so a narrower card with unused gutters.
  *
- * So the inset shrinks by exactly what the scale takes. Widening the
- * pre-transform box by 1/scale means the post-transform card lands at the
- * width an unscaled one would have had, and the extra design width inside it
- * is spent on the type before being scaled back — the card reads at the same
- * size, in the space that was already there.
+ * So the inset is solved for rather than chosen. Widening the pre-transform box
+ * makes the post-transform card land where we want it:
+ *
+ *     rendered inset = m + (width - 2m)(1 - scale) / 2
+ *
+ * Set that equal to the target and solve for `m`. Clamped to [0, resting]: 0
+ * because a box wider than its parent stops receiving touches on Android, and
+ * the resting margin because a scaled card should never sit *further* in than
+ * an unscaled one.
+ *
+ * `reclaim` is the caller's platform decision, not this function's. Android
+ * aims at the sprockets; iOS keeps the resting inset as its target and a
+ * floor under it, which is the behaviour already on that platform and which
+ * has been looked at on a device and signed off. The maths is identical — only
+ * the two numbers differ — so this stays one function with one test.
  */
-export function deckSideMargin(width: number, scale: number): number {
+export function deckSideMargin(width: number, scale: number, reclaim: boolean): number {
   if (width <= 0 || scale >= 1) return DECK_SIDE_MARGIN;
-  const rendered = width - DECK_SIDE_MARGIN * 2;
-  const needed = (width - rendered / scale) / 2;
-  return Math.max(DECK_MIN_SIDE_MARGIN, needed);
+  const target = reclaim ? DECK_EDGE_INSET : DECK_SIDE_MARGIN;
+  const floor = reclaim ? 0 : DECK_MIN_SIDE_MARGIN;
+  const solved = (target - (width * (1 - scale)) / 2) / scale;
+  return Math.max(floor, Math.min(DECK_SIDE_MARGIN, solved));
 }
 
 export interface DeckMetricsInput {
