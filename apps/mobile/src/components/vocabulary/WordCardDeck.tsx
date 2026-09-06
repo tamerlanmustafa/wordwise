@@ -1222,6 +1222,17 @@ export const WordCardDeck = ({
                 <Text
                   style={[
                     s.wordTranslation,
+                    // The band's colour, the same one the chip above wears and
+                    // the same one the target word is highlighted in below.
+                    // Three marks on one card that all mean "this word is
+                    // C1" — in three colours they read as three unrelated
+                    // decorations, and the level stops being a fact the card
+                    // states and becomes a badge in a corner.
+                    //
+                    // After the base style, so it overrides the token there;
+                    // before the same-as-source override, which deliberately
+                    // wins (see that style).
+                    { color: levelColor },
                     wtSameAsSource && s.wordTranslationSameAsSource,
                     { fontSize: wtTier.fontSize },
                   ]}
@@ -1407,8 +1418,20 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
   return StyleSheet.create({
     // Claims what the fixed column leaves, and reports it back through
     // onLayout so the deck zone can scale into it.
+    // Centred in whatever the column has left, rather than pinned to the top
+    // with the slack pooling underneath.
+    //
+    // `deckMetrics` caps the card's scale at 1, so on anything larger than an
+    // iPhone SE the block is smaller than its container and there is real
+    // slack to place. It used to sit entirely below the deck, which read as
+    // the card hanging off the hero rather than being the screen's subject —
+    // and that gap grew by 24 the moment the poster's height left the column.
+    //
+    // `paddingTop` stays as the minimum clearance from the block above, for
+    // the small phones where centring has nothing left to distribute.
     wrap: {
       flex: 1,
+      justifyContent: 'center',
       paddingTop: DECK_GAP_TOP,
     },
     deckWrap: {
@@ -1568,6 +1591,8 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontFamily: SERIF_FAMILY,
       fontStyle: 'italic',
       fontWeight: '600',
+      // Overridden per card with the band's colour — see the call site. The
+      // token stays as the fallback for a card rendered without one.
       color: tc.primaryOnSurface,
       // Takes the whole line and gives the rest back, so the language tag
       // beside it sits at the trailing edge — exactly where the dashed rule

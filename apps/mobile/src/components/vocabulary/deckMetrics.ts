@@ -47,10 +47,17 @@ export const ACTIONS_ROW_HEIGHT = PILL_HEIGHT + PILL_EDGE;
 
 /** Back-button row: a 34pt circle on its own line under the safe area. */
 export const BACK_ROW = { gap: 1, height: 34 };
-/** The poster beside the title. Exactly the artwork's own height: it used to
- *  be 119 for a paper frame around it (5 + 100 + 12 of margin, 1pt edge each
- *  side), and the frame is gone. */
-export const HERO_PLATE = { gap: 12, height: 100 };
+/**
+ * The title block under the back row.
+ *
+ * 76, not the poster's 100. This was the poster's height because the poster
+ * was the tallest thing in the block; with it gone the block only has to hold
+ * what the title needs — two lines at the larger tier (2 x 29) plus the meta
+ * line and its 4pt of breathing room. The 24pt difference goes to the deck
+ * rather than staying in the column as empty space, which is the same trade
+ * the poster's paper frame made when that was dropped.
+ */
+export const HERO_PLATE = { gap: 12, height: 76 };
 /** For You + six CEFR chips. */
 export const FILTER_BAR = { gap: 14, height: 44 };
 /** The screen is For You only, so the level chips have nothing to switch

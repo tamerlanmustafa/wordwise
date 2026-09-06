@@ -28,13 +28,15 @@ import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
  * card.
  *
  * No dark photo slab — that clashed with the reading-room cream. The backdrop
- * only tints the top of the screen, the poster is the single full-colour
- * object, and the title is ink on paper like the flashcards.
+ * only tints the top of the screen, and the title is ink on paper like the
+ * flashcards.
  *
- * The poster is the artwork and nothing else: it used to sit inside a "physical
- * print" — a cream paper margin, a cut edge, a 1.1° tilt and a drop shadow —
- * which put a second frame around an image that already ships with its own
- * border, and cost 19pt of the fixed column (see HERO_PLATE) for decoration.
+ * There is no poster. It was the single full-colour object on the screen and
+ * that was the problem: a piece of film artwork out-shouts every word on a
+ * page whose subject is one word, so the eye landed on it first on every
+ * open. The backdrop wash says which film this is without competing — it is
+ * behind the type rather than beside it — and the title says it in words. The
+ * 24pt the poster's block was taller than the title needs went to the deck.
  *
  * Three layers, and the wash is a SIBLING of the content rather than its
  * child: it bleeds 232pt down the screen, past the end of this block, and on
@@ -49,12 +51,8 @@ const WASH_HEIGHT = 232;
  *  well back and letting a gold overlay do the grading. */
 const WASH_IMAGE_OPACITY = 0.24;
 
-const POSTER_W = 68;
-const POSTER_H = 100;
-
 export interface MovieDetailHeroProps {
   backdropPath?: string | null;
-  posterPath?: string | null;
   title: string;
   /** CEFR band for the film, e.g. 'B2'. Null drops the whole meta line — it is
    *  the only thing on it, the star rating and the dialogue-word count having
@@ -64,18 +62,15 @@ export interface MovieDetailHeroProps {
   /** 0–100 match. Rendered only alongside `level`. */
   matchPct?: number | null;
   onBack: () => void;
-  onPosterPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
 export const MovieDetailHero = ({
   backdropPath,
-  posterPath,
   title,
   level,
   matchPct,
   onBack,
-  onPosterPress,
   style,
 }: MovieDetailHeroProps) => {
   const { t } = useTranslation();
@@ -129,27 +124,8 @@ export const MovieDetailHero = ({
           </Pressable>
         </View>
 
-        {/* c · poster + title */}
+        {/* c · the title, on the backdrop */}
         <View style={s.plate}>
-          <Pressable
-            onPress={withTap(onPosterPress)}
-            disabled={!onPosterPress || !posterPath}
-            accessibilityRole={onPosterPress && posterPath ? 'button' : undefined}
-            accessibilityLabel={onPosterPress && posterPath ? t('movies:detail.viewPoster') : undefined}
-          >
-            {posterPath ? (
-              <Image
-                source={{ uri: `https://image.tmdb.org/t/p/w185${posterPath}` }}
-                style={s.poster}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[s.poster, s.posterFallback]}>
-                <Text style={s.posterFallbackLetter}>{title.slice(0, 1).toUpperCase()}</Text>
-              </View>
-            )}
-          </Pressable>
-
           <View style={s.titleCol}>
             <Text
               style={[s.title, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
@@ -216,34 +192,16 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     chevron: {
       color: light ? '#6E5F47' : tc.textSecondary,
     },
+    // A block, not a row: the poster that sat beside the title is gone, so
+    // there is nothing to lay out against. Bottom-aligned as before, so a
+    // one-line title sits on the same baseline a two-line one ends on and
+    // the meta line never moves between films.
     plate: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      gap: 14,
+      justifyContent: 'flex-end',
       marginTop: HERO_PLATE.gap,
       height: HERO_PLATE.height,
     },
-    // The artwork on its own — no paper margin, no cut edge, no tilt, no
-    // shadow. HERO_PLATE.height is exactly this, so the frame's 19pt went to
-    // the card rather than staying in the column as empty space.
-    poster: {
-      width: POSTER_W,
-      height: POSTER_H,
-    },
-    posterFallback: {
-      backgroundColor: tc.chipBg,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    posterFallbackLetter: {
-      fontFamily: SERIF_FAMILY,
-      fontSize: 34,
-      fontWeight: '700',
-      color: tc.text,
-      opacity: 0.18,
-    },
     titleCol: {
-      flex: 1,
       paddingBottom: 4,
     },
     title: {

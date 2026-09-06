@@ -4,16 +4,13 @@ import {
   Alert,
   Animated,
   Easing,
-  Image,
   LayoutAnimation,
-  Modal,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -206,7 +203,6 @@ export const MovieDetailScreen = ({
   // for ever, with no control left to turn it back on.
   const accordionMode = true;
   const [lastOpenedKey, setLastOpenedKey] = useState<string | null>(null);
-  const [posterZoomOpen, setPosterZoomOpen] = useState(false);
   const bookmarkAppliedRef = useRef(false);
   const pendingBookmarkRef = useRef<{ word: string | null; level: string; explicit?: boolean } | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -1040,12 +1036,10 @@ export const MovieDetailScreen = ({
       <View style={{ flex: 1 }}>
         <MovieDetailHero
           backdropPath={movie.backdrop_path}
-          posterPath={movie.poster_path}
           title={movie.title}
           level={difficulty?.level ?? null}
           matchPct={difficulty ? difficulty.score : null}
           onBack={onBack}
-          onPosterPress={movie.poster_path ? () => setPosterZoomOpen(true) : undefined}
           style={{ paddingTop: insets.top }}
         />
 
@@ -1460,28 +1454,6 @@ export const MovieDetailScreen = ({
         ) : null}
         </View>
         </View>
-      <Modal
-        visible={posterZoomOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPosterZoomOpen(false)}
-      >
-        {/* Zoom only — the artwork is TMDB's, and "Save to Photos" was the one
-            control on this screen that wrote to the device's library, so
-            dropping it takes the Photos permission prompt out of the product
-            on both platforms. */}
-        <TouchableWithoutFeedback onPress={withTap(() => setPosterZoomOpen(false))}>
-          <View style={styles.posterZoomBackdrop}>
-            <TouchableWithoutFeedback>
-              <Image
-                source={{ uri: `https://image.tmdb.org/t/p/w780${movie.poster_path}` }}
-                style={styles.posterZoomImage}
-                resizeMode="contain"
-              />
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
 
       {pendingLearned && (
         <View style={styles.undoToast} pointerEvents="box-none">

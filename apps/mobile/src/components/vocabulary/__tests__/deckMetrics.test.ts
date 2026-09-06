@@ -137,7 +137,9 @@ describe('the card is scaled, never re-cut', () => {
     expect(m.scaled).toBe(true);
     expect(m.cropped).toBe(false);
     expect(m.scale).toBeGreaterThan(MIN_SCALE);
-    expect(m.scale).toBeLessThan(0.75);
+    // Upper bound only says the SE is still the device that scales — the exact
+    // figure is pinned below, where a change has to be explained.
+    expect(m.scale).toBeLessThan(1);
   });
 });
 
@@ -165,8 +167,15 @@ describe('invariants', () => {
     // Dropping the poster's paper frame then handed 19pt back to the column
     // (HERO_PLATE 119 → 100) and the SE — again the only device below the
     // clamp — is again the only one that moves: 0.658 → 0.701.
+    //
+    // Then the hero poster was removed, taking that block down to what the
+    // title actually needs (HERO_PLATE 100 → 76) and handing the difference
+    // back to the column. The SE is still the only device under the clamp, so
+    // once more it is the only one that moves: 0.701 → 0.755. The big phones
+    // stay at 1 and take theirs as air, which is what the deck's new
+    // `justifyContent: 'center'` distributes above and below it.
     expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.701, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.755, 3);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });
