@@ -1013,9 +1013,18 @@ async def start_session(
             def_choices = build_definition_choices(
                 lemma,
                 pool=pool_for(definition_pool, deck_pos.get(lemma), cefr),
+                # The session's own other words, as the last resort. Without
+                # it a thin registry bucket meant the definition card never
+                # appeared at all rather than appearing with weaker options.
+                deck=[w for w in unique_lemmas if w != lemma],
                 avoid=used_choices,
                 rng=rng,
             )
+            if not def_choices:
+                logger.info(
+                    "[srs.start] definition slot %d fell back to translation for %r",
+                    len(cards) + 1, lemma,
+                )
             if def_choices:
                 used_choices.update(
                     normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]

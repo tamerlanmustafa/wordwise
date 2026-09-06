@@ -443,11 +443,43 @@ class TestBuildDefinitionChoices:
         )
         assert choices is None
 
-    def test_returns_none_rather_than_a_short_grid(self):
+    def test_falls_back_to_the_deck_when_the_pool_is_thin(self):
+        # The bug this exists for: the first version had no fallback, so a thin
+        # registry bucket meant the definition card never appeared at all
+        # rather than appearing with weaker options. A deck word is weaker —
+        # it may be an answer later in the same session — but it is
+        # level-appropriate by construction.
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous"],
+            deck=["belligerent", "fastidious", "querulous"],
+            rng=random.Random(2),
+        )
+        assert choices is not None
+        assert len(choices) == 4
+
+    def test_prefers_the_pool_over_the_deck(self):
+        # The deck is the last resort, not an equal source: a word that is
+        # also an answer this session is a worse distractor than one that is
+        # not.
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "belligerent", "fastidious"],
+            deck=["zzzdeckone", "zzzdecktwo", "zzzdeckthree"],
+            rng=random.Random(2),
+        )
+        assert choices is not None
+        distractors = {c["word"] for c in choices if not c["is_correct"]}
+        assert distractors == {"ravenous", "belligerent", "fastidious"}
+
+    def test_returns_none_when_both_sources_are_exhausted(self):
         # The caller falls back to the translation MCQ for that card. A
         # three-option grid would be a different question shape arriving
         # unannounced.
         assert build_definition_choices("inconsolable", pool=["ravenous"]) is None
+        assert build_definition_choices(
+            "inconsolable", pool=["ravenous"], deck=["ravenous"],
+        ) is None
 
     def test_prefers_words_not_already_used_this_session(self):
         # The "too repetitive" half: a ten-card deck should stop offering the

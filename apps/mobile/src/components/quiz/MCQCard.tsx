@@ -57,6 +57,10 @@ interface MCQChoicePayload {
   is_correct: boolean;
 }
 
+/** Depth of the edge under the CTA. Matches the answer tiles' EDGE, so the
+ *  whole surface shares one physical language. */
+const CTA_EDGE = 4;
+
 export interface MCQCardProps {
   word: string;
   pos?: string | null;
@@ -210,23 +214,23 @@ export function MCQCard({
             onPressOut={() => ctaPress.setValue(0)}
             disabled={!ctaEnabled}
           >
-            {/* The CTA carries the same lip as the answer tiles, so the whole
-                surface shares one physical language. */}
-            <Animated.View
-              style={[
-                s.ctaEdge,
-                { backgroundColor: ctaEdge, transform: [{ scaleY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] }) }] },
-              ]}
-            />
+          <View style={s.ctaSlot}>
+            {/* The CTA carries the same edge as the answer tiles: a full-height
+                copy of the button sitting CTA_EDGE lower, not a strip beneath
+                it. A 5pt box with a 16pt radius is a line — the radius eats
+                the whole shape — which is why this read as a rule rather than
+                as thickness. */}
+            <View style={[s.ctaEdge, { backgroundColor: ctaEdge }]} />
             <Animated.View
               style={[
                 s.cta,
                 { borderColor: ctaAccent },
-                { transform: [{ translateY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [0, 3] }) }] },
+                { transform: [{ translateY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [0, CTA_EDGE - 1] }) }] },
               ]}
             >
               <Text style={[s.ctaText, { color: ctaAccent }]}>{ctaLabel}</Text>
             </Animated.View>
+          </View>
           </Pressable>
         </Animated.View>
       </View>
@@ -316,13 +320,18 @@ const makeStyles = (tc: ThemeColors) =>
       paddingTop: 18,
       backgroundColor: tc.background,
     },
-    // Reserves the lip's depth so pressing the button doesn't shift the bar.
+    // Reserves the edge's depth, so pressing the button does not shift the bar.
+    ctaSlot: {
+      paddingBottom: CTA_EDGE,
+    },
+    // Top CTA_EDGE, bottom 0 — the slot's padding makes that exactly the
+    // button's height, offset down by exactly CTA_EDGE.
     ctaEdge: {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: -5,
-      height: 5,
+      top: CTA_EDGE,
+      bottom: 0,
       borderRadius: 16,
     },
     cta: {

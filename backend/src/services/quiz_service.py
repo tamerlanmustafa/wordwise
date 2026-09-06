@@ -127,6 +127,7 @@ def build_definition_choices(
     word: str,
     *,
     pool: Optional[Iterable[str]] = None,
+    deck: Optional[Iterable[str]] = None,
     avoid: Optional[Set[str]] = None,
     rng: Optional[random.Random] = None,
     n_choices: int = 4,
@@ -150,9 +151,18 @@ def build_definition_choices(
     for translations: starving the last cards is a worse failure than an option
     appearing twice.
 
-    Returns None when fewer than `n_choices - 1` usable distractors survive.
-    The caller then falls back to the translation MCQ for that card rather than
-    dropping the word.
+    `deck` is the fallback: the session's other words. It exists because the
+    first version of this had none, and a definition card is all-or-nothing in
+    a way a translation card is not — `build_translation_choices` has always
+    fallen back to the deck's own translations, so a thin pool costs it
+    variety, while this returned None and the feature simply never appeared.
+    A deck word is a weaker distractor (it is a word the reader is studying,
+    so it may turn up as an answer later in the same session) but it is
+    level-appropriate by construction, and a slightly weaker question beats no
+    question at all.
+
+    Returns None only when both sources are exhausted. The caller then falls
+    back to the translation MCQ for that card rather than dropping the word.
     """
     correct = (word or "").strip()
     if not correct:
@@ -180,6 +190,10 @@ def build_definition_choices(
     distractors = _sample_preferring_unused(
         usable(pool or ()), avoid, n_distractors, r,
     )
+    if len(distractors) < n_distractors:
+        distractors += _sample_preferring_unused(
+            usable(deck or ()), avoid, n_distractors - len(distractors), r,
+        )
     if len(distractors) < n_distractors:
         return None
 

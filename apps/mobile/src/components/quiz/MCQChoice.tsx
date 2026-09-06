@@ -35,8 +35,11 @@ import { MCQ_CHOICE_MIN_H, MCQ_CHOICE_RADIUS, type MCQChoiceState } from './mcqL
 export type { MCQChoiceState };
 
 /** Depth of the lip under a resting tile, and under a pressed one. */
+/** Depth of the edge under the tile, and how far the face drops on press. */
 const EDGE = 4;
-const EDGE_PRESSED = 2;
+/** What is left showing once the face has sunk — a hairline of thickness, so
+ *  the tile still reads as an object rather than as a flat rectangle. */
+const EDGE_PRESSED = 1;
 
 export interface MCQChoiceProps {
   label: string;
@@ -105,16 +108,19 @@ export function MCQChoice({
   const border = isCorrect ? tc.success : isWrong ? tc.error : tc.goldOnSurface;
   const ink = isCorrect ? tc.success : isWrong ? tc.error : tc.text;
 
-  // Pressing moves the tile down by the depth the lip loses, so the tile's top
-  // edge drops and its bottom stays put — the tile compresses instead of
-  // sliding.
+  // Only the face moves. The edge is a full-height copy of the tile sitting
+  // EDGE lower, so pressing sinks the face onto it and the band of colour
+  // below shrinks from EDGE to EDGE_PRESSED — the same thing the word deck's
+  // pills do, and the reason they read as objects.
+  //
+  // It used to be a 4pt strip whose *height* animated. A 4pt tall box with a
+  // 14pt corner radius is not a thin slab, it is a line: the radius eats the
+  // whole shape, so there was nothing under the tile with any thickness to
+  // see. Copying the tile and offsetting it is what gives the band square
+  // shoulders where the tile's own curve leaves off.
   const translateY = pressed.interpolate({
     inputRange: [0, 1],
     outputRange: [0, EDGE - EDGE_PRESSED],
-  });
-  const edgeHeight = pressed.interpolate({
-    inputRange: [0, 1],
-    outputRange: [EDGE, EDGE_PRESSED],
   });
   const scale = pop.interpolate({
     inputRange: [0, 0.55, 1],
@@ -130,11 +136,10 @@ export function MCQChoice({
         { transform: [{ scale }] },
       ]}
     >
-      {/* The lip. A sibling behind the tile rather than a border on it, so its
-          height can animate without relaying out the tile's contents. */}
-      {!disabled ? (
-        <Animated.View style={[s.edge, { backgroundColor: edge, height: edgeHeight }]} />
-      ) : null}
+      {/* The edge: the tile's own shape, EDGE lower. A sibling behind it
+          rather than a border on it, so the face can move without relaying
+          out its contents. */}
+      {!disabled ? <View style={[s.edge, { backgroundColor: edge }]} /> : null}
 
       <Animated.View style={{ transform: [{ translateY }] }}>
         <Pressable
@@ -181,10 +186,15 @@ const makeStyles = (tc: ThemeColors) =>
     slot: {
       paddingBottom: EDGE,
     },
+    // Top EDGE, bottom 0: the slot reserves EDGE of padding below the tile,
+    // so this spans exactly the tile's height, offset down by exactly EDGE.
+    // Height is never set — the tile grows with a long option and the edge
+    // has to grow with it.
     edge: {
       position: 'absolute',
       left: 0,
       right: 0,
+      top: EDGE,
       bottom: 0,
       borderRadius: MCQ_CHOICE_RADIUS,
     },

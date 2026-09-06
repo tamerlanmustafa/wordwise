@@ -170,6 +170,26 @@ describe('options and the CTA are the deck’s buttons', () => {
   const card = () => fs.readFileSync(path.join(__dirname, '..', 'MCQCard.tsx'), 'utf8');
   const choice = () => fs.readFileSync(path.join(__dirname, '..', 'MCQChoice.tsx'), 'utf8');
 
+  it('makes the edge a full-height copy, not a strip', () => {
+    // The bug: a 4pt box with a 14pt corner radius is not a thin slab, it is a
+    // line — the radius eats the whole shape, so there was nothing under the
+    // tile with any thickness to see. Copying the tile and offsetting it gives
+    // the band square shoulders where the tile's own curve leaves off, which
+    // is what the word deck's pills do.
+    const s = choice();
+    expect(s).toMatch(/edge: \{[^}]*top: EDGE,[^}]*bottom: 0,/);
+    expect(s).not.toMatch(/height: edgeHeight/);
+    const cta = card();
+    expect(cta).toMatch(/ctaEdge: \{[^}]*top: CTA_EDGE,[^}]*bottom: 0,/);
+    expect(cta).not.toMatch(/bottom: -5/);
+  });
+
+  it('moves only the face, so the band below shrinks rather than sliding', () => {
+    const s = choice();
+    expect(s).toMatch(/outputRange: \[0, EDGE - EDGE_PRESSED\]/);
+    expect(card()).toMatch(/outputRange: \[0, CTA_EDGE - 1\]/);
+  });
+
   it('gives every option a paper face, a rim and an edge', () => {
     const s = choice();
     expect(s).toMatch(/backgroundColor: tc\.paper/);
