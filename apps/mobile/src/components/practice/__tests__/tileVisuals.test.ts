@@ -19,6 +19,7 @@ import path from 'path';
 
 import { themes, type ThemeColors } from '../../../theme/tokens';
 import { tileVisual } from '../tileVisuals';
+import { TILE_H, TILE_RADIUS, TILE_EDGE } from '../TilePill';
 
 const THEMES: Array<[string, ThemeColors]> = [
   ['light', themes.light],
@@ -165,17 +166,15 @@ describe('the tile is built like the deck buttons', () => {
       'utf8',
     );
 
-  it('is a capsule, not an ellipse', () => {
-    // The cave: an ellipse narrows to a point at its left and right extremes,
-    // so near those points the face occupies a sliver of height around its own
-    // centre line and the edge occupies one around a centre line lower. The
-    // two stop overlapping and the background shows through between them.
-    //
-    // A capsule's radius is half its height, not its width, so an offset copy
-    // still overlaps everywhere however long the face runs.
-    const s = pill();
-    expect(s).toMatch(/borderRadius: TILE_H \/ 2/);
-    expect(s).not.toMatch(/<Ellipse|react-native-svg/);
+  it('never lets the edge peek through at the tile\'s own left/right edges', () => {
+    // A rounded rectangle's narrowest vertical slice is at its flat left and
+    // right sides, where rounding has already eaten TILE_RADIUS off both the
+    // top and the bottom: local height there is TILE_H - 2*TILE_RADIUS, and
+    // it is never smaller than that anywhere else on the shape. The edge
+    // layer is the same shape offset straight down by TILE_EDGE, so the two
+    // only stay seamless everywhere as long as the edge never sinks further
+    // than that narrowest slice is tall.
+    expect(TILE_EDGE).toBeLessThanOrEqual(TILE_H - 2 * TILE_RADIUS);
   });
 
   it('draws a face over an edge and nothing else', () => {
@@ -214,11 +213,14 @@ describe('the tile is a long pill, alone, and lands when tapped', () => {
   const crack = () =>
     fs.readFileSync(path.join(__dirname, '..', 'TileCrack.tsx'), 'utf8');
 
-  it('is wider than it is tall — a rung, not a coin', () => {
+  it('is wider than it is tall, with corners shallow enough to read as a step', () => {
     const s = pill();
     expect(s).toMatch(/export const TILE_W = 200/);
     expect(s).toMatch(/export const TILE_H = 56/);
-    expect(s).toMatch(/borderRadius: TILE_H \/ 2/);
+    expect(s).toMatch(/borderRadius: TILE_RADIUS/);
+    // Rectangular, not a pill: a full capsule would need TILE_RADIUS === TILE_H / 2.
+    expect(TILE_RADIUS).toBeLessThan(TILE_H / 2);
+    expect(s).not.toMatch(/<Ellipse|react-native-svg/);
   });
 
   it('has no ring turning around it any more', () => {

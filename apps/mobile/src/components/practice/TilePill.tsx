@@ -9,19 +9,30 @@
  * — and it is deliberately the same, because every "button you press down"
  * in this app should be built the same way.
  *
- * A long capsule now, not a coin: the path reads as rungs on a ladder rather
- * than a trail of dots, and its tiles now sit flush against each other with
- * no gap, so the capsule shape is what keeps two adjacent tiles from reading
- * as one fused block — the rounded ends are the only seam between them.
+ * A long, shallow-cornered rectangle now, not a capsule: the path reads as a
+ * staircase of steps rather than a chain of pills. Each tile's edge is tall
+ * enough to read as a riser — the vertical face of a stair — rather than a
+ * thin lip, and its tiles sit flush against each other with no gap, so
+ * consecutive steps read as a continuous flight rather than floating tiles.
  *
- * ## Why a capsule, not an ellipse
+ * ## The corner-radius / edge-depth arithmetic
  *
- * Its sides are straight for most of the width and its end caps are half the
- * *height* in radius, so an offset copy still overlaps everywhere and the
- * only thing visible below the face is an even band — which is exactly what
- * the illusion needs and all it needs. An ellipse narrows to a point at its
- * ends instead: near those points the face and the edge stop overlapping and
- * the background shows through between them.
+ * A rounded rectangle's *narrowest* vertical slice is at its flat left and
+ * right edges (x=0 and x=`TILE_W`), where rounding has already eaten
+ * `TILE_RADIUS` off both the top and the bottom: the local height there is
+ * `TILE_H - 2 * TILE_RADIUS`, and it is never smaller than that anywhere else
+ * on the shape (the corners themselves only add height back, up to the full
+ * `TILE_H` a couple of pixels in from the edge). The edge layer is the same
+ * shape, offset straight down by `TILE_EDGE` and nothing else, so the two
+ * layers only stay seamless everywhere — no sliver of background showing
+ * through at the tile's own left/right edges — as long as
+ *
+ *     TILE_EDGE <= TILE_H - 2 * TILE_RADIUS
+ *
+ * i.e. the edge can never sink further than the shape's narrowest slice is
+ * tall. At `TILE_H` = 56 and `TILE_RADIUS` = 12 that ceiling is 32; the tile
+ * uses `TILE_EDGE` = 24, an 8pt margin under the limit rather than sitting
+ * exactly on it.
  *
  * ## Why the gradients went
  *
@@ -37,13 +48,17 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-/** Face width — long enough to read as a rung, not a coin. */
+/** Face width — long enough to read as a stair tread, not a coin. */
 export const TILE_W = 200;
 /** Face height. */
 export const TILE_H = 56;
-/** Depth of the edge under the face, and how far the face travels on press —
- *  the same 4pt the quiz MCQ choices use. */
-export const TILE_EDGE = 4;
+/** Corner radius. Shallow on purpose — see the arithmetic above — so the
+ *  tile reads as a rectangular step rather than a pill. */
+export const TILE_RADIUS = 12;
+/** Depth of the edge under the face, and how far the face travels on press.
+ *  Tall enough to read as a stair's riser rather than a hairline lip — see
+ *  the arithmetic above for why it stays under `TILE_H - 2 * TILE_RADIUS`. */
+export const TILE_EDGE = 24;
 /** Total painted height of one tile, face plus the edge showing beneath it. */
 export const TILE_BLOCK = TILE_H + TILE_EDGE;
 /** Side of the square box a glyph is drawn in, centred on the face. */
@@ -92,9 +107,10 @@ const styles = StyleSheet.create({
     start: 0,
     width: TILE_W,
     height: TILE_H,
-    // Half the *height* — the property that keeps this a capsule instead of
-    // an ellipse regardless of how wide the face is.
-    borderRadius: TILE_H / 2,
+    // See the corner-radius/edge-depth arithmetic in the file docblock: this
+    // has to stay <= (TILE_H - TILE_EDGE) / 2 for the edge to never peek
+    // through at the tile's own left/right edges.
+    borderRadius: TILE_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
   },

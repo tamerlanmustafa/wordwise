@@ -19,19 +19,20 @@
  *   • i == cursor → 'active'
  *   • i  > cursor → 'locked'
  *
- * Vertical rhythm: the pills *are* the road, sitting flush against each
- * other — no gap between one tile's bottom and the next one's top. Their
- * rounded ends are the only seam, which is what keeps two adjacent tiles
- * reading as separate rungs rather than fusing into one long strip.
+ * Vertical rhythm: the pills *are* the road, stacked flush with no gap
+ * between one tile's bottom and the next one's top. Each tile's own tall
+ * edge — the riser, see `TilePill` — is what keeps two abutting steps
+ * reading as separate treads rather than fusing into one long strip; the
+ * corners are rounded just enough to still read as a rectangle rather than
+ * a pill.
  *
  * The path itself doesn't know about session APIs or the free-tier daily
  * cap; the parent screen wires the tap of the active tile into the right
  * side-effects.
  */
 
-import { Fragment, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 /** Total tiles rendered at once. */
@@ -56,10 +57,9 @@ export function offsetForIndex(index: number): number {
   return X_OFFSETS[((index % n) + n) % n];
 }
 
-/** How many tiles make up one "section" — the landmark cadence. A
- *  checkpoint divider is rendered above each section's first tile so the
- *  user sees named landmarks scroll past as they advance, instead of an
- *  undifferentiated infinite chain. */
+/** How many tiles make up one "section" — the landmark cadence. No longer
+ *  drawn (the checkpoint banner is off in the UI), but kept as the data the
+ *  banner would need if it comes back — see `isSectionStart`. */
 export const SECTION_SIZE = 5;
 
 /** 1-based section number a given absolute index belongs to. */
@@ -67,7 +67,9 @@ export function sectionForIndex(index: number): number {
   return Math.floor(index / SECTION_SIZE) + 1;
 }
 
-/** True when this index opens a new section (gets a divider above it). */
+/** True when this index opens a new section. Not rendered any more (see
+ *  `SECTION_SIZE`), but still exported and tested — removing the divider was
+ *  a UI-only change, not a removal of the section data itself. */
 export function isSectionStart(index: number): boolean {
   return index % SECTION_SIZE === 0;
 }
@@ -97,64 +99,23 @@ export function PracticeTilePath({
 
   return (
     <View style={styles.wrap}>
-      {tiles.map((tile, slot) => {
+      {tiles.map((tile) => {
         const x = offsetForIndex(tile.index);
-        const startsSection = isSectionStart(tile.index);
         return (
-          <Fragment key={tile.index}>
-            {startsSection ? (
-              <SectionDivider
-                section={sectionForIndex(tile.index)}
-                completed={cursor >= tile.index + SECTION_SIZE}
-                current={tile.index <= cursor && cursor < tile.index + SECTION_SIZE}
-                first={slot === 0}
-              />
-            ) : null}
-            <View
-              style={[
-                styles.tileRow,
-                { transform: [{ translateX: x }] },
-              ]}
-            >
-              <PracticeTile
-                state={tile.state}
-                onPress={() => onTilePress(tile.index)}
-              />
-            </View>
-          </Fragment>
+          <View
+            key={tile.index}
+            style={[
+              styles.tileRow,
+              { transform: [{ translateX: x }] },
+            ]}
+          >
+            <PracticeTile
+              state={tile.state}
+              onPress={() => onTilePress(tile.index)}
+            />
+          </View>
         );
       })}
-    </View>
-  );
-}
-
-/** Checkpoint banner between sections. A completed section reads gold +
- *  checked (a landmark you've walked past); the section holding the
- *  cursor gets the bright gold accent; future sections stay faint. */
-function SectionDivider({
-  section,
-  completed,
-  current,
-  first,
-}: {
-  section: number;
-  completed: boolean;
-  current: boolean;
-  /** Opening the window — no tile above it to be separated from. */
-  first: boolean;
-}) {
-  const tc = useThemeColors();
-  const ds = useMemo(() => makeDividerStyles(tc), [tc]);
-  const accent = completed ? tc.goldOnSurface : current ? tc.gold : tc.textFaint;
-  return (
-    <View style={[ds.wrap, first && ds.wrapFirst]}>
-      <View style={[ds.line, { backgroundColor: tc.border }]} />
-      <View style={[ds.pill, { borderColor: accent, backgroundColor: tc.paper }]}>
-        <Text style={[ds.label, { color: accent }]}>
-          {completed ? '✓ ' : ''}SECTION {section}
-        </Text>
-      </View>
-      <View style={[ds.line, { backgroundColor: tc.border }]} />
     </View>
   );
 }
@@ -181,43 +142,9 @@ const styles = StyleSheet.create({
   wrap: {
     paddingTop: 6,
     paddingBottom: 24,
-    // No flex gap and no per-row margin — tiles sit flush, and a section
-    // divider owns the space above the tile it introduces.
+    // No flex gap and no per-row margin — tiles sit flush.
   },
   tileRow: {
     alignItems: 'center',
   },
 });
-
-const makeDividerStyles = (_tc: ThemeColors) =>
-  StyleSheet.create({
-    wrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingHorizontal: 4,
-      // Its own breathing room, unrelated to the (now zero) gap between
-      // tiles — a checkpoint banner still needs room to read as a landmark
-      // rather than a tile squeezed in the chain.
-      marginTop: 28,
-      marginBottom: 8,
-    },
-    wrapFirst: {
-      marginTop: 0,
-    },
-    line: {
-      flex: 1,
-      height: 1,
-    },
-    pill: {
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: 999,
-      borderWidth: 1.5,
-    },
-    label: {
-      fontSize: 10,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-    },
-  });
