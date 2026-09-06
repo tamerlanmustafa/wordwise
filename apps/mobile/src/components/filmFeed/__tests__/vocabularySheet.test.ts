@@ -22,9 +22,9 @@ const src = () => fs.readFileSync(path.join(HOME, 'VocabularySheet.tsx'), 'utf8'
 
 describe('colour means difficulty, from one source', () => {
   it('takes every band colour from the shared ramp', () => {
-    // Not a local map and not withAlpha-on-gold: two copies of a six-colour
-    // scale is how `theme/index.ts` and `theme/palette.ts` ended up
-    // disagreeing about what colour C2 is.
+    // Not a local map and not withAlpha-on-gold: duplicate copies of a
+    // six-colour scale are how this app ended up with two exports called
+    // `cefrColors` that disagreed about what colour C2 is.
     const s = src();
     expect(s).toMatch(/from '\.\.\/\.\.\/theme\/cefrRamp'/);
     expect(s).toMatch(/const ramp = cefrRampFor\(tc\)/);

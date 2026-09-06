@@ -12,14 +12,18 @@
  * looking, so the same segment is gold on one account and grey on another and
  * neither the bar nor the legend can be read on its own.
  *
- * ## Why not reuse `cefrColors`
+ * ## This is the only band palette
  *
- * There are two maps by that name already — `theme/index.ts` runs green→red,
- * `theme/palette.ts` runs green→purple — and they disagree with each other. If
- * you are here to add a third, don't: fold whatever you need into this one.
- * This ramp is deliberately built from the two accent *tokens* rather than
- * frozen hexes, so it follows the palette into light mode, dark mode, and
- * whatever the accent becomes next; the other two cannot.
+ * There were three. `theme/palette.ts` ran green→purple, a dead `theme/index.ts`
+ * ran green→red, and this ramp drew the vocabulary sheet's bar — and the first
+ * two disagreed with each other about what colour C2 is while both being
+ * exported as `cefrColors`. `theme/index.ts` is gone and `palette.ts` now
+ * derives its two maps from this file, so a band has one definition.
+ *
+ * Built from the accent *tokens* rather than frozen hexes, so it follows the
+ * palette into light mode, dark mode, and whatever the accent becomes next.
+ * If you need band colours somewhere new, project them from here — do not
+ * write a fourth set.
  */
 
 import { CEFR_LEVELS } from '../types/constants';

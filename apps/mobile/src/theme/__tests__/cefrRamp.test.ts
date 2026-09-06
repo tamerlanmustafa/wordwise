@@ -35,6 +35,14 @@ describe('mix', () => {
     expect(mix('oklch(0.7 0.1 80)', '#FFFFFF', 0.5)).toBe('oklch(0.7 0.1 80)');
     expect(mix('#FFFFFF', 'oklch(0.7 0.1 80)', 0.5)).toBe('#FFFFFF');
   });
+
+  it('returns 6-digit hex, because callers append an alpha suffix to it', () => {
+    // Half a dozen call sites build a translucent fill as `${levelColor}22`.
+    // That only works on hex: an `rgb()` string becomes
+    // `rgb(255,209,102)22`, which does not throw and does not render.
+    expect(mix('#FFD166', '#E57373', 0.4)).toMatch(/^#[0-9A-F]{6}$/);
+    expect(mix('rgb(255,209,102)', 'rgb(229,115,115)', 0.4)).toMatch(/^#[0-9A-F]{6}$/);
+  });
 });
 
 describe('cefrRamp', () => {

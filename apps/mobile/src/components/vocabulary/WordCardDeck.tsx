@@ -68,7 +68,6 @@ import {
   REVEAL_IN_MS,
   REVEAL_OUT_MS,
   REVEAL_RISE_PX,
-  B1_HIGHLIGHT,
   wordTier,
   wordTranslationTier,
   definitionTier,
@@ -926,10 +925,17 @@ export const WordCardDeck = ({
 
   const isSaved = savedWords.has(currentKey);
 
-  // Sentence highlight: the target word is bold italic in the CEFR colour,
-  // except B1's yellow which is too light on the white card.
-  const highlightColorFor = (lvl: string, color: string) =>
-    scheme === 'light' && lvl === 'B1' ? B1_HIGHLIGHT : color;
+  // Sentence highlight: the target word is bold italic in the band's own
+  // colour, with no exceptions any more.
+  //
+  // There used to be one, for B1. The old band palette put a bright amber
+  // (#FFC107) at B1, which measured 1.63:1 on the light card — invisible — so
+  // that one level was swapped for a darker gold and the highlight stopped
+  // matching the chip above it. The shared ramp has no such hole: on the light
+  // card the six bands measure 2.96–3.43:1, and on the dark card 6.4–13.2:1.
+  // Special-casing a level now would be the only thing breaking the promise
+  // that a band is one colour everywhere.
+  const highlightColorFor = (_lvl: string, color: string) => color;
 
   /**
    * The full card anatomy in its hidden (dashed placeholders) state — the
@@ -981,10 +987,10 @@ export const WordCardDeck = ({
         />
         <View style={s.wordTrSlot}>
           <View style={[s.slotLayer, s.wordTrRow]}>
+            <DashedRule color={dashColor} style={s.flexSpacer} />
             <View style={s.langTagDashed}>
               <Text style={s.langTagDashedText}>{lang}</Text>
             </View>
-            <DashedRule color={dashColor} style={s.flexSpacer} />
           </View>
         </View>
         <SentenceLabel s={s} label={t('movies:detail.exampleSentenceLabel')} />
@@ -1167,14 +1173,19 @@ export const WordCardDeck = ({
               <Animated.View
                 style={[s.slotLayer, s.wordTrRow, { opacity: revealHiddenOpacity }]}
               >
-                <View style={s.langTagDashed}>
-                  <Text style={s.langTagDashedText}>{lang}</Text>
-                </View>
                 {expansionLoading ? (
                   <View style={[s.skelBar, s.flexSpacer, { height: 10 }]} />
                 ) : (
                   <DashedRule color={dashColor} style={s.flexSpacer} />
                 )}
+                {/* Trailing, so it is in the same place as the solid tag on
+                    the layer that cross-fades in over this one. These two
+                    layers are stacked absolutely and only their opacity
+                    differs, so anything that moves between them reads as the
+                    tag sliding across the card during the reveal. */}
+                <View style={s.langTagDashed}>
+                  <Text style={s.langTagDashedText}>{lang}</Text>
+                </View>
               </Animated.View>
               <Animated.View
                 style={[
@@ -1541,7 +1552,20 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontStyle: 'italic',
       fontWeight: '600',
       color: tc.primaryOnSurface,
+      // Takes the whole line and gives the rest back, so the language tag
+      // beside it sits at the trailing edge — exactly where the dashed rule
+      // leaves it on the hidden layer underneath. Without the grow the tag
+      // rides directly behind the word and travels a variable distance on
+      // every reveal, because the distance is the length of the translation.
+      //
+      // `minWidth: 0` is what actually lets it shrink: a flex child will not
+      // go below its own content width without it, so a long translation
+      // pushes the tag off the card's trailing edge instead of ellipsising.
+      // The `numberOfLines={1}` at the call site is the other half — the row
+      // cannot wrap, so an unshrinkable child has nowhere to go but out.
+      flexGrow: 1,
       flexShrink: 1,
+      minWidth: 0,
     },
     // "same as English" is a statement about the word, not the word's
     // translation — lighter and unbolded so it doesn't read as the answer.

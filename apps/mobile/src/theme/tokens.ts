@@ -466,6 +466,13 @@ export function shade(color: string, amount: number): string {
  * Same contract as its neighbours: an unrecognised colour at either end
  * degrades to `from` rather than to garbage, so a future token shape costs a
  * flat colour and not an invisible view.
+ *
+ * Returns `#RRGGBB`, unlike {@link shade}, which returns `rgb()`. Not a
+ * stylistic difference: band colours from this function get an alpha suffix
+ * appended by half a dozen call sites (`` `${levelColor}22` `` for a chip
+ * fill, `66` for a rule), which is only valid on an 8-digit hex. Handing those
+ * an `rgb()` string produces `rgb(255,209,102)22` — not a parse error, just a
+ * colour that silently does not render.
  */
 export function mix(from: string, to: string, t: number): string {
   const a = parseRgb(from);
@@ -473,7 +480,7 @@ export function mix(from: string, to: string, t: number): string {
   if (!a || !b) return from;
   const k = Math.min(Math.max(t, 0), 1);
   const blended = a.map((c, i) => Math.round(c + (b[i] - c) * k));
-  return `rgb(${blended[0]},${blended[1]},${blended[2]})`;
+  return `#${blended.map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
 }
 
 /** The two colour shapes the palette actually stores → channels, or null. */

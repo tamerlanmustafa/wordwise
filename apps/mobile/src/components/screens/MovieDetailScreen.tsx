@@ -21,9 +21,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, cefrColors, cefrColorsDark } from '../../theme/palette';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
+import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
 import { styles } from '../../core/styles';
+import { withTap } from '../../utils/feedback';
 import type { MovieData } from '../../core/types';
 
 import {
@@ -291,7 +292,7 @@ export const MovieDetailScreen = ({
   const renderSplashFace = (scale: Animated.AnimatedInterpolation<number>) => (
     <>
       <Pressable
-        onPress={onBack}
+        onPress={withTap(onBack)}
         style={[
           backBtnStyles.backBtn,
           splashStyles.backBtn,
@@ -962,9 +963,15 @@ export const MovieDetailScreen = ({
 
   // Explainer-band inputs. Mix label = the user's level ±1, matching how the
 
+  // The band's colour, from the ramp for the *active* theme — the same call
+  // the vocabulary sheet's bar makes. The static `cefrColors` map is one
+  // projection of that ramp (the dark one), so reading it here would have left
+  // the deck's chip and its sentence highlight on dark-theme colours while the
+  // sheet two taps away showed the light ones.
+  const ramp = useMemo(() => cefrRampFor(tc), [tc]);
   const levelColorFor = useCallback(
-    (level: string) => cefrColors[level] || colors.primary,
-    [],
+    (level: string) => cefrColorFor(level, ramp),
+    [ramp],
   );
 
   // Every deck advance moves the resume cursor — the same movie_bookmark_{id}
@@ -1043,9 +1050,9 @@ export const MovieDetailScreen = ({
                           borderColor: `${tc.gold}73`,
                         },
                       ]}
-                      onPress={() => {
+                      onPress={withTap(() => {
                         startTransition(() => setWordsView('foryou'));
-                      }}
+                      })}
                       activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityState={{ selected: foryouActive }}
@@ -1071,16 +1078,21 @@ export const MovieDetailScreen = ({
                 <View style={[ledgerStyles.filterDivider, { backgroundColor: tc.border }]} />
                 {wordLevels.map((lvl) => {
                   const active = wordsView === 'all' && activeLevel === lvl.level;
-                  const c = cefrColors[lvl.level] || colors.primary;
-                  const selectedColor = scheme === 'dark' ? c : cefrColorsDark[lvl.level] || c;
+                  // Both from the active theme's ramp, so the chip and the
+                  // sheet behind the ring agree. `cefrColorsDark` used to be
+                  // consulted for the light scheme; it is now just the light
+                  // projection of this same ramp, so asking the ramp directly
+                  // says the same thing with one lookup instead of two.
+                  const c = cefrColorFor(lvl.level, ramp);
+                  const selectedColor = c;
                   return (
                     <TouchableOpacity
                       key={lvl.level}
                       style={[ledgerStyles.levelChip, active && { backgroundColor: `${c}2E` }]}
-                      onPress={() => {
+                      onPress={withTap(() => {
                         startTransition(() => setWordsView('all'));
                         setActiveLevel(lvl.level);
-                      }}
+                      })}
                       activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
@@ -1117,14 +1129,14 @@ export const MovieDetailScreen = ({
             ) : wordsView === 'all' ? (
               <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
                 <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
-                  <Text style={{ color: cefrColors[activeLevel] || colors.primary, fontWeight: '700' }}>
+                  <Text style={{ color: levelColorFor(activeLevel), fontWeight: '700' }}>
                     {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
                   </Text>
                   {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
                 </Text>
                 <View style={deckHeaderStyles.sortCluster}>
                   <TouchableOpacity
-                    onPress={() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare'))}
+                    onPress={withTap(() => setWordSortOrder((o) => (o === 'rare' ? 'common' : 'rare')))}
                     activeOpacity={0.6}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
@@ -1137,7 +1149,7 @@ export const MovieDetailScreen = ({
                       {(['rows', 'cards'] as const).map((m) => (
                         <TouchableOpacity
                           key={m}
-                          onPress={() => handleViewModeChange(m)}
+                          onPress={withTap(() => handleViewModeChange(m))}
                           style={[
                             deckHeaderStyles.toggleSeg,
                             viewMode === m && [
@@ -1215,7 +1227,7 @@ export const MovieDetailScreen = ({
         {loading ? null : error ? (
           <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
             <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadVocabulary}>
+            <TouchableOpacity style={styles.retryButton} onPress={withTap(loadVocabulary)}>
               <Text style={styles.retryButtonText}>{t('action.retry')}</Text>
             </TouchableOpacity>
           </View>
@@ -1290,7 +1302,7 @@ export const MovieDetailScreen = ({
                           idiom={item}
                           index={index}
                           rowNumber={index + 1}
-                          groupColor={cefrColors[item.cefr_level] || colors.primary}
+                          groupColor={levelColorFor(item.cefr_level)}
                           movieId={movieId}
                           targetLang={targetLang}
                           isSaved={savedWords.has(key)}
@@ -1338,7 +1350,7 @@ export const MovieDetailScreen = ({
                 {suggestedHidden > 0 && (
                   <TouchableOpacity
                     activeOpacity={0.7}
-                    onPress={() => startTransition(() => setWordsView('all'))}
+                    onPress={withTap(() => startTransition(() => setWordsView('all')))}
                     style={[styles.foryouMoreLink, { backgroundColor: tc.paper, borderColor: tc.border }]}
                   >
                     <Text style={[styles.foryouMoreLinkText, { color: tc.text }]}>
@@ -1368,7 +1380,7 @@ export const MovieDetailScreen = ({
                         idiom={item}
                         index={index}
                         rowNumber={index + 1}
-                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        groupColor={levelColorFor(activeLevel)}
                         movieId={movieId}
                         targetLang={targetLang}
                         isSaved={savedWords.has(key)}
@@ -1396,7 +1408,7 @@ export const MovieDetailScreen = ({
                         word={item}
                         index={index}
                         rowNumber={index + 1}
-                        groupColor={cefrColors[activeLevel] || colors.primary}
+                        groupColor={levelColorFor(activeLevel)}
                         movieId={movieId}
                         movieTitle={movie.title}
                         targetLang={targetLang}
@@ -1435,7 +1447,7 @@ export const MovieDetailScreen = ({
             control on this screen that wrote to the device's library, so
             dropping it takes the Photos permission prompt out of the product
             on both platforms. */}
-        <TouchableWithoutFeedback onPress={() => setPosterZoomOpen(false)}>
+        <TouchableWithoutFeedback onPress={withTap(() => setPosterZoomOpen(false))}>
           <View style={styles.posterZoomBackdrop}>
             <TouchableWithoutFeedback>
               <Image
@@ -1454,7 +1466,7 @@ export const MovieDetailScreen = ({
             <Text style={styles.undoToastText} numberOfLines={1}>
               "{pendingLearned}" hidden
             </Text>
-            <TouchableOpacity onPress={handleUndoLearned} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity onPress={withTap(handleUndoLearned)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.undoToastAction}>{t('movies:detail.undo')}</Text>
             </TouchableOpacity>
           </View>
@@ -1470,7 +1482,7 @@ export const MovieDetailScreen = ({
         <View style={quizPillStyles.pillWrap} pointerEvents="box-none">
           <TouchableOpacity
             style={quizPillStyles.pill}
-            onPress={() => onStartQuiz(userProficiency)}
+            onPress={withTap(() => onStartQuiz(userProficiency))}
             activeOpacity={0.85}
           >
             <BoltIcon size={15} color={tc.goldDeep} style={quizPillStyles.pillGlyph} />

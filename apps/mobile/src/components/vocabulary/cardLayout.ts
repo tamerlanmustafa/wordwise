@@ -214,6 +214,3 @@ export const REVEAL_IN_MS = 240;
 export const REVEAL_OUT_MS = 220;
 /** Hidden→revealed layers rise 5px as they fade in. */
 export const REVEAL_RISE_PX = 5;
-
-/** Sentence highlight: B1's raw yellow is too light on white — darken it. */
-export const B1_HIGHLIGHT = '#B08A00';
