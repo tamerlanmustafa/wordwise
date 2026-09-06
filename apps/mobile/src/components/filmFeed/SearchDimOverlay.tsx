@@ -31,6 +31,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import { useColorScheme } from '../../theme/tokens';
 import { Vignette } from '../common/Vignette';
+import { dimColors } from '../../theme/dim';
 
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 160;
@@ -57,12 +58,11 @@ export function SearchDimOverlay({
     }).start();
   }, [active, fade]);
 
-  // Light mode needs a lighter hand — the same alpha that reads as "behind
-  // something" on a dark ground reads as "broken" on a pale one. Both were
-  // raised once seen on a device: the first pass dimmed enough to notice but
-  // not enough to stop the feed competing with the panel over it.
-  const base = scheme === 'dark' ? 'rgba(0,0,0,0.62)' : 'rgba(20,16,10,0.38)';
-  const edge = scheme === 'dark' ? 'rgba(0,0,0,0.72)' : 'rgba(20,16,10,0.46)';
+  // Modal weight: the panel is over the feed and the feed is unreachable, so
+  // the dim is also the promise that a tap lands here rather than on a film
+  // card. Both values were raised once seen on a device — the first pass
+  // dimmed enough to notice and not enough to stop the feed competing.
+  const { base, edge } = dimColors('modal', scheme);
 
   return (
     <Animated.View

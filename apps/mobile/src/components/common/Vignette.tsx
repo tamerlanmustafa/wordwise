@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 /** How far the gradients reach in from each edge. */
 export const VIGNETTE_HEIGHT = 160;
 
+
 export function Vignette({ color }: { color: string }) {
   return (
     <>

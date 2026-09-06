@@ -49,6 +49,7 @@ import { SceneStrip, type SceneStripProps } from '../vocabulary/SceneStrip';
 import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
 import { FilmEdgeBackdrop } from '../ui/FilmEdgeBackdrop';
+import { FocusWash } from '../common/FocusWash';
 import { MovieDetailHero } from './MovieDetailHero';
 import {
   FILTER_BAR,
@@ -1048,6 +1049,23 @@ export const MovieDetailScreen = ({
           onPosterPress={movie.poster_path ? () => setPosterZoomOpen(true) : undefined}
           style={{ paddingTop: insets.top }}
         />
+
+        {/* Everything above this line recedes; everything below it is the
+            subject. The screen is a word deck with a film's identity at the
+            top, and the backdrop wash plus the poster were reading as the
+            headline — a still from a film is louder than any typography under
+            it, so the deck was competing with its own header for the eye.
+
+            Ambient, not modal: the hero stays legible and stays tappable. The
+            back button and the poster live up there, and burying navigation
+            under a scrim to make a list look better is a trade worth refusing.
+
+            Placement is the configuration — it dims what was drawn before it
+            and nothing after, so it sits here rather than carrying a zIndex
+            that would have to be kept in step with everything else's. The
+            counter and the deck's own controls are below it and stay at full
+            strength, which is what makes the deck read as one block. */}
+        <FocusWash />
 
         {/* Level filter, deck counter and progress. Nothing sticks any more
             — there is no scroll for it to stick against. */}
