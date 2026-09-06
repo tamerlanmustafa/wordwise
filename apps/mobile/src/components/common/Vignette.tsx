@@ -22,29 +22,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 /** How far the gradients reach in from each edge. */
 export const VIGNETTE_HEIGHT = 160;
 
-
-export function Vignette({
-  color,
-  height = VIGNETTE_HEIGHT,
-}: {
-  color: string;
-  /** How far each band reaches in. The default suits a sheet scrim, where the
-   *  vignette is atmosphere; a wash that has to cover a specific block — the
-   *  film hero on MovieDetail runs to about 206pt — passes its own reach so
-   *  the thing it is meant to push back is actually inside the dark part. */
-  height?: number;
-}) {
+export function Vignette({ color }: { color: string }) {
   return (
     <>
       <LinearGradient
         pointerEvents="none"
         colors={[color, 'transparent']}
-        style={[styles.band, styles.top, { height }]}
+        style={[styles.band, styles.top]}
       />
       <LinearGradient
         pointerEvents="none"
         colors={['transparent', color]}
-        style={[styles.band, styles.bottom, { height }]}
+        style={[styles.band, styles.bottom]}
       />
     </>
   );
@@ -55,6 +44,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     start: 0,
     end: 0,
+    height: VIGNETTE_HEIGHT,
   },
   top: { top: 0 },
   bottom: { bottom: 0 },

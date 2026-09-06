@@ -406,16 +406,10 @@ describe('tapping away closes the panel instead of opening a film', () => {
     expect(overlay()).not.toMatch(/useNativeDriver:\s*false/);
   });
 
-  it('asks the shared source for its depth rather than choosing one', () => {
-    // The alphas used to be written here. They moved to `theme/dim` when a
-    // second receding surface arrived — MovieDetail's ambient wash — because
-    // two copies of "how dark is behind something" is two answers waiting to
-    // disagree. The values themselves, and the relationships between the two
-    // strengths, are pinned in components/__tests__/focusWash.
-    const o = overlay();
-    expect(o).toMatch(/from '\.\.\/\.\.\/theme\/dim'/);
-    expect(o).toMatch(/dimColors\('modal', scheme\)/);
-    expect(o).not.toMatch(/rgba\(0,0,0,0\.\d+\)/);
+  it('lightens the dim in light mode', () => {
+    // The alpha that reads as "behind something" on a dark ground reads as
+    // broken on a pale one.
+    expect(overlay()).toMatch(/scheme === 'dark' \? 'rgba\(0,0,0,0\.62\)' : 'rgba\(20,16,10,0\.38\)'/);
   });
 
   it('shares its vignette with every sheet scrim', () => {
