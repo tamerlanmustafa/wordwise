@@ -39,7 +39,15 @@ const CAPSULE_PAD_V = 11;
 export const CAPSULE_HEIGHT = ICON + GAP + LABEL + CAPSULE_PAD_V * 2; // 61
 /** Inset from the screen's left/right edges. */
 export const SIDE_MARGIN = 14;
-/** Clear space between the capsule and the content above it. */
+/**
+ * Clear space between the bar and the content above it.
+ *
+ * Both shapes reserve it. The pinned bar did not, and on Android that put the
+ * deck's controls flush against the tab bar with nothing between them — the
+ * floating capsule hides the same omission because it is inset from the screen
+ * edge anyway, so the gap was there by accident on iOS and missing by accident
+ * everywhere else.
+ */
 export const TOP_GAP = 8;
 
 /** The pinned bar's top padding — unchanged from the original bar. */
@@ -90,7 +98,11 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
       barHeight,
       bottomMargin: 0,
       sideMargin: 0,
-      reservedHeight: barHeight,
+      // The bar's own height plus the same breathing room the capsule gets.
+      // On Android this is the difference between the deck's buttons sitting
+      // on the tab bar and sitting above it — and Android is where it matters
+      // most, because the system's own navigation is directly below that.
+      reservedHeight: barHeight + TOP_GAP,
       radius: 0,
       padTop: PINNED_PAD_TOP,
       padBottom,

@@ -80,6 +80,7 @@ import {
   deckMetrics,
   ACTIONS_ROW_HEIGHT,
   ACTIONS_GAP,
+  deckSideMargin,
   DECK_GAP_TOP,
   PILL_WIDTH,
   PILL_HEIGHT,
@@ -400,6 +401,9 @@ export const WordCardDeck = ({
   // action pills out underneath it. Hooks run before the empty-deck
   // return below, so this is computed unconditionally.
   const [available, setAvailable] = useState(0);
+  // Width as well as height: the scale is decided by the height, and the side
+  // inset then gives back what that scale took off the sides.
+  const [deckWidth, setDeckWidth] = useState(0);
   const metrics = useMemo(() => deckMetrics({ available }), [available]);
 
   // Keep the committed state in step with the parent's item list (learned
@@ -1071,7 +1075,13 @@ export const WordCardDeck = ({
   const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
 
   return (
-    <View style={s.wrap} onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}>
+    <View
+      style={s.wrap}
+      onLayout={(e) => {
+        setAvailable(e.nativeEvent.layout.height);
+        setDeckWidth(e.nativeEvent.layout.width);
+      }}
+    >
       {/* The zone's LAID-OUT height shrinks (`zoneHeight`) while its contents
           keep their design geometry and are scaled about the top edge. A
           transform alone would not free the space below, and editing the
@@ -1081,7 +1091,14 @@ export const WordCardDeck = ({
           `zoneHeight` tall while its contents keep the full 407, so scaling
           about the middle would push the card down out of its own box. */}
       <View
-        style={[s.deckWrap, { transform: [{ scale: metrics.scale }], transformOrigin: 'top center' }]}
+        style={[
+          s.deckWrap,
+          {
+            marginHorizontal: deckSideMargin(deckWidth, metrics.scale),
+            transform: [{ scale: metrics.scale }],
+            transformOrigin: 'top center',
+          },
+        ]}
       >
         {/* Ghost cards — pure styling; the incoming card's arrive animation
             starts from the near ghost's slot so the deck reads as stepping
@@ -1438,7 +1455,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       paddingTop: DECK_GAP_TOP,
     },
     deckWrap: {
-      marginHorizontal: 18,
+      // marginHorizontal is supplied per render — see `deckSideMargin`.
       marginTop: 0,
       height: DECK_ZONE_HEIGHT,
     },

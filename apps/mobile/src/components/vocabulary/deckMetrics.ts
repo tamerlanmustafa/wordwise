@@ -99,6 +99,42 @@ export const ACTIONS_GAP = 18;
  *  leave the viewport. */
 export const MIN_SCALE = 0.55;
 
+/** The deck's resting inset from each side of its container. */
+export const DECK_SIDE_MARGIN = 18;
+/**
+ * How narrow that inset may get while reclaiming width.
+ *
+ * A floor rather than an exact answer: on a phone scaled hard enough the exact
+ * compensation goes negative, which would lay the deck out wider than its
+ * parent — and on Android a child outside its parent's bounds stops receiving
+ * touches, so the card would look right and answer nothing.
+ */
+export const DECK_MIN_SIDE_MARGIN = 8;
+
+/**
+ * The deck's side inset, given the container width and the vertical scale.
+ *
+ * The scale exists to fit the card *vertically*: the card's slots are fixed
+ * heights, so a short viewport shrinks the whole zone rather than re-cutting
+ * it. But `transform: scale` is uniform, so a card scaled to fit a shorter
+ * screen also comes in off both sides — and on a device that had plenty of
+ * width to begin with, that width is simply left empty. A Samsung S24 shows
+ * this plainly next to an iPhone: shorter viewport, so a scale under 1, so a
+ * visibly narrower card with unused gutters either side of it.
+ *
+ * So the inset shrinks by exactly what the scale takes. Widening the
+ * pre-transform box by 1/scale means the post-transform card lands at the
+ * width an unscaled one would have had, and the extra design width inside it
+ * is spent on the type before being scaled back — the card reads at the same
+ * size, in the space that was already there.
+ */
+export function deckSideMargin(width: number, scale: number): number {
+  if (width <= 0 || scale >= 1) return DECK_SIDE_MARGIN;
+  const rendered = width - DECK_SIDE_MARGIN * 2;
+  const needed = (width - rendered / scale) / 2;
+  return Math.max(DECK_MIN_SIDE_MARGIN, needed);
+}
+
 export interface DeckMetricsInput {
   /** Measured height of the deck block: what `flex: 1` left it after the
    *  column above and the bottom bar below. 0 before the first layout pass.

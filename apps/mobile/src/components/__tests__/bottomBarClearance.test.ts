@@ -50,9 +50,12 @@ describe('the bar reserves more than the capsule it draws', () => {
     expect(m.reservedHeight).toBe(m.barHeight + m.bottomMargin + 8);
   });
 
-  it('pinned: the bar is flush, so its own height is the whole reservation', () => {
+  it('pinned: flush to the screen, but still a gap above it', () => {
+    // "Flush" describes where the bar sits, not how close content may come.
+    // Reserving only `barHeight` put Android's deck controls on the tab bar,
+    // which sits directly on the system's own navigation.
     const m = navBarMetrics(0, false);
-    expect(m.reservedHeight).toBe(m.barHeight);
+    expect(m.reservedHeight).toBe(m.barHeight + 8);
     expect(m.bottomMargin).toBe(0);
   });
 

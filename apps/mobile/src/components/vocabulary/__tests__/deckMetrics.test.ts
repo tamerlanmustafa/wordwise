@@ -14,6 +14,9 @@ import {
   deckMetrics,
   deckBlockHeightFor,
   ACTIONS_ROW_HEIGHT,
+  DECK_SIDE_MARGIN,
+  DECK_MIN_SIDE_MARGIN,
+  deckSideMargin,
   ACTIONS_GAP,
   DECK_GAP_TOP,
   COLUMN_ABOVE_DECK,
@@ -200,5 +203,53 @@ describe('invariants', () => {
     // which would silently overflow the smallest phone first.
     const device = { screenHeight: 1000, topInset: 50, barHeight: 80 };
     expect(deckBlockHeightFor(device)).toBe(1000 - 80 - 50 - COLUMN_ABOVE_DECK);
+  });
+});
+
+describe('the deck uses the width it has', () => {
+  // A Samsung S24 next to an iPhone 16 Pro: shorter viewport, so a scale under
+  // 1, so a uniformly smaller card — including in a direction that was never
+  // short of room. The gutters either side were the visible symptom.
+  const S24_WIDTH = 360;
+
+  it('leaves the inset alone when nothing is being scaled', () => {
+    expect(deckSideMargin(S24_WIDTH, 1)).toBe(DECK_SIDE_MARGIN);
+    expect(deckSideMargin(393, 1)).toBe(DECK_SIDE_MARGIN);
+  });
+
+  it('gives back exactly what a mild scale took off the sides', () => {
+    // The post-transform card lands at the width an unscaled one would have:
+    // widen the pre-transform box by 1/scale and the scale returns it.
+    const scale = 0.95;
+    const margin = deckSideMargin(S24_WIDTH, scale);
+    const rendered = (S24_WIDTH - margin * 2) * scale;
+    expect(rendered).toBeCloseTo(S24_WIDTH - DECK_SIDE_MARGIN * 2, 5);
+  });
+
+  it('never lays the deck out wider than its parent', () => {
+    // The exact compensation goes negative once the scale is small enough, and
+    // on Android a child outside its parent's bounds stops receiving touches —
+    // the card would look right and answer nothing.
+    for (let scale = 0.5; scale <= 1; scale += 0.01) {
+      for (const width of [320, 360, 393, 430]) {
+        const margin = deckSideMargin(width, scale);
+        expect(margin).toBeGreaterThanOrEqual(DECK_MIN_SIDE_MARGIN);
+        expect(width - margin * 2).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
+  it('reclaims monotonically — a harder squeeze never gives back less', () => {
+    let previous = Infinity;
+    for (let scale = 1; scale >= 0.7; scale -= 0.01) {
+      const margin = deckSideMargin(S24_WIDTH, scale);
+      expect(margin).toBeLessThanOrEqual(previous + 1e-9);
+      previous = margin;
+    }
+  });
+
+  it('degrades to the floor rather than to nonsense before layout', () => {
+    // Width is 0 on the first frame, and the deck renders that frame.
+    expect(deckSideMargin(0, 0.8)).toBe(DECK_SIDE_MARGIN);
   });
 });

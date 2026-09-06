@@ -61,12 +61,28 @@ describe('navBarMetrics — floating (iOS 26 glass)', () => {
 });
 
 describe('navBarMetrics — pinned (Android / iOS < 26)', () => {
-  it('reserves exactly its own height: nothing floats, nothing overlaps', () => {
+  it('sits flush to the screen but still reserves a gap above itself', () => {
+    // It used to reserve exactly `barHeight`, which put content flush against
+    // the bar's top edge. On Android that is the deck's controls resting on
+    // the tab bar with the system's own navigation directly below — three
+    // rows of controls stacked with no separation at all. The capsule hides
+    // the same omission on iOS because it is inset from the screen anyway,
+    // so the gap was there by accident there and missing everywhere else.
     const m = navBarMetrics(INSET_HOME_INDICATOR, false);
-    expect(m.reservedHeight).toBe(m.barHeight);
+    expect(m.reservedHeight).toBe(m.barHeight + TOP_GAP);
+    // Flush is about the bar's own placement, not its clearance.
     expect(m.bottomMargin).toBe(0);
     expect(m.sideMargin).toBe(0);
     expect(m.radius).toBe(0);
+  });
+
+  it('gives both shapes the same clearance above them', () => {
+    // One number, so a control that clears the bar on iOS clears it on
+    // Android without anyone re-deriving the gap per platform.
+    for (const inset of [0, 24, 34, 48]) {
+      expect(navBarMetrics(inset, false).reservedHeight - navBarMetrics(inset, false).barHeight)
+        .toBe(TOP_GAP);
+    }
   });
 
   it('keeps the original bar geometry — 8 top, >=18 bottom, honouring the inset', () => {
