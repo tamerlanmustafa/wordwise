@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/fonts';
@@ -34,12 +35,11 @@ import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import { wordTranslationDisplay } from './translationDisplay';
 import { glossLine } from '../../utils/glossLine';
-import { directionalIcon, directionSign } from '../../i18n/rtl';
+import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
 import {
   deckReducer,
   restoreDeck,
   swipeDecision,
-  INTENT_FULL_DX,
   shouldClaimHorizontalDrag,
   promotedKeyAfterRemoval,
   warmWindowKeys,
@@ -82,6 +82,10 @@ import {
   ACTIONS_ROW_HEIGHT,
   ACTIONS_GAP,
   DECK_GAP_TOP,
+  PILL_WIDTH,
+  PILL_HEIGHT,
+  PILL_EDGE,
+  PILL_EDGE_PRESSED_DROP,
   UNDO_SIZE,
   UNDO_EDGE,
 } from './deckMetrics';
@@ -537,24 +541,6 @@ export const WordCardDeck = ({
     revealHiddenOpacity,
     revealRise,
   } = animRef.current;
-
-  // What the drag is promising, painted on the card behind. Driven off the
-  // same `translate` the top card rides, so the promise cannot lag the finger,
-  // and `clamp` so a drag past the commit point does not keep brightening.
-  //
-  // The pairing is the whole point and it is easy to get backwards: dragging
-  // toward the trailing edge is `next`, and it uncovers the *leading* half of
-  // the card behind — so the leading panel is the one that says "next".
-  const nextIntent = translate.interpolate({
-    inputRange: [0, INTENT_FULL_DX],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const learnIntent = translate.interpolate({
-    inputRange: [-INTENT_FULL_DX, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
 
   // Play the enter choreography once per mounted key.
   useEffect(() => {
@@ -1117,25 +1103,7 @@ export const WordCardDeck = ({
               s.ghost,
               { top: GHOSTS[0].top, left: GHOSTS[0].inset, right: GHOSTS[0].inset, opacity: GHOSTS[0].opacity },
             ]}
-          >
-            {/* What letting go will do, painted on the card being uncovered.
-                This replaced a pair of buttons under the deck: the gesture was
-                always the real control, and the buttons were a second way to
-                say the same thing that took a third of the deck's height to
-                do it. The answer now lives where the user is already looking.
-
-                Each panel sits on the edge the top card exposes when it moves
-                the other way — drag toward the trailing edge to advance, and
-                the leading half of this card comes out from under it. `start`
-                and `end` rather than left and right, so the pairing survives
-                RTL along with the gesture. */}
-            <Animated.View style={[s.intent, s.intentNext, { opacity: nextIntent }]}>
-              <Text style={s.intentNextLabel}>{t('vocabulary:deck.next')}</Text>
-            </Animated.View>
-            <Animated.View style={[s.intent, s.intentLearn, { opacity: learnIntent }]}>
-              <Text style={s.intentLearnLabel}>{t('vocabulary:deck.knowIt')}</Text>
-            </Animated.View>
-          </View>
+          />
         ) : null}
 
         <Animated.View
@@ -1362,11 +1330,31 @@ export const WordCardDeck = ({
       </View>
       </View>
 
-      {/* Undo, alone. Its two neighbours are gone: Next and "I know it" are
-          the swipe now, announced on the card behind. Undo is not, and cannot
-          be — there is no gesture that means "the last one was a mistake", and
-          the card it would bring back is no longer on screen to swipe. */}
+      {/* actions under the deck — labeled tactile buttons with press-down
+          physics (edge layer + face drop); they fully cover the gestures */}
       <View style={s.actionsRow}>
+        {onMarkLearned ? (
+          <Pressable
+            onPress={withTap(() => doLearn('button'))}
+            accessibilityRole="button"
+            accessibilityLabel={t('vocabulary:deck.iKnowThisWord')}
+          >
+            {({ pressed }) => (
+              <View style={s.pillWrap}>
+                <View style={[s.pillEdge, s.knowEdge]} />
+                <View
+                  style={[s.pillFace, s.knowFace, pressed && s.pillFacePressed]}
+                >
+                  <Text style={s.knowCheck}>✓</Text>
+                  <Text style={s.knowLabel}>{t('vocabulary:deck.knowIt')}</Text>
+                </View>
+              </View>
+            )}
+          </Pressable>
+        ) : (
+          <View style={s.pillWrap} />
+        )}
+
         <Pressable
           onPress={withTap(doUndo)}
           disabled={!canUndo}
@@ -1379,6 +1367,25 @@ export const WordCardDeck = ({
               <View style={[s.undoFace, pressed && canUndo && s.undoFacePressed]}>
                 <Ionicons name={directionalIcon('arrow-undo')} size={18} color={tc.textSecondary} />
               </View>
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={withTap(() => doAdvance('button'))}
+          accessibilityRole="button"
+          accessibilityLabel={t('vocabulary:deck.nextCard')}
+        >
+          {({ pressed }) => (
+            <View style={s.pillWrap}>
+              <View style={[s.pillEdge, s.nextEdge]} />
+              <LinearGradient
+                colors={scheme === 'dark' ? ['#FFD166', '#E4B44A'] : ['#D89B22', '#C58B1B']}
+                style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}
+              >
+                <Text style={s.nextLabel}>{t('vocabulary:deck.next')}</Text>
+                <Text style={s.nextArrow}>{FORWARD_ARROW}</Text>
+              </LinearGradient>
             </View>
           )}
         </Pressable>
@@ -1724,49 +1731,63 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     // Edge + face "3D" button: the face translates down onto its edge while
     // pressed — same pattern as the practice tiles.
-    // Half the card behind, flush to one edge. Absolute rather than a flex
-    // row: at rest both are invisible and must take no space, and during a
-    // drag each has to reach the card's own rounded corners.
-    intent: {
+    pillWrap: {
+      width: PILL_WIDTH,
+      height: PILL_HEIGHT + PILL_EDGE,
+    },
+    pillEdge: {
       position: 'absolute',
-      top: 0,
-      bottom: 0,
-      width: '52%',
+      top: PILL_EDGE,
+      left: 0,
+      right: 0,
+      height: PILL_HEIGHT,
+      borderRadius: PILL_HEIGHT / 2,
+    },
+    pillFace: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 14,
+      gap: 7,
+      width: PILL_WIDTH,
+      height: PILL_HEIGHT,
+      borderRadius: PILL_HEIGHT / 2,
     },
-    // 52% each, so they overlap slightly at the seam. A hairline of card
-    // showing between them would read as a third state.
-    intentNext: {
-      start: 0,
-      backgroundColor: tc.gold,
-      borderTopStartRadius: 22,
-      borderBottomStartRadius: 22,
+    pillFacePressed: {
+      transform: [{ translateY: PILL_EDGE_PRESSED_DROP }],
     },
-    intentLearn: {
-      end: 0,
-      backgroundColor: tc.success,
-      borderTopEndRadius: 22,
-      borderBottomEndRadius: 22,
+    knowEdge: {
+      backgroundColor: 'rgba(63,139,123,0.28)',
     },
-    intentNextLabel: {
+    knowFace: {
+      backgroundColor: tc.paper,
+      borderWidth: 1.5,
+      borderColor: tc.success,
+    },
+    knowCheck: {
+      color: tc.success,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    knowLabel: {
+      color: tc.success,
+      fontSize: 13.5,
+      fontWeight: '800',
+    },
+    nextEdge: {
+      backgroundColor: tc.nodeGoldEdge,
+    },
+    nextFace: {
+      gap: 8,
+    },
+    nextLabel: {
+      color: tc.goldDeep,
+      fontSize: 13.5,
+      fontWeight: '900',
+    },
+    nextArrow: {
       color: tc.goldDeep,
       fontSize: 15,
-      fontWeight: '900',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      textAlign: 'center',
-    },
-    // White on the green, not `paper`: this panel is one flat fill in both
-    // themes, so an ink that inverts with the ground would vanish in one.
-    intentLearnLabel: {
-      color: '#FFFFFF',
-      fontSize: 15,
-      fontWeight: '900',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      textAlign: 'center',
+      fontWeight: '800',
     },
     undoWrap: {
       width: UNDO_SIZE,

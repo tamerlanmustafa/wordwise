@@ -71,36 +71,6 @@ export function swipeDecision(
 }
 
 /**
- * Which action the current drag is *aiming at*, before it has travelled far
- * enough to commit to anything.
- *
- * This is what the card behind is painted with while a finger is down, and it
- * has to be the same direction rule `swipeDecision` uses on release — a card
- * that promises "I know it" for 80 points and then advances at 90 is worse
- * than no promise at all, because the user has already stopped reading. The
- * two share this function rather than each testing `dx > 0` for themselves,
- * and a test pins that they can never disagree.
- *
- * `dx` is a *logical* offset — positive means toward the trailing edge in both
- * reading directions. The caller converts with `directionSign`.
- */
-export function swipeIntent(dx: number): SwipeAction {
-  if (dx === 0) return null;
-  return dx > 0 ? 'next' : 'learn';
-}
-
-/**
- * Drag distance at which the intent behind the card is fully opaque.
- *
- * Short of SWIPE_THRESHOLD on purpose. The colour has to be unambiguous
- * *before* the point of no return, or its only job — telling you what letting
- * go will do — is done at the moment it stops being useful. Reaching full
- * strength at two thirds leaves a stretch where the answer is certain and the
- * decision is still open.
- */
-export const INTENT_FULL_DX = Math.round(SWIPE_THRESHOLD * (2 / 3));
-
-/**
  * The drag must be this many times more horizontal than vertical to claim.
  * 1.0 is "more horizontal than vertical" — a 45° cone, widened from the 34°
  * one at 1.5, which rejected the diagonal arc a real thumb traces. It stops

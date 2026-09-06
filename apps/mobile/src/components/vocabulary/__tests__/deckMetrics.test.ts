@@ -165,14 +165,8 @@ describe('invariants', () => {
     // Dropping the poster's paper frame then handed 19pt back to the column
     // (HERO_PLATE 119 → 100) and the SE — again the only device below the
     // clamp — is again the only one that moves: 0.658 → 0.701.
-    //
-    // Then "I know it" and "Next" became the swipe, announced on the card
-    // behind instead of on two pills under the deck. The row is now as tall as
-    // Undo alone (ACTIONS_ROW_HEIGHT 56 → 49), which is 7pt more column, and
-    // once more only the SE is positioned to spend it: 0.701 → 0.717. The big
-    // phones were already clamped at 1 and simply have more air.
     expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.717, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.701, 3);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });
