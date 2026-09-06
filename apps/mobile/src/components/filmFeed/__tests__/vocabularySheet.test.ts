@@ -59,6 +59,27 @@ describe('the legend is codes and counts, nothing else', () => {
     expect(src()).toMatch(/legendSep/);
     expect(src()).toMatch(/\|/);
   });
+
+  it('never lets a code separate from its count', () => {
+    // The shipped bug: the legend was one Text with nested Texts inside it,
+    // which wraps as *text* — so with six pairs on a narrow sheet it broke at
+    // the space between a code and its number, and "C1 56" rendered as "C1"
+    // ending one line with an orphaned "56" starting the next.
+    //
+    // A wrapping row of views cannot do that: a flex item is atomic, so the
+    // only place a break can land is between items.
+    const s = src();
+    expect(s).toMatch(/legend: \{\s*\n\s*flexDirection: 'row',\s*\n\s*flexWrap: 'wrap'/);
+    expect(s).toMatch(/<View key=\{seg\.code\} style=\{s\.legendItem\}>/);
+    // Truncate rather than wrap, so one long count cannot reintroduce it.
+    expect(s).toMatch(/numberOfLines=\{1\}/);
+  });
+
+  it('keeps the pipe inside the item before it', () => {
+    // As its own flex item the separator could be the thing that wraps,
+    // leaving a line that begins with a bare pipe.
+    expect(src()).toMatch(/i < segments\.length - 1 \? <Text style=\{s\.legendSep\}>/);
+  });
 });
 
 describe('the explanatory prose stays gone', () => {

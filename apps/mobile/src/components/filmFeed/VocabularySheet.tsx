@@ -115,20 +115,27 @@ export function VocabularySheet({ visible, onClose, bottomOffset, dist, vocab, b
             rather than to the numbers. (A test in __tests__ enforces this by
             scanning for the name of that shape, so do not write it here.)
 
-            One Text with nested children rather than a flex row: this has to
-            wrap on a narrow phone, and a run of inline Texts wraps as text,
-            keeping each code glued to its own count and each separator glued
-            to the pair it follows. */}
-        <Text style={s.legend}>
+            Six pairs do not fit on one line, so this wraps — and a wrapping
+            row of *views* is what keeps a code with its count. Nested Texts
+            were tried and are not enough: inline text wraps at any space it
+            finds, including the one between a code and its number, so "C1 56"
+            broke across two lines with the count orphaned under it. A flex
+            item is atomic, so the only place a break can land is between
+            items.
+
+            The separator belongs to the pair before it for the same reason —
+            as its own item it could be the thing that wraps, leaving a line
+            beginning with a bare pipe. */}
+        <View style={s.legend}>
           {segments.map((seg, i) => (
-            <Text key={seg.code}>
-              {i > 0 ? <Text style={s.legendSep}>{'   |   '}</Text> : null}
-              <Text style={[s.legendText, { color: seg.color }]}>
+            <View key={seg.code} style={s.legendItem}>
+              <Text style={[s.legendText, { color: seg.color }]} numberOfLines={1}>
                 {`${seg.code} ${num(seg.count)}`}
               </Text>
-            </Text>
+              {i < segments.length - 1 ? <Text style={s.legendSep}>|</Text> : null}
+            </View>
           ))}
-        </Text>
+        </View>
 
         {/* Two facts about the film, said apart. They were once the same
             number rendered twice, which is why they are still listed
@@ -183,11 +190,21 @@ const makeStyles = (tc: ThemeColors) =>
       backgroundColor: tc.chipBg,
     },
     legend: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
       marginTop: 10,
-      // Roomier than the type needs. The codes and counts are mono and short,
-      // so a wrapped second row lands directly under the first and the two
-      // read as one block unless the leading opens them up.
-      lineHeight: 18,
+      // Between items on a line, and between the lines themselves. The row gap
+      // is the larger of the two: a wrapped second line otherwise sits so
+      // close under the first that the six pairs read as one block.
+      columnGap: 8,
+      rowGap: 6,
+    },
+    // The pair and the pipe that follows it, as one unbreakable item.
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     legendText: {
       fontFamily: MONO_FAMILY,
