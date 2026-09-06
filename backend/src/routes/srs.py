@@ -118,6 +118,22 @@ router = APIRouter(prefix="/srs", tags=["srs"])
 # "5–10 min session" target in the plan.
 SESSION_SIZE = int(os.environ.get("SRS_SESSION_SIZE", "10"))
 
+# Extra rows carried into the card loop beyond SESSION_SIZE.
+#
+# Rows are not cards. A word is dropped at card-build time when it has neither
+# a translation MCQ nor a definition to ask with, and padding to exactly
+# SESSION_SIZE meant every one of those drops came straight off the session:
+# ten rows with seven unusable words is a three-card lesson, which is what a
+# user actually got. The loop now stops at SESSION_SIZE cards and this is the
+# slack it draws on to reach it.
+#
+# Deliberately small. Every extra lemma here is a row through the translation
+# batch, and most padded lemmas are cache misses — this is a paid API. Four is
+# a 40% headroom against a drop rate the definition rescue below should keep
+# near zero, not a comfortable margin against a broken one.
+SESSION_HEADROOM = int(os.environ.get("SRS_SESSION_HEADROOM", "4"))
+SESSION_ROW_TARGET = SESSION_SIZE + SESSION_HEADROOM
+
 # Free-preview gate. Controls how many review sessions a non-premium user
 # can start before the paywall fires. Variant B from the A/B test in §3.
 FREE_PREVIEW_SESSIONS = int(os.environ.get("SRS_FREE_PREVIEW_SESSIONS", "3"))
@@ -783,7 +799,7 @@ async def start_session(
     # materialised the unstudied ones. Padding it from the reel would put
     # words the user never put in the list into a session they started from
     # that list.
-    if len(session_rows) < SESSION_SIZE and kind != "list_words":
+    if len(session_rows) < SESSION_ROW_TARGET and kind != "list_words":
         raw_level = getattr(current_user, "proficiencyLevel", None)
         user_level = raw_level.value if hasattr(raw_level, "value") else (raw_level or "B1")
         if kind == "practice":
@@ -792,7 +808,7 @@ async def start_session(
                 user_id=current_user.id,
                 user_level=str(user_level),
                 excluded_words=set(seen_lemmas),
-                needed=SESSION_SIZE - len(session_rows),
+                needed=SESSION_ROW_TARGET - len(session_rows),
             )
         else:
             fresh_rows = await _pad_with_fresh_reel_lemmas(
@@ -800,7 +816,7 @@ async def start_session(
                 user_id=current_user.id,
                 user_level=str(user_level),
                 excluded_words=set(seen_lemmas),
-                needed=SESSION_SIZE - len(session_rows),
+                needed=SESSION_ROW_TARGET - len(session_rows),
                 movie_ids=pad_movie_ids,
             )
         session_rows.extend(fresh_rows)
@@ -814,9 +830,9 @@ async def start_session(
     # surface form; the `carded_lemmas` guard in the card loop is what catches
     # a true lemma collision ("running" against an already-picked "run") once
     # the second lemmatization hop below has resolved them.
-    if len(session_rows) < SESSION_SIZE and reserve_rows:
+    if len(session_rows) < SESSION_ROW_TARGET and reserve_rows:
         for row in reserve_rows:
-            if len(session_rows) >= SESSION_SIZE:
+            if len(session_rows) >= SESSION_ROW_TARGET:
                 break
             if row.word.lower() in seen_lemmas:
                 continue
@@ -976,6 +992,11 @@ async def start_session(
     # Fresh per-request RNG so choice ordering varies per session.
     rng = random.Random()
     for r in session_rows:
+        # Rows are over-provisioned (SESSION_HEADROOM) so drops do not shorten
+        # the lesson; stopping here is what turns that slack into a fixed
+        # SESSION_SIZE rather than an occasionally longer session.
+        if len(cards) >= SESSION_SIZE:
+            break
         lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
         if lemma in carded_lemmas:
             continue
@@ -1005,12 +1026,17 @@ async def start_session(
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
-        # Every fourth card asks the meaning instead of the translation, when
-        # it has a definition to ask with. `is_definition_slot` counts cards
-        # actually built, not rows walked, so a word skipped for want of a
-        # translation does not silently shift the rhythm.
-        if base["definition"] and is_definition_slot(len(cards)):
-            def_choices = build_definition_choices(
+        # The definition question for this word, built once and used in
+        # either of two places: the fourth slot, where it is the point, and
+        # the fallback below, where it is the difference between a card and a
+        # dropped word.
+        #
+        # Built up front rather than inside a branch because it is a pure
+        # function over lists already in memory, and the alternative is a
+        # closure over the loop variable — which is a lint error here and a
+        # genuine footgun anywhere it outlives the iteration.
+        def_choices = (
+            build_definition_choices(
                 lemma,
                 pool=pool_for(definition_pool, deck_pos.get(lemma), cefr),
                 # The session's own other words, as the last resort. Without
@@ -1020,23 +1046,30 @@ async def start_session(
                 avoid=used_choices,
                 rng=rng,
             )
-            if not def_choices:
-                logger.info(
-                    "[srs.start] definition slot %d fell back to translation for %r",
-                    len(cards) + 1, lemma,
-                )
-            if def_choices:
-                used_choices.update(
-                    normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
-                )
-                cards.append(ReviewCard(
-                    **base,
-                    card_type="definition",
-                    pos=pos_label,
-                    translation=translation_map.get(lemma),
-                    choices=[MCQChoice(**c) for c in def_choices],
-                ))
-                continue
+            if base["definition"]
+            else None
+        )
+
+        def_card = (
+            ReviewCard(
+                **base,
+                card_type="definition",
+                pos=pos_label,
+                translation=translation_map.get(lemma),
+                choices=[MCQChoice(**c) for c in def_choices],
+            )
+            if def_choices
+            else None
+        )
+
+        # `is_definition_slot` counts cards actually built, not rows walked, so
+        # a word skipped for want of any question does not shift the rhythm.
+        if def_card and def_choices and is_definition_slot(len(cards)):
+            used_choices.update(
+                normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
+            )
+            cards.append(def_card)
+            continue
 
         choices = build_translation_choices(
             lemma,
@@ -1058,10 +1091,23 @@ async def start_session(
             ))
             continue
 
-        # No translation MCQ (missing translation or too few distinct
-        # deck translations for distractors) — drop the word from the
-        # session. It stays in the SRS queue and gets retried next time
-        # when data may have caught up.
+        # No translation MCQ — missing translation, or too few distinct deck
+        # translations for distractors. Ask the meaning instead before giving
+        # up: a definition card needs no translation at all, so a word the
+        # translation path cannot use is often perfectly askable.
+        #
+        # This is what actually holds the session at SESSION_SIZE. The headroom
+        # rows are the backstop; this is the reason most of them are never
+        # needed, and it costs nothing — the pool is already built.
+        if def_card and def_choices:
+            used_choices.update(
+                normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
+            )
+            cards.append(def_card)
+            continue
+
+        # Neither question can be asked. The word stays in the SRS queue and
+        # gets retried next time, when data may have caught up.
         skipped.append(lemma)
 
     if skipped:

@@ -520,3 +520,39 @@ class TestBuildDefinitionChoices:
     def test_needs_a_word(self):
         assert build_definition_choices("", pool=["a", "b", "c"]) is None
         assert build_definition_choices("   ", pool=["a", "b", "c"]) is None
+
+
+class TestSessionIsAlwaysFull:
+    """The lesson is ten questions, not ten attempts.
+
+    Rows are not cards: a word is dropped at card-build time when it has
+    neither a translation MCQ nor a definition to ask with. Padding to exactly
+    ten rows meant every drop came off the session, and a user with seven
+    untranslatable words got a three-card lesson.
+    """
+
+    def test_headroom_is_carried_beyond_the_card_target(self):
+        from src.routes.srs import SESSION_HEADROOM, SESSION_ROW_TARGET, SESSION_SIZE
+
+        assert SESSION_HEADROOM > 0
+        assert SESSION_ROW_TARGET == SESSION_SIZE + SESSION_HEADROOM
+
+    def test_headroom_stays_small_because_rows_cost_translations(self):
+        # Every extra row is a lemma through the translation batch, and a
+        # padded lemma is usually a cache miss on a paid API. This is a margin
+        # against a near-zero drop rate, not against a broken one.
+        from src.routes.srs import SESSION_HEADROOM, SESSION_SIZE
+
+        assert SESSION_HEADROOM <= SESSION_SIZE // 2
+
+    def test_a_word_with_only_a_definition_is_still_askable(self):
+        # The rescue that makes the headroom mostly unnecessary: a definition
+        # card needs no translation at all, so a word the translation path
+        # cannot use is often perfectly askable.
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "belligerent", "fastidious"],
+            rng=random.Random(1),
+        )
+        assert choices is not None
+        assert len(choices) == 4
