@@ -3,14 +3,27 @@
  * vocabulary ring.
  *
  * The ring gives one number, the film's distinct-word count. This sheet gives
- * the thing a single number never can: the *shape* of that vocabulary, and
- * where the reader's own level falls inside it.
+ * the thing a single number never can: the *shape* of that vocabulary.
  *
  * The bar is the oldest surviving part of this screen and the only part that
  * never had to be rewritten, through four different ring metrics. That is not
  * a coincidence — it does not compress the film to one figure, so there was
  * never a figure to be wrong. Worth remembering the next time the temptation
  * is to replace it with a headline statistic.
+ *
+ * ## Colour means difficulty
+ *
+ * Each band takes its colour from `theme/cefrRamp` — gold at A1 through to red
+ * at C2 — and the legend prints in the same colours, so the bar and the list
+ * underneath it are two readings of one array.
+ *
+ * It used to shade gold-if-at-or-below-your-level and grey above, which said
+ * something about the reader rather than about the film. That cost the sheet
+ * its self-containment: the same segment was gold on one account and grey on
+ * another, so neither the bar nor the legend could be read without knowing who
+ * was holding the phone. The reader's own level is no longer marked here at
+ * all — it is on the filter button two taps away, and the sheet is now about
+ * the film.
  *
  * Built on the shared `BottomSheet` with the vocabulary `FeedFilterSheet`
  * established — grabber, 17/'800' title, gold Done, `bottomOffset` so no row
@@ -25,10 +38,12 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { getFormattingLocale } from '../../i18n';
-import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
+import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { cefrRampFor } from '../../theme/cefrRamp';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { CEFR_LEVELS } from '../../types/constants';
 import { BottomSheet } from '../common/BottomSheet';
+import { withTap } from '../../utils/feedback';
 import type { FilmVocabulary } from './filmVocabulary';
 
 interface Props {
@@ -36,54 +51,33 @@ interface Props {
   onClose: () => void;
   /** Height of GlobalBottomBar — the sheet reserves it as inner padding. */
   bottomOffset?: number;
-  title: string;
   /** Distinct classified words per band, straight off the movie payload. */
   dist: Record<string, number> | null | undefined;
-  /** The reader's level — where the bar's gold half stops. */
-  level: string;
   vocab: FilmVocabulary;
   /** The film's own CEFR band, from its whole vocabulary. Null if ungraded. */
   band: string | null;
 }
 
-export function VocabularySheet({
-  visible,
-  onClose,
-  bottomOffset,
-  title,
-  dist,
-  level,
-  vocab,
-  band,
-}: Props) {
+export function VocabularySheet({ visible, onClose, bottomOffset, dist, vocab, band }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const locale = getFormattingLocale();
 
-  const cut = CEFR_LEVELS.indexOf(level as (typeof CEFR_LEVELS)[number]);
-
-  // One pass over the six bands, so the bar and the legend can't disagree
-  // about which side of the cut a band falls on.
-  const segments = useMemo(
-    () =>
-      CEFR_LEVELS.map((code, i) => {
-        const n = Number(dist?.[code]);
-        return {
-          code,
-          count: Number.isFinite(n) && n > 0 ? n : 0,
-          // Gold is the part of this film's vocabulary already within reach at
-          // the reader's level. The ring no longer claims anything about the
-          // reader, so this is the only place the two meet — and it is a
-          // shape, not a headline figure, which is why it can say it honestly.
-          known: i <= cut,
-          color: i <= cut
-            ? withAlpha(tc.gold, 0.95 - i * 0.2)
-            : withAlpha(tc.text, 0.16),
-        };
-      }).filter((seg) => seg.count > 0),
-    [dist, cut, tc.gold, tc.text],
-  );
+  // One pass over the six bands, so the bar and the legend read exactly the
+  // same colour for a band — they are two views of one array, not two
+  // lookups that have to be kept in step.
+  const segments = useMemo(() => {
+    const ramp = cefrRampFor(tc);
+    return CEFR_LEVELS.map((code, i) => {
+      const n = Number(dist?.[code]);
+      return {
+        code,
+        count: Number.isFinite(n) && n > 0 ? n : 0,
+        color: ramp[i],
+      };
+    }).filter((seg) => seg.count > 0);
+  }, [dist, tc]);
 
   const num = (n: number) => n.toLocaleString(locale);
 
@@ -91,17 +85,12 @@ export function VocabularySheet({
     <BottomSheet visible={visible} onClose={onClose} bottomOffset={bottomOffset}>
       <View style={s.pad}>
         <Text style={s.title}>{t('home:vocabSheet.title')}</Text>
-        <Text style={s.body}>
-          {t('home:vocabSheet.body', {
-            total: num(vocab.words),
-            title,
-            level,
-          })}
-        </Text>
 
-        {/* One stacked bar rather than six meters: the question is where the
-            reader's level falls inside *one* vocabulary, and a stacked bar is
-            the only form where that cut is a place you can point at. */}
+        {/* One stacked bar rather than six meters: the question is how *one*
+            vocabulary is shared out across the bands, and a stacked bar is the
+            only form where the proportions are the shape itself rather than
+            six lengths to compare by eye. Segments are `flex: count`, so the
+            widths are the counts. */}
         <View style={s.bar}>
           {segments.map((seg, i) => (
             <View
@@ -119,16 +108,27 @@ export function VocabularySheet({
           ))}
         </View>
 
-        <View style={s.legend}>
-          {segments.map((seg) => (
-            <View key={seg.code} style={s.legendItem}>
-              <View style={[s.swatch, { backgroundColor: seg.color }]} />
-              <Text style={[s.legendText, !seg.known && s.legendTextAbove]}>
+        {/* The legend carries its colour in the type itself, so nothing is
+            drawn in front of a label. A little coloured square there says the
+            same thing the coloured text already says, and it was the wider of
+            the two — six of them set the row's rhythm to the decoration
+            rather than to the numbers. (A test in __tests__ enforces this by
+            scanning for the name of that shape, so do not write it here.)
+
+            One Text with nested children rather than a flex row: this has to
+            wrap on a narrow phone, and a run of inline Texts wraps as text,
+            keeping each code glued to its own count and each separator glued
+            to the pair it follows. */}
+        <Text style={s.legend}>
+          {segments.map((seg, i) => (
+            <Text key={seg.code}>
+              {i > 0 ? <Text style={s.legendSep}>{'   |   '}</Text> : null}
+              <Text style={[s.legendText, { color: seg.color }]}>
                 {`${seg.code} ${num(seg.count)}`}
               </Text>
-            </View>
+            </Text>
           ))}
-        </View>
+        </Text>
 
         {/* Two facts about the film, said apart. They were once the same
             number rendered twice, which is why they are still listed
@@ -144,15 +144,15 @@ export function VocabularySheet({
           </View>
         ) : null}
 
-        {/* Load-bearing, not a footnote. `cefr_distribution` counts distinct
-            words (types), not spoken words (tokens), so a word said once
-            counts the same as one repeated through the whole film. Without
-            this line the count reads as an amount of listening. */}
-        <Text style={s.caveat}>{t('home:vocabSheet.caveat')}</Text>
+        {/* The types-vs-tokens caveat used to sit here — `cefr_distribution`
+            counts distinct words, so a word said once counts the same as one
+            repeated all film. It is still true, and it is still why
+            `factWords` says "distinct" rather than "words"; that label is now
+            the only place it is stated, so keep the word in it. */}
 
         <TouchableOpacity
           style={s.doneBtn}
-          onPress={onClose}
+          onPress={withTap(onClose)}
           activeOpacity={0.85}
           accessibilityRole="button"
         >
@@ -174,12 +174,6 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.text,
       letterSpacing: -0.2,
     },
-    body: {
-      fontSize: 13.5,
-      lineHeight: 21,
-      color: tc.textSecondary,
-      marginTop: 8,
-    },
     bar: {
       flexDirection: 'row',
       height: 16,
@@ -189,28 +183,24 @@ const makeStyles = (tc: ThemeColors) =>
       backgroundColor: tc.chipBg,
     },
     legend: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 12,
       marginTop: 10,
-    },
-    legendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    swatch: {
-      width: 7,
-      height: 7,
-      borderRadius: 2,
+      // Roomier than the type needs. The codes and counts are mono and short,
+      // so a wrapped second row lands directly under the first and the two
+      // read as one block unless the leading opens them up.
+      lineHeight: 18,
     },
     legendText: {
       fontFamily: MONO_FAMILY,
-      fontSize: 10,
+      fontSize: 11,
       fontWeight: '700',
-      color: tc.goldOnSurface,
+      // Colour comes from the ramp, per band — see cefrRamp.
     },
-    legendTextAbove: {
+    // Faint on purpose: the pipe is punctuation between two readings, and at
+    // the legend's own weight it competes with the counts either side of it.
+    legendSep: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 11,
+      fontWeight: '700',
       color: tc.textFaint,
     },
     factRow: {
@@ -238,12 +228,6 @@ const makeStyles = (tc: ThemeColors) =>
       fontSize: 12.5,
       lineHeight: 17,
       color: tc.textSecondary,
-    },
-    caveat: {
-      fontSize: 11.5,
-      lineHeight: 16,
-      color: tc.textFaint,
-      marginTop: 12,
     },
     doneBtn: {
       marginTop: 16,

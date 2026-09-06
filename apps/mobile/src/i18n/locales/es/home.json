@@ -53,9 +53,7 @@
   "feed": {},
   "vocabSheet": {
     "title": "Qué hay en esta película",
-    "body": "{{title}} usa {{total}} palabras distintas. Todas las películas del nivel {{level}} son igual de difíciles que esta, pero no todas son así de grandes.",
     "factWords": "Palabras distintas que se hablan en esta película.",
-    "factBand": "El nivel de la propia película, según todo su vocabulario.",
-    "caveat": "Se cuenta por palabra distinta, no por línea de diálogo: una palabra dicha una vez cuenta igual que otra repetida toda la película."
+    "factBand": "El nivel de la propia película, según todo su vocabulario."
   }
 }

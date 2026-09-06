@@ -621,9 +621,7 @@ export const FilmFeedScreen = ({
           visible
           onClose={() => setRingDetail(null)}
           bottomOffset={bottomOffset}
-          title={ringDetail.movie.title}
           dist={ringDetail.movie.cefr_distribution}
-          level={selectedLevel}
           vocab={ringDetail.vocab}
           band={
             ringDetail.movie.cefr_level ??

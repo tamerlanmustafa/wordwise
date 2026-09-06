@@ -53,9 +53,7 @@
   "feed": {},
   "vocabSheet": {
     "title": "Bu filmde ne var",
-    "body": "{{title}} filminde {{total}} farklı kelime konuşuluyor. {{level}} rafındaki filmlerin hepsi bunun kadar zor — ama hepsi bu kadar büyük değil.",
     "factWords": "Bu filmde konuşulan farklı kelime sayısı.",
-    "factBand": "Filmin kendi seviyesi, tüm kelime dağarcığından.",
-    "caveat": "Diyalog satırı başına değil, farklı kelime başına sayılır — bir kez söylenen kelime, film boyunca tekrarlanan bir kelimeyle aynı sayılır."
+    "factBand": "Filmin kendi seviyesi, tüm kelime dağarcığından."
   }
 }

@@ -456,6 +456,26 @@ export function shade(color: string, amount: number): string {
   return `rgb(${mixed[0]},${mixed[1]},${mixed[2]})`;
 }
 
+/**
+ * A blend of two palette colours, `t` of the way from `from` to `to`.
+ *
+ * {@link shade} is this against white or black; this is the general case, for
+ * ramps that run between two *tokens* — so the ramp moves when either end
+ * moves, and neither end has to be frozen as a hex somewhere else.
+ *
+ * Same contract as its neighbours: an unrecognised colour at either end
+ * degrades to `from` rather than to garbage, so a future token shape costs a
+ * flat colour and not an invisible view.
+ */
+export function mix(from: string, to: string, t: number): string {
+  const a = parseRgb(from);
+  const b = parseRgb(to);
+  if (!a || !b) return from;
+  const k = Math.min(Math.max(t, 0), 1);
+  const blended = a.map((c, i) => Math.round(c + (b[i] - c) * k));
+  return `rgb(${blended[0]},${blended[1]},${blended[2]})`;
+}
+
 /** The two colour shapes the palette actually stores → channels, or null. */
 function parseRgb(color: string): [number, number, number] | null {
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());

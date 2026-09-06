@@ -53,9 +53,7 @@
   "feed": {},
   "vocabSheet": {
     "title": "What's in this film",
-    "body": "{{title}} speaks {{total}} different words. Every film on the {{level}} shelf is about as hard as this one — they are not all this big.",
     "factWords": "Distinct words spoken in this film.",
-    "factBand": "The film's own level, from its whole vocabulary.",
-    "caveat": "Counted per distinct word, not per line of dialogue — a word said once counts the same as one repeated all film."
+    "factBand": "The film's own level, from its whole vocabulary."
   }
 }
