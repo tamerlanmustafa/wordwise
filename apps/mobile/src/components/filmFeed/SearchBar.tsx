@@ -5,10 +5,18 @@
  * all state (query, focus, suggestions, recently-viewed) and handlers live
  * in FilmFeedScreen, so the data wiring is unchanged — only the skin differs.
  *
- *   • paper field, radius 12, height 48, 1px border that turns gold on
- *     focus, soft shadowCard. Leading stroked search glyph. Gold caret
- *     (native, via selectionColor). Trailing stroked ✕ clear icon when
- *     there's a query.
+ *   • paper field, radius 12, height 48, 1px border, soft shadowCard. Leading
+ *     stroked search glyph. Gold caret (native, via selectionColor). Trailing
+ *     stroked ✕ clear icon when there's a query.
+ *
+ *     The border stays neutral through focus. It used to turn gold and hold
+ *     there, which meant the field announced focus twice: once as the sweep
+ *     going round, then again as a rim that never left. The sweep already says
+ *     "this is now yours", and the keyboard says it for as long as it is true —
+ *     a permanent gold outline underneath only competed with the panel below.
+ *     The filter button never had one, so removing it also makes the two
+ *     controls in this row behave identically, which was the point of giving
+ *     the button the sweep in the first place.
  *   • Autocomplete dropdown: paper, radius 12, 1px border, big soft shadow.
  *     Each row = 40×60 poster + serif title + year. No footer — the panel is
  *     the whole of search now; there is no results page behind it.
@@ -203,11 +211,7 @@ export function SearchBar({
             {/* Under the field, so the field's own background clips it to a
                 rim. See FocusGlow. */}
             <FocusGlow active={focused} radius={FIELD_RADIUS} />
-            <Pressable
-              style={[s.field, { borderColor: focused ? tc.gold : tc.border }]}
-              onPress={withTap(focusField)}
-              accessible={false}
-            >
+            <Pressable style={s.field} onPress={withTap(focusField)} accessible={false}>
             <HomeIcon name="search" size={18} color={tc.textFaint} sw={2.2} />
             <TextInput
               ref={inputRef}
@@ -328,6 +332,9 @@ const makeStyles = (tc: ThemeColors) =>
       height: 48,
       borderRadius: FIELD_RADIUS,
       borderWidth: 1,
+      // Never changes on focus — the sweep is the whole of the focus
+      // treatment. See the note at the top of this file.
+      borderColor: tc.border,
       backgroundColor: tc.paper,
       flexDirection: 'row',
       alignItems: 'center',

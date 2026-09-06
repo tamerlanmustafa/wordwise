@@ -1,13 +1,15 @@
 /**
  * WordFeedScreen — the endless, level-mixed word feed.
  *
- * One word fills the viewport; a flick advances exactly one card. The
- * screen, the toast strip and the tab bar are one flat surface (`feedBg`):
- * no header, no title, no chips, no counter, no instructional text.
+ * One word fills the viewport; a flick advances exactly one card. The whole
+ * screen and the tab bar are one flat surface (`feedBg`): no header, no title,
+ * no chips, no counter, no instructional text.
  *
  *   top spacer (Dynamic Island / status bar)
  *   FlatList — one WordCard per viewport, snapped
- *   toast strip (share failures only)
+ *   toast strip — now pure spacing; the toast itself moved to the global
+ *     ToastHost at the top of the screen, but the band has to stay or the
+ *     four stop tiling and the pager shows the next word's edge
  *   bar spacer (the floating bottom bar's strip)
  *   [GlobalBottomBar is rendered by App.tsx, floating over that last band]
  *
@@ -35,7 +37,6 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
   type ViewToken,
@@ -53,6 +54,7 @@ import { ActionRail } from './wordFeed/ActionRail';
 import { MixPanel } from './wordFeed/MixPanel';
 import { ListPanel } from './wordFeed/ListPanel';
 import { useListsStore } from '../stores/listsStore';
+import { showToast as globalToast } from '../stores/toastStore';
 import { Skeleton } from './ui/Skeleton';
 
 interface Props {
@@ -111,7 +113,6 @@ export function WordFeedScreen({
   const [available, setAvailable] = useState(0);
   const [draftMix, setDraftMix] = useState<LevelMix>(mix);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
-  const [toast, setToast] = useState<string | null>(null);
 
   // The share card is mounted ONLY while a share is in flight.
   //
@@ -129,7 +130,6 @@ export function WordFeedScreen({
   const panelAnim = useRef(new Animated.Value(0)).current;
   const listAnim = useRef(new Animated.Value(0)).current;
   const liftAnim = useRef(new Animated.Value(0)).current;
-  const toastAnim = useRef(new Animated.Value(0)).current;
 
   // Every fixed dimension the feed used to hard-code is derived from the
   // measured viewport, so a 4.7" phone gets a proportionally smaller rail
@@ -207,29 +207,14 @@ export function WordFeedScreen({
     }
   }, [activeIndex, items.length, exhausted, loading, fetchNext]);
 
-  const showToast = useCallback(
-    (message: string) => {
-      setToast(message);
-      Animated.sequence([
-        Animated.timing(toastAnim, {
-          toValue: 1,
-          duration: 220,
-          easing: EXPLORE_EASING,
-          useNativeDriver: true,
-        }),
-        Animated.delay(2200),
-        Animated.timing(toastAnim, {
-          toValue: 0,
-          duration: 220,
-          easing: EXPLORE_EASING,
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        if (finished) setToast(null);
-      });
-    },
-    [toastAnim],
-  );
+  // This screen used to grow its own toast in the strip above the tab bar,
+  // with its own timer and its own colours. It only ever reported one thing (a
+  // share sheet that would not open), and once the global toasts moved to the
+  // top of the screen, keeping it meant the same app answered you in two
+  // different places depending on which screen you were standing on.
+  const showToast = useCallback((message: string) => {
+    globalToast({ message, tone: 'error' });
+  }, []);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(
@@ -388,28 +373,11 @@ export function WordFeedScreen({
         ) : null}
       </View>
 
-      <View style={[s.toastStrip, { height: m.toastStrip }]} pointerEvents="none">
-        {toast ? (
-          <Animated.View
-            style={[
-              s.toast,
-              {
-                opacity: toastAnim,
-                transform: [
-                  {
-                    translateY: toastAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [10, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text style={s.toastText}>{toast}</Text>
-          </Animated.View>
-        ) : null}
-      </View>
+      {/* The band this screen's own toast used to occupy. It stays as spacing:
+          the four bands have to tile the viewport exactly or the pager shows a
+          sliver of the next word (see metrics.ts), so removing the toast is not
+          licence to remove its height. */}
+      <View style={{ height: m.toastStrip }} />
 
       {/* The bar's own strip. It has to be a real band in this column, not a
           number subtracted from the card: `listArea` is flex:1 and takes
@@ -524,24 +492,6 @@ const makeStyles = (tc: ThemeColors) =>
     // One flat surface, status bar to tab bar — no card, no border, no glow.
     root: { flex: 1, backgroundColor: tc.feedBg },
     listArea: { flex: 1 },
-    toastStrip: {
-      paddingHorizontal: 24,
-      paddingBottom: 14,
-      justifyContent: 'flex-end',
-      backgroundColor: tc.feedBg,
-    },
-    toast: {
-      alignSelf: 'flex-start',
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 10,
-      backgroundColor: tc.toastBg,
-    },
-    toastText: {
-      fontSize: 12.5,
-      fontWeight: '700',
-      color: tc.toastText,
-    },
     skeleton: {
       paddingTop: 18,
       paddingStart: 24,

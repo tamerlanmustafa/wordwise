@@ -3,8 +3,22 @@
  * masks background work: "added to reel", "streak frozen", "you're offline".
  * Each toast auto-dismisses after ~3.6s; callers can dismiss early.
  *
- * Not persisted — toasts are ephemeral. One toast shows at a time (the head of
- * the queue); enqueuing more lines them up.
+ * Not persisted — toasts are ephemeral.
+ *
+ * ## Why several show at once
+ *
+ * This used to render only the head of the queue and hold everything behind it
+ * until that one's timer ran out. The actions that produce toasts are the ones
+ * people fire in bursts — "seen it", "not interested", + on a card, three cards
+ * in a row — so the second tap's confirmation arrived 3.6 seconds after the
+ * tap, by which time it is confirming something you have stopped thinking
+ * about. Worse, each of those toasts carries an Undo: a queued undo is an undo
+ * you cannot reach while it is still the thing you want to undo.
+ *
+ * So the visible toasts are a *stack*, up to VISIBLE_TOAST_LIMIT, each running
+ * its own timer from the moment it appears. Anything past the limit still
+ * queues — the cap is what stops a fast burst from papering over the screen it
+ * is reporting on.
  */
 
 import { create } from 'zustand';
@@ -41,6 +55,24 @@ interface ToastState {
 }
 
 export const DEFAULT_TOAST_DURATION = 3600;
+
+/** How many toasts can be on screen together. Three: enough that a burst of
+ *  card actions all get answered, few enough that the stack cannot grow past
+ *  the top third of the screen and start hiding the feed it is describing. */
+export const VISIBLE_TOAST_LIMIT = 3;
+
+/**
+ * The toasts the host should render, oldest first.
+ *
+ * Oldest at the top of the stack is deliberate. Newest-on-top is what a
+ * notification centre does, but it moves every toast already on screen down by
+ * a row the instant a new one lands — including the one your thumb is on its
+ * way to swipe or whose Undo you are reaching for. Appending below means an
+ * arriving toast never displaces one you are already aiming at.
+ */
+export function visibleToasts(queue: Toast[]): Toast[] {
+  return queue.slice(0, VISIBLE_TOAST_LIMIT);
+}
 
 let counter = 0;
 function nextId(): string {

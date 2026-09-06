@@ -171,11 +171,25 @@ describe('every point inside the border takes a tap', () => {
     // The magnifier, the gap beside it and the padding at the far end all sit
     // inside the border and looked like part of the control, but only the
     // TextInput — a slice of the middle — actually took a tap.
+    // Matched on the style *reference* rather than on how it is spelled: the
+    // focus border came out of the array, and a guard that pins the JSX
+    // formatting fails on a change that cannot affect what it is guarding.
     const s = src();
-    expect(s).toMatch(/<Pressable\n\s*style=\{\[s\.field/);
+    expect(s).toMatch(/<Pressable[^>]*style=\{\[?s\.field/);
     expect(s).toMatch(/onPress=\{withTap\(focusField\)\}/);
     expect(s).toMatch(/inputRef\.current\?\.focus\(\)/);
     expect(s).toMatch(/ref=\{inputRef\}/);
+  });
+
+  it('leaves the border neutral through focus — the sweep is the whole treatment', () => {
+    // The field used to turn its border gold on focus and hold it there, so it
+    // announced focus twice: the sweep going round, then a rim that never
+    // left. The filter button beside it never had one, and the two controls
+    // are meant to behave identically.
+    const s = src();
+    expect(s).not.toMatch(/borderColor:\s*focused\s*\?/);
+    expect(s).toMatch(/<FocusGlow active=\{focused\}/);
+    expect(s).toMatch(/<FocusGlow active=\{filtersOpen\}/);
   });
 
   it('the wrapper is invisible to screen readers', () => {
