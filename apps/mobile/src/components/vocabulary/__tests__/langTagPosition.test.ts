@@ -86,3 +86,68 @@ describe('the language tag is pinned to the trailing edge', () => {
     expect(styleBlock('wordTrRow')).not.toMatch(/flexWrap/);
   });
 });
+
+describe('the card behind carries the swipe intent', () => {
+  it('paints both panels on the ghost, not under the top card', () => {
+    // "On the card behind" is the whole design: the answer appears on a
+    // surface being uncovered, so the eye is already there. Backdrops under
+    // the moving card would slide with nothing and read as the card itself
+    // changing colour.
+    // Ordering, not proximity. A `[^]{0,N}` window between the two names is a
+    // character budget that anyone writing a comment between them breaks —
+    // which is exactly how the first draft of this test failed against correct
+    // code. Where the panels sit in the tree is the actual contract.
+    const s = src();
+    const ghost = s.lastIndexOf('s.ghost,');
+    const nextPanel = s.indexOf('s.intentNext');
+    const learnPanel = s.indexOf('s.intentLearn');
+    const focusedCard = s.indexOf('key={currentKey}');
+    expect(ghost).toBeGreaterThan(-1);
+    expect(ghost).toBeLessThan(nextPanel);
+    expect(nextPanel).toBeLessThan(learnPanel);
+    // Both inside the ghost, which is drawn before the card that covers it.
+    expect(learnPanel).toBeLessThan(focusedCard);
+  });
+
+  it('pairs each panel with the edge that gesture uncovers', () => {
+    // Drag toward the trailing edge → advance → the leading half of the card
+    // behind comes out from under the top card. So "next" is the leading
+    // panel. Reversing this is invisible in review and instantly wrong in the
+    // hand.
+    const next = styleBlock('intentNext');
+    const learn = styleBlock('intentLearn');
+    expect(next).toMatch(/start: 0/);
+    expect(learn).toMatch(/end: 0/);
+    // Logical edges, so the pairing survives RTL along with the gesture.
+    expect(next).not.toMatch(/left:|right:/);
+    expect(learn).not.toMatch(/left:|right:/);
+  });
+
+  it('keeps each panel the colour of the control it replaced', () => {
+    // The pills were gold-on-goldDeep and a green outline. Someone arriving
+    // at these panels cold should not have to guess which is which.
+    expect(styleBlock('intentNext')).toMatch(/backgroundColor: tc\.gold/);
+    expect(styleBlock('intentLearn')).toMatch(/backgroundColor: tc\.success/);
+  });
+
+  it('drives the fade off the drag itself', () => {
+    // Off `translate`, the same value the top card rides, so the promise
+    // cannot lag the finger — and clamped, so dragging past the commit point
+    // does not keep brightening something already fully lit.
+    const s = src();
+    expect(s).toMatch(/const nextIntent = translate\.interpolate\(/);
+    expect(s).toMatch(/const learnIntent = translate\.interpolate\(/);
+    expect(s).toMatch(/inputRange: \[0, INTENT_FULL_DX\]/);
+    expect(s).toMatch(/inputRange: \[-INTENT_FULL_DX, 0\]/);
+    expect((s.match(/extrapolate: 'clamp'/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('has no Next or Know it button left', () => {
+    // Both are the gesture now. A button that duplicates a gesture is a second
+    // thing to keep in step, and it cost a third of the deck's height.
+    const s = src();
+    expect(s).not.toMatch(/doLearn\('button'\)/);
+    expect(s).not.toMatch(/doAdvance\('button'\)/);
+    expect(s).not.toMatch(/pillFace|pillEdge|knowLabel|nextLabel/);
+  });
+});

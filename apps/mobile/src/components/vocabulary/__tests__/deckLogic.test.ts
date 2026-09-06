@@ -5,6 +5,8 @@ import {
   resumeMarker,
   warmWindowKeys,
   swipeDecision,
+  swipeIntent,
+  INTENT_FULL_DX,
   shouldClaimHorizontalDrag,
   parseViewMode,
   pickDefaultLevel,
@@ -356,5 +358,51 @@ describe('resumeMarker (bookmark mark on the progress rule)', () => {
 
   it('has nothing to mark on an empty deck', () => {
     expect(resumeMarker([], 'hollow')).toBeNull();
+  });
+});
+
+describe('the card behind promises what the release delivers', () => {
+  it('never shows one action and commits the other', () => {
+    // The failure this exists for: the panel says "I know it" at 80 points and
+    // the card advances at 90. The user has already stopped reading by the
+    // time the commit happens, so a promise that flips at the threshold is
+    // worse than no promise — they learn not to trust the colour.
+    //
+    // Both sides read `swipeIntent`, so this can only break if someone
+    // reintroduces a second direction rule. Swept rather than sampled,
+    // because a sign error is exactly the kind of bug a handful of chosen
+    // inputs steps over.
+    for (let dx = -400; dx <= 400; dx += 1) {
+      const decision = swipeDecision(dx, 0);
+      if (decision === null) continue; // not far enough; nothing committed
+      expect(decision).toBe(swipeIntent(dx));
+    }
+  });
+
+  it('agrees on a flick that barely moved', () => {
+    // A fast flick commits below the distance threshold, and `swipeDecision`
+    // falls back to the velocity's sign for the direction. The panel only ever
+    // saw the distance — so at dx exactly 0 there was no promise on screen to
+    // contradict, and anywhere else the two signs must match.
+    expect(swipeDecision(4, 2)).toBe(swipeIntent(4));
+    expect(swipeDecision(-4, -2)).toBe(swipeIntent(-4));
+  });
+
+  it('names the sides the way the gesture uncovers them', () => {
+    // Drag toward the trailing edge to advance, which slides the top card off
+    // the leading half of the one behind — so the leading panel is "next".
+    // Getting this backwards is invisible in code review and obvious in the
+    // hand, which is why it is written down as a test.
+    expect(swipeIntent(1)).toBe('next');
+    expect(swipeIntent(-1)).toBe('learn');
+    expect(swipeIntent(0)).toBeNull();
+  });
+
+  it('reaches full strength before the point of no return', () => {
+    // The colour's only job is telling you what letting go will do. If it
+    // finished at the commit distance it would become certain at the moment
+    // the decision stopped being yours.
+    expect(INTENT_FULL_DX).toBeLessThan(SWIPE_THRESHOLD);
+    expect(INTENT_FULL_DX).toBeGreaterThan(SWIPE_THRESHOLD / 2);
   });
 });

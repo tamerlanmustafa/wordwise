@@ -28,18 +28,21 @@ import { DECK_ZONE_HEIGHT } from './cardLayout';
 // ── The controls' own dimensions (unchanged; owned here so the geometry
 //    below and WordCardDeck's styles cannot drift apart) ──────────────────
 
-/** Tactile action buttons (Ledger mockup): a hard-edged "3D" shadow drawn as
+/** Tactile action button (Ledger mockup): a hard-edged "3D" shadow drawn as
  *  an offset edge layer; pressing translates the face down onto it. */
-export const PILL_WIDTH = 136;
-export const PILL_HEIGHT = 52;
-export const PILL_EDGE = 4;
-export const PILL_EDGE_PRESSED_DROP = 3;
 export const UNDO_SIZE = 46;
 export const UNDO_EDGE = 3;
 
-/** The actions row is as tall as its tallest child — the pill plus its edge
- *  layer. The undo button (46 + 3) is shorter and centres inside it. */
-export const ACTIONS_ROW_HEIGHT = PILL_HEIGHT + PILL_EDGE;
+/**
+ * The actions row is as tall as its tallest child.
+ *
+ * That used to be a 52pt pill plus its 4pt edge, because the row held "I know
+ * it" and "Next" either side of Undo. Both are gestures now, announced on the
+ * card behind, so Undo is the tallest thing left and the row gives its spare
+ * 7pt back to the card — which is the point of moving a control onto a
+ * surface that already exists rather than beside it.
+ */
+export const ACTIONS_ROW_HEIGHT = UNDO_SIZE + UNDO_EDGE;
 
 // ── The column above the deck ─────────────────────────────────────────────
 // Heights and the gap that precedes each, top to bottom. MovieDetailScreen
