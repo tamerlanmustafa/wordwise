@@ -35,10 +35,9 @@ export const PILL_HEIGHT = 52;
 export const PILL_EDGE = 4;
 export const PILL_EDGE_PRESSED_DROP = 3;
 export const UNDO_SIZE = 46;
-export const UNDO_EDGE = 3;
 
 /** The actions row is as tall as its tallest child — the pill plus its edge
- *  layer. The undo button (46 + 3) is shorter and centres inside it. */
+ *  layer. The step-back button is a flat 46pt circle and centres inside it. */
 export const ACTIONS_ROW_HEIGHT = PILL_HEIGHT + PILL_EDGE;
 
 // ── The column above the deck ─────────────────────────────────────────────

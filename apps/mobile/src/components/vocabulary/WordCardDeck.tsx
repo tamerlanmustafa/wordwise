@@ -88,7 +88,6 @@ import {
   PILL_EDGE,
   PILL_EDGE_PRESSED_DROP,
   UNDO_SIZE,
-  UNDO_EDGE,
 } from './deckMetrics';
 import { FlagIcon, HeartIcon } from '../ui/icons';
 import { SpeakerChip } from '../ui/SpeakerChip';
@@ -649,31 +648,34 @@ export const WordCardDeck = ({
   };
 
   /**
-   * Restart: back to the deck's first card, wherever you are.
+   * Back one card — and back one again, as far as the first.
    *
-   * It used to step back one card at a time off an undo stack, which made it
-   * the inverse of Next and nothing else. But the deck already restores you to
-   * a bookmark on every open, so "where you left off" is a place the app puts
-   * you rather than one you chose — and the control people actually reached
-   * for was the one that got them out of it and back to the top. Twenty
-   * presses to do that is not a control, it is a chore.
+   * It walks the deck's own order rather than a stack of cards this session
+   * happened to advance past. That stack was the bug: open a film at card 11
+   * because the bookmark put you there, and the stack is empty, so the button
+   * could not reach cards 1 to 10 at all. It stopped exactly where you had
+   * been dropped, which is the one place a "back" control has no reason to
+   * respect.
    *
-   * The bookmark is rewritten from card one, so this sticks: coming back to
-   * the film later starts where the restart left you rather than snapping
-   * forward to the old position.
+   * Reading the order instead means every press moves one card and the presses
+   * keep working to the front of the deck, wherever the session began.
+   *
+   * The bookmark follows each step, so leaving and returning resumes where the
+   * stepping left off rather than snapping forward again.
    */
-  const doRestart = () => {
-    const first = displayDeck.keys[0];
-    if (first == null || first === currentKey) return;
-    track('deck_restart', {});
+  const doPrevious = () => {
+    if (displayDeck.index <= 0) return;
+    const previous = displayDeck.keys[displayDeck.index - 1];
+    if (previous == null) return;
+    track('deck_previous', {});
     nextMountAnimRef.current = 'return';
     setExpandedKey(null);
-    dispatch({ type: 'focus', key: first });
-    onAdvanceBookmark(first);
+    dispatch({ type: 'focus', key: previous });
+    onAdvanceBookmark(previous);
   };
 
-  /** Nothing to restart to when the first card is already the one in hand. */
-  const canRestart = displayDeck.keys.length > 0 && displayDeck.keys[0] !== currentKey;
+  /** Only the first card has nothing behind it. */
+  const canGoBack = displayDeck.index > 0;
 
   // Refs so the PanResponder (captured once) always sees fresh handlers —
   // same pattern as BookmarkRowWrapper.
@@ -1398,15 +1400,18 @@ export const WordCardDeck = ({
         )}
 
         <Pressable
-          onPress={withTap(doRestart)}
-          disabled={!canRestart}
+          onPress={withTap(doPrevious)}
+          disabled={!canGoBack}
           accessibilityRole="button"
-          accessibilityLabel={t('vocabulary:deck.restartDeck')}
+          accessibilityLabel={t('vocabulary:deck.previousCard')}
         >
           {({ pressed }) => (
-            <View style={[s.undoWrap, !canRestart && s.undoDisabled]}>
-              <View style={s.undoEdge} />
-              <View style={[s.undoFace, pressed && canRestart && s.undoFacePressed]}>
+            // No edge layer under this one. The pills are raised because they
+            // are the decision; this is the way back from it, and giving a
+            // third control the same 3D lift made the row read as three equal
+            // buttons rather than a choice with an escape beside it.
+            <View style={[s.undoWrap, !canGoBack && s.undoDisabled]}>
+              <View style={[s.undoFace, pressed && canGoBack && s.undoFacePressed]}>
                 {/* A circular arrow, not the angular undo hook: this button
                     brings the previous card round again, and the round glyph
                     says "again" where the hook said "revert an edit".
@@ -1857,6 +1862,12 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     // action look like it came from a different app than the sheets.
     nextFace: {
       backgroundColor: tc.gold,
+      // The same rim "Knew it" wears, in the colour of its own edge layer —
+      // so the filled pill is outlined by the shade it sits on rather than by
+      // a fourth gold nobody chose. It is what stops a solid gold button
+      // dissolving into the paper on a light ground.
+      borderWidth: 1.5,
+      borderColor: tc.nodeGoldEdge,
     },
     nextLabel: {
       // White on the light theme's deeper gold (#C58B1B) measures 2.96:1 —
@@ -1868,18 +1879,11 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontWeight: '900',
       letterSpacing: 0.2,
     },
+    // Flat, and exactly the glyph's own circle — no edge layer to leave room
+    // for, so the wrapper is the button.
     undoWrap: {
       width: UNDO_SIZE,
-      height: UNDO_SIZE + UNDO_EDGE,
-    },
-    undoEdge: {
-      position: 'absolute',
-      top: UNDO_EDGE,
-      start: 0,
-      width: UNDO_SIZE,
       height: UNDO_SIZE,
-      borderRadius: UNDO_SIZE / 2,
-      backgroundColor: light ? 'rgba(45,36,24,0.08)' : 'rgba(0,0,0,0.4)',
     },
     // Same construction as the pills — paper face, 1.5pt rim — but on the
     // gold hairline rather than the neutral border, so the three controls
@@ -1895,8 +1899,9 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // Nothing to press down onto now, so the press reads as a dim instead.
     undoFacePressed: {
-      transform: [{ translateY: UNDO_EDGE - 1 }],
+      opacity: 0.6,
     },
     undoDisabled: {
       opacity: 0.35,

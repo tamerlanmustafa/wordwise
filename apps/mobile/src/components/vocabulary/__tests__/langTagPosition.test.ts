@@ -253,25 +253,51 @@ describe('the three controls under the deck are one family', () => {
 
 
 describe('the deck\u2019s smaller controls', () => {
-  it('restarts to the first card rather than stepping back one', () => {
-    // The deck already restores you to a bookmark on every open, so "where you
-    // left off" is a place the app puts you rather than one you chose \u2014 and
-    // the control people reached for was the one that got them out of it.
-    // Twenty presses to reach the top is a chore, not a control.
+
+
+
+  it('steps back through the deck order, not through a session stack', () => {
+    // The stack was the bug: open a film at card 11 because the bookmark put
+    // you there and it is empty, so the button could not reach cards 1 to 10
+    // at all. It stopped exactly where you had been dropped, which is the one
+    // place a "back" control has no reason to respect. Reading the order means
+    // every press moves one card and the presses keep working to the front.
     const s = src();
-    expect(s).toMatch(/const doRestart = \(\) => \{/);
-    expect(s).toMatch(/dispatch\(\{ type: 'focus', key: first \}\)/);
+    expect(s).toMatch(/const doPrevious = \(\) => \{/);
+    expect(s).toMatch(/displayDeck\.keys\[displayDeck\.index - 1\]/);
     expect(s).not.toMatch(/undoStackRef|UNDO_STACK_MAX/);
   });
 
-  it('rewrites the bookmark from the first card, so the restart sticks', () => {
-    // Without this, coming back to the film later snaps forward to the old
-    // position and the restart is undone by the next visit.
-    expect(src()).toMatch(/dispatch\(\{ type: 'focus', key: first \}\);\s*\n\s*onAdvanceBookmark\(first\)/);
+  it('moves the bookmark with each step', () => {
+    // Without it, leaving and returning snaps forward to the old position and
+    // the stepping is undone by the next visit.
+    expect(src()).toMatch(/dispatch\(\{ type: 'focus', key: previous \}\);\s*\n\s*onAdvanceBookmark\(previous\)/);
   });
 
-  it('disables itself on the first card instead of doing nothing', () => {
-    expect(src()).toMatch(/const canRestart = displayDeck\.keys\.length > 0 && displayDeck\.keys\[0\] !== currentKey/);
+  it('is live everywhere except the first card', () => {
+    // Index alone, so it does not care where the session started.
+    expect(src()).toMatch(/const canGoBack = displayDeck\.index > 0/);
+  });
+
+  it('is flat, with no edge layer under it', () => {
+    // The pills are raised because they are the decision; this is the way back
+    // from it. A third control with the same 3D lift made the row read as
+    // three equal buttons rather than a choice with an escape beside it.
+    const s = src();
+    expect(s).not.toMatch(/undoEdge|UNDO_EDGE/);
+    expect(styleBlock('undoWrap')).toMatch(/height: UNDO_SIZE,/);
+    expect(styleBlock('undoFacePressed')).toMatch(/opacity/);
+    expect(styleBlock('undoFacePressed')).not.toMatch(/translateY/);
+  });
+
+  it('rims Next in the colour of the pill beneath it', () => {
+    // The same rim "Knew it" wears, taken from its own edge layer rather than
+    // a fourth gold nobody chose, and it is what stops a solid gold button
+    // dissolving into the paper on a light ground.
+    const face = styleBlock('nextFace');
+    expect(face).toMatch(/borderWidth: 1\.5/);
+    expect(face).toMatch(/borderColor: tc\.nodeGoldEdge/);
+    expect(styleBlock('nextEdge')).toMatch(/tc\.nodeGoldEdge/);
   });
 
   it('draws both hearts at one size', () => {
