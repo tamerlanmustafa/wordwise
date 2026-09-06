@@ -45,6 +45,13 @@ import { NotificationsSheet } from '../components/NotificationsSheet';
 import { useNotificationsStore, type NotificationTarget } from '../stores/notificationsStore';
 import { SplashIntro } from '../components/SplashIntro';
 import { GlobalBottomBar, type BottomTab } from '../components/GlobalBottomBar';
+import {
+  TAB_ROOT,
+  remember,
+  screenForTabPress,
+  tabOf,
+  type TabMemory,
+} from './tabMemory';
 import { KeepAlive } from '../components/KeepAlive';
 import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
 import { AddFilmFlow } from '../components/movies/AddFilmFlow';
@@ -124,6 +131,10 @@ export default function App() {
   // is what a launch lands on — a tab bar whose leftmost cell says Home while
   // the app opens on the one beside it reads as a bug.
   const [currentScreen, setCurrentScreen] = useState<Screen>('words');
+  // Where each tab was when it was last left — see `core/tabMemory`. Not
+  // persisted: it is a within-session convenience, and a film restored on top
+  // of a cold launch would be a stranger place to start than the feed.
+  const [tabMemory, setTabMemory] = useState<TabMemory>({});
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
@@ -551,6 +562,30 @@ export default function App() {
   const handleTabPressUnguarded = (tab: BottomTab) => {
     // Any tab tap dismisses the notifications sheet.
     setShowNotifSheet(false);
+
+    // Record where this tab is being left before working out where the next
+    // one resumes — `remember` also *clears* a tab left at its root, so a
+    // film you backed out of does not come back later on its own.
+    const from = tabOf(currentScreen);
+    const memory = remember(tabMemory, currentScreen);
+    setTabMemory(memory);
+
+    let target = screenForTabPress(tab, from, memory);
+    // The remembered screen may no longer be renderable: `movieDetail` draws
+    // nothing without `selectedMovie`, and the two are separate pieces of
+    // state that a sign-out or a deep link can move independently. Falling
+    // back to the root is the difference between "you land on the feed" and
+    // "you land on a blank tab".
+    if (target === 'movieDetail' && !selectedMovie) target = TAB_ROOT[tab];
+
+    if (target !== TAB_ROOT[tab]) {
+      // Resuming: no reset, or the state being resumed into is the state we
+      // would be throwing away. `navigateToFilms` in particular clears
+      // `selectedMovie`, which is the film we are going back to.
+      setCurrentScreen(target);
+      return;
+    }
+
     if (tab === 'films') navigateToFilms();
     else if (tab === 'words') navigateToWords();
     else if (tab === 'practice') navigateToPractice();
@@ -979,7 +1014,12 @@ export default function App() {
       case 'savedMovies':
         return 'profile';
       default:
-        return null;
+        // Everything else derives from the same map the navigation uses, so
+        // the lit tab and "which tab am I in" cannot disagree. That mattered
+        // the moment movie detail became resumable: `tabOf` puts it under the
+        // film feed, and a bar showing no tab lit while the feed owned the
+        // screen would make re-tapping Explore look like it did nothing.
+        return tabOf(currentScreen);
     }
   })();
 
