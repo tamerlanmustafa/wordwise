@@ -27,7 +27,7 @@ const read = (...p: string[]) => fs.readFileSync(path.join(HOME, ...p), 'utf8');
 const side = (w: number, h: number) => Math.ceil(Math.hypot(w, h));
 
 describe('the two controls behave the same way', () => {
-  const bar = () => read('HomeSearchBar.tsx');
+  const bar = () => read('SearchBar.tsx');
 
   it('both wear the same glow, from the same component', () => {
     // It was SearchFieldGlow until the filter button wanted it too. A
@@ -165,7 +165,7 @@ describe('the glow stays out of the way', () => {
 });
 
 describe('every point inside the border takes a tap', () => {
-  const src = () => read('HomeSearchBar.tsx');
+  const src = () => read('SearchBar.tsx');
 
   it('wraps the field in a Pressable that focuses the input', () => {
     // The magnifier, the gap beside it and the padding at the far end all sit
@@ -204,7 +204,7 @@ describe('every point inside the border takes a tap', () => {
 });
 
 describe('the panel is the whole of search', () => {
-  const bar = () => read('HomeSearchBar.tsx');
+  const bar = () => read('SearchBar.tsx');
   const home = () =>
     fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
   const app = () => fs.readFileSync(path.join(HOME, '..', '..', 'core', 'App.tsx'), 'utf8');
@@ -271,10 +271,10 @@ describe('every pressable on Home taps back', () => {
   // visible on the element that owns it and greppable from outside.
   const FILES = [
     ['screens/FilmFeedScreen.tsx', 1],
-    ['home/HomeSearchBar.tsx', 6],
-    ['home/RankedMovieList.tsx', 5],
-    ['home/TodayWordCard.tsx', 4],
-    ['home/FeedFilterSheet.tsx', 5],
+    ['filmFeed/SearchBar.tsx', 6],
+    ['filmFeed/RankedMovieList.tsx', 5],
+    ['filmFeed/TodayWordCard.tsx', 4],
+    ['filmFeed/FeedFilterSheet.tsx', 5],
   ] as const;
 
   const componentsDir = path.join(HOME, '..');
@@ -314,13 +314,13 @@ describe('every pressable on Home taps back', () => {
 
   it('the sheet option row is NOT wrapped, because its parent already is', () => {
     // Two wrappers is two buzzes for one press.
-    expect(readRel('home/SheetOptionRow.tsx')).not.toMatch(/withTap/);
-    expect(readRel('home/FeedFilterSheet.tsx')).toMatch(/onPress=\{withTap\(\(\) => onSortPress/);
+    expect(readRel('filmFeed/SheetOptionRow.tsx')).not.toMatch(/withTap/);
+    expect(readRel('filmFeed/FeedFilterSheet.tsx')).toMatch(/onPress=\{withTap\(\(\) => onSortPress/);
   });
 });
 
 describe('the recently-viewed panel', () => {
-  const src = () => read('HomeSearchBar.tsx');
+  const src = () => read('SearchBar.tsx');
 
   it('offers three films, not five', () => {
     expect(src()).toMatch(/RECENT_LIMIT = 3/);
@@ -399,7 +399,7 @@ describe('tapping away closes the panel instead of opening a film', () => {
 
   it('the filter button is not reachable while searching', () => {
     // Opening a sheet from under the search panel is never what the tap meant.
-    const bar = read('HomeSearchBar.tsx');
+    const bar = read('SearchBar.tsx');
     expect(bar).toMatch(/onPress=\{withTap\(focused \? onDismiss \?\? onFilterPress : onFilterPress\)\}/);
     expect(bar).toMatch(/focused && s\.filterBtnDimmed/);
   });
@@ -407,7 +407,7 @@ describe('tapping away closes the panel instead of opening a film', () => {
   it('the filter button dismisses rather than doing nothing', () => {
     // A control that looks present and answers to nothing is the dead zone
     // this field just got rid of.
-    expect(read('HomeSearchBar.tsx')).toMatch(/onDismiss \?\? onFilterPress/);
+    expect(read('SearchBar.tsx')).toMatch(/onDismiss \?\? onFilterPress/);
   });
 
   it('dismissing clears focus, the suggestions and the keyboard', () => {

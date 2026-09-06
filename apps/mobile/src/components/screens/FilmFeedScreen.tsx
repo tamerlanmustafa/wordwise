@@ -24,15 +24,15 @@ import { showToast } from '../../stores/toastStore';
 import { useNotificationsStore } from '../../stores/notificationsStore';
 import type { SwipeAction } from '../../utils/swipeDecision';
 import { useShowAds } from '../../stores/entitlementsStore';
-import { RankedMovieList } from '../home/RankedMovieList';
-import { SnapPager } from '../home/SnapPager';
-import { TodayWordCard, TodayWordCardSkeleton } from '../home/TodayWordCard';
+import { RankedMovieList } from '../filmFeed/RankedMovieList';
+import { SnapPager } from '../filmFeed/SnapPager';
+import { TodayWordCard, TodayWordCardSkeleton } from '../filmFeed/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
-import { HomeSearchBar } from '../home/HomeSearchBar';
-import { SearchDimOverlay } from '../home/SearchDimOverlay';
-import { FeedFilterSheet } from '../home/FeedFilterSheet';
-import { VocabularySheet } from '../home/VocabularySheet';
-import type { FilmVocabulary } from '../home/filmVocabulary';
+import { SearchBar } from '../filmFeed/SearchBar';
+import { SearchDimOverlay } from '../filmFeed/SearchDimOverlay';
+import { FeedFilterSheet } from '../filmFeed/FeedFilterSheet';
+import { VocabularySheet } from '../filmFeed/VocabularySheet';
+import type { FilmVocabulary } from '../filmFeed/filmVocabulary';
 import { scoreToCefr } from '../../utils/formatting';
 import {
   DEFAULT_FEED_FILTERS,
@@ -41,7 +41,7 @@ import {
   sortHasDirection,
   type LevelSort,
   type MovieType,
-} from '../home/filterOptions';
+} from '../filmFeed/filterOptions';
 import { useFeedLevel } from '../../hooks/useFeedLevel';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
@@ -420,7 +420,7 @@ export const FilmFeedScreen = ({
       {/* No header row. It held one gold level chip in 46pt of screen; the
           chip now prints on the filter button beside the search field, which
           was already there. The search block is the first child under the
-          glow — HomeSearchBar's own paddingTop keeps it off the safe area. */}
+          glow — SearchBar's own paddingTop keeps it off the safe area. */}
 
       {/* The header stack (search + ad + collapsible word card + filters) is
           pinned; the movie feed below is the page's sole scroller. Scrolling
@@ -446,7 +446,7 @@ export const FilmFeedScreen = ({
         {/* Search — paper field with autocomplete dropdown. zIndex keeps the
             dropdown above the ad slot / controls below it. */}
         <View style={s.searchLayer}>
-          <HomeSearchBar
+          <SearchBar
             query={searchQuery}
             onChangeText={onSearchTextChange}
             // The keyboard's Search key has nowhere to go now — the panel is

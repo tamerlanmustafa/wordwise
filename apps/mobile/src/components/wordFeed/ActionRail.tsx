@@ -20,7 +20,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { RailIcon, type RailGlyph } from './ExploreIcons';
+import { RailIcon, type RailGlyph } from './WordFeedIcons';
 import { RAIL_ITEM_WIDTH } from './metrics';
 
 interface Props {

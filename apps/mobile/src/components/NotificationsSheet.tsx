@@ -28,7 +28,7 @@ import {
   type AppNotification,
   type NotificationTarget,
 } from '../stores/notificationsStore';
-import { HomeIcon } from './home/HomeIcons';
+import { HomeIcon } from './filmFeed/FilmFeedIcons';
 
 const KIND_ICON: Record<AppNotification['kind'], 'play' | 'star' | 'bell'> = {
   reviews_due: 'play',

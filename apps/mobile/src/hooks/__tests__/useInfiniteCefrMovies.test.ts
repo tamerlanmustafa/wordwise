@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../../services/api';
 import { renderHook, flushAsync, act, cleanupHooks } from '../../test-utils/renderHook';
-import type { MovieType } from '../../components/home/filterOptions';
+import type { MovieType } from '../../components/filmFeed/filterOptions';
 
 const mockGet = wordwiseApi.getMoviesByCefr as jest.Mock;
 

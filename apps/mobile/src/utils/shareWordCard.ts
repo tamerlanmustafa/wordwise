@@ -23,7 +23,7 @@
 
 import { Platform, Share } from 'react-native';
 import { File, Paths } from 'expo-file-system';
-import { shareFileName } from '../components/explore/shareCardLayout';
+import { shareFileName } from '../components/wordFeed/shareCardLayout';
 
 /** Anything with react-native-svg's rasteriser on it. */
 export interface Rasterisable {

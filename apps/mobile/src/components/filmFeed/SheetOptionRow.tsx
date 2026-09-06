@@ -17,7 +17,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { HomeIcon } from './HomeIcons';
+import { HomeIcon } from './FilmFeedIcons';
 import { FilmIcon, SparkleIcon } from '../ui/icons';
 import type { MovieTypeIcon } from './filterOptions';
 

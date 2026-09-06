@@ -12,7 +12,7 @@ import { wordwiseApi, type TodaysWord } from '../../services/api';
 import { useDoubleTap } from '../../hooks/useDoubleTap';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { Skeleton } from '../ui/Skeleton';
-import { HomeIcon } from './HomeIcons';
+import { HomeIcon } from './FilmFeedIcons';
 import { withTap } from '../../utils/feedback';
 
 /**

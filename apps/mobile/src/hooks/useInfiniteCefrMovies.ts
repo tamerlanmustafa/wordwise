@@ -54,7 +54,7 @@ import {
   animatedParam,
   type LevelSort,
   type MovieType,
-} from '../components/home/filterOptions';
+} from '../components/filmFeed/filterOptions';
 
 /** The sort values `/movies/by-cefr` accepts. Same union the picker uses —
  *  a second copy is how a picker and a query drift apart. */

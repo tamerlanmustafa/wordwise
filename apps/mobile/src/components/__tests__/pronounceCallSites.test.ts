@@ -42,10 +42,12 @@ describe('pronunciation call sites', () => {
   it('finds all three (guards the guard)', () => {
     // If this drops to two, a speaker was deleted; if it grows, the new one
     // has to satisfy everything below.
+    // Sorted, so the order follows the directory names: `wordFeed` came after
+    // the rename that `explore` came before.
     expect(FILES.map(rel).sort()).toEqual([
-      path.join('explore', 'WordCard.tsx'),
       path.join('vocabulary', 'VocabRow.tsx'),
       path.join('vocabulary', 'WordCardDeck.tsx'),
+      path.join('wordFeed', 'WordCard.tsx'),
     ]);
   });
 

@@ -1,5 +1,5 @@
 /**
- * HomeIcons — the stroked SVG icon set for the redesigned Home screen.
+ * FilmFeedIcons — the stroked SVG icon set for the redesigned Home screen.
  *
  * Mirrors the `Icon` set in the design template (home/home-mobile.jsx),
  * translated to `react-native-svg`. Every glyph here replaces an emoji the

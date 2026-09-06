@@ -19,7 +19,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_LEVEL } from '../components/home/filterOptions';
+import { DEFAULT_LEVEL } from '../components/filmFeed/filterOptions';
 
 export function useFeedLevel(profileLevel?: string | null) {
   const [level, setLevel] = useState(profileLevel || DEFAULT_LEVEL);

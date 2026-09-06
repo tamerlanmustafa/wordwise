@@ -1,5 +1,5 @@
 /**
- * HomeSearchBar — the cinema search field for the redesigned Home.
+ * SearchBar — the cinema search field for the redesigned Home.
  *
  * Replaces the old purple 🔍 search button + plain input. Presentational:
  * all state (query, focus, suggestions, recently-viewed) and handlers live
@@ -42,7 +42,7 @@ import {
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
-import { HomeIcon } from './HomeIcons';
+import { HomeIcon } from './FilmFeedIcons';
 import { FocusGlow } from './FocusGlow';
 import { feedback, withTap } from '../../utils/feedback';
 
@@ -112,7 +112,7 @@ function Row({
   );
 }
 
-export function HomeSearchBar({
+export function SearchBar({
   query,
   onChangeText,
   onSubmit,

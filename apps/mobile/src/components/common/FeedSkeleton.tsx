@@ -28,7 +28,7 @@ import {
   CARD_RADIUS,
   CARD_ROW_GAP,
   RING_SIZE,
-} from '../home/cardVisuals';
+} from '../filmFeed/cardVisuals';
 import { Skeleton } from '../ui/Skeleton';
 
 export interface FeedSkeletonProps {

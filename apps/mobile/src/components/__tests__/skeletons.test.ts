@@ -8,7 +8,7 @@
  * its target. Two of them had been wrong for months:
  *
  *   • `FeedSkeleton` drew a 64x96 portrait poster with two text lines beside
- *     it. That was the home feed's row layout *before* the card redesign made
+ *     it. That was the film feed's row layout *before* the card redesign made
  *     every row a 116pt full-width backdrop tile.
  *   • ReviewScreen's inline bars drew **three** answer rows where every deck
  *     has four, at 52pt against a 56pt tap target, radius 12 against 14, under
@@ -28,7 +28,7 @@ import {
   CARD_RADIUS,
   ITEM_H,
   RING_SIZE,
-} from '../home/cardVisuals';
+} from '../filmFeed/cardVisuals';
 import {
   MCQ_CHOICE_COUNT,
   MCQ_CHOICE_GAP,
@@ -50,7 +50,7 @@ const code = (rel: string) =>
 // 1. Geometry is shared, not copied
 // ---------------------------------------------------------------------------
 
-describe('the home card and its skeleton read one set of numbers', () => {
+describe('the film card and its skeleton read one set of numbers', () => {
   it('exposes the card geometry from cardVisuals', () => {
     expect(CARD_H).toBe(116);
     expect(CARD_GAP).toBe(8);
@@ -59,7 +59,7 @@ describe('the home card and its skeleton read one set of numbers', () => {
   });
 
   it('the real card imports them rather than declaring its own', () => {
-    const src = code('components/home/RankedMovieList.tsx');
+    const src = code('components/filmFeed/RankedMovieList.tsx');
     expect(src).toMatch(/import \{[\s\S]*?CARD_H[\s\S]*?\} from '\.\/cardVisuals'/);
     expect(src).not.toMatch(/const\s+CARD_H\s*=/);
     expect(src).not.toMatch(/const\s+CARD_GAP\s*=/);
@@ -69,7 +69,7 @@ describe('the home card and its skeleton read one set of numbers', () => {
     const src = code('components/common/FeedSkeleton.tsx');
     expect(src).toMatch(/CARD_H/);
     expect(src).toMatch(/CARD_RADIUS/);
-    expect(src).toMatch(/from '\.\.\/home\/cardVisuals'/);
+    expect(src).toMatch(/from '\.\.\/filmFeed\/cardVisuals'/);
   });
 
   it('the skeleton hard-codes no size of its own', () => {
@@ -174,7 +174,7 @@ describe('content loads behind skeletons, not spinners', () => {
   const CONVERTED = [
     'components/screens/AddFilmSearchScreen.tsx',
     'components/onboarding/PickFirstFilmStep.tsx',
-    'components/explore/ListPanel.tsx',
+    'components/wordFeed/ListPanel.tsx',
     'components/ReviewScreen.tsx',
     'components/screens/ListDetailScreen.tsx',
     'components/FamilyPlanScreen.tsx',
@@ -197,7 +197,7 @@ describe('content loads behind skeletons, not spinners', () => {
   it('the screens that dropped their spinner entirely no longer import one', () => {
     for (const rel of [
       'components/onboarding/PickFirstFilmStep.tsx',
-      'components/explore/ListPanel.tsx',
+      'components/wordFeed/ListPanel.tsx',
       'components/ReviewScreen.tsx',
       'components/FamilyPlanScreen.tsx',
     ]) {
@@ -211,7 +211,7 @@ describe('content loads behind skeletons, not spinners', () => {
     // footer spinner sits under a list already on screen; LoadingScreen is
     // the cold-boot gate, where there is no known layout to draw yet.
     expect(code('components/screens/LoginScreen.tsx')).toMatch(/ActivityIndicator/);
-    expect(code('components/home/RankedMovieList.tsx')).toMatch(/ActivityIndicator/);
+    expect(code('components/filmFeed/RankedMovieList.tsx')).toMatch(/ActivityIndicator/);
     expect(code('components/ui/LoadingScreen.tsx')).toMatch(/ActivityIndicator/);
   });
 });
