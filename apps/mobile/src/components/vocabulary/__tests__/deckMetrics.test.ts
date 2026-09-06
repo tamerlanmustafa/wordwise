@@ -169,13 +169,14 @@ describe('invariants', () => {
     // clamp — is again the only one that moves: 0.658 → 0.701.
     //
     // Then the hero poster was removed, taking that block down to what the
-    // title actually needs (HERO_PLATE 100 → 76) and handing the difference
-    // back to the column. The SE is still the only device under the clamp, so
-    // once more it is the only one that moves: 0.701 → 0.755. The big phones
-    // stay at 1 and take theirs as air, which is what the deck's new
+    // film's own lines need and handing the difference back to the column —
+    // 100 → 86 once the band chip moved above the title and claimed a row of
+    // its own. The SE is still the only device under the clamp, so once more
+    // it is the only one that moves: 0.701 → 0.733. The big phones stay at 1
+    // and take theirs as air, which is what the deck's new
     // `justifyContent: 'center'` distributes above and below it.
     expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.755, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.733, 3);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
   });

@@ -14,9 +14,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors, useColorScheme } from '../../theme/tokens';
+import { useThemeColors, useColorScheme, withAlpha } from '../../theme/tokens';
 import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import type { ThemeColors } from '../../theme/tokens';
 import {
@@ -35,7 +34,7 @@ import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
 import { wordTranslationDisplay } from './translationDisplay';
 import { glossLine } from '../../utils/glossLine';
-import { directionalIcon, directionSign, FORWARD_ARROW } from '../../i18n/rtl';
+import { directionalIcon, directionSign } from '../../i18n/rtl';
 import {
   deckReducer,
   restoreDeck,
@@ -1356,7 +1355,6 @@ export const WordCardDeck = ({
                 <View
                   style={[s.pillFace, s.knowFace, pressed && s.pillFacePressed]}
                 >
-                  <Text style={s.knowCheck}>✓</Text>
                   <Text style={s.knowLabel}>{t('vocabulary:deck.knowIt')}</Text>
                 </View>
               </View>
@@ -1376,7 +1374,16 @@ export const WordCardDeck = ({
             <View style={[s.undoWrap, !canUndo && s.undoDisabled]}>
               <View style={s.undoEdge} />
               <View style={[s.undoFace, pressed && canUndo && s.undoFacePressed]}>
-                <Ionicons name={directionalIcon('arrow-undo')} size={18} color={tc.textSecondary} />
+                {/* A circular arrow, not the angular undo hook: this button
+                    brings the previous card round again, and the round glyph
+                    says "again" where the hook said "revert an edit".
+
+                    Still through `directionalIcon`, which passes an unmirrored
+                    name straight through — a full circle has no reading
+                    direction to flip, and routing every Ionicon through it is
+                    what makes the ones that DO need mirroring impossible to
+                    forget. */}
+                <Ionicons name={directionalIcon('reload')} size={19} color={tc.goldOnSurface} />
               </View>
             </View>
           )}
@@ -1390,13 +1397,9 @@ export const WordCardDeck = ({
           {({ pressed }) => (
             <View style={s.pillWrap}>
               <View style={[s.pillEdge, s.nextEdge]} />
-              <LinearGradient
-                colors={scheme === 'dark' ? ['#FFD166', '#E4B44A'] : ['#D89B22', '#C58B1B']}
-                style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}
-              >
+              <View style={[s.pillFace, s.nextFace, pressed && s.pillFacePressed]}>
                 <Text style={s.nextLabel}>{t('vocabulary:deck.next')}</Text>
-                <Text style={s.nextArrow}>{FORWARD_ARROW}</Text>
-              </LinearGradient>
+              </View>
             </View>
           )}
         </Pressable>
@@ -1780,39 +1783,43 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     pillFacePressed: {
       transform: [{ translateY: PILL_EDGE_PRESSED_DROP }],
     },
+    // The pair reads as one decision with two answers, so they share a shape
+    // and differ only in weight: the affirmative is an outline, the neutral
+    // one carries the fill. Neither has a glyph any more — a tick beside the
+    // word "I know it" and an arrow beside "Next" each said the label again,
+    // and two words are quicker to read than a word plus a symbol.
     knowEdge: {
-      backgroundColor: 'rgba(63,139,123,0.28)',
+      // Derived from the token rather than a hand-mixed green, so it follows
+      // `success` if that ever moves. It was rgba(63,139,123,0.28), which is
+      // the dark theme's success at 28% — frozen, and wrong in light mode.
+      backgroundColor: withAlpha(tc.success, 0.28),
     },
     knowFace: {
       backgroundColor: tc.paper,
       borderWidth: 1.5,
       borderColor: tc.success,
     },
-    knowCheck: {
-      color: tc.success,
-      fontSize: 15,
-      fontWeight: '800',
-    },
     knowLabel: {
       color: tc.success,
-      fontSize: 13.5,
+      fontSize: 14,
       fontWeight: '800',
+      letterSpacing: 0.2,
     },
     nextEdge: {
       backgroundColor: tc.nodeGoldEdge,
     },
+    // Flat gold, not a two-stop gradient of frozen hexes. This is the app's
+    // primary button — the same fill and ink every sheet's Done wears — and
+    // it was the one place a gradient appeared, which made the deck's main
+    // action look like it came from a different app than the sheets.
     nextFace: {
-      gap: 8,
+      backgroundColor: tc.gold,
     },
     nextLabel: {
       color: tc.goldDeep,
-      fontSize: 13.5,
+      fontSize: 14,
       fontWeight: '900',
-    },
-    nextArrow: {
-      color: tc.goldDeep,
-      fontSize: 15,
-      fontWeight: '800',
+      letterSpacing: 0.2,
     },
     undoWrap: {
       width: UNDO_SIZE,
@@ -1827,13 +1834,17 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       borderRadius: UNDO_SIZE / 2,
       backgroundColor: light ? 'rgba(45,36,24,0.08)' : 'rgba(0,0,0,0.4)',
     },
+    // Same construction as the pills — paper face, 1.5pt rim — but on the
+    // gold hairline rather than the neutral border, so the three controls
+    // under the deck read as one family in the app's own accent instead of
+    // two coloured buttons and a grey one.
     undoFace: {
       width: UNDO_SIZE,
       height: UNDO_SIZE,
       borderRadius: UNDO_SIZE / 2,
       backgroundColor: tc.paper,
       borderWidth: 1.5,
-      borderColor: tc.border,
+      borderColor: tc.goldLine,
       alignItems: 'center',
       justifyContent: 'center',
     },

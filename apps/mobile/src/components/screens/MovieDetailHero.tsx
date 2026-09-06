@@ -16,6 +16,7 @@ import { withTap } from '../../utils/feedback';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon } from '../../i18n/rtl';
 import { movieTitleTier } from '../vocabulary/cardLayout';
+import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
 import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
 
 /**
@@ -79,14 +80,7 @@ export const MovieDetailHero = ({
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
   const tier = movieTitleTier(title);
-
-  // The film's CEFR band, with the match percentage when we have one. Null
-  // until `difficulty` lands, and the line is hidden rather than reserved.
-  const metaLine = level
-    ? matchPct != null
-      ? `${level} ${Math.round(matchPct)}%`
-      : level
-    : null;
+  const bandColor = cefrColorFor(level ?? '', cefrRampFor(tc));
 
   return (
     <>
@@ -124,9 +118,30 @@ export const MovieDetailHero = ({
           </Pressable>
         </View>
 
-        {/* c · the title, on the backdrop */}
+        {/* c · the film, on the backdrop: its band, then its name.
+            Band mark above the subject is how every card in this app is laid
+            out — the word feed's card, the deck's card — so the screen's own
+            header now reads the same way as the things inside it. It used to
+            be one mono line under the title spelling "C1 72%", which made a
+            level and a match rate look like a single value. */}
         <View style={s.plate}>
           <View style={s.titleCol}>
+            {level ? (
+              <View style={s.metaRow}>
+                {/* The band's own colour, from the shared ramp — the same
+                    chip the deck's card wears below, so a level is one colour
+                    everywhere on the screen and not just within one block. */}
+                <View style={[s.levelChip, { backgroundColor: `${bandColor}22` }]}>
+                  <Text style={[s.levelChipText, { color: bandColor }]}>{level}</Text>
+                </View>
+                {matchPct != null ? (
+                  // Deliberately not in the band's colour: it is a fact about
+                  // the reader, not about the film, and colouring it the same
+                  // would fold two different measurements into one mark.
+                  <Text style={s.matchPct}>{`${Math.round(matchPct)}%`}</Text>
+                ) : null}
+              </View>
+            ) : null}
             <Text
               style={[s.title, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
               numberOfLines={tier.lines}
@@ -134,11 +149,6 @@ export const MovieDetailHero = ({
             >
               {title}
             </Text>
-            {metaLine ? (
-              <Text style={s.metaGold} numberOfLines={1}>
-                {metaLine}
-              </Text>
-            ) : null}
           </View>
         </View>
       </View>
@@ -210,17 +220,31 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       letterSpacing: -0.4,
       color: tc.text,
     },
-    metaGold: {
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 7,
+    },
+    // The deck card's chip, at the deck card's proportions — same fill rule
+    // (the band at 22 hex alpha), same mono code on top.
+    levelChip: {
+      paddingVertical: 2,
+      paddingHorizontal: 7,
+      borderRadius: 5,
+    },
+    levelChipText: {
       fontFamily: MONO_FAMILY,
-      fontSize: 9.5,
-      lineHeight: 13,
+      fontSize: 10.5,
+      fontWeight: '900',
+      letterSpacing: 1,
+    },
+    matchPct: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 10.5,
       fontWeight: '700',
-      letterSpacing: 1.05,
-      // 10, not the old 7: it used to hang off a gold rule that carried 9pt of
-      // its own space above it, and inheriting only the 7 pulled the band up
-      // under the title's descenders.
-      marginTop: 10,
-      color: tc.goldOnSurface,
+      letterSpacing: 0.6,
+      color: tc.textSecondary,
     },
   });
 };

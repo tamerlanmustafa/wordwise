@@ -34,7 +34,12 @@ function styleBlock(name: string): string {
   const s = src();
   const start = s.indexOf(`    ${name}: {`);
   if (start === -1) throw new Error(`no style block named ${name}`);
-  return s.slice(start, s.indexOf('\n    },', start));
+  const block = s.slice(start, s.indexOf('\n    },', start));
+  // Comments stripped: every caller is asking about a *property*, and these
+  // blocks explain the values they replaced. A guard that reads the prose
+  // fails on the sentence describing the thing it is banning — which is
+  // exactly how this helper's first two callers broke on correct code.
+  return block.replace(/\/\/[^\n]*/g, '');
 }
 
 /** The three tag call sites, in source order: static face, hidden, revealed. */
@@ -131,11 +136,36 @@ describe('the hero is the backdrop and the title', () => {
     expect(sc).not.toMatch(/posterZoomOpen|posterZoom/);
   });
 
-  it('keeps the title and the meta line on the backdrop', () => {
+  it('keeps the title, the band and the match rate on the backdrop', () => {
     const h = hero();
     expect(h).toMatch(/movieTitleTier\(title\)/);
-    expect(h).toMatch(/s\.metaGold/);
+    expect(h).toMatch(/s\.levelChipText/);
+    expect(h).toMatch(/s\.matchPct/);
     expect(h).toMatch(/s\.wash/);
+  });
+
+  it('puts the band mark above the title, as every card in the app does', () => {
+    // The word feed's card and the deck's card both lead with the level and
+    // then give the subject. The screen's own header now reads the same way
+    // as the things inside it.
+    const h = hero();
+    expect(h.indexOf('s.metaRow')).toBeLessThan(h.indexOf('numberOfLines={tier.lines}'));
+  });
+
+  it('takes the chip colour from the shared ramp, not a local choice', () => {
+    // A level is one colour everywhere on the screen, chip included.
+    expect(hero()).toMatch(/cefrColorFor\(level \?\? '', cefrRampFor\(tc\)\)/);
+  });
+
+  it('leaves the match rate out of the band colour', () => {
+    // It is a fact about the reader, not about the film; colouring it the
+    // same would fold two different measurements into one mark.
+    const block = (() => {
+      const h = hero();
+      const at = h.indexOf('    matchPct: {');
+      return h.slice(at, h.indexOf('\n    },', at));
+    })();
+    expect(block).toMatch(/color: tc\.textSecondary/);
   });
 
   it('gives the freed height to the column rather than keeping it empty', () => {
@@ -154,5 +184,47 @@ describe('the hero is the backdrop and the title', () => {
     // The slack used to pool below the deck, which read as the card hanging
     // off the hero rather than being the screen's subject.
     expect(styleBlock('wrap')).toMatch(/justifyContent: 'center'/);
+  });
+});
+
+describe('the three controls under the deck are one family', () => {
+  it('carries no glyph beside either label', () => {
+    // A tick next to "I know it" and an arrow next to "Next" each said the
+    // label again, and two words read quicker than a word plus a symbol.
+    const s = src();
+    expect(s).not.toMatch(/knowCheck|nextArrow/);
+    expect(s).not.toMatch(/FORWARD_ARROW/);
+  });
+
+  it('fills Next with the app’s primary gold rather than a gradient', () => {
+    // The same fill and ink every sheet's Done wears. The gradient was two
+    // frozen hexes per theme and the only one in the app, which made the
+    // deck's main action look like it came from somewhere else.
+    const s = src();
+    expect(styleBlock('nextFace')).toMatch(/backgroundColor: tc\.gold/);
+    expect(styleBlock('nextLabel')).toMatch(/color: tc\.goldDeep/);
+    expect(s).not.toMatch(/LinearGradient/);
+    expect(s).not.toMatch(/#FFD166|#E4B44A|#D89B22|#C58B1B/);
+  });
+
+  it('derives the affirmative’s edge from the success token', () => {
+    // It was rgba(63,139,123,0.28) — the dark theme's success at 28%, frozen,
+    // and wrong in light mode.
+    expect(styleBlock('knowEdge')).toMatch(/withAlpha\(tc\.success, 0\.28\)/);
+    expect(styleBlock('knowEdge')).not.toMatch(/rgba\(63,139,123/);
+  });
+
+  it('puts the undo on the gold hairline, not the neutral border', () => {
+    // Two coloured buttons and a grey one read as three unrelated controls;
+    // on the app's accent they read as one row.
+    expect(styleBlock('undoFace')).toMatch(/borderColor: tc\.goldLine/);
+  });
+
+  it('gives the undo a round arrow, still routed through directionalIcon', () => {
+    // A circle has no reading direction to mirror, and `directionalIcon`
+    // passes unmirrored names through — routing every Ionicon through it is
+    // what makes the ones that DO need mirroring impossible to forget.
+    expect(src()).toMatch(/directionalIcon\('reload'\)/);
+    expect(src()).not.toMatch(/directionalIcon\('arrow-undo'\)/);
   });
 });

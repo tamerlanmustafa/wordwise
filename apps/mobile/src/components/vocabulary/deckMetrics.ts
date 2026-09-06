@@ -50,14 +50,15 @@ export const BACK_ROW = { gap: 1, height: 34 };
 /**
  * The title block under the back row.
  *
- * 76, not the poster's 100. This was the poster's height because the poster
+ * 86, not the poster's 100. This was the poster's height because the poster
  * was the tallest thing in the block; with it gone the block only has to hold
- * what the title needs — two lines at the larger tier (2 x 29) plus the meta
- * line and its 4pt of breathing room. The 24pt difference goes to the deck
- * rather than staying in the column as empty space, which is the same trade
- * the poster's paper frame made when that was dropped.
+ * what the film's own lines need — the band chip and its match rate (19 plus a
+ * 7pt gap) over two title lines at the larger tier (2 x 29), and 4pt of
+ * breathing room under it. The 14pt difference goes to the deck rather than
+ * staying in the column as empty space, which is the same trade the poster's
+ * paper frame made when that was dropped.
  */
-export const HERO_PLATE = { gap: 12, height: 76 };
+export const HERO_PLATE = { gap: 12, height: 86 };
 /** For You + six CEFR chips. */
 export const FILTER_BAR = { gap: 14, height: 44 };
 /** The screen is For You only, so the level chips have nothing to switch
