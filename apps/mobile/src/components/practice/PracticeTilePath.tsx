@@ -8,23 +8,21 @@
  *
  * Rendering window:
  *   • Show {@link WINDOW_SIZE} tiles around the cursor — up to
- *     {@link COMPLETED_ABOVE} completed tiles above (capped by what's
+ *     {@link COMPLETED_BEHIND} completed tiles below (capped by what's
  *     actually been completed; a brand-new user shows zero), then the
- *     active tile, then locked tiles below until the window fills.
+ *     active tile, then locked tiles above until the window fills.
  *   • The visible range is always WINDOW_SIZE rows; the window slides
- *     down as the user advances.
+ *     up as the user advances.
  *
  * State derivation rules (pure, per index `i`):
  *   • i  < cursor → 'completed'
  *   • i == cursor → 'active'
  *   • i  > cursor → 'locked'
  *
- * Vertical rhythm: the pills *are* the road, stacked flush with no gap
- * between one tile's bottom and the next one's top. Each tile's own tall
- * edge — the riser, see `TilePill` — is what keeps two abutting steps
- * reading as separate treads rather than fusing into one long strip; the
- * corners are rounded just enough to still read as a rectangle rather than
- * a pill.
+ * Vertical rhythm: the pills *are* the road. `buildWindow` returns tiles in
+ * index order (past → future); {@link visualOrder} flips that for display so
+ * the path climbs the screen — the road ahead is always above you, the road
+ * behind sinks away below.
  *
  * The path itself doesn't know about session APIs or the free-tier daily
  * cap; the parent screen wires the tap of the active tile into the right
@@ -37,9 +35,9 @@ import { PracticeTile, type PracticeTileState } from './PracticeTile';
 
 /** Total tiles rendered at once. */
 const WINDOW_SIZE = 9;
-/** How many completed tiles to show above the active one (capped by
+/** How many completed tiles to show below the active one (capped by
  *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
-const COMPLETED_ABOVE = 2;
+const COMPLETED_BEHIND = 2;
 
 /** Horizontal sway of the road, as a smooth wave rather than a jitter: four
  *  steps out and four back, so consecutive tiles lean into each other the way
@@ -98,7 +96,7 @@ export function PracticeTilePath({
 
   return (
     <View style={styles.wrap}>
-      {tiles.map((tile) => {
+      {visualOrder(tiles).map((tile) => {
         const x = offsetForIndex(tile.index);
         return (
           <View
@@ -116,12 +114,12 @@ export function PracticeTilePath({
   );
 }
 
-/** Pure — given the cursor, return WINDOW_SIZE consecutive tiles
- *  (top-to-bottom) with their absolute indices and per-tile state.
+/** Pure — given the cursor, return WINDOW_SIZE consecutive tiles in index
+ *  order (past → future) with their absolute indices and per-tile state.
  *  Exported for unit testing. */
 export function buildWindow(cursor: number): RenderedTile[] {
-  const completedAbove = Math.min(COMPLETED_ABOVE, Math.max(0, cursor));
-  const startIndex = Math.max(0, cursor - completedAbove);
+  const completedBehind = Math.min(COMPLETED_BEHIND, Math.max(0, cursor));
+  const startIndex = Math.max(0, cursor - completedBehind);
   const out: RenderedTile[] = [];
   for (let i = 0; i < WINDOW_SIZE; i += 1) {
     const absolute = startIndex + i;
@@ -132,6 +130,13 @@ export function buildWindow(cursor: number): RenderedTile[] {
     out.push({ index: absolute, state });
   }
   return out;
+}
+
+/** Display order: `buildWindow` runs past → future, but the path climbs the
+ *  screen, so the furthest-future tile renders first (top) and the furthest
+ *  past tile last (bottom). Pure + exported for unit testing. */
+export function visualOrder(tiles: RenderedTile[]): RenderedTile[] {
+  return [...tiles].reverse();
 }
 
 const styles = StyleSheet.create({

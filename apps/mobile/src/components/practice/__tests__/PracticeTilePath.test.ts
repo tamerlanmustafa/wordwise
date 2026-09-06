@@ -1,6 +1,7 @@
 import {
   buildWindow,
   offsetForIndex,
+  visualOrder,
   sectionForIndex,
   isSectionStart,
   SECTION_SIZE,
@@ -62,6 +63,29 @@ describe('buildWindow', () => {
       const ahead = buildWindow(cursor).filter((t) => t.state === 'locked');
       expect(ahead.length).toBeGreaterThanOrEqual(6);
     }
+  });
+});
+
+describe('visualOrder (path climbs up the screen)', () => {
+  it('renders future tiles first (top) and past tiles last (bottom)', () => {
+    const display = visualOrder(buildWindow(5));
+    expect(display.map((t) => t.index)).toEqual([11, 10, 9, 8, 7, 6, 5, 4, 3]);
+    // Topmost is the furthest future, bottommost the furthest past.
+    expect(display[0].state).toBe('locked');
+    expect(display[display.length - 1].state).toBe('completed');
+  });
+
+  it('keeps the active tile between the past below and the future above', () => {
+    const display = visualOrder(buildWindow(5));
+    const activeAt = display.findIndex((t) => t.state === 'active');
+    expect(display.slice(0, activeAt).every((t) => t.state === 'locked')).toBe(true);
+    expect(display.slice(activeAt + 1).every((t) => t.state === 'completed')).toBe(true);
+  });
+
+  it('does not mutate the window it is given', () => {
+    const w = buildWindow(5);
+    visualOrder(w);
+    expect(w.map((t) => t.index)).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
   });
 });
 
