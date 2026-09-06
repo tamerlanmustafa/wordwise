@@ -209,6 +209,18 @@ export function sentenceTranslationTier(translation: string): TypeTier {
 
 // ── Reveal + transition timing ────────────────────────────────────────────
 
+/**
+ * The speaker chip beside the headword, and its gap from the word.
+ *
+ * Smaller than the word feed's 44: that card is a full viewport with a 46pt
+ * headword, this one is a deck card with a 32pt one, and a chip taller than
+ * the word it belongs to reads as the subject of the slot. 36 still clears the
+ * stores' 44pt tap minimum once `SpeakerChip`'s own 8pt slop is counted, and
+ * it fits the 56pt word slot on both type tiers.
+ */
+export const DECK_SPEAKER_CHIP = 36;
+export const DECK_SPEAKER_GAP = 10;
+
 /** Cross-fade duration for the reveal (in) / hide (out) of translations. */
 export const REVEAL_IN_MS = 240;
 export const REVEAL_OUT_MS = 220;

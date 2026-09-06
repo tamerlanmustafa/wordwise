@@ -66,7 +66,8 @@ import {
   SENTENCE_TR_SLOT_HEIGHT,
   FOOTER_TOP,
   FOOTER_HEIGHT,
-  FOOTER_ICON_HIT_SLOP,
+  DECK_SPEAKER_CHIP,
+  DECK_SPEAKER_GAP,
   REVEAL_IN_MS,
   REVEAL_OUT_MS,
   REVEAL_RISE_PX,
@@ -88,7 +89,8 @@ import {
   UNDO_SIZE,
   UNDO_EDGE,
 } from './deckMetrics';
-import { FlagIcon, HeartIcon, SpeakerIcon } from '../ui/icons';
+import { FlagIcon, HeartIcon } from '../ui/icons';
+import { SpeakerChip } from '../ui/SpeakerChip';
 
 /**
  * Interpolated style that slides the incoming focused card from the near-
@@ -975,12 +977,25 @@ export const WordCardDeck = ({
           ) : null}
         </View>
         <View style={s.wordSlot}>
-          <Text
-            style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
-            numberOfLines={wTier.lines}
-          >
-            {term}
-          </Text>
+          <View style={s.wordRow}>
+            <Text
+              style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
+              numberOfLines={wTier.lines}
+            >
+              {term}
+            </Text>
+            {isPremium && !staticIdiom ? (
+              // Pointer-inert like the rest of this face, but it has to
+              // measure identically or the word jumps as the overlay detaches.
+              <SpeakerChip
+                size={DECK_SPEAKER_CHIP}
+                playing={false}
+                disabled
+                accessibilityLabel={t('vocabulary:row.pronounce')}
+                style={s.wordSpeaker}
+              />
+            ) : null}
+          </View>
         </View>
         <DefinitionSlot
           s={s}
@@ -1032,14 +1047,6 @@ export const WordCardDeck = ({
             <View style={s.actionRow}>
               <FlagIcon size={13} color={tc.textFaint} />
               <Text style={s.actionText}>{t('vocabulary:row.reportIssue')}</Text>
-            </View>
-          ) : null}
-          {isPremium && !staticIdiom ? (
-            // A plain View, mirroring the focused card's TouchableOpacity
-            // wrapper: the overlay is pointer-inert, but its footer has to
-            // measure identically or the icon shifts as the overlay detaches.
-            <View>
-              <SpeakerIcon size={16} color={tc.textFaint} />
             </View>
           ) : null}
           <Text style={s.tapHint}>{t('vocabulary:deck.tapToReveal')}</Text>
@@ -1151,12 +1158,28 @@ export const WordCardDeck = ({
             {/* 2 · word slot — bottom-aligned; long words step down a tier
                 and wrap to two lines instead of shrinking */}
             <View style={s.wordSlot}>
-              <Text
-                style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
-                numberOfLines={wTier.lines}
-              >
-                {currentKey}
-              </Text>
+              <View style={s.wordRow}>
+                <Text
+                  style={[s.word, { fontSize: wTier.fontSize, lineHeight: wTier.lineHeight }]}
+                  numberOfLines={wTier.lines}
+                >
+                  {currentKey}
+                </Text>
+                {isPremium && !idiom ? (
+                  <SpeakerChip
+                    size={DECK_SPEAKER_CHIP}
+                    playing={playingAudio}
+                    onPress={withTap((e: GestureResponderEvent) => {
+                      // The whole card is the reveal target; without this a
+                      // tap on the speaker would also flip the translation.
+                      e.stopPropagation();
+                      handlePronounce();
+                    })}
+                    accessibilityLabel={t('vocabulary:row.pronounce')}
+                    style={s.wordSpeaker}
+                  />
+                ) : null}
+              </View>
             </View>
 
             {/* 2b · definition slot — English gloss for the sense the example
@@ -1283,28 +1306,6 @@ export const WordCardDeck = ({
                 >
                   <FlagIcon size={13} color={tc.textFaint} />
                   <Text style={s.actionText}>{t('vocabulary:row.reportIssue')}</Text>
-                </TouchableOpacity>
-              ) : null}
-              {isPremium && !idiom ? (
-                // A touchable with real slop, not a bare `Text onPress`: the
-                // glyph is 13pt inside the card's tap-to-reveal Pressable, so
-                // an unpadded target made a near miss flip the card instead of
-                // playing the word. `stopPropagation` for the hits that do
-                // land, exactly as the save heart does.
-                <TouchableOpacity
-                  onPress={withTap((e: GestureResponderEvent) => {
-                    e.stopPropagation();
-                    handlePronounce();
-                  })}
-                  hitSlop={FOOTER_ICON_HIT_SLOP}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('vocabulary:row.pronounce')}
-                >
-                  <SpeakerIcon
-                    size={16}
-                    playing={playingAudio}
-                    color={playingAudio ? tc.gold : tc.textFaint}
-                  />
                 </TouchableOpacity>
               ) : null}
               <Text style={s.tapHint}>{expanded ? t('vocabulary:deck.tapToHide') : t('vocabulary:deck.tapToReveal')}</Text>
@@ -1503,7 +1504,21 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       justifyContent: 'flex-end',
       overflow: 'hidden',
     },
+    // The headword and its speaker, on one line — the word feed's arrangement.
+    // Centred rather than bottom-aligned: on the one-line tier the chip lands
+    // on the word's optical middle, and on the two-line tier it sits level
+    // with the gap instead of hanging off the descenders of the last line.
+    wordRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    wordSpeaker: {
+      marginStart: DECK_SPEAKER_GAP,
+    },
     word: {
+      // Shrink, don't grow. `flex: 1` would push the chip to the card's
+      // trailing edge and break the "beside the word" reading.
+      flexShrink: 1,
       fontFamily: SERIF_FAMILY,
       fontWeight: '700',
       letterSpacing: -0.3,

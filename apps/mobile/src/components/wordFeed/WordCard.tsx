@@ -41,7 +41,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -52,23 +51,9 @@ import { glossLine } from '../../utils/glossLine';
 import { pronounce } from '../../utils/pronunciation';
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { showToast } from '../../stores/toastStore';
-import { SpeakerIcon } from '../ui/icons';
+import { SpeakerChip } from '../ui/SpeakerChip';
 import { CARD_PADDING_START, SPEAKER_GAP, wordRowLayout } from './wordRowLayout';
 import type { FeedItem } from '../../services/api';
-
-/** Big enough to read beside display type without competing with it. */
-const SPEAKER_SIZE = 22;
-
-/**
- * Extra margin around the chip.
- *
- * Small now, and deliberately so: the chip is already a 44pt target, and the
- * slop used to be the *only* thing making the 22pt glyph tappable. Uncapped on
- * every side — this speaker has no icon neighbours to steal taps from, only the
- * card-wide reveal Pressable underneath it, which is exactly what it is
- * protecting the user from hitting by accident.
- */
-const SPEAKER_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 /**
  * How far the renderer may shrink the word past our own floor.
@@ -238,28 +223,18 @@ function WordCardBase({
             {item.word}
           </Text>
           {isPremium ? (
-            <TouchableOpacity
+            <SpeakerChip
+              size={wordRow.chipSize}
+              playing={playing}
               onPress={(e) => {
                 // The whole card is the reveal target; without this a tap on
                 // the speaker would also flip the translation.
                 e.stopPropagation();
                 void handlePronounce();
               }}
-              hitSlop={SPEAKER_HIT_SLOP}
-              style={[
-                s.speaker,
-                { width: wordRow.chipSize, height: wordRow.chipSize, borderRadius: wordRow.chipSize / 2 },
-                playing && s.speakerPlaying,
-              ]}
-              accessibilityRole="button"
               accessibilityLabel={t('vocabulary:row.pronounce')}
-            >
-              <SpeakerIcon
-                size={SPEAKER_SIZE}
-                playing={playing}
-                color={playing ? tc.goldDeep : tc.goldOnSurface}
-              />
-            </TouchableOpacity>
+              style={s.speaker}
+            />
           ) : null}
         </View>
 
@@ -440,29 +415,11 @@ const makeStyles = (tc: ThemeColors) =>
       // fontSize, lineHeight, letterSpacing and maxWidth are supplied per
       // render — they are functions of the word and the screen.
     },
+    // Only the gap to the word belongs to this card; the chip's own size,
+    // fill and pressed state live in SpeakerChip so the deck's copy cannot
+    // drift from this one.
     speaker: {
       marginStart: SPEAKER_GAP,
-      alignItems: 'center',
-      justifyContent: 'center',
-      // The word yields, never the tap target: the whole point of the chip is
-      // a size a thumb can hit, and a squeezed one would put us back where we
-      // started.
-      flexShrink: 0,
-      // A filled chip, not a bare glyph on the card ground. It was `textFaint`,
-      // which is the app's quietest ink — nearly invisible in both themes on a
-      // card whose whole job is one loud word — and it read as decoration
-      // rather than as something to press. Gold is the app's one accent, and
-      // both tokens are theme-aware: the wash and the hairline invert with the
-      // ground while the ink stays legible on either.
-      backgroundColor: tc.goldWash,
-      borderWidth: 1,
-      borderColor: tc.goldLine,
-    },
-    speakerPlaying: {
-      // Filled while it speaks, so the state is visible from across the room
-      // rather than only in the icon's own animation.
-      backgroundColor: tc.gold,
-      borderColor: tc.gold,
     },
     ipa: {
       marginTop: 7,
