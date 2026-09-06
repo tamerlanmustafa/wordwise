@@ -59,18 +59,18 @@ import { useTranslation } from 'react-i18next';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withTap } from '../../utils/feedback';
-import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/palette';
 import { useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
 import { isRTL } from '../../i18n/rtl';
-import { formatCompactCount, scoreToCefr } from '../../utils/formatting';
+import { scoreToCefr } from '../../utils/formatting';
 import { useReelStore } from '../../stores/reelStore';
 import { useFlightStore } from '../../stores/flightStore';
 import { useReelBadgeStore } from '../../stores/reelBadgeStore';
 import { SwipeableRow } from './SwipeableRow';
 import { filmVocabulary, type FilmVocabulary } from './filmVocabulary';
+import { LevelRing } from './LevelRing';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
@@ -79,18 +79,12 @@ import {
   CARD_RADIUS,
   EDGE_FADE_W,
   ITEM_H,
-  RING_C,
-  RING_HOLE,
-  RING_R,
-  RING_SIZE,
-  RING_STROKE,
   buildEdgeFade,
   buildScrim,
   cornerForGlyph,
   hexToRgb,
   pickPlusInk,
   plusHalo,
-  ringDashOffset,
 } from './cardVisuals';
 import type { SwipeAction } from '../../utils/swipeDecision';
 
@@ -160,8 +154,6 @@ const LEAD  = { x: RTL ? 1 : 0, y: 0.5 };
 const TRAIL = { x: RTL ? 0 : 1, y: 0.5 };
 const CAST_START = { x: RTL ? 0 : 1, y: 0 };
 const CAST_END   = { x: RTL ? 0.75 : 0.25, y: 1 };
-
-const RING_MID = RING_SIZE / 2;
 
 function prefetchMovieImages(movie: any) {
   if (movie.poster_path)
@@ -308,80 +300,6 @@ const AddToReelPlus = React.memo(({
   );
 });
 
-// ── Vocabulary ring ─────────────────────────────────────────────────────────
-// How many distinct words this film speaks, with a one-word caption under it.
-// The hole is filled with card stock, not left transparent, so the backdrop
-// can't show through it. The number is deliberately ink rather than gold: two
-// golds at this size failed contrast.
-//
-// The caption is load-bearing. Without it a bare four-digit number in a circle
-// reads as a runtime, a rank or a score — and every metric this ring has held
-// has failed by being mistaken for something it was not.
-//
-// The arc is NOT the count: a count has no natural 0-100. It fills against a
-// typical film on the same shelf (`SHELF_FULL_RING`), so a full ring means
-// "wordy for this level" rather than "100% of anything".
-//
-// Geometry, RING_*, and the stock-filled hole are unchanged.
-const LevelRing = React.memo(({
-  vocab,
-  caption,
-  tc,
-  s,
-}: {
-  vocab: FilmVocabulary | null;
-  /** The word under the percent, already translated. Passed in rather than
-   *  looked up here so a cell that FlashList recycles doesn't take an i18n
-   *  context subscription per row. */
-  caption: string;
-  tc: ThemeColors;
-  s: ReturnType<typeof makeStyles>;
-}) => (
-  <View style={s.ring}>
-    <Svg width={RING_SIZE} height={RING_SIZE}>
-      <Circle
-        cx={RING_MID}
-        cy={RING_MID}
-        r={RING_R}
-        strokeWidth={RING_STROKE}
-        stroke={tc.cardRingTrack}
-        fill="none"
-      />
-      {vocab ? (
-        <Circle
-          cx={RING_MID}
-          cy={RING_MID}
-          r={RING_R}
-          strokeWidth={RING_STROKE}
-          stroke={tc.cardMeta}
-          fill="none"
-          strokeDasharray={RING_C}
-          strokeDashoffset={ringDashOffset(vocab.fill)}
-          strokeLinecap="butt"
-          transform={`rotate(-90 ${RING_MID} ${RING_MID})`}
-        />
-      ) : null}
-    </Svg>
-    <View style={s.ringHoleWrap} pointerEvents="none">
-      <View style={s.ringHole}>
-        {/* No distribution → bare track and an em dash. `0` would read as
-            "this film has nothing for you", which is a claim; the dash is not. */}
-        <Text style={s.ringPct} numberOfLines={1} adjustsFontSizeToFit>
-          {vocab ? formatCompactCount(vocab.words) : '—'}
-        </Text>
-        {vocab ? (
-          // adjustsFontSizeToFit, because this word is translated into six
-          // languages and the hole is a fixed 36pt: "TO LEARN" fits, but a
-          // longer locale must shrink rather than truncate to "TO LEA…".
-          <Text style={s.ringCaption} numberOfLines={1} adjustsFontSizeToFit>
-            {caption}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  </View>
-));
-
 // ── Single ranked card ─────────────────────────────────────────────────────
 const MovieCard = React.memo(({
   movie,
@@ -501,7 +419,7 @@ const MovieCard = React.memo(({
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             accessibilityRole={vocab && onRingPress ? 'button' : undefined}
           >
-            <LevelRing vocab={vocab} caption={knownCaption} tc={tc} s={s} />
+            <LevelRing vocab={vocab} caption={knownCaption} tc={tc} holeColor={tc.cardStock} />
           </TouchableOpacity>
         </View>
 
@@ -779,59 +697,6 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       paddingStart: 14,
       paddingEnd: 12,
       gap: 13,
-    },
-
-    ring: {
-      width: RING_SIZE,
-      height: RING_SIZE,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    ringHoleWrap: {
-      ...StyleSheet.absoluteFillObject,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    ringHole: {
-      width: RING_HOLE,
-      height: RING_HOLE,
-      borderRadius: RING_HOLE / 2,
-      backgroundColor: tc.cardStock,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 2,
-    },
-    // The percent is the headline now (it was the 9.5pt understudy to the
-    // band), so it takes the size the band used to have.
-    // A count, not a percent — up to four digits on an A1 shelf, so it keeps
-    // the 12pt size but is allowed to shrink rather than overflow the hole.
-    // Both lines are width-bounded and centred. Without an explicit width they
-    // size to their own content inside an `alignItems: 'center'` parent, so
-    // `adjustsFontSizeToFit` has no box to shrink into and a long value spills
-    // out of the 36pt hole onto the gold arc — which is exactly what "1,667"
-    // did. Short of the full 36 because these lines sit above and below the
-    // circle's midline, where it is already narrowing.
-    ringPct: {
-      width: RING_HOLE - 4,
-      textAlign: 'center',
-      fontFamily: MONO_FAMILY,
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: -0.36,
-      lineHeight: 12,
-      color: tc.cardInk,
-    },
-    // Small enough to read as a unit label rather than as a second value —
-    // it has to fit the 36pt hole in every locale, hence numberOfLines={1}.
-    ringCaption: {
-      width: RING_HOLE - 4,
-      textAlign: 'center',
-      fontFamily: MONO_FAMILY,
-      fontSize: 6.5,
-      fontWeight: '700',
-      letterSpacing: 0.65,
-      lineHeight: 8,
-      color: tc.cardMeta,
     },
 
     // paddingEnd clears the add glyph in the trailing corner.

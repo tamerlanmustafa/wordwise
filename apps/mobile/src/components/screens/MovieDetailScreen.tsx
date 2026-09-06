@@ -48,6 +48,8 @@ import { ForYouWordRow } from '../vocabulary/ForYouWordRow';
 import { WordCardDeck } from '../vocabulary/WordCardDeck';
 import { FilmEdgeBackdrop } from '../ui/FilmEdgeBackdrop';
 import { MovieDetailHero } from './MovieDetailHero';
+import { filmVocabulary } from '../filmFeed/filmVocabulary';
+import { VocabularySheet } from '../filmFeed/VocabularySheet';
 import {
   FILTER_BAR,
   DECK_HEADER_ROW,
@@ -193,6 +195,7 @@ export const MovieDetailScreen = ({
   }, []);
 
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
+  const [vocabSheetOpen, setVocabSheetOpen] = useState(false);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
   const [pendingLearned, setPendingLearned] = useState<string | null>(null);
@@ -1039,6 +1042,14 @@ export const MovieDetailScreen = ({
 
   const handleDeckCursorChange = useCallback((n: number) => setDeckCardNumber(n), []);
 
+  // Same distinct-word count the feed card's ring reads, off this film's own
+  // `level_distribution` rather than a movie-list payload's `cefr_distribution`
+  // — the two are the same shape, just named for their different endpoints.
+  const ringVocab = useMemo(
+    () => filmVocabulary(vocabulary?.level_distribution, activeLevel),
+    [vocabulary?.level_distribution, activeLevel],
+  );
+
   // Nothing scrolls in cards mode any more, so the deck's drag has no
   // ScrollView to fight over the finger and needs no lock.
 
@@ -1073,6 +1084,8 @@ export const MovieDetailScreen = ({
           title={movie.title}
           level={difficulty?.level ?? null}
           matchPct={difficulty ? difficulty.score : null}
+          vocab={ringVocab}
+          onRingPress={ringVocab ? () => setVocabSheetOpen(true) : undefined}
           onBack={onBack}
           style={{ paddingTop: insets.top }}
         />
@@ -1537,6 +1550,19 @@ export const MovieDetailScreen = ({
             </Animated.View>
           ))}
         </View>
+      ) : null}
+
+      {/* Rendered at the screen root, not inside the hero: BottomSheet is an
+          absolute overlay, so it must not be scoped to the hero's own box. */}
+      {vocabSheetOpen && ringVocab ? (
+        <VocabularySheet
+          visible
+          onClose={() => setVocabSheetOpen(false)}
+          bottomOffset={barInset}
+          dist={vocabulary?.level_distribution ?? null}
+          vocab={ringVocab}
+          band={difficulty?.level ?? null}
+        />
       ) : null}
 
     </View>

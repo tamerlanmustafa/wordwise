@@ -18,6 +18,8 @@ import { directionalIcon } from '../../i18n/rtl';
 import { movieTitleTier } from '../vocabulary/cardLayout';
 import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
 import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
+import { LevelRing } from '../filmFeed/LevelRing';
+import type { FilmVocabulary } from '../filmFeed/filmVocabulary';
 
 /**
  * MovieDetailHero — the movie stated once, in a block that never moves.
@@ -72,6 +74,12 @@ export interface MovieDetailHeroProps {
   level?: string | null;
   /** 0–100 match. Rendered only alongside `level`. */
   matchPct?: number | null;
+  /** This film's vocabulary size, same shape the feed card's ring reads.
+   *  Null hides the ring rather than drawing an empty one. */
+  vocab?: FilmVocabulary | null;
+  /** Opens the vocabulary breakdown sheet. Required for the ring to be
+   *  tappable — see `VocabularySheet`. */
+  onRingPress?: () => void;
   onBack: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -81,6 +89,8 @@ export const MovieDetailHero = ({
   title,
   level,
   matchPct,
+  vocab,
+  onRingPress,
   onBack,
   style,
 }: MovieDetailHeroProps) => {
@@ -135,30 +145,52 @@ export const MovieDetailHero = ({
             be one mono line under the title spelling "C1 72%", which made a
             level and a match rate look like a single value. */}
         <View style={s.plate}>
-          <View style={s.titleCol}>
-            {level ? (
-              <View style={s.metaRow}>
-                {/* The band's own colour, from the shared ramp — the same
-                    chip the deck's card wears below, so a level is one colour
-                    everywhere on the screen and not just within one block. */}
-                <View style={[s.levelChip, { backgroundColor: `${bandColor}22` }]}>
-                  <Text style={[s.levelChipText, { color: bandColor }]}>{level}</Text>
+          <View style={s.plateRow}>
+            <View style={s.titleCol}>
+              {level ? (
+                <View style={s.metaRow}>
+                  {/* The band's own colour, from the shared ramp — the same
+                      chip the deck's card wears below, so a level is one colour
+                      everywhere on the screen and not just within one block. */}
+                  <View style={[s.levelChip, { backgroundColor: `${bandColor}22` }]}>
+                    <Text style={[s.levelChipText, { color: bandColor }]}>{level}</Text>
+                  </View>
+                  {matchPct != null ? (
+                    // Deliberately not in the band's colour: it is a fact about
+                    // the reader, not about the film, and colouring it the same
+                    // would fold two different measurements into one mark.
+                    <Text style={s.matchPct}>{`${Math.round(matchPct)}%`}</Text>
+                  ) : null}
                 </View>
-                {matchPct != null ? (
-                  // Deliberately not in the band's colour: it is a fact about
-                  // the reader, not about the film, and colouring it the same
-                  // would fold two different measurements into one mark.
-                  <Text style={s.matchPct}>{`${Math.round(matchPct)}%`}</Text>
-                ) : null}
-              </View>
+              ) : null}
+              <Text
+                style={[s.title, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
+                numberOfLines={tier.lines}
+                ellipsizeMode="tail"
+              >
+                {title}
+              </Text>
+            </View>
+            {/* Same ring the feed card wears — this film's distinct-word count.
+                Not a button at all when there's nothing to explain, same rule
+                the feed card's ring follows. */}
+            {vocab && onRingPress ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={withTap(onRingPress)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <LevelRing
+                  vocab={vocab}
+                  caption={t('home:rankedList.knownCaption')}
+                  tc={tc}
+                  // The hole fills with the page's own background rather than the
+                  // feed card's stock colour: by the plate's depth the wash has
+                  // already faded to it, and there is no card here to match.
+                  holeColor={tc.background}
+                />
+              </Pressable>
             ) : null}
-            <Text
-              style={[s.title, { fontSize: tier.fontSize, lineHeight: tier.lineHeight }]}
-              numberOfLines={tier.lines}
-              ellipsizeMode="tail"
-            >
-              {title}
-            </Text>
           </View>
         </View>
       </View>
@@ -221,7 +253,14 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       marginTop: HERO_PLATE.gap,
       height: HERO_PLATE.height,
     },
+    plateRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 12,
+    },
     titleCol: {
+      flex: 1,
+      minWidth: 0,
       paddingBottom: 4,
     },
     title: {
