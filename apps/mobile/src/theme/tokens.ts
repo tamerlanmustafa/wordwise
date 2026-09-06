@@ -81,7 +81,7 @@ export interface ThemeColors {
 
   // v0.7 Practice screen — lesson nodes + warm hero glow
   heroGlowStart:      string;  // top vertex of the practice-screen warm vignette
-  lessonRing:         string;  // dashed ring around the active lesson node
+  lessonRing:         string;  // decorative rings on the Practice backdrop
   nodeLocked:         string;  // locked lesson node fill
   nodeLockedBorder:   string;  // locked lesson node border
   nodeGoldEdge:       string;  // 3D bottom edge under the gold (active) tile

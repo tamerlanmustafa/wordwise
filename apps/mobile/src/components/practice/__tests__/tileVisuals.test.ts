@@ -205,3 +205,64 @@ describe('the tile is built like the deck buttons', () => {
     expect(s).toMatch(/styles\.edge, \{ backgroundColor: edge \}\] \} pointerEvents="none"|styles\.edge, \{ backgroundColor: edge \}\]\} pointerEvents="none"/);
   });
 });
+
+describe('the tile is round, alone, and lands when tapped', () => {
+  const coin = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'TileCoin.tsx'), 'utf8');
+  const tile = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'PracticeTile.tsx'), 'utf8');
+  const crack = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'TileCrack.tsx'), 'utf8');
+
+  it('is a circle', () => {
+    // 72x56 was the footprint of an ellipse "seen slightly from above". Once
+    // the ellipse went, the stadium left behind was wider than tall for a
+    // reason that no longer existed.
+    const s = coin();
+    expect(s).toMatch(/export const COIN_H = COIN_W/);
+    expect(s).toMatch(/borderRadius: COIN_H \/ 2/);
+  });
+
+  it('has no ring turning around it any more', () => {
+    // The bounce already marks the one tappable tile. A second permanent
+    // animation on the same object was two things competing to say one thing.
+    expect(fs.existsSync(path.join(__dirname, '..', 'TileRing.tsx'))).toBe(false);
+    const s = tile();
+    expect(s).not.toMatch(/TileRing|RING_SIZE|ringLayer|rotate/);
+  });
+
+  it('stops bouncing once struck, and never restarts for that mount', () => {
+    // The tap is a commitment; a tile that keeps hovering after you have
+    // chosen it is still asking to be chosen.
+    const s = tile();
+    expect(s).toMatch(/if \(state !== 'active' \|\| struck\) return;/);
+    expect(s).toMatch(/\}, \[state, struck, bounce\]\)/);
+  });
+
+  it('marks the floor on press-in, not on press', () => {
+    // `onPress` fires on release, by which time the navigation this tile
+    // starts is already under way and there is nothing left to watch.
+    expect(tile()).toMatch(/onPressIn=\{tappable \? \(\) => setStruck\(true\) : undefined\}/);
+  });
+
+  it('draws the crack under the tile, so the fissures come out from beneath', () => {
+    // Rendered before the coin and anchored to its baseline: the tile's own
+    // body covers every line's origin and only what escapes is visible.
+    const s = tile();
+    expect(s.indexOf('<TileCrack')).toBeLessThan(s.indexOf('<TileCoin'));
+    expect(crack()).toMatch(/bottom: 0/);
+  });
+
+  it('inks the crack from the text token, so it survives both themes', () => {
+    // A fixed dark crack is invisible on a near-black floor. Inverting with
+    // the theme gives a dark fissure on light and a lit one on dark.
+    expect(crack()).toMatch(/withAlpha\(tc\.text, 0\.34\)/);
+  });
+
+  it('animates the crack on the native driver only', () => {
+    // A tap here starts a navigation; the mark must not compete with it.
+    const s = crack();
+    expect(s).not.toMatch(/useNativeDriver:\s*false/);
+    expect(s).toMatch(/opacity: progress/);
+  });
+});

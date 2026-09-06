@@ -37,10 +37,18 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-/** Face width. */
-export const COIN_W = 72;
-/** Face height. Also the corner radius, twice over — this is a capsule. */
-export const COIN_H = 56;
+/**
+ * Face diameter.
+ *
+ * Round, not the 72x56 capsule it was. That shape came from an ellipse drawn
+ * "seen slightly from above", and once the ellipse went it was a stadium
+ * nobody had chosen — wider than tall for a reason that no longer existed.
+ * A circle is what the path's dots want to be.
+ */
+export const COIN_W = 64;
+/** Same as the width — this is a circle, and the two are separate names only
+ *  so the callers that measure a face still read as measuring a face. */
+export const COIN_H = COIN_W;
 /** Depth of the edge under the face, and how far the face travels on press. */
 export const COIN_EDGE = 8;
 /** Total painted height of one tile, face plus the edge showing beneath it. */
@@ -91,8 +99,9 @@ const styles = StyleSheet.create({
     start: 0,
     width: COIN_W,
     height: COIN_H,
-    // Half the height: the end caps are semicircles, so an offset copy of
-    // this shape overlaps it everywhere. See the note at the top.
+    // Half the height, which on a square makes a circle. The property that
+    // matters is unchanged: an offset copy of this shape overlaps it
+    // everywhere, so there is no gap for the background to show through.
     borderRadius: COIN_H / 2,
     alignItems: 'center',
     justifyContent: 'center',

@@ -4,9 +4,8 @@
  * One pressable coin. Four visual states, derived by the parent path
  * component from the cursor:
  *
- *   • active    → gold coin, bare face, a slowly turning ring of dots and a
- *                 gentle bounce. Tappable. Exactly one per render.
- *                 (= cursor position)
+ *   • active    → gold coin, bare face, and a gentle bounce. Tappable, and
+ *                 exactly one per render. (= cursor position)
  *   • completed → green coin, slightly receded. Past tiles.
  *   • locked    → matte stone coin. Future tiles — unlocked by walking the
  *                 path to them.
@@ -29,17 +28,23 @@
  * gets its own three-tone ramp — lit crown, body, shaded base — over a
  * deeper green lip, and stays the same object the gold one is.
  *
- * The 3D body itself lives in {@link TileCoin} and the ring in
- * {@link TileRing}; this file owns the state → colour mapping and the two
+ * The body lives in {@link TileCoin} and the impact mark in
+ * {@link TileCrack}; this file owns the state → colour mapping and the
  * animations.
+ *
+ * The active tile hovers until it is tapped. Tapping lands it: the bounce
+ * stops where it is, the face sinks onto its edge, and a fan of fissures
+ * spreads from under it. The ring of dots that used to turn around it is gone
+ * — the bounce already marks the one tappable tile, and a second permanent
+ * animation on the same object was two things competing to say one thing.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { COIN_BLOCK, COIN_H, GLYPH_BOX, TileCoin } from './TileCoin';
-import { RING_SIZE, TileRing } from './TileRing';
+import { COIN_BLOCK, COIN_W, GLYPH_BOX, TileCoin } from './TileCoin';
+import { TileCrack } from './TileCrack';
 import { tileVisual } from './tileVisuals';
 
 export type PracticeTileState =
@@ -60,36 +65,17 @@ export function PracticeTile({
   const tc = useThemeColors();
   const s = makeStyles(tc);
 
-  // Active-state turning ring — same Reanimated-style loop the archived
-  // LessonNode used. 18s/360°.
-  const rotate = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (state !== 'active') return;
-    const anim = Animated.loop(
-      Animated.timing(rotate, {
-        toValue: 1,
-        duration: 18000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    anim.start();
-    return () => {
-      anim.stop();
-      rotate.setValue(0);
-    };
-  }, [state, rotate]);
-  const spin = rotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
   // Active-state gentle bounce — draws the eye to the one tappable tile
   // and reads as "this is your next step forward". Pauses for every
   // other state so the rest of the path stays calm.
+  //
+  // It runs until the tile is struck and then never again for this mount: the
+  // tap is a commitment, and a tile that keeps hovering after you have chosen
+  // it is still asking to be chosen.
   const bounce = useRef(new Animated.Value(0)).current;
+  const [struck, setStruck] = useState(false);
   useEffect(() => {
-    if (state !== 'active') return;
+    if (state !== 'active' || struck) return;
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(bounce, {
@@ -109,9 +95,30 @@ export function PracticeTile({
     anim.start();
     return () => {
       anim.stop();
-      bounce.setValue(0);
     };
-  }, [state, bounce]);
+  }, [state, struck, bounce]);
+
+  // The landing. The loop above has already been torn down by `struck`, so
+  // this only has to bring the tile down from wherever it stopped and open
+  // the crack under it.
+  const crack = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!struck) return;
+    Animated.parallel([
+      Animated.timing(bounce, {
+        toValue: 0,
+        duration: 110,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(crack, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [struck, bounce, crack]);
   const translateY = bounce.interpolate({
     inputRange: [0, 1],
     outputRange: [0, -6],
@@ -127,22 +134,19 @@ export function PracticeTile({
   return (
     <Pressable
       onPress={tappable ? onPress : undefined}
+      // On press-in, not on press: the mark belongs to the finger landing,
+      // and `onPress` fires on release — by which time the navigation this
+      // tile starts is already under way and there is nothing left to watch.
+      onPressIn={tappable ? () => setStruck(true) : undefined}
       style={s.hit}
       hitSlop={8}
     >
       {({ pressed }) => (
         <View style={s.stack}>
-          {state === 'active' ? (
-            <Animated.View
-              style={[s.ringLayer, { transform: [{ rotate: spin }] }]}
-              pointerEvents="none"
-            >
-              <TileRing color={tc.lessonRing} />
-            </Animated.View>
-          ) : null}
+          {struck ? <TileCrack progress={crack} /> : null}
 
-          {/* Face and lip move as one unit so the bounce never splits the
-              coin apart; pressing sinks only the face onto its lip. */}
+          {/* Face and edge move as one unit so the bounce never splits the
+              tile apart; pressing sinks only the face onto its edge. */}
           <Animated.View
             style={[
               visual.faded && s.receded,
@@ -201,24 +205,16 @@ const makeStyles = (_tc: ThemeColors) =>
     hit: {
       alignItems: 'center',
     },
-    // Exactly the painted height of one coin. The ring overflows it
-    // deliberately — reserving space for it would make every row as tall as
-    // the tallest state and stretch the path to half as many tiles per
-    // screen. It is pointer-transparent, so the overflow costs nothing but
-    // pixels.
+    // Exactly one tile. The crack overflows it on both sides deliberately —
+    // reserving space for it would widen every row for a mark that only one
+    // tile ever shows, and it is pointer-transparent, so the overflow costs
+    // nothing but pixels.
     stack: {
-      width: RING_SIZE,
+      width: COIN_W,
       height: COIN_BLOCK,
       alignItems: 'center',
     },
     receded: {
       opacity: 0.9,
-    },
-    ringLayer: {
-      position: 'absolute',
-      // Centred on the *face*, not on the coin block: the lip hangs below
-      // the face, and a ring centred on the whole block would sit low.
-      top: COIN_H / 2 - RING_SIZE / 2,
-      start: 0,
     },
   });
