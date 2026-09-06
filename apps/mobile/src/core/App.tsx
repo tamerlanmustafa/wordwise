@@ -135,6 +135,17 @@ export default function App() {
   // persisted: it is a within-session convenience, and a film restored on top
   // of a cold launch would be a stranger place to start than the feed.
   const [tabMemory, setTabMemory] = useState<TabMemory>({});
+  // Whether the next render of MovieDetail is a return rather than an opening
+  // — it skips the wordmark splash. Defaults to false, so a navigation path
+  // added later and not thought about keeps today's behaviour rather than
+  // silently dropping the animation from a genuine first open.
+  const [movieDetailResumed, setMovieDetailResumed] = useState(false);
+
+  /** Back into a film already open — from the quiz flow, or another tab. */
+  const returnToMovieDetail = () => {
+    setMovieDetailResumed(true);
+    setCurrentScreen('movieDetail');
+  };
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
@@ -309,6 +320,7 @@ export default function App() {
       return;
     }
     setSelectedMovie(movie);
+    setMovieDetailResumed(false);
     setCurrentScreen('movieDetail');
   };
 
@@ -582,6 +594,7 @@ export default function App() {
       // Resuming: no reset, or the state being resumed into is the state we
       // would be throwing away. `navigateToFilms` in particular clears
       // `selectedMovie`, which is the film we are going back to.
+      if (target === 'movieDetail') setMovieDetailResumed(true);
       setCurrentScreen(target);
       return;
     }
@@ -689,6 +702,7 @@ export default function App() {
   const handleHubStudy = () => {
     if (!activePreviewTile) return;
     setSelectedMovie(reelTileToMovieData(activePreviewTile.tile));
+    setMovieDetailResumed(false);
     setCurrentScreen('movieDetail');
   };
 
@@ -893,7 +907,7 @@ export default function App() {
       // here there has to be a way out — QuizJourneyScreen renders no back
       // control of its own.
       case 'quizJourney':
-        return () => setCurrentScreen('movieDetail');
+        return returnToMovieDetail;
       case 'quizBatchJourney':
         return () => setCurrentScreen('quizBatchBuilder');
       case 'quizBatchBuilder':
@@ -1191,7 +1205,7 @@ export default function App() {
           <QuizJourneyScreen
             movieId={resolvedMovieId}
             movieTitle={selectedMovie.title}
-            onBack={() => setCurrentScreen('movieDetail')}
+            onBack={returnToMovieDetail}
             onStartSession={handleQuizSessionStart}
           />
         ) : currentScreen === 'quizBatchBuilder' ? (
@@ -1225,6 +1239,7 @@ export default function App() {
           <MovieDetailScreen
             movie={selectedMovie}
             onBack={handleMovieDetailBack}
+            resumed={movieDetailResumed}
             targetLanguage={targetLanguage}
             onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
           />

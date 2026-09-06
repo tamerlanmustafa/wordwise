@@ -110,6 +110,18 @@ interface Props {
    *  caller (App.tsx) owns the session-start round-trip and the
    *  post-quiz nav; we just surface a sticky CTA. */
   onStartQuiz?: (level: string) => void;
+  /**
+   * True when this screen is being *returned* to rather than opened — coming
+   * back to a film left open in the Explore tab, say.
+   *
+   * Skips the wordmark entirely. The splash is a first-impression device that
+   * masks a cold vocabulary fetch; on a return the data is already in the
+   * offline cache and paints in well under 100ms, so playing it would be a
+   * second of ceremony in front of a screen that is already ready. Worse, it
+   * is ceremony the user did not ask for twice — an animation earns its
+   * second showing far more slowly than its first.
+   */
+  resumed?: boolean;
 }
 
 export const MovieDetailScreen = ({
@@ -119,6 +131,7 @@ export const MovieDetailScreen = ({
   readWords,
   sceneStrips,
   onStartQuiz,
+  resumed = false,
 }: Props) => {
   // The tab bar is an absolute overlay, so the word list reserves its height
   // itself or its last rows sit behind the floating capsule.
@@ -134,7 +147,11 @@ export const MovieDetailScreen = ({
   // (so the first card is finished, not merely mounted, when it parts) and
   // holds for SPLASH_HOLD_MS regardless, so a cache hit doesn't flash it.
   const [sentencesWarm, setSentencesWarm] = useState(false);
-  const [splashFloorElapsed, setSplashFloorElapsed] = useState(false);
+  // A resume starts every hold already cleared, so the gate below is false on
+  // the first render and the wordmark never mounts. Skipping it at the *state*
+  // rather than hiding it in the render is what keeps the pulse loop and the
+  // door animation from running at all behind a screen nobody can see.
+  const [splashFloorElapsed, setSplashFloorElapsed] = useState(resumed);
   const splashHolding = isSplashUp({
     loading,
     sentencesWarm,
@@ -142,7 +159,7 @@ export const MovieDetailScreen = ({
   });
   // …and `splashMounted` outlives that by the length of the doors' slide: the
   // gate says when to START opening, not when the splash is gone.
-  const [splashMounted, setSplashMounted] = useState(true);
+  const [splashMounted, setSplashMounted] = useState(!resumed);
   const [error, setError] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
@@ -209,8 +226,12 @@ export const MovieDetailScreen = ({
   // rather than adding to it: a cold open never notices this, and a cached
   // one stops flashing the wordmark for a handful of frames.
   useEffect(() => {
+    if (resumed) return;
     const id = setTimeout(() => setSplashFloorElapsed(true), SPLASH_HOLD_MS);
     return () => clearTimeout(id);
+    // `resumed` is fixed for the life of a mount — App remounts this screen on
+    // every entry — so this is a mount-time decision, not a subscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reduce Motion swaps the doors' slide for a fade — two full-screen panels
@@ -228,7 +249,9 @@ export const MovieDetailScreen = ({
   // apart by a frame; the doors are the last DOOR_OPEN_MS of the minimum
   // second, not an extra slice after it.
   const splashExit = useRef(new Animated.Value(0)).current;
-  const doorsStartedRef = useRef(false);
+  // Pre-armed on a resume: there are no doors to open when there was never a
+  // wordmark to open them from.
+  const doorsStartedRef = useRef(resumed);
   useEffect(() => {
     if (splashHolding || doorsStartedRef.current) return;
     doorsStartedRef.current = true;
