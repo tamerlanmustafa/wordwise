@@ -1,15 +1,10 @@
 import {
   buildWindow,
   offsetForIndex,
-  riserDirectionForIndex,
-  stairTopForIndex,
   sectionForIndex,
   isSectionStart,
   SECTION_SIZE,
-  STAIR_RISE,
-  STEP_RUN,
 } from '../PracticeTilePath';
-import { TILE_EDGE, TILE_W } from '../TilePill';
 describe('buildWindow', () => {
   it('renders 9 tiles for a fresh user (cursor=0): one active + eight locked', () => {
     const w = buildWindow(0);
@@ -73,28 +68,27 @@ describe('buildWindow', () => {
 describe('offsetForIndex (zigzag anchored to absolute index)', () => {
   it('is keyed on absolute index, repeating every 8', () => {
     expect(offsetForIndex(0)).toBe(0);
-    expect(offsetForIndex(1)).toBe(STEP_RUN);
-    expect(offsetForIndex(4)).toBe(offsetForIndex(0));
-    expect(offsetForIndex(5)).toBe(offsetForIndex(1));
+    expect(offsetForIndex(1)).toBe(28);
+    expect(offsetForIndex(8)).toBe(offsetForIndex(0));
+    expect(offsetForIndex(9)).toBe(offsetForIndex(1));
   });
 
   it('sways as a wave, so consecutive tiles lean into each other', () => {
     // The jitter it replaced ([0, 24, -16, 12, …]) crossed the centre line on
     // every step, which reads as noise once the trail of dots between tiles is
     // gone and the coins themselves have to describe the road.
-    const wave = Array.from({ length: 4 }, (_, i) => offsetForIndex(i));
-    expect(wave).toEqual([0, STEP_RUN, 0, -STEP_RUN]);
-    // Every riser moves by 16% of a tread: no nearly-vertical 12pt links.
-    for (let i = 1; i < wave.length; i += 1) {
-      expect(Math.abs(wave[i] - wave[i - 1])).toBe(STEP_RUN);
-    }
+    const wave = Array.from({ length: 8 }, (_, i) => offsetForIndex(i));
+    expect(wave).toEqual([0, 28, 40, 28, 0, -28, -40, -28]);
+    // One sign change per half-period, not one per step.
+    const crossings = wave.filter((v, i) => i > 0 && Math.sign(v) * Math.sign(wave[i - 1]) < 0);
+    expect(crossings).toHaveLength(0);
   });
 
   it('stays inside the narrowest phone the app supports', () => {
-    // The pill is TILE_W wide, on a 320pt screen with 18pt of page
+    // The pill is 200pt wide, on a 320pt screen with 18pt of page
     // padding on each side: an amplitude that clips would only show up on
     // hardware.
-    const halfTile = TILE_W / 2;
+    const halfTile = 100;
     const halfScreen = 320 / 2 - 18;
     for (let i = 0; i < 8; i += 1) {
       expect(Math.abs(offsetForIndex(i)) + halfTile).toBeLessThanOrEqual(halfScreen);
@@ -102,8 +96,8 @@ describe('offsetForIndex (zigzag anchored to absolute index)', () => {
   });
 
   it('handles a defensively negative index', () => {
-    // ((-1 % 4) + 4) % 4 === 3 → the last offset.
-    expect(offsetForIndex(-1)).toBe(-STEP_RUN);
+    // ((-1 % 8) + 8) % 8 === 7 → last offset.
+    expect(offsetForIndex(-1)).toBe(-28);
   });
 
   it('scrolls the path shape as the cursor advances (not frozen)', () => {
@@ -113,20 +107,6 @@ describe('offsetForIndex (zigzag anchored to absolute index)', () => {
     const shapeAt = (cursor: number) =>
       buildWindow(cursor).map((t) => offsetForIndex(t.index));
     expect(shapeAt(3)).not.toEqual(shapeAt(4));
-  });
-
-  it('mirrors its riser direction on alternating turns', () => {
-    expect(riserDirectionForIndex(0)).toBe('upper-right');
-    expect(riserDirectionForIndex(1)).toBe('upper-left');
-  });
-
-  it('uses exactly one riser as the vertical rise', () => {
-    expect(STAIR_RISE).toBe(TILE_EDGE);
-  });
-
-  it('keeps the active tread anchored as the cursor advances', () => {
-    expect(stairTopForIndex(10, 10)).toBe(stairTopForIndex(11, 11));
-    expect(stairTopForIndex(11, 10) - stairTopForIndex(10, 10)).toBe(-STAIR_RISE);
   });
 });
 

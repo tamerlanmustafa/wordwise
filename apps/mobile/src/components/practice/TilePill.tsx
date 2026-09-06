@@ -72,28 +72,17 @@ export interface TilePillProps {
   edge: string;
   /** Face pushed down onto its edge while a finger is on it. */
   pressed?: boolean;
-  /** The direction the next, higher tread takes. The riser shifts toward it
-   *  so left and right turns are mirrored rather than flat copies. */
-  riserDirection: 'upper-left' | 'upper-right';
   /** Centred on the face, and a child of it, so it sinks on press without a
    *  transform of its own. */
   children?: ReactNode;
 }
 
-export function TilePill({ face, edge, pressed = false, riserDirection, children }: TilePillProps) {
+export function TilePill({ face, edge, pressed = false, children }: TilePillProps) {
   return (
     <View style={styles.body}>
       {/* Static. Only the face moves, which is what makes the press read as
           depth rather than as the whole tile sliding down. */}
-      <View
-        style={[
-          styles.layer,
-          styles.edge,
-          riserDirection === 'upper-left' ? styles.edgeUpperLeft : styles.edgeUpperRight,
-          { backgroundColor: edge },
-        ]}
-        pointerEvents="none"
-      />
+      <View style={[styles.layer, styles.edge, { backgroundColor: edge }]} pointerEvents="none" />
       <View
         style={[
           styles.layer,
@@ -127,14 +116,6 @@ const styles = StyleSheet.create({
   },
   edge: {
     top: TILE_EDGE,
-  },
-  // The 8pt lateral shift is smaller than the 24pt rise, so this remains a
-  // riser rather than a detached slab. It mirrors with every turn.
-  edgeUpperLeft: {
-    transform: [{ translateX: -8 }],
-  },
-  edgeUpperRight: {
-    transform: [{ translateX: 8 }],
   },
   face: {
     top: 0,

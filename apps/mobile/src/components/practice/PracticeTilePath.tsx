@@ -34,23 +34,12 @@
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
-import { TILE_BLOCK, TILE_EDGE, TILE_W } from './TilePill';
 
 /** Total tiles rendered at once. */
 const WINDOW_SIZE = 9;
 /** How many completed tiles to show above the active one (capped by
  *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
 const COMPLETED_ABOVE = 2;
-// The next tread begins one riser higher. With TILE_H=56 and TILE_EDGE=24,
-// the 32pt face overlap leaves no background slit while preserving a full,
-// readable 24pt riser between consecutive steps.
-export const STAIR_RISE = TILE_EDGE;
-// At 32pt, each diagonal move is 16% of a 200pt tread. STAIR_RISE / STEP_RUN
-// is 0.75: visibly diagonal, without breaking the path into isolated buttons.
-export const STEP_RUN = 32;
-// The active tile used to be the third rendered row after progression begins.
-// Keeping that 160pt anchor prevents it jumping when a lesson completes.
-const ACTIVE_ANCHOR_Y = COMPLETED_ABOVE * TILE_BLOCK;
 
 /** Horizontal sway of the road, as a smooth wave rather than a jitter: four
  *  steps out and four back, so consecutive tiles lean into each other the way
@@ -58,23 +47,13 @@ const ACTIVE_ANCHOR_Y = COMPLETED_ABOVE * TILE_BLOCK;
  *  {@link offsetForIndex}) rather than its rendered slot, so the shape scrolls
  *  past as the cursor advances — the road moves, instead of the window showing
  *  an identical frozen shape every session. */
-const X_OFFSETS = [0, STEP_RUN, 0, -STEP_RUN];
+const X_OFFSETS = [0, 28, 40, 28, 0, -28, -40, -28];
 
 /** Horizontal zigzag offset for a tile at absolute path index. Pure +
  *  exported for unit testing. */
 export function offsetForIndex(index: number): number {
   const n = X_OFFSETS.length;
   return X_OFFSETS[((index % n) + n) % n];
-}
-
-/** Direction from this tread to the next, higher (future) tread. */
-export function riserDirectionForIndex(index: number): 'upper-left' | 'upper-right' {
-  return offsetForIndex(index + 1) < offsetForIndex(index) ? 'upper-left' : 'upper-right';
-}
-
-/** Absolute tread position around the fixed active-step anchor. */
-export function stairTopForIndex(index: number, cursor: number): number {
-  return ACTIVE_ANCHOR_Y + (cursor - index) * STAIR_RISE;
 }
 
 /** How many tiles make up one "section" — the landmark cadence. No longer
@@ -121,21 +100,14 @@ export function PracticeTilePath({
     <View style={styles.wrap}>
       {tiles.map((tile) => {
         const x = offsetForIndex(tile.index);
-        const y = stairTopForIndex(tile.index, cursor);
         return (
           <View
             key={tile.index}
-            style={[
-              styles.tileRow,
-              // Lower (past) treads paint on top of higher (future) ones,
-              // matching the front-to-back order of a staircase.
-              { top: y, zIndex: cursor - tile.index, transform: [{ translateX: x }] },
-            ]}
+            style={[styles.tileRow, { transform: [{ translateX: x }] }]}
           >
             <PracticeTile
               state={tile.state}
               onPress={() => onTilePress(tile.index)}
-              riserDirection={riserDirectionForIndex(tile.index)}
             />
           </View>
         );
@@ -164,13 +136,11 @@ export function buildWindow(cursor: number): RenderedTile[] {
 
 const styles = StyleSheet.create({
   wrap: {
-    height: ACTIVE_ANCHOR_Y + COMPLETED_ABOVE * STAIR_RISE + TILE_BLOCK,
     paddingTop: 6,
+    paddingBottom: 24,
+    // No flex gap and no per-row margin — tiles sit flush.
   },
   tileRow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     alignItems: 'center',
   },
 });
