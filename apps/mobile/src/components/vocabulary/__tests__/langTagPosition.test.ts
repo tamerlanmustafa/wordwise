@@ -207,11 +207,28 @@ describe('the three controls under the deck are one family', () => {
     expect(s).not.toMatch(/#FFD166|#E4B44A|#D89B22|#C58B1B/);
   });
 
-  it('derives the affirmative’s edge from the success token', () => {
-    // It was rgba(63,139,123,0.28) — the dark theme's success at 28%, frozen,
-    // and wrong in light mode.
-    expect(styleBlock('knowEdge')).toMatch(/withAlpha\(tc\.success, 0\.28\)/);
-    expect(styleBlock('knowEdge')).not.toMatch(/rgba\(63,139,123/);
+  it('keeps every control in the app’s one accent', () => {
+    // "Knew it" was green. `tc.success` is not unused, but everywhere else it
+    // appears it means *correct* — a right MCQ answer, a finished session's
+    // tick, the quiz backdrop. Dismissing a word you already know is not a
+    // correctness judgement, so borrowing that colour put a verdict on a
+    // button that was only ever a filter.
+    expect(styleBlock('knowFace')).not.toMatch(/tc\.success/);
+    expect(styleBlock('knowLabel')).not.toMatch(/tc\.success/);
+    expect(styleBlock('knowEdge')).not.toMatch(/tc\.success|rgba\(63,139,123/);
+  });
+
+  it('separates the three by weight, not by hue', () => {
+    // Filled, strong outline, hairline — the same primary/secondary pairing
+    // the sheets use. Hue would need a second meaning to carry.
+    expect(styleBlock('nextFace')).toMatch(/backgroundColor: tc\.gold/);
+    expect(styleBlock('knowFace')).toMatch(/borderColor: tc\.goldOnSurface/);
+    expect(styleBlock('undoFace')).toMatch(/borderColor: tc\.goldLine/);
+  });
+
+  it('gives both pills the same edge, so they read as one pair', () => {
+    expect(styleBlock('knowEdge')).toMatch(/tc\.nodeGoldEdge/);
+    expect(styleBlock('nextEdge')).toMatch(/tc\.nodeGoldEdge/);
   });
 
   it('puts the undo on the gold hairline, not the neutral border', () => {

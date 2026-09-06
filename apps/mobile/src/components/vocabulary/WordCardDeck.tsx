@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors, useColorScheme, withAlpha } from '../../theme/tokens';
+import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import { SERIF_FAMILY, SERIF_ITALIC_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import type { ThemeColors } from '../../theme/tokens';
 import {
@@ -1808,24 +1808,34 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     pillFacePressed: {
       transform: [{ translateY: PILL_EDGE_PRESSED_DROP }],
     },
-    // The pair reads as one decision with two answers, so they share a shape
-    // and differ only in weight: the affirmative is an outline, the neutral
-    // one carries the fill. Neither has a glyph any more — a tick beside the
-    // word "I know it" and an arrow beside "Next" each said the label again,
-    // and two words are quicker to read than a word plus a symbol.
+    // The three controls are one family in the app's one accent, separated by
+    // weight rather than by hue: Next is filled, "Knew it" is a strong
+    // outline, Undo is a hairline. That is the same primary/secondary pairing
+    // the sheets use, and it is why they share an edge colour.
+    //
+    // "Knew it" was green — `tc.success`. That token is not unused, but every
+    // other place it appears means *correct*: a right MCQ answer, a finished
+    // session's tick, the quiz's backdrop. Dismissing a word you already know
+    // is not a correctness judgement, and borrowing the colour that means one
+    // put a verdict on a button that was only ever a filter. Gold says
+    // "action in this app" and says nothing more than that.
+    //
+    // Neither pill has a glyph any more — a tick beside "Knew it" and an
+    // arrow beside "Next" each said the label again, and two words are
+    // quicker to read than a word plus a symbol.
     knowEdge: {
-      // Derived from the token rather than a hand-mixed green, so it follows
-      // `success` if that ever moves. It was rgba(63,139,123,0.28), which is
-      // the dark theme's success at 28% — frozen, and wrong in light mode.
-      backgroundColor: withAlpha(tc.success, 0.28),
+      backgroundColor: tc.nodeGoldEdge,
     },
     knowFace: {
       backgroundColor: tc.paper,
       borderWidth: 1.5,
-      borderColor: tc.success,
+      // The readable-on-paper gold, not the hairline: this button removes a
+      // word from the deck, so it outranks Undo's rim without reaching Next's
+      // fill.
+      borderColor: tc.goldOnSurface,
     },
     knowLabel: {
-      color: tc.success,
+      color: tc.goldOnSurface,
       fontSize: 14,
       fontWeight: '800',
       letterSpacing: 0.2,
