@@ -718,6 +718,27 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.cardStock,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255,255,255,0.10)' : '#E5DCC4',
+      // …except on the trailing edge, where it read as an outline drawn on
+      // the photograph rather than as the edge of the card.
+      //
+      // The border is one uniform hairline, but it is not seen uniformly. The
+      // backdrop is anchored to this edge and runs the card's full height, so
+      // the trailing stroke is the only one lying entirely on the still, with
+      // the scrim already eased to nothing underneath it. Against cream stock
+      // on the other three sides it is a definition line; against a
+      // photograph it is a bright tan rule.
+      //
+      // Clearing the colour, not the width. Zeroing this edge's width instead
+      // would leave the top and bottom strokes tapering to nothing through the
+      // corner radius, which looks like a rendering fault. All four widths
+      // stay at 1, so the geometry is exactly what it was and only the paint
+      // changes. (A test scans for the width property by name — describe it
+      // here, don't write it.)
+      //
+      // Not simply dropped altogether — in dark mode `cardStock` (#0F1013)
+      // and the page (#0e0d10) are within two levels of each other, so the
+      // leading edge is defined by this border and almost nothing else.
+      borderEndColor: 'transparent',
       shadowColor: '#000',
       shadowOpacity: isDark ? 0.45 : 0.10,
       shadowRadius: isDark ? 16 : 12,

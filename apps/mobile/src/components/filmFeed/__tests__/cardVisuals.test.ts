@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
@@ -285,5 +287,44 @@ describe('level ring geometry', () => {
 describe('backdrop geometry', () => {
   it('is the full 16:9 frame at the 116pt card height', () => {
     expect(BACKDROP_W).toBe(Math.round((116 * 16) / 9));
+  });
+});
+
+describe('the card edge over the backdrop', () => {
+  const src = () =>
+    fs.readFileSync(path.join(__dirname, '..', 'RankedMovieList.tsx'), 'utf8');
+
+  it('paints the trailing border clear', () => {
+    // The backdrop is anchored to the trailing edge and runs the card's full
+    // height, so that one stroke lies entirely on the photograph — where the
+    // scrim has already eased to nothing — and reads as an outline on the
+    // image rather than as the edge of the card.
+    expect(src()).toMatch(/borderEndColor: 'transparent'/);
+  });
+
+  it('keeps all four border widths at 1', () => {
+    // Zeroing the trailing *width* instead would leave the top and bottom
+    // strokes tapering to nothing through the 14pt corner radius, which reads
+    // as a rendering fault. Only the paint changes.
+    const s = src();
+    expect(s).toMatch(/borderWidth: 1/);
+    expect(s).not.toMatch(/borderEndWidth/);
+    expect(s).not.toMatch(/borderRightWidth/);
+  });
+
+  it('still draws the other three, which dark mode depends on', () => {
+    // `cardStock` (#0F1013) and the dark page (#0e0d10) are within two levels
+    // of each other, so the leading edge is defined by this border and little
+    // else. Dropping it outright would lose the card's shape in dark mode.
+    expect(src()).toMatch(/borderColor: isDark \? 'rgba\(255,255,255,0\.10\)' : '#E5DCC4'/);
+  });
+
+  it('uses the logical edge, so it mirrors with the backdrop under RTL', () => {
+    // The backdrop is placed with `end: 0`. A physical `borderRightColor`
+    // would stay on the right while the image moved to the left, putting the
+    // bright stroke back on the photograph and a clear one over the stock.
+    const s = src();
+    expect(s).not.toMatch(/borderRightColor/);
+    expect(s).toMatch(/end: 0,\s*\n\s*width: BACKDROP_W/);
   });
 });
