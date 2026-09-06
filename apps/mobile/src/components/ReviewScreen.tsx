@@ -25,6 +25,7 @@ import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
+import { isChoiceCard } from './quiz/mcqLogic';
 import { QuizCardSkeleton } from './quiz/QuizCardSkeleton';
 import { sessionPosition } from './quiz/quizHeaderLayout';
 import { emptyDeckCopy } from './quiz/emptyDeck';
@@ -295,7 +296,7 @@ export function ReviewScreen({
   // per card index.
   useEffect(() => {
     if (phase !== 'card' || !currentCard) return;
-    const renderable = currentCard.card_type === 'mcq' && currentCard.choices;
+    const renderable = isChoiceCard(currentCard.card_type) && currentCard.choices;
     if (renderable) return;
     console.warn('[ReviewScreen] skipping unrenderable card:', currentCard.card_type, currentCard.word);
     // `record: false` — the user never saw this card, so posting an outcome
@@ -581,7 +582,7 @@ export function ReviewScreen({
     />
   );
 
-  if (currentCard.card_type === 'mcq' && currentCard.choices) {
+  if (isChoiceCard(currentCard.card_type) && currentCard.choices) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {sharedHeader}
@@ -595,6 +596,11 @@ export function ReviewScreen({
             example={currentCard.example_sentence}
             choices={currentCard.choices}
             level={currentCard.cefr_level}
+            // Only set on a definition card, which is what switches the panel
+            // from showing the word to asking for it.
+            definition={
+              currentCard.card_type === 'definition' ? currentCard.definition : null
+            }
             onAnswer={(correct) => advance(correct)}
           />
         </Animated.View>

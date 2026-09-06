@@ -143,6 +143,52 @@ async def build_pool(
     return pool
 
 
+async def build_lemma_pool(
+    db,
+    *,
+    buckets: Iterable[BucketKey],
+    exclude_lemmas: Iterable[str],
+) -> dict[BucketKey, list[str]]:
+    """The same candidates as `build_pool`, but as English lemmas.
+
+    A definition card asks "which word means this?", so its wrong answers are
+    *words*, not translations. That makes this the cheaper of the two pools by
+    a whole round trip: `build_pool` has to read `translation_cache` and drops
+    every candidate it has no cached translation for, which is why a cold
+    language yields a thin pool. Nothing here depends on the user's language at
+    all, so the pool is as wide as the registry on the first session in any
+    language.
+
+    Same bucketing and the same `pool_for` ladder, for the same reason: a B2
+    verb should be surrounded by B2 verbs, or the grammar of the options gives
+    the answer away before the meaning does.
+
+    Never raises. A failure costs option variety, not the session.
+    """
+    wanted = [
+        (pos, level)
+        for pos, level in dict.fromkeys(buckets)
+        if pos and level
+    ]
+    if not wanted:
+        return {}
+
+    try:
+        rows = await _candidate_lemmas(db, wanted, exclude_lemmas)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("[distractor_pool] lemma candidate query failed: %s", e)
+        return {}
+
+    pool: dict[BucketKey, list[str]] = {}
+    for row in rows:
+        lemma = str(row["lemma"]).strip()
+        if not lemma:
+            continue
+        key = (_norm_pos(row["pos"]), _norm_level(row["cefr_level"]))
+        pool.setdefault(key, []).append(lemma)
+    return pool
+
+
 async def _candidate_lemmas(
     db: _SupportsQueryRaw,
     buckets: list[BucketKey],

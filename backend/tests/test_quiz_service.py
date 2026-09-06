@@ -14,9 +14,11 @@ from src.services.quiz_service import (
     XP_PER_SELF_RATE,
     XP_THREE_STAR_BONUS,
     XP_TWO_STAR_BONUS,
+    build_definition_choices,
     build_translation_choices,
     compute_stars,
     compute_xp,
+    is_definition_slot,
     is_near_form,
     normalize_choice,
     is_unit_unlocked,
@@ -394,3 +396,95 @@ class TestIsUnitUnlocked:
 
     def test_unknown_level_locked(self):
         assert is_unit_unlocked("C7", LEVELS, attempted_levels={"A1", "A2"}) is False
+
+
+# ── Definition cards ────────────────────────────────────────────────────────
+
+
+class TestIsDefinitionSlot:
+    def test_every_fourth_card_zero_indexed(self):
+        # Cards 4, 8, 12 — counted as they are built, so a word skipped for
+        # want of a translation cannot silently shift the rhythm.
+        slots = [is_definition_slot(i) for i in range(12)]
+        assert slots == [
+            False, False, False, True,
+            False, False, False, True,
+            False, False, False, True,
+        ]
+
+    def test_a_zero_interval_never_fires(self):
+        # Defensive: the constant is tunable, and a 0 would otherwise make
+        # every card a definition card via a modulo-by-zero crash.
+        assert is_definition_slot(3, every=0) is False
+
+
+class TestBuildDefinitionChoices:
+    def test_offers_the_word_itself_plus_three_others(self):
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "belligerent", "fastidious", "querulous"],
+            rng=random.Random(1),
+        )
+        assert choices is not None
+        assert len(choices) == 4
+        assert sum(c["is_correct"] for c in choices) == 1
+        correct = next(c for c in choices if c["is_correct"])
+        assert correct["word"] == "inconsolable"
+
+    def test_drops_near_forms_of_the_answer(self):
+        # A definition for "consolable" with "inconsolable" beside it is not a
+        # harder question, it is an unfair one — and a registry bucket is full
+        # of morphological neighbours, so this is the common case rather than
+        # the edge one.
+        choices = build_definition_choices(
+            "console",
+            pool=["consoles", "consoled", "ravenous"],
+            rng=random.Random(1),
+        )
+        assert choices is None
+
+    def test_returns_none_rather_than_a_short_grid(self):
+        # The caller falls back to the translation MCQ for that card. A
+        # three-option grid would be a different question shape arriving
+        # unannounced.
+        assert build_definition_choices("inconsolable", pool=["ravenous"]) is None
+
+    def test_prefers_words_not_already_used_this_session(self):
+        # The "too repetitive" half: a ten-card deck should stop offering the
+        # same four nouns. A preference, not a filter — starving the last
+        # cards is the worse failure.
+        used = {"ravenous", "belligerent"}
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "belligerent", "fastidious", "querulous", "laconic"],
+            avoid=used,
+            rng=random.Random(3),
+        )
+        assert choices is not None
+        distractors = {c["word"] for c in choices if not c["is_correct"]}
+        assert distractors.isdisjoint(used)
+
+    def test_falls_back_to_used_words_rather_than_starving(self):
+        used = {"ravenous", "belligerent", "fastidious"}
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "belligerent", "fastidious"],
+            avoid=used,
+            rng=random.Random(3),
+        )
+        assert choices is not None
+        assert len(choices) == 4
+
+    def test_never_repeats_an_option_within_one_grid(self):
+        choices = build_definition_choices(
+            "inconsolable",
+            pool=["ravenous", "Ravenous", "RAVENOUS", "belligerent", "laconic"],
+            rng=random.Random(5),
+        )
+        assert choices is not None
+        words = [normalize_choice(c["word"]) for c in choices]
+        assert len(set(words)) == len(words)
+
+    def test_needs_a_word(self):
+        assert build_definition_choices("", pool=["a", "b", "c"]) is None
+        assert build_definition_choices("   ", pool=["a", "b", "c"]) is None

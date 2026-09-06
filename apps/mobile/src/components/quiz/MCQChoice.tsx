@@ -25,7 +25,6 @@
 
 import { useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
@@ -92,14 +91,19 @@ export function MCQChoice({
       useNativeDriver: true,
     }).start();
 
-  const edge = isCorrect ? tc.quizCorrectEdge : isWrong ? tc.quizWrongEdge : tc.quizRaisedEdge;
-  const border = isCorrect ? tc.successBorder : isWrong ? tc.errorBorder : tc.divider;
+  // The word deck's construction, answered in this screen's colours: a paper
+  // face with a 1.5pt rim, a solid edge under it, and the ink matching the
+  // rim. Idle wears the app's accent — the same pairing "Knew it" has — so a
+  // fresh question reads as a row of buttons rather than a row of panels, and
+  // the answered states swap that one accent for the verdict.
+  //
+  // The two-stop gradient fill went with it. It was a 4pt vertical shift to
+  // make a 60pt tile read as a lit surface, which is exactly the work the
+  // edge already does — and on the answered states it turned a colour that
+  // means something into a wash that only nearly does.
+  const edge = isCorrect ? tc.quizCorrectEdge : isWrong ? tc.quizWrongEdge : tc.nodeGoldEdge;
+  const border = isCorrect ? tc.success : isWrong ? tc.error : tc.goldOnSurface;
   const ink = isCorrect ? tc.success : isWrong ? tc.error : tc.text;
-  const fill: [string, string] = isCorrect
-    ? [withAlpha(tc.success, 0.22), withAlpha(tc.success, 0.1)]
-    : isWrong
-      ? [withAlpha(tc.error, 0.22), withAlpha(tc.error, 0.1)]
-      : [tc.quizRaisedTop, tc.quizRaisedBottom];
 
   // Pressing moves the tile down by the depth the lip loses, so the tile's top
   // edge drops and its bottom stays put — the tile compresses instead of
@@ -140,14 +144,7 @@ export function MCQChoice({
           accessibilityRole="button"
           accessibilityState={{ disabled: !!disabled || !isIdle }}
         >
-          <LinearGradient
-            colors={fill}
-            style={[
-              s.tile,
-              { borderColor: border, borderWidth: isIdle ? StyleSheet.hairlineWidth : 1.5 },
-              isIdle && !disabled ? s.ambient : null,
-            ]}
-          >
+          <View style={[s.tile, { borderColor: border }]}>
             <View style={[s.badge, { borderColor: withAlpha(ink, 0.35) }]}>
               <Text style={[s.badgeText, { color: ink }]}>{position}</Text>
             </View>
@@ -170,7 +167,7 @@ export function MCQChoice({
                 {isWrong ? <Path d="M6 6l12 12M18 6L6 18" /> : <Path d="M4 12.5l5 5L20 6.5" />}
               </Svg>
             ) : null}
-          </LinearGradient>
+          </View>
         </Pressable>
       </Animated.View>
     </Animated.View>
@@ -191,6 +188,10 @@ const makeStyles = (tc: ThemeColors) =>
       bottom: 0,
       borderRadius: MCQ_CHOICE_RADIUS,
     },
+    // Paper face, 1.5pt rim, the edge showing beneath — the deck's pills, at
+    // a row's proportions. The soft ambient shadow went with the gradient: a
+    // solid edge and a blurred drop are two different ways of saying the tile
+    // is raised, and together they say it twice.
     tile: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -199,13 +200,8 @@ const makeStyles = (tc: ThemeColors) =>
       paddingHorizontal: 14,
       paddingVertical: 12,
       borderRadius: MCQ_CHOICE_RADIUS,
-    },
-    ambient: {
-      shadowColor: '#000',
-      shadowOpacity: 0.16,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 2,
+      borderWidth: 1.5,
+      backgroundColor: tc.paper,
     },
     badge: {
       width: 26,

@@ -44,13 +44,30 @@ export interface WordCardProps {
   size?: number;
   /** This word's CEFR band. Hidden when absent or off the ramp. */
   level?: string | null;
+  /**
+   * The definition to ask with, on a `definition` card.
+   *
+   * When present the panel asks the meaning instead of showing the word: the
+   * gloss takes the headline, and the word is blanked out of the example
+   * rather than highlighted in it. Highlighting it would print the answer
+   * directly above the four options.
+   */
+  definition?: string | null;
 }
 
-export function WordCard({ word, pos, example, size = 42, level }: WordCardProps) {
+export function WordCard({
+  word,
+  pos,
+  example,
+  size = 42,
+  level,
+  definition,
+}: WordCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const band = level && level in cefrColors ? level : null;
   const posLabel = pos ? pos.replace(/\.$/, '') : null;
+  const asking = Boolean(definition);
   const parts = useMemo(
     () => (example ? splitAroundWord(example, word) : null),
     [example, word],
@@ -81,9 +98,18 @@ export function WordCard({ word, pos, example, size = 42, level }: WordCardProps
         </View>
       ) : null}
 
-      <Text style={[s.word, { fontSize: size }]} allowFontScaling numberOfLines={2}>
-        {word}
-      </Text>
+      {asking ? (
+        // Serif and smaller than a headword, because it is a sentence rather
+        // than a word — at 42pt a gloss becomes three lines of display type
+        // and the card stops being readable at a glance.
+        <Text style={s.definition} allowFontScaling numberOfLines={4}>
+          {definition}
+        </Text>
+      ) : (
+        <Text style={[s.word, { fontSize: size }]} allowFontScaling numberOfLines={2}>
+          {word}
+        </Text>
+      )}
 
       {example ? (
         <>
@@ -93,7 +119,15 @@ export function WordCard({ word, pos, example, size = 42, level }: WordCardProps
             {parts ? (
               <>
                 {parts.before}
-                <Text style={s.exampleTarget}>{parts.match}</Text>
+                {asking ? (
+                  // Blanked, not highlighted. On a definition card the
+                  // sentence is the second half of the question, and lighting
+                  // the word up in it would print the answer directly above
+                  // the four options.
+                  <Text style={s.exampleBlank}>{BLANK}</Text>
+                ) : (
+                  <Text style={s.exampleTarget}>{parts.match}</Text>
+                )}
                 {parts.after}
               </>
             ) : (
@@ -106,6 +140,10 @@ export function WordCard({ word, pos, example, size = 42, level }: WordCardProps
   );
 }
 
+/** Stands in for the word on a definition card. Long enough to read as a gap
+ *  in the sentence rather than as punctuation. */
+const BLANK = '\u2014\u2014\u2014';
+
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     card: {
@@ -117,6 +155,15 @@ const makeStyles = (tc: ThemeColors) =>
       borderColor: tc.divider,
       alignItems: 'center',
       overflow: 'hidden',
+    },
+    definition: {
+      fontFamily: SERIF_FAMILY,
+      fontSize: 21,
+      lineHeight: 29,
+      fontWeight: '600',
+      fontStyle: 'italic',
+      color: tc.text,
+      textAlign: 'center',
     },
     litEdge: {
       position: 'absolute',
@@ -193,5 +240,13 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.goldOnSurface,
       backgroundColor: withAlpha(tc.gold, 0.16),
       fontWeight: '700',
+    },
+    // The same wash the highlight uses, so the gap reads as the place the
+    // word belongs rather than as a typo.
+    exampleBlank: {
+      color: tc.goldOnSurface,
+      backgroundColor: withAlpha(tc.gold, 0.16),
+      fontWeight: '700',
+      letterSpacing: -1,
     },
   });

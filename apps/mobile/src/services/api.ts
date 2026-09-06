@@ -1084,12 +1084,19 @@ export interface SrsReviewCard {
   definition: string | null;
   example_sentence: string | null;
   cefr_level: string | null;
-  /** 'mcq' — a 4-choice translation pick (replaced the retired
-   *  typed-translation and synonym cards). Client scores the tap
-   *  locally and posts the boolean to /srs/review. Cards with unknown
-   *  types get skipped on the client. */
-  card_type?: 'mcq';
-  /** Present for 'mcq': 4 entries, exactly one is_correct. */
+  /**
+   * 'mcq'        — the four choices are translations of `word`.
+   * 'definition' — the four choices are English words, and the question is
+   *                this card's own `definition` and `example_sentence`. Every
+   *                fourth card that has a definition to ask with.
+   *
+   * The client scores the tap locally and posts the boolean to /srs/review in
+   * both cases; only the question changes. Cards with unknown types get
+   * skipped on the client.
+   */
+  card_type?: 'mcq' | 'definition';
+  /** 4 entries, exactly one is_correct. Translations on 'mcq', English words
+   *  on 'definition'. */
   choices?: MCQChoicePayload[];
   pos?: string | null;
   /** Canonical translation — the correct 'mcq' choice, echoed for

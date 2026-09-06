@@ -5,6 +5,19 @@
  * "Mobile test conventions").
  */
 
+/**
+ * Card types that render as a four-option grid.
+ *
+ * Both score the same way and post the same boolean; only the question
+ * differs — `mcq` asks for a translation, `definition` asks which word means
+ * the gloss on the card. Every screen that renders a grid asks this rather
+ * than testing for `'mcq'`, so adding a third question shape is one edit here
+ * instead of three identical conditions drifting apart.
+ */
+export function isChoiceCard(cardType: string | null | undefined): boolean {
+  return cardType === 'mcq' || cardType === 'definition';
+}
+
 export type MCQPhase = 'idle' | 'answered';
 export type MCQChoiceState = 'idle' | 'correct' | 'wrong' | 'reveal-correct';
 

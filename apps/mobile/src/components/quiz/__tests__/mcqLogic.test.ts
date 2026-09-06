@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 /**
  * mcqLogic — choice-state matrix + copy for the translation MCQ card.
  * Pure logic, no React: covers the tile states (picked/reveal/dim)
@@ -7,6 +9,7 @@ import * as mcqLogic from '../mcqLogic';
 import {
   choiceIsDimmed,
   choiceStateFor,
+  isChoiceCard,
   type MCQAnswerState,
 } from '../mcqLogic';
 
@@ -90,5 +93,104 @@ describe('the card carries no hardcoded copy', () => {
     const pickedWrong = { phase: 'answered' as const, pickedIdx: 0, correctIdx: 2, userWasCorrect: false };
     expect(choiceStateFor(2, pickedWrong)).toBe('reveal-correct');
     expect(choiceIsDimmed(2, pickedWrong)).toBe(false);
+  });
+});
+
+describe('isChoiceCard', () => {
+  it('accepts both question shapes', () => {
+    // They score identically and post the same boolean; only the question
+    // differs. Every screen that renders a grid asks this rather than testing
+    // for 'mcq', so a third shape is one edit here instead of three identical
+    // conditions drifting apart.
+    expect(isChoiceCard('mcq')).toBe(true);
+    expect(isChoiceCard('definition')).toBe(true);
+  });
+
+  it('rejects the self-rate card and anything unknown', () => {
+    // A card type the client does not recognise is skipped rather than
+    // rendered as an empty grid.
+    expect(isChoiceCard('self_rate')).toBe(false);
+    expect(isChoiceCard('synonym_mcq')).toBe(false);
+    expect(isChoiceCard(null)).toBe(false);
+    expect(isChoiceCard(undefined)).toBe(false);
+  });
+});
+
+describe('the definition card asks rather than tells', () => {
+  const wordCard = () => fs.readFileSync(path.join(__dirname, '..', 'WordCard.tsx'), 'utf8');
+
+  it('blanks the target word out of the example instead of highlighting it', () => {
+    // The sentence is the second half of the question. Lighting the word up in
+    // it would print the answer directly above the four options.
+    const s = wordCard();
+    expect(s).toMatch(/asking \? \(/);
+    expect(s).toMatch(/s\.exampleBlank/);
+  });
+
+  it('shows the gloss instead of the headword', () => {
+    expect(wordCard()).toMatch(/\{asking \? \(\s*\n[^]*?s\.definition/);
+  });
+
+  it('leaves an ordinary card untouched when no definition is passed', () => {
+    // `asking` is derived from the prop, so a translation card cannot fall
+    // into the definition branch by accident.
+    expect(wordCard()).toMatch(/const asking = Boolean\(definition\)/);
+  });
+});
+
+describe('the quiz surface is one plane', () => {
+  const backdrop = () => fs.readFileSync(path.join(__dirname, '..', 'QuizBackdrop.tsx'), 'utf8');
+  const card = () => fs.readFileSync(path.join(__dirname, '..', 'MCQCard.tsx'), 'utf8');
+
+  it('draws a flat background, not a gradient', () => {
+    // A gradient that ends is a line. This one started right below the
+    // progress panel, so the two read as two surfaces with a seam between
+    // them rather than as one screen.
+    const s = backdrop();
+    expect(s).not.toMatch(/LinearGradient|expo-linear-gradient/);
+    expect(s).toMatch(/backgroundColor: tc\.background/);
+  });
+
+  it('takes the same ground as the practice path', () => {
+    const practice = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'PracticeScreen.tsx'), 'utf8',
+    );
+    expect(practice).toMatch(/backgroundColor: tc\.background/);
+    expect(backdrop()).toMatch(/backgroundColor: tc\.background/);
+  });
+
+  it('puts no rule or fade under the options', () => {
+    const s = card();
+    expect(s).not.toMatch(/borderTopWidth/);
+    expect(s).not.toMatch(/LinearGradient/);
+  });
+});
+
+describe('options and the CTA are the deck’s buttons', () => {
+  const card = () => fs.readFileSync(path.join(__dirname, '..', 'MCQCard.tsx'), 'utf8');
+  const choice = () => fs.readFileSync(path.join(__dirname, '..', 'MCQChoice.tsx'), 'utf8');
+
+  it('gives every option a paper face, a rim and an edge', () => {
+    const s = choice();
+    expect(s).toMatch(/backgroundColor: tc\.paper/);
+    expect(s).toMatch(/borderWidth: 1\.5/);
+    expect(s).toMatch(/backgroundColor: edge/);
+    // The gradient fill is gone: a 4pt vertical shift was doing the work the
+    // edge already does.
+    expect(s).not.toMatch(/LinearGradient|quizRaisedTop|quizRaisedBottom/);
+  });
+
+  it('builds the CTA the same way', () => {
+    const s = card();
+    expect(s).toMatch(/backgroundColor: tc\.paper/);
+    expect(s).toMatch(/borderWidth: 1\.5/);
+    expect(s).toMatch(/borderColor: ctaAccent/);
+  });
+
+  it('adopts the verdict’s colour on both', () => {
+    // Right and wrong have to reach the controls, since the backdrop no longer
+    // says it behind them.
+    expect(choice()).toMatch(/isCorrect \? tc\.quizCorrectEdge : isWrong \? tc\.quizWrongEdge/);
+    expect(card()).toMatch(/userWasCorrect\s*\n?\s*\? tc\.success\s*\n?\s*: tc\.error/);
   });
 });

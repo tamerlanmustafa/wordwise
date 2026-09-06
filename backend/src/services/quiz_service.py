@@ -103,6 +103,93 @@ def is_near_form(candidate: str, correct: str) -> bool:
     return shorter in longer
 
 
+# Every Nth card is a definition card rather than a translation one: the
+# prompt is the gloss and an example sentence, and the options are English
+# words. Fourth, not third or fifth — often enough that a session cannot be
+# answered purely by recognising translations, rare enough that the quiz is
+# still mainly the thing it has always been.
+DEFINITION_EVERY = 4
+
+
+def is_definition_slot(index: int, *, every: int = DEFINITION_EVERY) -> bool:
+    """True for the 4th card, the 8th, and so on. `index` is 0-based.
+
+    A pure function rather than a modulo inline in the router because the
+    client has to agree with it for the progress bar, and two copies of "every
+    fourth" drift the moment one of them is tuned.
+    """
+    if every <= 0:
+        return False
+    return (index + 1) % every == 0
+
+
+def build_definition_choices(
+    word: str,
+    *,
+    pool: Optional[Iterable[str]] = None,
+    avoid: Optional[Set[str]] = None,
+    rng: Optional[random.Random] = None,
+    n_choices: int = 4,
+) -> Optional[List[dict]]:
+    """The option grid for a definition card: the word itself plus wrong words.
+
+    The distractors come from `services/distractor_pool.build_lemma_pool`,
+    which matches part of speech and CEFR level — that is what keeps them from
+    being *too remote*. A B2 verb surrounded by B2 verbs is a question about
+    meaning; the same verb surrounded by A1 nouns is a question about grammar,
+    and the user answers it without reading the definition.
+
+    `is_near_form` does the other half. A definition for "consolable" with
+    "inconsolable" in the grid is not a harder question, it is an unfair one —
+    and it is the shape that turns up most, because a registry bucket is full
+    of morphological neighbours.
+
+    `avoid` carries the words already spent as options earlier in the session,
+    so a ten-card deck stops offering the same four nouns — that is the *too
+    repetitive* half. It is a preference rather than a filter, exactly as it is
+    for translations: starving the last cards is a worse failure than an option
+    appearing twice.
+
+    Returns None when fewer than `n_choices - 1` usable distractors survive.
+    The caller then falls back to the translation MCQ for that card rather than
+    dropping the word.
+    """
+    correct = (word or "").strip()
+    if not correct:
+        return None
+    r = rng or random.Random()
+    n_distractors = n_choices - 1
+
+    seen = {normalize_choice(correct)}
+
+    def usable(candidates: Iterable[str]) -> List[str]:
+        out: List[str] = []
+        for candidate in candidates:
+            text = (candidate or "").strip()
+            if not text:
+                continue
+            key = normalize_choice(text)
+            if key in seen:
+                continue
+            if is_near_form(text, correct):
+                continue
+            seen.add(key)
+            out.append(text)
+        return out
+
+    distractors = _sample_preferring_unused(
+        usable(pool or ()), avoid, n_distractors, r,
+    )
+    if len(distractors) < n_distractors:
+        return None
+
+    choices = [{"word": correct, "is_correct": True}] + [
+        {"word": d, "is_correct": False} for d in distractors
+    ]
+    r.shuffle(choices)
+    return choices
+
+
 def build_translation_choices(
     word: str,
     translations: dict[str, str],

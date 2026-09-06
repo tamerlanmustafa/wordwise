@@ -36,7 +36,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
@@ -65,6 +64,9 @@ export interface MCQCardProps {
   choices: MCQChoicePayload[];
   /** This word's CEFR band, shown as a chip on the word card. */
   level?: string | null;
+  /** Set on a `definition` card: the panel asks this gloss instead of showing
+   *  the word, and the options are English words rather than translations. */
+  definition?: string | null;
   /** Called exactly once when the user advances past this card. */
   onAnswer: (correct: boolean) => void;
 }
@@ -75,6 +77,7 @@ export function MCQCard({
   example,
   choices,
   level,
+  definition,
   onAnswer,
 }: MCQCardProps) {
   const { t } = useTranslation();
@@ -133,16 +136,17 @@ export function MCQCard({
     onAnswer(userWasCorrect);
   }, [phase, pickedIdx, userWasCorrect, onAnswer]);
 
-  const ctaBg = phase === 'idle'
-    ? tc.chipBg
+  // The same face-over-edge the options wear, and the word deck's buttons
+  // before them: a paper face with a rim, and a solid edge under it. Idle is
+  // the accent, answered takes the verdict's colour — so the button is the
+  // fourth thing on screen saying right or wrong, not a fifth kind of object.
+  const ctaAccent = phase === 'idle'
+    ? tc.goldOnSurface
     : userWasCorrect
       ? tc.success
       : tc.error;
-  // Dark ink on a coloured fill, never white: `success` and `error` are light
-  // enough in dark mode that white text on them lands near 2:1.
-  const ctaFg = phase === 'idle' ? tc.textFaint : tc.textInverse;
   const ctaEdge = phase === 'idle'
-    ? 'transparent'
+    ? tc.nodeGoldEdge
     : userWasCorrect
       ? tc.quizCorrectEdge
       : tc.quizWrongEdge;
@@ -161,7 +165,13 @@ export function MCQCard({
             the question's identity, so a new card re-runs the arrival rather
             than only the first one animating. */}
         <Arriving index={0} entryKey={word}>
-          <WordCard word={word} pos={pos} example={example} level={level} />
+          <WordCard
+            word={word}
+            pos={pos}
+            example={example}
+            level={level}
+            definition={definition}
+          />
         </Arriving>
 
         <View style={s.choicesList}>
@@ -187,11 +197,12 @@ export function MCQCard({
           tab bar (see useBottomBarInset) — on iOS 26 the bar is a capsule that
           hovers clear of the screen edge, so a footer padded only by the safe
           area sits underneath it. */}
-      <LinearGradient
-        colors={['transparent', tc.background]}
-        locations={[0, 0.45]}
-        style={[s.ctaBar, { paddingBottom: barInset + 10, borderTopColor: tc.divider }]}
-      >
+      {/* Flat, and no hairline along its top. Both were drawing a line across
+          a screen whose whole job is one question — the gradient because a
+          gradient that ends *is* a line, and the rule because it was one. The
+          footer is the page colour now, so the options simply stop where they
+          stop. */}
+      <View style={[s.ctaBar, { paddingBottom: barInset + 10 }]}>
         <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
           <Pressable
             onPress={ctaEnabled ? handleAdvance : undefined}
@@ -210,16 +221,15 @@ export function MCQCard({
             <Animated.View
               style={[
                 s.cta,
-                { backgroundColor: ctaBg },
-                !ctaEnabled && s.ctaGhost,
+                { borderColor: ctaAccent },
                 { transform: [{ translateY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [0, 3] }) }] },
               ]}
             >
-              <Text style={[s.ctaText, { color: ctaFg }]}>{ctaLabel} →</Text>
+              <Text style={[s.ctaText, { color: ctaAccent }]}>{ctaLabel}</Text>
             </Animated.View>
           </Pressable>
         </Animated.View>
-      </LinearGradient>
+      </View>
     </View>
   );
 }
@@ -304,7 +314,7 @@ const makeStyles = (tc: ThemeColors) =>
     ctaBar: {
       paddingHorizontal: 18,
       paddingTop: 18,
-      borderTopWidth: StyleSheet.hairlineWidth,
+      backgroundColor: tc.background,
     },
     // Reserves the lip's depth so pressing the button doesn't shift the bar.
     ctaEdge: {
@@ -321,13 +331,8 @@ const makeStyles = (tc: ThemeColors) =>
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    ctaGhost: {
-      // The disabled state is a hairline surface, not a dimmed button: a faded
-      // filled button still reads as pressable and invites a tap that does
-      // nothing.
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: tc.divider,
+      borderWidth: 1.5,
+      backgroundColor: tc.paper,
     },
     ctaText: {
       fontFamily: MONO_FAMILY,

@@ -36,7 +36,7 @@ from ..services.chest_service import award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
-from ..services.distractor_pool import build_pool, pool_for
+from ..services.distractor_pool import build_lemma_pool, build_pool, pool_for
 from ..services.session_kinds import (
     LIST_KINDS,
     PRACTICE_SOURCE,
@@ -44,7 +44,12 @@ from ..services.session_kinds import (
     canonical_kind,
     compose_for_kind,
 )
-from ..services.quiz_service import build_translation_choices, normalize_choice
+from ..services.quiz_service import (
+    build_definition_choices,
+    build_translation_choices,
+    is_definition_slot,
+    normalize_choice,
+)
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
@@ -132,12 +137,19 @@ class ReviewCard(BaseModel):
     definition: Optional[str] = None
     example_sentence: Optional[str] = None
     cefr_level: Optional[str] = None
-    # Card variant: 'mcq' — a translation MCQ whose distractors are the
-    # other deck words' translations. Cards without one (no translation)
-    # are skipped. The legacy typed-translation 'type' card was removed
-    # with v0.8; the 'synonym_mcq' variant was retired with v0.9.
+    # Card variant:
+    #   'mcq'        — the options are translations of this word.
+    #   'definition' — the options are English words, and the prompt is this
+    #                  card's own `definition` and `example_sentence`. Every
+    #                  fourth card, when it has a definition to ask with; see
+    #                  `quiz_service.is_definition_slot`.
+    #
+    # Cards with neither are skipped. The legacy typed-translation 'type' card
+    # was removed with v0.8; the 'synonym_mcq' variant was retired with v0.9.
     card_type: str = "mcq"
-    # Present for 'mcq': 4 translation entries, exactly one is_correct.
+    # 4 entries, exactly one is_correct. Translations on an 'mcq' card, English
+    # words on a 'definition' one — the client reads `card_type` to know which
+    # question it is asking.
     choices: Optional[list[MCQChoice]] = None
     pos: Optional[str] = None
     # Canonical translation — the correct 'mcq' choice, echoed for
@@ -936,6 +948,20 @@ async def start_session(
             exclude_lemmas=translation_map.keys(),
         )
 
+    # A second pool, of English lemmas, for the definition cards. It is the
+    # cheaper of the two — no translation cache to read and nothing to drop for
+    # want of one — so it is built from every card's bucket rather than only
+    # the translated ones.
+    definition_buckets = {
+        (deck_pos.get(lem), cefr_map.get(lem))
+        for lem in unique_lemmas
+    }
+    definition_pool = await build_lemma_pool(
+        db,
+        buckets=definition_buckets,
+        exclude_lemmas=unique_lemmas,
+    ) if unique_lemmas else {}
+
     cards: list[ReviewCard] = []
     skipped: list[str] = []
     # Last-line guard against a duplicate *displayed* word reaching the
@@ -979,6 +1005,30 @@ async def start_session(
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
+        # Every fourth card asks the meaning instead of the translation, when
+        # it has a definition to ask with. `is_definition_slot` counts cards
+        # actually built, not rows walked, so a word skipped for want of a
+        # translation does not silently shift the rhythm.
+        if base["definition"] and is_definition_slot(len(cards)):
+            def_choices = build_definition_choices(
+                lemma,
+                pool=pool_for(definition_pool, deck_pos.get(lemma), cefr),
+                avoid=used_choices,
+                rng=rng,
+            )
+            if def_choices:
+                used_choices.update(
+                    normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
+                )
+                cards.append(ReviewCard(
+                    **base,
+                    card_type="definition",
+                    pos=pos_label,
+                    translation=translation_map.get(lemma),
+                    choices=[MCQChoice(**c) for c in def_choices],
+                ))
+                continue
+
         choices = build_translation_choices(
             lemma,
             translation_map,
