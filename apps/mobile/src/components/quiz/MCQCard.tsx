@@ -142,15 +142,17 @@ export function MCQCard({
 
   // The same face-over-edge the options wear, and the word deck's buttons
   // before them: a paper face with a rim, and a solid edge under it. Idle is
-  // the accent, answered takes the verdict's colour — so the button is the
+  // *visibly disabled* — faint rim, faint text, border-grey edge — so the
+  // button reads as "waiting for an answer", not as a gold control you could
+  // tap. Once answered it takes the verdict's colour, so the button is the
   // fourth thing on screen saying right or wrong, not a fifth kind of object.
   const ctaAccent = phase === 'idle'
-    ? tc.goldOnSurface
+    ? tc.textFaint
     : userWasCorrect
       ? tc.success
       : tc.error;
   const ctaEdge = phase === 'idle'
-    ? tc.nodeGoldEdge
+    ? tc.border
     : userWasCorrect
       ? tc.quizCorrectEdge
       : tc.quizWrongEdge;

@@ -11,16 +11,19 @@
  * secondary) CTA. Confetti + count-ups honor reduce-motion via their primitives.
  */
 
-import { useMemo, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, type ReactNode } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
-import { PressableScale } from '../ui/PressableScale';
 import { Confetti } from '../ui/Confetti';
 import { CountUp } from '../ui/CountUp';
 import { FORWARD_ARROW } from '../../i18n/rtl';
+
+/** Depth of the edge under the primary CTA. Matches the quiz card's
+ *  CTA_EDGE, so the whole quiz surface shares one physical language. */
+const CTA_EDGE = 4;
 
 export interface SessionStat {
   value: number;
@@ -68,6 +71,8 @@ export function SessionComplete({
   // Both hosts render under the global tab bar, which is an absolute overlay
   // — without this the Done button sits behind it.
   const barInset = useBottomBarInset();
+  // Same press as the quiz card's Next: only the face sinks onto the edge.
+  const ctaPress = useRef(new Animated.Value(0)).current;
 
   const compDelta = comprehension ? Math.round(comprehension.after - comprehension.before) : 0;
 
@@ -135,16 +140,33 @@ export function SessionComplete({
           of the screen edge — a footer padded only by the safe area sits
           underneath it. */}
       <View style={[s.footer, { paddingBottom: barInset + 10 }]}>
-        <View>
-          <View style={[s.primaryEdge, { backgroundColor: tc.quizCorrectEdge }]} />
-          <PressableScale style={s.primaryBtn} onPress={onPrimary} accessibilityRole="button" accessibilityLabel={primaryLabel}>
-            <Text style={s.primaryBtnText}>{primaryLabel}</Text>
-          </PressableScale>
-        </View>
+        {/* The same construction the quiz card's Next wears: a paper face
+            with a rim, and a full-height edge copy sunk CTA_EDGE beneath it.
+            The palette is the card's answered-correct one — this screen is
+            the quiz's correct ending, and its lip was already quizCorrectEdge. */}
+        <Pressable
+          onPress={onPrimary}
+          onPressIn={() => ctaPress.setValue(1)}
+          onPressOut={() => ctaPress.setValue(0)}
+          accessibilityRole="button"
+          accessibilityLabel={primaryLabel}
+        >
+          <View style={s.primarySlot}>
+            <View style={[s.primaryEdge, { backgroundColor: tc.quizCorrectEdge }]} />
+            <Animated.View
+              style={[
+                s.primaryBtn,
+                { transform: [{ translateY: ctaPress.interpolate({ inputRange: [0, 1], outputRange: [0, CTA_EDGE - 1] }) }] },
+              ]}
+            >
+              <Text style={s.primaryBtnText}>{primaryLabel}</Text>
+            </Animated.View>
+          </View>
+        </Pressable>
         {secondaryLabel && onSecondary ? (
-          <PressableScale style={s.secondaryBtn} onPress={onSecondary} accessibilityRole="button" accessibilityLabel={secondaryLabel}>
+          <Pressable style={s.secondaryBtn} onPress={onSecondary} accessibilityRole="button" accessibilityLabel={secondaryLabel}>
             <Text style={s.secondaryBtnText}>{secondaryLabel}</Text>
-          </PressableScale>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -239,20 +261,31 @@ const makeStyles = (tc: ThemeColors) =>
     statLabel: { fontSize: 12, color: tc.textSecondary, marginTop: 2 },
     // Footer. `paddingBottom` is applied inline from `useBottomBarInset`.
     footer: { paddingHorizontal: 24, paddingTop: 8, gap: 12 },
-    // The same lip the answer tiles and the in-deck CTA wear, so the end
-    // screen belongs to the surface the user just came through.
+    // Reserves the edge's depth, so pressing the button does not shift the bar.
+    primarySlot: { paddingBottom: CTA_EDGE },
+    // A full-height copy of the face offset CTA_EDGE down, like the answer
+    // tiles and the quiz card's CTA — not a 5px strip, whose radius would eat
+    // the whole shape and read as a hairline rather than thickness.
     primaryEdge: {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: -5,
-      height: 5,
+      top: CTA_EDGE,
+      bottom: 0,
       borderRadius: 16,
     },
-    primaryBtn: { backgroundColor: tc.gold, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    primaryBtn: {
+      height: 54,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: tc.success,
+      backgroundColor: tc.paper,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     primaryBtnText: {
       fontFamily: MONO_FAMILY,
-      color: tc.goldDeep,
+      color: tc.success,
       fontSize: 13.5,
       fontWeight: '900',
       letterSpacing: 1.4,
