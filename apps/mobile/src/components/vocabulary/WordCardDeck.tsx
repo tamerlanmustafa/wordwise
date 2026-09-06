@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type GestureResponderEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -28,6 +29,7 @@ import {
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { showToast } from '../../stores/toastStore';
 import { pronounce } from '../../utils/pronunciation';
+import { withTap } from '../../utils/feedback';
 import { ReportDialog } from '../ReportDialog';
 import { track } from '../../services/analytics';
 import { renderHighlighted, type SentenceExample } from './VocabRow';
@@ -1112,7 +1114,7 @@ export const WordCardDeck = ({
         >
           <Pressable
             style={s.cardPress}
-            onPress={handleCardPress}
+            onPress={withTap(handleCardPress)}
             accessibilityRole="button"
             accessibilityLabel={expanded ? t('vocabulary:deck.hideTranslation') : t('vocabulary:deck.showTranslation')}
           >
@@ -1133,10 +1135,10 @@ export const WordCardDeck = ({
               <View style={s.flexSpacer} />
               {isAuthenticated ? (
                 <TouchableOpacity
-                  onPress={(e) => {
+                  onPress={withTap((e: GestureResponderEvent) => {
                     e.stopPropagation();
                     onSave(currentKey);
-                  }}
+                  })}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel={isSaved ? t('vocabulary:row.removeFromSaved') : t('vocabulary:row.saveWord')}
@@ -1276,7 +1278,7 @@ export const WordCardDeck = ({
               {isAuthenticated ? (
                 <TouchableOpacity
                   style={s.actionRow}
-                  onPress={() => setReportOpen(true)}
+                  onPress={withTap(() => setReportOpen(true))}
                   accessibilityRole="button"
                 >
                   <FlagIcon size={13} color={tc.textFaint} />
@@ -1290,10 +1292,10 @@ export const WordCardDeck = ({
                 // playing the word. `stopPropagation` for the hits that do
                 // land, exactly as the save heart does.
                 <TouchableOpacity
-                  onPress={(e) => {
+                  onPress={withTap((e: GestureResponderEvent) => {
                     e.stopPropagation();
                     handlePronounce();
-                  }}
+                  })}
                   hitSlop={FOOTER_ICON_HIT_SLOP}
                   accessibilityRole="button"
                   accessibilityLabel={t('vocabulary:row.pronounce')}
@@ -1332,7 +1334,7 @@ export const WordCardDeck = ({
       <View style={s.actionsRow}>
         {onMarkLearned ? (
           <Pressable
-            onPress={() => doLearn('button')}
+            onPress={withTap(() => doLearn('button'))}
             accessibilityRole="button"
             accessibilityLabel={t('vocabulary:deck.iKnowThisWord')}
           >
@@ -1353,7 +1355,7 @@ export const WordCardDeck = ({
         )}
 
         <Pressable
-          onPress={doUndo}
+          onPress={withTap(doUndo)}
           disabled={!canUndo}
           accessibilityRole="button"
           accessibilityLabel={t('vocabulary:deck.previousCard')}
@@ -1369,7 +1371,7 @@ export const WordCardDeck = ({
         </Pressable>
 
         <Pressable
-          onPress={() => doAdvance('button')}
+          onPress={withTap(() => doAdvance('button'))}
           accessibilityRole="button"
           accessibilityLabel={t('vocabulary:deck.nextCard')}
         >

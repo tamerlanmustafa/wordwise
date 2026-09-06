@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LayoutAnimation, Text, TouchableOpacity, View } from 'react-native';
+import { LayoutAnimation, Text, TouchableOpacity, View, type GestureResponderEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme } from '../../theme/tokens';
 import {
@@ -12,6 +12,7 @@ import {
 import { useIsPremium } from '../../stores/entitlementsStore';
 import { showToast } from '../../stores/toastStore';
 import { pronounce } from '../../utils/pronunciation';
+import { withTap } from '../../utils/feedback';
 import { ReportDialog } from '../ReportDialog';
 import { makeRowStyles, ROW_ICON_HIT_SLOP } from './rowStyles';
 import { isSameAsSource } from './translationDisplay';
@@ -250,7 +251,7 @@ export const VocabRow = ({
     <View>
       <TouchableOpacity
         style={[styles.row, { backgroundColor: rowBg }]}
-        onPress={handlePress}
+        onPress={withTap(handlePress)}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityHint={t('vocabulary:row.showsTranslation')}
@@ -335,7 +336,7 @@ export const VocabRow = ({
                     {isAuthenticated && (
                       <TouchableOpacity
                         style={styles.actionRow}
-                        onPress={() => setReportOpen(true)}
+                        onPress={withTap(() => setReportOpen(true))}
                         accessibilityRole="button"
                       >
                         <FlagIcon size={14} color={tc.textSecondary} />
@@ -345,7 +346,7 @@ export const VocabRow = ({
                     {onHide && (
                       <TouchableOpacity
                         style={styles.actionRow}
-                        onPress={() => onHide(term)}
+                        onPress={withTap(() => onHide(term))}
                         accessibilityRole="button"
                       >
                         <BlockIcon size={14} color={tc.error} />
@@ -358,10 +359,10 @@ export const VocabRow = ({
                       // an unpadded near miss collapsed the row instead of
                       // playing the word.
                       <TouchableOpacity
-                        onPress={(e) => {
+                        onPress={withTap((e: GestureResponderEvent) => {
                           e.stopPropagation();
                           handlePronounce();
-                        }}
+                        })}
                         hitSlop={ROW_ICON_HIT_SLOP}
                         accessibilityRole="button"
                         accessibilityLabel={t('vocabulary:row.pronounce')}
@@ -394,7 +395,7 @@ export const VocabRow = ({
 
         {isAuthenticated && onSave && (
           <TouchableOpacity
-            onPress={(e) => { e.stopPropagation(); onSave(term); }}
+            onPress={withTap((e: GestureResponderEvent) => { e.stopPropagation(); onSave(term); })}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.starBtn}
             accessibilityRole="button"

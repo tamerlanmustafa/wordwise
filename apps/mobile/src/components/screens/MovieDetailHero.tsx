@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
+import { withTap } from '../../utils/feedback';
 import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon } from '../../i18n/rtl';
 import { movieTitleTier } from '../vocabulary/cardLayout';
@@ -120,7 +121,7 @@ export const MovieDetailHero = ({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('action.back')}
-            onPress={onBack}
+            onPress={withTap(onBack)}
             hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
             style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
           >
@@ -131,7 +132,7 @@ export const MovieDetailHero = ({
         {/* c · poster + title */}
         <View style={s.plate}>
           <Pressable
-            onPress={onPosterPress}
+            onPress={withTap(onPosterPress)}
             disabled={!onPosterPress || !posterPath}
             accessibilityRole={onPosterPress && posterPath ? 'button' : undefined}
             accessibilityLabel={onPosterPress && posterPath ? t('movies:detail.viewPoster') : undefined}

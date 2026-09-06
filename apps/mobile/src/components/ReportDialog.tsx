@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { reportsApi, type ReportReason } from '../services/api';
 import { FlagIcon } from './ui/icons';
+import { withTap } from '../utils/feedback';
 
 // Mirrors the web ReportDialog (frontend/src/components/ReportDialog.tsx),
 // adapted to React Native primitives. Same shape, same backend call.
@@ -118,7 +119,7 @@ export function ReportDialog({
           <View style={styles.header}>
             <FlagIcon size={18} solid color={COLORS.warning} style={styles.headerIcon} />
             <Text style={styles.headerTitle}>{t('report.title')}</Text>
-            <TouchableOpacity onPress={handleClose} disabled={submitting} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={withTap(handleClose)} disabled={submitting} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={styles.headerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -137,10 +138,10 @@ export function ReportDialog({
                 <TouchableOpacity
                   key={opt}
                   style={[styles.reasonRow, selected && styles.reasonRowSelected]}
-                  onPress={() => {
+                  onPress={withTap(() => {
                     setReason(opt);
                     setError(null);
-                  }}
+                  })}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
@@ -181,14 +182,14 @@ export function ReportDialog({
           <View style={styles.footer}>
             <TouchableOpacity
               style={[styles.btn, styles.btnGhost]}
-              onPress={handleClose}
+              onPress={withTap(handleClose)}
               disabled={submitting}
             >
               <Text style={styles.btnGhostText}>{t('action.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.btnPrimary, (!reason || submitting) && styles.btnDisabled]}
-              onPress={handleSubmit}
+              onPress={withTap(handleSubmit)}
               disabled={!reason || submitting}
             >
               {submitting ? (
