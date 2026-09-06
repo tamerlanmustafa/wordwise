@@ -17,16 +17,33 @@
  * on the scrim rather than on what is under it.
  *
  * **ambient** — nothing is covering this; it is simply not the subject. The
- * word deck's backdrop and poster stay legible, tappable and clearly *there*,
- * just no longer competing. Modal weight here would read as a screen waiting
- * for a dialog that never arrives, and would bury the back button with it.
+ * word deck's backdrop and poster stay tappable and clearly *there*, just no
+ * longer competing.
  *
- * The edge is always darker than the base — that difference is the vignette,
- * and equal values would render two flat layers and read as a grey sheet
- * rather than as depth.
+ * ## The two are different shapes, not just different strengths
+ *
+ * The first pass had ambient uniformly lighter than modal, on the reasoning
+ * that it sits over live controls. That was wrong on a device: a mid alpha of
+ * black over a bright film still does not read as *dark*, it reads as **grey**
+ * — the poster is knocked back toward the middle of the range rather than into
+ * the background, and the whole screen looks washed rather than focused.
+ *
+ * So ambient is now the steeper of the two. Its base stays lighter than
+ * modal's, because the centre of the screen is the deck and nothing should be
+ * fighting it there; its edge goes considerably darker, because the edges are
+ * where the poster and the backdrop actually live. That is what a vignette is
+ * for, and it is why the pairing cannot be described as one number.
+ *
+ * A flat scrim and a focus vignette are answering different questions: modal
+ * asks "can I touch this?", ambient asks "where do I look?".
+ *
+ * The edge is always darker than the base — equal values would render two flat
+ * layers and read as a grey sheet rather than as depth.
  *
  * Light mode needs a lighter hand at both strengths: the same alpha that reads
  * as "behind something" on a dark ground reads as "broken" on a pale one.
+ * Ambient uses plain black in both, unlike modal's warm brown — over film
+ * artwork a tinted dim reads as a colour cast rather than as shadow.
  */
 export function dimColors(
   strength: 'modal' | 'ambient',
@@ -38,6 +55,6 @@ export function dimColors(
       : { base: 'rgba(20,16,10,0.38)', edge: 'rgba(20,16,10,0.46)' };
   }
   return scheme === 'dark'
-    ? { base: 'rgba(0,0,0,0.34)', edge: 'rgba(0,0,0,0.58)' }
-    : { base: 'rgba(20,16,10,0.16)', edge: 'rgba(20,16,10,0.30)' };
+    ? { base: 'rgba(0,0,0,0.55)', edge: 'rgba(0,0,0,0.88)' }
+    : { base: 'rgba(0,0,0,0.30)', edge: 'rgba(0,0,0,0.62)' };
 }

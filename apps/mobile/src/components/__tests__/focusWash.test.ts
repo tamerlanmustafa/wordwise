@@ -39,15 +39,29 @@ describe('dimColors', () => {
     }
   });
 
-  it.each(SCHEMES)('%s: ambient is lighter than modal, at both stops', (scheme) => {
-    // The load-bearing relationship. Ambient sits permanently over live
-    // controls — a back button, a poster — so at modal weight the screen
-    // reads as waiting for a dialog that never arrives, and navigation gets
-    // buried to make a list look better.
+  it.each(SCHEMES)('%s: ambient keeps a lighter centre than modal', (scheme) => {
+    // The centre of an ambient screen is its subject — the word deck — so
+    // nothing should be sitting on top of it there.
     const m = dimColors('modal', scheme);
     const a = dimColors('ambient', scheme);
     expect(alpha(a.base)).toBeLessThan(alpha(m.base));
-    expect(alpha(a.edge)).toBeLessThan(alpha(m.edge));
+  });
+
+  it.each(SCHEMES)('%s: ambient falls off harder toward the edges', (scheme) => {
+    // This assertion replaced "ambient is lighter than modal at both stops",
+    // which was wrong and shipped: a mid alpha of black over a bright film
+    // still does not read as dark, it reads as GREY, and the poster sat in
+    // the middle of the range instead of behind the deck.
+    //
+    // The two are different shapes, not two strengths of one. Modal is a flat
+    // barrier answering "can I touch this?"; ambient is a vignette answering
+    // "where do I look?", so its edges — which is where the poster and the
+    // backdrop actually are — go darker than modal's while its centre stays
+    // lighter.
+    const m = dimColors('modal', scheme);
+    const a = dimColors('ambient', scheme);
+    expect(alpha(a.edge)).toBeGreaterThan(alpha(m.edge));
+    expect(alpha(a.edge) - alpha(a.base)).toBeGreaterThan(alpha(m.edge) - alpha(m.base));
   });
 
   it.each(['modal', 'ambient'] as const)('%s: light mode uses a lighter hand', (strength) => {
@@ -90,12 +104,24 @@ describe('both surfaces read the same source', () => {
   });
 
   it('both use the shared vignette rather than drawing their own edges', () => {
+    // The reach differs — FocusWash has a specific block to cover and passes
+    // its own — but the gradient itself is one component, so a screen that
+    // has receded looks the same whichever reason it receded for.
     for (const f of [
       ['filmFeed', 'SearchDimOverlay.tsx'],
       ['common', 'FocusWash.tsx'],
     ]) {
-      expect(read(...f)).toMatch(/<Vignette color=\{edge\} \/>/);
+      expect(read(...f)).toMatch(/<Vignette color=\{edge\}/);
     }
+  });
+
+  it('reaches past the film hero it has to push back', () => {
+    // The hero runs to roughly 206pt on a notched phone: safe area, the back
+    // row, then the poster's own 100. A shorter reach leaves the poster's
+    // lower half outside the dark part, bright, which is exactly what this
+    // number exists to answer.
+    const reach = Number(/const REACH = (\d+)/.exec(read('common', 'FocusWash.tsx'))?.[1]);
+    expect(reach).toBeGreaterThan(206);
   });
 });
 

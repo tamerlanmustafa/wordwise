@@ -37,6 +37,17 @@ import { useColorScheme } from '../../theme/tokens';
 import { Vignette } from './Vignette';
 import { dimColors } from '../../theme/dim';
 
+/**
+ * How far the darkening reaches in from each edge.
+ *
+ * Deeper than a sheet scrim's atmosphere, because this one has a job: the film
+ * hero it has to push back runs to roughly 206pt on a notched phone — safe
+ * area, the back row, then the poster's own 100. At the shared 160 the
+ * poster's lower half sat outside the dark part and stayed bright, which is
+ * the whole complaint the number exists to answer.
+ */
+const REACH = 260;
+
 export function FocusWash() {
   const scheme = useColorScheme();
   const { base, edge } = dimColors('ambient', scheme);
@@ -44,7 +55,7 @@ export function FocusWash() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: base }]} />
-      <Vignette color={edge} />
+      <Vignette color={edge} height={REACH} />
     </View>
   );
 }
