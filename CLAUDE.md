@@ -1,8 +1,13 @@
 # WordWise
 
-## Git
-- Never run `git add`, `git commit`, `git push`, or any destructive git command unless explicitly asked; instead, stage nothing and tell the user what you'd commit.
-- **Standing exception (2026-09-01):** a `/next-ticket` session ships the ticket it just finished — stages that ticket's files by name, commits, pushes `main`, and publishes to EAS `preview` (an OTA, or an `eas build` when native changed), exactly as step 6 of `.claude/skills/next-ticket/SKILL.md` lays out. The exception covers that step only: no mid-work commits, no `git add -A`, no stashing, no force-push, no `eas submit`.
+## Git: ship what you changed, every time
+- **A prompt that changes code ends with it shipped** (since 2026-09-05). Stage that work's files **by name**, commit, push `main`, and publish to EAS `preview` — an OTA via `eas update`, or an `eas build` when anything native changed. Don't ask first and don't wait to be told; "push to main and update eas preview" is now the default, not an instruction.
+- **A prompt that changes nothing ships nothing.** Questions, explanations, read-only investigation, a diff you reverted — answer and stop. An empty commit or a no-op OTA is noise in the history and burns an EAS update.
+- **Verify before you push, not after.** Typecheck, lint and the mobile suite (see "Verify your work") run first; a red result means fix it or report it, never push it. The pre-push hook and CI will catch you anyway — finding out from CI is just a slower way to learn the same thing.
+- **Stage by name. Never `git add -A`.** Several Claude sessions share this one checkout, so `-A` sweeps up another session's half-finished work and pushes it. For the same reason: never `git stash`.
+- **Still off-limits without being asked:** force-push, history rewrites, branch deletion, `eas submit`, and anything destructive. Unapplied prod SQL, an unauthorised `eas` CLI, or edits you don't recognise in the working tree all stop the ship — say so and hand it back rather than pushing around it.
+- One commit per prompt is the norm; split into more only when the pieces are independently revertable (a rename, then the folder move that follows it).
+- `/next-ticket` still ships its ticket exactly as step 6 of `.claude/skills/next-ticket/SKILL.md` lays out — that flow is now a specific case of this rule rather than an exception to it.
 
 ## Code reuse
 - Before implementing a new feature, check for existing components, hooks, styles, and utilities that can be reused.
