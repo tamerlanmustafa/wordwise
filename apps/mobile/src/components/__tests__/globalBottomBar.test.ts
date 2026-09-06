@@ -36,14 +36,23 @@ describe('tab order', () => {
   });
 
   it('routes the first tab to the word feed and the second to the film feed', () => {
-    // The labels swapped; the route ids did not. `home` is still the film
-    // feed's screen and `explore` still the word feed's — renaming those would
-    // have meant renaming both screen components and every navigation path
-    // that names them. This is the one place the two diverge, so this is where
-    // it gets written down.
+    // Ids name their content, labels name what we call it, and the two are
+    // allowed to cross. They used to cross confusingly — a route called 'home'
+    // rendering under a tab labelled "Explore" — because both were positional
+    // words pointing opposite ways. `words` under "Home" is a mapping; `home`
+    // under "Explore" was a riddle.
     expect(TABS.map((t) => t.id)).toEqual([
-      'explore', 'home', 'practice', 'lists', 'profile',
+      'words', 'films', 'practice', 'lists', 'profile',
     ]);
+  });
+
+  it('never names a tab id after a position', () => {
+    // The whole point of the rename. A positional id can be swapped with
+    // another position, and was; a content id cannot be.
+    const positional = ['home', 'explore'];
+    for (const tab of TABS) {
+      expect(positional).not.toContain(tab.id);
+    }
   });
 
   it('gives the Home-labelled tab the house icon', () => {

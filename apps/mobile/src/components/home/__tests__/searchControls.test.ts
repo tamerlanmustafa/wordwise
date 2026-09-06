@@ -53,7 +53,7 @@ describe('the two controls behave the same way', () => {
 
 describe('the two panels are never open together', () => {
   const home = () =>
-    fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+    fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
 
   it('focusing the field closes the filter sheet', () => {
     // Enforced on the state, not trusted to the sheet covering the field:
@@ -206,7 +206,7 @@ describe('every point inside the border takes a tap', () => {
 describe('the panel is the whole of search', () => {
   const bar = () => read('HomeSearchBar.tsx');
   const home = () =>
-    fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+    fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
   const app = () => fs.readFileSync(path.join(HOME, '..', '..', 'core', 'App.tsx'), 'utf8');
 
   it('caps matches at three', () => {
@@ -270,7 +270,7 @@ describe('every pressable on Home taps back', () => {
   // CLAUDE.md: a new pressable gets a haptic, wrapped in the JSX so it is
   // visible on the element that owns it and greppable from outside.
   const FILES = [
-    ['screens/HomeScreen.tsx', 1],
+    ['screens/FilmFeedScreen.tsx', 1],
     ['home/HomeSearchBar.tsx', 6],
     ['home/RankedMovieList.tsx', 5],
     ['home/TodayWordCard.tsx', 4],
@@ -347,7 +347,7 @@ describe('the recently-viewed panel', () => {
 });
 
 describe('tapping away closes the panel instead of opening a film', () => {
-  const src = () => fs.readFileSync(path.join(HOME, '..', 'screens', 'HomeScreen.tsx'), 'utf8');
+  const src = () => fs.readFileSync(path.join(HOME, '..', 'screens', 'FilmFeedScreen.tsx'), 'utf8');
   const overlay = () => read('SearchDimOverlay.tsx');
 
   it('the overlay is keyed on focus, not on the panel having rows', () => {

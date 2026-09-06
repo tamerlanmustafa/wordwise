@@ -87,7 +87,7 @@ export interface ExploreMetricsInput {
   topInset: number;
   /**
    * Height the floating bottom bar reserves. Explore is a snap pager, so the
-   * card stops above the bar rather than running under it (see ExploreScreen).
+   * card stops above the bar rather than running under it (see WordFeedScreen).
    * Zero on the pinned bar, and before the bar has reported its height.
    */
   bottomOffset?: number;

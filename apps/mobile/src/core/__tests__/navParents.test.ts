@@ -59,7 +59,7 @@ describe('PARENT_OF', () => {
   });
 
   it('leaves root tabs parentless so hardware back can exit the app', () => {
-    const rootTabs: Screen[] = ['home', 'explore', 'journey', 'practice', 'lists'];
+    const rootTabs: Screen[] = ['films', 'words', 'journey', 'practice', 'lists'];
     for (const screen of rootTabs) {
       expect(PARENT_OF[screen]).toBeUndefined();
     }

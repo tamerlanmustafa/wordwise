@@ -3,7 +3,7 @@
  *
  * Replaces the old purple 🔍 search button + plain input. Presentational:
  * all state (query, focus, suggestions, recently-viewed) and handlers live
- * in HomeScreen, so the data wiring is unchanged — only the skin differs.
+ * in FilmFeedScreen, so the data wiring is unchanged — only the skin differs.
  *
  *   • paper field, radius 12, height 48, 1px border that turns gold on
  *     focus, soft shadowCard. Leading stroked search glyph. Gold caret

@@ -3,7 +3,7 @@
  *
  * Backed by FlashList: only a small window of cards is mounted at a time no
  * matter how long the list grows, so memory and render cost stay flat. The
- * list lives in a fixed-height panel inside the HomeScreen page; scrolling it
+ * list lives in a fixed-height panel inside the FilmFeedScreen page; scrolling it
  * to the bottom calls onEndReached to fetch the next page, and a footer
  * spinner shows while that page is in flight (visible on slow connections).
  *

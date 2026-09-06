@@ -30,7 +30,7 @@ import { QuizLessonScreen } from '../components/QuizLessonScreen';
 import { QuizResultScreen } from '../components/QuizResultScreen';
 import { QuizBatchBuilderScreen } from '../components/QuizBatchBuilderScreen';
 import type { MoviePreviewPayload } from '../components/journey/sharedTypes';
-import { ExploreScreen } from '../components/ExploreScreen';
+import { WordFeedScreen } from '../components/WordFeedScreen';
 import { SavedMoviesScreen } from '../components/SavedMoviesScreen';
 import { PracticeScreen } from '../components/PracticeScreen';
 import { MoviePreviewHub } from '../components/MoviePreviewHub';
@@ -70,7 +70,7 @@ import { SettingsScreen } from '../components/screens/SettingsScreen';
 import { ListsIndexScreen } from '../components/screens/ListsIndexScreen';
 import { ListDetailScreen } from '../components/screens/ListDetailScreen';
 import { WatchedScreen } from '../components/screens/WatchedScreen';
-import { HomeScreen } from '../components/screens/HomeScreen';
+import { FilmFeedScreen } from '../components/screens/FilmFeedScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
 import { initI18n, hydrateAppLanguage } from '../i18n';
 import { syncRtlLayout, reloadForRtl } from '../i18n/rtl';
@@ -123,7 +123,7 @@ export default function App() {
   // The word feed. It is the first tab and the one now labelled "Home", so it
   // is what a launch lands on — a tab bar whose leftmost cell says Home while
   // the app opens on the one beside it reads as a bug.
-  const [currentScreen, setCurrentScreen] = useState<Screen>('explore');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('words');
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
@@ -301,10 +301,10 @@ export default function App() {
     setCurrentScreen('movieDetail');
   };
 
-  const navigateToHome = () => {
+  const navigateToFilms = () => {
     setSelectedMovie(null);
     setResolvedMovieId(null);
-    setCurrentScreen('home');
+    setCurrentScreen('films');
     // Home stays mounted under KeepAlive, so its mount-time refresh won't
     // re-run — recompute here so the bell dot reflects e.g. a just-finished
     // review session.
@@ -355,7 +355,7 @@ export default function App() {
     previewsLimit: number;
     reason: PaywallReason;
     origin: Screen;
-  }>({ previewsUsed: 0, previewsLimit: 3, reason: null, origin: 'home' });
+  }>({ previewsUsed: 0, previewsLimit: 3, reason: null, origin: 'films' });
 
   // Where a review session came from. The Practice tab and the other
   // entry points (StatsScreen, notification deep links) pass nothing and
@@ -408,7 +408,7 @@ export default function App() {
   // origin) rather than teleporting to Home (UX audit F-006). We drop back to
   // the base tab the sheet was opened over — Home/My Movies/Practice are all
   // mounted under KeepAlive, so that switch is instant and the sheet animates
-  // straight back with no Home flash. Deliberately skips navigateToHome's
+  // straight back with no Home flash. Deliberately skips navigateToFilms's
   // movie/search resets and notification refresh, which caused that flash.
   // Stable identity (it only touches setters and a ref) so the hardware-back
   // effect below can depend on it without re-subscribing every render.
@@ -510,9 +510,9 @@ export default function App() {
   const [batch, setBatch] = useState<{ ids: number[]; title: string } | null>(null);
 
   // v0.7: navigation targets for the new two-tab world.
-  const navigateToExplore = () => {
+  const navigateToWords = () => {
     useReelBadgeStore.getState().clear();
-    setCurrentScreen('explore');
+    setCurrentScreen('words');
   };
   const navigateToSavedMovies = () => {
     setCurrentScreen('savedMovies');
@@ -551,8 +551,8 @@ export default function App() {
   const handleTabPressUnguarded = (tab: BottomTab) => {
     // Any tab tap dismisses the notifications sheet.
     setShowNotifSheet(false);
-    if (tab === 'home') navigateToHome();
-    else if (tab === 'explore') navigateToExplore();
+    if (tab === 'films') navigateToFilms();
+    else if (tab === 'words') navigateToWords();
     else if (tab === 'practice') navigateToPractice();
     else if (tab === 'lists') navigateToLists();
     else if (tab === 'profile') navigateToProfile();
@@ -569,14 +569,14 @@ export default function App() {
       }
       // An open Explore panel swallows the first back press, exactly as the
       // notification sheet above does.
-      if (currentScreen === 'explore' && useWordFeedStore.getState().openPanel) {
+      if (currentScreen === 'words' && useWordFeedStore.getState().openPanel) {
         useWordFeedStore.getState().setPanelOpen(null);
         return true;
       }
-      // 'explore' is deliberately absent: back from the feed lands on Home
+      // 'words' is deliberately absent: back from that feed lands on the film
       // rather than exiting the app, since it's a browsing surface rather
       // than the app's root.
-      const rootTabs: Screen[] = ['home', 'practice', 'lists'];
+      const rootTabs: Screen[] = ['films', 'practice', 'lists'];
       if (authed && !rootTabs.includes(currentScreen)) {
         // Same resolver the header chevron and the edge swipe use, so the
         // hardware button can no longer disagree with them — it used to send
@@ -584,7 +584,7 @@ export default function App() {
         // stranding its session state.
         const back = resolveBackRef.current(currentScreen);
         if (back) back();
-        else navigateToHome();
+        else navigateToFilms();
         return true;
       }
       return false; // on a root tab (or login) — let Android do its default
@@ -815,7 +815,7 @@ export default function App() {
     // If we came from the reel preview hub, return there; otherwise drop back
     // to Home as before.
     if (activePreviewTile) setCurrentScreen('moviePreview');
-    else navigateToHome();
+    else navigateToFilms();
   };
 
   // ── One answer to "where does Back go from here" ──────────────────────
@@ -862,7 +862,7 @@ export default function App() {
       case 'quizBatchJourney':
         return () => setCurrentScreen('quizBatchBuilder');
       case 'quizBatchBuilder':
-        return navigateToHome;
+        return navigateToFilms;
       default:
         return PARENT_OF[from] ? () => goToParent(from) : null;
     }
@@ -938,10 +938,10 @@ export default function App() {
   // v0.7 4-tab map: Home · My Movies · Practice · Profile.
   const activeTab: BottomTab | null = (() => {
     switch (currentScreen) {
-      case 'home':
-        return 'home';
-      case 'explore':
-        return 'explore';
+      case 'films':
+        return 'films';
+      case 'words':
+        return 'words';
       // The Lists tab owns both its index and any list opened from it.
       case 'lists':
       case 'listDetail':
@@ -1002,14 +1002,14 @@ export default function App() {
             tabs — or opening a detail screen and pressing back — retains its
             scroll position and list/data state instead of remounting. Deep
             screens render in the ternary below, on top of this layer. */}
-        <KeepAlive visible={currentScreen === 'home'}>
-          <HomeScreen onMoviePress={navigateToMovie} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
+        <KeepAlive visible={currentScreen === 'films'}>
+          <FilmFeedScreen onMoviePress={navigateToMovie} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Explore keeps its place in KeepAlive so the feed doesn't lose
             its scroll position when the user dips into Profile. */}
-        <KeepAlive visible={currentScreen === 'explore' || currentScreen === 'journey'}>
-          <ExploreScreen
-            active={currentScreen === 'explore'}
+        <KeepAlive visible={currentScreen === 'words' || currentScreen === 'journey'}>
+          <WordFeedScreen
+            active={currentScreen === 'words'}
             proficiencyLevel={user?.proficiency_level}
             targetLanguage={targetLanguage}
             bottomOffset={barHeight}
@@ -1069,7 +1069,7 @@ export default function App() {
             initialSession={reviewLaunch.session}
             // Routed through `resolveBack`, not a second copy of the
             // destination. This prop *was* that second copy — it still said
-            // `navigateToHome` after the resolver moved to Practice, and
+            // `navigateToFilms` after the resolver moved to Practice, and
             // because the header chevron calls it directly it also skipped
             // the quit guard entirely. One resolver, so the chevron, hardware
             // back, the swipe and a tab tap cannot disagree about either
@@ -1157,7 +1157,7 @@ export default function App() {
         ) : currentScreen === 'quizBatchBuilder' ? (
           <QuizBatchBuilderScreen
             userLevel={user?.proficiency_level}
-            onBack={navigateToHome}
+            onBack={navigateToFilms}
             onStart={handleBatchBuilt}
           />
         ) : currentScreen === 'quizBatchJourney' && batch ? (

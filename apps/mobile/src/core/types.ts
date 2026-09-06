@@ -1,7 +1,10 @@
 // App-scoped types shared by App.tsx and extracted screen components.
 
 export type Screen =
-  | 'home'
+  /** The film feed. Named for what it shows, not for where its tab sits: the
+   *  tab is *labelled* "Explore", and the two were swapped once already. A
+   *  positional name can be swapped again; a content name cannot. */
+  | 'films'
   /** The account area's front door. Was a bottom sheet until 2026-09-05; it is
    *  a tab root now, which is why `PROFILE_SHEET` no longer exists. */
   | 'profile'
@@ -33,7 +36,8 @@ export type Screen =
   // but kept in the union so any legacy navigation paths still typecheck
   // until they're cleaned up. App.tsx no longer routes anything here.
   | 'journey'
-  | 'explore'
+  /** The word feed — the tab labelled "Home". See `films` above. */
+  | 'words'
   /** The saved reel, now reached from the Profile sheet rather than a tab. */
   | 'savedMovies'
   /** An open list inside the Lists tab. The tab stays lit while it shows. */

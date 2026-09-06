@@ -75,7 +75,7 @@ interface Props {
  *  whole of search — there is no "see all" behind it. */
 const SUGGESTION_LIMIT = 3;
 
-export const HomeScreen = ({
+export const FilmFeedScreen = ({
   onMoviePress,
   user,
   targetLanguage,
@@ -116,7 +116,7 @@ export const HomeScreen = ({
   // absolute overlay and a 116pt recycled cell would clip it.
   const [ringDetail, setRingDetail] = useState<{ movie: any; vocab: FilmVocabulary } | null>(null);
   // Stable, so MovieCard's React.memo survives — an inline arrow here would
-  // hand every recycled cell a new prop on every HomeScreen render.
+  // hand every recycled cell a new prop on every FilmFeedScreen render.
   const handleRingPress = useCallback(
     (movie: any, vocab: FilmVocabulary) => setRingDetail({ movie, vocab }),
     [],

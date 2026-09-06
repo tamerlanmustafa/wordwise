@@ -230,7 +230,7 @@ describe('placeholders go through the Skeleton primitive', () => {
    */
   it('no component paints its own skeleton bar', () => {
     const files = [
-      'components/ExploreScreen.tsx',
+      'components/WordFeedScreen.tsx',
       'components/screens/MovieDetailScreen.tsx',
       'components/common/FeedSkeleton.tsx',
       'components/quiz/QuizCardSkeleton.tsx',

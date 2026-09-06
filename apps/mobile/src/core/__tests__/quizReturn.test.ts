@@ -38,9 +38,9 @@ describe('quizReturnScreen', () => {
   it('falls back to Home when nothing survived', () => {
     expect(
       quizReturnScreen({ origin: null, hasPreviewTile: false, hasSelectedMovie: false }),
-    ).toBe('home');
+    ).toBe('films');
     expect(
       quizReturnScreen({ origin: 'reel-preview', hasPreviewTile: false, hasSelectedMovie: false }),
-    ).toBe('home');
+    ).toBe('films');
   });
 });

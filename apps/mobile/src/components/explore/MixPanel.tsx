@@ -104,7 +104,7 @@ export function MixPanel({
 
   // The committed mix and what the server actually honoured — the truth for
   // the thin-level note. Read from the store rather than added to the props so
-  // ExploreScreen keeps the props it already passes.
+  // WordFeedScreen keeps the props it already passes.
   const committedMix = useWordFeedStore((st) => st.mix);
   const mixApplied = useWordFeedStore((st) => st.mixApplied);
   const shortfall = useMemo(
@@ -121,7 +121,7 @@ export function MixPanel({
   /** A move mid-drag repaints the bar and nothing else. The parent holds the
    *  draft that Done commits, and it does not need a new one sixty times a
    *  second for a divider the finger has not finished aiming — that is one
-   *  ExploreScreen render per touch event to show a value about to change. */
+   *  WordFeedScreen render per touch event to show a value about to change. */
   function preview(next: MixCuts) {
     setCuts(next);
   }

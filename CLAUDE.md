@@ -111,5 +111,6 @@
 - Treat `frontend/dist/` and other generated/build output as read-only.
 
 ## Gotchas
+- **The tab labelled "Home" shows the word feed; the tab labelled "Explore" shows the film feed.** The labels were swapped once and the route ids were not, so a screen called `home` rendered under a tab called "Explore" for a while. Ids are named for content now — `words` → `WordFeedScreen`, `films` → `FilmFeedScreen` — and `GlobalBottomBar.TABS` is the only place content, label and position meet. Say "the film feed" or "the word feed"; "home page" is ambiguous and always has been.
 - Shared types live in `packages/types` (`@wordwise/types`). Change types there once — don't redefine them per-app.
 - Two dead web trees, neither of them the product: `web/` at the repo root is legacy `.jsx` (movies/practice/quiz/shell), and `frontend/` is the frozen React app (see "Mobile is the product"). Don't edit either for current features unless asked.

@@ -10,7 +10,7 @@ import {
 } from '../collapseOnScroll';
 
 // Feed a sequence of absolute scroll offsets through the reducer and return
-// the final state — mirrors how onScroll drives it in HomeScreen.
+// the final state — mirrors how onScroll drives it in FilmFeedScreen.
 function run(offsets: number[], start: CollapseState = initialCollapseState): CollapseState {
   return offsets.reduce(reduceCollapse, start);
 }

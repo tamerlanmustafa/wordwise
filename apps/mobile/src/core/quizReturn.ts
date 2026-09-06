@@ -48,5 +48,5 @@ export function quizReturnScreen({
   if (origin === 'reel-preview' && hasPreviewTile) return 'moviePreview';
   if (hasPreviewTile) return 'moviePreview';
   if (hasSelectedMovie) return 'movieDetail';
-  return 'home';
+  return 'films';
 }

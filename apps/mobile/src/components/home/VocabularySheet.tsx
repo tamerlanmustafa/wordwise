@@ -16,7 +16,7 @@
  * established — grabber, 17/'800' title, gold Done, `bottomOffset` so no row
  * hides behind the floating bar.
  *
- * Rendered at the HomeScreen root rather than inside the card: BottomSheet is
+ * Rendered at the FilmFeedScreen root rather than inside the card: BottomSheet is
  * an absolute overlay, so from inside a 116pt FlashList cell it would be
  * clipped to that cell — and the cell is recycled out from under it besides.
  */

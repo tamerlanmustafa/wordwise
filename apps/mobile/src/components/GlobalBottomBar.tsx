@@ -57,7 +57,7 @@ import {
   type NavBarMetrics,
 } from './navBarMetrics';
 
-export type BottomTab = 'home' | 'explore' | 'practice' | 'lists' | 'profile';
+export type BottomTab = 'films' | 'words' | 'practice' | 'lists' | 'profile';
 
 interface Props {
   /** Which tab to render as active; `null` when inside a sub-page that
@@ -82,24 +82,27 @@ type NavIconKind = 'home' | 'explore' | 'spark' | 'list' | 'user';
 // Labels live in `common:nav.*` and are resolved at render — this array is
 // module-level, so a literal label here would freeze at the launch language.
 //
-// ## The word feed is Home now
+// ## Ids say what a screen shows; labels say what we call it
 //
 // The first tab shows the **word feed** and is called Home; the second shows
-// the **film feed** and is called Explore. That is the swap, and it is why
-// `id` and `labelKey` no longer match on the first two rows.
+// the **film feed** and is called Explore. The labels were swapped at some
+// point and the route ids were not, which left a screen called `home`
+// rendering under a tab labelled "Explore" — two positional words pointing
+// opposite ways, and a standing tax on every conversation about either tab.
 //
-// The ids are internal route names and deliberately were NOT renamed with the
-// labels. `home` still routes to `HomeScreen` (the film feed) and `explore` to
-// `ExploreScreen` (the word feed); renaming those would mean renaming the two
-// screen components, every `navigateToX`, `PARENT_OF`, `resolveBack` and
-// `quizReturn` — a large blast radius across the navigation, for a change that
-// is about what the tabs are *called*. The divergence is confined to these two
-// lines and pinned by `globalBottomBar.test.ts`, which is the trade: one
-// documented mismatch in one array, rather than a rename touching every
-// navigation path in the app.
+// The ids are named for their content now (`words`, `films`), so they cannot
+// be swapped by a future reshuffle: a tab can move or be renamed, but the film
+// feed is always the film feed.
+//
+// This array is the ONE place content, label and position meet, and the three
+// are allowed to disagree here because they are three different things: `id`
+// is which feed, `labelKey` is what we call it, `icon` is what it wears.
+//
+// A reshuffle is therefore a one-line edit here, and nothing downstream has to
+// know it happened.
 export const TABS: TabItem[] = [
-  { id: 'explore',  labelKey: 'home',     icon: 'home' },
-  { id: 'home',     labelKey: 'explore',  icon: 'explore' },
+  { id: 'words',  labelKey: 'home',     icon: 'home' },
+  { id: 'films',  labelKey: 'explore',  icon: 'explore' },
   { id: 'practice', labelKey: 'practice', icon: 'spark' },
   { id: 'lists',    labelKey: 'lists',    icon: 'list' },
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },

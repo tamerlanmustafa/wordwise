@@ -1,5 +1,5 @@
 /**
- * ExploreScreen — the endless, level-mixed word feed.
+ * WordFeedScreen — the endless, level-mixed word feed.
  *
  * One word fills the viewport; a flick advances exactly one card. The
  * screen, the toast strip and the tab bar are one flat surface (`feedBg`):
@@ -70,7 +70,7 @@ interface Props {
   bottomOffset?: number;
 }
 
-export function ExploreScreen({
+export function WordFeedScreen({
   active,
   proficiencyLevel,
   targetLanguage,
