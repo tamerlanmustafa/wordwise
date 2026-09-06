@@ -56,11 +56,13 @@ export type PracticeTileState =
 export interface PracticeTileProps {
   state: PracticeTileState;
   onPress?: () => void;
+  riserDirection: 'upper-left' | 'upper-right';
 }
 
 export function PracticeTile({
   state,
   onPress,
+  riserDirection,
 }: PracticeTileProps) {
   const tc = useThemeColors();
   const s = makeStyles(tc);
@@ -157,6 +159,7 @@ export function PracticeTile({
               face={visual.face}
               edge={visual.edge}
               pressed={pressed && tappable}
+              riserDirection={riserDirection}
             >
               {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
             </TilePill>

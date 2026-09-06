@@ -201,7 +201,8 @@ describe('the tile is built like the deck buttons', () => {
     const s = pill();
     const edgeAt = s.indexOf('styles.edge');
     expect(s.slice(edgeAt - 200, edgeAt)).toMatch(/Static/);
-    expect(s).toMatch(/styles\.edge, \{ backgroundColor: edge \}\] \} pointerEvents="none"|styles\.edge, \{ backgroundColor: edge \}\]\} pointerEvents="none"/);
+    expect(s).toMatch(/styles\.edge,\s*\n\s*riserDirection === 'upper-left' \? styles\.edgeUpperLeft : styles\.edgeUpperRight,/);
+    expect(s).toMatch(/pointerEvents="none"/);
   });
 });
 
