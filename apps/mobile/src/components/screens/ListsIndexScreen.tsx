@@ -128,7 +128,16 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
 
         {loading
           ? [0, 1, 2].map((i) => (
-              <Skeleton key={i} height={METRICS.rowMinHeight} radius={METRICS.rowRadius} />
+              // The row's full painted height — face plus the edge under it —
+              // and the gap it carries, so the list does not shift when the
+              // real rows land. Numbers from METRICS; a skeleton never states
+              // its own.
+              <Skeleton
+                key={i}
+                height={METRICS.rowMinHeight + METRICS.rowEdge}
+                radius={METRICS.rowRadius}
+                style={s.rowSkeleton}
+              />
             ))
           : shown.map((list) => (
               <View key={list.id}>
@@ -177,6 +186,7 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   segmentWrap: { paddingHorizontal: 18, paddingBottom: 14 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 18, gap: 0 },
+  rowSkeleton: { marginBottom: METRICS.rowGap },
   hint: {
     ...metaText,
     letterSpacing: 0,

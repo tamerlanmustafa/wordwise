@@ -6,16 +6,23 @@
  * of a list holding one kind only, and it means the user recognises a list
  * without opening it.
  *
- * The two pinned lists are marked by the gold hairline border and a gold
- * meta line — nothing else. No badge, no lock icon: they read as *yours and
- * always here*, not as *restricted*.
+ * Each row is a pill — a face over a darker edge, which sinks under a finger
+ * (see `ui/PressablePill`). The same object the film-feed card is, at a
+ * different height: these rows grow with their content, which is why they use
+ * the shared primitive rather than the card's fixed-height layers.
+ *
+ * The two pinned lists were marked by a gold hairline border and a gold meta
+ * line — no badge, no lock icon, so they read as *yours and always here*
+ * rather than as *restricted*. The border half of that no longer distinguishes
+ * them: every row wears the gold rim now, so the meta line carries it alone.
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { FORWARD_ARROW } from '../../i18n/rtl';
+import { withTap } from '../../utils/feedback';
 import { PosterFan } from './PosterFan';
 import {
   METRICS,
@@ -26,6 +33,7 @@ import {
 } from './listStyles';
 import type { ListSummary } from '../../core/types';
 import { HeartIcon } from '../ui/icons';
+import { PressablePill } from '../ui/PressablePill';
 
 interface Props {
   list: ListSummary;
@@ -44,7 +52,8 @@ export function useListDisplayName(list: ListSummary): string {
 export function ListRow({ list, onPress }: Props) {
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
-  const s = useMemo(() => makeStyles(tc), [tc]);
+  const isDark = useColorScheme() === 'dark';
+  const s = useMemo(() => makeStyles(tc, isDark), [tc, isDark]);
   const name = useListDisplayName(list);
 
   const isSystem = list.systemKey !== null;
@@ -66,10 +75,14 @@ export function ListRow({ list, onPress }: Props) {
   }, [isEmpty, isSystem, isFilms, list.count, list.totalWords, list.dueCount, t]);
 
   return (
-    <TouchableOpacity
-      style={[s.row, isSystem && { borderColor: tc.goldLine }]}
-      onPress={onPress}
-      activeOpacity={0.85}
+    <PressablePill
+      style={s.slot}
+      faceStyle={s.row}
+      edge={tc.nodeGoldEdge}
+      radius={METRICS.rowRadius}
+      edgeDepth={METRICS.rowEdge}
+      shadow={s.edgeShadow}
+      onPress={withTap(onPress)}
       accessibilityRole="button"
       accessibilityLabel={`${name}. ${meta}`}
     >
@@ -92,7 +105,7 @@ export function ListRow({ list, onPress }: Props) {
       </View>
 
       <Text style={s.chevron}>{FORWARD_ARROW}</Text>
-    </TouchableOpacity>
+    </PressablePill>
   );
 }
 
@@ -100,7 +113,8 @@ export function ListRow({ list, onPress }: Props) {
  *  two user-made lists are still distinguishable at a glance. */
 function WordTile({ list }: { list: ListSummary }) {
   const tc = useThemeColors();
-  const s = useMemo(() => makeStyles(tc), [tc]);
+  const isDark = useColorScheme() === 'dark';
+  const s = useMemo(() => makeStyles(tc, isDark), [tc, isDark]);
   const isFavourites = list.systemKey === 'favourites';
   const initial = (list.name.trim()[0] ?? '?').toUpperCase();
 
@@ -120,24 +134,42 @@ function WordTile({ list }: { list: ListSummary }) {
   );
 }
 
-const makeStyles = (tc: ThemeColors) => StyleSheet.create({
+const makeStyles = (tc: ThemeColors, isDark: boolean) => StyleSheet.create({
+  /** Outer layout only. The gap between rows lives here, not on the face:
+   *  the face no longer touches the next row — the edge does. */
+  slot: {
+    marginBottom: METRICS.rowGap,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: METRICS.rowMinHeight,
     borderRadius: METRICS.rowRadius,
     backgroundColor: tc.paper,
+    // The rim the film-feed card and "Knew it" wear. Tokens, so #8B5A00 on
+    // cream and #FFD166 on near-black come from the palette rather than from a
+    // branch here.
     borderWidth: 1,
-    borderColor: tc.border,
+    borderColor: tc.goldOnSurface,
     paddingVertical: 12,
     paddingHorizontal: 14,
     gap: METRICS.rowInnerGap,
-    marginBottom: METRICS.rowGap,
-    shadowColor: tc.cardShadowColor,
-    shadowOpacity: 1,
-    shadowRadius: 11,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
+    // No shadow — the edge underneath carries it. See PressablePill.
+  },
+  /**
+   * Matches the film-feed card's, so a card and a list row sit at the same
+   * height off the page.
+   *
+   * iOS only, and deliberately no `elevation`: on Android that property also
+   * sets z-order, so an elevated edge draws *above* the face it is supposed to
+   * sit under. The hard edge is the depth cue there — which is what every
+   * other pill in the app relies on. See `ui/PressablePill`.
+   */
+  edgeShadow: {
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.45 : 0.10,
+    shadowRadius: isDark ? 16 : 12,
+    shadowOffset: { width: 0, height: isDark ? 6 : 4 },
   },
   body: { flex: 1, gap: 3 },
   name: { ...listName, color: tc.text },

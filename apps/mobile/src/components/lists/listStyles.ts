@@ -52,6 +52,15 @@ export const previewWords: TextStyle = {
 export const METRICS = {
   rowRadius: 14,
   rowMinHeight: 68,
+  /**
+   * Depth of the edge under a row's face — a row is a pill (see
+   * `ui/PressablePill`), so it paints `face + rowEdge` tall.
+   *
+   * The loading skeleton reads this too. A placeholder that is not the size of
+   * the thing it stands in for makes the list jump the moment the data lands,
+   * which is the whole reason these numbers live in one file.
+   */
+  rowEdge: 4,
   rowGap: 10,
   rowInnerGap: 14,
   posterW: 46,

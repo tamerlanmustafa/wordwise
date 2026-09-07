@@ -701,11 +701,22 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       // The shadow lives here, not on the face: this is the bottom-most solid,
       // so the card casts one shadow rather than the face casting a second one
       // onto its own edge.
+      //
+      // iOS only, and NO `elevation` — that is not an omission. On Android
+      // `elevation` also sets z-order within the parent, so an edge with any
+      // elevation draws *above* the zero-elevation face beside it: the whole
+      // card would render as a solid gold-brown block with a 4pt sliver of
+      // content at the top. The elevation here was correct while the card was
+      // one layer; splitting it into face + edge is what made it wrong.
+      //
+      // No Android shadow is the right trade rather than a loss. Every other
+      // pill in the app — TilePill, MCQChoice, the deck's Knew it / Next —
+      // carries none either: the hard edge IS the depth cue, and a shadow says
+      // "this floats" where an edge says "this is a button you can push".
       shadowColor: '#000',
       shadowOpacity: isDark ? 0.45 : 0.10,
       shadowRadius: isDark ? 16 : 12,
       shadowOffset: { width: 0, height: isDark ? 6 : 4 },
-      elevation: isDark ? 4 : 3,
     },
     card: {
       height: CARD_H,
