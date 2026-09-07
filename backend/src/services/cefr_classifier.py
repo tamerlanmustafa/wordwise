@@ -9,7 +9,7 @@ Aggressive pre-cleaning before tokenization
 import logging
 import threading
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import json
 from pathlib import Path
@@ -1080,6 +1080,55 @@ class WordClassification:
     zipf_score: Optional[float] = None  # Zipf frequency (0-7 scale, higher = more common)
     is_multi_word: bool = False
     alternatives: Optional[List[Tuple[CEFRLevel, float]]] = None
+    # Set when a SCRIPT-SCOPED adjustment (kids genre, C2-spike) rewrote
+    # cefr_level for this script only. They hold the grade from before that
+    # rewrite — the one that is true of the word everywhere — and stay None
+    # when nothing was adjusted. See `registry_level`.
+    base_level: Optional[CEFRLevel] = None
+    base_confidence: Optional[float] = None
+
+    @property
+    def registry_level(self) -> CEFRLevel:
+        """The grade fit to write to the global `lemmas` registry.
+
+        `cefr_level` answers "what is this word in THIS script", which is what
+        `word_classifications` stores and what the movie's own screens show. The
+        registry is keyed on the lemma alone and has one row per word for every
+        user, so it must be told the unadjusted grade instead.
+
+        Prod on 2026-09-06 is what happens when it isn't: the kids-genre branch
+        graded `contingent` A2 at confidence 0.6 while classifying Rango, that
+        beat the B2 at 0.55 that 21 other scripts agreed on (`_level_wins`
+        keeps the higher confidence), and A2 became the word's level app-wide.
+        1,522 registry rows carried that exact signature.
+        """
+        return self.base_level if self.base_level is not None else self.cefr_level
+
+    @property
+    def registry_confidence(self) -> float:
+        """Confidence to go with `registry_level` — see that property."""
+        return (
+            self.base_confidence if self.base_confidence is not None else self.confidence
+        )
+
+
+def _script_scoped(
+    cls: WordClassification, level: CEFRLevel, confidence: float
+) -> WordClassification:
+    """Rewrite `cls` for the current script only, preserving the global grade.
+
+    Every genre- or script-shaped adjustment goes through here rather than
+    building a `WordClassification` by hand, so none of them can forget to
+    carry `base_level` and leak a per-movie opinion into the `lemmas` registry.
+    Chained adjustments keep the ORIGINAL base, not the previous rewrite.
+    """
+    return replace(
+        cls,
+        cefr_level=level,
+        confidence=confidence,
+        base_level=cls.registry_level,
+        base_confidence=cls.registry_confidence,
+    )
 
 
 def _zipf_to_cefr(word: str) -> str:
@@ -2082,15 +2131,7 @@ class HybridCEFRClassifier:
             # For kids genres: downgrade B2+ non-dictionary words to A2
             # IMPORTANT: Create new object to avoid mutating cached results
             if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
-                freq_result = WordClassification(
-                    word=freq_result.word,
-                    lemma=freq_result.lemma,
-                    pos=freq_result.pos,
-                    cefr_level=CEFRLevel.A2,
-                    confidence=0.6,
-                    source=freq_result.source,
-                    is_multi_word=freq_result.is_multi_word
-                )
+                freq_result = _script_scoped(freq_result, CEFRLevel.A2, 0.6)
             _GLOBAL_CEFR_CACHE.set(cache_key, freq_result)
             return freq_result
 
@@ -2101,14 +2142,8 @@ class HybridCEFRClassifier:
                 # For kids genres: downgrade high levels from embeddings
                 # IMPORTANT: Create new object to avoid mutating cached results
                 if is_kids_genre and emb_result.cefr_level in [CEFRLevel.B2, CEFRLevel.C1, CEFRLevel.C2]:
-                    emb_result = WordClassification(
-                        word=emb_result.word,
-                        lemma=emb_result.lemma,
-                        pos=emb_result.pos,
-                        cefr_level=CEFRLevel.A2,
-                        confidence=emb_result.confidence * 0.7,
-                        source=emb_result.source,
-                        is_multi_word=emb_result.is_multi_word
+                    emb_result = _script_scoped(
+                        emb_result, CEFRLevel.A2, emb_result.confidence * 0.7
                     )
                 _GLOBAL_CEFR_CACHE.set(cache_key, emb_result)
                 return emb_result
@@ -2117,15 +2152,7 @@ class HybridCEFRClassifier:
         if freq_result:
             # IMPORTANT: Create new object to avoid mutating cached results
             if is_kids_genre and freq_result.cefr_level in [CEFRLevel.B2]:
-                freq_result = WordClassification(
-                    word=freq_result.word,
-                    lemma=freq_result.lemma,
-                    pos=freq_result.pos,
-                    cefr_level=CEFRLevel.A2,
-                    confidence=0.4,
-                    source=freq_result.source,
-                    is_multi_word=freq_result.is_multi_word
-                )
+                freq_result = _script_scoped(freq_result, CEFRLevel.A2, 0.4)
             _GLOBAL_CEFR_CACHE.set(cache_key, freq_result)
             return freq_result
 
@@ -2321,19 +2348,12 @@ class HybridCEFRClassifier:
                     idx = c2_indices[i]
                     old_cls = classifications[idx]
                     # Create NEW object - NEVER mutate the original
-                    new_cls = WordClassification(
-                        word=old_cls.word,
-                        lemma=old_cls.lemma,
-                        pos=old_cls.pos,
-                        cefr_level=CEFRLevel.A2,
-                        confidence=0.3,
-                        source=old_cls.source,
-                        is_multi_word=old_cls.is_multi_word
-                    )
-                    classifications[idx] = new_cls
+                    classifications[idx] = _script_scoped(old_cls, CEFRLevel.A2, 0.3)
                     # NOTE: We do NOT update _GLOBAL_CEFR_CACHE here!
                     # The C2 spike fix is movie-specific (proper nouns/fantasy context)
-                    # Other movies may have legitimate C2 words with the same lemma
+                    # Other movies may have legitimate C2 words with the same lemma —
+                    # which is also why `_script_scoped` keeps the pre-spike grade in
+                    # base_level for the `lemmas` registry to use instead.
 
                 logger.info(f"✓ Downgraded {downgrade_count}/{len(c2_indices)} C2 words to A2")
 

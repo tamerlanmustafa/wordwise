@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Protocol
 
+from .cefr_registry import trusted_registry_sql
 from .hidden_words import hidden_word_exclusion_sql
 
 # Levels the Explore mix can address — the whole CEFR range. The mix panel is a
@@ -51,6 +52,21 @@ def real_word_sql(alias: str = "l") -> str:
     - isn't curated away in hidden_words (which is also where profanity and the
       over-stripped junk lemmas live, so this is the filter that keeps them off
       a screen)
+    - carries a level something actually graded (`trusted_registry_sql`)
+
+    That third test used to be the quiz's alone, and the divergence is what
+    let #91's dumping ground back onto a screen: on 2026-09-06 prod served
+    3,850 A2 cards — 56% of the level — whose grade was populate_lemma_registry's
+    old A2 default for lemmas the classifier never placed. `disport`,
+    `pumpernickel` and `unbreached` all reached the beginner feed that way while
+    the quiz, which did call the guard, correctly refused them. One predicate,
+    one answer.
+
+    It is a no-op as written: regrade_a2_bucket.py re-graded all 7,160 rows
+    first, so no real level has an untrusted row left and this only catches
+    future drift. That order was deliberate — turning the guard on alone would
+    have cut the A2 feed from 6,745 words to 1,477, below A1, which is a worse
+    product than the bug it fixes.
 
     Split out of `feed_eligibility_sql` for the quiz's distractor pool, which
     needs everything here and none of the "has an example sentence" test below:
@@ -65,6 +81,7 @@ def real_word_sql(alias: str = "l") -> str:
           {alias}.lemma ~ '^[a-zA-Z]+$'
           AND length({alias}.lemma) >= {FEED_MIN_LEMMA_LENGTH}
           AND {hidden_word_exclusion_sql(f"{alias}.lemma")}
+          AND {trusted_registry_sql(alias)}
     """
 
 

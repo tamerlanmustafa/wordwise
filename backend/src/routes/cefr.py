@@ -634,12 +634,18 @@ async def run_script_classification(
                     script.cleanedScriptText, doc=script_doc
                 )
 
-                # Build classification lookup for the lemmatization service
+                # Build classification lookup for the lemmatization service.
+                #
+                # `registry_level`, not `cefr_level`: the rows above are this
+                # script's view and may carry a kids-genre or C2-spike
+                # downgrade, while `lemmas` holds one row per word for every
+                # user and must be told the unadjusted grade (see
+                # WordClassification.registry_level).
                 cls_lookup = {}
                 for cls in cls_list:
                     cls_lookup[cls.lemma] = {
-                        "cefr_level": cls.cefr_level.value,
-                        "confidence": cls.confidence,
+                        "cefr_level": cls.registry_level.value,
+                        "confidence": cls.registry_confidence,
                         "source": cls.source.value,
                         "frequency_rank": cls.frequency_rank,
                         "pos": cls.pos,

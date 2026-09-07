@@ -59,11 +59,27 @@ class TestEligibilityFragment:
         assert "cand.lemma" in frag
         assert "sll.lemma_id = cand.id" in frag
 
-    def test_does_not_filter_by_level(self):
+    def test_does_not_scope_to_a_band(self):
         # Level scoping belongs to the caller: /today asks for the user's band,
-        # /feed for whatever the mix names, the report for all of them.
+        # /feed for whatever the mix names, the report for all of them. So no
+        # servable level may appear as a literal.
+        #
+        # `cefr_level` itself does appear, via trusted_registry_sql's
+        # `<> 'UNKNOWN'`. That is not scoping: UNKNOWN is the "could not
+        # classify" holding pen (#91), never one of FEED_MIX_LEVELS, so no
+        # caller can ever ask for it.
         frag = feed_eligibility_sql("l")
-        assert "cefr_level" not in frag
+        for level in FEED_MIX_LEVELS:
+            assert f"'{level}'" not in frag
+
+    def test_requires_a_level_something_actually_graded(self):
+        # The quiz applied trusted_registry_sql and the feed did not, so the
+        # feed served 3,850 A2 cards on 2026-09-06 whose "grade" was the old
+        # populate_lemma_registry A2 default — `disport`, `pumpernickel`,
+        # `unbreached`. One predicate, or they drift again.
+        frag = feed_eligibility_sql("l")
+        assert "l.cefr_level <> 'UNKNOWN'" in frag
+        assert "l.source = 'fallback' AND l.confidence < 0.5" in frag
 
 
 class TestRealWordSplit:
@@ -140,3 +156,51 @@ def test_both_call_sites_use_the_shared_definition():
 
     report = (src / "services" / "vocab_coverage.py").read_text()
     assert "feed_pool_by_level" in report
+
+
+#: Modules that put a GRADED word in front of a user — the feed's cards, the
+#: quiz's decks, the distractor tiles. Each must reach `lemmas` through a
+#: shared fragment that carries the trust test, never a hand-written WHERE.
+#:
+#: Deliberately not every reader of the table. Admin panels and
+#: vocab_coverage count the untrusted rows on purpose (that is the metric),
+#: and the enrichment workers decide what to SPEND on rather than what to
+#: show. The three below are the ones whose output a learner reads as "this
+#: word is B1", which is the claim the trust test protects.
+_WORD_SERVING_MODULES = (
+    ("routes", "srs.py"),
+    ("routes", "quiz.py"),
+    ("services", "distractor_pool.py"),
+)
+
+_TRUST_CARRYING_FRAGMENTS = (
+    "trusted_registry_sql",
+    "real_word_sql",
+    "feed_eligibility_sql",
+)
+
+
+def test_word_serving_readers_cannot_hand_roll_the_trust_test():
+    """The feed served ungraded A2 cards for months because it built its own
+    WHERE clause while the quiz called `trusted_registry_sql` — same table,
+    same question, two answers (2026-09-06: 3,850 rows, 56% of the level)."""
+    src = Path(__file__).resolve().parents[1] / "src"
+
+    for parts in _WORD_SERVING_MODULES:
+        path = src.joinpath(*parts)
+        text = path.read_text()
+        if "FROM lemmas" not in text:
+            continue
+        assert any(frag in text for frag in _TRUST_CARRYING_FRAGMENTS), (
+            f"{'/'.join(parts)} reads `lemmas` to serve words but references "
+            f"none of {_TRUST_CARRYING_FRAGMENTS}. A hand-written WHERE will "
+            f"serve rows nothing ever graded — see feed_pool.real_word_sql."
+        )
+
+
+def test_the_trust_test_is_reachable_from_the_feed_fragment():
+    """Not just imported somewhere in the module — actually composed in."""
+    from src.services.cefr_registry import trusted_registry_sql
+
+    assert trusted_registry_sql("l") in feed_eligibility_sql("l")
+    assert trusted_registry_sql("l") in real_word_sql("l")
