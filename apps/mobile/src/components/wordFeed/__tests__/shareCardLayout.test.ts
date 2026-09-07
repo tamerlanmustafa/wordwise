@@ -126,9 +126,15 @@ describe('the headword cannot collapse to a dot', () => {
     // toward zero. A tap re-renders the card and re-measures the reveal block,
     // so the fit runs again from the size it had already shrunk to — which is
     // why it compounds, and why it was not reproducible on demand.
+    //
+    // The shrink used to run only when the estimate reported `!wordRow.fits`,
+    // which let a word heavy in wide glyphs ("misjudgment", two m's) beat the
+    // estimate and hard-clip with an ellipsis instead of shrinking. The
+    // backstop is unconditional now, so the only way to keep the two
+    // properties from ever pairing is to never set `lineHeight` at all.
     const s = card();
-    expect(s).toMatch(/adjustsFontSizeToFit=\{!wordRow\.fits\}/);
-    expect(s).toMatch(/wordRow\.fits \? \{ lineHeight: wordRow\.lineHeight \} : null/);
+    expect(s).toMatch(/adjustsFontSizeToFit\s*$/m);
+    expect(s).not.toMatch(/adjustsFontSizeToFit=\{/);
   });
 
   it('does not leave lineHeight in the always-applied style block', () => {
@@ -146,10 +152,9 @@ describe('the headword cannot collapse to a dot', () => {
     expect(code).not.toMatch(/lineHeight/);
   });
 
-  it('keeps the width bound on both paths', () => {
-    // It bounds the deterministic path — a word that beats the estimator
-    // ellipsises rather than running under the action rail — and it is the
-    // only thing the backstop has to shrink against on the other.
+  it('keeps the width bound in place for the backstop to shrink against', () => {
+    // Without it, a word that beats the estimator has nothing to shrink
+    // against and runs under the action rail instead of getting smaller.
     expect(card()).toMatch(/maxWidth: wordRow\.available/);
   });
 });

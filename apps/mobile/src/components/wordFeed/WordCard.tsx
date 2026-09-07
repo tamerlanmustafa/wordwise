@@ -58,10 +58,13 @@ import type { FeedItem } from '../../services/api';
 /**
  * How far the renderer may shrink the word past our own floor.
  *
- * The computed size does the work; this is the backstop for the pathological
- * case — a 21-letter lemma on a 4.7" screen, where even `WORD_SIZE_MIN`
- * overflows the lane. Truncating is not an option the design allows, so the
- * last few points come from the platform.
+ * The computed size is only an estimate — an average per-character advance,
+ * which a word heavy in wide glyphs (a double `m`, in "misjudgment") can beat
+ * even though the estimator called it a fit. The renderer's own shrink runs on
+ * every word for exactly that reason, not only the pathological ones, so an
+ * underestimate never reaches the screen as a clipped ellipsis. Truncating is
+ * not an option the design allows, so the last few points come from the
+ * platform.
  */
 const WORD_MIN_SCALE = 0.8;
 
@@ -198,12 +201,13 @@ function WordCardBase({
 
       {/* 3. Lifting group. */}
       <Animated.View style={liftStyle}>
-        {/* Word + speaker, always on one line. The size is computed from the
-            string and the device (see wordRowLayout) rather than fixed, so a
-            21-character lemma shrinks instead of wrapping and dragging the
-            speaker away from the word it belongs to.
+        {/* Word + speaker, always on one line, however long the word or
+            narrow the screen. The size is computed from the string and the
+            device (see wordRowLayout) rather than fixed, so a 21-character
+            lemma shrinks instead of wrapping and dragging the speaker away
+            from the word it belongs to.
 
-            ## Why the renderer's own shrink is off unless it is needed
+            ## Why this Text never carries a fixed lineHeight
 
             `adjustsFontSizeToFit` and an explicit `lineHeight` must never be
             set on the same Text. UIKit turns `lineHeight` into a fixed
@@ -214,18 +218,21 @@ function WordCardBase({
             tap that re-renders the card and re-measures the reveal block, so
             UIKit runs the fit again against the size it had already shrunk to.
 
-            The two modes are therefore exclusive, and the computed layout
-            decides which is in force:
+            `adjustsFontSizeToFit` used to run only when the computed layout
+            reported `!wordRow.fits`, trusting an *average*-character estimate
+            to say whether the platform's own shrink was needed. A word heavy
+            in wide glyphs — "misjudgment", two m's — can overflow at the
+            computed size even though the estimate called it a fit, and with
+            the backstop off that overflow rendered as a hard-clipped
+            ellipsis instead of a slightly smaller word. So the backstop is
+            unconditional now, on every word, and `lineHeight` is dropped for
+            good rather than kept for the (unreliable) cases that don't need
+            it — the two can no longer be paired because neither is ever set
+            together.
 
-              fits   — a deterministic size, our own lineHeight, no shrink.
-                       This is every ordinary word, so the bug cannot occur.
-              !fits  — the pathological string. The renderer's shrink is the
-                       backstop, so `lineHeight` is dropped for that Text and
-                       the font's natural leading is used instead.
-
-            `maxWidth` stays on both: it bounds the deterministic path (a word
-            that beats the estimator ellipsises rather than running under the
-            action rail) and gives the backstop something to shrink against. */}
+            `maxWidth` stays: it bounds the computed size (a word that beats
+            the estimator ellipsises rather than running under the action
+            rail) and gives the backstop something to shrink against. */}
         <View style={s.wordRow}>
           <Text
             style={[
@@ -235,10 +242,9 @@ function WordCardBase({
                 letterSpacing: wordRow.letterSpacing,
                 maxWidth: wordRow.available,
               },
-              wordRow.fits ? { lineHeight: wordRow.lineHeight } : null,
             ]}
             numberOfLines={1}
-            adjustsFontSizeToFit={!wordRow.fits}
+            adjustsFontSizeToFit
             minimumFontScale={WORD_MIN_SCALE}
             allowFontScaling={false}
           >
