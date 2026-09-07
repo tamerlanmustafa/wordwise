@@ -40,9 +40,15 @@ class _FakeDb:
         self.answers = answers or {}
         self.fail_on = fail_on
         self.calls: list[str] = []
+        #: (sql, args) per call. Kept alongside `calls` so the assertions that
+        #: only care about SQL text stay readable; the paginated browser needs
+        #: the binds, because its limit cap and offset clamp are applied to the
+        #: parameters rather than to the query text.
+        self.bound: list[tuple[str, tuple]] = []
 
     async def query_raw(self, sql, *args):
         self.calls.append(sql)
+        self.bound.append((sql, args))
         if self.fail_on and self.fail_on in sql:
             raise RuntimeError(f"relation does not exist: {self.fail_on}")
         for needle, rows in self.answers.items():
@@ -52,6 +58,13 @@ class _FakeDb:
 
     def sql_mentioning(self, needle: str) -> list[str]:
         return [s for s in self.calls if needle in s]
+
+    def args_for(self, needle: str) -> tuple:
+        """Binds of the first statement mentioning `needle`."""
+        for sql, args in self.bound:
+            if needle in sql:
+                return args
+        raise AssertionError(f"no statement mentioning {needle!r}")
 
 
 def _normalised(sql: str) -> str:
@@ -119,6 +132,158 @@ class TestWordsComeFromTheRegistry:
 
         # Nine figures, one scan. The old endpoint made a round trip per count.
         assert len(db.sql_mentioning("FROM lemmas")) == 1
+
+
+# ── one level's words, for the tabs ─────────────────────────────────────────
+
+def _word_row(lemma: str = "contingent", **over) -> dict:
+    row = {
+        "id": 1,
+        "lemma": lemma,
+        "pos": "NOUN",
+        "cefr_level": "B2",
+        "confidence": 0.55,
+        "source": "frequency_backoff",
+        "frequency_rank": 2041,
+        "total_movie_count": 21,
+        "has_definition": True,
+        "hidden": False,
+    }
+    row.update(over)
+    return row
+
+
+class TestWordsByLevel:
+    async def test_returns_one_page_with_the_row_shape_the_browser_renders(self):
+        db = _FakeDb({"FROM lemmas": [_word_row()]})
+
+        page = await ap.words_by_level(db, level="B2")
+
+        assert page["level"] == "B2"
+        assert page["sort"] == "frequency"
+        assert page["offset"] == 0
+        assert page["words"][0] == {
+            "id": 1,
+            "lemma": "contingent",
+            "pos": "NOUN",
+            "cefr_level": "B2",
+            "confidence": 0.55,
+            "source": "frequency_backoff",
+            "frequency_rank": 2041,
+            "movie_count": 21,
+            "has_definition": True,
+            "hidden": False,
+        }
+
+    async def test_has_more_comes_from_an_over_fetch_not_a_count(self):
+        # limit+1 rows come back, the extra is dropped, and no COUNT(*) is run.
+        db = _FakeDb({"FROM lemmas": [_word_row(f"w{i}", id=i) for i in range(4)]})
+
+        page = await ap.words_by_level(db, level="B2", limit=3)
+
+        assert page["has_more"] is True
+        assert len(page["words"]) == 3
+        assert "count(" not in _normalised(" ".join(db.calls))
+
+    async def test_a_short_page_is_the_last_page(self):
+        db = _FakeDb({"FROM lemmas": [_word_row(f"w{i}", id=i) for i in range(2)]})
+
+        page = await ap.words_by_level(db, level="B2", limit=3)
+
+        assert page["has_more"] is False
+        assert len(page["words"]) == 2
+
+    async def test_serves_the_rows_every_learner_facing_reader_filters_out(self):
+        # The point of the page. `trusted_registry_sql` and the hidden_words
+        # exclusion are what keep an ungraded or curated-away word off a
+        # learner's screen; an admin opens this list to find exactly those.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="A2")
+
+        sql = _normalised(" ".join(db.calls))
+        assert "confidence < 0.5" not in sql
+        assert "not exists" not in sql
+
+    async def test_projects_the_signals_that_expose_an_ungraded_row(self):
+        # source + confidence are how 3,850 fake-A2 rows would have been
+        # visible on this page instead of needing a DB session to find.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="A2")
+
+        sql = _normalised(" ".join(db.calls))
+        for column in ("l.source::text", "l.confidence", "hidden", "has_definition"):
+            assert column.lower() in sql
+
+    async def test_filters_the_level_without_casting_the_enum(self):
+        # #118 again: the cast that mis-plans is the one in the predicate.
+        # Projecting `cefr_level::text` shapes the row, not the plan.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="C1")
+
+        sql = _normalised(" ".join(db.calls))
+        assert "where l.cefr_level = 'c1'" in sql
+        assert "where l.cefr_level::text" not in sql
+
+    @pytest.mark.parametrize("sort", sorted(ap.WORD_SORTS))
+    async def test_every_offered_sort_is_accepted(self, sort):
+        db = _FakeDb()
+
+        page = await ap.words_by_level(db, level="B2", sort=sort)
+
+        assert page["sort"] == sort
+
+    async def test_an_unknown_sort_is_refused_rather_than_interpolated(self):
+        db = _FakeDb()
+
+        with pytest.raises(ValueError):
+            await ap.words_by_level(db, level="B2", sort="lemma; DROP TABLE lemmas")
+
+    async def test_an_unknown_level_is_refused(self):
+        # The level IS interpolated (it is an enum literal), so the allowlist
+        # is the only thing between a caller and the query text.
+        db = _FakeDb()
+
+        with pytest.raises(ValueError):
+            await ap.words_by_level(db, level="A2' OR '1'='1")
+
+    async def test_the_holding_pen_is_a_browsable_level(self):
+        # UNKNOWN is where every unplaceable word lands (#91), so it is the
+        # band an admin most needs to be able to read.
+        db = _FakeDb({"FROM lemmas": [_word_row(cefr_level="UNKNOWN")]})
+
+        page = await ap.words_by_level(db, level="UNKNOWN")
+
+        assert page["level"] == "UNKNOWN"
+
+    async def test_page_size_is_capped(self):
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="B2", limit=10_000)
+
+        # The cap is applied to the bind, not the SQL text.
+        assert db.args_for("FROM lemmas")[0] == ap.WORD_PAGE_MAX + 1
+
+    async def test_a_negative_offset_is_clamped(self):
+        db = _FakeDb()
+
+        page = await ap.words_by_level(db, level="B2", offset=-5)
+
+        assert page["offset"] == 0
+        assert db.args_for("FROM lemmas")[1] == 0
+
+    async def test_a_failed_query_raises_instead_of_reporting_an_empty_band(self):
+        # The panels degrade a broken query to [] on purpose — a missing
+        # worker table is a missing stat. A *list* must not: "no words in A2"
+        # is a claim, and a dev database missing `lemmas.definition` made that
+        # claim about a band holding 98,192 rows. An admin has to be able to
+        # tell "empty" from "broken".
+        db = _FakeDb(fail_on="FROM lemmas")
+
+        with pytest.raises(RuntimeError):
+            await ap.words_by_level(db, level="A2")
 
 
 # ── films ───────────────────────────────────────────────────────────────────

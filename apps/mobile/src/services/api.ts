@@ -799,6 +799,36 @@ export interface AdminWords {
   hidden_words: number;
 }
 
+/** One row of the per-level word browser.
+ *
+ *  `source` and `confidence` are on the row because they are how you tell a
+ *  real grade from a placeholder: on 2026-09-06 the A2 band was 56% rows
+ *  written by an old `fallback`/0.0 default that nothing had ever graded.
+ *  Every learner-facing query filters those out; this list must not. */
+export interface AdminWord {
+  id: number;
+  lemma: string;
+  pos: string | null;
+  cefr_level: string;
+  confidence: number;
+  source: string;
+  frequency_rank: number | null;
+  movie_count: number;
+  has_definition: boolean;
+  /** Curated away in `hidden_words`, so no learner ever meets it. */
+  hidden: boolean;
+}
+
+/** How the word browser can order one level. Must match `WORD_SORTS` in
+ *  `backend/src/services/admin_panels.py`. */
+export type AdminWordSort = 'frequency' | 'alpha' | 'movies' | 'recent';
+
+export interface AdminWordPage {
+  words: AdminWord[];
+  has_more: boolean;
+  offset: number;
+}
+
 export interface AdminUsers {
   users_total: number;
   admins: number;
@@ -1668,6 +1698,36 @@ export const adminApi = {
       throw new Error(`GET /admin/words → ${res.status} ${body.slice(0, 120)}`);
     }
     return res.json();
+  },
+
+  /**
+   * One page of a single CEFR band, for the Words page's level tabs.
+   *
+   * Paged for the same reason the film browser is: the largest band holds
+   * ~9,000 words, and a tab that fetched all of them would be a multi-megabyte
+   * response the phone renders in full before showing anything.
+   */
+  wordList: async (opts: {
+    level: string;
+    sort?: AdminWordSort;
+    offset?: number;
+    limit?: number;
+  }): Promise<AdminWordPage> => {
+    const qs = new URLSearchParams({ level: opts.level });
+    if (opts.sort) qs.set('sort', opts.sort);
+    if (opts.offset != null) qs.set('offset', String(opts.offset));
+    qs.set('limit', String(opts.limit ?? 40));
+    const res = await authFetch(`${API_BASE_URL}/admin/words/list?${qs}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GET /admin/words/list → ${res.status} ${body.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    return {
+      words: data.words || [],
+      has_more: Boolean(data.has_more),
+      offset: Number(data.offset ?? 0),
+    };
   },
 
   // Users page: accounts, tiers, and rolling signup/activity windows.

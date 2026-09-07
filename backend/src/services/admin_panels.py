@@ -172,6 +172,118 @@ async def words_panel(db: Prisma) -> dict:
     }
 
 
+#: How the words browser can order one level's list. Values are SQL, so this
+#: dict is the allowlist that keeps caller input out of the query text — the
+#: same shape as `PROCESSED_SORTS` in routes/admin.py.
+#:
+#: `frequency` leads because the question this page usually answers is "what
+#: does a learner at this level actually meet", and that is the common words
+#: first. `recent` is what a backfill just touched, which is how you check one
+#: landed: after regrade_a2_bucket.py ran, sorting A2 by `recent` showed the
+#: rows it rewrote.
+WORD_SORTS = {
+    "frequency": "l.frequency_rank ASC NULLS LAST, l.id ASC",
+    "alpha": "l.lemma ASC",
+    "movies": "l.total_movie_count DESC, l.id ASC",
+    "recent": "l.updated_at DESC, l.id ASC",
+}
+
+#: Page size cap. The browser asks for 40; a caller asking for more than this
+#: gets this, matching /admin/movies/processed.
+WORD_PAGE_MAX = 100
+
+
+async def words_by_level(
+    db: Prisma,
+    level: str,
+    sort: str = "frequency",
+    limit: int = 40,
+    offset: int = 0,
+) -> dict:
+    """One page of the registry, for the words page's per-level tabs.
+
+    Deliberately UNFILTERED. Every other reader of `lemmas` applies
+    `trusted_registry_sql` and `hidden_word_exclusion_sql` so a learner never
+    meets an ungraded or curated-away word; this one must not, because the
+    rows those filters remove are the rows an admin opens this page to find.
+    `source`, `confidence` and `hidden` are projected for the same reason: on
+    2026-09-06, 3,850 A2 rows carried the old `fallback`/0.0 signature of a
+    word nothing had ever graded, and a list that hid that column would have
+    shown a clean-looking A2 band with `pumpernickel` in it.
+
+    `has_more` comes from over-fetching one row rather than a second COUNT,
+    like /admin/movies/processed.
+
+    Uses `db.query_raw` directly rather than `_rows`. That helper degrades a
+    failed query to `[]`, which is right for a panel — a missing worker table
+    is a missing stat, not a broken screen — and wrong here: an empty list is
+    a *claim* ("this band holds no words"), so swallowing the error would
+    render a broken query as a confident, false answer. Seen for real during
+    verification, where a dev database missing `lemmas.definition` reported
+    A2 as empty while holding 98,192 A2 rows. Let it raise; the client has an
+    error state and an admin needs to know the difference.
+
+    On prod (44k lemmas, ~9k in the largest band) this plans as an index scan
+    over ix_lemmas_frequency_rank with the level as a filter: 6.9ms at offset
+    2000. No composite index is worth carrying for a page only admins open.
+    """
+    order_by = WORD_SORTS.get(sort.lower())
+    if order_by is None:
+        raise ValueError(f"Invalid sort: {sort}")
+    if level not in REGISTRY_LEVELS:
+        raise ValueError(f"Invalid level: {level}")
+
+    take = min(max(limit, 1), WORD_PAGE_MAX)
+    rows = await db.query_raw(
+        f"""
+        SELECT l.id,
+               l.lemma,
+               l.pos,
+               l.cefr_level::text                              AS cefr_level,
+               l.confidence,
+               l.source::text                                  AS source,
+               l.frequency_rank,
+               l.total_movie_count,
+               (l.definition IS NOT NULL AND l.definition <> '') AS has_definition,
+               EXISTS (
+                   SELECT 1 FROM hidden_words h
+                    WHERE LOWER(h.word) = LOWER(l.lemma)
+               )                                               AS hidden
+          FROM lemmas l
+         WHERE l.cefr_level = '{level}'
+         ORDER BY {order_by}
+         LIMIT $1 OFFSET $2
+        """,
+        take + 1,
+        max(offset, 0),
+    )
+
+    has_more = len(rows) > take
+    rows = rows[:take]
+
+    return {
+        "level": level,
+        "sort": sort.lower(),
+        "offset": max(offset, 0),
+        "has_more": has_more,
+        "words": [
+            {
+                "id": r["id"],
+                "lemma": r["lemma"],
+                "pos": r.get("pos"),
+                "cefr_level": r["cefr_level"],
+                "confidence": float(r["confidence"]) if r["confidence"] is not None else 0.0,
+                "source": r["source"],
+                "frequency_rank": r.get("frequency_rank"),
+                "movie_count": _int(r.get("total_movie_count")),
+                "has_definition": bool(r.get("has_definition")),
+                "hidden": bool(r.get("hidden")),
+            }
+            for r in rows
+        ],
+    }
+
+
 # ── users ───────────────────────────────────────────────────────────────────
 
 async def users_panel(db: Prisma) -> dict:

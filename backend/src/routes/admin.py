@@ -19,6 +19,7 @@ from src.services.movie_cefr import (
 from src.services.admin_panels import (
     films_panel,
     users_panel,
+    words_by_level,
     words_panel,
     workers_panel,
 )
@@ -115,6 +116,30 @@ async def admin_words(
     """The Words page: the lemma registry, its CEFR split, and how far the
     definition worker has got through it."""
     return await words_panel(db)
+
+
+@router.get("/words/list")
+async def admin_words_list(
+    level: str,
+    sort: str = "frequency",
+    limit: int = 40,
+    offset: int = 0,
+    admin_user=Depends(get_admin_user),
+    db: Prisma = Depends(get_db),
+):
+    """One level's words, paginated — what the Words page's level tabs open.
+
+    Registered before `/words` would matter if the paths could collide; they
+    cannot (`/words/list` is a longer path), but it sits next to it so the two
+    are read together.
+
+    Unfiltered on purpose: see `words_by_level`. The learner-facing filters are
+    exactly what an admin needs to see through.
+    """
+    try:
+        return await words_by_level(db, level=level, sort=sort, limit=limit, offset=offset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/users")
