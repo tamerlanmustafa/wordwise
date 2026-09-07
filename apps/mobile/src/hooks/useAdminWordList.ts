@@ -31,16 +31,30 @@
  * is to see what a backfill just did.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { adminApi, type AdminWord, type AdminWordSort } from '../services/api';
+import {
+  adminApi,
+  type AdminWord,
+  type AdminWordSort,
+  type AdminWordVisibility,
+} from '../services/api';
 
 export const WORD_PAGE_SIZE = 40;
 
-export function useAdminWordList(level: string | null, sort: AdminWordSort = 'frequency') {
+export function useAdminWordList(
+  level: string | null,
+  sort: AdminWordSort = 'frequency',
+  visibility: AdminWordVisibility = 'learner',
+) {
   const [words, setWords] = useState<AdminWord[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // How many rows match this (level, visibility) in total, from page 0. Null
+  // until it lands. Appends carry no total, so this is only ever written on a
+  // reset — overwriting it with an append's null would blank the count the
+  // moment the user scrolled.
+  const [total, setTotal] = useState<number | null>(null);
 
   // How many rows we hold. Read synchronously as the next page's offset —
   // see the docblock.
@@ -63,6 +77,7 @@ export function useAdminWordList(level: string | null, sort: AdminWordSort = 'fr
         countRef.current = 0;
         hasMoreRef.current = false;
         setWords([]);
+        setTotal(null);
         setLoading(true);
       } else {
         setLoadingMore(true);
@@ -72,16 +87,19 @@ export function useAdminWordList(level: string | null, sort: AdminWordSort = 'fr
         const page = await adminApi.wordList({
           level,
           sort,
+          visibility,
           offset,
           limit: WORD_PAGE_SIZE,
         });
-        // A newer tab or sort started while this was awaiting — drop it.
+        // A newer tab, sort or visibility started while this was awaiting.
         if (reqId !== reqIdRef.current) return;
 
         countRef.current = offset + page.words.length;
         hasMoreRef.current = page.has_more;
         setHasMore(page.has_more);
         setWords((prev) => (reset ? page.words : [...prev, ...page.words]));
+        // Only a reset carries a total — see the declaration.
+        if (reset) setTotal(page.total);
         setError(null);
       } catch (e: any) {
         if (reqId !== reqIdRef.current) return;
@@ -102,11 +120,12 @@ export function useAdminWordList(level: string | null, sort: AdminWordSort = 'fr
         }
       }
     },
-    [level, sort],
+    [level, sort, visibility],
   );
 
-  // Reset whenever the tab or the sort changes. Deselecting clears the list
-  // rather than leaving the last band's words behind the closed tab.
+  // Reset whenever the tab, the sort or the visibility changes. Deselecting
+  // clears the list rather than leaving the last band's words behind the
+  // closed tab.
   useEffect(() => {
     if (!level) {
       reqIdRef.current++;
@@ -115,6 +134,7 @@ export function useAdminWordList(level: string | null, sort: AdminWordSort = 'fr
       loadingRef.current = false;
       setWords([]);
       setHasMore(false);
+      setTotal(null);
       setLoading(false);
       setLoadingMore(false);
       setError(null);
@@ -129,6 +149,7 @@ export function useAdminWordList(level: string | null, sort: AdminWordSort = 'fr
 
   return {
     words,
+    total,
     loading,
     loadingMore,
     hasMore,

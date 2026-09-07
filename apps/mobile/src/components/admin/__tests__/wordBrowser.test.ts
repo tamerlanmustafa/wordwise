@@ -17,7 +17,14 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { CEFR_LEVELS } from '../../../types/constants';
-import { WORD_BROWSE_LEVELS, WORD_SORT_TABS, isUngraded, levelColor } from '../WordsView';
+import {
+  EXCLUSION_LABELS,
+  WORD_BROWSE_LEVELS,
+  WORD_SORT_TABS,
+  WORD_VISIBILITY_TABS,
+  isUngraded,
+  levelColor,
+} from '../WordsView';
 
 const adminPanelsPy = readFileSync(
   join(__dirname, '../../../../../../backend/src/services/admin_panels.py'),
@@ -67,6 +74,46 @@ describe('sort chips', () => {
     // The question this page usually answers is "what does a learner at this
     // level actually meet", and that is frequency order.
     expect(WORD_SORT_TABS[0].id).toBe('frequency');
+  });
+});
+
+describe('visibility toggle', () => {
+  it('offers only the slices the endpoint implements', () => {
+    const body = adminPanelsPy.split('WORD_VISIBILITIES = (')[1]?.split(')')[0] ?? '';
+    const backend = [...body.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+
+    expect(backend.length).toBe(3);
+    expect(WORD_VISIBILITY_TABS.map((t) => t.id).sort()).toEqual(backend.sort());
+  });
+
+  it('defaults to what a learner can see', () => {
+    // The registry is 1.6x the servable set, so the raw list overstates every
+    // band. The first tab is the default, and it answers the real question.
+    expect(WORD_VISIBILITY_TABS[0].id).toBe('learner');
+  });
+
+  it('keeps a way to see the removed words', () => {
+    // Without this the page becomes a mirror of the app and is blind, by
+    // construction, to the class of bug it was built to expose.
+    expect(WORD_VISIBILITY_TABS.map((t) => t.id)).toContain('removed');
+  });
+});
+
+describe('exclusion labels', () => {
+  it('names every reason the endpoint can return', () => {
+    const body = adminPanelsPy.split('def excluded_reason_sql')[1]?.split('\ndef ')[0] ?? '';
+    const backend = [...body.matchAll(/THEN '([a-z_]+)'/g)].map((m) => m[1]);
+
+    expect(backend.length).toBeGreaterThan(0);
+    expect(Object.keys(EXCLUSION_LABELS).sort()).toEqual([...new Set(backend)].sort());
+  });
+
+  it('says what happened, not which column was read', () => {
+    // An admin reading "no_sentence" has to know the schema; "no sentence yet"
+    // says the same thing and also says it is temporary.
+    for (const label of Object.values(EXCLUSION_LABELS)) {
+      expect(label).not.toMatch(/_/);
+    }
   });
 });
 

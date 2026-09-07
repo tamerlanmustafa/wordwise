@@ -43,6 +43,7 @@ from typing import Any, Optional
 
 from prisma import Prisma
 
+from .feed_pool import FEED_MIN_LEMMA_LENGTH, feed_eligibility_sql
 from .movie_cefr import CEFR_LEVELS, cefr_from_score
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,66 @@ WORD_SORTS = {
 #: gets this, matching /admin/movies/processed.
 WORD_PAGE_MAX = 100
 
+#: Which slice of a band the browser is looking at.
+#:
+#: `learner` is the default because the usual question is "what does this level
+#: actually deal", and the registry is 1.6x bigger than that (prod 2026-09-07:
+#: 42,998 rows, 27,209 servable). `removed` is the complement — the words a
+#: learner can never meet — which is where a curation or grading mistake hides.
+WORD_VISIBILITIES = ("learner", "removed", "all")
+
+
+def visibility_sql(visibility: str, alias: str = "l") -> str:
+    """WHERE-clause fragment for one `WORD_VISIBILITIES` value.
+
+    Built from `feed_eligibility_sql` rather than restating its four tests, so
+    "what a learner sees" here is the *same predicate the feed serves from*.
+    Restating it would create a second definition of eligibility that drifts —
+    which is the exact bug this browser was built to make visible, and it would
+    be a poor page that reproduced it.
+
+    `NOT (...)` is total here: every column the fragment tests (`lemma`,
+    `cefr_level`, `source`, `confidence`) is NOT NULL and the two subqueries are
+    EXISTS, so there is no third truth value for the negation to swallow.
+
+    `alias` is written by the caller, never user input — it is interpolated.
+    """
+    if visibility == "all":
+        return "TRUE"
+    eligible = feed_eligibility_sql(alias)
+    return f"({eligible})" if visibility == "learner" else f"NOT ({eligible})"
+
+
+def excluded_reason_sql(alias: str = "l") -> str:
+    """CASE expression: which filter keeps this row from learners, or NULL.
+
+    Ordered most-fundamental first, so a row that fails several tests reports
+    the one worth acting on. A word in the UNKNOWN pen has no level to show,
+    which matters more than it also lacking a sentence.
+
+    This is the payoff of the `removed` view: "11,011 words are invisible" is a
+    number, and "11,011 are in the holding pen, 2,631 are too short, 390 are
+    curated away, 1,757 are waiting on a sentence" is something to act on.
+    """
+    p = f"{alias}."
+    return f"""
+        CASE
+          WHEN {p}cefr_level = 'UNKNOWN' THEN 'unknown_level'
+          WHEN {p}source = 'fallback' AND {p}confidence < 0.5 THEN 'ungraded'
+          WHEN NOT ({p}lemma ~ '^[a-zA-Z]+$')
+            OR length({p}lemma) < {FEED_MIN_LEMMA_LENGTH} THEN 'shape'
+          WHEN EXISTS (
+              SELECT 1 FROM hidden_words h
+               WHERE LOWER(h.word) = LOWER({p}lemma)
+          ) THEN 'curated_away'
+          WHEN NOT EXISTS (
+              SELECT 1 FROM sentence_lemma_links sll
+               WHERE sll.lemma_id = {p}id AND sll.is_global
+          ) THEN 'no_sentence'
+          ELSE NULL
+        END
+    """
+
 
 async def words_by_level(
     db: Prisma,
@@ -199,20 +260,27 @@ async def words_by_level(
     sort: str = "frequency",
     limit: int = 40,
     offset: int = 0,
+    visibility: str = "learner",
 ) -> dict:
-    """One page of the registry, for the words page's per-level tabs.
+    """One page of a band, for the words page's per-level tabs.
 
-    Deliberately UNFILTERED. Every other reader of `lemmas` applies
-    `trusted_registry_sql` and `hidden_word_exclusion_sql` so a learner never
-    meets an ungraded or curated-away word; this one must not, because the
-    rows those filters remove are the rows an admin opens this page to find.
-    `source`, `confidence` and `hidden` are projected for the same reason: on
-    2026-09-06, 3,850 A2 rows carried the old `fallback`/0.0 signature of a
-    word nothing had ever graded, and a list that hid that column would have
-    shown a clean-looking A2 band with `pumpernickel` in it.
+    `visibility` picks the slice — see `WORD_VISIBILITIES`. It defaults to
+    `learner` because the usual question is "what does this level actually
+    deal", and answering it from the raw registry overstates every band: prod
+    on 2026-09-07 holds 42,998 lemmas of which 27,209 can reach a learner.
+
+    The other two slices are why this is a toggle rather than a filter that is
+    simply always on. `removed` is the complement, and it is where a curation
+    or grading mistake hides — on 2026-09-06, 3,850 A2 rows carried the old
+    `fallback`/0.0 signature of a word nothing had ever graded, and a page that
+    could only show learner-visible rows would have been blind to them by
+    construction. `source`, `confidence`, `hidden` and `excluded_reason` are
+    projected for the same reason.
 
     `has_more` comes from over-fetching one row rather than a second COUNT,
-    like /admin/movies/processed.
+    like /admin/movies/processed. `total` is a real COUNT, but only on the
+    first page of a band: it costs 10-49ms depending on the band, it is the
+    same number for every page after, and the client holds it.
 
     Uses `db.query_raw` directly rather than `_rows`. That helper degrades a
     failed query to `[]`, which is right for a panel — a missing worker table
@@ -232,8 +300,13 @@ async def words_by_level(
         raise ValueError(f"Invalid sort: {sort}")
     if level not in REGISTRY_LEVELS:
         raise ValueError(f"Invalid level: {level}")
+    if visibility not in WORD_VISIBILITIES:
+        raise ValueError(f"Invalid visibility: {visibility}")
 
     take = min(max(limit, 1), WORD_PAGE_MAX)
+    start = max(offset, 0)
+    where_sql = f"l.cefr_level = '{level}' AND {visibility_sql(visibility)}"
+
     rows = await db.query_raw(
         f"""
         SELECT l.id,
@@ -248,15 +321,23 @@ async def words_by_level(
                EXISTS (
                    SELECT 1 FROM hidden_words h
                     WHERE LOWER(h.word) = LOWER(l.lemma)
-               )                                               AS hidden
+               )                                               AS hidden,
+               {excluded_reason_sql("l")}                      AS excluded_reason
           FROM lemmas l
-         WHERE l.cefr_level = '{level}'
+         WHERE {where_sql}
          ORDER BY {order_by}
          LIMIT $1 OFFSET $2
         """,
         take + 1,
-        max(offset, 0),
+        start,
     )
+
+    total: Optional[int] = None
+    if start == 0:
+        count_rows = await db.query_raw(
+            f"SELECT count(*)::int AS n FROM lemmas l WHERE {where_sql}"
+        )
+        total = _int(_first(count_rows).get("n"))
 
     has_more = len(rows) > take
     rows = rows[:take]
@@ -264,8 +345,12 @@ async def words_by_level(
     return {
         "level": level,
         "sort": sort.lower(),
-        "offset": max(offset, 0),
+        "visibility": visibility,
+        "offset": start,
         "has_more": has_more,
+        # None on an append — the client keeps the count from page 0 rather
+        # than paying for it once per scroll.
+        "total": total,
         "words": [
             {
                 "id": r["id"],
@@ -278,6 +363,10 @@ async def words_by_level(
                 "movie_count": _int(r.get("total_movie_count")),
                 "has_definition": bool(r.get("has_definition")),
                 "hidden": bool(r.get("hidden")),
+                # NULL for a learner-visible row; otherwise which filter
+                # removed it. Always projected, so the `all` view can mark the
+                # invisible rows inline rather than looking uniform.
+                "excluded_reason": r.get("excluded_reason"),
             }
             for r in rows
         ],

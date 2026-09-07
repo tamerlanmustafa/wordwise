@@ -817,16 +817,39 @@ export interface AdminWord {
   has_definition: boolean;
   /** Curated away in `hidden_words`, so no learner ever meets it. */
   hidden: boolean;
+  /** Null when a learner can meet this word; otherwise which filter removed
+   *  it. Always present, so the "All" view can mark invisible rows inline. */
+  excluded_reason: AdminWordExclusion | null;
 }
+
+/** Why a word never reaches a learner. Must match `excluded_reason_sql` in
+ *  `backend/src/services/admin_panels.py`. */
+export type AdminWordExclusion =
+  | 'unknown_level'
+  | 'ungraded'
+  | 'shape'
+  | 'curated_away'
+  | 'no_sentence';
 
 /** How the word browser can order one level. Must match `WORD_SORTS` in
  *  `backend/src/services/admin_panels.py`. */
 export type AdminWordSort = 'frequency' | 'alpha' | 'movies' | 'recent';
 
+/** Which slice of a band to list. Must match `WORD_VISIBILITIES` in
+ *  `backend/src/services/admin_panels.py`.
+ *
+ *  `learner` is the default: the registry is 1.6x bigger than what the app can
+ *  actually deal (prod 2026-09-07: 42,998 rows, 27,209 servable), so listing it
+ *  raw overstates every band. */
+export type AdminWordVisibility = 'learner' | 'removed' | 'all';
+
 export interface AdminWordPage {
   words: AdminWord[];
   has_more: boolean;
   offset: number;
+  /** Rows matching this (level, visibility). Only sent on the first page —
+   *  it is the same number for every page after, so the client keeps it. */
+  total: number | null;
 }
 
 export interface AdminUsers {
@@ -1710,11 +1733,13 @@ export const adminApi = {
   wordList: async (opts: {
     level: string;
     sort?: AdminWordSort;
+    visibility?: AdminWordVisibility;
     offset?: number;
     limit?: number;
   }): Promise<AdminWordPage> => {
     const qs = new URLSearchParams({ level: opts.level });
     if (opts.sort) qs.set('sort', opts.sort);
+    if (opts.visibility) qs.set('visibility', opts.visibility);
     if (opts.offset != null) qs.set('offset', String(opts.offset));
     qs.set('limit', String(opts.limit ?? 40));
     const res = await authFetch(`${API_BASE_URL}/admin/words/list?${qs}`);
@@ -1727,6 +1752,8 @@ export const adminApi = {
       words: data.words || [],
       has_more: Boolean(data.has_more),
       offset: Number(data.offset ?? 0),
+      // Absent on an append, and 0 is a real answer — so null, never `|| 0`.
+      total: data.total == null ? null : Number(data.total),
     };
   },
 

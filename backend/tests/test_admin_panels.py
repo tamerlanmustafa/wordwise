@@ -148,6 +148,7 @@ def _word_row(lemma: str = "contingent", **over) -> dict:
         "total_movie_count": 21,
         "has_definition": True,
         "hidden": False,
+        "excluded_reason": None,
     }
     row.update(over)
     return row
@@ -173,13 +174,16 @@ class TestWordsByLevel:
             "movie_count": 21,
             "has_definition": True,
             "hidden": False,
+            "excluded_reason": None,
         }
 
     async def test_has_more_comes_from_an_over_fetch_not_a_count(self):
-        # limit+1 rows come back, the extra is dropped, and no COUNT(*) is run.
+        # limit+1 rows come back and the extra is dropped. Asserted on an
+        # append, where the band's `total` is not computed, so the only COUNT
+        # that could appear would be one paging needed — and none does.
         db = _FakeDb({"FROM lemmas": [_word_row(f"w{i}", id=i) for i in range(4)]})
 
-        page = await ap.words_by_level(db, level="B2", limit=3)
+        page = await ap.words_by_level(db, level="B2", limit=3, offset=40)
 
         assert page["has_more"] is True
         assert len(page["words"]) == 3
@@ -193,17 +197,18 @@ class TestWordsByLevel:
         assert page["has_more"] is False
         assert len(page["words"]) == 2
 
-    async def test_serves_the_rows_every_learner_facing_reader_filters_out(self):
-        # The point of the page. `trusted_registry_sql` and the hidden_words
-        # exclusion are what keep an ungraded or curated-away word off a
-        # learner's screen; an admin opens this list to find exactly those.
+    async def test_all_can_still_serve_what_every_learner_reader_filters_out(self):
+        # The point of keeping a third slice. `trusted_registry_sql` and the
+        # hidden_words exclusion are what keep an ungraded or curated-away word
+        # off a learner's screen; `all` is how an admin finds exactly those.
+        # (`excluded_reason` names them in the projection, hence the split.)
         db = _FakeDb()
 
-        await ap.words_by_level(db, level="A2")
+        await ap.words_by_level(db, level="A2", visibility="all")
 
-        sql = _normalised(" ".join(db.calls))
-        assert "confidence < 0.5" not in sql
-        assert "not exists" not in sql
+        where = _normalised(" ".join(db.calls)).split("case")[0]
+        assert "confidence < 0.5" not in where
+        assert "not exists" not in where
 
     async def test_projects_the_signals_that_expose_an_ungraded_row(self):
         # source + confidence are how 3,850 fake-A2 rows would have been
@@ -273,6 +278,93 @@ class TestWordsByLevel:
 
         assert page["offset"] == 0
         assert db.args_for("FROM lemmas")[1] == 0
+
+    async def test_defaults_to_what_a_learner_can_see(self):
+        # The registry is 1.6x the servable set (prod 2026-09-07: 42,998 vs
+        # 27,209), so listing it raw overstates every band.
+        db = _FakeDb()
+
+        page = await ap.words_by_level(db, level="B2")
+
+        assert page["visibility"] == "learner"
+        assert "sll.is_global" in _normalised(" ".join(db.calls))
+
+    async def test_the_learner_slice_is_the_feeds_own_predicate(self):
+        # Not a restatement of it. A second definition of "eligible" is exactly
+        # the drift this browser was built to expose.
+        from src.services.feed_pool import feed_eligibility_sql
+
+        assert feed_eligibility_sql("l") in ap.visibility_sql("learner", "l")
+
+    async def test_removed_is_the_exact_complement_of_learner(self):
+        from src.services.feed_pool import feed_eligibility_sql
+
+        assert ap.visibility_sql("removed", "l") == f"NOT ({feed_eligibility_sql('l')})"
+
+    async def test_all_applies_no_filter(self):
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="B2", visibility="all")
+
+        sql = _normalised(" ".join(db.calls))
+        assert "sll.is_global" not in sql.split("case")[0]
+
+    async def test_an_unknown_visibility_is_refused(self):
+        db = _FakeDb()
+
+        with pytest.raises(ValueError):
+            await ap.words_by_level(db, level="B2", visibility="everything")
+
+    async def test_counts_the_band_only_on_the_first_page(self):
+        # The count costs 10-49ms and is the same for every page of a band, so
+        # an append must not pay it again.
+        first = _FakeDb({"FROM lemmas": [_word_row()]})
+        await ap.words_by_level(first, level="B2", offset=0)
+        assert len([s for s in first.calls if "count(*)" in s]) == 1
+
+        later = _FakeDb({"FROM lemmas": [_word_row()]})
+        page = await ap.words_by_level(later, level="B2", offset=40)
+        assert [s for s in later.calls if "count(*)" in s] == []
+        assert page["total"] is None
+
+    async def test_the_count_and_the_list_share_one_where_clause(self):
+        # A total computed from a different predicate than the rows is a number
+        # that disagrees with the list under it.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="C1", visibility="removed")
+
+        count_sql = next(s for s in db.calls if "count(*)" in s)
+        list_sql = next(s for s in db.calls if "count(*)" not in s)
+        where = f"l.cefr_level = 'C1' AND {ap.visibility_sql('removed')}"
+        assert where in count_sql
+        assert where in list_sql
+
+    async def test_every_row_reports_whether_a_learner_can_reach_it(self):
+        db = _FakeDb({"FROM lemmas": [_word_row(excluded_reason="curated_away")]})
+
+        page = await ap.words_by_level(db, level="B2", visibility="removed")
+
+        assert page["words"][0]["excluded_reason"] == "curated_away"
+
+    async def test_a_visible_row_has_no_exclusion_reason(self):
+        db = _FakeDb({"FROM lemmas": [_word_row(excluded_reason=None)]})
+
+        page = await ap.words_by_level(db, level="B2")
+
+        assert page["words"][0]["excluded_reason"] is None
+
+    async def test_the_exclusion_reason_names_the_most_fundamental_filter(self):
+        # A row can fail several tests; the CASE is ordered so it reports the
+        # one worth acting on. UNKNOWN outranks "no sentence yet".
+        frag = _normalised(ap.excluded_reason_sql("l"))
+        for earlier, later in (
+            ("unknown_level", "ungraded"),
+            ("ungraded", "shape"),
+            ("shape", "curated_away"),
+            ("curated_away", "no_sentence"),
+        ):
+            assert frag.index(earlier) < frag.index(later)
 
     async def test_a_failed_query_raises_instead_of_reporting_an_empty_band(self):
         # The panels degrade a broken query to [] on purpose — a missing

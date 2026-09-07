@@ -42,7 +42,13 @@ import {
   View,
 } from 'react-native';
 import { useAdminWordList } from '../../hooks/useAdminWordList';
-import type { AdminWord, AdminWords, AdminWordSort } from '../../services/api';
+import type {
+  AdminWord,
+  AdminWordExclusion,
+  AdminWords,
+  AdminWordSort,
+  AdminWordVisibility,
+} from '../../services/api';
 import { cefrColors } from '../../theme/palette';
 import { CEFR_LEVELS } from '../../types/constants';
 import { withTap } from '../../utils/feedback';
@@ -62,6 +68,42 @@ export const WORD_SORT_TABS: ReadonlyArray<{ id: AdminWordSort; label: string }>
   { id: 'movies', label: 'Most films' },
   { id: 'recent', label: 'Recently changed' },
 ];
+
+/**
+ * Which slice of the band to list. Must match `WORD_VISIBILITIES` in
+ * `backend/src/services/admin_panels.py`.
+ *
+ * `learner` leads and is the default, because "what does this level actually
+ * deal" is the question, and the registry answers a different one: prod on
+ * 2026-09-07 holds 42,998 lemmas against 27,209 a learner can reach.
+ */
+export const WORD_VISIBILITY_TABS: ReadonlyArray<{
+  id: AdminWordVisibility;
+  label: string;
+  blurb: string;
+}> = [
+  {
+    id: 'learner',
+    label: 'Learners see',
+    blurb: 'Exactly what the feed can deal at this level — the app’s own eligibility test.',
+  },
+  {
+    id: 'removed',
+    label: 'Removed',
+    blurb: 'Words a learner can never meet, and which filter removed each one.',
+  },
+  { id: 'all', label: 'All', blurb: 'The whole registry at this level, removed rows marked.' },
+];
+
+/** Plain-language label for `excluded_reason`. Wording matches what the filter
+ *  actually does, not the column it reads. */
+export const EXCLUSION_LABELS: Record<AdminWordExclusion, string> = {
+  unknown_level: 'ungraded pile',
+  ungraded: 'never graded',
+  shape: 'too short / not a word',
+  curated_away: 'hidden',
+  no_sentence: 'no sentence yet',
+};
 
 /**
  * Is this row's level a real judgement, or a placeholder?
@@ -88,7 +130,12 @@ export function WordsView({ data }: { data: AdminWords | null }) {
 
   const [level, setLevel] = useState<string | null>(null);
   const [sort, setSort] = useState<AdminWordSort>('frequency');
-  const { words, loading, loadingMore, hasMore, error, loadMore } = useAdminWordList(level, sort);
+  const [visibility, setVisibility] = useState<AdminWordVisibility>('learner');
+  const { words, total, loading, loadingMore, hasMore, error, loadMore } = useAdminWordList(
+    level,
+    sort,
+    visibility,
+  );
 
   // Tapping the open tab closes it and returns to the overview, so the tabs
   // are both the way in and the way back — there is no other affordance on a
@@ -133,14 +180,24 @@ export function WordsView({ data }: { data: AdminWords | null }) {
               {item.source} {item.confidence.toFixed(2)}
             </Text>
           </View>
-          {ungraded || item.hidden || !item.has_definition ? (
+          {item.excluded_reason || ungraded || item.hidden || !item.has_definition ? (
             <View style={styles.flagRow}>
-              {ungraded ? (
+              {/* Why a learner never meets this word — the reason the
+                  "Removed" view exists. First, because it explains the row. */}
+              {item.excluded_reason ? (
+                <View style={[styles.flag, { backgroundColor: c.error }]}>
+                  <Text style={styles.flagText}>
+                    {EXCLUSION_LABELS[item.excluded_reason] ?? item.excluded_reason}
+                  </Text>
+                </View>
+              ) : null}
+              {/* Suppressed when it would only restate the line above. */}
+              {ungraded && item.excluded_reason !== 'ungraded' ? (
                 <View style={[styles.flag, { backgroundColor: c.error }]}>
                   <Text style={styles.flagText}>ungraded</Text>
                 </View>
               ) : null}
-              {item.hidden ? (
+              {item.hidden && item.excluded_reason !== 'curated_away' ? (
                 <View style={[styles.flag, { backgroundColor: c.textTertiary }]}>
                   <Text style={styles.flagText}>hidden</Text>
                 </View>
@@ -163,6 +220,10 @@ export function WordsView({ data }: { data: AdminWords | null }) {
   const definedPct = data.lemmas_total
     ? Math.round((data.definitions_written / data.lemmas_total) * 100)
     : 0;
+
+  // What the open band's chip says — the whole registry at that level. The
+  // list is a slice of it, and `countLine` below states which.
+  const registryCount = level ? (data.words_by_level?.[level] ?? 0) : 0;
 
   const header = (
     <View>
@@ -245,6 +306,31 @@ export function WordsView({ data }: { data: AdminWords | null }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipRow}
           >
+            {WORD_VISIBILITY_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: visibility === tab.id }}
+                accessibilityHint={tab.blurb}
+                style={[styles.sortChip, visibility === tab.id && styles.sortChipOn]}
+                onPress={withTap(() => setVisibility(tab.id))}
+              >
+                <Text
+                  style={[styles.sortChipText, visibility === tab.id && styles.sortChipTextOn]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {level ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
             {WORD_SORT_TABS.map((tab) => (
               <TouchableOpacity
                 key={tab.id}
@@ -259,6 +345,29 @@ export function WordsView({ data }: { data: AdminWords | null }) {
               </TouchableOpacity>
             ))}
           </ScrollView>
+        ) : null}
+
+        {/* Reconciles the chip count with the list. The chip counts the whole
+            registry band; in the default view the list is a subset of it, and
+            leaving that gap unexplained is the kind of quiet mismatch that
+            makes an admin page untrustworthy. */}
+        {level && total != null ? (
+          <Text style={styles.countLine}>
+            {visibility === 'learner'
+              ? `${total.toLocaleString()} of ${registryCount.toLocaleString()} reach a learner` +
+                (registryCount > total
+                  ? ` · ${(registryCount - total).toLocaleString()} removed`
+                  : '')
+              : visibility === 'removed'
+                ? `${total.toLocaleString()} of ${registryCount.toLocaleString()} never reach a learner`
+                : `${total.toLocaleString()} in the registry`}
+          </Text>
+        ) : null}
+
+        {level ? (
+          <Text style={styles.note}>
+            {WORD_VISIBILITY_TABS.find((t) => t.id === visibility)?.blurb}
+          </Text>
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -315,7 +424,13 @@ export function WordsView({ data }: { data: AdminWords | null }) {
             <ActivityIndicator size="small" color={c.primary} />
           </View>
         ) : words.length === 0 ? (
-          <Text style={styles.note}>No words in {level}.</Text>
+          <Text style={styles.note}>
+            {visibility === 'learner'
+              ? `No words in ${level} reach a learner.`
+              : visibility === 'removed'
+                ? `Nothing is removed from ${level} — every word reaches a learner.`
+                : `No words in ${level}.`}
+          </Text>
         ) : !hasMore ? (
           <Text style={styles.note}>
             End of {level} — {words.length.toLocaleString()} loaded
@@ -342,6 +457,12 @@ const makeStyles = (c: AdminColors) =>
       fontSize: 12.5,
       lineHeight: 18,
       color: c.error,
+      marginTop: 8,
+    },
+    countLine: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.text,
       marginTop: 8,
     },
     chipRow: {

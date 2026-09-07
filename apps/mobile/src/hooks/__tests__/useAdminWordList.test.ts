@@ -19,7 +19,13 @@ import { cleanupHooks, flushAsync, renderHook, act } from '../../test-utils/rend
 import type { AdminWord, AdminWordPage } from '../../services/api';
 
 interface Pending {
-  args: { level: string; sort?: string; offset?: number; limit?: number };
+  args: {
+    level: string;
+    sort?: string;
+    visibility?: string;
+    offset?: number;
+    limit?: number;
+  };
   resolve: (page: AdminWordPage) => void;
   reject: (e: Error) => void;
 }
@@ -51,12 +57,19 @@ const word = (lemma: string, id = Number(lemma.replace(/\D/g, '')) || 1): AdminW
   movie_count: 3,
   has_definition: true,
   hidden: false,
+  excluded_reason: null,
 });
 
-const page = (lemmas: string[], has_more = false, offset = 0): AdminWordPage => ({
+const page = (
+  lemmas: string[],
+  has_more = false,
+  offset = 0,
+  total: number | null = offset === 0 ? lemmas.length : null,
+): AdminWordPage => ({
   words: lemmas.map((l, i) => word(l, offset + i + 1)),
   has_more,
   offset,
+  total,
 });
 
 /** Settle the nth in-flight request and let React commit the result. */
@@ -192,6 +205,55 @@ describe('useAdminWordList', () => {
     expect(result.current.words.map((w) => w.lemma)).toEqual(['w1', 'w2']);
     expect(result.current.error).toBe('timeout');
     expect(result.current.loadingMore).toBe(false);
+  });
+
+  it('defaults to what a learner can actually see', async () => {
+    // The registry is 1.6x the servable set, so listing it raw overstates
+    // every band. The default answers the question people actually ask.
+    renderHook(() => useAdminWordList('B2'));
+
+    expect(mockPending[0].args.visibility).toBe('learner');
+  });
+
+  it('restarts at page 0 when the visibility changes', async () => {
+    let visibility: 'learner' | 'removed' = 'learner';
+    const { result, rerender } = renderHook(() =>
+      useAdminWordList('B2', 'frequency', visibility),
+    );
+    await land(0, page(['w1', 'w2'], true));
+
+    visibility = 'removed';
+    rerender();
+
+    expect(mockPending[1].args).toMatchObject({ visibility: 'removed', offset: 0 });
+    // "Removed" is a different list, not a filter over the one on screen.
+    expect(result.current.words).toEqual([]);
+    expect(result.current.total).toBeNull();
+  });
+
+  it('keeps the total across appends, which do not carry one', async () => {
+    // The server sends `total` only on page 0 — it is the same number for
+    // every page after. Letting an append's null overwrite it would blank the
+    // count the moment the user scrolled.
+    const { result } = renderHook(() => useAdminWordList('B2'));
+    await land(0, page(['w1', 'w2'], true, 0, 500));
+    expect(result.current.total).toBe(500);
+
+    act(() => result.current.loadMore());
+    await land(1, page(['w3'], false, 2, null));
+
+    expect(result.current.total).toBe(500);
+    expect(result.current.words).toHaveLength(3);
+  });
+
+  it('treats a total of zero as an answer, not a missing value', async () => {
+    // An empty band is a real result — UNKNOWN under "Learners see" is always
+    // 0 — and must not render as "counting…".
+    const { result } = renderHook(() => useAdminWordList('UNKNOWN'));
+
+    await land(0, page([], false, 0, 0));
+
+    expect(result.current.total).toBe(0);
   });
 
   it('empties the list when page 0 itself fails', async () => {

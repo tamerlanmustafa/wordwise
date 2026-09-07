@@ -124,6 +124,7 @@ async def admin_words_list(
     sort: str = "frequency",
     limit: int = 40,
     offset: int = 0,
+    visibility: str = "learner",
     admin_user=Depends(get_admin_user),
     db: Prisma = Depends(get_db),
 ):
@@ -133,11 +134,19 @@ async def admin_words_list(
     cannot (`/words/list` is a longer path), but it sits next to it so the two
     are read together.
 
-    Unfiltered on purpose: see `words_by_level`. The learner-facing filters are
-    exactly what an admin needs to see through.
+    `visibility` defaults to `learner`, so the list answers "what does this
+    band actually deal" without being asked. `removed` and `all` are what make
+    it a diagnostic rather than a mirror of the app — see `words_by_level`.
     """
     try:
-        return await words_by_level(db, level=level, sort=sort, limit=limit, offset=offset)
+        return await words_by_level(
+            db,
+            level=level,
+            sort=sort,
+            limit=limit,
+            offset=offset,
+            visibility=visibility,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
