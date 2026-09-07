@@ -17,22 +17,27 @@
  *
  * ## The corner-radius / edge-depth arithmetic
  *
- * A rounded rectangle's *narrowest* vertical slice is at its flat left and
- * right edges (x=0 and x=`TILE_W`), where rounding has already eaten
- * `TILE_RADIUS` off both the top and the bottom: the local height there is
- * `TILE_H - 2 * TILE_RADIUS`, and it is never smaller than that anywhere else
- * on the shape (the corners themselves only add height back, up to the full
- * `TILE_H` a couple of pixels in from the edge). The edge layer is the same
- * shape, offset straight down by `TILE_EDGE` and nothing else, so the two
- * layers only stay seamless everywhere — no sliver of background showing
- * through at the tile's own left/right edges — as long as
+ * Look at the tile's flat left side, x=0. The face occupies y from
+ * `TILE_RADIUS` down to `TILE_H - TILE_RADIUS` there — rounding has eaten the
+ * rest. The edge is the same rectangle pushed down by `TILE_EDGE`, so at that
+ * same x it starts at `TILE_EDGE + TILE_EDGE_RADIUS`.
  *
- *     TILE_EDGE <= TILE_H - 2 * TILE_RADIUS
+ * For the face to still cover the edge's top corner — no sliver of background
+ * showing through between them at the tile's own left and right sides — the
+ * edge has to start no lower than the face ends:
  *
- * i.e. the edge can never sink further than the shape's narrowest slice is
- * tall. At `TILE_H` = 56 and `TILE_RADIUS` = 12 that ceiling is 32; the tile
- * uses `TILE_EDGE` = 24, an 8pt margin under the limit rather than sitting
- * exactly on it.
+ *     TILE_EDGE + TILE_EDGE_RADIUS <= TILE_H - TILE_RADIUS
+ *
+ * or, rearranged into the ceiling on how far the edge may sink:
+ *
+ *     TILE_EDGE <= TILE_H - TILE_RADIUS - TILE_EDGE_RADIUS
+ *
+ * Each radius costs the same as the other, which is the useful thing to know
+ * when tuning them: rounding the edge's feet by 4 buys you exactly as much
+ * headroom as rounding the face by 4 would, and spends it from the same
+ * budget. At `TILE_H` = 56 with both radii at 12 the ceiling is 32. A test
+ * asserts this rather than leaving it as a comment, because the failure is a
+ * one-pixel seam that is easy to miss on a screenshot and obvious on a phone.
  *
  * ## Why the gradients went
  *
@@ -52,13 +57,25 @@ import { StyleSheet, View } from 'react-native';
 export const TILE_W = 200;
 /** Face height. */
 export const TILE_H = 56;
-/** Corner radius. Shallow on purpose — see the arithmetic above — so the
- *  tile reads as a rectangular step rather than a pill. */
+/** Corner radius of the FACE. Shallow on purpose — see the arithmetic above —
+ *  so the tile reads as a rectangular step rather than a pill. */
 export const TILE_RADIUS = 12;
+/**
+ * Corner radius of the EDGE, tunable independently of the face.
+ *
+ * Only the bottom corners of this ever show: the edge is the same rectangle
+ * offset down by `TILE_EDGE`, so its top half sits behind the face and its
+ * top radius is invisible whatever you set here. Raising it rounds off the
+ * riser's feet; lowering it squares them under a still-rounded face.
+ *
+ * Equal to the face by default, which is the shape the path shipped with.
+ */
+export const TILE_EDGE_RADIUS = 12;
 /** Depth of the edge under the face, and how far the face travels on press.
  *  Tall enough to read as a stair's riser rather than a hairline lip — see
- *  the arithmetic above for why it stays under `TILE_H - 2 * TILE_RADIUS`. */
-export const TILE_EDGE = 24;
+ *  the arithmetic above for why it stays under
+ *  `TILE_H - TILE_RADIUS - TILE_EDGE_RADIUS`. */
+export const TILE_EDGE = 26;
 /** Total painted height of one tile, face plus the edge showing beneath it. */
 export const TILE_BLOCK = TILE_H + TILE_EDGE;
 /** Side of the square box a glyph is drawn in, centred on the face. */
@@ -102,23 +119,25 @@ const styles = StyleSheet.create({
     width: TILE_W,
     height: TILE_BLOCK,
   },
+  // Everything the two layers share EXCEPT the corner radius — that is now
+  // each layer's own, so the riser's feet can be tuned without reshaping the
+  // face. See the arithmetic in the file docblock for how far they may
+  // diverge before a seam opens at the tile's left and right sides.
   layer: {
     position: 'absolute',
     start: 0,
     width: TILE_W,
     height: TILE_H,
-    // See the corner-radius/edge-depth arithmetic in the file docblock: this
-    // has to stay <= (TILE_H - TILE_EDGE) / 2 for the edge to never peek
-    // through at the tile's own left/right edges.
-    borderRadius: TILE_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
   },
   edge: {
     top: TILE_EDGE,
+    borderRadius: TILE_EDGE_RADIUS,
   },
   face: {
     top: 0,
+    borderRadius: TILE_RADIUS,
   },
   facePressed: {
     transform: [{ translateY: TILE_EDGE }],

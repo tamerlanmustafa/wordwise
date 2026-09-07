@@ -19,7 +19,7 @@ import path from 'path';
 
 import { themes, type ThemeColors } from '../../../theme/tokens';
 import { tileVisual } from '../tileVisuals';
-import { TILE_H, TILE_RADIUS, TILE_EDGE } from '../TilePill';
+import { TILE_H, TILE_RADIUS, TILE_EDGE, TILE_EDGE_RADIUS } from '../TilePill';
 
 const THEMES: Array<[string, ThemeColors]> = [
   ['light', themes.light],
@@ -167,14 +167,33 @@ describe('the tile is built like the deck buttons', () => {
     );
 
   it('never lets the edge peek through at the tile\'s own left/right edges', () => {
-    // A rounded rectangle's narrowest vertical slice is at its flat left and
-    // right sides, where rounding has already eaten TILE_RADIUS off both the
-    // top and the bottom: local height there is TILE_H - 2*TILE_RADIUS, and
-    // it is never smaller than that anywhere else on the shape. The edge
-    // layer is the same shape offset straight down by TILE_EDGE, so the two
-    // only stay seamless everywhere as long as the edge never sinks further
-    // than that narrowest slice is tall.
-    expect(TILE_EDGE).toBeLessThanOrEqual(TILE_H - 2 * TILE_RADIUS);
+    // At the tile's flat left side the face runs from TILE_RADIUS to
+    // TILE_H - TILE_RADIUS; the edge, pushed down by TILE_EDGE, starts at
+    // TILE_EDGE + TILE_EDGE_RADIUS. The face covers the edge's top corner
+    // only while the edge starts no lower than the face ends — otherwise a
+    // sliver of background shows between them.
+    //
+    // The two radii are now independent, so this is the general form of the
+    // old `TILE_H - 2 * TILE_RADIUS`: each radius spends from the same budget
+    // at the same rate.
+    expect(TILE_EDGE).toBeLessThanOrEqual(TILE_H - TILE_RADIUS - TILE_EDGE_RADIUS);
+  });
+
+  it('gives the face and the edge their own radius, on the layers themselves', () => {
+    // A shared `layer` radius is what made them impossible to tune apart. If
+    // the radius moves back onto `layer`, one of these two disappears and the
+    // separation is silently gone.
+    const s = pill();
+    expect(s).toMatch(/face: \{\s*\n\s*top: 0,\s*\n\s*borderRadius: TILE_RADIUS,/);
+    expect(s).toMatch(/edge: \{\s*\n\s*top: TILE_EDGE,\s*\n\s*borderRadius: TILE_EDGE_RADIUS,/);
+    const layer = s.slice(s.indexOf('layer: {'), s.indexOf('edge: {'));
+    expect(layer).not.toMatch(/borderRadius/);
+  });
+
+  it('starts the edge radius equal to the face, so the shape is unchanged', () => {
+    // The split is a new dial, not a new look. Whoever turns it should be
+    // the designer, not this refactor.
+    expect(TILE_EDGE_RADIUS).toBe(TILE_RADIUS);
   });
 
   it('draws a face over an edge and nothing else', () => {
@@ -218,7 +237,7 @@ describe('the tile is a long pill, alone, and lands when tapped', () => {
     const s = pill();
     expect(s).toMatch(/export const TILE_W = 200/);
     expect(s).toMatch(/export const TILE_H = 56/);
-    expect(s).toMatch(/borderRadius: TILE_RADIUS/);
+    expect(s).toMatch(/borderRadius: TILE_RADIUS/);  // now on `face`
     // Rectangular, not a pill: a full capsule would need TILE_RADIUS === TILE_H / 2.
     expect(TILE_RADIUS).toBeLessThan(TILE_H / 2);
     expect(s).not.toMatch(/<Ellipse|react-native-svg/);
