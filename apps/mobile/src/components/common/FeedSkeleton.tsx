@@ -2,8 +2,13 @@
  * FeedSkeleton — loading placeholder for the home ranked feed (Motion §E3).
  *
  * It draws one silhouette per `RankedMovieList` card: a full-width tile of
- * exactly `CARD_H` at `CARD_RADIUS`, spaced by `CARD_GAP`, with faint blocks
- * where the level ring, the title and the meta line will land.
+ * exactly `CARD_BLOCK` at `CARD_RADIUS`, spaced by `CARD_GAP`, with faint
+ * blocks where the level ring, the title and the meta line will land.
+ *
+ * `CARD_BLOCK`, not `CARD_H`: the real card is a face over an edge it can sink
+ * onto, and the row it occupies is both. Reserving only the face would put the
+ * skeleton's pitch 4pt under the list's on every row — the same silent
+ * re-layout described below, just smaller.
  *
  * It used to draw something else entirely — a 64x96 portrait poster with two
  * text lines beside it, which was the feed's row layout *before* the card
@@ -22,8 +27,8 @@ import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import {
+  CARD_BLOCK,
   CARD_GAP,
-  CARD_H,
   CARD_PAD_START,
   CARD_RADIUS,
   CARD_ROW_GAP,
@@ -81,7 +86,7 @@ const makeStyles = (tc: ThemeColors) =>
     // sideways the moment the list took over.
     container: { paddingTop: 0 },
     card: {
-      height: CARD_H,
+      height: CARD_BLOCK,
       marginBottom: CARD_GAP,
       borderRadius: CARD_RADIUS,
       backgroundColor: tc.cardStock,

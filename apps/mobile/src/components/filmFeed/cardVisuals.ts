@@ -211,12 +211,36 @@ export function cornerForGlyph(value: unknown, isRtl: boolean): Rgb | null {
 // Placeholders are only worth having if they are the size of the thing they
 // stand in for, so the numbers live here and both sides read them.
 
-/** Height of one card. */
+/** Height of the card's face — the part that moves when you press it. */
 export const CARD_H = 116;
+/**
+ * Depth of the edge under the face, and how far the face travels on press.
+ *
+ * The card is built like every other "button you press down" in this app: a
+ * face and a darker copy of the same shape offset straight down (see
+ * `practice/TilePill`, the quiz's MCQ choices, the quiz CTA). 4 matches the
+ * quiz CTA's `CTA_EDGE` rather than the practice path's much deeper 24 — the
+ * path's tiles are stair treads you climb, a feed card is a button you tap.
+ *
+ * The ceiling from TilePill's arithmetic is `CARD_H - 2 * CARD_RADIUS` = 88,
+ * beyond which the offset copy would show a sliver of background at the
+ * card's own left and right edges. 4 is nowhere near it.
+ */
+export const CARD_EDGE = 4;
+/** Total painted height of one card, face plus the edge showing beneath it.
+ *  Mirrors `TILE_BLOCK` in practice/TilePill, which is the same construction. */
+export const CARD_BLOCK = CARD_H + CARD_EDGE;
 /** Vertical space between two cards. */
 export const CARD_GAP = 8;
-/** Row pitch — what a list has to reserve per item. */
-export const ITEM_H = CARD_H + CARD_GAP;
+/**
+ * Row pitch — what a list has to reserve per item.
+ *
+ * Counts the edge. The skeleton reserves the same pitch from the same
+ * constant, which is the whole reason these numbers live here: a placeholder
+ * that is not the size of the thing it stands in for makes the feed jump the
+ * moment the data lands.
+ */
+export const ITEM_H = CARD_BLOCK + CARD_GAP;
 /** Card corner radius. */
 export const CARD_RADIUS = 14;
 /** Inset from the card's leading edge to the ring. */

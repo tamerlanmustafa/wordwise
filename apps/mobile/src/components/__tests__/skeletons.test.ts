@@ -23,6 +23,8 @@
 import fs from 'fs';
 import path from 'path';
 import {
+  CARD_BLOCK,
+  CARD_EDGE,
   CARD_GAP,
   CARD_H,
   CARD_RADIUS,
@@ -54,8 +56,23 @@ describe('the film card and its skeleton read one set of numbers', () => {
   it('exposes the card geometry from cardVisuals', () => {
     expect(CARD_H).toBe(116);
     expect(CARD_GAP).toBe(8);
-    expect(ITEM_H).toBe(CARD_H + CARD_GAP);
     expect(CARD_RADIUS).toBe(14);
+  });
+
+  it('counts the pressable edge in the painted height and the row pitch', () => {
+    // The card is a face over an edge it sinks onto when pressed, so the row
+    // it occupies is both. A pitch that reserved only the face would leave the
+    // skeleton 4pt short per row — the same silent re-layout this file exists
+    // to prevent, just smaller.
+    expect(CARD_BLOCK).toBe(CARD_H + CARD_EDGE);
+    expect(ITEM_H).toBe(CARD_BLOCK + CARD_GAP);
+  });
+
+  it('keeps the edge under the depth its corner radius allows', () => {
+    // TilePill's arithmetic: the offset copy is the same rounded rectangle
+    // moved straight down, so it stays seamless at the card's own left and
+    // right edges only while the offset is under the shape's narrowest slice.
+    expect(CARD_EDGE).toBeLessThanOrEqual(CARD_H - 2 * CARD_RADIUS);
   });
 
   it('the real card imports them rather than declaring its own', () => {
@@ -67,7 +84,9 @@ describe('the film card and its skeleton read one set of numbers', () => {
 
   it('the skeleton imports them too', () => {
     const src = code('components/common/FeedSkeleton.tsx');
-    expect(src).toMatch(/CARD_H/);
+    // CARD_BLOCK, not CARD_H: the placeholder has to reserve the edge as well
+    // as the face, or its pitch is short of the real list's on every row.
+    expect(src).toMatch(/CARD_BLOCK/);
     expect(src).toMatch(/CARD_RADIUS/);
     expect(src).toMatch(/from '\.\.\/filmFeed\/cardVisuals'/);
   });

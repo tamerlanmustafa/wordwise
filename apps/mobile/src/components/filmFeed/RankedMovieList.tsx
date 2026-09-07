@@ -49,6 +49,7 @@ import {
   Easing,
   Image,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -61,7 +62,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withTap } from '../../utils/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/palette';
-import { useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
+import { shade, useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
 import { isRTL } from '../../i18n/rtl';
 import { scoreToCefr } from '../../utils/formatting';
@@ -74,6 +75,8 @@ import { LevelRing } from './LevelRing';
 import {
   BACKDROP_OPACITY,
   BACKDROP_W,
+  CARD_BLOCK,
+  CARD_EDGE,
   CARD_GAP,
   CARD_H,
   CARD_RADIUS,
@@ -319,6 +322,7 @@ const MovieCard = React.memo(({
 }) => {
   const tc = useThemeColors();
   const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
   const backdropUri = movie.backdrop_path
@@ -358,13 +362,52 @@ const MovieCard = React.memo(({
     return pickPlusInk(corner, CARD_STOCK_RGB[scheme]);
   }, [movie.backdrop_corner_rgb, movie.backdropCornerRgb, backdropUri, tc.cardMeta, scheme]);
 
+  // 0 at rest, 1 while a finger is down. `useRef` because a card that
+  // re-renders mid-press (the ring resolving, a poster arriving) must not get
+  // a fresh Animated.Value and snap back up under the finger.
+  const press = useRef(new Animated.Value(0)).current;
+
+  // Derived from the stock the face is painted in, not a frozen hex: the edge
+  // *is* the thickness, so it has to move whenever the card colour does.
+  // Darker in light mode, lighter in dark — on a near-black card stock (#0F1013)
+  // darkening has nowhere left to go and the edge would disappear.
+  const edgeColor = useMemo(
+    () => (isDark ? shade(tc.cardStock, 0.16) : shade(tc.cardStock, -0.14)),
+    [isDark, tc.cardStock],
+  );
+
   return (
-    <TouchableOpacity
-      style={s.card}
+    <Pressable
+      style={s.cardBody}
       onPress={withTap(onPress)}
-      onPressIn={() => prefetchMovieImages(movie)}
-      activeOpacity={0.9}
+      onPressIn={() => {
+        prefetchMovieImages(movie);
+        press.setValue(1);
+      }}
+      onPressOut={() => press.setValue(0)}
     >
+      {/* Static, and the only layer carrying the shadow: it is the bottom-most
+          solid, so the whole card casts one. A blurred shadow under the *face*
+          plus a hard edge would be two different depth cues drawn at once. */}
+      <View style={[s.cardEdge, { backgroundColor: edgeColor }]} pointerEvents="none" />
+      <Animated.View
+        style={[
+          s.card,
+          {
+            transform: [
+              {
+                // -1 so the face never quite reaches the edge's bottom; a face
+                // that lands flush reads as the button vanishing rather than
+                // as it bottoming out.
+                translateY: press.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, CARD_EDGE - 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
       {backdropUri ? (
         <>
           {/* The whole 16:9 frame at card height, trailing-anchored. The
@@ -440,7 +483,8 @@ const MovieCard = React.memo(({
       <View style={s.plusSlot} pointerEvents="box-none">
         <AddToReelPlus movie={movie} flightSourceRef={ringRef} ink={plusInk} />
       </View>
-    </TouchableOpacity>
+      </Animated.View>
+    </Pressable>
   );
 });
 
@@ -529,7 +573,10 @@ export const RankedMovieList = ({ movies: data, onMoviePress, level, onRingPress
               <View style={s.cardSlot}>
                 {onSwipeAction ? (
                   <SwipeableRow
-                    height={CARD_H}
+                    // CARD_BLOCK, not CARD_H: the card paints a face over an
+                    // edge, and a background 4pt short of it shows the page
+                    // through the bottom of the revealed action.
+                    height={CARD_BLOCK}
                     resetKey={rowId}
                     onSwipe={(action) => onSwipeAction(action, item)}
                   >
@@ -629,8 +676,38 @@ const plusStyles = StyleSheet.create({
 const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
   const isDark = scheme === 'dark';
   return StyleSheet.create({
+    // Face + edge: the card's whole painted block, named like TilePill's
+    // `body`. Distinct from the module-scope `cardSlot`, which is the ROW —
+    // this block plus the gap below it.
+    //
+    // Reserving the depth here is what stops a card sinking under a finger
+    // from shifting the row below it. Same construction as the quiz CTA's
+    // `ctaSlot`.
+    cardBody: {
+      height: CARD_BLOCK,
+    },
+    // The face's shape, offset straight down by CARD_EDGE and nothing else.
+    // Top CARD_EDGE / bottom 0 against a CARD_BLOCK-tall slot makes it exactly
+    // CARD_H, so the two layers are the same rectangle — which is what keeps
+    // them seamless at the corners.
+    cardEdge: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: CARD_EDGE,
+      bottom: 0,
+      borderRadius: CARD_RADIUS,
+      // The shadow lives here, not on the face: this is the bottom-most solid,
+      // so the card casts one shadow rather than the face casting a second one
+      // onto its own edge.
+      shadowColor: '#000',
+      shadowOpacity: isDark ? 0.45 : 0.10,
+      shadowRadius: isDark ? 16 : 12,
+      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
+      elevation: isDark ? 4 : 3,
+    },
     card: {
-      flex: 1,
+      height: CARD_H,
       borderRadius: CARD_RADIUS,
       overflow: 'hidden',
       backgroundColor: tc.cardStock,
@@ -657,11 +734,7 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       // and the page (#0e0d10) are within two levels of each other, so the
       // leading edge is defined by this border and almost nothing else.
       borderEndColor: 'transparent',
-      shadowColor: '#000',
-      shadowOpacity: isDark ? 0.45 : 0.10,
-      shadowRadius: isDark ? 16 : 12,
-      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
-      elevation: isDark ? 4 : 3,
+      // No shadow here — `cardEdge` carries it. See that style.
     },
 
     backdropWrap: {
