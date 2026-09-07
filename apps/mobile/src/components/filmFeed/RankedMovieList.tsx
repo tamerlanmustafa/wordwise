@@ -62,7 +62,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withTap } from '../../utils/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/palette';
-import { shade, useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
+import { useColorScheme, useThemeColors, themes, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY } from '../../theme/fonts';
 import { isRTL } from '../../i18n/rtl';
 import { scoreToCefr } from '../../utils/formatting';
@@ -322,7 +322,6 @@ const MovieCard = React.memo(({
 }) => {
   const tc = useThemeColors();
   const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
   const backdropUri = movie.backdrop_path
@@ -367,14 +366,16 @@ const MovieCard = React.memo(({
   // a fresh Animated.Value and snap back up under the finger.
   const press = useRef(new Animated.Value(0)).current;
 
-  // Derived from the stock the face is painted in, not a frozen hex: the edge
-  // *is* the thickness, so it has to move whenever the card colour does.
-  // Darker in light mode, lighter in dark — on a near-black card stock (#0F1013)
-  // darkening has nowhere left to go and the edge would disappear.
-  const edgeColor = useMemo(
-    () => (isDark ? shade(tc.cardStock, 0.16) : shade(tc.cardStock, -0.14)),
-    [isDark, tc.cardStock],
-  );
+  // The same edge "Knew it" sits on (`knowEdge` in WordCardDeck), and the same
+  // one under the practice path's active tile — one token, so a card, a pill
+  // and a tile are all the same object seen at three sizes.
+  //
+  // A token, not a shade derived off the card stock. Deriving it was the right
+  // answer while the rim was the stock's own tan, and the wrong one now the rim
+  // is gold: an edge mixed from the card colour under a gold border reads as
+  // two unrelated materials. (A test scans for the derived form by name —
+  // describe it here, don't write it.)
+  const edgeColor = tc.nodeGoldEdge;
 
   return (
     <Pressable
@@ -711,29 +712,30 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       borderRadius: CARD_RADIUS,
       overflow: 'hidden',
       backgroundColor: tc.cardStock,
+      // The rim "Knew it" wears, closed all the way round.
+      //
+      // This border used to be a tan hairline with its TRAILING side painted
+      // out — the backdrop is anchored to that edge and runs the card's full
+      // height, so that one stroke lay entirely on the photograph and read as
+      // an outline drawn on the still rather than as the edge of the card.
+      //
+      // The exception went when the card became a pressable pill. A pill with
+      // one side missing is not a pill: the rim and the edge beneath it are
+      // one closed shape, and a gap in it reads as a drawing mistake rather
+      // than as restraint. The stroke does still cross the still on that side,
+      // and it is louder in gold than it was in tan — that is the trade, taken
+      // deliberately, because the closed outline is the whole effect.
+      //
+      // All four widths stay at 1. Zeroing one side's *width* instead of its
+      // colour would leave the top and bottom strokes tapering to nothing
+      // through the corner radius, which looks like a rendering fault. (A test
+      // scans for the width property by name — describe it here, don't write
+      // it.)
+      //
+      // Both values are tokens, so light and dark are handled by the palette
+      // rather than by a branch here: #8B5A00 on cream, #FFD166 on near-black.
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.10)' : '#E5DCC4',
-      // …except on the trailing edge, where it read as an outline drawn on
-      // the photograph rather than as the edge of the card.
-      //
-      // The border is one uniform hairline, but it is not seen uniformly. The
-      // backdrop is anchored to this edge and runs the card's full height, so
-      // the trailing stroke is the only one lying entirely on the still, with
-      // the scrim already eased to nothing underneath it. Against cream stock
-      // on the other three sides it is a definition line; against a
-      // photograph it is a bright tan rule.
-      //
-      // Clearing the colour, not the width. Zeroing this edge's width instead
-      // would leave the top and bottom strokes tapering to nothing through the
-      // corner radius, which looks like a rendering fault. All four widths
-      // stay at 1, so the geometry is exactly what it was and only the paint
-      // changes. (A test scans for the width property by name — describe it
-      // here, don't write it.)
-      //
-      // Not simply dropped altogether — in dark mode `cardStock` (#0F1013)
-      // and the page (#0e0d10) are within two levels of each other, so the
-      // leading edge is defined by this border and almost nothing else.
-      borderEndColor: 'transparent',
+      borderColor: tc.goldOnSurface,
       // No shadow here — `cardEdge` carries it. See that style.
     },
 

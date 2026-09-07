@@ -90,12 +90,15 @@ describe('the two layers are the same rectangle', () => {
     expect(face).not.toMatch(/shadowOpacity/);
   });
 
-  it('derives the edge colour from the stock rather than freezing a hex', () => {
-    // The edge *is* the thickness, so it has to move when the card colour
-    // does. Dark mode lightens instead: #0F1013 has no room left to darken.
+  it('takes both its colours from tokens, so both themes come free', () => {
+    // The rim and the edge are the ones "Knew it" wears (`knowFace` /
+    // `knowEdge` in WordCardDeck). Tokens, not hexes and not a light/dark
+    // branch: the palette already answers that question, and a frozen pair
+    // here is two more places to miss when the accent moves.
     const s = card();
-    expect(s).toMatch(/shade\(tc\.cardStock/);
-    expect(s).toMatch(/isDark \? shade\(tc\.cardStock, 0\.16\) : shade\(tc\.cardStock, -0\.14\)/);
+    expect(s).toMatch(/const edgeColor = tc\.nodeGoldEdge/);
+    expect(s).toMatch(/borderColor: tc\.goldOnSurface/);
+    expect(s).not.toMatch(/borderColor: isDark \?/);
   });
 
   it('holds the press value across re-renders', () => {

@@ -294,12 +294,16 @@ describe('the card edge over the backdrop', () => {
   const src = () =>
     fs.readFileSync(path.join(__dirname, '..', 'RankedMovieList.tsx'), 'utf8');
 
-  it('paints the trailing border clear', () => {
-    // The backdrop is anchored to the trailing edge and runs the card's full
-    // height, so that one stroke lies entirely on the photograph — where the
-    // scrim has already eased to nothing — and reads as an outline on the
-    // image rather than as the edge of the card.
-    expect(src()).toMatch(/borderEndColor: 'transparent'/);
+  it('closes the rim all the way round', () => {
+    // The trailing side used to be painted out: the backdrop is anchored to
+    // that edge, so the stroke lies entirely on the photograph and reads as an
+    // outline on the image rather than as the edge of the card.
+    //
+    // That exception went when the card became a pressable pill. The rim and
+    // the edge beneath it are one closed shape, and a gap in it reads as a
+    // drawing mistake rather than as restraint — so the stroke crossing the
+    // still on that side is the accepted trade.
+    expect(src()).not.toMatch(/borderEndColor/);
   });
 
   it('keeps all four border widths at 1', () => {
@@ -312,11 +316,25 @@ describe('the card edge over the backdrop', () => {
     expect(s).not.toMatch(/borderRightWidth/);
   });
 
-  it('still draws the other three, which dark mode depends on', () => {
-    // `cardStock` (#0F1013) and the dark page (#0e0d10) are within two levels
-    // of each other, so the leading edge is defined by this border and little
-    // else. Dropping it outright would lose the card's shape in dark mode.
-    expect(src()).toMatch(/borderColor: isDark \? 'rgba\(255,255,255,0\.10\)' : '#E5DCC4'/);
+  it('wears the rim "Knew it" wears, from a token in both themes', () => {
+    // One token, so light (#8B5A00 on cream) and dark (#FFD166 on near-black)
+    // are the palette's problem rather than a branch in this file. It still
+    // does the job the old tan hairline did: `cardStock` (#0F1013) and the
+    // dark page (#0e0d10) are within two levels of each other, so the card's
+    // shape in dark mode is defined by this border and little else.
+    expect(src()).toMatch(/borderColor: tc\.goldOnSurface/);
+    expect(src()).not.toMatch(/#E5DCC4/);
+  });
+
+  it('sits on the edge "Knew it" sits on', () => {
+    // `knowEdge` in WordCardDeck, and the practice path's active tile. One
+    // token means a card, a pill and a tile are the same object at three
+    // sizes — and it is a token rather than a shade of the card stock,
+    // because an edge derived from the stock under a gold rim reads as two
+    // unrelated materials.
+    const s = src();
+    expect(s).toMatch(/const edgeColor = tc\.nodeGoldEdge/);
+    expect(s).not.toMatch(/shade\(tc\.cardStock/);
   });
 
   it('uses the logical edge, so it mirrors with the backdrop under RTL', () => {
