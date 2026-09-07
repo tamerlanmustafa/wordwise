@@ -100,15 +100,16 @@ describe('"Knew it" reports itself the way the rest of the app does', () => {
     expect(s).not.toMatch(/undoToastInner|undoToastAction/);
   });
 
-  it('offers the Undo for exactly as long as it works', () => {
-    // The toast's default dwell is 3.6s and the deferred write lands at 5s.
-    // Held apart, the gap between them is a window with nothing on screen to
-    // press and still time to press it.
+  it('undoes through the server, not by cancelling a pending write', () => {
+    // The mark used to be a deferred delete held open by a 5s timer, and the
+    // toast's dwell had to be pinned to that timer or the Undo vanished while
+    // the write was still cancellable. Nothing is deferred now: the mark goes
+    // out on release and `unlearnWord` reverses it, so the toast keeps the
+    // default dwell and the window mismatch is gone by construction.
     const s = screen();
-    expect(s).toMatch(/const LEARNED_COMMIT_MS = 5000/);
-    expect(s).toMatch(/duration: LEARNED_COMMIT_MS/);
-    expect(s).toMatch(/\}, LEARNED_COMMIT_MS\)/);
-    expect(s).not.toMatch(/\}, 5000\)/);
+    expect(s).toMatch(/wordwiseApi\.unlearnWord\(word\)/);
+    expect(s).not.toMatch(/LEARNED_COMMIT_MS/);
+    expect(s).not.toMatch(/pendingLearned/);
   });
 
   it('says what happened, rather than that something was hidden', () => {

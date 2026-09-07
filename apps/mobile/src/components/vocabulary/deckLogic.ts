@@ -3,9 +3,15 @@
  * (mockup 2a). No React, no AsyncStorage: everything here is unit-testable.
  *
  * The deck is a rotation over the same filtered/sorted item list the rows
- * render. "Next" wraps around (a word stays in rotation until learned);
- * learned words leave the deck via the parent's item list shrinking, which
- * the reducer reconciles in the 'sync' action.
+ * render, and every card stays in it. Both commits — "Next" and "Knew it" —
+ * advance and wrap; "Knew it" additionally records a marker, which is a label
+ * on the card rather than a reason to remove it. (It used to remove: the
+ * parent filtered marked words out of its item list, so a reader could swipe
+ * a film's deck down to nothing with no way to put a card back.)
+ *
+ * The item list can still shrink for reasons of its own — a level tab change,
+ * a word whose example sentence never arrives — and the 'sync' action is what
+ * reconciles the cursor when it does.
  */
 
 import { SWIPE_COMMIT_VELOCITY } from '../../utils/swipeDecision';
@@ -139,7 +145,8 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     }
     case 'focus': {
       // Undo: bring a previously swiped card back into focus. No-op when the
-      // key has since left the deck (e.g. it was marked learned).
+      // key has since left the deck (a level change, or a word dropped for
+      // having no example sentence).
       const i = state.keys.indexOf(action.key);
       return i >= 0 && i !== state.index ? { ...state, index: i } : state;
     }
@@ -149,8 +156,8 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
       const currentKey = state.index >= 0 ? state.keys[state.index] : undefined;
       const found = currentKey != null ? keys.indexOf(currentKey) : -1;
       if (found >= 0) return { keys, index: found };
-      // The focused card left the deck (marked learned): promote whatever now
-      // sits at the same position, wrapping to the start past the end.
+      // The focused card left the deck: promote whatever now sits at the same
+      // position, wrapping to the start past the end.
       const index = state.index > 0 ? state.index % keys.length : 0;
       return { keys, index };
     }
@@ -208,8 +215,8 @@ export interface ResumeMarker {
  * longer identifies a card in a deck of more than a hundred.
  *
  * Null covers all three ways the mark stops meaning anything: no bookmark was
- * stored, the deck is empty, or the bookmarked word is no longer in it (marked
- * learned since, or dropped for having no example sentence). A word that has
+ * stored, the deck is empty, or the bookmarked word is no longer in it (dropped
+ * for having no example sentence, or gone with a level change). A word that has
  * left the deck must not fall back to position 0 — that would pin the mark to
  * the start of the rule and quietly claim the reader resumed at card 1.
  */
@@ -224,16 +231,6 @@ export function resumeMarker(
   return { card, percent: Math.round((card / keys.length) * 100) };
 }
 
-/**
- * The card that gets focus after `removedKey` is marked learned — used to
- * write the implicit resume bookmark before the parent's item list catches up.
- */
-export function promotedKeyAfterRemoval(state: DeckState, removedKey: string): string | null {
-  const rest = state.keys.filter((k) => k !== removedKey);
-  if (rest.length === 0) return null;
-  const index = state.index > 0 ? state.index % rest.length : 0;
-  return rest[index];
-}
 
 // ── Initial view resolution (screen load) ─────────────────────────────────
 

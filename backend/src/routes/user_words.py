@@ -111,9 +111,16 @@ async def mark_word_learned(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db)
 ):
-    # Upsert a global (movieId=null) learned marker. Hides the word from all
-    # movie vocabulary lists. Leaves any per-movie saved rows untouched —
-    # starring and "never show again" are orthogonal.
+    # Upsert a global (movieId=null) "the user already knew this" marker.
+    #
+    # It does NOT hide the word. It used to: the mobile movie screen subtracted
+    # these words from every vocabulary list, so a reader swiping "Knew it"
+    # through a deck could empty it and nothing reachable in the app put a card
+    # back. The marker is now a label the client badges, plus the flag the
+    # quiz/practice pool skips on. /unlearn removes it.
+    #
+    # Leaves any per-movie saved rows untouched — starring and "I knew this"
+    # are orthogonal.
     #
     # This is find-then-create rather than a Prisma upsert because the
     # uniqueness backstop is a partial index (`user_words_global_word_unique`,

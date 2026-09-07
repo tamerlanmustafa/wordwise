@@ -9,8 +9,22 @@ interface Props {
   onBookmark: (word: string) => void;
   onMarkLearned?: (word: string) => void;
   isCurrentBookmark: boolean;
+  /** Already marked "Knew it". The row stays and stays tappable — it just
+   *  sits back, so the list reads as "these are the ones left". */
+  isKnown?: boolean;
   children: React.ReactNode;
 }
+
+/**
+ * How far a known row recedes.
+ *
+ * A swipe-left used to collapse the row away entirely, which is what made
+ * "Knew it" unrecoverable. Recessing is the honest version of the same
+ * feedback: the row visibly changes on release, and it is still there to swipe
+ * back. Not lower than this — below ~0.5 it stops reading as "handled" and
+ * starts reading as "disabled", and the row is fully interactive.
+ */
+const KNOWN_ROW_OPACITY = 0.55;
 
 // "Where you left off" row wrapper.
 // Reports its vertical offset via onLayout so the parent can scrollTo, and
@@ -26,6 +40,7 @@ const _BookmarkRowWrapper = ({
   onBookmark,
   onMarkLearned,
   isCurrentBookmark,
+  isKnown = false,
   children,
 }: Props) => {
   const tc = useThemeColors();
@@ -157,6 +172,10 @@ const _BookmarkRowWrapper = ({
       <Animated.View
         style={{
           transform: [{ translateX: Animated.multiply(translate, directionSign) }],
+          // Not while the row is sliding: mid-swipe the fill behind it is what
+          // keeps the reveal from bleeding through, and a translucent row would
+          // show the reveal it is uncovering straight through its own text.
+          opacity: isKnown && !revealing ? KNOWN_ROW_OPACITY : 1,
           backgroundColor: revealing ? tc.paper : undefined,
           ...(revealing
             ? {

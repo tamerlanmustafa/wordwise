@@ -4,7 +4,6 @@ import {
   Alert,
   Animated,
   Easing,
-  LayoutAnimation,
   Pressable,
   ScrollView,
   StatusBar,
@@ -88,23 +87,6 @@ const ROWS_MODE_ENABLED: boolean = false;
 
 // Hide the floating "Quiz me" pill.
 const SHOW_QUIZ_PILL: boolean = false;
-
-/**
- * How long "Knew it" stays undoable.
- *
- * One number for two things that must agree: the deferred write, and the
- * toast that offers to cancel it. Held apart they drift into a window where
- * the Undo is gone and the write has not landed — nothing to press, and still
- * time to press it.
- */
-const LEARNED_COMMIT_MS = 5000;
-
-const LEARNED_ROW_ANIM = {
-  duration: 260,
-  create: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-  update: { type: 'easeInEaseOut' as const },
-  delete: { type: 'easeInEaseOut' as const, property: 'opacity' as const },
-};
 
 // TODO: wire sceneStrips once the scenes endpoint returns
 // { afterWord, sceneNumber, sceneTitle, timestamp, image_path, words_in_scene[] } per movie.
@@ -197,9 +179,9 @@ export const MovieDetailScreen = ({
   const [difficulty, setDifficulty] = useState<{ level: string; score: number } | null>(null);
   const [vocabSheetOpen, setVocabSheetOpen] = useState(false);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
+  /** Terms marked "Knew it". A label on the row and the card — never a filter
+   *  over the lists. */
   const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set());
-  const [pendingLearned, setPendingLearned] = useState<string | null>(null);
-  const pendingLearnedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authStatus = useAuthStore((s) => s.status);
   const isAuthenticated = authStatus === 'authenticated' || authStatus === 'offline_authenticated';
   const authUser = useAuthStore((s) => s.user);
@@ -489,29 +471,39 @@ export const MovieDetailScreen = ({
     }
   };
 
+  /**
+   * "Knew it" — record the mark, keep the word.
+   *
+   * This used to be a deferred delete: the word went into `learnedWords`,
+   * which filtered it out of every list, and a 5-second timer held the network
+   * write open so the Undo in the toast had something to cancel. All of that
+   * machinery — the pending word, the timer, the commit window, the unmount
+   * flush, the LayoutAnimation collapsing the row — existed to make a
+   * *removal* undoable. Nothing is removed now, so none of it is needed: the
+   * write goes out immediately and the Undo reverses it on the server.
+   *
+   * Optimistic, and deliberately so: the badge appears on the release of the
+   * swipe rather than on the response, and a failed write rolls it back off.
+   */
   const handleMarkLearned = useCallback((word: string) => {
     if (!isAuthenticated) return;
-    if (pendingLearnedTimerRef.current) {
-      clearTimeout(pendingLearnedTimerRef.current);
-      pendingLearnedTimerRef.current = null;
-    }
-    const previousPending = pendingLearned;
-    if (previousPending && previousPending !== word) {
-      wordwiseApi.markWordLearned(previousPending).catch(() => {});
-      setLearnedWords((prev) => {
-        const next = new Set(prev);
-        next.add(previousPending);
-        return next;
-      });
-    }
-
-    LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
     setLearnedWords((prev) => {
+      if (prev.has(word)) return prev;
       const next = new Set(prev);
       next.add(word);
       return next;
     });
-    setPendingLearned(word);
+
+    const rollback = () => {
+      setLearnedWords((prev) => {
+        if (!prev.has(word)) return prev;
+        const next = new Set(prev);
+        next.delete(word);
+        return next;
+      });
+    };
+
+    wordwiseApi.markWordLearned(word).catch(rollback);
 
     // The same shape the film feed uses for "Seen it" and "Not interested":
     // the global toast, carrying its own Undo. This screen used to grow a
@@ -519,65 +511,28 @@ export const MovieDetailScreen = ({
     // own dismissal — which meant the app told you what it had just done in
     // two different places depending on which screen you were standing on.
     //
-    // Its duration is the commit window, not the default 3.6s. Those two being
-    // different is a gap where the Undo has gone but the write has not
-    // happened yet: nothing on screen to press, and still time to press it.
+    // The default duration now, not a bespoke one: the toast no longer has to
+    // outlive a pending write, because there is no longer a pending write.
     showToast({
       message: t('vocabulary:deck.markedKnown', { word }),
       tone: 'success',
-      duration: LEARNED_COMMIT_MS,
       actionLabel: t('movies:detail.undo'),
-      onAction: () => undoLearnedRef.current(),
-    });
-
-    pendingLearnedTimerRef.current = setTimeout(() => {
-      pendingLearnedTimerRef.current = null;
-      setPendingLearned((current) => (current === word ? null : current));
-      wordwiseApi.markWordLearned(word).catch(() => {
-        LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
-        setLearnedWords((prev) => {
-          const next = new Set(prev);
-          next.delete(word);
-          return next;
+      onAction: () => {
+        rollback();
+        // `/user/words/unlearn` deletes the global marker. It has existed and
+        // worked all along; the only screen that called it was unreachable,
+        // which is how "Knew it" became a one-way door in the first place.
+        wordwiseApi.unlearnWord(word).catch(() => {
+          setLearnedWords((prev) => {
+            const next = new Set(prev);
+            next.add(word);
+            return next;
+          });
         });
-      });
-    }, LEARNED_COMMIT_MS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, pendingLearned]);
-
-  // The toast is raised inside `handleMarkLearned`, which is declared above
-  // the handler it needs. A ref rather than a reorder: the alternative is
-  // moving a hundred lines of unrelated code to satisfy a declaration order,
-  // and the ref is read at press time when the handler certainly exists.
-  const undoLearnedRef = useRef<() => void>(() => {});
-  const handleUndoLearned = () => {
-    if (!pendingLearned) return;
-    if (pendingLearnedTimerRef.current) {
-      clearTimeout(pendingLearnedTimerRef.current);
-      pendingLearnedTimerRef.current = null;
-    }
-    LayoutAnimation.configureNext(LEARNED_ROW_ANIM);
-    setLearnedWords((prev) => {
-      const next = new Set(prev);
-      next.delete(pendingLearned);
-      return next;
+      },
     });
-    setPendingLearned(null);
-  };
-  undoLearnedRef.current = handleUndoLearned;
-
-  useEffect(() => {
-    return () => {
-      if (pendingLearnedTimerRef.current) {
-        clearTimeout(pendingLearnedTimerRef.current);
-        pendingLearnedTimerRef.current = null;
-      }
-      if (pendingLearned) {
-        wordwiseApi.markWordLearned(pendingLearned).catch(() => {});
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const handleSaveWord = useCallback(async (word: string) => {
     if (!isAuthenticated) return;
@@ -719,19 +674,28 @@ export const MovieDetailScreen = ({
   }, [idioms]);
 
   const activeData = wordLevels.find((l) => l.level === activeLevel);
-  const allActiveWords = activeData?.words || [];
-  const allActiveIdioms = idiomsByLevel[activeLevel] || [];
-  const filteredActiveWords = learnedWords.size
-    ? allActiveWords.filter((w: any) => !learnedWords.has(w.word))
-    : allActiveWords;
-  const filteredActiveIdioms = learnedWords.size
-    ? allActiveIdioms.filter((i) => !learnedWords.has(i.phrase))
-    : allActiveIdioms;
+  // `learnedWords` used to be subtracted here, and that was the bug: a word
+  // the reader had marked "Knew it" left this film's vocabulary — and every
+  // other film's — permanently. Swiping left through a deck could empty it,
+  // and nothing reachable in the app put a word back (`/user/words/unlearn`
+  // exists, but its only caller, LearnedWordsScreen, is orphaned: nothing
+  // navigates to `vocabulary`).
+  //
+  // A mark is now a label, not a filter. The set still arrives from the server
+  // and still drives the badge on rows and cards; it just no longer decides
+  // what the list contains. Nothing was ever deleted, so dropping the filter
+  // is also what restores the decks people have already emptied — no backfill.
+  //
+  // Left undefaulted, with the `?? []` inside the memo below: `x || []` builds
+  // a fresh array on every render whenever the level is empty, and as a
+  // dependency that defeats the memo it is a dependency of.
+  const activeWords = activeData?.words;
+  const activeIdioms = idiomsByLevel[activeLevel];
   // Words and idioms share the level's row list. Idioms have no frequency
   // rank so they always sort to the end (matching the existing null-rank
   // behavior for words).
   const activeItems = useMemo<RowItem[]>(() => {
-    const arr: RowItem[] = [...filteredActiveWords, ...filteredActiveIdioms];
+    const arr: RowItem[] = [...(activeWords ?? []), ...(activeIdioms ?? [])];
     arr.sort((a, b) => {
       const aRank = isIdiom(a) ? null : a.frequency_rank;
       const bRank = isIdiom(b) ? null : b.frequency_rank;
@@ -745,7 +709,7 @@ export const MovieDetailScreen = ({
         : (aRank as number) - (bRank as number);
     });
     return arr;
-  }, [filteredActiveWords, filteredActiveIdioms, wordSortOrder]);
+  }, [activeWords, activeIdioms, wordSortOrder]);
 
   const SUGGESTED_CAP = 60;
   const LEVEL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -757,16 +721,20 @@ export const MovieDetailScreen = ({
     const targetLevels = new Set([userProficiency]);
     if (idx + 1 < LEVEL_ORDER.length) targetLevels.add(LEVEL_ORDER[idx + 1]);
 
+    // Known words are NOT skipped here either, and this is the less obvious
+    // half of it: "For You" looks like a ranking, where demoting a word the
+    // reader says they know would be reasonable. But `suggestedVisible` is
+    // also what feeds the deck when `wordsView === 'foryou'`, so a skip here
+    // is the same one-way door as the level tabs' — swipe left through the
+    // For You deck and it empties, with no way back.
     const pool: SuggestedItem[] = [];
     for (const lvl of targetLevels) {
       const list = vocabulary.top_words_by_level[lvl] || [];
       for (const w of list) {
-        if (learnedWords.has(w.word)) continue;
         pool.push({ ...w, cefr_level: lvl });
       }
       const idiomList = idiomsByLevel[lvl] || [];
       for (const i of idiomList) {
-        if (learnedWords.has(i.phrase)) continue;
         pool.push({ ...i, cefr_level: lvl });
       }
     }
@@ -781,7 +749,7 @@ export const MovieDetailScreen = ({
       return (bRank as number) - (aRank as number);
     });
     return pool;
-  }, [vocabulary, userProficiency, learnedWords, idiomsByLevel]);
+  }, [vocabulary, userProficiency, idiomsByLevel]);
 
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
@@ -959,8 +927,8 @@ export const MovieDetailScreen = ({
   }, [renderLimit, activeListLength]);
 
   // ── Card-deck view mode (Ledger Reveal, mockup 1a) ───────────────────────
-  // The deck is fed the active tab's items after the level filter, sort, and
-  // learned removal, then the same renderable-sentence filter the rows apply:
+  // The deck is fed the active tab's items after the level filter and sort,
+  // then the same renderable-sentence filter the rows apply:
   // long content steps down a type tier rather than being dropped, but a word
   // with no AI-authored example has an empty sentence slot and no card worth
   // showing. Unlike the rows (~100 mounts, hence the deferred inputs) the deck
@@ -1194,9 +1162,9 @@ export const MovieDetailScreen = ({
               <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
                 <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
                   <Text style={{ color: levelColorFor(activeLevel), fontWeight: '700' }}>
-                    {(activeData?.count ?? 0) + (allActiveIdioms.length || 0)}
+                    {(activeData?.count ?? 0) + (activeIdioms?.length ?? 0)}
                   </Text>
-                  {' '}{activeLevel} {allActiveIdioms.length > 0 ? 'items' : 'words'}
+                  {' '}{activeLevel} {(activeIdioms?.length ?? 0) > 0 ? 'items' : 'words'}
                 </Text>
                 <View style={deckHeaderStyles.sortCluster}>
                   <TouchableOpacity
@@ -1320,6 +1288,7 @@ export const MovieDetailScreen = ({
               targetLang={targetLang}
               isAuthenticated={isAuthenticated}
               savedWords={savedWords}
+              knownWords={learnedWords}
               onSave={handleSaveWord}
               onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
               onAdvanceBookmark={recordAdvanceBookmark}
@@ -1360,6 +1329,7 @@ export const MovieDetailScreen = ({
                         onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                         onBookmark={recordBookmark}
                         onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                        isKnown={learnedWords.has(key)}
                         isCurrentBookmark={currentBookmarkWord === key}
                       >
                         <IdiomRow
@@ -1388,6 +1358,7 @@ export const MovieDetailScreen = ({
                         onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                         onBookmark={recordBookmark}
                         onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                        isKnown={learnedWords.has(key)}
                         isCurrentBookmark={currentBookmarkWord === key}
                       >
                         <ForYouWordRow
@@ -1438,6 +1409,7 @@ export const MovieDetailScreen = ({
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
                       onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                      isKnown={learnedWords.has(key)}
                       isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <IdiomRow
@@ -1466,6 +1438,7 @@ export const MovieDetailScreen = ({
                       onLayoutY={(w, y) => { rowYOffsets.current[w] = y; }}
                       onBookmark={recordBookmark}
                       onMarkLearned={isAuthenticated ? handleMarkLearned : undefined}
+                      isKnown={learnedWords.has(key)}
                       isCurrentBookmark={currentBookmarkWord === key}
                     >
                       <WordRow

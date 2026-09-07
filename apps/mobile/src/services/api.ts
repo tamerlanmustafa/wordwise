@@ -588,7 +588,9 @@ export const wordwiseApi = {
     return res.json();
   },
 
-  // Mark a word as learned globally — hides it from every movie's list.
+  // Record that the user already knew a word — a global (movie_id NULL)
+  // marker. It does NOT hide the word: movie vocabulary lists and decks show
+  // every word and badge the marked ones. Reverse it with `unlearnWord`.
   markWordLearned: async (word: string): Promise<{ learned: boolean; word: string }> => {
     const res = await authFetch(`${API_BASE_URL}/user/words/mark-learned`, {
       method: 'POST',
@@ -598,7 +600,8 @@ export const wordwiseApi = {
     return res.json();
   },
 
-  // Reverse mark-learned. Word reappears in movie vocabulary lists.
+  // Reverse mark-learned: deletes the global marker, so the word loses its
+  // "known" badge and rejoins the quiz/practice pool.
   unlearnWord: async (word: string): Promise<{ learned: boolean; word: string }> => {
     const res = await authFetch(`${API_BASE_URL}/user/words/unlearn`, {
       method: 'POST',

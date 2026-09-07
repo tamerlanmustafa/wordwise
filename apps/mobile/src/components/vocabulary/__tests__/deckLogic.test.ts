@@ -1,7 +1,6 @@
 import {
   deckReducer,
   restoreDeck,
-  promotedKeyAfterRemoval,
   resumeMarker,
   warmWindowKeys,
   swipeDecision,
@@ -113,20 +112,6 @@ describe('deckReducer restore', () => {
     const state: DeckState = { keys: [], index: -1 };
     const next = deckReducer(state, { type: 'restore', keys: KEYS, bookmarkWord: 'grim' });
     expect(next).toEqual({ keys: KEYS, index: 3 });
-  });
-});
-
-describe('promotedKeyAfterRemoval', () => {
-  it('names the card that takes focus after the current one is learned', () => {
-    expect(promotedKeyAfterRemoval({ keys: KEYS, index: 1 }, 'brittle')).toBe('run out of');
-  });
-
-  it('wraps to the first card when the last one is removed', () => {
-    expect(promotedKeyAfterRemoval({ keys: KEYS, index: 3 }, 'grim')).toBe('hollow');
-  });
-
-  it('returns null when the removal empties the deck', () => {
-    expect(promotedKeyAfterRemoval({ keys: ['hollow'], index: 0 }, 'hollow')).toBeNull();
   });
 });
 

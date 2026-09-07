@@ -41,7 +41,6 @@ import {
   restoreDeck,
   swipeDecision,
   shouldClaimHorizontalDrag,
-  promotedKeyAfterRemoval,
   warmWindowKeys,
   STACK_SLOTS,
   type StackSlot,
@@ -293,6 +292,31 @@ const DefinitionSlot = ({
   );
 };
 
+/**
+ * "Knew it" badge on the card's meta row.
+ *
+ * The only thing on screen that survives a left swipe. Without it the two
+ * pills under the deck do the same visible thing — both advance a card — and a
+ * control the reader cannot tell apart from Next is one they stop using
+ * deliberately, which costs us the signal the mark exists to collect.
+ *
+ * A component rather than four inline lines for the same reason as
+ * `DefinitionSlot`: the focused card and the fly-away overlay render this row
+ * twice, and the two have to measure identically or the card pops at the
+ * instant the overlay detaches.
+ */
+const KnownBadge = ({
+  s,
+  label,
+}: {
+  s: ReturnType<typeof makeDeckStyles>;
+  label: string;
+}) => (
+  <View style={s.knownBadge}>
+    <Text style={s.knownBadgeText}>{label}</Text>
+  </View>
+);
+
 export type DeckItem = WordInfo | IdiomInfo;
 const isIdiomItem = (item: DeckItem): item is IdiomInfo => 'phrase' in item;
 const keyOf = (item: DeckItem) => (isIdiomItem(item) ? item.phrase : item.word);
@@ -315,8 +339,12 @@ export interface WordCardDeckProps {
   targetLang: string;
   isAuthenticated: boolean;
   savedWords: Set<string>;
+  /** Terms already marked "Knew it". They stay in the deck — this only puts
+   *  the badge on their meta row. */
+  knownWords: Set<string>;
   onSave: (term: string) => void;
-  /** Same handler as the rows' swipe-left; keeps the 5s undo snackbar. */
+  /** Same handler as the rows' swipe-left. Records the mark; it does NOT
+   *  remove the term from `items`. */
   onMarkLearned?: (term: string) => void;
   /** Cursor write on every advance (explicit: false). The top card IS the
    *  bookmark — leaving the screen resumes from whatever was in focus. */
@@ -369,6 +397,7 @@ export const WordCardDeck = ({
   targetLang,
   isAuthenticated,
   savedWords,
+  knownWords,
   onSave,
   onMarkLearned,
   onAdvanceBookmark,
@@ -472,7 +501,6 @@ export const WordCardDeck = ({
     /** …the same value in physical pixels, built once per key so a re-render
      *  mid-drag rebinds the same native node rather than a fresh one. */
     translateX: Animated.AnimatedMultiplication<number>;
-    focusOpacity: Animated.Value;
     arrive: Animated.Value;
     reveal: Animated.Value;
     revealHiddenOpacity: Animated.AnimatedInterpolation<number>;
@@ -481,14 +509,12 @@ export const WordCardDeck = ({
     // transform mixes translateX/translateY/scale interpolations depending
     // on the mode, which RN's WithAnimatedObject unions can't express.
     focusedArrive: { opacity: Animated.AnimatedInterpolation<number>; transform: any[] };
-    focusedOpacity: Animated.AnimatedMultiplication<number>;
   } | null>(null);
   const focusedKey = displayDeck.index >= 0 ? displayDeck.keys[displayDeck.index] : '';
   if (animRef.current == null || animRef.current.key !== focusedKey) {
     const mode = reduceMotionRef.current ? null : nextMountAnimRef.current;
     nextMountAnimRef.current = null;
     const arrive = new Animated.Value(mode == null ? 1 : 0);
-    const focusOpacity = new Animated.Value(1);
     const reveal = new Animated.Value(0);
     const focusedArrive =
       mode === 'return'
@@ -524,27 +550,18 @@ export const WordCardDeck = ({
       key: focusedKey,
       translate,
       translateX: Animated.multiply(translate, directionSign),
-      focusOpacity,
       arrive,
       reveal,
       revealHiddenOpacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       revealRise: reveal.interpolate({ inputRange: [0, 1], outputRange: [REVEAL_RISE_PX, 0] }),
       mode,
       focusedArrive,
-      // The imperative learn-hide multiplies in, on a node built once per
-      // key so mid-animation re-renders rebind the same graph.
-      focusedOpacity: Animated.multiply(
-        focusOpacity,
-        focusedArrive.opacity as Animated.AnimatedInterpolation<number>,
-      ),
     };
   }
   const {
     translate,
     translateX,
-    focusOpacity,
     focusedArrive,
-    focusedOpacity,
     revealHiddenOpacity,
     revealRise,
   } = animRef.current;
@@ -632,19 +649,38 @@ export const WordCardDeck = ({
     onAdvanceBookmark(nextKey);
   };
 
+  /**
+   * "Knew it" — a note about the word, not a reason to take it away.
+   *
+   * This used to remove the card: the parent filtered every learned word out
+   * of the item list, so the deck shrank by one and the word was gone from
+   * every movie, forever. A reader could swipe left until a film had no cards
+   * left, and nothing reachable in the app could bring them back (the `unlearn`
+   * endpoint existed, but the only screen that called it was orphaned).
+   *
+   * So it advances, exactly like `doAdvance`. The card comes round again, the
+   * back button still reaches it, and what "Knew it" leaves behind is the
+   * `user_words` marker plus the badge on the card's meta row.
+   *
+   * The fly-out still goes toward the LEADING edge. The two gestures commit
+   * different things and have to keep looking different, or the deck teaches
+   * that a left swipe and a right swipe are the same swipe.
+   */
   const doLearn = (method: 'swipe' | 'button') => {
     if (displayDeck.index < 0 || !onMarkLearned || currentKey == null) return;
     track('deck_mark_learned', { method });
-    const promoted = promotedKeyAfterRemoval(displayDeck, currentKey);
-    const term = currentKey;
+    onMarkLearned(currentKey);
+    if (total <= 1) {
+      // Nowhere to advance to — settle back. The mark above still counts.
+      Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      return;
+    }
+    const nextKey = displayDeck.keys[(displayDeck.index + 1) % total];
     pushOutgoing(-1, method === 'swipe' ? lastDragXRef.current : 0);
-    // The item list shrinks via the parent, so the remount lags this commit
-    // by a beat — hide the focused card NOW so it never doubles the overlay.
-    focusOpacity.setValue(0);
     nextMountAnimRef.current = 'step';
     setExpandedKey(null);
-    onMarkLearned(term);
-    if (promoted) onAdvanceBookmark(promoted);
+    dispatch({ type: 'advance' });
+    onAdvanceBookmark(nextKey);
   };
 
   /**
@@ -985,6 +1021,9 @@ export const WordCardDeck = ({
               <Text style={s.idiomBadgeText}>{staticBadge}</Text>
             </View>
           ) : null}
+          {knownWords.has(term) ? (
+            <KnownBadge s={s} label={t('vocabulary:deck.knownBadge')} />
+          ) : null}
           <View style={s.flexSpacer} />
           {isAuthenticated ? (
             <HeartIcon size={HEART_SIZE} filled={savedWords.has(term)} color={savedWords.has(term) ? tc.gold : tc.textFaint} />
@@ -1148,7 +1187,7 @@ export const WordCardDeck = ({
             s.card,
             {
               transform: [{ translateX }, ...focusedArrive.transform],
-              opacity: focusedOpacity,
+              opacity: focusedArrive.opacity,
             },
           ]}
           {...panResponder.panHandlers}
@@ -1172,6 +1211,9 @@ export const WordCardDeck = ({
                     {(currentItem as IdiomInfo).type === 'phrasal_verb' ? 'phrasal verb' : 'idiom'}
                   </Text>
                 </View>
+              ) : null}
+              {knownWords.has(currentKey) ? (
+                <KnownBadge s={s} label={t('vocabulary:deck.knownBadge')} />
               ) : null}
               <View style={s.flexSpacer} />
               {isAuthenticated ? (
@@ -1566,6 +1608,22 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontWeight: '800',
       letterSpacing: 0.4,
       color: tc.goldOnSurface,
+    },
+    // Same chip geometry as the level and idiom badges — it sits in their row
+    // and a third size there would read as three unrelated things. Success
+    // rather than gold: gold in this row already means "idiom", and the badge
+    // has to be legible as a state the reader put the word into.
+    knownBadge: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 5,
+      backgroundColor: `${tc.success}1F`,
+    },
+    knownBadgeText: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      color: tc.success,
     },
     flexSpacer: {
       flex: 1,
