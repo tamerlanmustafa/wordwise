@@ -22,6 +22,7 @@ from src.services.quiz_service import (
     is_near_form,
     normalize_choice,
     is_unit_unlocked,
+    order_for_definition_slots,
     pick_card_types,
     srs_outcome_for_card,
 )
@@ -520,6 +521,63 @@ class TestBuildDefinitionChoices:
     def test_needs_a_word(self):
         assert build_definition_choices("", pool=["a", "b", "c"]) is None
         assert build_definition_choices("   ", pool=["a", "b", "c"]) is None
+
+
+class TestOrderForDefinitionSlots:
+    """The 4th and 8th cards are definition cards, not "every fourth card when
+    the row that happened to land there had a gloss"."""
+
+    def test_keeps_row_order_when_the_slots_already_work(self):
+        order = order_for_definition_slots([True] * 10, total=10)
+        assert order == list(range(10))
+
+    def test_swaps_a_glossless_row_off_the_fourth_and_eighth_slots(self):
+        # Only rows 0 and 5 can be asked as definitions. They have to end up on
+        # slots 3 and 7 (the 4th and 8th cards) or the feature does not exist.
+        can = [True, False, False, False, False, True, False, False, False, False]
+        order = order_for_definition_slots(can, total=10)
+        assert can[order[3]] and can[order[7]]
+        assert sorted(order) == list(range(10))
+
+    def test_filling_the_eighth_never_empties_the_fourth(self):
+        # The bug a naive "find any capable row" swap has: slot 7 steals the
+        # row slot 3 just took, and the session ends with one definition card
+        # where it had none before the swap.
+        can = [False] * 10
+        can[2] = True
+        can[6] = True
+        order = order_for_definition_slots(can, total=10)
+        assert can[order[3]] and can[order[7]]
+        assert order[3] != order[7]
+
+    def test_pulls_from_the_headroom_when_the_deck_has_none_to_spare(self):
+        # Twelve candidates, ten cards. The only two that can carry a gloss are
+        # rows the session was not going to reach.
+        can = [False] * 12
+        can[10] = True
+        can[11] = True
+        order = order_for_definition_slots(can, total=10)
+        assert len(order) == 10
+        assert can[order[3]] and can[order[7]]
+        assert len(set(order)) == 10
+
+    def test_a_deck_with_no_glosses_still_runs_ten_cards(self):
+        # Graceful degradation: ten questions with no definition card beats
+        # eight questions and two apologies. The caller falls back to a
+        # translation MCQ on those slots.
+        order = order_for_definition_slots([False] * 10, total=10)
+        assert order == list(range(10))
+
+    def test_never_returns_more_cards_than_candidates(self):
+        assert order_for_definition_slots([True, True, True], total=10) == [0, 1, 2]
+        assert order_for_definition_slots([], total=10) == []
+        assert order_for_definition_slots([True] * 5, total=0) == []
+
+    def test_every_candidate_is_used_at_most_once(self):
+        can = [i % 3 == 0 for i in range(14)]
+        order = order_for_definition_slots(can, total=10)
+        assert len(order) == len(set(order)) == 10
+        assert all(0 <= i < 14 for i in order)
 
 
 class TestSessionIsAlwaysFull:

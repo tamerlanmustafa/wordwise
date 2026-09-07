@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Set
+from typing import Iterable, List, Optional, Sequence, Set
 
 CARDS_PER_SESSION = 10
 MCQ_RATIO = 0.7  # ~70% scored MCQ cards, ~30% self-rate
@@ -121,6 +121,73 @@ def is_definition_slot(index: int, *, every: int = DEFINITION_EVERY) -> bool:
     if every <= 0:
         return False
     return (index + 1) % every == 0
+
+
+def order_for_definition_slots(
+    can_define: Sequence[bool],
+    *,
+    total: int,
+    every: int = DEFINITION_EVERY,
+) -> List[int]:
+    """Which candidates to ask, in the order to ask them, so that the 4th and
+    8th cards are definition cards.
+
+    `can_define[i]` says whether candidate `i` has both a gloss and enough
+    distractors to be asked as a definition. Returns `min(total, len)` indices
+    into `can_define`.
+
+    This exists because asking "is this the 4th card?" of whichever row happens
+    to arrive fourth is not the same question as "make the 4th card a
+    definition". The router used to do the former: a greedy single pass that
+    checked the slot against the row already in hand, so slot 4 was a
+    definition card only when that row happened to carry a gloss, and the
+    session's shape was decided by the order rows came out of the composer.
+    Deciding the whole running order up front is what turns "every fourth card,
+    when it can be" into "the 4th and the 8th".
+
+    Two sources of a swap, in order of preference:
+
+    1. A candidate already in the session, sitting on a slot that does not
+       itself need a gloss. Free — the deck is unchanged, two cards trade
+       places, and the session is still the same ten words.
+    2. The headroom candidates the session did not need. Only reached when
+       *every* in-session candidate that could move is glossless, and it costs
+       the deck a word it was going to ask.
+
+    Order is otherwise preserved: recall-first ordering out of the composer is
+    deliberate, so this moves as little as it can. When no candidate anywhere
+    has a gloss, the slot keeps its original row and the caller falls back to a
+    translation card — a session of ten questions beats eight questions and two
+    apologies.
+    """
+    n = min(max(total, 0), len(can_define))
+    if n <= 0:
+        return []
+    chosen = list(range(n))
+    spare = list(range(n, len(can_define)))
+
+    for slot in range(n):
+        if not is_definition_slot(slot, every=every) or can_define[chosen[slot]]:
+            continue
+        # Definition slots are skipped as donors so filling the 8th cannot
+        # empty the 4th.
+        donor = next(
+            (
+                j
+                for j in range(n)
+                if not is_definition_slot(j, every=every) and can_define[chosen[j]]
+            ),
+            None,
+        )
+        if donor is not None:
+            chosen[slot], chosen[donor] = chosen[donor], chosen[slot]
+            continue
+        reserve = next((r for r in spare if can_define[r]), None)
+        if reserve is not None:
+            spare.remove(reserve)
+            spare.append(chosen[slot])
+            chosen[slot] = reserve
+    return chosen
 
 
 def build_definition_choices(

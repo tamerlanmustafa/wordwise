@@ -32,7 +32,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY, SERIF_ITALIC_FAMILY } from '../../theme/fonts';
-import { splitAroundWord } from './wordCardText';
+import { shouldShowExample, splitAroundWord } from './wordCardText';
 
 export interface WordCardProps {
   word: string;
@@ -71,6 +71,13 @@ export function WordCard({
   const parts = useMemo(
     () => (example ? splitAroundWord(example, word) : null),
     [example, word],
+  );
+  // A definition card blanks the word in its sentence. When the sentence uses
+  // an inflected form the lemma cannot match, there is nothing to blank and
+  // the sentence would print the answer above the options, so it is dropped.
+  const showExample = useMemo(
+    () => shouldShowExample(example, word, asking),
+    [example, word, asking],
   );
 
   return (
@@ -111,7 +118,7 @@ export function WordCard({
         </Text>
       )}
 
-      {example ? (
+      {showExample ? (
         <>
           <View style={[s.divider, { backgroundColor: tc.divider }]} />
           <Text style={[s.exampleLabel, { color: withAlpha(tc.gold, 0.6) }]}>EXAMPLE</Text>

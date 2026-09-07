@@ -49,6 +49,7 @@ from ..services.quiz_service import (
     build_translation_choices,
     is_definition_slot,
     normalize_choice,
+    order_for_definition_slots,
 )
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
 from ..services.srs_engine import (
@@ -876,6 +877,33 @@ async def start_session(
             if d.word not in pos_map and getattr(d, "part_of_speech", None):
                 pos_map[d.word] = d.part_of_speech
 
+    # The gloss the definition card actually asks with, from `lemmas`.
+    #
+    # `words` above is the legacy per-movie table and it holds **zero rows in
+    # prod** — every read of it returns nothing, so `def_map` was always empty,
+    # `base["definition"]` was always None, and the definition card could never
+    # be built. Not "rarely": never, since the feature shipped. The gloss the
+    # rest of the app shows (Explore card, word feed, movie card deck) has
+    # always come from `lemmas.definition`, which the definition worker fills
+    # from the lemma's own global sentence — 27,946 of 42,998 lemmas in prod.
+    # This is that same column, so the quiz asks the definition the user has
+    # already seen on the card for that word rather than a second one.
+    #
+    # Registry-keyed, so lemma-keyed and lowercase; `def_map`'s surface-form
+    # entries still win where a legacy `words` row exists, which keeps
+    # non-prod fixtures behaving as they did.
+    definition_by_lemma: dict[str, str] = {}
+    if unique_lemmas:
+        try:
+            lemma_rows = await db.lemma.find_many(
+                where={"lemma": {"in": unique_lemmas}}
+            )
+            definition_by_lemma = {
+                row.lemma: row.definition for row in lemma_rows if row.definition
+            }
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"[srs.start] registry definition lookup failed: {e}")
+
     # v0.7 §7 — example sentences for the IN CONTEXT callout. Global
     # LLM-authored (Haiku) sentences only — subtitle extracts read like
     # dialogue fragments and are deliberately excluded, so a lemma the
@@ -991,12 +1019,22 @@ async def start_session(
     used_choices: set[str] = set()
     # Fresh per-request RNG so choice ordering varies per session.
     rng = random.Random()
+
+    # ── Pass 1: what could each row be asked as? ────────────────────────────
+    # Rows are over-provisioned (SESSION_HEADROOM) and not every one is
+    # askable, so the session's shape is not known until every row has been
+    # costed. Walking rows and asking "is this the 4th card?" of whichever one
+    # arrives fourth is a different question from "make the 4th card a
+    # definition" — see `order_for_definition_slots`. Nothing here touches the
+    # DB: both pools and every map are already in memory.
+    def _deck_fallback(lemma: str) -> list[str]:
+        """The session's own other words, as the last resort for distractors.
+        Without it a thin registry bucket meant the definition card never
+        appeared at all rather than appearing with weaker options."""
+        return [w for w in unique_lemmas if w != lemma]
+
+    candidates: list[dict] = []
     for r in session_rows:
-        # Rows are over-provisioned (SESSION_HEADROOM) so drops do not shorten
-        # the lesson; stopping here is what turns that slack into a fixed
-        # SESSION_SIZE rather than an occasionally longer session.
-        if len(cards) >= SESSION_SIZE:
-            break
         lemma, spacy_pos = lemma_pos_map.get(r.word, (r.word.lower(), None))
         if lemma in carded_lemmas:
             continue
@@ -1022,99 +1060,123 @@ async def start_session(
             movie_title=movie_map.get(r.movieId) if r.movieId else None,
             srs_box=r.srsBox,
             srs_due_at=r.srsDueAt,
-            definition=def_entry[0] if def_entry else None,
+            # `words` is empty in prod, so the registry gloss is what fills
+            # this in practice; the legacy row still wins where one exists.
+            definition=(def_entry[0] if def_entry else None)
+            or definition_by_lemma.get(lemma),
             example_sentence=example_sentence,
             cefr_level=cefr,
         )
-        # The definition question for this word, built once and used in
-        # either of two places: the fourth slot, where it is the point, and
-        # the fallback below, where it is the difference between a card and a
-        # dropped word.
-        #
-        # Built up front rather than inside a branch because it is a pure
-        # function over lists already in memory, and the alternative is a
-        # closure over the loop variable — which is a lint error here and a
-        # genuine footgun anywhere it outlives the iteration.
+        # Can this word be asked at all, and how? Both probes are pure
+        # functions over lists already in memory, and `avoid` is a preference
+        # rather than a filter (see `_sample_preferring_unused`) — so a probe
+        # that succeeds here cannot fail in pass 2 once `used_choices` has
+        # grown. That is what makes the plan below binding rather than a hope.
+        can_define = bool(base["definition"]) and (
+            build_definition_choices(
+                lemma,
+                pool=pool_for(definition_pool, deck_pos.get(lemma), cefr),
+                deck=_deck_fallback(lemma),
+                rng=rng,
+            )
+            is not None
+        )
+        can_translate = (
+            build_translation_choices(
+                lemma,
+                translation_map,
+                pool=pool_for(distractors, deck_pos.get(lemma), cefr),
+                rng=rng,
+            )
+            is not None
+        )
+        if not can_define and not can_translate:
+            # Neither question can be asked. The word stays in the SRS queue
+            # and gets retried next time, when data may have caught up.
+            skipped.append(lemma)
+            continue
+        candidates.append(dict(
+            base=base,
+            lemma=lemma,
+            cefr=cefr,
+            pos_label=pos_label,
+            can_define=can_define,
+        ))
+
+    # ── Pass 2: place the definition cards, then build every grid ──────────
+    # The running order is decided first so the 4th and 8th cards are
+    # definition cards whenever the session holds a word that can carry one.
+    # Grids are built in that final order, because `used_choices` accumulates:
+    # building them in row order and shuffling afterwards would hand the first
+    # pick to a card that ends up last.
+    order = order_for_definition_slots(
+        [c["can_define"] for c in candidates], total=SESSION_SIZE
+    )
+    for slot, idx in enumerate(order):
+        c = candidates[idx]
+        lemma, base, cefr = c["lemma"], c["base"], c["cefr"]
+
         def_choices = (
             build_definition_choices(
                 lemma,
                 pool=pool_for(definition_pool, deck_pos.get(lemma), cefr),
-                # The session's own other words, as the last resort. Without
-                # it a thin registry bucket meant the definition card never
-                # appeared at all rather than appearing with weaker options.
-                deck=[w for w in unique_lemmas if w != lemma],
+                deck=_deck_fallback(lemma),
                 avoid=used_choices,
                 rng=rng,
             )
-            if base["definition"]
+            if c["can_define"]
             else None
         )
 
-        def_card = (
-            ReviewCard(
-                **base,
-                card_type="definition",
-                pos=pos_label,
-                translation=translation_map.get(lemma),
-                choices=[MCQChoice(**c) for c in def_choices],
-            )
-            if def_choices
-            else None
+        # A definition card on its own slot is the point; on any other slot it
+        # is the rescue that keeps a word with no translation from being
+        # dropped, which is what actually holds the session at SESSION_SIZE.
+        want_definition = def_choices and (
+            is_definition_slot(slot) or not translation_map.get(lemma)
         )
-
-        # `is_definition_slot` counts cards actually built, not rows walked, so
-        # a word skipped for want of any question does not shift the rhythm.
-        if def_card and def_choices and is_definition_slot(len(cards)):
-            used_choices.update(
-                normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
+        choices = None
+        if not want_definition:
+            choices = build_translation_choices(
+                lemma,
+                translation_map,
+                pool=pool_for(distractors, deck_pos.get(lemma), cefr),
+                avoid=used_choices,
+                rng=rng,
             )
-            cards.append(def_card)
+        card_type = "mcq" if choices else "definition"
+        picked = choices or def_choices
+        if not picked:  # pragma: no cover - pass 1 admits nothing unaskable
+            skipped.append(lemma)
             continue
 
-        choices = build_translation_choices(
-            lemma,
-            translation_map,
-            pool=pool_for(distractors, deck_pos.get(lemma), cefr),
-            avoid=used_choices,
-            rng=rng,
+        used_choices.update(
+            normalize_choice(ch["word"]) for ch in picked if not ch["is_correct"]
         )
-        if choices:
-            used_choices.update(
-                normalize_choice(c["word"]) for c in choices if not c["is_correct"]
-            )
-            cards.append(ReviewCard(
-                **base,
-                card_type="mcq",
-                pos=pos_label,
-                translation=translation_map.get(lemma),
-                choices=[MCQChoice(**c) for c in choices],
-            ))
-            continue
-
-        # No translation MCQ — missing translation, or too few distinct deck
-        # translations for distractors. Ask the meaning instead before giving
-        # up: a definition card needs no translation at all, so a word the
-        # translation path cannot use is often perfectly askable.
-        #
-        # This is what actually holds the session at SESSION_SIZE. The headroom
-        # rows are the backstop; this is the reason most of them are never
-        # needed, and it costs nothing — the pool is already built.
-        if def_card and def_choices:
-            used_choices.update(
-                normalize_choice(c["word"]) for c in def_choices if not c["is_correct"]
-            )
-            cards.append(def_card)
-            continue
-
-        # Neither question can be asked. The word stays in the SRS queue and
-        # gets retried next time, when data may have caught up.
-        skipped.append(lemma)
+        cards.append(ReviewCard(
+            **base,
+            card_type=card_type,
+            pos=c["pos_label"],
+            translation=translation_map.get(lemma),
+            choices=[MCQChoice(**ch) for ch in picked],
+        ))
 
     if skipped:
         logger.info(
             "[srs.start] dropped %d card(s) without a translation MCQ: %s",
             len(skipped), skipped[:10],
         )
+
+    # The two numbers that say whether this session came out the shape it was
+    # meant to. A deck short of SESSION_SIZE means the headroom ran out; zero
+    # definition cards on a full deck means no word in it carried a gloss,
+    # which is the failure that hid for as long as definitions were read from
+    # the empty `words` table.
+    logger.info(
+        "[srs.start] built %d/%d card(s), %d definition card(s) at slot(s) %s",
+        len(cards), SESSION_SIZE,
+        sum(1 for c in cards if c.card_type == "definition"),
+        [i + 1 for i, c in enumerate(cards) if c.card_type == "definition"],
+    )
 
     # How much of the wide distractor pool this language could actually fill.
     # `translation_cache` coverage varies per target language and nothing else

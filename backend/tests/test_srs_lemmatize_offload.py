@@ -124,6 +124,11 @@ def _fake_db(due_count: int = 0):
     return SimpleNamespace(
         userword=SimpleNamespace(count=count, find_many=find_many),
         word=SimpleNamespace(find_many=find_many),
+        # The registry, where the definition card's gloss comes from. Present
+        # even though these tests never populate it: without the attribute the
+        # lookup raises into its own `except` and the handler under test is
+        # quietly a different handler. See test_srs_definition_cards.py.
+        lemma=SimpleNamespace(find_many=find_many),
         movie=SimpleNamespace(find_many=find_many),
         user=SimpleNamespace(update=update),
         query_raw=query_raw,

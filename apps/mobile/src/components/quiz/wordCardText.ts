@@ -38,3 +38,30 @@ export function splitAroundWord(
     after: sentence.slice(m.index + m[0].length),
   };
 }
+
+/**
+ * Whether the card may print its example sentence at all.
+ *
+ * `asking` is the definition card: the gloss is the question and the sentence
+ * is the second half of it, so the target word in it has to be blanked. That
+ * inverts the trade-off `splitAroundWord` is tuned for. A sentence the lemma
+ * cannot be located in is a *missed highlight* on an ordinary card — invisible
+ * — and the *answer printed above the four options* on a definition card.
+ *
+ * It is not a rare case: the sentence prompt explicitly allows an inflected
+ * form ("an inflected form is fine, but it must be unambiguously the same
+ * lemma"), and 9,453 of the 36,531 eligible global sentences in prod use one.
+ * So a quarter of definition cards would answer themselves.
+ *
+ * The gloss alone is a complete question, so the card drops the sentence
+ * rather than showing a compromised one.
+ */
+export function shouldShowExample(
+  example: string | null | undefined,
+  word: string,
+  asking: boolean,
+): boolean {
+  if (!example) return false;
+  if (!asking) return true;
+  return splitAroundWord(example, word) !== null;
+}

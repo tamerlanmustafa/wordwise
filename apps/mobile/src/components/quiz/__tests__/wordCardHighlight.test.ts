@@ -8,7 +8,7 @@
  * conservative — highlight only what is certainly the word.
  */
 
-import { splitAroundWord } from '../wordCardText';
+import { shouldShowExample, splitAroundWord } from '../wordCardText';
 
 describe('splitAroundWord', () => {
   it('splits around the word', () => {
@@ -69,5 +69,36 @@ describe('splitAroundWord', () => {
   it('handles empty inputs without throwing', () => {
     expect(splitAroundWord('', 'run')).toBeNull();
     expect(splitAroundWord('She ran.', '')).toBeNull();
+  });
+});
+
+/**
+ * The same lookup, read the other way round. On a definition card the sentence
+ * is half the question and the word in it is blanked, so "cannot locate it" is
+ * no longer a missed highlight — it is the answer printed above the four
+ * options. A quarter of the corpus uses an inflected form, so this is the
+ * common case, not the edge one.
+ */
+describe('shouldShowExample', () => {
+  it('shows the sentence on an ordinary card whether or not the word is found', () => {
+    expect(shouldShowExample('She had to run home.', 'run', false)).toBe(true);
+    // Inflected away: no highlight, but the sentence is still worth reading.
+    expect(shouldShowExample('She ran home.', 'run', false)).toBe(true);
+  });
+
+  it('shows the sentence on a definition card when the word can be blanked', () => {
+    expect(shouldShowExample('She had to run home.', 'run', true)).toBe(true);
+  });
+
+  it('hides the sentence on a definition card when the word cannot be blanked', () => {
+    // "ran" is the answer to "to move quickly on foot", sitting above the grid.
+    expect(shouldShowExample('She ran home.', 'run', true)).toBe(false);
+    expect(shouldShowExample('A running joke.', 'run', true)).toBe(false);
+  });
+
+  it('has nothing to show without a sentence', () => {
+    expect(shouldShowExample(null, 'run', true)).toBe(false);
+    expect(shouldShowExample(undefined, 'run', false)).toBe(false);
+    expect(shouldShowExample('', 'run', false)).toBe(false);
   });
 });
