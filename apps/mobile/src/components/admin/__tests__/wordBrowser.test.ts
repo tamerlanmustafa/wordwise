@@ -19,9 +19,11 @@ import { join } from 'path';
 import { CEFR_LEVELS } from '../../../types/constants';
 import {
   EXCLUSION_LABELS,
+  SAFETY_FILTERS,
   WORD_BROWSE_LEVELS,
+  WORD_FILTER_TABS,
   WORD_SORT_TABS,
-  WORD_VISIBILITY_TABS,
+  countLine,
   isUngraded,
   levelColor,
 } from '../WordsView';
@@ -70,6 +72,12 @@ describe('sort chips', () => {
     expect(WORD_SORT_TABS.map((t) => t.id).sort()).toEqual(backendSorts.sort());
   });
 
+  it('offers both ends of the frequency ordering', () => {
+    const ids = WORD_SORT_TABS.map((t) => t.id);
+    expect(ids).toContain('frequency');
+    expect(ids).toContain('rarest');
+  });
+
   it('defaults to the commonest words first', () => {
     // The question this page usually answers is "what does a learner at this
     // level actually meet", and that is frequency order.
@@ -77,25 +85,79 @@ describe('sort chips', () => {
   });
 });
 
-describe('visibility toggle', () => {
-  it('offers only the slices the endpoint implements', () => {
-    const body = adminPanelsPy.split('WORD_VISIBILITIES = (')[1]?.split(')')[0] ?? '';
-    const backend = [...body.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+describe('filter chips', () => {
+  it('offers exactly the filters the endpoint implements', () => {
+    const body = adminPanelsPy.split('WORD_FILTERS = (')[1]?.split(')')[0] ?? '';
+    const backend = [...body.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 
-    expect(backend.length).toBe(3);
-    expect(WORD_VISIBILITY_TABS.map((t) => t.id).sort()).toEqual(backend.sort());
+    expect(backend.length).toBeGreaterThan(3);
+    expect(WORD_FILTER_TABS.map((t) => t.id).sort()).toEqual(backend.sort());
   });
 
   it('defaults to what a learner can see', () => {
     // The registry is 1.6x the servable set, so the raw list overstates every
-    // band. The first tab is the default, and it answers the real question.
-    expect(WORD_VISIBILITY_TABS[0].id).toBe('learner');
+    // band. The first chip is the default, and it answers the real question.
+    expect(WORD_FILTER_TABS[0].id).toBe('learner');
   });
 
   it('keeps a way to see the removed words', () => {
     // Without this the page becomes a mirror of the app and is blind, by
     // construction, to the class of bug it was built to expose.
-    expect(WORD_VISIBILITY_TABS.map((t) => t.id)).toContain('removed');
+    expect(WORD_FILTER_TABS.map((t) => t.id)).toContain('removed');
+  });
+
+  it('groups the chips so eleven of them stay scannable', () => {
+    // Each group must be contiguous, or the dividers land mid-group.
+    const groups = WORD_FILTER_TABS.map((t) => t.group);
+    expect([...new Set(groups)]).toEqual([...new Set(groups)].filter(Boolean));
+    const firstIndex = new Map<string, number>();
+    const lastIndex = new Map<string, number>();
+    groups.forEach((g, i) => {
+      if (!firstIndex.has(g)) firstIndex.set(g, i);
+      lastIndex.set(g, i);
+    });
+    for (const g of firstIndex.keys()) {
+      const span = lastIndex.get(g)! - firstIndex.get(g)! + 1;
+      expect(groups.filter((x) => x === g).length).toBe(span);
+    }
+  });
+
+  it('treats the offensive-word checks as their own group', () => {
+    // They are not subsets of "removed": they ask whether anything we refuse
+    // to teach is still reachable, which is a bug report, not a statistic.
+    expect(SAFETY_FILTERS).toEqual(['slur', 'profane']);
+  });
+
+  it('gives every chip a blurb saying what it selects', () => {
+    for (const tab of WORD_FILTER_TABS) {
+      expect(tab.blurb.length).toBeGreaterThan(20);
+      expect(tab.label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('countLine', () => {
+  it('reconciles the chip count with the list for the default view', () => {
+    expect(countLine('learner', 1618, 1930)).toBe(
+      '1,618 of 1,930 reach a learner · 312 removed',
+    );
+  });
+
+  it('drops the removed clause when nothing was removed', () => {
+    expect(countLine('learner', 500, 500)).toBe('500 of 500 reach a learner');
+  });
+
+  it('does not claim a subset when showing everything', () => {
+    expect(countLine('all', 1930, 1930)).toBe('1,930 in the registry');
+  });
+
+  it('states the complement plainly', () => {
+    expect(countLine('removed', 312, 1930)).toBe('312 of 1,930 never reach a learner');
+  });
+
+  it('falls back to a band-relative count for the single-cause filters', () => {
+    expect(countLine('hidden', 131, 1930)).toBe('131 of 1,930 in this band');
+    expect(countLine('slur', 0, 1930)).toBe('0 of 1,930 in this band');
   });
 });
 

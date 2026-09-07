@@ -833,15 +833,34 @@ export type AdminWordExclusion =
 
 /** How the word browser can order one level. Must match `WORD_SORTS` in
  *  `backend/src/services/admin_panels.py`. */
-export type AdminWordSort = 'frequency' | 'alpha' | 'movies' | 'recent';
+export type AdminWordSort = 'frequency' | 'rarest' | 'alpha' | 'movies' | 'recent';
 
-/** Which slice of a band to list. Must match `WORD_VISIBILITIES` in
+/** Which slice of a band to list. Must match `WORD_FILTERS` in
  *  `backend/src/services/admin_panels.py`.
  *
  *  `learner` is the default: the registry is 1.6x bigger than what the app can
  *  actually deal (prod 2026-09-07: 42,998 rows, 27,209 servable), so listing it
- *  raw overstates every band. */
-export type AdminWordVisibility = 'learner' | 'removed' | 'all';
+ *  raw overstates every band.
+ *
+ *  `slur` and `profane` are not subsets of `removed` — they ask "is anything we
+ *  refuse to teach still reachable", which is a different question from "what
+ *  did we remove". */
+export type AdminWordFilter =
+  | 'learner'
+  | 'removed'
+  | 'all'
+  | 'hidden'
+  | 'short'
+  | 'ungraded'
+  | 'unknown'
+  | 'no_sentence'
+  | 'no_definition'
+  | 'slur'
+  | 'profane';
+
+/** @deprecated The parameter's old name, kept so nothing that imported it
+ *  breaks. `AdminWordFilter` is the same union, wider. */
+export type AdminWordVisibility = AdminWordFilter;
 
 export interface AdminWordPage {
   words: AdminWord[];
@@ -1733,13 +1752,13 @@ export const adminApi = {
   wordList: async (opts: {
     level: string;
     sort?: AdminWordSort;
-    visibility?: AdminWordVisibility;
+    filter?: AdminWordFilter;
     offset?: number;
     limit?: number;
   }): Promise<AdminWordPage> => {
     const qs = new URLSearchParams({ level: opts.level });
     if (opts.sort) qs.set('sort', opts.sort);
-    if (opts.visibility) qs.set('visibility', opts.visibility);
+    if (opts.filter) qs.set('filter', opts.filter);
     if (opts.offset != null) qs.set('offset', String(opts.offset));
     qs.set('limit', String(opts.limit ?? 40));
     const res = await authFetch(`${API_BASE_URL}/admin/words/list?${qs}`);

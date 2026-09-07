@@ -22,7 +22,7 @@ interface Pending {
   args: {
     level: string;
     sort?: string;
-    visibility?: string;
+    filter?: string;
     offset?: number;
     limit?: number;
   };
@@ -212,20 +212,18 @@ describe('useAdminWordList', () => {
     // every band. The default answers the question people actually ask.
     renderHook(() => useAdminWordList('B2'));
 
-    expect(mockPending[0].args.visibility).toBe('learner');
+    expect(mockPending[0].args.filter).toBe('learner');
   });
 
-  it('restarts at page 0 when the visibility changes', async () => {
-    let visibility: 'learner' | 'removed' = 'learner';
-    const { result, rerender } = renderHook(() =>
-      useAdminWordList('B2', 'frequency', visibility),
-    );
+  it('restarts at page 0 when the filter changes', async () => {
+    let filter: 'learner' | 'removed' = 'learner';
+    const { result, rerender } = renderHook(() => useAdminWordList('B2', 'frequency', filter));
     await land(0, page(['w1', 'w2'], true));
 
-    visibility = 'removed';
+    filter = 'removed';
     rerender();
 
-    expect(mockPending[1].args).toMatchObject({ visibility: 'removed', offset: 0 });
+    expect(mockPending[1].args).toMatchObject({ filter: 'removed', offset: 0 });
     // "Removed" is a different list, not a filter over the one on screen.
     expect(result.current.words).toEqual([]);
     expect(result.current.total).toBeNull();

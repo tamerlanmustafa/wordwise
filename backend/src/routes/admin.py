@@ -124,7 +124,8 @@ async def admin_words_list(
     sort: str = "frequency",
     limit: int = 40,
     offset: int = 0,
-    visibility: str = "learner",
+    filter: str | None = None,
+    visibility: str | None = None,
     admin_user=Depends(get_admin_user),
     db: Prisma = Depends(get_db),
 ):
@@ -134,9 +135,13 @@ async def admin_words_list(
     cannot (`/words/list` is a longer path), but it sits next to it so the two
     are read together.
 
-    `visibility` defaults to `learner`, so the list answers "what does this
-    band actually deal" without being asked. `removed` and `all` are what make
-    it a diagnostic rather than a mirror of the app — see `words_by_level`.
+    `filter` defaults to `learner`, so the list answers "what does this band
+    actually deal" without being asked; the other ten values are what make it a
+    diagnostic rather than a mirror of the app — see `WORD_FILTERS`.
+
+    `visibility` is the parameter's old name and is still accepted, because an
+    installed build that predates the rename still sends it and a phone is not
+    a browser tab you can reload out from under. `filter` wins if both arrive.
     """
     try:
         return await words_by_level(
@@ -145,7 +150,7 @@ async def admin_words_list(
             sort=sort,
             limit=limit,
             offset=offset,
-            visibility=visibility,
+            visibility=filter or visibility or "learner",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

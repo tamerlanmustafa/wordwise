@@ -45,9 +45,9 @@ import { useAdminWordList } from '../../hooks/useAdminWordList';
 import type {
   AdminWord,
   AdminWordExclusion,
+  AdminWordFilter,
   AdminWords,
   AdminWordSort,
-  AdminWordVisibility,
 } from '../../services/api';
 import { cefrColors } from '../../theme/palette';
 import { CEFR_LEVELS } from '../../types/constants';
@@ -64,6 +64,7 @@ export const WORD_BROWSE_LEVELS: readonly string[] = [...CEFR_LEVELS, 'UNKNOWN']
 /** Must match `WORD_SORTS` in `backend/src/services/admin_panels.py`. */
 export const WORD_SORT_TABS: ReadonlyArray<{ id: AdminWordSort; label: string }> = [
   { id: 'frequency', label: 'Commonest' },
+  { id: 'rarest', label: 'Rarest' },
   { id: 'alpha', label: 'A–Z' },
   { id: 'movies', label: 'Most films' },
   { id: 'recent', label: 'Recently changed' },
@@ -77,23 +78,91 @@ export const WORD_SORT_TABS: ReadonlyArray<{ id: AdminWordSort; label: string }>
  * deal" is the question, and the registry answers a different one: prod on
  * 2026-09-07 holds 42,998 lemmas against 27,209 a learner can reach.
  */
-export const WORD_VISIBILITY_TABS: ReadonlyArray<{
-  id: AdminWordVisibility;
+export const WORD_FILTER_TABS: ReadonlyArray<{
+  id: AdminWordFilter;
   label: string;
   blurb: string;
+  /** Chips are grouped so eleven of them stay scannable: the three broad
+   *  slices, then the single causes, then the two safety checks. */
+  group: 'slice' | 'cause' | 'safety';
 }> = [
   {
     id: 'learner',
     label: 'Learners see',
     blurb: 'Exactly what the feed can deal at this level — the app’s own eligibility test.',
+    group: 'slice',
   },
   {
     id: 'removed',
     label: 'Removed',
-    blurb: 'Words a learner can never meet, and which filter removed each one.',
+    blurb: 'Every word a learner can never meet, and which filter removed each one.',
+    group: 'slice',
   },
-  { id: 'all', label: 'All', blurb: 'The whole registry at this level, removed rows marked.' },
+  {
+    id: 'all',
+    label: 'All',
+    blurb: 'The whole registry at this level, removed rows marked.',
+    group: 'slice',
+  },
+  {
+    id: 'hidden',
+    label: 'Hidden',
+    blurb: 'Curated away in hidden_words — someone decided we should not teach these.',
+    group: 'cause',
+  },
+  {
+    id: 'short',
+    label: 'Too short',
+    blurb: 'Under four letters, or not purely alphabetic. Mostly tokenizer debris.',
+    group: 'cause',
+  },
+  {
+    id: 'ungraded',
+    label: 'Never graded',
+    blurb: 'Placeholder level from an old default — nothing ever judged these. Should be 0.',
+    group: 'cause',
+  },
+  {
+    id: 'unknown',
+    label: 'Ungraded pile',
+    blurb: 'The UNKNOWN holding pen: classified as unplaceable, never taught.',
+    group: 'cause',
+  },
+  {
+    id: 'no_sentence',
+    label: 'No sentence',
+    blurb: 'Waiting on the sentence worker. A worklist, not a verdict.',
+    group: 'cause',
+  },
+  {
+    id: 'no_definition',
+    label: 'No meaning',
+    blurb: 'No definition written. These still show on a card, with a blank line under them.',
+    group: 'cause',
+  },
+  {
+    id: 'slur',
+    label: 'Slurs',
+    blurb: 'Slurs the profanity filter blocks. Any of these reaching a learner is a bug.',
+    group: 'safety',
+  },
+  {
+    id: 'profane',
+    label: 'Profanity',
+    blurb: 'Strong profanity and slurs. Mild swears (damn, hell) are taught and excluded here.',
+    group: 'safety',
+  },
 ];
+
+/** @deprecated Old name; `WORD_FILTER_TABS` is the same list, longer. */
+export const WORD_VISIBILITY_TABS = WORD_FILTER_TABS;
+
+/** Filters that ask "is anything we refuse to teach still reachable" rather
+ *  than "what did we remove". A non-zero count under `learner` eligibility is
+ *  a bug, not a statistic — which is why they are their own group. */
+export const SAFETY_FILTERS: ReadonlyArray<AdminWordFilter> = WORD_FILTER_TABS.filter(
+  (t) => t.group === 'safety',
+).map((t) => t.id);
 
 /** Plain-language label for `excluded_reason`. Wording matches what the filter
  *  actually does, not the column it reads. */
@@ -118,6 +187,34 @@ export function isUngraded(word: Pick<AdminWord, 'source' | 'confidence'>): bool
   return word.source === 'fallback' && word.confidence < 0.5;
 }
 
+/**
+ * The line that reconciles the chip count with the list under it.
+ *
+ * The chip counts the whole registry band; most filters list a subset of it,
+ * and leaving that gap unexplained is the kind of quiet mismatch that makes an
+ * admin page untrustworthy — it is a smaller version of the bug that put 3,850
+ * ungraded words behind a confident A2 label.
+ *
+ * Pure, so the wording is testable without rendering anything.
+ */
+export function countLine(
+  filter: AdminWordFilter,
+  total: number,
+  registryCount: number,
+): string {
+  const n = total.toLocaleString();
+  const of = registryCount.toLocaleString();
+  if (filter === 'learner') {
+    const removed = registryCount - total;
+    return removed > 0
+      ? `${n} of ${of} reach a learner · ${removed.toLocaleString()} removed`
+      : `${n} of ${of} reach a learner`;
+  }
+  if (filter === 'removed') return `${n} of ${of} never reach a learner`;
+  if (filter === 'all') return `${n} in the registry`;
+  return `${n} of ${of} in this band`;
+}
+
 export function levelColor(level: string, fallback: string): string {
   // UNKNOWN is not a CEFR band, so it gets neutral ink rather than a colour
   // that would put it on the difficulty ramp.
@@ -130,11 +227,11 @@ export function WordsView({ data }: { data: AdminWords | null }) {
 
   const [level, setLevel] = useState<string | null>(null);
   const [sort, setSort] = useState<AdminWordSort>('frequency');
-  const [visibility, setVisibility] = useState<AdminWordVisibility>('learner');
+  const [filter, setFilter] = useState<AdminWordFilter>('learner');
   const { words, total, loading, loadingMore, hasMore, error, loadMore } = useAdminWordList(
     level,
     sort,
-    visibility,
+    filter,
   );
 
   // Tapping the open tab closes it and returns to the overview, so the tabs
@@ -306,22 +403,32 @@ export function WordsView({ data }: { data: AdminWords | null }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipRow}
           >
-            {WORD_VISIBILITY_TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: visibility === tab.id }}
-                accessibilityHint={tab.blurb}
-                style={[styles.sortChip, visibility === tab.id && styles.sortChipOn]}
-                onPress={withTap(() => setVisibility(tab.id))}
-              >
-                <Text
-                  style={[styles.sortChipText, visibility === tab.id && styles.sortChipTextOn]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {WORD_FILTER_TABS.map((tab, i) => {
+              const on = filter === tab.id;
+              const startsGroup = i > 0 && WORD_FILTER_TABS[i - 1].group !== tab.group;
+              return (
+                <View key={tab.id} style={styles.chipWrap}>
+                  {/* A hairline where the grouping changes: three broad
+                      slices, then single causes, then the safety checks. */}
+                  {startsGroup ? <View style={styles.chipDivider} /> : null}
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityHint={tab.blurb}
+                    style={[
+                      styles.sortChip,
+                      tab.group === 'safety' && styles.safetyChip,
+                      on && styles.sortChipOn,
+                    ]}
+                    onPress={withTap(() => setFilter(tab.id))}
+                  >
+                    <Text style={[styles.sortChipText, on && styles.sortChipTextOn]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </ScrollView>
         ) : null}
 
@@ -353,20 +460,22 @@ export function WordsView({ data }: { data: AdminWords | null }) {
             makes an admin page untrustworthy. */}
         {level && total != null ? (
           <Text style={styles.countLine}>
-            {visibility === 'learner'
-              ? `${total.toLocaleString()} of ${registryCount.toLocaleString()} reach a learner` +
-                (registryCount > total
-                  ? ` · ${(registryCount - total).toLocaleString()} removed`
-                  : '')
-              : visibility === 'removed'
-                ? `${total.toLocaleString()} of ${registryCount.toLocaleString()} never reach a learner`
-                : `${total.toLocaleString()} in the registry`}
+            {countLine(filter, total, registryCount)}
+          </Text>
+        ) : null}
+
+        {/* A safety filter reading zero is the result you want, and an empty
+            list alone does not say so — it looks like every other empty list.
+            Say it, so "nothing is wrong" is legible as an answer. */}
+        {level && total === 0 && SAFETY_FILTERS.includes(filter) ? (
+          <Text style={[styles.countLine, { color: c.success }]}>
+            None in {level} — nothing offensive is reachable here.
           </Text>
         ) : null}
 
         {level ? (
           <Text style={styles.note}>
-            {WORD_VISIBILITY_TABS.find((t) => t.id === visibility)?.blurb}
+            {WORD_FILTER_TABS.find((t) => t.id === filter)?.blurb}
           </Text>
         ) : null}
 
@@ -425,11 +534,11 @@ export function WordsView({ data }: { data: AdminWords | null }) {
           </View>
         ) : words.length === 0 ? (
           <Text style={styles.note}>
-            {visibility === 'learner'
+            {filter === 'learner'
               ? `No words in ${level} reach a learner.`
-              : visibility === 'removed'
+              : filter === 'removed'
                 ? `Nothing is removed from ${level} — every word reaches a learner.`
-                : `No words in ${level}.`}
+                : `No words in ${level} match this filter.`}
           </Text>
         ) : !hasMore ? (
           <Text style={styles.note}>
@@ -494,11 +603,25 @@ const makeStyles = (c: AdminColors) =>
     levelChipTextOn: {
       color: c.accentInk,
     },
+    chipWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    chipDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 20,
+      backgroundColor: c.border,
+    },
     sortChip: {
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
       backgroundColor: c.inset,
+    },
+    safetyChip: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.error,
     },
     sortChipOn: {
       backgroundColor: c.accentFill,

@@ -137,6 +137,20 @@ _UNAMBIGUOUS_FORMS: frozenset = frozenset(BLOCKED_WORDS - _AMBIGUOUS_FORMS)
 _SPLIT_RE = re.compile(r"[\s'’_-]+")
 
 
+def slur_forms() -> frozenset:
+    """The slur half of `BLOCKED_WORDS`, expanded to its stored forms.
+
+    Exposed for the admin word browser, which needs to ask "is any slur still
+    reachable by a learner" as a question separate from "is any strong swear".
+    They are different severities and a mistake in the first is worse.
+
+    Derived from the same bases and the same expander `BLOCKED_WORDS` uses, and
+    minus `KEPT_MILD` for the same reason, so this can never name a term the
+    blocklist does not actually block.
+    """
+    return frozenset(build_forms(_SLUR_BASES, pluralize, _SLUR_EXTRA)) - KEPT_MILD
+
+
 def is_profane(term: str) -> bool:
     """
     True when `term` is strong profanity or a slur we refuse to teach.

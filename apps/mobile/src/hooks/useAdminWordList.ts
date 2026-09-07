@@ -35,7 +35,7 @@ import {
   adminApi,
   type AdminWord,
   type AdminWordSort,
-  type AdminWordVisibility,
+  type AdminWordFilter,
 } from '../services/api';
 
 export const WORD_PAGE_SIZE = 40;
@@ -43,14 +43,14 @@ export const WORD_PAGE_SIZE = 40;
 export function useAdminWordList(
   level: string | null,
   sort: AdminWordSort = 'frequency',
-  visibility: AdminWordVisibility = 'learner',
+  filter: AdminWordFilter = 'learner',
 ) {
   const [words, setWords] = useState<AdminWord[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // How many rows match this (level, visibility) in total, from page 0. Null
+  // How many rows match this (level, filter) in total, from page 0. Null
   // until it lands. Appends carry no total, so this is only ever written on a
   // reset — overwriting it with an append's null would blank the count the
   // moment the user scrolled.
@@ -87,11 +87,11 @@ export function useAdminWordList(
         const page = await adminApi.wordList({
           level,
           sort,
-          visibility,
+          filter,
           offset,
           limit: WORD_PAGE_SIZE,
         });
-        // A newer tab, sort or visibility started while this was awaiting.
+        // A newer tab, sort or filter started while this was awaiting.
         if (reqId !== reqIdRef.current) return;
 
         countRef.current = offset + page.words.length;
@@ -120,10 +120,10 @@ export function useAdminWordList(
         }
       }
     },
-    [level, sort, visibility],
+    [level, sort, filter],
   );
 
-  // Reset whenever the tab, the sort or the visibility changes. Deselecting
+  // Reset whenever the tab, the sort or the filter changes. Deselecting
   // clears the list rather than leaving the last band's words behind the
   // closed tab.
   useEffect(() => {

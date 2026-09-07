@@ -184,6 +184,10 @@ async def words_panel(db: Prisma) -> dict:
 #: rows it rewrote.
 WORD_SORTS = {
     "frequency": "l.frequency_rank ASC NULLS LAST, l.id ASC",
+    # NULLS LAST on both ends deliberately: an unranked word is "we don't know
+    # how common this is", which belongs at the bottom of *either* ordering
+    # rather than being presented as the rarest word in the band.
+    "rarest": "l.frequency_rank DESC NULLS LAST, l.id ASC",
     "alpha": "l.lemma ASC",
     "movies": "l.total_movie_count DESC, l.id ASC",
     "recent": "l.updated_at DESC, l.id ASC",
@@ -193,34 +197,100 @@ WORD_SORTS = {
 #: gets this, matching /admin/movies/processed.
 WORD_PAGE_MAX = 100
 
+#: Placeholder the profanity filters leave for their bound `text[]`. Replaced
+#: with the real `$n` by the caller, which is the only thing that knows how
+#: many parameters precede it in its own statement.
+WORDS_PARAM = ":WORDS:"
+
 #: Which slice of a band the browser is looking at.
 #:
-#: `learner` is the default because the usual question is "what does this level
-#: actually deal", and the registry is 1.6x bigger than that (prod 2026-09-07:
-#: 42,998 rows, 27,209 servable). `removed` is the complement — the words a
-#: learner can never meet — which is where a curation or grading mistake hides.
-WORD_VISIBILITIES = ("learner", "removed", "all")
+#: The first three are the broad ones. `learner` is the default because the
+#: usual question is "what does this level actually deal", and the registry is
+#: 1.6x bigger than that (prod 2026-09-07: 42,998 rows, 27,209 servable).
+#: `removed` is its complement — where a curation or grading mistake hides.
+#:
+#: The rest narrow to one cause. Five mirror `excluded_reason_sql` so a bar on
+#: the "why is this invisible" breakdown can be opened. `no_definition` is not
+#: an exclusion at all — such a word still shows on a card, with a blank line
+#: under it — so it is a filter and never a reason.
+#:
+#: `slur` and `profane` are deliberately NOT subsets of `removed`. Every other
+#: value here answers "what did we remove"; these answer "is anything we refuse
+#: to teach still reachable", which is a different and more urgent question. On
+#: prod 2026-09-07 the answer is 0 of 11, and this is how it stays checkable.
+WORD_FILTERS = (
+    "learner",
+    "removed",
+    "all",
+    "hidden",
+    "short",
+    "ungraded",
+    "unknown",
+    "no_sentence",
+    "no_definition",
+    "slur",
+    "profane",
+)
+
+#: Kept as an alias so an older mobile build's `visibility=` still resolves —
+#: an app on someone's phone is not a browser tab you can reload.
+WORD_VISIBILITIES = WORD_FILTERS
 
 
-def visibility_sql(visibility: str, alias: str = "l") -> str:
-    """WHERE-clause fragment for one `WORD_VISIBILITIES` value.
+def word_filter_sql(name: str, alias: str = "l") -> tuple[str, list]:
+    """(WHERE-clause fragment, bound params) for one `WORD_FILTERS` value.
 
-    Built from `feed_eligibility_sql` rather than restating its four tests, so
-    "what a learner sees" here is the *same predicate the feed serves from*.
-    Restating it would create a second definition of eligibility that drifts —
-    which is the exact bug this browser was built to make visible, and it would
-    be a poor page that reproduced it.
+    The learner slice is `feed_eligibility_sql` itself rather than a restatement
+    of its four tests, so "what a learner sees" here is the *same predicate the
+    feed serves from*. A second definition of eligibility that drifts from the
+    first is the exact bug this browser exists to make visible, and it would be
+    a poor page that reproduced it.
 
-    `NOT (...)` is total here: every column the fragment tests (`lemma`,
-    `cefr_level`, `source`, `confidence`) is NOT NULL and the two subqueries are
+    `NOT (...)` is total: every column the fragment tests (`lemma`,
+    `cefr_level`, `source`, `confidence`) is NOT NULL and both subqueries are
     EXISTS, so there is no third truth value for the negation to swallow.
+
+    The profanity filters bind a `text[]` rather than interpolating 443 quoted
+    literals into the statement. They return it as a param list, and the caller
+    substitutes `WORDS_PARAM` with the right `$n` — only the caller knows how
+    many parameters its own statement puts first.
 
     `alias` is written by the caller, never user input — it is interpolated.
     """
-    if visibility == "all":
-        return "TRUE"
-    eligible = feed_eligibility_sql(alias)
-    return f"({eligible})" if visibility == "learner" else f"NOT ({eligible})"
+    p = f"{alias}."
+    if name == "all":
+        return "TRUE", []
+    if name in ("learner", "removed"):
+        eligible = feed_eligibility_sql(alias)
+        return (f"({eligible})" if name == "learner" else f"NOT ({eligible})"), []
+    if name in ("slur", "profane"):
+        # Imported here: profanity_filter builds its word forms at import time,
+        # and admin panels are not worth that cost on an unrelated request.
+        from src.services.profanity_filter import BLOCKED_WORDS, slur_forms
+
+        words = sorted(slur_forms() if name == "slur" else BLOCKED_WORDS)
+        return f"LOWER({p}lemma) = ANY({WORDS_PARAM}::text[])", [words]
+
+    # The single-cause filters. Each is the branch of `excluded_reason_sql`
+    # that names it, so the two cannot disagree about what "hidden" means.
+    by_reason = {
+        "unknown": f"{p}cefr_level = 'UNKNOWN'",
+        "ungraded": f"({p}source = 'fallback' AND {p}confidence < 0.5)",
+        "short": (
+            f"(NOT ({p}lemma ~ '^[a-zA-Z]+$') "
+            f"OR length({p}lemma) < {FEED_MIN_LEMMA_LENGTH})"
+        ),
+        "hidden": (
+            f"EXISTS (SELECT 1 FROM hidden_words h "
+            f"WHERE LOWER(h.word) = LOWER({p}lemma))"
+        ),
+        "no_sentence": (
+            f"NOT EXISTS (SELECT 1 FROM sentence_lemma_links sll "
+            f"WHERE sll.lemma_id = {p}id AND sll.is_global)"
+        ),
+        "no_definition": f"({p}definition IS NULL OR {p}definition = '')",
+    }
+    return by_reason[name], []
 
 
 def excluded_reason_sql(alias: str = "l") -> str:
@@ -300,12 +370,22 @@ async def words_by_level(
         raise ValueError(f"Invalid sort: {sort}")
     if level not in REGISTRY_LEVELS:
         raise ValueError(f"Invalid level: {level}")
-    if visibility not in WORD_VISIBILITIES:
-        raise ValueError(f"Invalid visibility: {visibility}")
+    if visibility not in WORD_FILTERS:
+        raise ValueError(f"Invalid filter: {visibility}")
 
     take = min(max(limit, 1), WORD_PAGE_MAX)
     start = max(offset, 0)
-    where_sql = f"l.cefr_level = '{level}' AND {visibility_sql(visibility)}"
+
+    # The filter's params come first in both statements, so its placeholder is
+    # always $1 and `limit`/`offset` shift by however many it bound. Getting
+    # this wrong binds the array to LIMIT, which errors rather than silently
+    # returning the wrong page — but only because the types differ, so the
+    # arithmetic is written once, here, rather than at each call.
+    filter_sql, filter_params = word_filter_sql(visibility, "l")
+    filter_sql = filter_sql.replace(WORDS_PARAM, "$1")
+    where_sql = f"l.cefr_level = '{level}' AND {filter_sql}"
+    limit_pos = len(filter_params) + 1
+    offset_pos = len(filter_params) + 2
 
     rows = await db.query_raw(
         f"""
@@ -326,8 +406,9 @@ async def words_by_level(
           FROM lemmas l
          WHERE {where_sql}
          ORDER BY {order_by}
-         LIMIT $1 OFFSET $2
+         LIMIT ${limit_pos} OFFSET ${offset_pos}
         """,
+        *filter_params,
         take + 1,
         start,
     )
@@ -335,7 +416,8 @@ async def words_by_level(
     total: Optional[int] = None
     if start == 0:
         count_rows = await db.query_raw(
-            f"SELECT count(*)::int AS n FROM lemmas l WHERE {where_sql}"
+            f"SELECT count(*)::int AS n FROM lemmas l WHERE {where_sql}",
+            *filter_params,
         )
         total = _int(_first(count_rows).get("n"))
 

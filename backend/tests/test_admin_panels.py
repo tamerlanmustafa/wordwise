@@ -294,12 +294,12 @@ class TestWordsByLevel:
         # the drift this browser was built to expose.
         from src.services.feed_pool import feed_eligibility_sql
 
-        assert feed_eligibility_sql("l") in ap.visibility_sql("learner", "l")
+        assert feed_eligibility_sql("l") in ap.word_filter_sql("learner", "l")[0]
 
     async def test_removed_is_the_exact_complement_of_learner(self):
         from src.services.feed_pool import feed_eligibility_sql
 
-        assert ap.visibility_sql("removed", "l") == f"NOT ({feed_eligibility_sql('l')})"
+        assert ap.word_filter_sql("removed", "l")[0] == f"NOT ({feed_eligibility_sql('l')})"
 
     async def test_all_applies_no_filter(self):
         db = _FakeDb()
@@ -314,6 +314,90 @@ class TestWordsByLevel:
 
         with pytest.raises(ValueError):
             await ap.words_by_level(db, level="B2", visibility="everything")
+
+    @pytest.mark.parametrize("name", ap.WORD_FILTERS)
+    async def test_every_offered_filter_builds_and_runs(self, name):
+        db = _FakeDb({"FROM lemmas": [_word_row()]})
+
+        page = await ap.words_by_level(db, level="B2", visibility=name)
+
+        assert page["visibility"] == name
+        assert ap.WORDS_PARAM not in " ".join(db.calls)
+
+    @pytest.mark.parametrize("name", ["slur", "profane"])
+    async def test_the_word_lists_are_bound_not_interpolated(self, name):
+        # 443 quoted literals in the statement text would be a quoting bug
+        # waiting to happen, and would defeat the plan cache.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="B2", visibility=name)
+
+        sql = " ".join(db.calls)
+        assert "= ANY($1::text[])" in sql
+        assert "'faggot'" not in sql
+        words = db.args_for("FROM lemmas")[0]
+        assert isinstance(words, list) and len(words) > 50
+
+    @pytest.mark.parametrize("name", ["slur", "profane"])
+    async def test_a_bound_filter_shifts_limit_and_offset(self, name):
+        # The filter's params come first, so LIMIT/OFFSET are $2/$3 rather than
+        # $1/$2. Getting this wrong binds the array to LIMIT.
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="B2", visibility=name, limit=7, offset=14)
+
+        list_sql = next(s for s in db.calls if "count(*)" not in s)
+        assert "LIMIT $2 OFFSET $3" in list_sql
+        _, take, start = db.args_for("ORDER BY")
+        assert (take, start) == (8, 14)
+
+    async def test_an_unbound_filter_leaves_limit_and_offset_first(self):
+        db = _FakeDb()
+
+        await ap.words_by_level(db, level="B2", visibility="hidden", limit=7, offset=14)
+
+        list_sql = next(s for s in db.calls if "count(*)" not in s)
+        assert "LIMIT $1 OFFSET $2" in list_sql
+        assert db.args_for("ORDER BY") == (8, 14)
+
+    async def test_slur_is_a_subset_of_profane(self):
+        from src.services.profanity_filter import BLOCKED_WORDS, slur_forms
+
+        assert slur_forms() <= BLOCKED_WORDS
+
+    async def test_the_offensive_filters_are_not_scoped_to_removed(self):
+        # They answer "is anything we refuse to teach still reachable", which
+        # a subset of `removed` cannot express: a slur that is NOT removed is
+        # exactly the row worth finding.
+        sql, _ = ap.word_filter_sql("slur", "l")
+
+        assert "sll.is_global" not in sql
+        assert "hidden_words" not in sql
+
+    @pytest.mark.parametrize(
+        "name,reason",
+        [
+            ("unknown", "unknown_level"),
+            ("ungraded", "ungraded"),
+            ("short", "shape"),
+            ("hidden", "curated_away"),
+            ("no_sentence", "no_sentence"),
+        ],
+    )
+    async def test_each_single_cause_filter_matches_its_exclusion_branch(self, name, reason):
+        # The filter and the row's `excluded_reason` must agree about what e.g.
+        # "hidden" means, or filtering to a reason returns rows labelled with a
+        # different one.
+        def squash(sql: str) -> str:
+            # Whitespace-free: the CASE branch and the filter are written in
+            # different layouts, and only the logic has to match.
+            return "".join(sql.split()).strip("()")
+
+        frag, _ = ap.word_filter_sql(name, "l")
+        case = "".join(ap.excluded_reason_sql("l").split())
+        branch = case.split(f"THEN'{reason}'")[0].split("WHEN")[-1]
+
+        assert squash(frag) == squash(branch)
 
     async def test_counts_the_band_only_on_the_first_page(self):
         # The count costs 10-49ms and is the same for every page of a band, so
@@ -336,7 +420,7 @@ class TestWordsByLevel:
 
         count_sql = next(s for s in db.calls if "count(*)" in s)
         list_sql = next(s for s in db.calls if "count(*)" not in s)
-        where = f"l.cefr_level = 'C1' AND {ap.visibility_sql('removed')}"
+        where = f"l.cefr_level = 'C1' AND {ap.word_filter_sql('removed')[0]}"
         assert where in count_sql
         assert where in list_sql
 
