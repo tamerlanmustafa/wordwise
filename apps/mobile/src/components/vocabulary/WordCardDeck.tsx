@@ -1480,13 +1480,23 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       marginTop: 0,
       height: DECK_ZONE_HEIGHT,
     },
+    // All three card faces — the ghosts behind, the focused card, and a card
+    // mid-swipe — wear the same rim as "Knew it" below them (`knowFace`), and
+    // as the film-feed card. One token, so both themes come from the palette.
+    //
+    // All three, not just the focused one: a ghost promoted to focus and a
+    // card swiped out are the *same* card a moment earlier and later, so a rim
+    // that only the focused card wore would change colour mid-animation.
+    //
+    // The ghosts carry their own opacity (see GHOSTS), which softens the gold
+    // on them without a second colour needing to exist.
     ghost: {
       position: 'absolute',
       height: CARD_HEIGHT,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: tc.border,
+      borderColor: tc.goldOnSurface,
     },
     // A swiped card mid-flight: same face as the focused card, floating
     // above the new focused card.
@@ -1499,7 +1509,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: tc.border,
+      borderColor: tc.goldOnSurface,
       padding: 20,
       overflow: 'hidden',
       shadowColor: light ? '#2D2418' : '#000',
@@ -1517,7 +1527,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: tc.border,
+      borderColor: tc.goldOnSurface,
       shadowColor: light ? '#2D2418' : '#000',
       shadowOpacity: 0.1,
       shadowRadius: 12,
