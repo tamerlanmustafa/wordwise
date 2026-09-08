@@ -82,6 +82,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
         'face',
         'faded',
         'glyph',
+        'markInk',
         'nosing',
       ]);
     });

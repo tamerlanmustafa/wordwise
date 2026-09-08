@@ -48,7 +48,6 @@
 import { useMemo } from 'react';
 import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
-import { markSideForIndex } from './TileMarks';
 
 /**
  * How many completed tiles sit below the active one — which is the same thing
@@ -190,11 +189,10 @@ export function PracticeTilePath({
             <PracticeTile
               state={tile.state}
               onPress={() => onTilePress(tile.index)}
-              // Keyed on the absolute index, like the zigzag: the alternation
-              // has to belong to the tile rather than to the slot it happens
-              // to occupy, or the scuff flips under every tile as the window
-              // slides.
-              markSide={markSideForIndex(tile.index)}
+              // 1-based, and from the ABSOLUTE index like the zigzag: the
+              // number names the tile, not the slot it currently occupies, so
+              // it stays put as the window slides past.
+              lesson={tile.index + 1}
               nextUp={tile.index === cursor + 1}
               depth={depth}
               marksOnAllLocked={marksOnAllLocked}

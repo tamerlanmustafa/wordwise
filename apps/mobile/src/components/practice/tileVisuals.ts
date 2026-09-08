@@ -35,8 +35,36 @@
  * the path but an interruption to it.
  */
 
-import type { ThemeColors } from '../../theme/tokens';
+import { shade, type ThemeColors } from '../../theme/tokens';
 import type { PracticeTileState } from './PracticeTile';
+
+/**
+ * How much darker than its own face a groove's floor sits.
+ *
+ * Lives here rather than next to the check it was written for, because the
+ * lesson number now shares it: both are cut into the same stone by the same
+ * light, and two constants that must agree are one constant. `TileMarks`
+ * imports it — the other direction would be a cycle, since this file is what
+ * `TileMarks` asks for its inks.
+ */
+export const CHECK_FLOOR_DARKEN = 0.14;
+
+/**
+ * How much darker the completed tile's *number* is cut than its check.
+ *
+ * Deliberately not `CHECK_FLOOR_DARKEN`, and the difference is optical rather
+ * than aesthetic: ink depth buys contrast in proportion to how much of it is
+ * on the surface, and a 12pt numeral puts a fraction of the check's 2.9-wide
+ * stroke on the tread. Matched to the check the two looked identical in the
+ * palette and nothing alike on a phone — the number read on gold and on stone
+ * and vanished on green, because green is the one face the shallow darkening
+ * barely moves. This is the depth at which all three states read alike.
+ *
+ * The lesson generalises past this tile: the same colour at two stroke widths
+ * is two different contrasts, so a value tuned on a thick mark cannot be
+ * inherited by a thin one.
+ */
+const DONE_NUMBER_DARKEN = 0.34;
 
 export interface TileVisual {
   /** Flat colour of the tile's face. */
@@ -50,6 +78,17 @@ export interface TileVisual {
   band: number;
   /** Alpha of the white nosing along the tread's front lip. */
   nosing: number;
+  /**
+   * Floor colour for text cut into the tread — the lesson number, and START.
+   *
+   * The tile's own face in shadow rather than a palette entry of its own,
+   * which is what keeps an engraved numeral reading as part of the stone. Per
+   * state because the faces are nowhere near each other in lightness: the same
+   * ink that is legible on gold disappears on the locked tile's stone, and a
+   * groove on a near-black face has no room to go darker at all — there the
+   * lit lower lip is doing the work, exactly as it does for the lock.
+   */
+  markInk: string;
   /** Centre glyph, or null for a bare face. */
   glyph: 'alarm' | null;
   /** Slightly receded, for tiles the user has already walked past. */
@@ -66,6 +105,7 @@ export function tileVisual(state: PracticeTileState, tc: ThemeColors): TileVisua
         edge: tc.nodeRepairEdge,
         band: 0.4,
         nosing: 0.5,
+        markInk: shade(tc.error, -0.4),
         glyph: 'alarm',
         faded: false,
       };
@@ -75,6 +115,7 @@ export function tileVisual(state: PracticeTileState, tc: ThemeColors): TileVisua
         edge: tc.nodeDoneEdge,
         band: 0.55,
         nosing: 0.28,
+        markInk: shade(tc.nodeDone, -DONE_NUMBER_DARKEN),
         glyph: null,
         faded: true,
       };
@@ -84,6 +125,9 @@ export function tileVisual(state: PracticeTileState, tc: ThemeColors): TileVisua
         edge: tc.nodeGoldEdge,
         band: 0.4,
         nosing: 0.5,
+        // Shared with the START label on this same tile — `goldDeep` is the
+        // palette's dark-text-on-gold, which is exactly this job.
+        markInk: tc.goldDeep,
         glyph: null,
         faded: false,
       };
@@ -98,6 +142,11 @@ export function tileVisual(state: PracticeTileState, tc: ThemeColors): TileVisua
         edge: tc.nodeLockedEdge,
         band: 0.85,
         nosing: 0.09,
+        // Deeper than the others because the locked face is the darkest, and
+        // a shallow darkening of near-black is no groove at all. On the dark
+        // theme this bottoms out and the lit lower lip carries the numeral —
+        // the same trade the lock makes two lines down the tread.
+        markInk: shade(tc.nodeLocked, -0.45),
         glyph: null,
         faded: false,
       };

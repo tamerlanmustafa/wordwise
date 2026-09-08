@@ -20,10 +20,9 @@ import fs from 'fs';
 import path from 'path';
 
 import { themes, shade, type ThemeColors } from '../../../theme/tokens';
-import { tileVisual, tileMark } from '../tileVisuals';
+import { tileVisual, tileMark, CHECK_FLOOR_DARKEN } from '../tileVisuals';
 import {
   CHECK_BOX,
-  CHECK_FLOOR_DARKEN,
   CHECK_FLOOR_W,
   CHECK_LIP_W,
   LOCK_INK,
@@ -31,8 +30,6 @@ import {
   SCUFF_H,
   SCUFF_START,
   SCUFF_W,
-  markSideForIndex,
-  mirroredStart,
 } from '../TileMarks';
 import {
   NOSING_H,
@@ -166,76 +163,63 @@ describe('tileMark', () => {
   });
 });
 
-describe('markSideForIndex', () => {
-  it('alternates, so the scuff does not draw a stripe down the flight', () => {
-    // The check is centred on every tile now, so breaking that stripe is the
-    // scuff's whole job — this is the only thing that varies down the path.
-    expect(markSideForIndex(0)).toBe('right');
-    expect(markSideForIndex(1)).toBe('left');
-    expect(markSideForIndex(2)).toBe('right');
-  });
-
-  it('is keyed on the absolute index, like the zigzag', () => {
-    // Keyed on the rendered slot instead, every mark would flip sides each
-    // time the window slid by one — the same bug `offsetForIndex` documents.
-    expect(markSideForIndex(8)).toBe(markSideForIndex(0));
-    expect(markSideForIndex(9)).toBe(markSideForIndex(1));
-  });
-
-  it('handles a defensively negative index', () => {
-    expect(markSideForIndex(-1)).toBe('left');
-    expect(markSideForIndex(-2)).toBe('right');
-  });
-});
-
-describe('the check is centred and the scuff works around it', () => {
-  const sides = ['left', 'right'] as const;
+describe('the tread has three fixed zones', () => {
+  // Leading end: the lesson number, on every tile. Centre: the state's mark.
+  // Trailing end: the scuff. The check used to alternate sides by index to
+  // avoid drawing a vertical stripe down a path that bends — numbering every
+  // tile puts a deliberate column there regardless, so the alternation went
+  // and each mark now has exactly one home.
+  const NUMBER_START = NOSING_INSET;
+  const CHECK_START = (TILE_W - CHECK_BOX) / 2;
 
   it('centres the check on both axes, exactly where the lock and START sit', () => {
-    // All three marks share one home. That is what makes the states read as
-    // one family rather than three differently-placed badges — and on a 56pt
-    // tread a 30pt box centres to MARK_TOP, so the scuff keeps its baseline.
+    // All three centre marks share one home. On a 56pt tread a 30pt box
+    // centres to MARK_TOP, so the scuff keeps its baseline for free.
     expect(MARK_TOP).toBe((TILE_H - CHECK_BOX) / 2);
   });
 
-  it('mirrors the two scuff positions about the tread centre', () => {
-    const centres = sides.map((s) => SCUFF_START[s] + SCUFF_W / 2);
-    expect(centres[0] + centres[1]).toBeCloseTo(TILE_W, 6);
+  it('starts the number where the nosing does, so the tread breaks on one line', () => {
+    // The number, the lit lip's inset and the face's corner radius are all
+    // the same 12pt. That is the detail that makes the leading edge read as
+    // deliberate rather than as a margin someone guessed.
+    expect(NUMBER_START).toBe(NOSING_INSET);
+    expect(NOSING_INSET).toBe(TILE_RADIUS);
   });
 
-  it('keeps the scuff clear of the centred check on both sides', () => {
-    // They are drawn in one face with no layout between them; overlap would
-    // put a footprint under the check and read as a smudge on the groove.
-    const checkStart = (TILE_W - CHECK_BOX) / 2;
-    for (const side of sides) {
-      const scuffStart = SCUFF_START[side];
-      const gap =
-        scuffStart > checkStart
-          ? scuffStart - (checkStart + CHECK_BOX)
-          : checkStart - (scuffStart + SCUFF_W);
-      expect(gap).toBeGreaterThanOrEqual(8);
+  it('runs number → check → scuff across the tread without overlap', () => {
+    const zones = [
+      ['number', NUMBER_START, 40],
+      ['check', CHECK_START, CHECK_BOX],
+      ['scuff', SCUFF_START, SCUFF_W],
+    ] as const;
+    for (let i = 1; i < zones.length; i += 1) {
+      const [, prevStart, prevW] = zones[i - 1];
+      const [, start] = zones[i];
+      expect(start).toBeGreaterThanOrEqual(prevStart + prevW);
     }
   });
 
-  it('keeps both marks inside the tread, which crops anything that is not', () => {
+  it('leaves the number room for four digits before it reaches the check', () => {
+    // The path is endless, so the number is not bounded. At 12pt mono a digit
+    // is roughly 7.2pt wide; this is the assertion that fails long before a
+    // committed user's lesson count starts colliding with the check.
+    const DIGIT_W = 7.2;
+    expect(CHECK_START - NUMBER_START).toBeGreaterThanOrEqual(4 * DIGIT_W);
+  });
+
+  it('keeps every mark inside the tread, which crops anything that is not', () => {
     // The face clips its children (it has to, or the occlusion band grows
     // square corners), so a mark that overruns is silently cut rather than
     // overflowing — which looks intentional in a screenshot.
-    for (const side of sides) {
-      for (const [start, w] of [
-        [(TILE_W - CHECK_BOX) / 2, CHECK_BOX],
-        [SCUFF_START[side], SCUFF_W],
-      ] as const) {
-        expect(start).toBeGreaterThanOrEqual(0);
-        expect(start + w).toBeLessThanOrEqual(TILE_W);
-      }
-      expect(MARK_TOP).toBeGreaterThanOrEqual(0);
-      expect(MARK_TOP + Math.max(CHECK_BOX, SCUFF_H)).toBeLessThanOrEqual(TILE_H);
+    for (const [start, w] of [
+      [CHECK_START, CHECK_BOX],
+      [SCUFF_START, SCUFF_W],
+    ] as const) {
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(start + w).toBeLessThanOrEqual(TILE_W);
     }
-  });
-
-  it('derives the leading scuff rather than typing a second number', () => {
-    expect(SCUFF_START.left).toBe(mirroredStart(SCUFF_START.right, SCUFF_W, SCUFF_W));
+    expect(MARK_TOP).toBeGreaterThanOrEqual(0);
+    expect(MARK_TOP + Math.max(CHECK_BOX, SCUFF_H)).toBeLessThanOrEqual(TILE_H);
   });
 
   it('clears the lit nosing, so a footprint never lands on the tread lip', () => {
@@ -397,9 +381,34 @@ describe('a mark is engraved, not embossed', () => {
     expect(s.match(/<RadialGradient/g)).toHaveLength(2);
   });
 
-  it('asks the palette for the letterpress ink instead of inventing a brown', () => {
-    expect(marks()).not.toMatch(/#4A2C00/i);
-    expect(marks()).toMatch(/color: tc\.goldDeep/);
+  it('takes every groove ink from the state mapping, never a literal', () => {
+    // Both pieces of text on the tread — the lesson number and START — are
+    // inked from `tileVisual().markInk`, so the two can never drift and no
+    // hex is frozen next to a palette that moves. The design brief named
+    // #4A2C00 for START; `goldDeep` is the palette's own dark-text-on-gold
+    // and within 16/255 of it, so the token wins.
+    const s = marks().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    expect(s).not.toMatch(/#[0-9a-f]{6}/i);
+    expect(s).toMatch(/color: ink/);
+  });
+
+  it('cuts the lesson number with the same letterpress as START', () => {
+    // Two constructions for two pieces of text on one tread is how they end
+    // up looking like two different engravings.
+    const s = marks();
+    expect(s.match(/<Letterpress/g)).toHaveLength(2);
+    expect(s).toMatch(/function Letterpress\(/);
+  });
+
+  it('numbers every tile, not just the ones behind you', () => {
+    // The number is an address, not a reward: 30 locked tiles is three
+    // screens of near-identical stone, and the road ahead is exactly where
+    // knowing your position matters most.
+    const s = marks();
+    const dispatch = s.slice(s.indexOf('export function TileMarks('));
+    expect(dispatch).toMatch(/<LessonNumber lesson=\{lesson\} ink=\{ink\} \/>/);
+    // Outside the mark conditionals, so no state can drop it.
+    expect(dispatch.indexOf('<LessonNumber')).toBeLessThan(dispatch.indexOf("mark === 'check'"));
   });
 
   it('stacks two copies of the label, because Text carries one shadow', () => {

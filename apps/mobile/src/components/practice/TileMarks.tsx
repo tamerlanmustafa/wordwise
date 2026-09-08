@@ -24,38 +24,41 @@
  * same path stroked three times at two widths, which is a drawing and not a
  * character.
  *
- * ## The check is centred; the scuff is what alternates
+ * Grooves come in two builds, and which one a mark uses is decided by what it
+ * is made of rather than by taste. The check and the lock are *drawings*, so
+ * they stroke and fill the same shape three times in SVG. The lesson number
+ * and START are *characters*, and no amount of SVG will set a numeral as well
+ * as the text engine will — so they stack two copies of a `Text` with opposite
+ * shadows instead. Same three layers either way; see {@link Letterpress}.
  *
- * The check sits dead centre of its tread, the same place the lock and the
- * START label sit. That is worth stating because it was not free: nine tiles
- * climb the screen on a zigzag, and a mark pinned to the same spot on every
- * face draws a vertical stripe straight down the flight — a line the path does
- * not have. The check having a *fixed* home is what makes the three states
- * read as one family rather than three differently-placed badges, so the job
- * of breaking that stripe moved entirely to the scuff, which alternates sides
- * by tile index and is faint enough to vary without drawing a second line.
+ * ## Three fixed zones
  *
- * The scuff's two positions are mirror images about the tread's centre, which
- * is why one is derived from the other rather than typed twice, and both clear
- * the centred check by a margin a test asserts.
+ * Leading end: the lesson number, on every tile. Centre: whatever the state
+ * says — check, START, or lock. Trailing end: the scuff, on completed tiles.
+ *
+ * The zones are fixed, and that is a reversal worth recording. The check used
+ * to sit off-centre and alternate sides by index, because a mark repeating in
+ * one spot draws a vertical stripe down a path that bends. Numbering every
+ * tile puts a deliberate column down the leading edge regardless, so there is
+ * no stripe left to avoid — and three marks that each have one home read as a
+ * layout, where the same three with one of them jumping about read as drift.
  *
  * Positions use `start`/`end` rather than `left`/`right` for the RTL scan in
- * `i18n/__tests__/rtl.test.ts`. Mirroring them is harmless here: the flight
- * is symmetric about its own centre line, so a mirrored path is the same
- * picture with the alternation starting on the other side.
+ * `i18n/__tests__/rtl.test.ts`. That is the correct behaviour here and not
+ * just guard-appeasement: the number is text, so under a right-to-left UI it
+ * belongs on the right, where that reader's eye starts.
  */
 
 import { useId } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type TextStyle } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { shade, useThemeColors } from '../../theme/tokens';
-import { TILE_W } from './TilePill';
-import type { TileMark } from './tileVisuals';
+import { NOSING_INSET } from './TilePill';
+import { CHECK_FLOOR_DARKEN, type TileMark } from './tileVisuals';
 
-/** Which side of the tread the scuff is worn into. The check is centred and
- *  takes no side. */
+/** Kept for the scuff's trailing-side anchor; the marks no longer alternate. */
 export type MarkSide = 'left' | 'right';
 
 /** Painted size of the check. */
@@ -67,9 +70,6 @@ const CHECK_PATH = 'M4.4 12.9L9.7 18.1L19.8 6.7';
  *  thinner so the lips show either side of it. */
 export const CHECK_LIP_W = 3.7;
 export const CHECK_FLOOR_W = 2.9;
-/** How much darker than `nodeDone` the groove's floor sits. It is the tile's
- *  own colour in shadow, not a second green. */
-export const CHECK_FLOOR_DARKEN = 0.14;
 
 /** Painted size of the scuff — wider and taller than the check, because the
  *  heel trails below and behind the ball. */
@@ -81,24 +81,17 @@ export const SCUFF_H = 40;
  *  the two marks still share a baseline. */
 export const MARK_TOP = 13;
 
-/** The x a `mirrorWidth`-wide box needs to sit exactly opposite a
- *  `width`-wide box at `start`, about the tread's centre. Exported so the
- *  symmetry is asserted rather than eyeballed: a mark that runs past the
- *  tread is silently cropped by the face's `overflow: 'hidden'`, which looks
- *  like a design choice on a screenshot and like a bug on a phone. */
-export function mirroredStart(start: number, width: number, mirrorWidth: number): number {
-  return TILE_W - (start + width / 2) - mirrorWidth / 2;
-}
-
-/** Where the scuff falls when it is worn into the trailing side of the tread.
- *  Far enough out that it clears the centred check. */
-const SCUFF_START_TRAILING = 132;
-/** Both scuff positions. The leading one is *derived* rather than typed, so
- *  the pair cannot drift apart the way two hand-tuned numbers do. */
-export const SCUFF_START: Record<MarkSide, number> = {
-  right: SCUFF_START_TRAILING,
-  left: mirroredStart(SCUFF_START_TRAILING, SCUFF_W, SCUFF_W),
-};
+/**
+ * Where the scuff is worn, on the trailing side of the tread.
+ *
+ * It used to alternate sides by tile index, to stop a mark repeating in one
+ * spot from drawing a vertical stripe down a path that bends. That job is
+ * gone: the lesson number now occupies the leading end of EVERY tile on
+ * purpose, so the flight has a deliberate column in it either way, and the
+ * leading half is spoken for. Three fixed zones — number, check, scuff — read
+ * as a layout; the same three with one of them jumping about reads as drift.
+ */
+export const SCUFF_START = 132;
 
 /**
  * The lock's two layers, at both weights.
@@ -113,27 +106,27 @@ export const LOCK_INK = {
   nextUp: { light: 'rgba(255,255,255,0.17)', dark: 'rgba(0,0,0,0.58)' },
 } as const;
 
-/** Which side of the tread tile `index` wears its scuff on. Pure + exported so
- *  the alternation is testable without rendering nine tiles. */
-export function markSideForIndex(index: number): MarkSide {
-  return ((index % 2) + 2) % 2 === 0 ? 'right' : 'left';
-}
-
 export interface TileMarksProps {
-  /** Which mark, from {@link tileMark}. */
+  /** Which centre mark, from {@link tileMark}. */
   mark: TileMark;
-  /** Side for the completed tile's scuff; ignored by the others. */
-  side: MarkSide;
+  /** 1-based lesson this tile is, cut into the leading end. */
+  lesson: number;
+  /** Groove floor for the tread's text, from `tileVisual().markInk`. */
+  ink: string;
   /** The one locked tile directly above the active one — its lock is cut a
    *  little deeper than the rest of the road ahead. */
   nextUp?: boolean;
 }
 
-export function TileMarks({ mark, side, nextUp = false }: TileMarksProps) {
-  if (mark === 'check') return <CompletedMark side={side} />;
-  if (mark === 'start') return <StartMark />;
-  if (mark === 'lock') return <LockMark emphasised={nextUp} />;
-  return null;
+export function TileMarks({ mark, lesson, ink, nextUp = false }: TileMarksProps) {
+  return (
+    <>
+      <LessonNumber lesson={lesson} ink={ink} />
+      {mark === 'check' ? <CompletedMark /> : null}
+      {mark === 'start' ? <StartMark ink={ink} /> : null}
+      {mark === 'lock' ? <LockMark emphasised={nextUp} /> : null}
+    </>
+  );
 }
 
 /**
@@ -143,7 +136,7 @@ export function TileMarks({ mark, side, nextUp = false }: TileMarksProps) {
  * icon: someone walked here. Two soft ellipses, ball and heel, at opacities
  * low enough to be felt before they are seen.
  */
-function CompletedMark({ side }: { side: MarkSide }) {
+function CompletedMark() {
   const tc = useThemeColors();
   // Unique per mount: react-native-svg resolves `url(#id)` per Svg root on
   // native, and this keeps that true if the path is ever rendered on web.
@@ -185,7 +178,7 @@ function CompletedMark({ side }: { side: MarkSide }) {
         </Svg>
       </View>
 
-      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: SCUFF_START[side] }]}>
+      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: SCUFF_START }]}>
         <Svg width={SCUFF_W} height={SCUFF_H}>
           {/* Radial-gradient fills rather than a blurred shape: CSS
               `filter: blur()` has no React Native equivalent, and an SVG
@@ -225,6 +218,53 @@ function CompletedMark({ side }: { side: MarkSide }) {
 }
 
 /**
+ * Text cut into the tread.
+ *
+ * React Native gives a `Text` exactly one `textShadow*` set, and a letterpress
+ * needs two — dark above the glyph, light below it. So the string is drawn
+ * twice in the same place: the lower copy first carrying the light shadow, the
+ * upper copy over it carrying the dark one. The glyphs are identical and
+ * opaque, so they cover each other exactly and only the shadows survive the
+ * overlap.
+ *
+ * The absolute-fill second copy is sized by the first, which is why the pair
+ * is wrapped in a bare `View` — that wrapper is the shared box, and without it
+ * the copy would fill the whole tread and set its text somewhere else.
+ */
+function Letterpress({ text, style }: { text: string; style: TextStyle }) {
+  return (
+    <View>
+      <Text style={[style, styles.pressLit]}>{text}</Text>
+      <Text style={[style, styles.pressCut, StyleSheet.absoluteFill]}>{text}</Text>
+    </View>
+  );
+}
+
+/**
+ * Which lesson this tile is — the number carved into its leading end.
+ *
+ * On every tile, including the road ahead, because its job is navigation
+ * rather than reward: the path now renders thirty locked tiles, and three
+ * screens of near-identical stone with nothing written on them is a place you
+ * cannot tell your position in. A number is the cheapest possible answer to
+ * "where am I", and unlike every score we could show here it is available
+ * without asking the server for anything — the tile already knows its index.
+ *
+ * It is an ADDRESS, not an achievement, and the distinction matters if anyone
+ * is ever tempted to label it: `users.practice_lessons_completed` is merged
+ * with GREATEST across devices and was never backfilled, so tile 47 is a
+ * position on the road and emphatically not a receipt for 47 finished
+ * sessions.
+ */
+function LessonNumber({ lesson, ink }: { lesson: number; ink: string }) {
+  return (
+    <View pointerEvents="none" style={styles.lessonSlot}>
+      <Letterpress text={String(lesson)} style={{ ...styles.lesson, color: ink }} />
+    </View>
+  );
+}
+
+/**
  * The one labelled tile on the path.
  *
  * It is also the only moving one — the active tile bounces — and that is
@@ -232,27 +272,16 @@ function CompletedMark({ side }: { side: MarkSide }) {
  * claim made twice on the one tile the user can actually tap, and nowhere
  * else on the flight competes with it.
  *
- * Letterpress needs two shadows, one above and one below, and React Native's
- * `Text` carries exactly one `textShadow*` set. So the word is drawn twice in
- * the same place: the lower copy first with the light shadow under it, the
- * upper copy over it with the dark shadow above. The glyphs are identical and
- * opaque, so only the shadows survive the overlap.
+ * Cut with the same {@link Letterpress} the lesson number uses — they are the
+ * two pieces of text on the tread, and one construction for both is what stops
+ * them drifting into two different-looking engravings.
  */
-function StartMark() {
+function StartMark({ ink }: { ink: string }) {
   const { t } = useTranslation('practice');
-  const tc = useThemeColors();
-  const label = t('start');
 
   return (
     <View pointerEvents="none" style={styles.centred}>
-      <View>
-        <Text style={[styles.start, styles.startLit, { color: tc.goldDeep }]}>{label}</Text>
-        <Text
-          style={[styles.start, styles.startCut, { color: tc.goldDeep }, StyleSheet.absoluteFill]}
-        >
-          {label}
-        </Text>
-      </View>
+      <Letterpress text={t('start')} style={{ ...styles.start, color: ink }} />
     </View>
   );
 }
@@ -327,6 +356,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The leading end, inset to the same 12pt the nosing stops at — so the
+  // number, the tread's lit lip and the tile's corner all break at one line.
+  lessonSlot: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    start: NOSING_INSET,
+    justifyContent: 'center',
+  },
+  lesson: {
+    fontFamily: MONO_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
   start: {
     fontFamily: MONO_FAMILY,
     fontSize: 15,
@@ -339,12 +383,12 @@ const styles = StyleSheet.create({
   },
   // A hairline radius keeps both shadows crisp; Android drops a shadow layer
   // of radius 0 entirely, so this is not the same as omitting it.
-  startLit: {
+  pressLit: {
     textShadowColor: 'rgba(255,255,255,0.60)',
     textShadowOffset: { width: 0, height: 1.5 },
     textShadowRadius: 0.6,
   },
-  startCut: {
+  pressCut: {
     textShadowColor: 'rgba(0,0,0,0.20)',
     textShadowOffset: { width: 0, height: -1 },
     textShadowRadius: 0.6,

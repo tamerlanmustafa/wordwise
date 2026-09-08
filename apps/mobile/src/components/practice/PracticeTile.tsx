@@ -43,7 +43,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TILE_BLOCK, TILE_W, GLYPH_BOX, TilePill } from './TilePill';
 import { TileCrack } from './TileCrack';
-import { TileMarks, type MarkSide } from './TileMarks';
+import { TileMarks } from './TileMarks';
 import { createPressLatch } from './pressLatch';
 import { tileVisual, tileMark } from './tileVisuals';
 
@@ -56,10 +56,9 @@ export type PracticeTileState =
 export interface PracticeTileProps {
   state: PracticeTileState;
   onPress?: () => void;
-  /** Which side of the tread a completed tile wears its scuff on. Alternates
-   *  down the path so the marks don't draw a stripe the road doesn't have —
-   *  the check itself is centred on every tile. */
-  markSide?: MarkSide;
+  /** 1-based lesson this tile is, cut into its leading end. Defaults to 1 so
+   *  a tile rendered outside the path still shows a coherent address. */
+  lesson?: number;
   /** The one locked tile directly above the active one. Its lock is cut a
    *  little deeper than the rest of the road ahead. */
   nextUp?: boolean;
@@ -72,7 +71,7 @@ export interface PracticeTileProps {
 export function PracticeTile({
   state,
   onPress,
-  markSide = 'right',
+  lesson = 1,
   nextUp = false,
   depth = 1,
   marksOnAllLocked = true,
@@ -236,7 +235,7 @@ export function PracticeTile({
               pressed={pressed && tappable}
             >
               {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
-              <TileMarks mark={mark} side={markSide} nextUp={nextUp} />
+              <TileMarks mark={mark} lesson={lesson} ink={visual.markInk} nextUp={nextUp} />
             </TilePill>
           </Animated.View>
         </View>
