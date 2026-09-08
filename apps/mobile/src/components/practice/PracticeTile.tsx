@@ -14,23 +14,21 @@
  *                 repair_window_active. Not yet implemented as a
  *                 real tappable flow; v1 just renders the visual.)
  *
- * **Colour is the state.** The path used to say everything twice: a check
- * glyph on completed tiles and a START callout on the active one, on top of
- * colours that already made both obvious. Every tile carried the same speech
- * bubble, which meant the glyph distinguished nothing at all — it was
- * furniture on 3D coins whose whole appeal is the surface. So a done tile is
- * green, the next one is gold and moving, and the rest are stone; nothing is
- * labelled. The only glyph left is the alarm on `repair`, which is a genuine
+ * **Colour is still the state.** A done tile is green, the next one is gold
+ * and moving, and the rest are stone; you can read the whole path with the
+ * marks turned off. What the marks add is a second, much quieter channel —
+ * a groove cut into the tread rather than a badge printed on it, at opacities
+ * chosen so the road ahead recedes rather than announcing itself. That is why
+ * they are not the check-and-callout set that was removed here once: those
+ * were flat glyphs restating the colour at full contrast, and these are
+ * surface texture that happens to carry a meaning.
+ *
+ * The one flat glyph left is the alarm on `repair`, which is a genuine
  * interruption rather than a position on the path.
  *
- * The green is not a flat swap. `TilePill` lights the top of the face and
- * shades the bottom from the one token it is given, so the completed tile
- * gets its own three-tone ramp — lit crown, body, shaded base — over a
- * deeper green lip, and stays the same object the gold one is.
- *
- * The body lives in {@link TilePill} and the impact mark in
- * {@link TileCrack}; this file owns the state → colour mapping and the
- * animations.
+ * The body lives in {@link TilePill}, the marks in {@link TileMarks} and the
+ * impact mark in {@link TileCrack}; this file owns the state → colour mapping
+ * and the animations.
  *
  * The active tile hovers until it is tapped. Tapping lands it: the bounce
  * stops where it is, the face sinks onto its edge, and a fan of fissures
@@ -45,7 +43,8 @@ import Svg, { Path } from 'react-native-svg';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TILE_BLOCK, TILE_W, GLYPH_BOX, TilePill } from './TilePill';
 import { TileCrack } from './TileCrack';
-import { tileVisual } from './tileVisuals';
+import { TileMarks, type MarkSide } from './TileMarks';
+import { tileVisual, tileMark } from './tileVisuals';
 
 export type PracticeTileState =
   | 'active'
@@ -56,11 +55,25 @@ export type PracticeTileState =
 export interface PracticeTileProps {
   state: PracticeTileState;
   onPress?: () => void;
+  /** Which side of the tread a completed tile cuts its check into. Alternates
+   *  down the path so nine checks don't draw a stripe the road doesn't have. */
+  markSide?: MarkSide;
+  /** The one locked tile directly above the active one. Its lock is cut a
+   *  little deeper than the rest of the road ahead. */
+  nextUp?: boolean;
+  /** 0–1 dial on the stair depth cues — see {@link TilePill}. */
+  depth?: number;
+  /** When false, only `nextUp` carries a lock. */
+  marksOnAllLocked?: boolean;
 }
 
 export function PracticeTile({
   state,
   onPress,
+  markSide = 'right',
+  nextUp = false,
+  depth = 1,
+  marksOnAllLocked = true,
 }: PracticeTileProps) {
   const tc = useThemeColors();
   const s = makeStyles(tc);
@@ -126,10 +139,11 @@ export function PracticeTile({
 
   const tappable = state === 'active';
 
-  // The tile's entire vocabulary, now that nothing is written on it — kept
-  // pure and tested in `tileVisuals`, because colour is the only thing left
-  // telling the user where on the path they are.
+  // The tile's entire vocabulary — kept pure and tested in `tileVisuals`,
+  // because colour is what tells the user where on the path they are and the
+  // marks only whisper it a second time.
   const visual = tileVisual(state, tc);
+  const mark = tileMark(state, { nextUp, marksOnAllLocked });
 
   return (
     <Pressable
@@ -156,9 +170,13 @@ export function PracticeTile({
             <TilePill
               face={visual.face}
               edge={visual.edge}
+              band={visual.band}
+              nosing={visual.nosing}
+              depth={depth}
               pressed={pressed && tappable}
             >
               {visual.glyph ? <TileGlyph kind={visual.glyph} color="#fff" /> : null}
+              <TileMarks mark={mark} side={markSide} nextUp={nextUp} />
             </TilePill>
           </Animated.View>
         </View>
@@ -173,10 +191,10 @@ type TileGlyphKind = 'alarm';
  *  plain views rather than an SVG group, so it sinks on press by carrying its
  *  children with it.
  *
- *  One kind left. The check, the lock and the speech bubble all went when
- *  colour became the state — a glyph every tile shares distinguishes nothing,
- *  and one that repeats what the colour already says is noise on a surface
- *  the whole design is about. */
+ *  One kind left, and it is the one that is genuinely *on* the tile rather
+ *  than in it: an alarm is an alert, and an alert that has been sanded into
+ *  the stone is not alerting anyone. Everything a tile says about its position
+ *  on the path is a groove instead — see {@link TileMarks}. */
 function TileGlyph({
   kind,
   color,

@@ -30,8 +30,9 @@
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
+import { markSideForIndex } from './TileMarks';
 
 /** Total tiles rendered at once. */
 const WINDOW_SIZE = 9;
@@ -78,7 +79,50 @@ export interface PracticeTilePathProps {
   /** Tap on the active tile. The path doesn't know what the tile does
    *  — the parent screen wires the actual session-start call. */
   onTilePress: (index: number) => void;
+  /**
+   * 0–1 dial on every tile's stair depth cues — the tread occlusion band and
+   * the lit nosing (see `TilePill`).
+   *
+   * One number for the whole flight, on purpose. Nine tiles' worth of shadow
+   * is the sort of effect that looks right in a mockup and heavy on a real
+   * screen, and the way that gets fixed badly is one opacity at a time until
+   * the states no longer agree with each other. This turns them together.
+   */
+  depth?: number;
+  /**
+   * When false, only the tile directly above the active one carries a lock and
+   * the rest of the road ahead stays bare stone.
+   */
+  marksOnAllLocked?: boolean;
 }
+
+/**
+ * One shadow for the whole flight, not one per tile.
+ *
+ * Nine shadows is nine objects lying on a floor; one shadow is a staircase
+ * standing on it. iOS gets this for free — a layer with no background colour
+ * casts the shadow of its composited subtree, which is exactly the zigzag
+ * silhouette the offsets draw.
+ *
+ * Android has no equivalent. `elevation` shadows the view's bounding box, so
+ * on a column that is mostly empty space it would draw a tall rounded
+ * rectangle behind the path rather than the shape of it — and putting
+ * `elevation` on the tiles themselves is worse still: it takes over Android's
+ * z-ordering and lifts each riser above the face that is supposed to cover it.
+ * So Android goes without, deliberately. The tread band and the nosing are the
+ * cues that actually make the flight read as stacked, and both are plain
+ * drawing that lands identically on either platform; this one only adds
+ * weight on the floor.
+ */
+const FLIGHT_SHADOW: ViewStyle = Platform.select<ViewStyle>({
+  ios: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+  },
+  default: {},
+});
 
 interface RenderedTile {
   index: number;
@@ -88,6 +132,8 @@ interface RenderedTile {
 export function PracticeTilePath({
   cursor,
   onTilePress,
+  depth = 1,
+  marksOnAllLocked = true,
 }: PracticeTilePathProps) {
   const tiles = useMemo<RenderedTile[]>(
     () => buildWindow(cursor),
@@ -106,6 +152,13 @@ export function PracticeTilePath({
             <PracticeTile
               state={tile.state}
               onPress={() => onTilePress(tile.index)}
+              // Keyed on the absolute index, like the zigzag: the alternation
+              // has to belong to the tile rather than to the slot it happens
+              // to occupy, or it flips under every tile as the window slides.
+              markSide={markSideForIndex(tile.index)}
+              nextUp={tile.index === cursor + 1}
+              depth={depth}
+              marksOnAllLocked={marksOnAllLocked}
             />
           </View>
         );
@@ -144,6 +197,10 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 24,
     // No flex gap and no per-row margin — tiles sit flush.
+    // The shadow belongs here rather than on a tile: see FLIGHT_SHADOW. Note
+    // this view must never gain a background colour — iOS would then shadow
+    // its bounding box instead of the flight's silhouette.
+    ...FLIGHT_SHADOW,
   },
   tileRow: {
     alignItems: 'center',

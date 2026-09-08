@@ -2,5 +2,6 @@
   "dayLabel_one": "DAY",
   "dayLabel_other": "DAYS",
   "freeze_one": "FREEZE",
-  "freeze_other": "FREEZES"
+  "freeze_other": "FREEZES",
+  "start": "START"
 }

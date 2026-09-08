@@ -6,5 +6,6 @@
   "freeze_few": "ЗАМОРОЗКИ",
   "freeze_many": "ЗАМОРОЗОК",
   "freeze_one": "ЗАМОРОЗКА",
-  "freeze_other": "ЗАМОРОЗКИ"
+  "freeze_other": "ЗАМОРОЗКИ",
+  "start": "СТАРТ"
 }

@@ -70,12 +70,20 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     });
 
     it('is the same object as every other tile, in a different colour', () => {
-      // There is no second surface treatment any more. `TilePill` draws a flat
-      // face over a darker edge and nothing else, so a state is exactly two
-      // colours — which is what makes this mapping the whole design.
+      // Every state is described by the same six fields — two colours, two
+      // depth alphas, a glyph and a fade. No state gets a treatment of its
+      // own, which is what keeps the tiles reading as one flight of stone
+      // rather than as four differently-built widgets in a row.
       const done = tileVisual('completed', tc);
 
-      expect(Object.keys(done).sort()).toEqual(['edge', 'face', 'faded', 'glyph']);
+      expect(Object.keys(done).sort()).toEqual([
+        'band',
+        'edge',
+        'face',
+        'faded',
+        'glyph',
+        'nosing',
+      ]);
     });
   });
 
@@ -196,17 +204,22 @@ describe('the tile is built like the deck buttons', () => {
     expect(TILE_EDGE_RADIUS).toBe(TILE_RADIUS);
   });
 
-  it('draws a face over an edge and nothing else', () => {
-    // The gradient, the fading rim, the specular oval and the edge's own
-    // second gradient were all doing the work the offset already does, and
-    // each was a place for the two shapes to disagree.
+  it('still models a flat tread, not a lit convex coin', () => {
+    // The coin this replaced carried a gradient across the FACE, a white rim
+    // that faded out by the equator, and a specular highlight near the top.
+    // Those modelled a curved surface catching a point light, and a stair
+    // tread is flat. They have not come back: the band and the nosing added
+    // since describe the tread's relationship to its NEIGHBOURS — what is
+    // above it, and where its front edge is — which is a different claim.
     //
     // Comments stripped: this bans the *names* of those effects, and the file
     // explains in prose which ones it dropped. Reading the explanation as if
     // it were code is how a guard fails on the change it was written for.
     const code = pill().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
-    expect(code).not.toMatch(/LinearGradient|Stop |stopOpacity|specular|gloss|matte/i);
-    expect(code).not.toMatch(/\bshade\(/);
+    expect(code).not.toMatch(/specular|gloss|matte|rim/i);
+    // One gradient down the riser and one at the top of the tread. A third
+    // would be the face gradient coming back under another name.
+    expect(code.match(/<LinearGradient/g)).toHaveLength(2);
   });
 
   it('moves only the face on press, by exactly the edge depth', () => {
@@ -219,8 +232,8 @@ describe('the tile is built like the deck buttons', () => {
   it('keeps the edge static under the moving face', () => {
     const s = pill();
     const edgeAt = s.indexOf('styles.edge');
-    expect(s.slice(edgeAt - 200, edgeAt)).toMatch(/Static/);
-    expect(s).toMatch(/styles\.edge, \{ backgroundColor: edge \}\]/);
+    expect(s.slice(edgeAt - 400, edgeAt)).toMatch(/Static/);
+    expect(s).toMatch(/\[styles\.layer, styles\.edge\]/);
     expect(s).toMatch(/pointerEvents="none"/);
   });
 });

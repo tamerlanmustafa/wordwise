@@ -46,6 +46,17 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
+// expo-linear-gradient — same untranspiled-ESM problem as expo-glass-effect
+// above, so importing anything that draws a gradient (the practice tiles, the
+// hero glows) would throw on the `import` keyword before a single assertion
+// ran. A gradient is a View with a `colors` prop; standing one in as a plain
+// View keeps the prop on the element for anything that wants to read it, and
+// costs nothing, since these tests never rasterise.
+jest.mock('expo-linear-gradient', () => {
+  const { View } = require('react-native');
+  return { LinearGradient: View };
+});
+
 // expo-av — in-memory Audio.Sound. There is no audio hardware under jest, so
 // the mock's job is to record what the app asked for (the source, crucially
 // including its headers) and to let a test drive playback to an end:
