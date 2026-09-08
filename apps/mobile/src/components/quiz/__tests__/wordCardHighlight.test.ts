@@ -8,7 +8,7 @@
  * conservative — highlight only what is certainly the word.
  */
 
-import { shouldShowExample, splitAroundWord } from '../wordCardText';
+import { isExampleBlanked, shouldShowExample, splitAroundWord } from '../wordCardText';
 
 describe('splitAroundWord', () => {
   it('splits around the word', () => {
@@ -100,5 +100,46 @@ describe('shouldShowExample', () => {
     expect(shouldShowExample(null, 'run', true)).toBe(false);
     expect(shouldShowExample(undefined, 'run', false)).toBe(false);
     expect(shouldShowExample('', 'run', false)).toBe(false);
+  });
+});
+
+/**
+ * The blank is a question device with an expiry.
+ *
+ * It exists only so a definition card does not print its answer above the four
+ * options. Once an option is tapped the correct row is already green, so the
+ * blank is protecting nothing and is instead withholding the one thing the
+ * sentence was shown for — the word, in use.
+ */
+describe('isExampleBlanked', () => {
+  it('blanks a definition card until the answer is in', () => {
+    expect(isExampleBlanked(true, false)).toBe(true);
+  });
+
+  it('fills the blank once an answer has been picked', () => {
+    expect(isExampleBlanked(true, true)).toBe(false);
+  });
+
+  it('never blanks an ordinary card, before or after answering', () => {
+    // An ordinary card asks for the translation and shows the word itself in
+    // the headline, so there was never anything to hide in the sentence.
+    expect(isExampleBlanked(false, false)).toBe(false);
+    expect(isExampleBlanked(false, true)).toBe(false);
+  });
+
+  it('only ever fills a sentence the word was actually located in', () => {
+    // The two rules compose: `shouldShowExample` drops the sentence entirely
+    // when the lemma is inflected away, so a revealed card can never be asked
+    // to fill a blank that was never cut. This is the pairing that stops the
+    // 26% inflected case from printing an un-blanked sentence on reveal.
+    const inflected = 'She ran home.';
+    expect(shouldShowExample(inflected, 'run', true)).toBe(false);
+    expect(splitAroundWord(inflected, 'run')).toBeNull();
+  });
+
+  it('fills with the sentence’s own casing, not the dictionary form', () => {
+    // What lands in the gap is `parts.match`, so a capitalised opener stays
+    // capitalised rather than dropping a lowercase lemma mid-sentence.
+    expect(splitAroundWord('Run for it.', 'run')?.match).toBe('Run');
   });
 });

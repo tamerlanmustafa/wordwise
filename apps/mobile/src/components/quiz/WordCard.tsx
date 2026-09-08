@@ -32,7 +32,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { cefrColors } from '../../theme/palette';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY, SERIF_FAMILY, SERIF_ITALIC_FAMILY } from '../../theme/fonts';
-import { shouldShowExample, splitAroundWord } from './wordCardText';
+import { isExampleBlanked, shouldShowExample, splitAroundWord } from './wordCardText';
 
 export interface WordCardProps {
   word: string;
@@ -53,6 +53,15 @@ export interface WordCardProps {
    * directly above the four options.
    */
   definition?: string | null;
+  /**
+   * The answer is in — an option has been tapped.
+   *
+   * Only a definition card reads this, and only to stop blanking: the word
+   * drops back into its own sentence so the reader finally sees it used. The
+   * headline stays the gloss, because the question is what they were asked and
+   * swapping it for the word on answer would re-write the card under them.
+   */
+  revealed?: boolean;
 }
 
 export function WordCard({
@@ -62,6 +71,7 @@ export function WordCard({
   size = 42,
   level,
   definition,
+  revealed = false,
 }: WordCardProps) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -79,6 +89,9 @@ export function WordCard({
     () => shouldShowExample(example, word, asking),
     [example, word, asking],
   );
+  // The blank is a question device, not a style. It lifts the moment an answer
+  // is in — see `isExampleBlanked`.
+  const blanked = isExampleBlanked(asking, revealed);
 
   return (
     <LinearGradient
@@ -126,13 +139,21 @@ export function WordCard({
             {parts ? (
               <>
                 {parts.before}
-                {asking ? (
+                {blanked ? (
                   // Blanked, not highlighted. On a definition card the
                   // sentence is the second half of the question, and lighting
                   // the word up in it would print the answer directly above
                   // the four options.
                   <Text style={s.exampleBlank}>{BLANK}</Text>
                 ) : (
+                  // `parts.match` rather than `word`: it is the occurrence as
+                  // the sentence actually wrote it, so a capitalised opener
+                  // stays capitalised instead of dropping the dictionary form
+                  // into the middle of a sentence that had inflected it.
+                  //
+                  // Same accent the ordinary card uses for its target word. A
+                  // second colour here would make the filled blank a new kind
+                  // of object; it is the same word doing the same job.
                   <Text style={s.exampleTarget}>{parts.match}</Text>
                 )}
                 {parts.after}

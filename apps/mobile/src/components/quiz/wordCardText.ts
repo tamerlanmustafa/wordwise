@@ -65,3 +65,23 @@ export function shouldShowExample(
   if (!asking) return true;
   return splitAroundWord(example, word) !== null;
 }
+
+/**
+ * Whether the example sentence is still hiding its word behind a blank.
+ *
+ * The blank exists for exactly one reason — on a definition card the sentence
+ * is the second half of the question, so showing the word in it would print
+ * the answer above the four options. That reason expires the instant an answer
+ * is picked: the correct choice is already highlighted green in the grid, so
+ * there is nothing left to protect, and a sentence still reading
+ * "She had to ——— home" is now withholding the one thing that would make it
+ * teach. Filling it in is the whole point of having shown the sentence.
+ *
+ * Two booleans rather than one because they mean different things and only one
+ * of them is about this card's state: `asking` is what KIND of card this is
+ * (a definition card blanks; an ordinary card highlights and never blanks),
+ * and `revealed` is WHEN. An ordinary card is never blanked at any point.
+ */
+export function isExampleBlanked(asking: boolean, revealed: boolean): boolean {
+  return asking && !revealed;
+}

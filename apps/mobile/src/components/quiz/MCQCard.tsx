@@ -177,6 +177,11 @@ export function MCQCard({
             example={example}
             level={level}
             definition={definition}
+            // Answered is answered, right or wrong. The correct row goes green
+            // either way, so there is nothing left for the blank to protect —
+            // and the reader who got it wrong is the one who most needs to see
+            // the word sitting in its sentence.
+            revealed={phase === 'answered'}
           />
         </Arriving>
 
