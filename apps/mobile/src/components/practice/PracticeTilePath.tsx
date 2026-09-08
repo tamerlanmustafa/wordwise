@@ -154,7 +154,8 @@ export function PracticeTilePath({
               onPress={() => onTilePress(tile.index)}
               // Keyed on the absolute index, like the zigzag: the alternation
               // has to belong to the tile rather than to the slot it happens
-              // to occupy, or it flips under every tile as the window slides.
+              // to occupy, or the scuff flips under every tile as the window
+              // slides.
               markSide={markSideForIndex(tile.index)}
               nextUp={tile.index === cursor + 1}
               depth={depth}

@@ -26,10 +26,10 @@ import {
   CHECK_FLOOR_DARKEN,
   CHECK_FLOOR_W,
   CHECK_LIP_W,
-  CHECK_START,
   LOCK_INK,
   MARK_TOP,
   SCUFF_H,
+  SCUFF_START,
   SCUFF_W,
   markSideForIndex,
   mirroredStart,
@@ -167,7 +167,9 @@ describe('tileMark', () => {
 });
 
 describe('markSideForIndex', () => {
-  it('alternates, so nine checks do not draw a stripe down the flight', () => {
+  it('alternates, so the scuff does not draw a stripe down the flight', () => {
+    // The check is centred on every tile now, so breaking that stripe is the
+    // scuff's whole job — this is the only thing that varies down the path.
     expect(markSideForIndex(0)).toBe('right');
     expect(markSideForIndex(1)).toBe('left');
     expect(markSideForIndex(2)).toBe('right');
@@ -186,25 +188,32 @@ describe('markSideForIndex', () => {
   });
 });
 
-describe('the completed marks sit opposite each other on the tread', () => {
+describe('the check is centred and the scuff works around it', () => {
   const sides = ['left', 'right'] as const;
 
-  it('mirrors the scuff about the tread centre, whichever side the check took', () => {
-    for (const side of sides) {
-      const check = CHECK_START[side];
-      const scuff = mirroredStart(check, CHECK_BOX, SCUFF_W);
-      const checkCentre = check + CHECK_BOX / 2;
-      const scuffCentre = scuff + SCUFF_W / 2;
-      expect(checkCentre + scuffCentre).toBeCloseTo(TILE_W, 6);
-    }
+  it('centres the check on both axes, exactly where the lock and START sit', () => {
+    // All three marks share one home. That is what makes the states read as
+    // one family rather than three differently-placed badges — and on a 56pt
+    // tread a 30pt box centres to MARK_TOP, so the scuff keeps its baseline.
+    expect(MARK_TOP).toBe((TILE_H - CHECK_BOX) / 2);
   });
 
-  it('puts the check on the opposite side of centre from the scuff', () => {
+  it('mirrors the two scuff positions about the tread centre', () => {
+    const centres = sides.map((s) => SCUFF_START[s] + SCUFF_W / 2);
+    expect(centres[0] + centres[1]).toBeCloseTo(TILE_W, 6);
+  });
+
+  it('keeps the scuff clear of the centred check on both sides', () => {
+    // They are drawn in one face with no layout between them; overlap would
+    // put a footprint under the check and read as a smudge on the groove.
+    const checkStart = (TILE_W - CHECK_BOX) / 2;
     for (const side of sides) {
-      const check = CHECK_START[side] + CHECK_BOX / 2 - TILE_W / 2;
-      const scuff =
-        mirroredStart(CHECK_START[side], CHECK_BOX, SCUFF_W) + SCUFF_W / 2 - TILE_W / 2;
-      expect(Math.sign(check) * Math.sign(scuff)).toBe(-1);
+      const scuffStart = SCUFF_START[side];
+      const gap =
+        scuffStart > checkStart
+          ? scuffStart - (checkStart + CHECK_BOX)
+          : checkStart - (scuffStart + SCUFF_W);
+      expect(gap).toBeGreaterThanOrEqual(8);
     }
   });
 
@@ -213,10 +222,9 @@ describe('the completed marks sit opposite each other on the tread', () => {
     // square corners), so a mark that overruns is silently cut rather than
     // overflowing — which looks intentional in a screenshot.
     for (const side of sides) {
-      const scuff = mirroredStart(CHECK_START[side], CHECK_BOX, SCUFF_W);
       for (const [start, w] of [
-        [CHECK_START[side], CHECK_BOX],
-        [scuff, SCUFF_W],
+        [(TILE_W - CHECK_BOX) / 2, CHECK_BOX],
+        [SCUFF_START[side], SCUFF_W],
       ] as const) {
         expect(start).toBeGreaterThanOrEqual(0);
         expect(start + w).toBeLessThanOrEqual(TILE_W);
@@ -224,6 +232,10 @@ describe('the completed marks sit opposite each other on the tread', () => {
       expect(MARK_TOP).toBeGreaterThanOrEqual(0);
       expect(MARK_TOP + Math.max(CHECK_BOX, SCUFF_H)).toBeLessThanOrEqual(TILE_H);
     }
+  });
+
+  it('derives the leading scuff rather than typing a second number', () => {
+    expect(SCUFF_START.left).toBe(mirroredStart(SCUFF_START.right, SCUFF_W, SCUFF_W));
   });
 
   it('clears the lit nosing, so a footprint never lands on the tread lip', () => {

@@ -24,14 +24,20 @@
  * same path stroked three times at two widths, which is a drawing and not a
  * character.
  *
- * ## Why the completed mark alternates sides
+ * ## The check is centred; the scuff is what alternates
  *
- * Nine tiles climb the screen on a zigzag, and a check pinned to the same spot
- * on each face draws a vertical stripe straight down the flight — a line the
- * path does not have. So it alternates by tile index, and the scuff takes
- * whichever side the check did not. The pair is mirror-symmetric about the
- * tread's centre, which is why the scuff's position is derived from the
- * check's rather than typed twice.
+ * The check sits dead centre of its tread, the same place the lock and the
+ * START label sit. That is worth stating because it was not free: nine tiles
+ * climb the screen on a zigzag, and a mark pinned to the same spot on every
+ * face draws a vertical stripe straight down the flight — a line the path does
+ * not have. The check having a *fixed* home is what makes the three states
+ * read as one family rather than three differently-placed badges, so the job
+ * of breaking that stripe moved entirely to the scuff, which alternates sides
+ * by tile index and is faint enough to vary without drawing a second line.
+ *
+ * The scuff's two positions are mirror images about the tread's centre, which
+ * is why one is derived from the other rather than typed twice, and both clear
+ * the centred check by a margin a test asserts.
  *
  * Positions use `start`/`end` rather than `left`/`right` for the RTL scan in
  * `i18n/__tests__/rtl.test.ts`. Mirroring them is harmless here: the flight
@@ -48,7 +54,8 @@ import { shade, useThemeColors } from '../../theme/tokens';
 import { TILE_W } from './TilePill';
 import type { TileMark } from './tileVisuals';
 
-/** Which side of the tread the completed check is cut into. */
+/** Which side of the tread the scuff is worn into. The check is centred and
+ *  takes no side. */
 export type MarkSide = 'left' | 'right';
 
 /** Painted size of the check. */
@@ -69,10 +76,10 @@ export const CHECK_FLOOR_DARKEN = 0.14;
 export const SCUFF_W = 44;
 export const SCUFF_H = 40;
 
-/** Both marks share a baseline down the tread. */
+/** Top of the scuff. The check needs no equivalent — it is centred on both
+ *  axes, and on a 56pt tread a 30pt box centres to exactly this, which is why
+ *  the two marks still share a baseline. */
 export const MARK_TOP = 13;
-/** Where the check sits on each side of the tread's centre line. */
-export const CHECK_START: Record<MarkSide, number> = { right: 104, left: 60 };
 
 /** The x a `mirrorWidth`-wide box needs to sit exactly opposite a
  *  `width`-wide box at `start`, about the tread's centre. Exported so the
@@ -82,6 +89,16 @@ export const CHECK_START: Record<MarkSide, number> = { right: 104, left: 60 };
 export function mirroredStart(start: number, width: number, mirrorWidth: number): number {
   return TILE_W - (start + width / 2) - mirrorWidth / 2;
 }
+
+/** Where the scuff falls when it is worn into the trailing side of the tread.
+ *  Far enough out that it clears the centred check. */
+const SCUFF_START_TRAILING = 132;
+/** Both scuff positions. The leading one is *derived* rather than typed, so
+ *  the pair cannot drift apart the way two hand-tuned numbers do. */
+export const SCUFF_START: Record<MarkSide, number> = {
+  right: SCUFF_START_TRAILING,
+  left: mirroredStart(SCUFF_START_TRAILING, SCUFF_W, SCUFF_W),
+};
 
 /**
  * The lock's two layers, at both weights.
@@ -96,8 +113,8 @@ export const LOCK_INK = {
   nextUp: { light: 'rgba(255,255,255,0.17)', dark: 'rgba(0,0,0,0.58)' },
 } as const;
 
-/** Which side of the tread tile `index` cuts its check into. Pure + exported
- *  so the alternation is testable without rendering nine tiles. */
+/** Which side of the tread tile `index` wears its scuff on. Pure + exported so
+ *  the alternation is testable without rendering nine tiles. */
 export function markSideForIndex(index: number): MarkSide {
   return ((index % 2) + 2) % 2 === 0 ? 'right' : 'left';
 }
@@ -105,7 +122,7 @@ export function markSideForIndex(index: number): MarkSide {
 export interface TileMarksProps {
   /** Which mark, from {@link tileMark}. */
   mark: TileMark;
-  /** Side for the completed check; ignored by the others. */
+  /** Side for the completed tile's scuff; ignored by the others. */
   side: MarkSide;
   /** The one locked tile directly above the active one — its lock is cut a
    *  little deeper than the rest of the road ahead. */
@@ -131,12 +148,10 @@ function CompletedMark({ side }: { side: MarkSide }) {
   // Unique per mount: react-native-svg resolves `url(#id)` per Svg root on
   // native, and this keeps that true if the path is ever rendered on web.
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const checkStart = CHECK_START[side];
-  const scuffStart = mirroredStart(checkStart, CHECK_BOX, SCUFF_W);
 
   return (
     <>
-      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: checkStart }]}>
+      <View pointerEvents="none" style={styles.centred}>
         <Svg width={CHECK_BOX} height={CHECK_BOX} viewBox="0 0 24 24">
           {/* 1 — the lip in shadow, above the stroke. */}
           <Path
@@ -170,7 +185,7 @@ function CompletedMark({ side }: { side: MarkSide }) {
         </Svg>
       </View>
 
-      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: scuffStart }]}>
+      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: SCUFF_START[side] }]}>
         <Svg width={SCUFF_W} height={SCUFF_H}>
           {/* Radial-gradient fills rather than a blurred shape: CSS
               `filter: blur()` has no React Native equivalent, and an SVG

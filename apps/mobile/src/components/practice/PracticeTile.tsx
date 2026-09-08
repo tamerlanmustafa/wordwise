@@ -55,8 +55,9 @@ export type PracticeTileState =
 export interface PracticeTileProps {
   state: PracticeTileState;
   onPress?: () => void;
-  /** Which side of the tread a completed tile cuts its check into. Alternates
-   *  down the path so nine checks don't draw a stripe the road doesn't have. */
+  /** Which side of the tread a completed tile wears its scuff on. Alternates
+   *  down the path so the marks don't draw a stripe the road doesn't have —
+   *  the check itself is centred on every tile. */
   markSide?: MarkSide;
   /** The one locked tile directly above the active one. Its lock is cut a
    *  little deeper than the rest of the road ahead. */
