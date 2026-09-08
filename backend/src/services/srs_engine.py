@@ -17,11 +17,12 @@ Module split:
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from prisma import Prisma
 
 from .milestone_service import apply_milestone_unlocks, parse_unlocked
+from ..utils.dates import as_date, utc_midnight
 
 # Leitner intervals in days, indexed by (box - 1). Box 1 → 1 day after a
 # correct answer, box 5 → 30 days. A card at box 5 that the user still
@@ -47,25 +48,53 @@ def compute_new_box(current_box: Optional[int], correct: bool) -> int:
 
 
 def can_free_user_start_session_today(
-    last_session_started_at: Optional[datetime],
+    last_session_finished_on: Optional[Union[date, datetime]],
     *,
     now: Optional[datetime] = None,
 ) -> bool:
     """Daily-cap gate for /srs/session/start.
 
-    Free users get one SRS session per UTC day. Returns True if a session
-    is allowed right now — either because the user has never started one,
-    or because the last start was on a different UTC date than `now`.
-    Premium callers bypass this entirely; this helper is for the free path.
+    Free users get one session per UTC day *of each activity* — see the two
+    callers in `routes/srs.py`, which pass the Practice completion date and the
+    list completion date respectively. Returns True when that activity has not
+    been finished today. Premium and admin callers bypass this entirely.
+
+    ## Finished, not started
+
+    This used to take `srsLastSessionStartedAt`, and the day was therefore spent
+    the moment a non-empty deck was *dealt*. A free user who opened Practice,
+    read one card and backed out had lost the day — no streak, no lesson, no
+    chest, and no way to earn them until tomorrow — without ever answering a
+    question. Nobody designed that; it is what "one session per day" degrades
+    into when the budget is charged at the wrong event, and it is the same
+    defect as a list deck spending the Practice slot: a once-a-day resource
+    consumed by something that is not the thing it exists to measure.
+
+    Keying off completion also makes the cap agree with the streak by
+    construction, since both now read the same column. "You have practised
+    today" and "you have used today's session" were two answers to one
+    question, and they could disagree — a dealt-and-abandoned deck said yes to
+    the second and no to the first.
+
+    The cost of the looser rule is that a free user can re-deal until they
+    answer something. That is bounded in practice: the client caches an
+    in-flight session for 24h and resumes it rather than asking for a new one
+    (`stores/reviewSessionStore`), so the ordinary quit-and-return path does
+    not reach this endpoint at all. What is left is a user repeatedly dealing
+    decks they never answer, which earns them nothing.
 
     UTC was picked over user-local time deliberately: the server has no
     reliable client timezone, and a single timezone shift at midnight UTC
     is easier to explain than per-user resets that vary by location.
     """
-    if last_session_started_at is None:
+    # `as_date` because both callers pass an `@db.Date` column, which prisma
+    # hands back as a `datetime`. Comparing that to `n.date()` directly is
+    # False on the one day it must be True — see utils/dates.
+    finished = as_date(last_session_finished_on)
+    if finished is None:
         return True
     n = now if now is not None else datetime.now(timezone.utc)
-    return last_session_started_at.date() != n.date()
+    return finished != n.date()
 
 
 def compute_new_streak(
@@ -165,7 +194,7 @@ async def advance_user_rollup_after_review(
 
     # Prisma Python's JSON encoder rejects bare `date` — must hand it
     # a `datetime`. The @db.Date column stores just the date part.
-    day_dt = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    day_dt = utc_midnight(day)
     await db.user.update(
         where={"id": user_id},
         data={
@@ -232,7 +261,7 @@ async def record_session_day(
         return prev_streak
 
     new_streak = compute_new_streak(prev_streak, last_date, day)
-    day_dt = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    day_dt = utc_midnight(day)
     await db.user.update(
         where={"id": user_id},
         data={

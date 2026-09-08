@@ -30,6 +30,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.milestone_service import parse_unlocked
 from ..services.streak_service import auto_apply_mercy
+from ..utils.dates import as_date
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/daily", tags=["daily"])
@@ -77,7 +78,12 @@ async def daily_state(
     # Re-fetch the user post-mercy so streak/longest reflect any changes
     # made by auto-consume (which rolls srsLastSessionDate forward).
     user = await db.user.find_unique(where={"id": current_user.id})
-    last_date = user.srsLastSessionDate if user else None
+    # Normalised, because `srsLastSessionDate` is `@db.Date` and prisma hands
+    # those back as `datetime`. Comparing one to `today` below is False on the
+    # exact day it should be True, so `today_done` was False for a user who
+    # had finished a lesson an hour earlier — and it is the flag the daily-habit
+    # UI reads to decide whether today is already satisfied. See utils/dates.
+    last_date = as_date(user.srsLastSessionDate) if user else None
     streak = (user.srsCurrentStreak or 0) if user else 0
     longest = (user.srsLongestStreak or 0) if user else 0
 

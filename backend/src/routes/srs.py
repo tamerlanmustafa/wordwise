@@ -65,6 +65,7 @@ from ..services.srs_engine import (
 from ..services.translation_service import TranslationService
 from ..utils.nlp_executor import run_nlp
 from ..utils.pos_labels import friendly_pos
+from ..utils.dates import as_date, utc_midnight
 from ..utils.subscription import is_premium
 
 
@@ -393,8 +394,13 @@ async def srs_stats(
     if premium:
         remaining = FREE_PREVIEW_SESSIONS
     else:
-        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
-        remaining = 1 if can_free_user_start_session_today(last_started, now=now) else 0
+        # The Practice budget specifically — /srs/stats is the Practice tab's
+        # header. Must read the same column the 402 gate reads, or the hint and
+        # the enforcement disagree and the app offers a session it will then
+        # refuse. It used to read the *start* stamp, which is why a user who
+        # abandoned a deck saw "0 remaining" having answered nothing.
+        last_finished = getattr(current_user, "srsLastSessionDate", None)
+        remaining = 1 if can_free_user_start_session_today(last_finished, now=now) else 0
 
     total_reviews = getattr(current_user, "srsTotalReviews", 0) or 0
     total_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
@@ -719,14 +725,38 @@ async def start_session(
     now = datetime.now(timezone.utc)
 
     if not premium:
-        last_started = getattr(current_user, "srsLastSessionStartedAt", None)
-        if not can_free_user_start_session_today(last_started, now=now):
+        # One budget per activity, and each is spent by *finishing*, not by
+        # being dealt a deck. Both halves were bugs:
+        #
+        #   • one shared budget meant drilling a list you built yourself cost
+        #     you that day's Practice lesson — the streak, the tile and the
+        #     chest — with nothing on the gold button to warn you;
+        #   • charging it at deal time meant opening Practice, reading one card
+        #     and backing out cost the same, without answering anything.
+        #
+        # Both are the same mistake: a once-a-day resource spent by an event
+        # that is not the thing it exists to measure.
+        last_finished = (
+            getattr(current_user, "srsLastListSessionDate", None)
+            if kind in LIST_KINDS
+            else getattr(current_user, "srsLastSessionDate", None)
+        )
+        if not can_free_user_start_session_today(last_finished, now=now):
             raise HTTPException(
                 status_code=402,
                 detail={
                     "paywall": "srs_daily_cap_reached",
-                    "message": "You've finished today's free review. "
-                               "Come back tomorrow — or upgrade for unlimited sessions.",
+                    "message": (
+                        # "a list", not "this list" — the budget is per user
+                        # per day, not per list, so practising list A blocks
+                        # list B too. Copy that implies otherwise sends the
+                        # user hunting for a second list that will not work.
+                        "You've done today's free list practice. Come back "
+                        "tomorrow — or upgrade for unlimited sessions."
+                        if kind in LIST_KINDS else
+                        "You've finished today's free review. "
+                        "Come back tomorrow — or upgrade for unlimited sessions."
+                    ),
                     # The daily cap is a budget of one session per UTC day, so
                     # "1 of 1" is the honest reading of these legacy fields.
                     # They were absent, and the mobile paywall defaults a
@@ -1193,9 +1223,14 @@ async def start_session(
         sum(len(v) for v in distractors.values()), len(distractors), target_lang,
     )
 
-    # Stamp the daily-cap field + the picked kind only when there was
-    # actually work to do. Don't penalize a free user who taps "review"
-    # into an empty queue.
+    # Record which deck was dealt and when. This is no longer the daily-cap
+    # field — the cap keys off the completion dates now, so being dealt a deck
+    # costs nothing and abandoning one costs nothing. What still reads this is
+    # /daily/state, which uses it to decide whether `srsLastSessionKind` is
+    # today's pick or a leftover from an earlier day.
+    #
+    # Still guarded on `cards`: an empty queue dealt nothing, so there is no
+    # session to describe.
     if cards:
         await db.user.update(
             where={"id": current_user.id},
@@ -1212,8 +1247,13 @@ async def start_session(
     if premium:
         remaining = FREE_PREVIEW_SESSIONS
     else:
-        # `cards` may have stamped the field above; if so, we just used today's
-        # slot. Otherwise the queue was empty and the slot remains available.
+        # Unchanged, but for a different reason now. The slot is spent on
+        # completion, so at this instant it is technically still available —
+        # yet a free user holding a non-empty deck will have spent it by the
+        # time they put the deck down, and this number exists to tell the
+        # in-session upgrade hint whether there is another one coming. Zero is
+        # the honest answer to that question. An empty queue dealt nothing and
+        # leaves the day genuinely untouched.
         remaining = 0 if cards else 1
 
     # `session_rows` is what the composer + padding managed to gather; `cards`
@@ -1359,6 +1399,23 @@ async def complete_session(
             "COALESCE(practice_lessons_completed, 0) + 1 WHERE id = $1",
             current_user.id,
         )
+    elif body.total_count > 0:
+        # An uncredited session still costs the free tier its list budget for
+        # the day. Nothing else here moves: no streak, no tile, no chest.
+        #
+        # Deliberately the mirror of the Practice branch rather than a shared
+        # one. The two activities now have one column each, and this is the
+        # only line that writes the list one — which is what makes "does a list
+        # spend the Practice day" answerable by reading two lines of code
+        # rather than by tracing a condition through the whole handler.
+        #
+        # `utc_midnight` because the column is `@db.Date`: prisma-client-py
+        # refuses a bare `date` and 500s the request. That exact mistake, two
+        # functions down, is why the daily chest had never once been awarded.
+        await db.user.update(
+            where={"id": current_user.id},
+            data={"srsLastListSessionDate": utc_midnight(today)},
+        )
 
     # Read after the write, so the streak we return is the one the done
     # screen should show rather than the one from before this session.
@@ -1373,9 +1430,7 @@ async def complete_session(
     # throwing (see the chest update further down): the field could only ever
     # be NULL, and NULL compares unequal for the right reason. Fixing that
     # write is what would have exposed this one.
-    last_chest = user.srsLastChestDate if user else None
-    if isinstance(last_chest, datetime):
-        last_chest = last_chest.date()
+    last_chest = as_date(user.srsLastChestDate) if user else None
     unlocked = parse_unlocked(user.unlockedCosmetics) if user else []
 
     # A list deck never opens the chest, and — the half that was actually
@@ -1426,8 +1481,7 @@ async def complete_session(
         # never appeared, and could not: the write that stamps the date is the
         # one that throws, so `srsLastChestDate` stayed NULL forever and every
         # day's first session took this same path again.
-        data={"srsLastChestDate": datetime(today.year, today.month, today.day,
-                                           tzinfo=timezone.utc)},
+        data={"srsLastChestDate": utc_midnight(today)},
     )
     # Re-read in case the chest reward bumped XP/freezes which the
     # client wants to reconcile. Streak itself doesn't change here.

@@ -33,10 +33,18 @@ model User {
   srsFreePreviewsUsed      Int?                     @default(0) @map("srs_free_previews_used")
   srsCurrentStreak         Int?                     @default(0) @map("srs_current_streak")
   srsLongestStreak         Int?                     @default(0) @map("srs_longest_streak")
+  // UTC date of the last COMPLETED Practice lesson. Owns two things at once:
+  // the streak, and the free tier's one-Practice-lesson-a-day budget.
   srsLastSessionDate       DateTime?                @map("srs_last_session_date") @db.Date
-  // Set on every POST /srs/session/start. Used by the new daily-cap gate
-  // (1 free session per UTC day, premium unlimited). Distinct from
-  // srsLastSessionDate, which tracks per-card review activity for the streak.
+  // The same, for a deck practised from the Lists tab. A separate budget
+  // because a list is not the daily lesson — see services/session_kinds.
+  // counts_toward_streak. Sharing one slot meant drilling your own saved
+  // words silently cost you that day's Practice lesson, streak included.
+  srsLastListSessionDate   DateTime?                @map("srs_last_list_session_date") @db.Date
+  // Set on every POST /srs/session/start that deals a non-empty deck.
+  // NOT the daily-cap gate — that keys off the completion dates above, so a
+  // deck dealt and abandoned no longer spends the day. Kept because
+  // /daily/state uses it to decide whether srsLastSessionKind is today's pick.
   srsLastSessionStartedAt  DateTime?                @map("srs_last_session_started_at") @db.Timestamptz(6)
   // v0.7.2 — which "practice tile" the user picked today (e.g.
   // 'quick_recall', 'synonym_round', 'tough_words', 'movie_deep_dive').

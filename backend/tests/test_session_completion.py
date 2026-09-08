@@ -70,6 +70,7 @@ def _user(**overrides):
         srsTotalReviews=0,
         srsTotalCorrect=0,
         srsLastChestDate=None,
+        srsLastListSessionDate=None,
         unlockedCosmetics=None,
         practiceLessonsCompleted=0,
     )
@@ -459,6 +460,54 @@ class TestListSessionsAreNotCredited:
 
         assert res.streak == 5
 
+    async def test_a_finished_list_deck_stamps_its_own_daily_slot(self):
+        """Uncredited is not free. The list still costs the free tier its own
+        once-a-day list budget — just not the Practice one. A words list
+        re-deals the same ten cards indefinitely (`compose_list_words` applies
+        neither a due filter nor the cross-session cooldown), so without a
+        budget of its own it would never run dry."""
+        db = _FakeDb(_user(srsLastListSessionDate=None))
+
+        await self._complete(db, correct=8, total=10, kind="list_words")
+
+        written = [u for u in db.user.updates if "srsLastListSessionDate" in u]
+        assert len(written) == 1
+        stamped = written[0]["srsLastListSessionDate"]
+        # `datetime`, not `date` — the column is `@db.Date` and prisma refuses
+        # the latter. That mistake on the chest column is why the chest had
+        # never once been awarded.
+        assert isinstance(stamped, datetime)
+        assert stamped.date() == datetime.now(timezone.utc).date()
+
+    async def test_a_finished_list_deck_leaves_the_practice_slot_alone(self):
+        """The whole point, read off the two columns side by side."""
+        db = _FakeDb(_user(srsLastSessionDate=None, srsLastListSessionDate=None))
+
+        await self._complete(db, correct=8, total=10, kind="list_words")
+
+        assert db.user._user.srsLastSessionDate is None
+        assert db.user._user.srsLastListSessionDate is not None
+
+    async def test_a_practice_lesson_leaves_the_list_slot_alone(self):
+        """And symmetrically — finishing today's lesson must not lock the user
+        out of revising their own saved words."""
+        db = _FakeDb(_user(srsLastSessionDate=None, srsLastListSessionDate=None))
+
+        await self._complete(db, correct=8, total=10, kind="practice")
+
+        assert db.user._user.srsLastSessionDate is not None
+        assert db.user._user.srsLastListSessionDate is None
+
+    async def test_a_list_deck_that_scored_nothing_spends_nothing(self):
+        """Same guard the streak uses. A deck whose every card turned out to
+        be unrenderable "finishes" without asking the user anything, and
+        charging a budget for that is charging for nothing."""
+        db = _FakeDb(_user(srsLastListSessionDate=None))
+
+        await self._complete(db, correct=0, total=0, kind="list_words")
+
+        assert db.user._user.srsLastListSessionDate is None
+
     async def test_a_deprecated_alias_is_resolved_before_the_decision(self):
         """Installed builds still send the three retired Practice tile names.
         They ARE practice, and asking the raw string would quietly demote every
@@ -617,6 +666,70 @@ class TestDeckStatus:
 # ---------------------------------------------------------------------------
 
 class TestDailyCapPayload:
+    """The free tier's daily budget: one per activity, spent by finishing.
+
+    Two separate defects lived in one line here. The gate read
+    `srsLastSessionStartedAt`, so the day was charged the moment a deck was
+    *dealt* — open Practice, read a card, back out, and the day was gone with
+    nothing answered. And it was one budget for two activities, so drilling a
+    list you built yourself silently cost you that day's Practice lesson, the
+    streak with it, and the gold button said nothing about that.
+
+    Both are one mistake wearing two hats: a once-a-day resource spent by an
+    event that is not the thing it exists to measure. Each activity now reads
+    its own completion date.
+    """
+
+    @staticmethod
+    def _user(**overrides):
+        base = dict(
+            id=1,
+            subscriptionTier=None,
+            subscriptionExpiresAt=None,
+            isAdmin=False,
+            srsLastSessionStartedAt=None,
+            srsLastSessionDate=None,
+            srsLastListSessionDate=None,
+        )
+        base.update(overrides)
+        return SimpleNamespace(**base)
+
+    @staticmethod
+    async def _start(user, kind, list_id=None):
+        # Called directly rather than through the app, so FastAPI is not here
+        # to resolve `Query(...)` defaults — pass the kind the client sends.
+        from src.routes.srs import start_session
+
+        return await start_session(
+            kind=kind,
+            movie_id=None,
+            list_id=list_id,
+            current_user=user,
+            db=_FakeDb(user),
+        )
+
+    @classmethod
+    async def _assert_allowed(cls, user, kind, list_id=None):
+        """The gate let this request past.
+
+        It cannot assert a whole session, because `_FakeDb` has no `userword`
+        table and composition dies the moment the gate is cleared. That death
+        is the pass condition: the cap raises its 402 before any query runs, so
+        reaching the database at all proves the budget was not charged. Only a
+        402 is a failure; every other exception means we got further than the
+        gate, which is the whole claim.
+        """
+        from fastapi import HTTPException
+
+        try:
+            await cls._start(user, kind, list_id=list_id)
+        except HTTPException as exc:
+            assert exc.status_code != 402, (
+                f"{kind} was refused for a budget it should not be charged to"
+            )
+        except Exception:
+            pass  # past the gate, into the fake DB — the point of the test
+
     async def test_the_402_detail_names_a_budget_of_one(self):
         """The mobile paywall defaults a missing count to 0, so an absent
         pair rendered "You've used 0 of 0 free review sessions" on the one
@@ -624,26 +737,10 @@ class TestDailyCapPayload:
         these fields and cannot be fixed from the client."""
         from fastapi import HTTPException
 
-        from src.routes.srs import start_session
+        user = self._user(srsLastSessionDate=_dt(REAL_TODAY))
 
-        user = SimpleNamespace(
-            id=1,
-            subscriptionTier=None,
-            subscriptionExpiresAt=None,
-            isAdmin=False,
-            srsLastSessionStartedAt=datetime.now(timezone.utc),
-        )
-
-        # Called directly rather than through the app, so FastAPI is not here
-        # to resolve `Query(...)` defaults — pass the kind the client sends.
         with pytest.raises(HTTPException) as exc:
-            await start_session(
-                kind="practice",
-                movie_id=None,
-                list_id=None,
-                current_user=user,
-                db=_FakeDb(user),
-            )
+            await self._start(user, "practice")
 
         assert exc.value.status_code == 402
         detail = exc.value.detail
@@ -651,3 +748,56 @@ class TestDailyCapPayload:
         assert detail["previews_used"] == 1
         assert detail["previews_limit"] == 1
         assert detail["message"]
+
+    async def test_a_dealt_but_unfinished_deck_does_not_spend_the_day(self):
+        """The one that was costing free users their streak. Being handed a
+        deck is not practising; only finishing one is. This user was dealt a
+        deck an instant ago and has completed nothing, so the day is intact."""
+        user = self._user(srsLastSessionStartedAt=datetime.now(timezone.utc))
+
+        await self._assert_allowed(user, "practice")
+
+    async def test_a_list_deck_does_not_spend_the_practice_day(self):
+        """Drilling a list must leave the Practice lesson available. This is
+        the budget half of the same split as `counts_toward_streak` — that one
+        stops a list claiming the day's credit, this one stops it spending the
+        day's allowance."""
+        user = self._user(srsLastListSessionDate=_dt(REAL_TODAY))
+
+        await self._assert_allowed(user, "practice")
+
+    async def test_a_practice_lesson_does_not_spend_the_list_day(self):
+        """And symmetrically. Finishing today's lesson must not lock the user
+        out of revising their own saved words."""
+        user = self._user(srsLastSessionDate=_dt(REAL_TODAY))
+
+        await self._assert_allowed(user, "list_words", list_id=7)
+
+    async def test_a_finished_list_deck_spends_the_list_day(self):
+        """The budget is still a budget — a free user gets one of each, not
+        unlimited lists. `compose_list_words` applies neither a due filter nor
+        the cross-session cooldown, so a words list re-deals the same ten cards
+        forever and would never run dry on its own."""
+        from fastapi import HTTPException
+
+        user = self._user(srsLastListSessionDate=_dt(REAL_TODAY))
+
+        with pytest.raises(HTTPException) as exc:
+            await self._start(user, "list_words", list_id=7)
+
+        assert exc.value.status_code == 402
+        # Copy says "a list", not "this list": the budget is per user per day,
+        # so practising list A blocks list B too, and telling the user
+        # otherwise sends them hunting for a second list that will not work.
+        assert "list" in exc.value.detail["message"].lower()
+        assert "this list" not in exc.value.detail["message"].lower()
+
+    async def test_premium_bypasses_both_budgets(self):
+        user = self._user(
+            subscriptionTier="premium",
+            srsLastSessionDate=_dt(REAL_TODAY),
+            srsLastListSessionDate=_dt(REAL_TODAY),
+        )
+
+        for kind, list_id in (("practice", None), ("list_words", 7)):
+            await self._assert_allowed(user, kind, list_id=list_id)
