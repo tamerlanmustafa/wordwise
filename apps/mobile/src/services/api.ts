@@ -1424,14 +1424,25 @@ export const srsApi = {
   /** v0.6: call once after the LAST /srs/review of a daily session.
    *  Returns the variable-reward chest (null on subsequent same-day
    *  calls — `already_claimed=true`). Server picks the reward to keep
-   *  the random roll tamper-proof. */
+   *  the random roll tamper-proof.
+   *
+   *  `kind` says which deck this was. Only `practice` is credited with the
+   *  streak, the tile number and the chest — a list is extra practice the
+   *  user asked for, and crediting it both cheapened the day and spent it
+   *  (see `quiz/sessionCredit`). Omitted means `practice` on the server, which
+   *  is what every build shipped before this argument existed sends. */
   completeSession: async (
     correctCount: number,
     totalCount: number,
+    kind?: SessionKind,
   ): Promise<CompleteSessionResponse> => {
     const res = await authFetch(`${API_BASE_URL}/srs/session/complete`, {
       method: 'POST',
-      body: JSON.stringify({ correct_count: correctCount, total_count: totalCount }),
+      body: JSON.stringify({
+        correct_count: correctCount,
+        total_count: totalCount,
+        kind,
+      }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');

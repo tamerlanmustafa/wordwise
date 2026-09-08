@@ -26,6 +26,7 @@ import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
 import { isChoiceCard } from './quiz/mcqLogic';
+import { isPracticeSession } from './quiz/sessionCredit';
 import { QuizCardSkeleton } from './quiz/QuizCardSkeleton';
 import { sessionPosition } from './quiz/quizHeaderLayout';
 import { emptyDeckCopy } from './quiz/emptyDeck';
@@ -160,8 +161,13 @@ export function ReviewScreen({
    * The Practice tab is a path of tiles; a Lists deck is a one-off. Only the
    * former gets the "Next" loop — offering it on a list would either replay
    * the same deck or silently start a *practice* session from inside Lists.
+   *
+   * The same predicate now also decides whether finishing this deck counts as
+   * today's practice, which is not a coincidence: "does the path continue" and
+   * "does the day advance" were always the same question, and the bug was that
+   * only the first one was asking it. See `quiz/sessionCredit`.
    */
-  const isPracticePath = (kind ?? 'practice') === 'practice' && listId == null;
+  const isPracticePath = isPracticeSession(kind, listId);
 
   /**
    * `initialSession` is a deck the caller already started (Lists). It must be
@@ -355,16 +361,23 @@ export function ReviewScreen({
         // Session complete — clear the persistent cache first so a
         // future open of the same tile gets a fresh queue.
         useReviewSessionStore.getState().clear();
-        // Anchor the daily streak. Bump is idempotent for same-day
-        // repeats (a free user can only start once per UTC day anyway,
-        // but premium users hitting multiple sessions today shouldn't
-        // inflate the streak).
-        const bump = useDailyGoalStore.getState().bump();
-        setDailySummary({ streak: bump.streak, justHitGoal: bump.justHitGoal });
-        // v0.7.3 — advance the Practice-path cursor so the next tile
-        // becomes active. The store debounces against accidental
-        // double-fires within the same completion.
-        usePracticePathStore.getState().advance();
+        // Everything in this block is one-per-day, so only the Practice tab's
+        // own deck may touch it. A list is extra practice the user went and
+        // asked for; crediting it let three words stand in for the lesson and,
+        // worse, *spent* the day, so the real lesson later found the chest
+        // claimed and the cursor already moved. See `quiz/sessionCredit`.
+        if (isPracticePath) {
+          // Anchor the daily streak. Bump is idempotent for same-day
+          // repeats (a free user can only start once per UTC day anyway,
+          // but premium users hitting multiple sessions today shouldn't
+          // inflate the streak).
+          const bump = useDailyGoalStore.getState().bump();
+          setDailySummary({ streak: bump.streak, justHitGoal: bump.justHitGoal });
+          // v0.7.3 — advance the Practice-path cursor so the next tile
+          // becomes active. The store debounces against accidental
+          // double-fires within the same completion.
+          usePracticePathStore.getState().advance();
+        }
         // The deck is finished, so leaving is no longer destructive — drop the
         // guard before the done screen renders, or its own CTAs would prompt.
         useQuizGuardStore.getState().setInProgress(false);
@@ -375,7 +388,17 @@ export function ReviewScreen({
         const scored = record ? 1 : 0;
         const justCorrect = correct && record ? stats.got + 1 : stats.got;
         const total = stats.got + stats.forgot + scored;
-        srsApi.completeSession(justCorrect, total)
+        // Still called for a list — the server is the authority on what a
+        // completion is worth, and it needs the kind to make that call for
+        // installed builds too. It simply writes nothing one-per-day for a
+        // list and answers with a null chest.
+        //
+        // `isPracticePath` rather than `kind` alone, because only it has seen
+        // the list id. A list session whose `kind` came back undefined would
+        // otherwise be *claimed* as practice; sending nothing instead lets the
+        // server fall back to the kind it stamped at session start, which is
+        // the right one.
+        srsApi.completeSession(justCorrect, total, isPracticePath ? 'practice' : kind)
           .then((res) => {
             if (res.chest) {
               setChest(res.chest);
@@ -388,7 +411,13 @@ export function ReviewScreen({
             // work" while the Practice header, which reads the server, said
             // "day 12" one tap later. /srs/session/complete now records the
             // session itself, which makes this number the authoritative one.
-            if (typeof res.streak === 'number' && res.streak > 0) {
+            //
+            // Gated on the same predicate as the bump it corrects. The server
+            // returns the account's real streak whatever the deck was, so a
+            // list session would otherwise end on "Streak extended — day 12"
+            // having extended nothing: the number is true, the sentence is a
+            // lie, and it is the sentence the user reads.
+            if (isPracticePath && typeof res.streak === 'number' && res.streak > 0) {
               setDailySummary((prev) => ({
                 streak: res.streak,
                 justHitGoal: prev?.justHitGoal ?? false,
@@ -417,7 +446,7 @@ export function ReviewScreen({
         // Phase stays 'card' — the next card mounts on the same surface.
       }
     },
-    [currentCard, index, cards.length, fade, stats]
+    [currentCard, index, cards.length, fade, stats, isPracticePath, kind]
   );
 
   if (phase === 'loading') {
@@ -479,6 +508,14 @@ export function ReviewScreen({
     const pct = total > 0 ? Math.round((stats.got / total) * 100) : 0;
     const streak = dailySummary?.streak ?? 0;
     const justHitGoal = dailySummary?.justHitGoal ?? false;
+    // A list deck is not the daily review, and the eyebrow was the last place
+    // the two were still conflated. The streak no longer moves for it, so a
+    // heading that still called it the daily review would be the one remaining
+    // sentence telling the user it had. (`dailySummary` stays null for a list,
+    // which is what already drops the "Streak extended" title below.)
+    const eyebrow = t(
+      isPracticePath ? 'quiz:review.dailyReview' : 'quiz:review.listPractice',
+    );
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Same chrome as the card screens the user just came through —
@@ -488,7 +525,7 @@ export function ReviewScreen({
             read as a different screen from the deck it ends. */}
         <QuizHeader onBack={onBack} />
         <SessionComplete
-          eyebrow={t('quiz:review.dailyReview')}
+          eyebrow={eyebrow}
           title={
             streak > 0
               ? t(justHitGoal ? 'quiz:review.streakExtendedGoal' : 'quiz:review.streakExtended', { streak })

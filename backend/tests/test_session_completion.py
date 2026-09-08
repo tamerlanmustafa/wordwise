@@ -265,27 +265,39 @@ class TestDailyStateFollows:
 # 3. The endpoint wires it up, and refuses to credit an empty session
 # ---------------------------------------------------------------------------
 
+async def _complete(db, correct, total, kind=None, last_kind=None):
+    """Call the endpoint the way the client does.
+
+    `kind` is what the client states; `last_kind` is what `/srs/session/start`
+    stamped on the user row, which is the fallback for builds too old to send
+    one. Both default to absent, which is the shape every installed build posts
+    and which reads as `practice`.
+    """
+    from src.routes.srs import CompleteSessionBody, complete_session
+
+    return await complete_session(
+        CompleteSessionBody(correct_count=correct, total_count=total, kind=kind),
+        current_user=SimpleNamespace(id=1, srsLastSessionKind=last_kind),
+        db=db,
+    )
+
+
+@pytest.fixture
+def _no_chest(monkeypatch):
+    """The chest roll has its own tests and its own daily ledger."""
+    class _Reward:
+        def as_dict(self):
+            return {"kind": "xp_small", "label": "XP", "payload": {"xp": 10}}
+
+    async def _award(db, *, user_id):
+        return _Reward()
+
+    monkeypatch.setattr("src.routes.srs.award_session_chest", _award)
+
+
+@pytest.mark.usefixtures("_no_chest")
 class TestCompleteSessionEndpoint:
-    async def _complete(self, db, correct, total):
-        from src.routes.srs import CompleteSessionBody, complete_session
-
-        return await complete_session(
-            CompleteSessionBody(correct_count=correct, total_count=total),
-            current_user=SimpleNamespace(id=1),
-            db=db,
-        )
-
-    @pytest.fixture(autouse=True)
-    def _no_chest(self, monkeypatch):
-        """The chest roll has its own tests and its own daily ledger."""
-        class _Reward:
-            def as_dict(self):
-                return {"kind": "xp_small", "label": "XP", "payload": {"xp": 10}}
-
-        async def _award(db, *, user_id):
-            return _Reward()
-
-        monkeypatch.setattr("src.routes.srs.award_session_chest", _award)
+    _complete = staticmethod(_complete)
 
     async def test_finishing_a_session_bumps_the_streak(self):
         """The whole point: this happens even when every `/srs/review` was
@@ -327,6 +339,243 @@ class TestCompleteSessionEndpoint:
         res = await self._complete(db, correct=7, total=10)
 
         assert (res.correct_count, res.total_count) == (7, 10)
+
+
+# ---------------------------------------------------------------------------
+# 3b. A list is practice, but it is not *today's* practice
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("_no_chest")
+class TestListSessionsAreNotCredited:
+    """The Lists tab's gold button and the Practice tab reach this endpoint by
+    the same road, and everything it writes is one-per-day: the streak, the
+    Practice tile number, and `srsLastChestDate`.
+
+    Crediting a list therefore broke the day in both directions at once. A
+    three-word list could stand in for the lesson — the hollow number a streak
+    exists against — and, having stood in for it, it *spent* it: the real
+    Practice lesson an hour later arrived to a claimed chest and a tile number
+    that had already moved. The user drilled their own vocabulary and was
+    charged a day for it.
+
+    The card-level write is deliberately left alone. `POST /srs/review` stays
+    kind-blind, because a word answered correctly should advance its Leitner
+    box wherever it was answered — that is a fact about the word, not about
+    the user's day.
+    """
+
+    _complete = staticmethod(_complete)
+
+    async def test_a_word_list_does_not_extend_the_streak(self):
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind="list_words")
+
+        assert res.streak == 4
+        assert db.user._user.srsLastSessionDate == _dt(REAL_YESTERDAY)
+
+    async def test_a_film_list_does_not_extend_the_streak(self):
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind="list_films")
+
+        assert res.streak == 4
+
+    async def test_a_list_does_not_advance_the_practice_tile_number(self):
+        """The number engraved on the stair tiles counts Practice lessons. A
+        list is not one, and a path that walked forward while the user was in
+        another tab is the visible half of this bug."""
+        db = _FakeDb(_user(practiceLessonsCompleted=12))
+
+        res = await self._complete(db, correct=8, total=10, kind="list_words")
+
+        assert res.lessons_completed == 12
+        assert db.raw == []
+
+    async def test_a_list_neither_opens_the_chest_nor_closes_it(self):
+        """`srsLastChestDate` is the one-per-day ledger. The damage was not
+        that a list handed out a chest — it is that it *stamped the date*, so
+        the Practice lesson that followed got `already_claimed` and nothing to
+        open."""
+        db = _FakeDb(_user(srsLastChestDate=None))
+
+        res = await self._complete(db, correct=8, total=10, kind="list_words")
+
+        assert res.chest is None
+        # Not "already claimed": nothing was claimed and nothing is owed. The
+        # flag is only ever read to explain a missing chest, and this is a
+        # different explanation from "you already have today's".
+        assert res.already_claimed is False
+        assert db.user._user.srsLastChestDate is None
+
+    async def test_practice_after_a_list_still_gets_its_day(self):
+        """The end-to-end shape of the fix: drill a list at breakfast, do the
+        real lesson at lunch, and the lesson is still worth a streak day, a
+        tile and a chest."""
+        db = _FakeDb(_user(
+            srsCurrentStreak=4,
+            srsLastSessionDate=_dt(REAL_YESTERDAY),
+            practiceLessonsCompleted=12,
+        ))
+
+        await self._complete(db, correct=3, total=3, kind="list_words")
+        res = await self._complete(db, correct=8, total=10, kind="practice")
+
+        assert res.streak == 5
+        assert res.lessons_completed == 13
+        assert res.chest is not None
+
+    async def test_an_unlabelled_completion_is_still_credited(self):
+        """Every build shipped before the client sent its kind posts nothing
+        here. Reading that silence as "uncredited" would stop the streak on
+        every phone that has not updated — a fix that breaks more than the
+        bug."""
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind=None)
+
+        assert res.streak == 5
+
+    async def test_an_unlabelled_completion_falls_back_to_the_started_kind(self):
+        """...but an old build is not left crediting lists forever either. The
+        kind stamped at session start is a good enough second source: it is the
+        session being finished in every case except a user who started a second
+        one somewhere else first."""
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind=None,
+                                   last_kind="list_words")
+
+        assert res.streak == 4
+
+    async def test_a_stated_kind_beats_the_stamped_one(self):
+        """`srsLastSessionKind` is the fallback, not the source. A client that
+        names its own kind knows which deck it just finished; the column knows
+        only which was started last."""
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind="practice",
+                                   last_kind="list_words")
+
+        assert res.streak == 5
+
+    async def test_a_deprecated_alias_is_resolved_before_the_decision(self):
+        """Installed builds still send the three retired Practice tile names.
+        They ARE practice, and asking the raw string would quietly demote every
+        one of them."""
+        db = _FakeDb(_user(srsCurrentStreak=4, srsLastSessionDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind="tough_words")
+
+        assert res.streak == 5
+
+
+# ---------------------------------------------------------------------------
+# 3c. The chest ledger is a Date column, and dates are not datetimes
+# ---------------------------------------------------------------------------
+
+class TestChestLedgerDateHandling:
+    """Two mirror-image bugs on one column, found while verifying the split.
+
+    `srsLastChestDate` is `DateTime? @db.Date`. prisma-client-py 0.11 serialises
+    query arguments itself and has no encoder for a bare `datetime.date`, so
+    *writing* one raised `TypeError: Type <class 'datetime.date'> not
+    serializable` and 500'd the request; and it hands the column back as a
+    `datetime`, so *reading* it and comparing to a `date` was always False.
+
+    The pair hid each other. The write threw on every credited completion, so
+    the column could only ever be NULL, so the read's comparison was never
+    reached with a real value — and the 500 itself was nearly silent, because
+    the streak and lesson writes commit before it and the client logs a failed
+    completion and shows the done screen regardless. The symptom users had was
+    simply that the chest never appeared, ever.
+
+    Fixing only the write would have swapped a dead chest for a chest on every
+    session, which is why both are pinned here.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _chest(self, monkeypatch):
+        class _Reward:
+            def as_dict(self):
+                return {"kind": "xp_small", "label": "XP", "payload": {"xp": 10}}
+
+        async def _award(db, *, user_id):
+            return _Reward()
+
+        monkeypatch.setattr("src.routes.srs.award_session_chest", _award)
+
+    _complete = staticmethod(_complete)
+
+    async def test_the_chest_date_is_written_as_a_datetime(self):
+        """A `date` here is not a stricter version of a `datetime` — it is a
+        type the query serialiser refuses, and the request dies."""
+        db = _FakeDb(_user(srsLastChestDate=None))
+
+        res = await self._complete(db, correct=8, total=10, kind="practice")
+
+        assert res.chest is not None
+        written = [u for u in db.user.updates if "srsLastChestDate" in u]
+        assert len(written) == 1
+        stamped = written[0]["srsLastChestDate"]
+        assert isinstance(stamped, datetime)
+        assert stamped.date() == datetime.now(timezone.utc).date()
+
+    async def test_a_second_session_the_same_day_claims_nothing(self):
+        """The once-a-day guard, with the column in the shape the database
+        actually returns. Comparing that `datetime` to a `date` is False, so
+        without normalising, every session of the day opened its own chest."""
+        today = datetime.now(timezone.utc).date()
+        db = _FakeDb(_user(
+            srsLastChestDate=datetime(today.year, today.month, today.day,
+                                      tzinfo=timezone.utc),
+        ))
+
+        res = await self._complete(db, correct=8, total=10, kind="practice")
+
+        assert res.chest is None
+        assert res.already_claimed is True
+        assert [u for u in db.user.updates if "srsLastChestDate" in u] == []
+
+    async def test_yesterdays_chest_does_not_block_todays(self):
+        db = _FakeDb(_user(srsLastChestDate=_dt(REAL_YESTERDAY)))
+
+        res = await self._complete(db, correct=8, total=10, kind="practice")
+
+        assert res.chest is not None
+        assert res.already_claimed is False
+
+
+class TestStreakKindPredicate:
+    """The predicate itself, away from the endpoint that calls it."""
+
+    def test_only_practice_counts(self):
+        from src.services.session_kinds import counts_toward_streak
+
+        assert counts_toward_streak("practice") is True
+        assert counts_toward_streak("list_words") is False
+        assert counts_toward_streak("list_films") is False
+
+    def test_every_deprecated_alias_still_counts(self):
+        from src.services.session_kinds import (
+            DEPRECATED_KIND_ALIASES,
+            counts_toward_streak,
+        )
+
+        for alias in DEPRECATED_KIND_ALIASES:
+            assert counts_toward_streak(alias) is True, alias
+
+    def test_silence_means_practice(self):
+        from src.services.session_kinds import counts_toward_streak
+
+        assert counts_toward_streak(None) is True
+
+    def test_every_list_kind_is_uncredited(self):
+        """Stated as a set relationship rather than two literals, so a third
+        list kind cannot be added later and quietly start moving the streak."""
+        from src.services.session_kinds import LIST_KINDS, counts_toward_streak
+
+        assert all(not counts_toward_streak(k) for k in LIST_KINDS)
 
 
 # ---------------------------------------------------------------------------

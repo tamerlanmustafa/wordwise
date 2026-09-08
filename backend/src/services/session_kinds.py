@@ -72,10 +72,39 @@ VALID_KINDS |= set(DEPRECATED_KIND_ALIASES)
 # Kinds driven by a list — they require `list_id`.
 LIST_KINDS: set[str] = {"list_words", "list_films"}
 
+# Kinds that count as *the* daily practice — the habit the streak measures.
+#
+# Only the Practice tab. A list is vocabulary the user chose to drill again on
+# their own initiative, and crediting it was doing two wrong things at once:
+# it let a 3-card list stand in for the day (so the streak stopped meaning
+# "you practised"), and, because the streak, the tile number and the chest are
+# all one-per-day, it *consumed* them — a user who drilled a list at breakfast
+# then did their real Practice lesson at lunch got no chest and no tile.
+#
+# Deliberately about the SESSION, not the card. `POST /srs/review` stays kind-
+# blind: a word answered correctly should advance its Leitner box wherever it
+# was answered, because that is a fact about the word rather than about the
+# user's day. What a list must not move is anything that is one-per-day.
+STREAK_KINDS: set[str] = {"practice"}
+
 
 def canonical_kind(kind: str) -> str:
     """The kind a request actually runs as, after alias resolution."""
     return DEPRECATED_KIND_ALIASES.get(kind, kind)
+
+
+def counts_toward_streak(kind: Optional[str]) -> bool:
+    """Whether finishing this kind of session counts as today's practice.
+
+    `None` means "a client that does not say", which is every build shipped
+    before the completion call carried its kind. Those answer `practice`,
+    because that is what the Practice tab has always been and the alternative
+    — treating an unlabelled session as uncredited — would silently break the
+    streak for every phone that has not updated.
+    """
+    if kind is None:
+        return True
+    return canonical_kind(kind) in STREAK_KINDS
 
 
 # Soft target session size — same as the existing SESSION_SIZE in

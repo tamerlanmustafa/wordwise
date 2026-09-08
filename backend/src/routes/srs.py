@@ -43,6 +43,7 @@ from ..services.session_kinds import (
     VALID_KINDS,
     canonical_kind,
     compose_for_kind,
+    counts_toward_streak,
 )
 from ..services.quiz_service import (
     build_definition_choices,
@@ -293,6 +294,11 @@ class CompleteSessionResponse(BaseModel):
 class CompleteSessionBody(BaseModel):
     correct_count: int = 0
     total_count: int = 0
+    #: Which queue this session drew from, so the endpoint knows whether it was
+    #: the daily practice or a list the user drilled on the side. Optional:
+    #: builds shipped before this field existed send nothing, and `None` reads
+    #: as `practice` (see `counts_toward_streak`).
+    kind: Optional[str] = None
 
 
 class PracticeProgressBody(BaseModel):
@@ -1318,11 +1324,27 @@ async def complete_session(
     anything is exactly the kind of hollow number the streak is supposed to
     mean something against. Same guard `advance_user_rollup_after_review`
     already applies.
+
+    Nor does a list. Every one-per-day thing this endpoint writes — the streak,
+    the Practice tile number, the chest — belongs to the Practice tab, and
+    handing them to a list deck broke them in both directions: a 3-card list
+    could stand in for the day, and, having claimed the day, it left the real
+    Practice lesson an hour later with no chest and no tile to show for it. See
+    `counts_toward_streak`. The kind comes from the body; a client too old to
+    send one falls back to the kind stamped at session start, and then to
+    `practice`, so no installed build loses its streak over this.
     """
     now = datetime.now(timezone.utc)
     today = now.date()
 
-    if body.total_count > 0:
+    # `srsLastSessionKind` is the fallback rather than the source: it is
+    # whatever was started *last*, which is the session being finished in every
+    # ordinary case but not if the user began a second one elsewhere first. A
+    # client that names its own kind is never second-guessed.
+    kind = body.kind or getattr(current_user, "srsLastSessionKind", None)
+    credited = counts_toward_streak(kind)
+
+    if body.total_count > 0 and credited:
         await record_session_day(db, user_id=current_user.id, today=today)
         # Same guard as the streak, for the same reason: a deck whose every
         # card turned out to be unrenderable "finishes" without asking the
@@ -1343,8 +1365,39 @@ async def complete_session(
     user = await db.user.find_unique(where={"id": current_user.id})
     streak = (user.srsCurrentStreak or 0) if user else 0
     lessons = (user.practiceLessonsCompleted or 0) if user else 0
+    # Normalised to a `date` before it is compared to one. Prisma Python hands
+    # back a `datetime` for an `@db.Date` column, and `datetime(2026, 9, 8) ==
+    # date(2026, 9, 8)` is False — so the once-a-day guard below would never
+    # fire and a premium user's second session would open a second chest. The
+    # bug was invisible while the write that sets this column was itself
+    # throwing (see the chest update further down): the field could only ever
+    # be NULL, and NULL compares unequal for the right reason. Fixing that
+    # write is what would have exposed this one.
     last_chest = user.srsLastChestDate if user else None
+    if isinstance(last_chest, datetime):
+        last_chest = last_chest.date()
     unlocked = parse_unlocked(user.unlockedCosmetics) if user else []
+
+    # A list deck never opens the chest, and — the half that was actually
+    # breaking things — never *closes* it either. `srsLastChestDate` is the
+    # one-per-day ledger, so a list session used to stamp today's date and the
+    # Practice lesson that followed it got `already_claimed`. Returning before
+    # the ledger is touched is what keeps the two independent.
+    if not credited:
+        return CompleteSessionResponse(
+            chest=None,
+            # Not "already claimed" — nothing was claimed and nothing is owed.
+            # The client renders on `chest` being null either way; the flag is
+            # only ever read to explain a *missing* chest, and "your list did
+            # not earn one" is not the same explanation as "you already have
+            # today's".
+            already_claimed=False,
+            correct_count=body.correct_count,
+            total_count=body.total_count,
+            streak=streak,
+            lessons_completed=lessons,
+            unlocked_cosmetics=unlocked,
+        )
 
     if last_chest == today:
         return CompleteSessionResponse(
@@ -1360,7 +1413,21 @@ async def complete_session(
     reward = await award_session_chest(db, user_id=current_user.id)
     await db.user.update(
         where={"id": current_user.id},
-        data={"srsLastChestDate": today},
+        # `datetime`, not `date`. The column is `@db.Date`, but prisma-client-py
+        # 0.11 serialises query arguments itself and has no encoder for a bare
+        # `datetime.date` — it raises `TypeError: Type <class 'datetime.date'>
+        # not serializable` and the whole request 500s. `record_session_day`
+        # already widens the same way for `srsLastSessionDate`.
+        #
+        # This threw on every credited completion, which hid itself neatly: the
+        # streak and lesson writes happen above and had already committed, so
+        # the numbers moved and only the *response* was lost — and the client
+        # logs a failed completion and shows the done screen anyway. The chest
+        # never appeared, and could not: the write that stamps the date is the
+        # one that throws, so `srsLastChestDate` stayed NULL forever and every
+        # day's first session took this same path again.
+        data={"srsLastChestDate": datetime(today.year, today.month, today.day,
+                                           tzinfo=timezone.utc)},
     )
     # Re-read in case the chest reward bumped XP/freezes which the
     # client wants to reconcile. Streak itself doesn't change here.
