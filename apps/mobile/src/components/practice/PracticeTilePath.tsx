@@ -10,9 +10,25 @@
  *   • Show {@link WINDOW_SIZE} tiles around the cursor — up to
  *     {@link COMPLETED_BEHIND} completed tiles below (capped by what's
  *     actually been completed; a brand-new user shows zero), then the
- *     active tile, then locked tiles above until the window fills.
+ *     active tile, then {@link LOCKED_AHEAD} locked tiles above it.
  *   • The visible range is always WINDOW_SIZE rows; the window slides
  *     up as the user advances.
+ *
+ * ## The active tile's two positions
+ *
+ * Vertically it is pinned: always the 5th tile from the bottom of the path,
+ * because `COMPLETED_BEHIND` tiles sit under it. The screen opens scrolled to
+ * the bottom, so that slot is where the user's eye lands every time they open
+ * the tab.
+ *
+ * Horizontally it is the opposite — it must NOT be pinned. `offsetForIndex` is
+ * keyed on the tile's absolute index, so as the cursor advances the active
+ * tile walks along the wave (0 → 28 → 40 → 28 → 0 → -28 …) instead of sitting
+ * in a fixed column. That is what makes progress feel like travelling a road
+ * rather than watching a counter: the slot stays, the position on the path
+ * does not. A fixed vertical slot plus a fixed horizontal offset would put
+ * every session's active tile in the identical pixel, which is the version of
+ * this that looks broken.
  *
  * State derivation rules (pure, per index `i`):
  *   • i  < cursor → 'completed'
@@ -34,11 +50,33 @@ import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
 import { markSideForIndex } from './TileMarks';
 
+/**
+ * How many completed tiles sit below the active one — which is the same thing
+ * as saying the active tile is the **5th from the bottom of the path**, and
+ * that is the point of the number.
+ *
+ * Capped by `cursor`, so a brand-new user shows fewer and the active tile
+ * simply sits lower until they have four sessions behind them. Nothing is
+ * padded to hold the slot: an empty row is a promise the path cannot keep, and
+ * a road with nothing behind you is the honest picture on day one.
+ */
+export const COMPLETED_BEHIND = 4;
+/**
+ * How many locked tiles to render above the active one.
+ *
+ * Sized by how far the user should be able to scroll, not by what fits: on the
+ * shortest phone the app supports the scroller shows roughly eight tiles, and
+ * the ask is at least three full screens of road ahead. Four of these are
+ * already on screen when the path opens at the bottom, so the remaining ~26
+ * are what the user climbs into — call it 3.4 screens with a little margin.
+ *
+ * It is the one number to change if the path should feel longer or shorter,
+ * and it is the one that costs: every tile here is a `TilePill` plus a lock,
+ * so raising it raises the mount cost of the whole tab.
+ */
+export const LOCKED_AHEAD = 30;
 /** Total tiles rendered at once. */
-const WINDOW_SIZE = 9;
-/** How many completed tiles to show below the active one (capped by
- *  `cursor` — a brand-new user with cursor=0 shows zero completed). */
-const COMPLETED_BEHIND = 2;
+export const WINDOW_SIZE = COMPLETED_BEHIND + 1 + LOCKED_AHEAD;
 
 /** Horizontal sway of the road, as a smooth wave rather than a jitter: four
  *  steps out and four back, so consecutive tiles lean into each other the way

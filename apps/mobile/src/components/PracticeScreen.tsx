@@ -87,6 +87,13 @@ export function PracticeScreen({
   const cursor = usePracticePathStore((st) => st.cursor);
   const pathHydrated = usePracticePathStore((st) => st.hydrated);
   const hydratePath = usePracticePathStore((st) => st.hydrate);
+
+  // Parks the path at its bottom once per cursor — see the ScrollView below.
+  const scrollRef = useRef<ScrollView>(null);
+  const didAnchor = useRef(false);
+  useEffect(() => {
+    didAnchor.current = false;
+  }, [cursor]);
   const userId = useAuthStore((st) => st.user?.id ?? null);
   useEffect(() => {
     void hydratePath();
@@ -165,10 +172,28 @@ export function PracticeScreen({
         </View>
       </View>
 
+      {/* Opens at the BOTTOM, not the top. The path climbs the screen, so the
+          bottom is where the user is — the active tile sits four completed
+          tiles up from the end and the rest of the content is road ahead to
+          climb into. Anchored on content size rather than on mount, because
+          the tiles lay out a frame after the cursor arrives and scrolling
+          before that lands on the wrong offset.
+
+          Re-armed whenever the cursor moves (see `didAnchor`), so finishing a
+          session re-settles the active tile in its slot instead of leaving the
+          user looking at whatever scroll position they had before. Guarded so
+          it fires ONCE per cursor: running on every content-size change would
+          yank the view back down while the user is scrolling. */}
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={[s.scrollPad, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => {
+          if (!pathHydrated || didAnchor.current) return;
+          didAnchor.current = true;
+          scrollRef.current?.scrollToEnd({ animated: false });
+        }}
       >
         {/* The tile chain. The active tile is at the cursor; the rest
             are completed (past) or locked (future). The path itself

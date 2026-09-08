@@ -44,6 +44,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TILE_BLOCK, TILE_W, GLYPH_BOX, TilePill } from './TilePill';
 import { TileCrack } from './TileCrack';
 import { TileMarks, type MarkSide } from './TileMarks';
+import { createPressLatch } from './pressLatch';
 import { tileVisual, tileMark } from './tileVisuals';
 
 export type PracticeTileState =
@@ -83,11 +84,33 @@ export function PracticeTile({
   // and reads as "this is your next step forward". Pauses for every
   // other state so the rest of the path stays calm.
   //
-  // It runs until the tile is struck and then never again for this mount: the
+  // It runs until the tile is struck, and then never again for this mount: the
   // tap is a commitment, and a tile that keeps hovering after you have chosen
   // it is still asking to be chosen.
+  //
+  // ## What counts as a commitment
+  //
+  // Press-in used to be enough, which was wrong. Putting a finger down and
+  // sliding it off a `Pressable` CANCELS the press: `onPress` never fires,
+  // nothing navigates, and the tile was left permanently still and cracked
+  // while still being the one tile the user is meant to tap. A stopped
+  // animation is a poor thing to leave behind after an action that did not
+  // happen.
+  //
+  // So the mark still lands on press-in — that timing is deliberate, see the
+  // `onPressIn` comment below — and a press that never completes takes it
+  // back. `pressLatch` owns that decision, including the reason it has to be
+  // read a turn late rather than inside the release handler.
   const bounce = useRef(new Animated.Value(0)).current;
   const [struck, setStruck] = useState(false);
+  const latch = useRef(createPressLatch()).current;
+  const releaseCheck = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (releaseCheck.current) clearTimeout(releaseCheck.current);
+    },
+    [],
+  );
   useEffect(() => {
     if (state !== 'active' || struck) return;
     const anim = Animated.loop(
@@ -115,9 +138,16 @@ export function PracticeTile({
   // The landing. The loop above has already been torn down by `struck`, so
   // this only has to bring the tile down from wherever it stopped and open
   // the crack under it.
+  //
+  // Rewinding on the way out matters as much as playing on the way in: a
+  // cancelled press unmounts the crack, and without this reset the *next*
+  // press would find the value already at 1 and open with no animation at all.
   const crack = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!struck) return;
+    if (!struck) {
+      crack.setValue(0);
+      return;
+    }
     Animated.parallel([
       Animated.timing(bounce, {
         toValue: 0,
@@ -148,11 +178,40 @@ export function PracticeTile({
 
   return (
     <Pressable
-      onPress={tappable ? onPress : undefined}
+      onPress={
+        tappable
+          ? () => {
+              latch.commit();
+              onPress?.();
+            }
+          : undefined
+      }
       // On press-in, not on press: the mark belongs to the finger landing,
       // and `onPress` fires on release — by which time the navigation this
       // tile starts is already under way and there is nothing left to watch.
-      onPressIn={tappable ? () => setStruck(true) : undefined}
+      onPressIn={
+        tappable
+          ? () => {
+              latch.down();
+              setStruck(true);
+            }
+          : undefined
+      }
+      // Fires on release whether or not the press completed, which is what
+      // makes it the right place to ask. Deferred by one turn so the answer is
+      // the same whichever order this and `onPress` arrived in — see
+      // `pressLatch`.
+      onPressOut={
+        tappable
+          ? () => {
+              if (releaseCheck.current) clearTimeout(releaseCheck.current);
+              releaseCheck.current = setTimeout(() => {
+                releaseCheck.current = null;
+                if (latch.settle()) setStruck(false);
+              }, 0);
+            }
+          : undefined
+      }
       style={s.hit}
       hitSlop={8}
     >

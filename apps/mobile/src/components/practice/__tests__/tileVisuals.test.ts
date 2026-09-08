@@ -272,10 +272,33 @@ describe('the tile is a long pill, alone, and lands when tapped', () => {
     expect(s).toMatch(/\}, \[state, struck, bounce\]\)/);
   });
 
-  it('marks the floor on press-in, not on press', () => {
-    // `onPress` fires on release, by which time the navigation this tile
-    // starts is already under way and there is nothing left to watch.
-    expect(tile()).toMatch(/onPressIn=\{tappable \? \(\) => setStruck\(true\) : undefined\}/);
+  it('marks the floor on press-in, and takes the mark back if the press is cancelled', () => {
+    // Press-in, because `onPress` fires on release — by which time the
+    // navigation this tile starts is already under way and there is nothing
+    // left to watch.
+    //
+    // But press-in is not a commitment. Sliding a finger off cancels the
+    // press, so the release has to be able to undo it, or the tile is left
+    // permanently still and cracked after an action that never happened.
+    // `pressLatch` owns the ordering; this only pins that all three handlers
+    // are still wired to it.
+    const s = tile();
+    expect(s).toMatch(/onPressIn=/);
+    expect(s).toMatch(/latch\.down\(\);\s*\n\s*setStruck\(true\);/);
+    expect(s).toMatch(/onPress=/);
+    expect(s).toMatch(/latch\.commit\(\);/);
+    expect(s).toMatch(/onPressOut=/);
+    expect(s).toMatch(/if \(latch\.settle\(\)\) setStruck\(false\);/);
+  });
+
+  it('rewinds the crack when the mark is taken back', () => {
+    // Without the reset the value is left at 1, and the NEXT press opens the
+    // crack with no animation — a bug that only appears on the second tap.
+    expect(tile()).toMatch(/if \(!struck\) \{\s*\n\s*crack\.setValue\(0\);/);
+  });
+
+  it('clears the pending release check when the tile unmounts', () => {
+    expect(tile()).toMatch(/clearTimeout\(releaseCheck\.current\)/);
   });
 
   it('draws the crack under the tile, so the fissures come out from beneath', () => {
