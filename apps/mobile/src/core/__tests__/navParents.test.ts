@@ -16,9 +16,10 @@ describe('PARENT_OF', () => {
       'leaderboard',
       'vocabulary',
       'admin',
-      // The "My Lists" hub was replaced by the Lists tab; the two screens it
-      // uniquely reached are now linked from Profile directly.
-      'notebook',
+      // The "My Lists" hub was replaced by the Lists tab; the screen it
+      // uniquely reached is now linked from Profile directly. The saved-words
+      // notebook was the other, and has been deleted — a discontinued view
+      // that a word tap inside a list could still throw you into.
       'watched',
     ];
     for (const screen of fromProfile) {

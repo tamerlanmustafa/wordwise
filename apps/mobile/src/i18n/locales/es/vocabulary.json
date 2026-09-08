@@ -37,12 +37,6 @@
     "watchedFilms": "Películas vistas",
     "watchedFilmsSub": "Películas que has marcado como vistas"
   },
-  "notebook": {
-    "all": "Todos",
-    "browseMovies": "Explorar películas",
-    "byMovie": "Por película",
-    "emptySaved": "Aún no hay palabras guardadas"
-  },
   "row": {
     "alsoAppearsIn": "También aparece en:",
     "noExamples": "No hay ejemplos de frases disponibles",

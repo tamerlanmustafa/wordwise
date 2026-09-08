@@ -44,12 +44,6 @@
     "restoreErrorBody": "Could not restore that word. Try again.",
     "restoreBody": "\"{{word}}\" will reappear in movie vocabulary lists."
   },
-  "notebook": {
-    "browseMovies": "Browse movies",
-    "all": "All",
-    "byMovie": "By Movie",
-    "emptySaved": "No saved words yet"
-  },
   "lists": {
     "title": "My Lists",
     "watchedFilms": "Watched Films",

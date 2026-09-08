@@ -17,7 +17,6 @@ export type Screen =
   | 'review'
   | 'paywall'
   | 'stats'
-  | 'notebook'
   | 'lists'
   | 'watched'
   | 'achievements'
@@ -46,8 +45,6 @@ export type Screen =
   | 'moviePreview'
   | 'setIntro'
   | 'addToReel';
-
-export type ListFilter = 'saved' | 'learned';
 
 // ─── Lists tab ───────────────────────────────────────────────────────────
 // A list holds films or words, never both. That constraint is what lets a

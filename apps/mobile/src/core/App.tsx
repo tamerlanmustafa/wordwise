@@ -18,7 +18,6 @@ import { ReviewScreen } from '../components/ReviewScreen';
 import { PaywallScreen } from '../components/PaywallScreen';
 import type { PaywallReason } from '../components/paywallPricing';
 import { StatsScreen } from '../components/StatsScreen';
-import { NotebookScreen } from '../components/NotebookScreen';
 import { registerForPushNotifications, cancelWordReminder, cancelReviewReminder } from '../services/notifications';
 import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
@@ -63,7 +62,7 @@ import { useReelBadgeStore } from '../stores/reelBadgeStore';
 import { authApi, quizApi, setOnSessionExpired, type QuizStartSessionResponse, type QuizCompleteResponse, type QuizCardResultInput } from '../services/api';
 import { useReelStore } from '../stores/reelStore';
 import { useWordFeedStore } from '../stores/wordFeedStore';
-import type { Screen, ListFilter, MovieData, ListSummary } from './types';
+import type { Screen, MovieData, ListSummary } from './types';
 import { PARENT_OF } from './navParents';
 import { quizReturnScreen, type QuizOriginKind } from './quizReturn';
 import { guardQuizExit, useQuizGuardStore } from '../stores/quizGuardStore';
@@ -149,7 +148,6 @@ export default function App() {
   // Base tab the Profile sheet was last opened over, so closing a screen
   // launched from the sheet returns there instead of teleporting to Home.
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
-  const [listFilter, setListFilter] = useState<ListFilter>('saved');
   // Header dropdown's chosen translation language. Persisted to AsyncStorage
   // (key: targetLanguage) so the user's last pick survives app restarts
   // instead of snapping back to user.learning_language every cold start.
@@ -435,11 +433,6 @@ export default function App() {
   // movie/search resets and notification refresh, which caused that flash.
   // Stable identity (it only touches setters and a ref) so the hardware-back
   // effect below can depend on it without re-subscribing every render.
-  const navigateToNotebook = (filter: ListFilter = 'saved') => {
-    setListFilter(filter);
-    setCurrentScreen('notebook');
-  };
-
   const navigateToLists = () => {
     setCurrentScreen('lists');
   };
@@ -1019,7 +1012,6 @@ export default function App() {
       case 'leaderboard':
       case 'vocabulary':
       case 'learnedWords':
-      case 'notebook':
       case 'lists':
       case 'admin':
       case 'familyPlan':
@@ -1140,8 +1132,6 @@ export default function App() {
           />
         ) : currentScreen === 'stats' ? (
           <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
-        ) : currentScreen === 'notebook' ? (
-          <NotebookScreen onBack={backFrom('notebook')} backLabel={backLabelFor('notebook')} filter={listFilter} />
         ) : currentScreen === 'listDetail' && openList ? (
           <ListDetailScreen
             list={openList}
@@ -1153,7 +1143,6 @@ export default function App() {
               poster_path: item.posterPath,
               release_date: item.year ? `${item.year}-01-01` : '',
             })}
-            onOpenWord={() => navigateToNotebook('saved')}
             onPaywall={() => navigateToPaywall(0, 0)}
             bottomOffset={barHeight}
           />

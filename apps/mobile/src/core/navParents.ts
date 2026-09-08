@@ -42,9 +42,9 @@ export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
   terms: 'legal',
   // Second-level lists, reached from their parent list screen.
   learnedWords: 'vocabulary',
-  // Both were reached through the old "My Lists" hub, which the Lists tab
-  // replaced; Profile links them directly.
-  notebook: 'profile',
+  // Reached through the old "My Lists" hub, which the Lists tab replaced;
+  // Profile links it directly. The saved-words notebook sat here too until it
+  // was deleted — it had no route left to come back to.
   watched: 'profile',
   // An open list returns to the Lists tab index.
   listDetail: 'lists',

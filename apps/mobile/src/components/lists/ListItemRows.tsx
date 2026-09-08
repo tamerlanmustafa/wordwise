@@ -94,17 +94,25 @@ export function FilmItemRow({
  * A word in an open list. The heart toggles Favourites and is silent — no
  * toast — exactly as it is in Explore, because the fill state is the
  * feedback and a toast per tap would be noise while skimming a list.
+ *
+ * The row body is deliberately NOT pressable. It used to be, and tapping a
+ * word threw the user out of the list they were reading and into the old
+ * saved-words notebook — every saved word, unfiltered, with no relationship
+ * to the word tapped or the list it was in. That view is gone (see the delete
+ * in this change), and rather than find the row somewhere else to go, the row
+ * simply stops claiming it goes anywhere. A control that looks tappable and
+ * does nothing is worse than one that never offered.
+ *
+ * The heart is still a real button, and is now the only one here.
  */
 export function WordItemRow({
   item,
   favourite,
   onToggleFavourite,
-  onPress,
 }: {
   item: ListWordItem;
   favourite: boolean;
   onToggleFavourite: () => void;
-  onPress: () => void;
 }) {
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
@@ -113,7 +121,7 @@ export function WordItemRow({
   const sub = [item.pos, t(`srs.${item.srsState}`)].filter(Boolean).join(META_SEPARATOR);
 
   return (
-    <TouchableOpacity style={s.wordRow} onPress={onPress} activeOpacity={0.7}>
+    <View style={s.wordRow}>
       <View style={s.wordBody}>
         <View style={s.wordHead}>
           <Text style={s.word} numberOfLines={1}>{item.word}</Text>
@@ -135,7 +143,7 @@ export function WordItemRow({
       >
         <HeartIcon size={19} filled={favourite} color={favourite ? tc.gold : tc.textFaint} />
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 }
 

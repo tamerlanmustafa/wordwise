@@ -37,12 +37,6 @@
     "watchedFilms": "İzlediğim Filmler",
     "watchedFilmsSub": "\"İzlendi\" olarak işaretlediğin filmler"
   },
-  "notebook": {
-    "all": "Tümü",
-    "browseMovies": "Filmlere göz at",
-    "byMovie": "Film'e göre",
-    "emptySaved": "Henüz kaydedilmiş kelime yok"
-  },
   "row": {
     "alsoAppearsIn": "Ayrıca şu kaynaklarda da yer almaktadır:",
     "noExamples": "Cümle örneği bulunmamaktadır",

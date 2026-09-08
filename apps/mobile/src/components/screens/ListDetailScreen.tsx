@@ -46,7 +46,6 @@ interface Props {
   /** Hands the started session to the review screen. */
   onStartSession: (session: SrsSessionStart, listId: number) => void;
   onOpenFilm: (item: ListFilmItem) => void;
-  onOpenWord: (item: ListWordItem) => void;
   onPaywall: () => void;
   bottomOffset: number;
 }
@@ -56,7 +55,6 @@ export function ListDetailScreen({
   onBack,
   onStartSession,
   onOpenFilm,
-  onOpenWord,
   onPaywall,
   bottomOffset,
 }: Props) {
@@ -219,7 +217,6 @@ export function ListDetailScreen({
               // the heart is the remove control.
               favourite={summary.systemKey === 'favourites'}
               onToggleFavourite={() => void removeItem(list.id, item.word)}
-              onPress={() => onOpenWord(item)}
             />
           ))
         )}
