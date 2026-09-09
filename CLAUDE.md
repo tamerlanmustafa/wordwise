@@ -50,6 +50,7 @@
 - When you add or change a feature, add or extend a test that covers it in the same change. New behavior shouldn't land untested.
 - Put tests next to the code in a `__tests__/` folder and follow the nearest existing test's structure before inventing a new one. Jest/pytest auto-discover them.
 - Mobile (`apps/mobile`): **logic + integration only — do NOT add a component-render library** (`@testing-library/react-native`). Cover features via stores, services, hooks, pure helpers, and cross-store user-story flows. Use `src/test-utils/renderHook` for hooks, and `jest.setup.js` for the shared AsyncStorage/SecureStore mocks. Watch the known gotchas: native `import()` can't run under jest, flush microtasks (not `setImmediate`) when fake timers are on, and drive dates with `jest.setSystemTime`.
+- **Cover the teardown, not just the setup.** Opening a thing is the path you build and demo; closing it runs just as often, gets none of that attention, and is where the bugs are — especially for a panel that *hides* rather than unmounts, so its keyboard, draft, timers and listeners all survive. Walk every exit, including the successful one.
 - Backend: pytest under `backend/tests`. Web (`frontend/`): frozen, so no new tests — it's gated by typecheck + build only.
 - The mobile jest suite + typechecks run automatically on **pre-push** (`.husky/pre-push`) and in **CI** (`.github/workflows/ci.yml`), so any test you add is exercised on every push/PR — no extra wiring needed.
 
