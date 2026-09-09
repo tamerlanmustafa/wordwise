@@ -80,13 +80,15 @@ const SERIF_FAMILY = 'Source Serif 4';
  * number. Everything around it renders in the platform face — SF on iOS, whose
  * lowercase is TALLER than Charter's, and Roboto on Android, whose lowercase is
  * slightly shorter than Noto Serif's — so the correction runs in opposite
- * directions on the two platforms: 17 becomes ~17.8 on iOS and ~16.8 on
+ * directions on the two platforms: 18 becomes ~18.9 on iOS and ~17.8 on
  * Android, and the line looks the same size as the word above it on both.
  *
  * Safe to resize here, unlike the card deck: this card centres a lifting group
- * between two flex spacers instead of seating the gloss in a fixed slot.
+ * between two flex spacers instead of seating the gloss in a fixed slot — and
+ * the card is longer now, so the point this gained comes out of slack rather
+ * than out of the sentence below it.
  */
-const GLOSS_SIZE = opticalSize(17, 'serifItalic', 'sans');
+const GLOSS_SIZE = opticalSize(18, 'serifItalic', 'sans');
 
 /** The shared curve for every Explore movement. */
 export const EXPLORE_EASING = Easing.bezier(0.22, 0.75, 0.28, 1);
@@ -275,10 +277,10 @@ function WordCardBase({
 
             Three, not the deck's two: the clamp here is a backstop against a
             pathological value, not a squeeze. The usable width is the card
-            minus 24 and the action rail's lane (~300pt), which at 17pt seats
-            roughly 40 characters a line — so MAX_DEF_CHARS (90) plus the label
-            needs a third line to land whole on an SE. The deck can afford two
-            because its slot runs at 12pt.
+            minus 24 and the action rail's lane (~300pt), which at 18pt seats
+            roughly 38 characters a line — so MAX_DEF_CHARS (90) plus the label
+            still lands whole inside three, with a line's worth to spare. The
+            deck can afford two because its slot runs at 12pt.
 
             One Text, not a row: the label has to wrap with the gloss rather
             than sit beside it, or a long definition would flow underneath it
@@ -519,8 +521,8 @@ const makeStyles = (tc: ThemeColors) =>
     },
     translatedSentence: {
       marginTop: 8,
-      fontSize: 16,
-      lineHeight: 16 * 1.5,
+      fontSize: 17,
+      lineHeight: 17 * 1.5,
       color: tc.textSecondary,
     },
     measure: {

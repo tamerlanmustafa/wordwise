@@ -31,6 +31,27 @@
  *  and the fixed chrome gets trimmed rather than eating the card. */
 const COMPACT_VIEWPORT = 620;
 
+/**
+ * Clear space above the card, and below it.
+ *
+ * Both bands were sized for chrome that no longer exists: the top floor cleared
+ * a hero, and the bottom band held this screen's own toast. Neither renders
+ * anything now, so both were pure margin — and because the four bands tile the
+ * viewport exactly, every point they were holding was a point the card did not
+ * have. They are down to breathing room: enough that the card reads as a
+ * surface with edges rather than as the screen itself, and no more.
+ *
+ * The top value is only a *floor*. A device reporting a deeper safe-area inset
+ * — anything with a Dynamic Island — still wins, so on most modern phones this
+ * number does not bite at all and the length comes from the bottom band. It
+ * matters on flat-top phones and on Android, where the inset is ~20-24 and this
+ * floor is what actually decides the gap.
+ */
+const TOP_FLOOR = 34;
+const TOP_FLOOR_COMPACT = 26;
+const BOTTOM_BAND = 16;
+const BOTTOM_BAND_COMPACT = 12;
+
 /** Share of the card area the action rail occupies. 285/662 on the
  *  reference device. */
 const RAIL_HEIGHT_RATIO = 0.43;
@@ -96,7 +117,11 @@ export interface ExploreMetricsInput {
 export interface ExploreMetrics {
   /** Clears the Dynamic Island / status bar. */
   topSpacer: number;
-  /** Reserved so the surface never reflows when a toast comes and goes. */
+  /**
+   * The band below the card. Named for the toast it used to hold; it is now
+   * just the gap between the card's bottom edge and the floating bar, kept
+   * small so the length goes to the card instead.
+   */
   toastStrip: number;
   /** Clears the floating bottom bar. Mirrors `topSpacer` at the other end, so
    *  the four bands laid out by the screen add up to the container exactly. */
@@ -142,8 +167,11 @@ export function exploreMetrics({
 
   // A device reporting a deeper inset (Dynamic Island) always wins over the
   // design floor — clearing the hardware matters more than the mockup.
-  const topSpacer = Math.max(topInset, compact ? 44 : 62);
-  const toastStrip = compact ? 38 : 46;
+  const topSpacer = Math.max(topInset, compact ? TOP_FLOOR_COMPACT : TOP_FLOOR);
+  const toastStrip = compact ? BOTTOM_BAND_COMPACT : BOTTOM_BAND;
+  // Whatever the two bands give back lands here, because these three plus the
+  // bar's strip are defined to tile the viewport. That is the whole mechanism
+  // for lengthening the card: there is no separate height to raise.
   const cardHeight = Math.max(0, usable - topSpacer - toastStrip);
 
   // The rail's height still scales with the card — it must leave the word

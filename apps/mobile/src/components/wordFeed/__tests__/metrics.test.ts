@@ -24,11 +24,27 @@ const TINY = { viewport: 500, width: 320, topInset: 20 };
 describe('exploreMetrics — reference device', () => {
   it('reproduces the design values on the phone it was measured on', () => {
     const m = exploreMetrics(LARGE);
-    expect(m.topSpacer).toBe(62);
-    expect(m.toastStrip).toBe(46);
+    // The hardware inset wins here: 59pt of Dynamic Island is deeper than the
+    // 34pt floor, so on this class of phone the floor never bites.
+    expect(m.topSpacer).toBe(59);
+    expect(m.toastStrip).toBe(16);
     expect(m.railHeight).toBe(285);
     expect(m.cardLift).toBe(150);
     expect(m.railEnd).toBe(10);
+  });
+
+  it('spends the retired chrome on the card rather than on margin', () => {
+    // The top floor cleared a hero and the bottom band held this screen's own
+    // toast; neither renders anything now. Because the bands tile the viewport
+    // by definition, holding onto them was holding height away from the card —
+    // so the test is that the card gets nearly all of what is left after the
+    // hardware inset, not that any particular band is a particular number.
+    const m = exploreMetrics(LARGE);
+    const chrome = m.topSpacer + m.toastStrip;
+    expect(m.cardHeight).toBe(LARGE.viewport - chrome);
+    expect(chrome).toBeLessThan(80);
+    // It really is longer than the layout this replaces (62 + 46 of chrome).
+    expect(m.cardHeight).toBeGreaterThan(LARGE.viewport - 108);
   });
 
   it('never exceeds the design on an even larger screen', () => {
@@ -96,8 +112,10 @@ describe('exploreMetrics — the small-screen bug this exists to prevent', () =>
 
   it('trims the fixed chrome on a compact screen instead of the card', () => {
     const m = exploreMetrics(SMALL);
-    expect(m.topSpacer).toBe(44);
-    expect(m.toastStrip).toBe(38);
+    // 20pt of inset is shallower than the floor, so here the floor is what
+    // decides the gap — this is the class of phone the top number exists for.
+    expect(m.topSpacer).toBe(26);
+    expect(m.toastStrip).toBe(12);
     expect(m.railEnd).toBe(6);
   });
 });
@@ -161,8 +179,8 @@ describe('exploreMetrics — invariants across every device', () => {
     // 640pt of screen is roomy; 640 minus a 91pt bar is not. Compactness has
     // to be judged on what is left after the bar, not on the raw screen.
     const m = exploreMetrics({ viewport: 640, width: 375, topInset: 20, bottomOffset: 91 });
-    expect(m.topSpacer).toBe(44);
-    expect(m.toastStrip).toBe(38);
+    expect(m.topSpacer).toBe(26);
+    expect(m.toastStrip).toBe(12);
   });
 
   it('degrades safely if the bar reports more height than the screen', () => {

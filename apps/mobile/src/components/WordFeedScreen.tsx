@@ -375,10 +375,12 @@ export function WordFeedScreen({
         ) : null}
       </View>
 
-      {/* The band this screen's own toast used to occupy. It stays as spacing:
-          the four bands have to tile the viewport exactly or the pager shows a
-          sliver of the next word (see metrics.ts), so removing the toast is not
-          licence to remove its height. */}
+      {/* The band this screen's own toast used to occupy, now trimmed to the
+          gap between the card and the floating bar. It cannot be removed
+          outright — the four bands have to tile the viewport exactly or the
+          pager shows a sliver of the next word (see metrics.ts) — but every
+          point it gives up goes straight to the card, which is where the
+          card's extra length came from. */}
       <View style={{ height: m.toastStrip }} />
 
       {/* The bar's own strip. It has to be a real band in this column, not a
