@@ -82,7 +82,11 @@ export function NewListSheet({
       <Text style={s.subtitle}>{t('new.subtitle')}</Text>
 
       <View style={s.tiles}>
-        {(['films', 'words'] as const).map((k) => {
+        {/* Words first. A word list is the one people make — words are what
+            you collect while reading, and a films list is the occasional
+            deliberate act — so the common choice should be the one your thumb
+            lands on first. */}
+        {(['words', 'films'] as const).map((k) => {
           const selected = kind === k;
           return (
             <TouchableOpacity

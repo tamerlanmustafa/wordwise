@@ -102,3 +102,42 @@ describe('the Lists index does not mount every row', () => {
     expect(source).not.toContain('getItemLayout');
   });
 });
+
+/**
+ * What happens after a list is created.
+ *
+ * It used to open the new list — an empty screen answering a question nobody
+ * asked, whose only move is straight back out. Staying on the index and
+ * pointing at the new row keeps the reader where they were and still shows
+ * them the result.
+ */
+describe('creating a list leaves you looking at it', () => {
+  const index = readFileSync(
+    join(__dirname, '..', '..', 'screens', 'ListsIndexScreen.tsx'),
+    'utf8',
+  );
+
+  it('does not navigate into the new list', () => {
+    expect(index).not.toContain('onOpenList(created)');
+  });
+
+  it('switches to the segment the new list is on', () => {
+    // The sheet can create a words list while the films tab is showing, and a
+    // flash on a row in the other tab is a flash nobody sees.
+    expect(index).toContain('setActiveKind(created.kind)');
+  });
+
+  it('flashes the new row and stops', () => {
+    // The id, not a flag on the row: FlatList recycles rows, so a row that
+    // remembered "I am new" would light up for whatever landed in its slot.
+    expect(index).toContain('setNewListId(created.id)');
+    expect(index).toContain('setNewListId(null)');
+    expect(index).toContain('highlighted={item.id === newListId}');
+  });
+
+  it('clears its timer on unmount', () => {
+    // The flash outlives the screen otherwise, setting state on something
+    // that is gone.
+    expect(index).toContain('clearTimeout(flashTimer.current)');
+  });
+});

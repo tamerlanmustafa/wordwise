@@ -149,15 +149,26 @@ describe('sheets dim the whole screen, bar included', () => {
   });
 
   it.each(SHEETS)('%s still keeps its own rows clear of the bar', (file) => {
-    // The offset does not disappear — it moves inside, as padding.
+    // The offset does not disappear — it moves inside the sheet. What it
+    // *is* differs by sheet, so the assertion is that `bottomOffset` still
+    // reserves space rather than that it reserves it one particular way:
     //
-    // `BottomSheet` drops it while the keyboard is up, which is the same rule
-    // rather than an exception to it: the padding exists so no row hides
-    // behind the floating capsule, and while the keyboard covers the capsule
-    // there is nothing to hide behind — reserving the space would leave a dead
-    // gap between the sheet and the keys. So the assertion is that the offset
-    // is still what the padding is built from, not that it is unconditional.
-    expect(code(file)).toMatch(/paddingBottom:\s*SHEET_PAD_BOTTOM \+[^,\n]*bottomOffset/);
+    //   • NotificationsSheet: padding, as before.
+    //   • BottomSheet: an animated child height, because the strip has to
+    //     close up as the sheet rises over a keyboard — the bar is behind the
+    //     keys then, so the space is a gap rather than clearance — and
+    //     padding is layout, which cannot share the native driver the sheet's
+    //     own transform runs on. As padding it snapped shut under a sheet
+    //     that was still gliding.
+    expect(code(file)).toMatch(/bottomOffset/);
+  });
+
+  it('BottomSheet reserves the bar as an animated strip it can give back', () => {
+    const src = code(path.join('components', 'common', 'BottomSheet.tsx'));
+    expect(src).toMatch(/barSpace/);
+    // Still the bar's height at rest — the strip animates between that and 0,
+    // it is not merely decorative.
+    expect(src).toMatch(/toValue:\s*up\s*\?\s*0\s*:\s*bottomOffset/);
   });
 
   it.each(SHEETS)('%s does not add the offset to its hidden position twice', (file) => {

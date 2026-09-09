@@ -19,7 +19,7 @@ import { act } from 'react-test-renderer';
 import { renderHook, cleanupHooks } from '../../test-utils/renderHook';
 import { useKeyboardHeight } from '../useKeyboardHeight';
 
-type Handler = (e?: { endCoordinates?: { height: number } }) => void;
+type Handler = (e?: { endCoordinates?: { height: number }; duration?: number }) => void;
 
 /** Stands in for the native keyboard, so a test can raise and drop it. */
 function mockKeyboard() {
@@ -46,7 +46,7 @@ describe('useKeyboardHeight', () => {
 
   it('starts at zero', () => {
     mockKeyboard();
-    expect(renderHook(() => useKeyboardHeight()).result.current).toBe(0);
+    expect(renderHook(() => useKeyboardHeight()).result.current.height).toBe(0);
   });
 
   it('reports where the keyboard is going, not where it is', () => {
@@ -58,7 +58,37 @@ describe('useKeyboardHeight', () => {
 
     act(() => handlers.keyboardWillShow?.({ endCoordinates: { height: 336 } }));
 
-    expect(result.current).toBe(336);
+    expect(result.current.height).toBe(336);
+  });
+
+  it("reports the keyboard's own duration so callers can match it", () => {
+    // A raw height makes a panel teleport: state lands in one frame and the
+    // keyboard spends the next ~250ms sliding up underneath it. Callers
+    // animate on this instead, so the two arrive together.
+    const { handlers } = mockKeyboard();
+    const { result } = renderHook(() => useKeyboardHeight());
+
+    act(() => handlers.keyboardWillShow?.({
+      endCoordinates: { height: 336 },
+      duration: 310,
+    }));
+
+    expect(result.current.duration).toBe(310);
+  });
+
+  it('honours a zero duration rather than substituting a default', () => {
+    // Zero is iOS saying "no animation" — a hardware keyboard attaching, a
+    // split-keyboard drag. Falling back to 250 there would animate something
+    // that did not move.
+    const { handlers } = mockKeyboard();
+    const { result } = renderHook(() => useKeyboardHeight());
+
+    act(() => handlers.keyboardWillShow?.({
+      endCoordinates: { height: 336 },
+      duration: 0,
+    }));
+
+    expect(result.current.duration).toBe(0);
   });
 
   it('returns to zero when the keyboard goes away', () => {
@@ -68,7 +98,7 @@ describe('useKeyboardHeight', () => {
     act(() => handlers.keyboardWillShow?.({ endCoordinates: { height: 336 } }));
     act(() => handlers.keyboardWillHide?.());
 
-    expect(result.current).toBe(0);
+    expect(result.current.height).toBe(0);
   });
 
   it('treats a height-less event as zero rather than NaN', () => {
@@ -81,7 +111,7 @@ describe('useKeyboardHeight', () => {
     act(() => handlers.keyboardDidShow?.({}));
     act(() => handlers.keyboardWillShow?.({}));
 
-    expect(result.current).toBe(0);
+    expect(result.current.height).toBe(0);
   });
 
   it('listens for the events its platform actually emits', () => {

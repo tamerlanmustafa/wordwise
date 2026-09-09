@@ -45,13 +45,21 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { BlurView } from 'expo-blur';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
+import { KEYBOARD_EASING, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { Vignette } from './Vignette';
 
 /** Pulls the top and bottom edges down past the flat scrim tint. Deeper than
  *  the tint itself, or it would not read as an edge at all. */
 const SCRIM_EDGE = 'rgba(0,0,0,0.34)';
+
+/** Breathing room between the sheet's bottom edge and the keyboard's top. */
+const KEYBOARD_GAP = 6;
+
+/** Backdrop blur strength. Enough that text behind stops being readable —
+ *  which is the point — without turning the page into flat grey. */
+const SCRIM_BLUR = 24;
 
 interface Props {
   visible: boolean;
@@ -65,7 +73,8 @@ interface Props {
 export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
-  const keyboard = useKeyboardHeight();
+  const { height: keyboard, duration } = useKeyboardHeight();
+  const scheme = useColorScheme();
 
   // Start well off-screen; the real distance is set once the sheet measures
   // itself, so it always fully clears the bar however tall it grows.
@@ -81,6 +90,42 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       speed: 18,
     }).start();
   }, [visible, slide]);
+
+  /**
+   * The sheet rides up to sit on the keyboard, and gives back the bar's space
+   * as it goes.
+   *
+   * Two values because they cannot share a driver. `lift` is a transform and
+   * runs natively beside the entrance spring; `barSpace` is the height of the
+   * strip reserved for the floating tab bar, which is layout and cannot. They
+   * animate on the same duration and curve, so the sheet rises while the dead
+   * strip under its last row closes up — assigning either directly made that
+   * half of the movement snap while the other gilded.
+   *
+   * Reserving the bar's height is right at rest and wrong under a keyboard:
+   * the bar is behind the keys then, so the space is a gap between the sheet
+   * and the keyboard rather than clearance for anything.
+   */
+  const lift = useRef(new Animated.Value(0)).current;
+  const barSpace = useRef(new Animated.Value(bottomOffset)).current;
+
+  useEffect(() => {
+    const up = keyboard > 0;
+    Animated.parallel([
+      Animated.timing(lift, {
+        toValue: up ? keyboard + KEYBOARD_GAP : 0,
+        duration,
+        easing: KEYBOARD_EASING,
+        useNativeDriver: true,
+      }),
+      Animated.timing(barSpace, {
+        toValue: up ? 0 : bottomOffset,
+        duration,
+        easing: KEYBOARD_EASING,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [keyboard, duration, bottomOffset, lift, barSpace]);
 
   /**
    * A closing sheet takes its keyboard with it.
@@ -141,6 +186,17 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
               }) },
           ]}
         >
+          {/* Blur first, tint over it. Blurring alone leaves the screen
+              legible enough to keep reading, which is the opposite of what a
+              modal surface is for; tinting alone leaves every edge behind it
+              sharp enough to compete with the sheet. Together the page reads
+              as *behind* something rather than merely darker. */}
+          <BlurView
+            intensity={SCRIM_BLUR}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={s.scrimTint} />
           <Vignette color={SCRIM_EDGE} />
         </Animated.View>
       </TouchableWithoutFeedback>
@@ -148,20 +204,21 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       <Animated.View
         style={[
           s.sheet,
-          // While the keyboard is up the bottom bar is behind it, so the
-          // space this normally reserves for the bar would be a dead gap
-          // between the sheet and the keys.
-          { paddingBottom: SHEET_PAD_BOTTOM + (keyboard > 0 ? 0 : bottomOffset) },
-          // Two translations, not one. `slide` is the show/hide animation and
-          // is driven natively; the keyboard lift is a separate, static offset
-          // — combining them into one value would make the sheet re-animate
-          // its entrance every time the keyboard moved.
-          { transform: [{ translateY: slide }, { translateY: -keyboard }] },
+          // Two translations, not one summed value. `slide` is the show/hide
+          // spring; folding the keyboard offset into it would make the sheet
+          // re-animate its entrance every time the keyboard moved.
+          { transform: [{ translateY: slide }, { translateY: Animated.multiply(lift, -1) }] },
         ]}
         onLayout={onSheetLayout}
       >
         <View style={s.grabber} />
         {children}
+        {/* The bar's reserved strip, as a child rather than as padding, so it
+            can animate its own height on the JS driver while the sheet's
+            transform stays native. Mixing the two on one view is not allowed
+            and, before this, showed as the padding snapping shut under a
+            sheet that was still gliding. */}
+        <Animated.View style={{ height: barSpace }} pointerEvents="none" />
       </Animated.View>
     </View>
   );
@@ -173,7 +230,13 @@ const SHEET_PAD_BOTTOM = 24;
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+  },
+  // Lighter than the flat 0.48 it replaces: the blur underneath is now doing
+  // half the work of separating the sheet from the page, so the same total
+  // effect needs less black.
+  scrimTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.34)',
   },
   sheet: {
     position: 'absolute',
@@ -181,10 +244,13 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     end: 0,
     bottom: 0,
     backgroundColor: tc.paper,
-    borderTopStartRadius: 24,
-    borderTopEndRadius: 24,
+    // All four corners, not just the top two. At rest the bottom pair sit at
+    // the screen edge and read as square anyway; lifted over a keyboard they
+    // are the sheet's visible bottom edge, and two hard corners there made it
+    // look torn off rather than floating.
+    borderRadius: 24,
     paddingTop: 10,
-    // paddingBottom is applied inline — it carries the bar's reserved height.
+    paddingBottom: SHEET_PAD_BOTTOM,
     paddingHorizontal: 20,
   },
   grabber: {

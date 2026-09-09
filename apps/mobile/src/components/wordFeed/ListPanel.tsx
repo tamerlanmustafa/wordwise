@@ -25,7 +25,7 @@
  * the whole card.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
@@ -39,12 +39,16 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
-import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { KEYBOARD_EASING, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { directionSign } from '../../i18n/rtl';
 import type { ListSummary } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
 
 const SERIF_FAMILY = 'Source Serif 4';
+
+/** Breathing room between the panel's bottom edge and the keyboard's top.
+ *  Small enough to read as "resting on it" rather than floating above. */
+const KEYBOARD_GAP = 6;
 
 interface Props {
   /** The word the panel is filing — its name is the panel's title. */
@@ -83,21 +87,40 @@ export function ListPanel({
   const [busy, setBusy] = useState(false);
 
   /**
-   * How far the keyboard pushes the panel up.
+   * The panel rides up to sit on the keyboard.
    *
-   * Deliberately not gated on `creating`, though that reads like the obvious
-   * guard. Submitting a name sets `creating` false the instant the request
-   * resolves, while the keyboard takes its own ~250ms to retract — so gating
-   * on it dropped the panel *through* a keyboard that was still on screen.
-   * Following the keyboard's own height means the panel travels with it, in
-   * both directions. Nothing else on the word feed raises a keyboard, so
-   * there is no case where this lifts for something that is not this panel.
+   * Two things this gets right that the obvious version does not.
    *
-   * `+ 8` keeps the panel's rounded bottom edge off the keyboard's top rather
-   * than flush against it.
+   * **The offset is absolute, not additive.** The panel rests at `bottom`,
+   * which is the action rail's own inset from the screen edge. Adding the
+   * keyboard height to that parked it a whole rail-height *above* the keys —
+   * the "too much gap" this replaces. What we want is the panel's bottom edge
+   * at `keyboard + KEYBOARD_GAP` from the screen edge whatever it rests at,
+   * so the travel is the difference, floored at zero so it can never move
+   * down for a short keyboard.
+   *
+   * **It is animated, not assigned.** State lands in one frame while the
+   * keyboard spends its own ~250ms sliding; setting the offset directly made
+   * the panel teleport and then wait. Animating on the event's own duration
+   * and curve means the two arrive together.
+   *
+   * Deliberately not gated on `creating`. That reads like the obvious guard
+   * and is wrong: submitting sets it false the instant the request resolves,
+   * while the keyboard is still retracting — so the panel dropped *through* a
+   * keyboard still on screen.
    */
-  const keyboard = useKeyboardHeight();
-  const lift = keyboard > 0 ? keyboard + 8 : 0;
+  const { height: keyboard, duration } = useKeyboardHeight();
+  const lift = useRef(new Animated.Value(0)).current;
+  const target = keyboard > 0 ? Math.max(0, keyboard + KEYBOARD_GAP - bottom) : 0;
+
+  useEffect(() => {
+    Animated.timing(lift, {
+      toValue: target,
+      duration,
+      easing: KEYBOARD_EASING,
+      useNativeDriver: true,
+    }).start();
+  }, [target, duration, lift]);
 
   /**
    * Whether the rows overflow their box — i.e. there is more list below.
@@ -155,7 +178,7 @@ export function ListPanel({
         s.panel,
         {
           height,
-          bottom: bottom + lift,
+          bottom,
           end: lane,
           opacity: progress,
           transform: [
@@ -165,6 +188,10 @@ export function ListPanel({
                 outputRange: [-500 * directionSign, 0],
               }),
             },
+            // Negative because `bottom`-anchored means up is -Y. A transform
+            // rather than the `bottom` prop so it can run on the native
+            // driver alongside the slide-in above it.
+            { translateY: Animated.multiply(lift, -1) },
           ],
         },
       ]}

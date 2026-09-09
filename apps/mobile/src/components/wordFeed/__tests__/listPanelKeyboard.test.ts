@@ -27,9 +27,23 @@ function read(...parts: string[]): string {
 describe('the word-feed list panel clears the keyboard', () => {
   const panel = read('components', 'wordFeed', 'ListPanel.tsx');
 
-  it('lifts by the keyboard height', () => {
+  it('lifts to sit on the keyboard, not on top of its own inset', () => {
+    // The offset is absolute, not additive. The panel rests at `bottom` —
+    // the action rail's inset from the screen edge — and adding the keyboard
+    // height to that parked it a whole rail-height above the keys. The travel
+    // is the difference, floored so a short keyboard can never push it down.
     expect(panel).toContain('useKeyboardHeight');
-    expect(panel).toContain('bottom: bottom + lift');
+    expect(panel).toContain('Math.max(0, keyboard + KEYBOARD_GAP - bottom)');
+    expect(panel).not.toContain('bottom: bottom + lift');
+  });
+
+  it('animates the lift instead of assigning it', () => {
+    // State lands in one frame while the keyboard spends its own ~250ms
+    // sliding, so assigning the offset made the panel teleport and then wait
+    // for the keys to catch up.
+    expect(panel).toContain('Animated.timing');
+    expect(panel).toContain('easing: KEYBOARD_EASING');
+    expect(panel).toContain('duration,');
   });
 
   it('follows the keyboard rather than the create flag', () => {
@@ -38,7 +52,7 @@ describe('the word-feed list panel clears the keyboard', () => {
     // own ~250ms to retract — so the panel dropped *through* a keyboard still
     // on screen. Following the height means it travels with the keys, both
     // ways.
-    expect(panel).toContain('keyboard > 0 ? keyboard + 8 : 0');
+    expect(panel).toContain('keyboard > 0 ? Math.max(0');
     expect(panel).not.toContain('creating && keyboard');
   });
 
@@ -81,20 +95,32 @@ describe('every bottom sheet clears the keyboard', () => {
     // this component's, and its children know nothing about where it is
     // pinned. NewListSheet surfaced it; the fix belongs here.
     expect(sheet).toContain('useKeyboardHeight');
-    expect(sheet).toContain('translateY: -keyboard');
+    expect(sheet).toContain('keyboard + KEYBOARD_GAP');
   });
 
   it('keeps the entrance animation separate from the lift', () => {
     // Two transforms, not one summed value: `slide` is the show/hide spring
     // and is driven natively. Folding the keyboard offset into it would make
     // the sheet re-animate its entrance every time the keyboard moved.
-    expect(sheet).toContain('{ translateY: slide }, { translateY: -keyboard }');
+    expect(sheet).toContain('{ translateY: slide }, { translateY: Animated.multiply(lift, -1) }');
   });
 
-  it('stops reserving the bottom bar while the keyboard is up', () => {
-    // The bar is behind the keyboard then, so the space would be a dead gap
-    // between the sheet and the keys.
-    expect(sheet).toContain('keyboard > 0 ? 0 : bottomOffset');
+  it('gives back the bar strip as it rises, rather than snapping it shut', () => {
+    // The bar is behind the keyboard, so its reserved strip is a gap rather
+    // than clearance. It is an animated child height, not padding, because
+    // padding is layout and cannot share the native driver the sheet's own
+    // transform runs on — before this, the strip snapped shut under a sheet
+    // that was still gliding.
+    expect(sheet).toContain('barSpace');
+    expect(sheet).toContain('useNativeDriver: false');
+    expect(sheet).not.toContain('keyboard > 0 ? 0 : bottomOffset');
+  });
+
+  it('rounds all four corners', () => {
+    // Lifted over a keyboard the bottom pair are the sheet's visible edge,
+    // and two hard corners there made it look torn off rather than floating.
+    expect(sheet).toContain('borderRadius: 24');
+    expect(sheet).not.toContain('borderTopStartRadius');
   });
 });
 
@@ -130,5 +156,47 @@ describe('closing a panel takes the keyboard with it', () => {
     // and a successful create — which calls onClose mid-focus and is the one
     // a user actually hits.
     expect(sheet).toContain('if (!visible) Keyboard.dismiss()');
+  });
+});
+
+/**
+ * Both backdrops are dimmed and blurred.
+ *
+ * A panel opening over a full-contrast page is two things competing for the
+ * same attention, and on the word feed the page wins: it is large type on a
+ * dark ground. Dimming alone leaves every edge behind it sharp; blurring
+ * alone leaves the text legible enough to keep reading, which is the opposite
+ * of what a modal surface is for.
+ */
+describe('the page behind a panel recedes', () => {
+  const feed = read('components', 'WordFeedScreen.tsx');
+  const sheet = read('components', 'common', 'BottomSheet.tsx');
+
+  it.each([
+    ['word feed', 'components/WordFeedScreen.tsx'],
+    ['bottom sheet', 'components/common/BottomSheet.tsx'],
+  ])('%s blurs and tints', (_name, file) => {
+    const src = file.includes('WordFeed') ? feed : sheet;
+    expect(src).toContain('BlurView');
+    expect(src).toContain('intensity=');
+    expect(src).toContain("tint={scheme === 'dark' ? 'dark' : 'light'}");
+  });
+
+  it('the word feed fades its backdrop with whichever panel opened', () => {
+    // Appearing on mount would pop a dark sheet of glass over the card a beat
+    // before the panel arrived on it — and the value has to be the one that
+    // tracks *any* panel. `panelAnim` is the mix panel's own progress and
+    // `listAnim` the list's, so either of those leaves the backdrop at zero
+    // opacity for the other panel. That shipped for one screenshot: the panel
+    // opened over a perfectly sharp word card.
+    expect(feed).toContain('opacity: liftAnim');
+    expect(feed).not.toContain('opacity: panelAnim');
+  });
+
+  it('the word feed keeps the whole backdrop as the dismiss target', () => {
+    // Visuals inside the Pressable, not over it, or they swallow the tap that
+    // closes the panel.
+    expect(feed).toContain('<Pressable');
+    expect(feed).toContain('panelScrim');
   });
 });

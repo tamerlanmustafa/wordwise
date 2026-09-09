@@ -42,7 +42,8 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useThemeColors, type ThemeColors } from '../theme/tokens';
+import { BlurView } from 'expo-blur';
+import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import { useWordFeedStore, PREFETCH_THRESHOLD, logFeedFlip } from '../stores/wordFeedStore';
 import { dominantLevel } from '../utils/levelMix';
 import type { FeedItem, LevelMix } from '../services/api';
@@ -79,6 +80,7 @@ export function WordFeedScreen({
   bottomOffset = 0,
 }: Props) {
   const tc = useThemeColors();
+  const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -392,11 +394,36 @@ export function WordFeedScreen({
           strip short of that, so anchoring them inside `listArea` would park
           them a strip too high and make the gap depend on the toast's size. */}
       {anyPanelOpen ? (
+        // Dimmed and blurred behind whichever panel is open. It used to be an
+        // invisible dismiss target, so a panel opened over a full-contrast
+        // word card and the two competed — the card is large type on a dark
+        // ground and wins that fight. Blurring it settles which one is being
+        // read. Fading rather than appearing on mount keeps it on the same
+        // clock as the panel sliding in.
+        //
+        // `liftAnim`, not `panelAnim`: the three values are per-panel and the
+        // names do not say so. `panelAnim` is the *mix* panel's progress and
+        // `listAnim` the list's, so fading on either left the backdrop at
+        // zero opacity for the other one. `liftAnim` tracks `anyPanelOpen`,
+        // which is exactly when a backdrop should be there.
+        //
+        // The Pressable stays the outermost layer: the whole backdrop is the
+        // dismiss target, and putting the visuals inside it means they cannot
+        // swallow the tap.
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={() => setOpenPanel(null)}
           accessibilityLabel="Close word mix"
-        />
+        >
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: liftAnim }]}>
+            <BlurView
+              intensity={PANEL_BLUR}
+              tint={scheme === 'dark' ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={s.panelScrim} />
+          </Animated.View>
+        </Pressable>
       ) : null}
 
       <ActionRail
@@ -476,10 +503,21 @@ function CardSkeleton({ height, s }: { height: number; s: Styles }) {
   );
 }
 
+/** Backdrop blur behind an open panel. Enough that the word card stops being
+ *  readable — which is the point of a panel over it — without flattening the
+ *  page to grey. */
+const PANEL_BLUR = 22;
+
 type Styles = ReturnType<typeof makeStyles>;
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
+    // Lighter than a blur-less scrim would need: the blur under it is doing
+    // half the work of separating the panel from the card.
+    panelScrim: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.28)',
+    },
     // Parked off-screen rather than hidden. `display: none` and `opacity: 0`
     // both stop the surface being drawn, and react-native-svg can only
     // rasterise what the platform has actually rendered — a hidden canvas

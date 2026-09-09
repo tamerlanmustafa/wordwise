@@ -26,7 +26,7 @@
  * API would buy a loading tail and a merge path to save nothing.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +54,10 @@ const INITIAL_ROWS = 8;
  *  FlatList a new empty array on every render. */
 const EMPTY: ListSummary[] = [];
 
+/** How long a newly created row stays lit. Long enough to notice after the
+ *  scroll settles, short enough that it is gone before it becomes a question. */
+const FLASH_MS = 1600;
+
 interface Props {
   /** True while this tab is the visible one — the screen stays mounted
    *  (App's keep-alive) so scroll position and segment survive a switch. */
@@ -79,6 +83,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
   const create = useListsStore((st) => st.create);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const listRef = useRef<FlatList<ListSummary>>(null);
 
   useEffect(() => { void hydrate(); }, [hydrate]);
 
@@ -101,13 +106,41 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
     track('lists_segment_changed', { kind });
   }, [setActiveKind]);
 
+  /**
+   * Which row to flash, and for how long.
+   *
+   * Held here rather than in the row because the row is recycled: FlatList
+   * hands the same component a different list as you scroll, so a row that
+   * remembered "I am new" would light up for whatever landed in its slot.
+   * The id is the thing that is actually new.
+   */
+  const [newListId, setNewListId] = useState<number | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+  }, []);
+
   const onCreate = useCallback(async (name: string, kind: ListKind) => {
     const created = await create(name, kind);
     track('list_created', { kind });
-    // Land the user in the list they just made — it's empty, and the empty
-    // state is what tells them how to fill it.
-    onOpenList(created);
-  }, [create, onOpenList]);
+
+    // Stay on the index rather than opening it. Creating a list used to drop
+    // the reader into it — an empty screen answering a question nobody asked,
+    // from which the only move is straight back out. The list they just made
+    // is the thing worth seeing, so we show it to them here.
+    //
+    // Switching the segment matters: the sheet can create a words list while
+    // the films tab is showing, and a flash on a row in the other tab is a
+    // flash nobody sees.
+    setActiveKind(created.kind);
+    setNewListId(created.id);
+    // New lists append, so the end is where it landed. Deferred a frame so
+    // the row exists to scroll to.
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setNewListId(null), FLASH_MS);
+  }, [create, setActiveKind]);
 
   const openList = useCallback((list: ListSummary) => {
     track('list_opened', { kind: list.kind, system_key: list.systemKey });
@@ -121,7 +154,11 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
   const renderRow = useCallback(
     ({ item }: { item: ListSummary }) => (
       <View>
-        <ListRow list={item} onPress={() => openList(item)} />
+        <ListRow
+          list={item}
+          onPress={() => openList(item)}
+          highlighted={item.id === newListId}
+        />
         {item.count === 0 && item.systemKey ? (
           <Text style={s.hint}>
             {item.systemKey === 'reel' ? t('empty.reel') : t('empty.favourites')}
@@ -129,7 +166,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
         ) : null}
       </View>
     ),
-    [openList, s.hint, t],
+    [openList, newListId, s.hint, t],
   );
 
   /**
@@ -195,6 +232,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
       </View>
 
       <FlatList
+        ref={listRef}
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
