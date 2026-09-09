@@ -22,17 +22,31 @@
  * Extracted from the UserMenuSheet / NotificationsSheet pattern when the
  * Lists tab needed two more sheets; those two are untouched, but new sheets
  * should build on this rather than hand-rolling a third copy.
+ *
+ * ## The keyboard
+ *
+ * A bottom-anchored sheet and a keyboard want the same part of the screen, so
+ * any sheet with a text field in it — `NewListSheet` is the one that surfaced
+ * this — had its field covered the moment it was focused: you were typing
+ * into something you could not see. The sheet now rides above the keyboard.
+ *
+ * It is handled here rather than in each sheet because the geometry is this
+ * component's, not theirs: they contribute content and know nothing about
+ * where the sheet is pinned. Sheets with no input are unaffected, since a
+ * keyboard they never raise leaves the height at zero.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
+  Keyboard,
   StyleSheet,
   TouchableWithoutFeedback,
   View,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { Vignette } from './Vignette';
 
 /** Pulls the top and bottom edges down past the flat scrim tint. Deeper than
@@ -51,6 +65,7 @@ interface Props {
 export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Props) {
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
+  const keyboard = useKeyboardHeight();
 
   // Start well off-screen; the real distance is set once the sheet measures
   // itself, so it always fully clears the bar however tall it grows.
@@ -66,6 +81,24 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       speed: 18,
     }).start();
   }, [visible, slide]);
+
+  /**
+   * A closing sheet takes its keyboard with it.
+   *
+   * Every way out of a sheet with a field in it left the keys up: the scrim
+   * tap, the hardware back, and — the one a user actually hits — a successful
+   * create, which calls `onClose` while the field is still focused. The sheet
+   * would slide away behind a keyboard that stayed, hovering over a screen
+   * with nothing to type into.
+   *
+   * Here rather than in each sheet for the same reason the lift is: the sheet
+   * owns its own dismissal, and its children do not know they are being
+   * closed. Sheets with no field raise no keyboard, so this is a no-op for
+   * them rather than something they have to opt out of.
+   */
+  useEffect(() => {
+    if (!visible) Keyboard.dismiss();
+  }, [visible]);
 
   const onSheetLayout = (e: LayoutChangeEvent) => {
     // Slack past its own height so the closed sheet is fully off-screen. The
@@ -115,8 +148,15 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
       <Animated.View
         style={[
           s.sheet,
-          { paddingBottom: SHEET_PAD_BOTTOM + bottomOffset },
-          { transform: [{ translateY: slide }] },
+          // While the keyboard is up the bottom bar is behind it, so the
+          // space this normally reserves for the bar would be a dead gap
+          // between the sheet and the keys.
+          { paddingBottom: SHEET_PAD_BOTTOM + (keyboard > 0 ? 0 : bottomOffset) },
+          // Two translations, not one. `slide` is the show/hide animation and
+          // is driven natively; the keyboard lift is a separate, static offset
+          // — combining them into one value would make the sheet re-animate
+          // its entrance every time the keyboard moved.
+          { transform: [{ translateY: slide }, { translateY: -keyboard }] },
         ]}
         onLayout={onSheetLayout}
       >

@@ -11,11 +11,24 @@
  *
  * Only `words` lists appear. A film list can't hold a lemma, so showing them
  * would be offering an action that cannot work.
+ *
+ * ## The panel rides the keyboard; nothing else does
+ *
+ * Naming a new list puts a text field at the panel's bottom edge, which is
+ * exactly where the keyboard arrives — so the field you were typing into was
+ * the first thing hidden. The panel is absolutely positioned, so it lifts by
+ * adding the keyboard's height to its own `bottom`, and the word card behind
+ * it does not move at all. That is deliberate: the reader is filing *this*
+ * word, and sliding the word off screen to make room for the panel filing it
+ * would be a strange trade. It is also why this is not a
+ * `KeyboardAvoidingView` — that moves a container, and the container here is
+ * the whole card.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,7 +37,9 @@ import {
   View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { directionSign } from '../../i18n/rtl';
 import type { ListSummary } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
@@ -67,6 +82,60 @@ export function ListPanel({
   const [draftName, setDraftName] = useState('');
   const [busy, setBusy] = useState(false);
 
+  /**
+   * How far the keyboard pushes the panel up.
+   *
+   * Deliberately not gated on `creating`, though that reads like the obvious
+   * guard. Submitting a name sets `creating` false the instant the request
+   * resolves, while the keyboard takes its own ~250ms to retract — so gating
+   * on it dropped the panel *through* a keyboard that was still on screen.
+   * Following the keyboard's own height means the panel travels with it, in
+   * both directions. Nothing else on the word feed raises a keyboard, so
+   * there is no case where this lifts for something that is not this panel.
+   *
+   * `+ 8` keeps the panel's rounded bottom edge off the keyboard's top rather
+   * than flush against it.
+   */
+  const keyboard = useKeyboardHeight();
+  const lift = keyboard > 0 ? keyboard + 8 : 0;
+
+  /**
+   * Whether the rows overflow their box — i.e. there is more list below.
+   *
+   * Measured rather than counted, because "too many" is not a number: it
+   * depends on the panel's height, which the caller sets, and on the row
+   * height, which the theme's font scaling can change. Comparing the two
+   * onLayout answers the actual question.
+   */
+  const [rowsBoxH, setRowsBoxH] = useState(0);
+  const [rowsContentH, setRowsContentH] = useState(0);
+  const scrollable = rowsContentH > rowsBoxH + 1;
+
+  /**
+   * Closing the panel puts the keyboard away and throws the draft out.
+   *
+   * The panel is never unmounted — it hides by animating `opacity` and
+   * `translateX` — so without this both survive the close. Two things went
+   * wrong, and neither is visible from the opening path:
+   *
+   *   • the keyboard outlived the panel. Dismissing the panel while naming a
+   *     list left the keys up over the word feed with nothing focused behind
+   *     them, and no obvious way to get rid of them.
+   *   • the draft outlived the word. Reopening the panel — on the *next*
+   *     word, after swiping on — put the reader back in a half-typed create
+   *     row belonging to a word they had left behind.
+   *
+   * Keyed on the panel closing rather than on the create row itself, because
+   * "the user is done with this" is the panel's state, not the row's.
+   */
+  useEffect(() => {
+    if (visible) return;
+    Keyboard.dismiss();
+    setCreating(false);
+    setDraftName('');
+    setBusy(false);
+  }, [visible]);
+
   const submit = async () => {
     const name = draftName.trim();
     if (!name || busy) return;
@@ -86,7 +155,7 @@ export function ListPanel({
         s.panel,
         {
           height,
-          bottom,
+          bottom: bottom + lift,
           end: lane,
           opacity: progress,
           transform: [
@@ -108,7 +177,7 @@ export function ListPanel({
       </Text>
       <Text style={s.sub}>Pick as many lists as you like.</Text>
 
-      <View style={s.rows}>
+      <View style={s.rows} onLayout={(e) => setRowsBoxH(e.nativeEvent.layout.height)}>
         {loading && lists.length === 0 ? (
           /* Rows the shape of the list rows about to replace them, so the
              panel does not resize under the user's thumb mid-save. */
@@ -126,8 +195,12 @@ export function ListPanel({
           // Only the rows scroll; the panel itself never does, so the
           // create button below stays reachable however many lists exist.
           <ScrollView
-            showsVerticalScrollIndicator={false}
+            // On, now that there can be enough lists to need it. It is a
+            // hint while the thumb is down and nothing at rest, which is
+            // why the fade below exists as well rather than instead.
+            showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
+            onContentSizeChange={(_w, h) => setRowsContentH(h)}
           >
             {lists.map((list, i) => (
               <ListRow
@@ -142,6 +215,21 @@ export function ListPanel({
             ))}
           </ScrollView>
         )}
+
+        {/* The standing sign that the list continues.
+            A scrollbar only appears once you are already scrolling, which is
+            no use to a reader deciding whether to: the last row simply looked
+            like the last row. A row fading out under the panel's edge says
+            "there is more" without spending a line of the panel on saying it,
+            and it is drawn only when the rows actually overflow — a permanent
+            fade would imply more list on a panel showing all three of them. */}
+        {scrollable ? (
+          <LinearGradient
+            colors={[withAlpha(tc.paper, 0), tc.paper]}
+            style={s.moreFade}
+            pointerEvents="none"
+          />
+        ) : null}
       </View>
 
       {creating ? (
@@ -268,6 +356,16 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.textFaint,
     },
     rows: { flex: 1, marginTop: 6 },
+    // Sits inside the rows box, over its bottom edge. 28 is a little over one
+    // row, so the row beneath is half-visible rather than cleanly cut — a cut
+    // reads as the end of the list, a fade reads as more of it.
+    moreFade: {
+      position: 'absolute',
+      start: 0,
+      end: 0,
+      bottom: 0,
+      height: 28,
+    },
     spinner: { marginTop: 20 },
     empty: {
       marginTop: 18,

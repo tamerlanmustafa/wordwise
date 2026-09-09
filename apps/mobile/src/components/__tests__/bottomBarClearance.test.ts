@@ -150,7 +150,14 @@ describe('sheets dim the whole screen, bar included', () => {
 
   it.each(SHEETS)('%s still keeps its own rows clear of the bar', (file) => {
     // The offset does not disappear — it moves inside, as padding.
-    expect(code(file)).toMatch(/paddingBottom:\s*SHEET_PAD_BOTTOM \+ bottomOffset/);
+    //
+    // `BottomSheet` drops it while the keyboard is up, which is the same rule
+    // rather than an exception to it: the padding exists so no row hides
+    // behind the floating capsule, and while the keyboard covers the capsule
+    // there is nothing to hide behind — reserving the space would leave a dead
+    // gap between the sheet and the keys. So the assertion is that the offset
+    // is still what the padding is built from, not that it is unconditional.
+    expect(code(file)).toMatch(/paddingBottom:\s*SHEET_PAD_BOTTOM \+[^,\n]*bottomOffset/);
   });
 
   it.each(SHEETS)('%s does not add the offset to its hidden position twice', (file) => {
