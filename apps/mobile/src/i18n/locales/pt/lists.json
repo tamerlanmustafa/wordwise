@@ -25,7 +25,8 @@
     "placeholderWords": "Palavras do noticiário",
     "submit": "Criar lista",
     "errorEmpty": "Dê um nome à sua lista.",
-    "errorDuplicate": "Você já tem uma lista com esse nome."
+    "errorDuplicate": "Você já tem uma lista com esse nome.",
+    "errorLimit": "Você atingiu o número máximo de listas. Exclua uma para abrir espaço."
   },
   "practice": {
     "films": "Praticar palavras destes filmes",

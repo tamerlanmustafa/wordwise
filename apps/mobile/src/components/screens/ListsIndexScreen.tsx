@@ -9,10 +9,25 @@
  * States (§8) are real screens, not spinners: skeleton rows at the true row
  * height while loading, a retry line above kept content when a refresh
  * fails, and per-row instructions when a pinned list has nothing in it.
+ *
+ * ## Why a FlatList for at most 50 rows
+ *
+ * Not the row count — the posters. A films row draws a `PosterFan` of up to
+ * three remote TMDB images, and the cap is 50 lists per kind
+ * (`MAX_LISTS_PER_KIND`), so a full films tab inside a plain `ScrollView`
+ * mounted up to 150 image requests the instant it opened, ~147 of them for
+ * rows nobody had scrolled to. Fifty rows of text would have been fine; fifty
+ * rows each pulling three images over the network is not, and it is the films
+ * tab — the one people fill — where it bites.
+ *
+ * Windowing fixes it at the render layer, which is the right layer: the index
+ * itself is cheap to fetch (`get_lists` is bounded at 8 queries however many
+ * lists exist, and the whole payload is ~20KB at the cap), so paginating the
+ * API would buy a loading tail and a merge path to save nothing.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -24,6 +39,20 @@ import { METRICS, listName, metaText, screenTitle } from '../lists/listStyles';
 import { useListsStore, subscribeToReel } from '../../stores/listsStore';
 import { track } from '../../services/analytics';
 import type { ListKind, ListSummary } from '../../core/types';
+
+/**
+ * Rows mounted before the list waits for a scroll.
+ *
+ * A row paints `rowMinHeight + rowEdge` and carries `rowGap` below it — 82pt
+ * — so eight fills an 874pt screen with one to spare. Enough that nothing is
+ * blank on arrival, few enough that opening a full films tab requests a
+ * couple of dozen posters instead of a hundred and fifty.
+ */
+const INITIAL_ROWS = 8;
+
+/** Stable identity, so `data={loading ? EMPTY : shown}` does not hand
+ *  FlatList a new empty array on every render. */
+const EMPTY: ListSummary[] = [];
 
 interface Props {
   /** True while this tab is the visible one — the screen stays mounted
@@ -87,6 +116,58 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
 
   const loading = status === 'loading' && lists.length === 0;
 
+  const keyOf = useCallback((list: ListSummary) => String(list.id), []);
+
+  const renderRow = useCallback(
+    ({ item }: { item: ListSummary }) => (
+      <View>
+        <ListRow list={item} onPress={() => openList(item)} />
+        {item.count === 0 && item.systemKey ? (
+          <Text style={s.hint}>
+            {item.systemKey === 'reel' ? t('empty.reel') : t('empty.favourites')}
+          </Text>
+        ) : null}
+      </View>
+    ),
+    [openList, s.hint, t],
+  );
+
+  /**
+   * The retry line and the loading skeleton, both above the rows.
+   *
+   * They live in the header rather than as `ListEmptyComponent` and a sibling
+   * because their order and spacing relative to the rows is the point: a
+   * failed refresh must sit *above* whatever content is already on screen
+   * without blanking it, which is not something an empty-state slot can
+   * express.
+   */
+  const header = useMemo(
+    () => (
+      <>
+        {loadError ? (
+          <TouchableOpacity style={s.retry} onPress={() => void fetchLists()} activeOpacity={0.7}>
+            <Text style={s.retryText}>{t('error.retry')}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {loading
+          ? [0, 1, 2].map((i) => (
+              // The row's full painted height — face plus the edge under it —
+              // and the gap it carries, so the list does not shift when the
+              // real rows land. Numbers from METRICS; a skeleton never states
+              // its own.
+              <Skeleton
+                key={i}
+                height={METRICS.rowMinHeight + METRICS.rowEdge}
+                radius={METRICS.rowRadius}
+                style={s.rowSkeleton}
+              />
+            ))
+          : null}
+      </>
+    ),
+    [loadError, loading, fetchLists, s.retry, s.retryText, s.rowSkeleton, t],
+  );
+
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
@@ -113,43 +194,28 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
         />
       </View>
 
-      <ScrollView
+      <FlatList
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: bottomOffset + 24 }]}
         showsVerticalScrollIndicator={false}
-      >
-        {/* A failed refresh never blanks kept content — the retry line sits
-            above whatever is already on screen. */}
-        {loadError ? (
-          <TouchableOpacity style={s.retry} onPress={() => void fetchLists()} activeOpacity={0.7}>
-            <Text style={s.retryText}>{t('error.retry')}</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {loading
-          ? [0, 1, 2].map((i) => (
-              // The row's full painted height — face plus the edge under it —
-              // and the gap it carries, so the list does not shift when the
-              // real rows land. Numbers from METRICS; a skeleton never states
-              // its own.
-              <Skeleton
-                key={i}
-                height={METRICS.rowMinHeight + METRICS.rowEdge}
-                radius={METRICS.rowRadius}
-                style={s.rowSkeleton}
-              />
-            ))
-          : shown.map((list) => (
-              <View key={list.id}>
-                <ListRow list={list} onPress={() => openList(list)} />
-                {list.count === 0 && list.systemKey ? (
-                  <Text style={s.hint}>
-                    {list.systemKey === 'reel' ? t('empty.reel') : t('empty.favourites')}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-      </ScrollView>
+        // Empty while loading so the skeleton is the whole body, exactly as it
+        // was — the header below holds both the retry line and the placeholder
+        // rows, which keeps their order and spacing out of this list's hands.
+        data={loading ? EMPTY : shown}
+        keyExtractor={keyOf}
+        renderItem={renderRow}
+        ListHeaderComponent={header}
+        // Deliberately no `getItemLayout`: a row is not a fixed height. An
+        // empty pinned list carries an instruction line underneath it, so two
+        // rows in every list are taller than the rest, and handing FlatList a
+        // constant would misplace everything after them. Measuring costs a
+        // frame; wrong offsets cost correctness.
+        //
+        // Windowing does not need it — `initialNumToRender` and `windowSize`
+        // are what stop the other 40-odd rows (and their posters) mounting.
+        initialNumToRender={INITIAL_ROWS}
+        windowSize={5}
+      />
 
       <NewListSheet
         visible={sheetOpen}

@@ -25,7 +25,8 @@
     "placeholderWords": "Palabras de las noticias",
     "submit": "Crear lista",
     "errorEmpty": "Ponle un nombre a tu lista.",
-    "errorDuplicate": "Ya tienes una lista con ese nombre."
+    "errorDuplicate": "Ya tienes una lista con ese nombre.",
+    "errorLimit": "Has alcanzado el número máximo de listas. Elimina una para hacer sitio."
   },
   "practice": {
     "films": "Practicar palabras de estas películas",

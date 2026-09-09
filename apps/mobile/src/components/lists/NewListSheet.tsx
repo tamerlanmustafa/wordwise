@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { BottomSheet } from '../common/BottomSheet';
 import { detailTitle, listName, metaText } from './listStyles';
+import { newListErrorKey } from './newListError';
 import type { ListKind } from '../../core/types';
 
 interface Props {
@@ -66,8 +67,10 @@ export function NewListSheet({
       await onCreate(trimmed, kind);
       onClose();
     } catch (e) {
-      const code = (e as { code?: string })?.code;
-      setError(code === 'duplicate_name' ? t('new.errorDuplicate') : (e as Error).message);
+      // A known refusal gets our words; anything else falls back to whatever
+      // the layer below said, which is unhelpful but never silent.
+      const key = newListErrorKey((e as { code?: string })?.code);
+      setError(key ? t(key) : (e as Error).message);
     } finally {
       setBusy(false);
     }

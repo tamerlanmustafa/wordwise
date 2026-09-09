@@ -25,7 +25,8 @@
     "placeholderWords": "Words from the news",
     "submit": "Create list",
     "errorEmpty": "Give your list a name.",
-    "errorDuplicate": "You already have a list with that name."
+    "errorDuplicate": "You already have a list with that name.",
+    "errorLimit": "You've reached the maximum number of lists. Delete one to make room."
   },
   "practice": {
     "films": "Practice words from these films",
