@@ -13,8 +13,6 @@
     "filmCount_other": "{{count}} FİLİM",
     "wordCount_one": "{{count}} KELİME",
     "wordCount_other": "{{count}} KELİME",
-    "dueCount_one": "{{count}} TEKRAR",
-    "dueCount_other": "{{count}} TEKRAR",
     "addedFromHome": "ANA SAYFADAN EKLENDİ",
     "nothingSaved": "HENÜZ BİR ŞEY YOK"
   },
@@ -31,8 +29,6 @@
   },
   "practice": {
     "films": "Bu filmlerin kelimelerini çalış",
-    "due_one": "{{count}} tekrarı çalış",
-    "due_other": "{{count}} tekrarı çalış",
     "none": "Bu listeyi çalış",
     "empty": "Henüz çalışılacak bir şey yok"
   },
@@ -41,7 +37,6 @@
     "added": "Son eklenen",
     "titleAZ": "Başlık",
     "rating": "Puan",
-    "due": "Önce vadesi gelen",
     "alpha": "A–Z"
   },
   "menu": {
@@ -71,7 +66,6 @@
   "srs": {
     "new": "yeni",
     "learning": "öğreniliyor",
-    "due": "bugün",
     "learned": "öğrenildi"
   }
 }

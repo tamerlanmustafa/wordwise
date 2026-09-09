@@ -17,12 +17,10 @@ import {
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
 import { useQuizGuardStore } from '../stores/quizGuardStore';
-import { useTipDismissalsStore } from '../stores/tipDismissalsStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
 import { ChestReveal } from './journey/ChestReveal';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
-import { TipPopup } from './common/TipPopup';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
 import { isChoiceCard } from './quiz/mcqLogic';
@@ -35,11 +33,6 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { EmptyState } from './common/EmptyState';
 import type { PaywallReason } from './paywallPricing';
 import { SessionComplete } from './common/SessionComplete';
-
-// v0.6 spacing-effect tip key — incrementable suffix lets us replace
-// the body copy without grandfathering old dismissals (`v2` would
-// re-show to users who dismissed v1).
-const SPACING_TIP_KEY = 'spacing_first_repeat_v1';
 
 // Leitner review session UI — also the v0.6 "daily 2-min" habit anchor.
 //
@@ -127,16 +120,6 @@ export function ReviewScreen({
   // can dismiss it without re-firing the API call.
   const [chest, setChest] = useState<ChestPayload | null>(null);
   const [chestVisible, setChestVisible] = useState(false);
-  // Spacing-effect tip — shown once per session when the first
-  // SRS-resurfaced word appears (srs_box >= 2 means the user has
-  // graduated past first-encounter on this word).
-  const [spacingTipVisible, setSpacingTipVisible] = useState(false);
-  const tipHydrate = useTipDismissalsStore((s) => s.hydrate);
-  const tipHydrated = useTipDismissalsStore((s) => s.hydrated);
-  useEffect(() => {
-    if (!tipHydrated) tipHydrate();
-  }, [tipHydrated, tipHydrate]);
-
   // Answer chimes, loaded for the length of the session (see QuizLessonScreen).
   useEffect(() => {
     void feedback.preload();
@@ -281,7 +264,6 @@ export function ReviewScreen({
     setChest(null);
     setChestVisible(false);
     setMilestoneQueue([]);
-    setSpacingTipVisible(false);
     setAnsweredBefore(0);
     setDeckStatus(undefined);
     setErrorMessage(null);
@@ -290,12 +272,6 @@ export function ReviewScreen({
 
   const currentCard = cards[index];
 
-  // Spacing-effect tip trigger. Fires on the first reappearing card
-  // (srs_box >= 2 means the user has gotten this right at least once
-  // before — they're seeing it again because of the 3-day Leitner
-  // interval that the literature calls out). Guarded by
-  // `shouldShow(SPACING_TIP_KEY)` so it never repeats once dismissed
-  // or already shown this session.
   // v0.7 §7 — skip any card the client can't render (server shouldn't
   // emit these post-refactor, but old server builds could). We do it
   // in an effect so render stays pure and the skip fires exactly once
@@ -315,15 +291,6 @@ export function ReviewScreen({
     // next render). Keying off currentCard + phase fires once per card.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCard, phase]);
-
-  useEffect(() => {
-    if (phase !== 'card' || !currentCard || !tipHydrated) return;
-    if (currentCard.srs_box < 2) return;
-    const { shouldShow, markShown } = useTipDismissalsStore.getState();
-    if (!shouldShow(SPACING_TIP_KEY)) return;
-    markShown(SPACING_TIP_KEY);
-    setSpacingTipVisible(true);
-  }, [phase, currentCard, tipHydrated]);
 
   const advance = useCallback(
     (correct: boolean, opts?: { record?: boolean }) => {
@@ -605,20 +572,6 @@ export function ReviewScreen({
       onBack={onBack}
     />
   );
-  const sharedTip = (
-    <TipPopup
-      visible={spacingTipVisible}
-      eyebrow={t('quiz:review.tipEyebrow')}
-      title={t('quiz:review.tipTitle')}
-      body={t('quiz:review.tipBody')}
-      onDismiss={() => setSpacingTipVisible(false)}
-      onDontShowAgain={() => {
-        void useTipDismissalsStore.getState().dismiss(SPACING_TIP_KEY);
-        setSpacingTipVisible(false);
-      }}
-    />
-  );
-
   if (isChoiceCard(currentCard.card_type) && currentCard.choices) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -641,7 +594,6 @@ export function ReviewScreen({
             onAnswer={(correct) => advance(correct)}
           />
         </Animated.View>
-        {sharedTip}
       </SafeAreaView>
     );
   }
@@ -652,7 +604,6 @@ export function ReviewScreen({
     <SafeAreaView style={styles.container} edges={['top']}>
       {sharedHeader}
       <QuizCardSkeleton />
-      {sharedTip}
     </SafeAreaView>
   );
 }

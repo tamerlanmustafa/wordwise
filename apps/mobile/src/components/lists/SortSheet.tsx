@@ -14,7 +14,7 @@ import { detailTitle, listName } from './listStyles';
 import type { ListKind, ListSort } from '../../core/types';
 
 const FILM_SORTS: ListSort[] = ['added', 'title', 'rating'];
-const WORD_SORTS: ListSort[] = ['due', 'added', 'alpha'];
+const WORD_SORTS: ListSort[] = ['added', 'alpha'];
 
 export function sortsFor(kind: ListKind): ListSort[] {
   return kind === 'films' ? FILM_SORTS : WORD_SORTS;
@@ -38,7 +38,6 @@ export function SortSheet({ visible, onClose, bottomOffset, kind, value, onChang
     added: t('sort.added'),
     title: t('sort.titleAZ'),
     rating: t('sort.rating'),
-    due: t('sort.due'),
     alpha: t('sort.alpha'),
   };
 

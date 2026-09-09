@@ -133,6 +133,9 @@ describe('API endpoint wrappers', () => {
       kind: 'films',
       system_key: 'reel',
       count: 5,
+      // The server stopped sending this. Kept in the fixture on purpose: an
+      // app running against an older backend still receives it, and the
+      // mapper must ignore a field it no longer models rather than choke.
       due_count: null,
       total_words: 20424,
       preview: { posters: ['/a.jpg'], words: null },
@@ -158,7 +161,6 @@ describe('API endpoint wrappers', () => {
         id: 12,
         systemKey: 'reel',
         count: 5,
-        dueCount: null,
         totalWords: 20424,
       });
       expect(summary.preview.posters).toEqual(['/a.jpg']);

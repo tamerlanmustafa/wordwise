@@ -2595,7 +2595,6 @@ function toSummary(w: ListSummaryWire): ListSummary {
     kind: w.kind,
     systemKey: w.system_key ?? null,
     count: w.count,
-    dueCount: w.due_count ?? null,
     totalWords: w.total_words ?? null,
     preview: {
       posters: w.preview?.posters ?? null,
@@ -2624,7 +2623,6 @@ function toItem(kind: ListKind, raw: Record<string, unknown>): ListItem {
     pos: (raw.pos as string | null) ?? null,
     cefr: (raw.cefr as string | null) ?? null,
     srsState: (raw.srs_state as ListWordItem['srsState']) ?? 'new',
-    nextReviewAt: (raw.next_review_at as string | null) ?? null,
     addedAt: raw.added_at as string,
   };
 }

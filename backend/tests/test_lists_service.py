@@ -118,15 +118,19 @@ class TestValidateSort:
     def test_film_sorts(self, sort):
         assert validate_sort("films", sort) == sort
 
-    @pytest.mark.parametrize("sort", ["added", "due", "alpha"])
+    @pytest.mark.parametrize("sort", ["added", "alpha"])
     def test_word_sorts(self, sort):
         assert validate_sort("words", sort) == sort
 
-    def test_due_is_rejected_on_a_films_list(self):
-        # §3: sort=due is words-only; on a films list it is a 422 rather than
-        # a silent fallback, so a client bug surfaces.
+    @pytest.mark.parametrize("kind", ["films", "words"])
+    def test_due_is_rejected_on_both_kinds(self, kind):
+        """`due` was a words sort and is gone: a list is a collection its
+        owner built, and ordering it by the SRS schedule handed them their own
+        words in whatever order the algorithm wanted. An unknown sort is a 422
+        rather than a silent fallback, so a client still sending it surfaces
+        instead of quietly getting a different order than it asked for."""
         with pytest.raises(ListError) as e:
-            validate_sort("films", "due")
+            validate_sort(kind, "due")
         assert e.value.code == "invalid_sort"
         assert e.value.status == 422
 
@@ -190,30 +194,50 @@ class TestSystemLists:
 # ── SRS state derivation ───────────────────────────────────────────────────
 
 class TestSrsState:
+    """How far along a word is — and deliberately not when it is next due.
+
+    There used to be a fourth state, `due`, which rendered as "due today" on
+    the row and made a list the reader had assembled read like a chore sheet
+    with items falling out of date. The schedule is the Practice tab's; a list
+    describes its words. The clock is gone from this function entirely, which
+    is why it no longer takes `now`.
+    """
+
     def test_no_srs_row_is_new(self):
         # Legitimate: added from Explore, never studied (§2.7).
-        assert _srs_state({"due_at": None, "learned": None, "box": None}, NOW) == "new"
+        assert _srs_state({"due_at": None, "learned": None, "box": None}) == "new"
 
-    def test_due_in_the_past_is_due(self):
+    def test_a_word_past_its_due_date_is_still_just_learning(self):
+        # The behaviour change, stated directly: this used to be "due".
         row = {"due_at": NOW - timedelta(days=1), "learned": False, "box": 2}
-        assert _srs_state(row, NOW) == "due"
+        assert _srs_state(row) == "learning"
 
-    def test_due_exactly_now_is_due(self):
-        assert _srs_state({"due_at": NOW, "learned": False, "box": 1}, NOW) == "due"
+    def test_box_one_stays_new_however_overdue(self):
+        assert _srs_state({"due_at": NOW, "learned": False, "box": 1}) == "new"
 
     def test_future_due_past_box_one_is_learning(self):
         row = {"due_at": NOW + timedelta(days=3), "learned": False, "box": 3}
-        assert _srs_state(row, NOW) == "learning"
+        assert _srs_state(row) == "learning"
 
-    def test_learned_wins_over_due(self):
+    def test_learned_wins(self):
         row = {"due_at": NOW - timedelta(days=9), "learned": True, "box": 5}
-        assert _srs_state(row, NOW) == "learned"
+        assert _srs_state(row) == "learned"
 
-    def test_naive_timestamp_is_treated_as_utc(self):
-        # Postgres can hand back a naive datetime depending on the driver;
-        # comparing it to an aware `now` would raise instead of resolving.
-        row = {"due_at": datetime(2026, 8, 15, 12, 0), "learned": False, "box": 1}
-        assert _srs_state(row, NOW) == "due"
+    def test_the_timestamp_is_never_compared_to_a_clock(self):
+        # A naive datetime used to be a real hazard here: comparing it to an
+        # aware `now` raises. Nothing compares it any more — only its presence
+        # matters — so the whole class of bug is gone rather than handled.
+        row = {"due_at": datetime(2026, 8, 15, 12, 0), "learned": False, "box": 4}
+        assert _srs_state(row) == "learning"
+
+    def test_no_state_reports_a_due_date(self):
+        rows = [
+            {"due_at": None, "learned": None, "box": None},
+            {"due_at": NOW - timedelta(days=1), "learned": False, "box": 2},
+            {"due_at": NOW + timedelta(days=3), "learned": False, "box": 3},
+            {"due_at": NOW - timedelta(days=9), "learned": True, "box": 5},
+        ]
+        assert all(_srs_state(r) != "due" for r in rows)
 
 
 # ── CEFR sources ───────────────────────────────────────────────────────────

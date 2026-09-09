@@ -13,8 +13,6 @@
     "filmCount_other": "{{count}} PELÍCULAS",
     "wordCount_one": "{{count}} PALABRA",
     "wordCount_other": "{{count}} PALABRAS",
-    "dueCount_one": "{{count}} PENDIENTE",
-    "dueCount_other": "{{count}} PENDIENTES",
     "addedFromHome": "AÑADIDO DESDE INICIO",
     "nothingSaved": "AÚN NO HAY NADA"
   },
@@ -31,8 +29,6 @@
   },
   "practice": {
     "films": "Practicar palabras de estas películas",
-    "due_one": "Practicar {{count}} pendiente",
-    "due_other": "Practicar {{count}} pendientes",
     "none": "Practicar esta lista",
     "empty": "Aún no hay nada que practicar"
   },
@@ -41,7 +37,6 @@
     "added": "Añadido recientemente",
     "titleAZ": "Título",
     "rating": "Valoración",
-    "due": "Vence antes",
     "alpha": "A–Z"
   },
   "menu": {
@@ -71,7 +66,6 @@
   "srs": {
     "new": "nueva",
     "learning": "aprendiendo",
-    "due": "toca hoy",
     "learned": "aprendida"
   }
 }

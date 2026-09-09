@@ -484,8 +484,10 @@ class TestIndexQueryBudget:
         by_key = {s.system_key: s for s in await svc.get_lists(db, 7)}
         films, words = by_key["reel"], by_key["favourites"]
         # A films row shows a poster fan and a vocabulary size; a words row
-        # shows its first three words and a due count. Never the other way.
+        # shows its first three words. Never the other way. (A words row used
+        # to carry a due count too; a list describes what is in it, not what
+        # the scheduler wants back — see `_srs_state`.)
         assert films.preview_posters is not None and films.preview_words is None
-        assert films.total_words is not None and films.due_count is None
+        assert films.total_words is not None
         assert words.preview_words is not None and words.preview_posters is None
-        assert words.due_count is not None and words.total_words is None
+        assert words.total_words is None

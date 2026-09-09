@@ -69,10 +69,9 @@ export function ListRow({ list, onPress }: Props) {
       if (list.totalWords) parts.push(t('meta.wordCount', { count: list.totalWords }));
     } else {
       parts.push(t('meta.wordCount', { count: list.count }));
-      if (list.dueCount) parts.push(t('meta.dueCount', { count: list.dueCount }));
     }
     return parts.join(META_SEPARATOR);
-  }, [isEmpty, isSystem, isFilms, list.count, list.totalWords, list.dueCount, t]);
+  }, [isEmpty, isSystem, isFilms, list.count, list.totalWords, t]);
 
   return (
     <PressablePill

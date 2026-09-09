@@ -49,7 +49,6 @@ function summary(over: Partial<ListSummary> = {}): ListSummary {
     kind: 'films',
     systemKey: null,
     count: 3,
-    dueCount: null,
     totalWords: 1200,
     preview: { posters: ['/a.jpg'], words: null },
     updatedAt: '2026-08-16T00:00:00Z',
@@ -60,7 +59,7 @@ function summary(over: Partial<ListSummary> = {}): ListSummary {
 const REEL = summary({ id: 12, systemKey: 'reel', name: 'Saved from Home' });
 const FAVS = summary({
   id: 11, kind: 'words', systemKey: 'favourites', name: 'Favourites',
-  count: 8, dueCount: 2, totalWords: null,
+  count: 8, totalWords: null,
   preview: { posters: null, words: ['reluctant'] },
 });
 
@@ -206,8 +205,8 @@ describe('removeItem', () => {
         11: {
           summary: summary({ id: 11, kind: 'words', count: 2 }),
           items: [
-            { word: 'reluctant', lemmaId: null, pos: null, cefr: null, srsState: 'new', nextReviewAt: null, addedAt: 'x' },
-            { word: 'glimpse', lemmaId: null, pos: null, cefr: null, srsState: 'new', nextReviewAt: null, addedAt: 'x' },
+            { word: 'reluctant', lemmaId: null, pos: null, cefr: null, srsState: 'new', addedAt: 'x' },
+            { word: 'glimpse', lemmaId: null, pos: null, cefr: null, srsState: 'new', addedAt: 'x' },
           ],
           nextCursor: null,
         },

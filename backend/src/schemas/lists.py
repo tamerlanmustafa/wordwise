@@ -12,7 +12,9 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 ListKind = Literal["films", "words"]
-SrsState = Literal["new", "learning", "due", "learned"]
+# No "due". A list describes how far along a word is, not when the scheduler
+# wants it back — that belongs to the Practice tab. See services/lists._srs_state.
+SrsState = Literal["new", "learning", "learned"]
 
 
 class ListPreview(BaseModel):
@@ -31,8 +33,6 @@ class ListSummaryOut(BaseModel):
     # the name from `lists.system.*` so it localises, and hides rename/delete.
     system_key: Optional[str] = None
     count: int
-    # Words lists only — how many members are due for review right now.
-    due_count: Optional[int] = None
     # Films lists only — size of the combined vocabulary of its films.
     total_words: Optional[int] = None
     preview: ListPreview
@@ -60,7 +60,6 @@ class ListWordItemOut(BaseModel):
     pos: Optional[str] = None
     cefr: Optional[str] = None
     srs_state: SrsState
-    next_review_at: Optional[datetime] = None
     added_at: datetime
 
 

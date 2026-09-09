@@ -17,10 +17,6 @@
     "wordCount_few": "{{count}} СЛОВА",
     "wordCount_many": "{{count}} СЛОВ",
     "wordCount_other": "{{count}} СЛОВА",
-    "dueCount_one": "{{count}} К ПОВТОРЕНИЮ",
-    "dueCount_few": "{{count}} К ПОВТОРЕНИЮ",
-    "dueCount_many": "{{count}} К ПОВТОРЕНИЮ",
-    "dueCount_other": "{{count}} К ПОВТОРЕНИЮ",
     "addedFromHome": "ДОБАВЛЕНО С ГЛАВНОЙ",
     "nothingSaved": "ПОКА ПУСТО"
   },
@@ -37,10 +33,6 @@
   },
   "practice": {
     "films": "Учить слова из этих фильмов",
-    "due_one": "Повторить {{count}}",
-    "due_few": "Повторить {{count}}",
-    "due_many": "Повторить {{count}}",
-    "due_other": "Повторить {{count}}",
     "none": "Учить этот список",
     "empty": "Пока нечего повторять"
   },
@@ -49,7 +41,6 @@
     "added": "Недавно добавленные",
     "titleAZ": "Название",
     "rating": "Рейтинг",
-    "due": "Скорее повторять",
     "alpha": "А–Я"
   },
   "menu": {
@@ -79,7 +70,6 @@
   "srs": {
     "new": "новое",
     "learning": "учится",
-    "due": "сегодня",
     "learned": "выучено"
   }
 }

@@ -68,7 +68,11 @@ export function ListDetailScreen({
   const destroy = useListsStore((st) => st.destroy);
   const rename = useListsStore((st) => st.rename);
 
-  const [sort, setSort] = useState<ListSort>(list.kind === 'words' ? 'due' : 'added');
+  // 'added' for both kinds now. A words list opened on "soonest due", which
+  // ordered the reader's own collection by a schedule they never set and put
+  // whatever the algorithm wanted first — the order a list is *built* in is the
+  // one its owner recognises.
+  const [sort, setSort] = useState<ListSort>('added');
   const [sortOpen, setSortOpen] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -88,16 +92,20 @@ export function ListDetailScreen({
       if (summary.systemKey === 'reel') parts.push(t('meta.addedFromHome'));
     } else {
       parts.push(t('meta.wordCount', { count: summary.count }));
-      if (summary.dueCount) parts.push(t('meta.dueCount', { count: summary.dueCount }));
     }
     return parts.join(META_SEPARATOR);
   }, [isFilms, summary, t]);
 
+  // One label for a words list, whatever its SRS schedule says. It used to
+  // read "Practice 6 due" and fall back to "Practice this list" at zero, which
+  // made the button's own name flicker with a number the reader never asked
+  // about — and told them "0 due" was a reason not to press it, when a list is
+  // something you revise when you feel like it.
   const practiceLabel = useMemo(() => {
     if (summary.count === 0) return t('practice.empty');
     if (isFilms) return t('practice.films');
-    return summary.dueCount ? t('practice.due', { count: summary.dueCount }) : t('practice.none');
-  }, [isFilms, summary.count, summary.dueCount, t]);
+    return t('practice.none');
+  }, [isFilms, summary.count, t]);
 
   const startPractice = useCallback(async () => {
     if (summary.count === 0 || starting) return;
@@ -107,7 +115,6 @@ export function ListDetailScreen({
       track('list_practice_started', {
         kind: summary.kind,
         item_count: summary.count,
-        due_count: summary.dueCount ?? 0,
       });
       onStartSession(session, list.id);
     } catch (e) {

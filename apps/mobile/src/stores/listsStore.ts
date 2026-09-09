@@ -175,7 +175,6 @@ export const useListsStore = create<ListsState>((set, get) => ({
       kind,
       systemKey: null,
       count: 0,
-      dueCount: kind === 'words' ? 0 : null,
       totalWords: kind === 'films' ? 0 : null,
       preview: { posters: kind === 'films' ? [] : null, words: kind === 'words' ? [] : null },
       updatedAt: new Date().toISOString(),

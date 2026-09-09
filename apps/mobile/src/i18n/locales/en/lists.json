@@ -13,8 +13,6 @@
     "filmCount_other": "{{count}} FILMS",
     "wordCount_one": "{{count}} WORD",
     "wordCount_other": "{{count}} WORDS",
-    "dueCount_one": "{{count}} DUE",
-    "dueCount_other": "{{count}} DUE",
     "addedFromHome": "ADDED FROM HOME",
     "nothingSaved": "NOTHING SAVED YET"
   },
@@ -31,8 +29,6 @@
   },
   "practice": {
     "films": "Practice words from these films",
-    "due_one": "Practice {{count}} due",
-    "due_other": "Practice {{count}} due",
     "none": "Practice this list",
     "empty": "Nothing to practise yet"
   },
@@ -41,7 +37,6 @@
     "added": "Recently added",
     "titleAZ": "Title",
     "rating": "Rating",
-    "due": "Soonest due",
     "alpha": "A–Z"
   },
   "menu": {
@@ -71,7 +66,6 @@
   "srs": {
     "new": "new",
     "learning": "learning",
-    "due": "due today",
     "learned": "learned"
   }
 }

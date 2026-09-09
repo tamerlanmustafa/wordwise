@@ -66,7 +66,6 @@ export interface ListSummary {
   systemKey: ListSystemKey;
   count: number;
   /** Words lists only — members due for review right now. */
-  dueCount: number | null;
   /** Films lists only — combined vocabulary size of its films. */
   totalWords: number | null;
   /** At most 3, in list order. Exactly one side is populated, per `kind`. */
@@ -85,7 +84,11 @@ export interface ListFilmItem {
   addedAt: string;
 }
 
-export type ListWordSrsState = 'new' | 'learning' | 'due' | 'learned';
+// No 'due'. A list is a collection the reader built, and telling them which
+// of their own words the scheduler wants next turned it into a chore list —
+// the Practice tab is where the schedule belongs. What is left describes the
+// word itself: never studied, in progress, or finished.
+export type ListWordSrsState = 'new' | 'learning' | 'learned';
 
 export interface ListWordItem {
   word: string;
@@ -95,7 +98,6 @@ export interface ListWordItem {
   /** `new` covers "added from Explore, never studied" — a legitimate state,
    *  not missing data. */
   srsState: ListWordSrsState;
-  nextReviewAt: string | null;
   addedAt: string;
 }
 
@@ -107,7 +109,7 @@ export interface ListDetail {
   nextCursor: string | null;
 }
 
-export type ListSort = 'added' | 'title' | 'rating' | 'due' | 'alpha';
+export type ListSort = 'added' | 'title' | 'rating' | 'alpha';
 
 // TMDB-shaped movie with optional fields our backend sometimes supplies
 // (e.g. when enriching by-level results). Used across Search/Home/Detail.

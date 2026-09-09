@@ -64,12 +64,16 @@ MAX_FILMS_PER_LIST = 500
 MAX_WORDS_PER_LIST = 2000
 MAX_NAME_LENGTH = 60
 
-# Sorts each kind accepts. `due` is meaningless for films — the route turns
-# the resulting error into a 422 rather than silently falling back, so a
-# client bug surfaces instead of quietly returning the wrong order.
+# Sorts each kind accepts. The route turns an unknown one into a 422 rather
+# than silently falling back, so a client bug surfaces instead of quietly
+# returning the wrong order.
+#
+# `due` was a words sort and is gone. A list is a collection its owner built,
+# and ordering it by the SRS schedule handed them their own words in an order
+# the algorithm chose — which is the Practice tab's job, not a list's.
 SORTS_BY_KIND: dict[str, set[str]] = {
     "films": {"added", "title", "rating"},
-    "words": {"added", "due", "alpha"},
+    "words": {"added", "alpha"},
 }
 
 DEFAULT_PAGE_SIZE = 50
@@ -176,7 +180,6 @@ class ListSummary:
     kind: str
     system_key: Optional[str]
     count: int
-    due_count: Optional[int]
     total_words: Optional[int]
     preview_posters: Optional[list[str]]
     preview_words: Optional[list[str]]
@@ -241,8 +244,6 @@ def _sort_clause(kind: str, sort: str) -> str:
         return "ORDER BY f.added_at DESC, f.tmdb_id ASC"
     if sort == "alpha":
         return "ORDER BY LOWER(w.word) ASC"
-    if sort == "due":
-        return "ORDER BY due_at ASC NULLS LAST, w.added_at DESC, w.word ASC"
     return "ORDER BY w.added_at DESC, w.word ASC"
 
 
@@ -385,12 +386,17 @@ async def _word_stats(
     word_lists: list[Any],
     now: Optional[datetime] = None,
 ) -> dict[int, dict]:
-    """count + first 3 words + due_count for every words list.
+    """count + first 3 words for every words list.
 
-    2 queries: custom-list members (with their SRS due join), favourites.
+    2 queries: custom-list members, favourites.
+
+    Neither counts what is due any more. Both used to carry a correlated
+    EXISTS over `user_words` per row purely to render "· 4 DUE" on a list row,
+    which is a per-word subquery paid on every render of the Lists tab for a
+    number the tab no longer shows.
     """
     out: dict[int, dict] = {
-        int(r.id): {"count": 0, "words": [], "due_count": 0} for r in word_lists
+        int(r.id): {"count": 0, "words": []} for r in word_lists
     }
     if not word_lists:
         return out
@@ -400,14 +406,13 @@ async def _word_stats(
     fav_row = next((r for r in word_lists if r.systemKey == "favourites"), None)
     fav_id = int(fav_row.id) if fav_row is not None else None
 
-    # (1) Custom lists. `due` is EXISTS over the user's rows for that word
-    # regardless of movie: a word can have a global row plus one per movie,
-    # and if any of them is due the word is due.
+    # (1) Custom lists. No join to `user_words` at all now — this is a count
+    # and three names, both answerable from `user_list_words` alone.
     if custom_ids:
         n = len(custom_ids)
         rows = await db.query_raw(
             f"""
-            SELECT list_id, word, cnt, due_cnt
+            SELECT list_id, word, cnt
             FROM (
                 SELECT
                     ulw.list_id,
@@ -416,26 +421,18 @@ async def _word_stats(
                         PARTITION BY ulw.list_id
                         ORDER BY ulw.position ASC, ulw.added_at DESC
                     ) AS rn,
-                    COUNT(*) OVER (PARTITION BY ulw.list_id) AS cnt,
-                    COUNT(*) FILTER (WHERE EXISTS (
-                        SELECT 1 FROM user_words uw
-                        WHERE uw.user_id = ${n + 1}
-                          AND LOWER(uw.word) = LOWER(ulw.word)
-                          AND uw.is_learned = false
-                          AND uw.srs_due_at <= ${n + 2}::timestamptz
-                    )) OVER (PARTITION BY ulw.list_id) AS due_cnt
+                    COUNT(*) OVER (PARTITION BY ulw.list_id) AS cnt
                 FROM user_list_words ulw
                 WHERE ulw.list_id IN ({_placeholders(1, n)})
             ) t
             WHERE rn <= 3
             ORDER BY list_id, rn
             """,
-            *custom_ids, user_id, when,
+            *custom_ids,
         )
         for row in rows:
             entry = out[int(row["list_id"])]
             entry["count"] = int(row["cnt"])
-            entry["due_count"] = int(row["due_cnt"])
             entry["words"].append(row["word"])
 
     # (2) The favourites adapter. `is_learned = false` is what separates the
@@ -446,13 +443,12 @@ async def _word_stats(
     if fav_id is not None:
         rows = await db.query_raw(
             f"""
-            SELECT word, cnt, due_cnt
+            SELECT word, cnt
             FROM (
                 SELECT
                     word,
                     ROW_NUMBER() OVER (ORDER BY created_at DESC, word ASC) AS rn,
-                    COUNT(*) OVER () AS cnt,
-                    COUNT(*) FILTER (WHERE srs_due_at <= $2::timestamptz) OVER () AS due_cnt
+                    COUNT(*) OVER () AS cnt
                 FROM user_words
                 WHERE user_id = $1
                   AND movie_id IS NULL
@@ -462,12 +458,11 @@ async def _word_stats(
             WHERE rn <= 3
             ORDER BY rn
             """,
-            user_id, when,
+            user_id,
         )
         entry = out[fav_id]
         for row in rows:
             entry["count"] = int(row["cnt"])
-            entry["due_count"] = int(row["due_cnt"])
             entry["words"].append(row["word"])
 
     return out
@@ -481,7 +476,6 @@ def _summary_from(row: Any, stats: dict) -> ListSummary:
         kind="films" if films else "words",
         system_key=row.systemKey,
         count=stats["count"],
-        due_count=None if films else stats["due_count"],
         total_words=stats["total_words"] if films else None,
         preview_posters=stats["posters"] if films else None,
         preview_words=None if films else stats["words"],
@@ -684,26 +678,26 @@ async def _word_items(
             "lemma_id": r["lemma_id"],
             "pos": r["pos"],
             "cefr": lemma_cefr(r["cefr_level"]),
-            "srs_state": _srs_state(r, when),
-            "next_review_at": r["due_at"],
+            "srs_state": _srs_state(r),
             "added_at": r["added_at"],
         }
         for r in rows
     ]
 
 
-def _srs_state(row: dict, now: datetime) -> str:
-    """`new` when the word has no SRS row at all, which is the normal state
-    for a word added from Explore and not yet studied."""
+def _srs_state(row: dict) -> str:
+    """How far along this word is: `new` when it has no SRS row at all, which
+    is the normal state for a word added from Explore and not yet studied.
+
+    Deliberately says nothing about *when* it is next due. A `due` state used
+    to sit between `learning` and `learned` and rendered as "due today" on the
+    row, which turned a collection the reader assembled into a chore list with
+    items falling out of date. The schedule belongs to the Practice tab; a list
+    describes its words, not their homework."""
     if row.get("learned"):
         return "learned"
-    due = row.get("due_at")
-    if due is None:
+    if row.get("due_at") is None:
         return "new"
-    if isinstance(due, datetime):
-        due_at = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
-        if due_at <= now:
-            return "due"
     box = row.get("box") or 1
     return "learning" if int(box) > 1 else "new"
 
@@ -765,7 +759,7 @@ async def create_list(
             ) from exc
         raise
 
-    empty = {"count": 0, "posters": [], "words": [], "due_count": 0, "total_words": 0}
+    empty = {"count": 0, "posters": [], "words": [], "total_words": 0}
     return _summary_from(row, empty)
 
 

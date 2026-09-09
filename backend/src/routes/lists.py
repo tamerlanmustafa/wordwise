@@ -49,7 +49,6 @@ def _out(summary: svc.ListSummary) -> ListSummaryOut:
         kind=summary.kind,
         system_key=summary.system_key,
         count=summary.count,
-        due_count=summary.due_count,
         total_words=summary.total_words,
         preview=ListPreview(
             posters=summary.preview_posters,

@@ -21,12 +21,6 @@
     "wordCount_few": "{{count}} كلمات",
     "wordCount_many": "{{count}} كلمة",
     "wordCount_other": "{{count}} كلمة",
-    "dueCount_zero": "{{count}} للمراجعة",
-    "dueCount_one": "{{count}} للمراجعة",
-    "dueCount_two": "{{count}} للمراجعة",
-    "dueCount_few": "{{count}} للمراجعة",
-    "dueCount_many": "{{count}} للمراجعة",
-    "dueCount_other": "{{count}} للمراجعة",
     "addedFromHome": "مُضاف من الرئيسية",
     "nothingSaved": "لا شيء محفوظ بعد"
   },
@@ -43,12 +37,6 @@
   },
   "practice": {
     "films": "تدرّب على كلمات هذه الأفلام",
-    "due_zero": "تدرّب على {{count}}",
-    "due_one": "تدرّب على {{count}}",
-    "due_two": "تدرّب على {{count}}",
-    "due_few": "تدرّب على {{count}}",
-    "due_many": "تدرّب على {{count}}",
-    "due_other": "تدرّب على {{count}}",
     "none": "تدرّب على هذه القائمة",
     "empty": "لا شيء للتدرّب عليه بعد"
   },
@@ -57,7 +45,6 @@
     "added": "الأحدث إضافة",
     "titleAZ": "الاسم",
     "rating": "التقييم",
-    "due": "الأقرب للمراجعة",
     "alpha": "أ–ي"
   },
   "menu": {
@@ -87,7 +74,6 @@
   "srs": {
     "new": "جديدة",
     "learning": "قيد التعلم",
-    "due": "اليوم",
     "learned": "متعلمة"
   }
 }
