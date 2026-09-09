@@ -17,7 +17,7 @@ import { Keyboard, Platform } from 'react-native';
 import { act } from 'react-test-renderer';
 
 import { renderHook, cleanupHooks } from '../../test-utils/renderHook';
-import { useKeyboardHeight } from '../useKeyboardHeight';
+import { LIFT_SPEEDUP, liftDuration, useKeyboardHeight } from '../useKeyboardHeight';
 
 type Handler = (e?: { endCoordinates?: { height: number }; duration?: number }) => void;
 
@@ -134,5 +134,58 @@ describe('useKeyboardHeight', () => {
     renderHook(() => useKeyboardHeight()).unmount();
 
     expect(removals).toHaveLength(2);
+  });
+});
+
+/**
+ * `liftDuration` — the panel gets there first.
+ *
+ * Moving in lockstep with the keyboard is what the panel used to do, and it
+ * read as the panel being dragged up by the keys rather than getting out of
+ * their way. The panel is already on screen and only has to clear a space the
+ * keyboard is about to occupy, so it should be settled before the keys land.
+ */
+describe('liftDuration', () => {
+  it('rises in a fraction of the keyboard time', () => {
+    expect(liftDuration(250, true)).toBe(150);
+    expect(liftDuration(250, true)).toBe(Math.round(250 * LIFT_SPEEDUP));
+  });
+
+  it('actually leads rather than merely differing', () => {
+    // The whole point is arriving early, so this is the property that must
+    // hold for every plausible keyboard, not just the 250ms one.
+    for (const d of [180, 220, 250, 300, 400, 550]) {
+      expect(liftDuration(d, true)).toBeLessThan(d);
+    }
+  });
+
+  it('falls at the keyboard’s own pace', () => {
+    // Going down, leading means the panel finishes its drop while the keys are
+    // still on screen — i.e. it parks itself behind a keyboard that has not
+    // left yet. Empty space is the only thing worth racing into.
+    expect(liftDuration(250, false)).toBe(250);
+    expect(liftDuration(310, false)).toBe(310);
+  });
+
+  it('does not shorten a move below the point of being seen', () => {
+    // 60% of a 150ms keyboard is 90ms, which stops reading as movement and
+    // starts reading as a cut between two positions.
+    expect(liftDuration(150, true)).toBe(120);
+  });
+
+  it('never lets the floor make the panel the slower of the two', () => {
+    // A keyboard faster than the floor is already fast enough; clamping up to
+    // 120 there would have the panel trailing the keys, which is the exact
+    // thing this function exists to prevent.
+    expect(liftDuration(90, true)).toBe(90);
+    expect(liftDuration(120, true)).toBe(120);
+  });
+
+  it('leaves a zero duration at zero', () => {
+    // Zero is iOS saying "no animation" — a hardware keyboard attaching. A
+    // fraction of no animation is still no animation, and the floor must not
+    // turn it into a 120ms slide of something that never moved.
+    expect(liftDuration(0, true)).toBe(0);
+    expect(liftDuration(0, false)).toBe(0);
   });
 });

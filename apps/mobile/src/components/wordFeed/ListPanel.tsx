@@ -39,7 +39,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, withAlpha, type ThemeColors } from '../../theme/tokens';
-import { KEYBOARD_EASING, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { KEYBOARD_EASING, liftDuration, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { directionSign } from '../../i18n/rtl';
 import type { ListSummary } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
@@ -99,10 +99,14 @@ export function ListPanel({
    * so the travel is the difference, floored at zero so it can never move
    * down for a short keyboard.
    *
-   * **It is animated, not assigned.** State lands in one frame while the
-   * keyboard spends its own ~250ms sliding; setting the offset directly made
-   * the panel teleport and then wait. Animating on the event's own duration
-   * and curve means the two arrive together.
+   * **It is animated, not assigned, and it leads.** State lands in one frame
+   * while the keyboard spends its own ~250ms sliding; setting the offset
+   * directly made the panel teleport and then wait. Animating fixes that, but
+   * animating on the keyboard's *exact* duration made the panel feel like it
+   * was being dragged along by the keys — so `liftDuration` runs it at a
+   * fraction of their time on the way up, and at their full time on the way
+   * down, where getting there first would only mean sitting behind a keyboard
+   * that has not finished leaving.
    *
    * Deliberately not gated on `creating`. That reads like the obvious guard
    * and is wrong: submitting sets it false the instant the request resolves,
@@ -112,15 +116,16 @@ export function ListPanel({
   const { height: keyboard, duration } = useKeyboardHeight();
   const lift = useRef(new Animated.Value(0)).current;
   const target = keyboard > 0 ? Math.max(0, keyboard + KEYBOARD_GAP - bottom) : 0;
+  const travel = liftDuration(duration, keyboard > 0);
 
   useEffect(() => {
     Animated.timing(lift, {
       toValue: target,
-      duration,
+      duration: travel,
       easing: KEYBOARD_EASING,
       useNativeDriver: true,
     }).start();
-  }, [target, duration, lift]);
+  }, [target, travel, lift]);
 
   /**
    * Whether the rows overflow their box — i.e. there is more list below.

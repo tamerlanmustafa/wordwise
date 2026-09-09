@@ -47,7 +47,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
-import { KEYBOARD_EASING, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { KEYBOARD_EASING, liftDuration, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { Vignette } from './Vignette';
 
 /** Pulls the top and bottom edges down past the flat scrim tint. Deeper than
@@ -102,6 +102,10 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
    * strip under its last row closes up — assigning either directly made that
    * half of the movement snap while the other gilded.
    *
+   * That duration is a fraction of the keyboard's going up (`liftDuration`)
+   * and all of it coming down. The sheet should be settled above the keys
+   * before they land, but never be down before they are.
+   *
    * Reserving the bar's height is right at rest and wrong under a keyboard:
    * the bar is behind the keys then, so the space is a gap between the sheet
    * and the keyboard rather than clearance for anything.
@@ -111,16 +115,17 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
 
   useEffect(() => {
     const up = keyboard > 0;
+    const travel = liftDuration(duration, up);
     Animated.parallel([
       Animated.timing(lift, {
         toValue: up ? keyboard + KEYBOARD_GAP : 0,
-        duration,
+        duration: travel,
         easing: KEYBOARD_EASING,
         useNativeDriver: true,
       }),
       Animated.timing(barSpace, {
         toValue: up ? 0 : bottomOffset,
-        duration,
+        duration: travel,
         easing: KEYBOARD_EASING,
         useNativeDriver: false,
       }),

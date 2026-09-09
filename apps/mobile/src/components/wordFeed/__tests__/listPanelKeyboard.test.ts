@@ -43,7 +43,16 @@ describe('the word-feed list panel clears the keyboard', () => {
     // for the keys to catch up.
     expect(panel).toContain('Animated.timing');
     expect(panel).toContain('easing: KEYBOARD_EASING');
-    expect(panel).toContain('duration,');
+  });
+
+  it('gets there ahead of the keyboard rather than alongside it', () => {
+    // Matching the keyboard's duration exactly is what it used to do, and it
+    // read as the panel being dragged up by the keys. `liftDuration` runs it
+    // at a fraction of their time on the way up — and at all of it on the way
+    // down, which is why the raw duration must not be passed straight in.
+    expect(panel).toContain('liftDuration(duration, keyboard > 0)');
+    expect(panel).toContain('duration: travel');
+    expect(panel).not.toMatch(/duration,\s*\n\s*easing: KEYBOARD_EASING/);
   });
 
   it('follows the keyboard rather than the create flag', () => {
@@ -103,6 +112,14 @@ describe('every bottom sheet clears the keyboard', () => {
     // and is driven natively. Folding the keyboard offset into it would make
     // the sheet re-animate its entrance every time the keyboard moved.
     expect(sheet).toContain('{ translateY: slide }, { translateY: Animated.multiply(lift, -1) }');
+  });
+
+  it('leads the keyboard up, with both of its values', () => {
+    // The lift and the bar strip have to keep the same time as each other or
+    // the sheet rises while the dead space under its last row is still
+    // closing — so the shortened duration is computed once and shared.
+    expect(sheet).toContain('const travel = liftDuration(duration, up)');
+    expect(sheet.match(/duration: travel/g)).toHaveLength(2);
   });
 
   it('gives back the bar strip as it rises, rather than snapping it shut', () => {

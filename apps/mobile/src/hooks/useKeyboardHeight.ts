@@ -24,6 +24,12 @@
  * arrive with it rather than before or after. iOS puts that in the event; on
  * Android there is nothing to read, so `DEFAULT_DURATION` stands in.
  *
+ * Matching that duration exactly is not the goal, though — `liftDuration`
+ * below runs the panel at a fraction of it on the way up, so the panel is out
+ * of the way before the keys arrive rather than shoulder to shoulder with
+ * them. The keyboard's timing is still the input; it is the budget the panel
+ * has to beat.
+ *
  * Deliberately not returning a ready-made `Animated.Value` of the height: the
  * two callers want different offsets from it — one is pinned above a bottom
  * bar and the other to the screen edge — so the useful shared thing is the
@@ -58,6 +64,39 @@ const DEFAULT_DURATION = 250;
  * times, not a slightly different acceleration on the way.
  */
 export const KEYBOARD_EASING = Easing.bezier(0.17, 0.59, 0.4, 0.77);
+
+/**
+ * The fraction of the keyboard's own time a panel takes to make the same trip.
+ *
+ * Matching the keyboard exactly is correct and reads as sluggish. The keys
+ * come from off-screen and are the thing being waited for; the panel is
+ * already on screen and is merely getting out of the way, so it should be
+ * clear of the space before the keys claim it rather than racing them for it.
+ * At 0.6 a 250ms keyboard gets a 150ms panel — settled, then the keys slide
+ * in under it.
+ */
+export const LIFT_SPEEDUP = 0.6;
+
+/** Below this a move stops reading as motion and starts reading as a cut. */
+const MIN_LIFT_MS = 120;
+
+/**
+ * How long a panel should take to clear a keyboard that moves in `duration`.
+ *
+ * **Only on the way up.** Going down, the panel must not outrun the keyboard:
+ * the keys take their own ~250ms to retract, and a panel that has already
+ * finished dropping is a panel sitting behind a keyboard that is still there.
+ * Leading is only ever right into empty space.
+ *
+ * The floor never makes the panel *slower* than the keyboard — a keyboard
+ * quicker than `MIN_LIFT_MS` is already fast enough that matching it is fine —
+ * and a zero duration passes through untouched, since 60% of "no animation" is
+ * still no animation.
+ */
+export function liftDuration(duration: number, rising: boolean): number {
+  if (!rising || duration <= 0) return duration;
+  return Math.min(duration, Math.max(MIN_LIFT_MS, Math.round(duration * LIFT_SPEEDUP)));
+}
 
 export interface KeyboardState {
   /** Height in points. 0 whenever no keyboard is up. */
