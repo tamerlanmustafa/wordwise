@@ -11,7 +11,8 @@
   },
   "search": {
     "placeholder": "Filmleri, kelimeleri veya oyuncuları ara…",
-    "recentlyViewed": "SON GÖRÜLENLER"
+    "recentlyViewed": "SON GÖRÜLENLER",
+    "unavailable": "Henüz mevcut değil"
   },
   "swipe": {
     "notInterested": "İlgi duymuyorum",

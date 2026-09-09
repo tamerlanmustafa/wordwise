@@ -7,7 +7,6 @@
     "hideWordTitle": "إخفاء الكلمة عالميًا؟",
     "hideWordFailed": "تعذّر إخفاء الكلمة",
     "hide": "إخفاء",
-    "scriptTooShort": "النص قصير جدًا أو غير موجود",
     "less": "أقل ▴",
     "more": "المزيد ▾",
     "sortRarest": "الأندر أولًا ⇅",
@@ -18,7 +17,13 @@
     "hideWordUnknownError": "خطأ غير معروف",
     "exampleSentenceLabel": "جملة مثال",
     "wordsOfDialogue": "{{formatted}} كلمة من الحوار",
-    "viewPoster": "عرض الملصق"
+    "viewPoster": "عرض الملصق",
+    "unavailableTitle": "لا يتوفر لدينا فيلم {{title}} بعد",
+    "unavailableBody": "لم نعثر على نص أو ترجمة لهذا الفيلم في أي من مصادرنا. ما زلنا نبحث — عد لاحقًا.",
+    "tooShortTitle": "لا يوجد ما يكفي للتعلم",
+    "tooShortBody": "عثرنا على نص لهذا الفيلم، لكنه أقصر من أن نبني منه قائمة كلمات.",
+    "loadFailedTitle": "تعذّر تحميل الفيلم",
+    "loadFailedBody": "حدث خطأ من جانبنا. تحقق من اتصالك وحاول مرة أخرى."
   },
   "preview": {
     "inYourReel": "في قائمتك",

@@ -17,13 +17,18 @@
     "noNewWords": "Não há palavras novas no seu nível",
     "quizMe": "Teste meus conhecimentos · {{count}} palavras",
     "rowsView": "Visualização por linhas",
-    "scriptTooShort": "Script muito curto ou não encontrado",
     "sortCommon": "Primeiro comum ⇅",
     "sortRarest": "O mais raro primeiro ⇅",
     "undo": "DESFAZER",
     "exampleSentenceLabel": "FRASE DE EXEMPLO",
     "wordsOfDialogue": "{{formatted}} PALAVRAS DE DIÁLOGO",
-    "viewPoster": "Ver pôster"
+    "viewPoster": "Ver pôster",
+    "unavailableTitle": "Ainda não temos {{title}}",
+    "unavailableBody": "Não encontramos roteiro nem legendas deste filme em nenhuma das nossas fontes. Continuamos procurando — volte mais tarde.",
+    "tooShortTitle": "Não há material suficiente",
+    "tooShortBody": "Encontramos um roteiro deste filme, mas é curto demais para montar uma lista de palavras.",
+    "loadFailedTitle": "Não foi possível carregar o filme",
+    "loadFailedBody": "Algo deu errado do nosso lado. Verifique sua conexão e tente novamente."
   },
   "journey": {
     "chestAdded": "Adicionado à sua coleção de revelações.",

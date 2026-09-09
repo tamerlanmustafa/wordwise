@@ -11,7 +11,8 @@
   },
   "search": {
     "placeholder": "Busca películas, palabras o actores…",
-    "recentlyViewed": "VISITADO RECIENTEMENTE"
+    "recentlyViewed": "VISITADO RECIENTEMENTE",
+    "unavailable": "Aún no disponible"
   },
   "swipe": {
     "notInterested": "No me interesa",

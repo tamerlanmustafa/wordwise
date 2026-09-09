@@ -17,13 +17,18 @@
     "noNewWords": "Senin seviyende yeni kelime yok",
     "quizMe": "Bana soru sor · {{count}} kelime",
     "rowsView": "Satır görünümü",
-    "scriptTooShort": "Komut dosyası çok kısa ya da bulunamadı",
     "sortCommon": "En yaygın olanı ⇅",
     "sortRarest": "En nadir olan ilk ⇅",
     "undo": "GERİ AL",
     "exampleSentenceLabel": "ÖRNEK CÜMLE",
     "wordsOfDialogue": "{{formatted}} DİYALOG KELİMESİ",
-    "viewPoster": "Afişi görüntüle"
+    "viewPoster": "Afişi görüntüle",
+    "unavailableTitle": "{{title}} henüz bizde yok",
+    "unavailableBody": "Bu filmin senaryosunu veya altyazısını hiçbir kaynağımızda bulamadık. Aramaya devam ediyoruz — daha sonra tekrar bak.",
+    "tooShortTitle": "Öğrenmek için yeterli değil",
+    "tooShortBody": "Bu filmin bir senaryosunu bulduk ama kelime listesi çıkarmak için fazla kısa.",
+    "loadFailedTitle": "Film yüklenemedi",
+    "loadFailedBody": "Bizim tarafımızda bir sorun oldu. Bağlantını kontrol edip tekrar dene."
   },
   "journey": {
     "chestAdded": "“Reveal” koleksiyonuna eklendi.",

@@ -616,6 +616,12 @@ class HiddenIdsResponse(BaseModel):
     tmdb_ids: List[int]
 
 
+class AvailabilityResponse(BaseModel):
+    """Which of the asked-about films we tried to ingest and gave up on."""
+
+    unavailable: List[int]
+
+
 @router.get("/watched", response_model=WatchedListResponse)
 async def list_watched(
     db: Prisma = Depends(get_db),
@@ -730,6 +736,88 @@ async def unhide_movie(
         where={"userId": user.id, "tmdbId": tmdb_id}
     )
     return None
+
+
+@router.get("/availability", response_model=AvailabilityResponse)
+async def movie_availability(
+    response: Response,
+    tmdb_ids: str = Query(..., description="Comma-separated TMDB ids, max 40"),
+    db: Prisma = Depends(get_db),
+):
+    """Which of these films the ingest worker tried and gave up on.
+
+    Search shows TMDB's whole catalogue, and we have a script for most of it
+    but not all: 196 of 4,585 queued films are parked `dead` in prod, almost
+    every one of them "no script found in any source". Before this, the only
+    way to discover that was to tap the film, wait out the fetch, and land on
+    an error — so the answer is moved to the moment the title appears in the
+    search panel.
+
+    ## Only `dead` counts
+
+    A film with no job row at all is *unknown*, not unavailable — nobody has
+    asked for it yet, and it will very likely work. Reporting those as
+    unavailable would mark most of TMDB as broken. The claim here is narrow
+    and evidence-backed: **we tried, we exhausted every source, we stopped.**
+    That is exactly what `status = 'dead'` records (see `workers/queue.py`,
+    where a job is parked after `_MAX_ATTEMPTS` and on a 404 from the script
+    fetch, which is itself keyed on `ScriptNotFoundError` rather than on
+    error strings).
+
+    ## Why this is its own endpoint
+
+    The obvious alternative is to annotate `/tmdb/search` results directly,
+    and it is wrong for one reason: that response is `public, max-age=3600`
+    and sits in Cloudflare's cache, shared between users. A staleness of one
+    hour is fine for a film's poster and title — those do not change — and
+    completely wrong for its availability, which is precisely the thing that
+    changes when the worker finally succeeds. Baking a flag into a cached
+    payload would leave "not available" on screen for an hour after it stopped
+    being true, and there would be nothing to invalidate it with.
+
+    So: separate call, `no-store`, computed from live job state on every
+    request. That is also the whole of "make the message go away when the
+    worker processes it" — there is no flag to flip, no cache to bust and no
+    push to send. The row stops being `dead` and the next search stops saying
+    so. A derived answer cannot go stale; a stored one has to be maintained.
+
+    Unauthenticated on purpose: it mirrors the search it annotates, which is
+    also open, and it discloses nothing about a user — only which films our
+    own ingest failed on.
+    """
+    ids: List[int] = []
+    for part in tmdb_ids.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not part.lstrip("-").isdigit():
+            raise HTTPException(
+                status_code=400,
+                detail="tmdb_ids must be comma-separated integers",
+            )
+        ids.append(int(part))
+
+    # Same ceiling as the TMDB batch endpoint: a search panel shows three rows
+    # and a page shows twenty, so 40 leaves room without letting a caller
+    # enumerate the catalogue one request at a time.
+    if len(ids) > 40:
+        raise HTTPException(status_code=400, detail="at most 40 tmdb_ids")
+
+    if not ids:
+        return AvailabilityResponse(unavailable=[])
+
+    # One query for the whole batch rather than a lookup per row: the caller is
+    # a search-as-you-type panel, so this runs on almost every keystroke.
+    rows = await db.query_raw(
+        "SELECT tmdb_id FROM movie_jobs WHERE status = 'dead' AND tmdb_id = ANY($1::int[])",
+        ids,
+    )
+
+    # Never cached, anywhere. See the docstring: the freshness of this answer
+    # is the feature. The edge would happily hold it for an hour otherwise,
+    # since it is a public GET.
+    response.headers["Cache-Control"] = "no-store"
+    return AvailabilityResponse(unavailable=[r["tmdb_id"] for r in rows])
 
 
 @router.get("/{movie_id}", response_model=MovieResponse)

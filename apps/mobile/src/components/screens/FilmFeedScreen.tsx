@@ -18,6 +18,7 @@ import {
   tmdbApi,
   srsApi,
   watchedApi,
+  wordwiseApi,
   type TodaysWord,
 } from '../../services/api';
 import { showToast } from '../../stores/toastStore';
@@ -96,8 +97,23 @@ export const FilmFeedScreen = ({
   const [homeTab] = useState<'level' | 'trending'>('level');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
+  /**
+   * Which suggested films our ingest tried and gave up on.
+   *
+   * Asked on every search rather than remembered anywhere. A film is only
+   * unavailable until the worker manages it, so a stored answer would go
+   * quietly wrong in the one direction that matters — telling a reader they
+   * cannot study a film we have since ingested — and nothing would be there
+   * to correct it. Derived fresh, it corrects itself: the row stops being
+   * `dead` on the server and the next keystroke stops saying so.
+   */
+  const [unavailableIds, setUnavailableIds] = useState<Set<number>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id for the in-flight search. The availability call resolves
+  // after the suggestions it describes, so two quick keystrokes can land out
+  // of order and the slower one would paint stale badges over newer rows.
+  const searchSeq = useRef(0);
   const [trendingMovies, setTrendingMovies] = useState<any[]>([]);
   const [levelSort, setLevelSort] = useState<LevelSort>(DEFAULT_FEED_FILTERS.sort);
   const [levelSortAsc, setLevelSortAsc] = useState(DEFAULT_FEED_FILTERS.sortAsc);
@@ -261,10 +277,12 @@ export const FilmFeedScreen = ({
 
     if (text.trim().length < 2) {
       setSuggestions([]);
+      setUnavailableIds(new Set());
       setShowSuggestions(false);
       return;
     }
 
+    const seq = ++searchSeq.current;
     debounceRef.current = setTimeout(async () => {
       try {
         const results = await tmdbApi.searchMovies(text.trim());
@@ -273,8 +291,26 @@ export const FilmFeedScreen = ({
         // screen listing the same search — a screen whose only job was to be
         // longer. Typing another word narrows a search faster than scrolling
         // a page of near-misses does.
-        setSuggestions(results.slice(0, SUGGESTION_LIMIT));
+        const shown = results.slice(0, SUGGESTION_LIMIT);
+        setSuggestions(shown);
         setShowSuggestions(true);
+
+        // Deliberately after the panel is on screen, not awaited with it.
+        // Search-as-you-type is the one place in the app where latency is the
+        // whole experience, and an annotation is not worth a frame of it — the
+        // rows appear immediately and the labels catch up. Cleared first so a
+        // new query cannot briefly wear the previous one's badges.
+        setUnavailableIds(new Set());
+        const ids = shown
+          .map((m: any) => m.id ?? m.tmdb_id)
+          .filter((id: unknown): id is number => typeof id === 'number');
+        wordwiseApi.movieAvailability(ids).then((unavailable) => {
+          // Only apply if this is still the query on screen. Two keystrokes in
+          // flight can land out of order, and the slower one would otherwise
+          // paint its answer over the newer results.
+          if (searchSeq.current !== seq) return;
+          setUnavailableIds(unavailable);
+        });
       } catch (err) {
         console.error('Autocomplete failed:', err);
       }
@@ -284,6 +320,7 @@ export const FilmFeedScreen = ({
   const clearSearch = () => {
     setSearchQuery('');
     setSuggestions([]);
+    setUnavailableIds(new Set());
     setShowSuggestions(false);
   };
 
@@ -474,6 +511,7 @@ export const FilmFeedScreen = ({
               blurTimerRef.current = setTimeout(() => setSearchFocused(false), 200);
             }}
             suggestions={suggestions}
+            unavailableIds={unavailableIds}
             showSuggestions={showSuggestions}
             recentlyViewed={recentlyViewed}
             onMoviePress={onSearchMoviePress}

@@ -11,7 +11,8 @@
   },
   "search": {
     "placeholder": "Поиск фильмов, слов или актёров…",
-    "recentlyViewed": "ПОСЛЕДНИЕ ПРОСМОТРЫ"
+    "recentlyViewed": "ПОСЛЕДНИЕ ПРОСМОТРЫ",
+    "unavailable": "Пока недоступен"
   },
   "swipe": {
     "notInterested": "Не интересует",

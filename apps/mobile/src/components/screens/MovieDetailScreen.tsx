@@ -38,6 +38,11 @@ type RowItem = WordInfo | IdiomInfo;
 const isIdiom = (item: RowItem): item is IdiomInfo => 'phrase' in item;
 import { useAuthStore } from '../../stores/authStore';
 import { fetchMovieVocabulary } from '../../services/movieVocabulary';
+import { EmptyState } from '../common/EmptyState';
+import {
+  movieLoadFailureCopy,
+  type MovieLoadFailure,
+} from '../movies/movieLoadFailure';
 import { offlineCache } from '../../services/offlineCache';
 import { WordRow } from '../vocabulary/WordRow';
 import { IdiomRow } from '../vocabulary/IdiomRow';
@@ -152,7 +157,17 @@ export const MovieDetailScreen = ({
   // …and `splashMounted` outlives that by the length of the doors' slide: the
   // gate says when to START opening, not when the splash is gone.
   const [splashMounted, setSplashMounted] = useState(!resumed);
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * Why the vocabulary is not on screen — a *kind*, not a message.
+   *
+   * It used to hold `err.message`, which meant the screen rendered whatever
+   * string the network layer happened to throw ("Failed to fetch script") and
+   * had no way to tell a film we will never have from a request that timed
+   * out. Both got the same paper box and the same Retry button, and for the
+   * first of those Retry can only fail again. Storing the kind lets the copy,
+   * the icon and whether a retry is even offered follow from it.
+   */
+  const [failure, setFailure] = useState<MovieLoadFailure>(null);
   const [vocabulary, setVocabulary] = useState<VocabularyResponse | null>(null);
   const [activeLevel, setActiveLevel] = useState<string>('B1');
   const [wordSortOrder, setWordSortOrder] = useState<'rare' | 'common'>('rare');
@@ -398,7 +413,12 @@ export const MovieDetailScreen = ({
     });
 
     if (result.status === 'script_too_short') {
-      if (!opts.silent) setError(t('movies:detail.scriptTooShort'));
+      if (!opts.silent) setFailure('script_too_short');
+      return null;
+    }
+
+    if (result.status === 'unavailable') {
+      if (!opts.silent) setFailure('unavailable');
       return null;
     }
 
@@ -412,7 +432,7 @@ export const MovieDetailScreen = ({
   };
 
   const loadVocabulary = async () => {
-    setError(null);
+    setFailure(null);
     bookmarkAppliedRef.current = false;
     pendingBookmarkRef.current = null;
     rowYOffsets.current = {};
@@ -464,8 +484,11 @@ export const MovieDetailScreen = ({
       if (!fresh) return;
       await applyVocabulary(fresh.vocab, fresh.movieId, fresh.difficulty);
 
-    } catch (err: any) {
-      setError(err.message || 'Failed to load vocabulary');
+    } catch {
+      // Anything that reaches here is transient by elimination — the two
+      // permanent outcomes were returned as statuses above. So the message is
+      // ours rather than the exception's, and Retry means something.
+      setFailure('transient');
     } finally {
       setLoading(false);
     }
@@ -1256,14 +1279,25 @@ export const MovieDetailScreen = ({
             card into whatever this leaves. While loading, the poster splash
             overlay is the loading view, so the body renders nothing. */}
         <View style={{ flex: 1 }}>
-        {loading ? null : error ? (
-          <View style={[styles.scriptErrorBox, { backgroundColor: tc.paper, borderColor: tc.border }]}>
-            <Text style={[styles.scriptErrorText, { color: tc.textSecondary }]}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={withTap(loadVocabulary)}>
-              <Text style={styles.retryButtonText}>{t('action.retry')}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+        {loading || !failure ? null : (() => {
+          // One shared empty state rather than a bespoke paper box, so a film
+          // we cannot teach looks like every other "nothing here" surface in
+          // the app instead of like a crash. `copy` decides everything: the
+          // words, the icon, and — the part that matters — whether Retry is
+          // offered at all. Retry on a film no source has is a button whose
+          // only possible outcome is the same screen again.
+          const copy = movieLoadFailureCopy(failure);
+          return (
+            <EmptyState
+              icon={copy.icon}
+              tone={copy.tone}
+              title={t(copy.titleKey, { title: movie.title })}
+              body={t(copy.bodyKey)}
+              ctaLabel={copy.retryable ? t('action.retry') : undefined}
+              onCta={copy.retryable ? withTap(loadVocabulary) : undefined}
+            />
+          );
+        })()}
 
         {vocabulary ? (
         // `paddingBottom` is what makes the card deck's own measurement honest:

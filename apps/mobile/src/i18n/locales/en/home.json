@@ -3,7 +3,8 @@
   "notifications": "Notifications",
   "search": {
     "placeholder": "Search films, words, or actors…",
-    "recentlyViewed": "RECENTLY VIEWED"
+    "recentlyViewed": "RECENTLY VIEWED",
+    "unavailable": "Not available yet"
   },
   "rankedList": {
     "endOfLevel": "That's everything at this level",

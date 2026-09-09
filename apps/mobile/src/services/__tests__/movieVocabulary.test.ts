@@ -15,7 +15,7 @@ jest.mock('../auth/tokenStorage', () => ({
   },
 }));
 
-import { wordwiseApi } from '../api';
+import { wordwiseApi, ScriptUnavailableError } from '../api';
 import { fetchMovieVocabulary } from '../movieVocabulary';
 
 const VOCAB = {
@@ -196,5 +196,57 @@ describe('fetchMovieVocabulary', () => {
 
     // vocab started while difficulty was still in flight.
     expect(order).toEqual(['difficulty:start', 'vocab:start']);
+  });
+
+  /**
+   * A film no source has is an *answer*, not a failed request.
+   *
+   * The backend already separates the two — `routes/scripts.py` raises 404
+   * only from `ScriptNotFoundError`, after exhausting every source, and 500
+   * for a transient outage — and it keys that on exception type rather than
+   * on error strings so a source's own "not found" text cannot be misread.
+   * The client used to flatten both into `Error('Failed to fetch script')` one
+   * line later, which is what put a Retry button in front of films where
+   * retrying can only ever fail again.
+   */
+  describe('a film we do not have', () => {
+    it('is a status, not a thrown error', async () => {
+      fetchScript.mockRejectedValue(new ScriptUnavailableError('Hook'));
+
+      const result = await fetchMovieVocabulary({ title: 'Hook', targetLang: 'ES' });
+
+      expect(result).toEqual({ status: 'unavailable' });
+    });
+
+    it('does not classify or fetch vocabulary for it', async () => {
+      // There is no script to classify. Firing either would be a wasted
+      // round-trip on the one path where we already know the answer.
+      fetchScript.mockRejectedValue(new ScriptUnavailableError('Hook'));
+
+      await fetchMovieVocabulary({ title: 'Hook', targetLang: 'ES' });
+
+      expect(classify).not.toHaveBeenCalled();
+      expect(vocabFull).not.toHaveBeenCalled();
+      expect(vocabPreview).not.toHaveBeenCalled();
+    });
+
+    it('lets a transient failure keep throwing', async () => {
+      // The distinction is the point. A timeout must stay an exception so the
+      // screen offers Retry; only the permanent miss becomes a status.
+      fetchScript.mockRejectedValue(new Error('Network request failed'));
+
+      await expect(
+        fetchMovieVocabulary({ title: 'Heat', targetLang: 'ES' }),
+      ).rejects.toThrow('Network request failed');
+    });
+
+    it('is still distinct from a script that is merely too short', async () => {
+      // We have this film; we cannot teach from it. Different sentence.
+      fetchScript.mockResolvedValue(script({ word_count: 12 }) as never);
+
+      const result = await fetchMovieVocabulary({ title: 'Heat', targetLang: 'ES' });
+
+      expect(result).toEqual({ status: 'script_too_short' });
+    });
   });
 });

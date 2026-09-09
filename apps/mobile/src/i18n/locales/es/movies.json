@@ -17,13 +17,18 @@
     "noNewWords": "No hay palabras nuevas de tu nivel",
     "quizMe": "Ponme a prueba · {{count}} palabras",
     "rowsView": "Vista de filas",
-    "scriptTooShort": "El script es demasiado corto o no se ha encontrado",
     "sortCommon": "Nombre más común ⇅",
     "sortRarest": "Lo más raro primero ⇅",
     "undo": "DESHACER",
     "exampleSentenceLabel": "FRASE DE EJEMPLO",
     "wordsOfDialogue": "{{formatted}} PALABRAS DE DIÁLOGO",
-    "viewPoster": "Ver póster"
+    "viewPoster": "Ver póster",
+    "unavailableTitle": "Todavía no tenemos {{title}}",
+    "unavailableBody": "No encontramos guion ni subtítulos de esta película en ninguna de nuestras fuentes. Seguimos buscando: vuelve más tarde.",
+    "tooShortTitle": "No hay suficiente para aprender",
+    "tooShortBody": "Encontramos un guion de esta película, pero es demasiado corto para crear una lista de palabras.",
+    "loadFailedTitle": "No se pudo cargar la película",
+    "loadFailedBody": "Algo salió mal por nuestra parte. Comprueba tu conexión e inténtalo de nuevo."
   },
   "journey": {
     "chestAdded": "Se ha añadido a tu colección de revelaciones.",

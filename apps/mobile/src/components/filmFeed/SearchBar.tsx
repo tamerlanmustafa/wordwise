@@ -74,6 +74,15 @@ interface Props {
   onBlur: () => void;
   /** The autocomplete rows. Capped by the caller — see SUGGESTION_LIMIT. */
   suggestions: any[];
+  /**
+   * TMDB ids among `suggestions` our ingest tried and gave up on.
+   *
+   * Arrives after the suggestions do — it is a second, deliberately uncached
+   * call — so a row is drawn plain first and gains its label a moment later.
+   * That ordering is the right one: showing the search instantly and
+   * annotating it beats holding three rows back behind an annotation.
+   */
+  unavailableIds?: Set<number>;
   showSuggestions: boolean;
   recentlyViewed: any[];
   onMoviePress: (movie: any) => void;
@@ -99,25 +108,53 @@ function Row({
   tc,
   s,
   onPress,
+  unavailable = false,
 }: {
   movie: any;
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
   onPress: () => void;
+  /** Our ingest tried this film and gave up — see `/movies/availability`. */
+  unavailable?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <TouchableOpacity style={s.row} onPress={withTap(onPress)} activeOpacity={0.7}>
       {movie.poster_path ? (
         <Image
           source={{ uri: `https://image.tmdb.org/t/p/w92${movie.poster_path}` }}
-          style={s.rowPoster}
+          // Dimmed rather than greyscaled: the poster is still how the reader
+          // recognises the film, and a colour filter would make the row look
+          // disabled. It is not disabled — see the comment on the label.
+          style={[s.rowPoster, unavailable && s.rowPosterDim]}
         />
       ) : (
         <View style={[s.rowPoster, { backgroundColor: tc.border }]} />
       )}
       <View style={s.rowInfo}>
-        <Text style={s.rowTitle} numberOfLines={1}>{movie.title}</Text>
-        <Text style={s.rowYear}>{movie.release_date?.slice(0, 4)}</Text>
+        <Text
+          style={[s.rowTitle, unavailable && s.rowTitleDim]}
+          numberOfLines={1}
+        >
+          {movie.title}
+        </Text>
+        {unavailable ? (
+          // Replaces the year rather than sitting beside it. The year is the
+          // disambiguator between two films of the same name, and this row is
+          // one the reader is being steered away from — the one thing worth
+          // the line is why.
+          //
+          // The row stays tappable on purpose. The film's page still has its
+          // poster, its overview and its trailer; only the vocabulary is
+          // missing, and blocking the tap would hide a film the reader
+          // recognised and asked for. This sets the expectation, it does not
+          // enforce it.
+          <Text style={s.rowUnavailable} numberOfLines={1}>
+            {t('home:search.unavailable')}
+          </Text>
+        ) : (
+          <Text style={s.rowYear}>{movie.release_date?.slice(0, 4)}</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -132,6 +169,7 @@ export function SearchBar({
   onFocus,
   onBlur,
   suggestions,
+  unavailableIds,
   showSuggestions,
   recentlyViewed,
   onMoviePress,
@@ -311,6 +349,7 @@ export function SearchBar({
                 tc={tc}
                 s={s}
                 onPress={withTap(() => onMoviePress(movie))}
+                unavailable={unavailableIds?.has(movie.id)}
               />
             ))}
           </View>
@@ -509,6 +548,19 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.textFaint,
       marginTop: 2,
       fontWeight: '600',
+    },
+    // A film we cannot teach from. Recessive, not alarming: nothing is broken
+    // and the reader did nothing wrong, so this reads as absence rather than
+    // as an error. No new colours — `textFaint` is the palette's "present but
+    // secondary", which is exactly the status being described.
+    rowPosterDim: { opacity: 0.45 },
+    rowTitleDim: { color: tc.textSecondary },
+    rowUnavailable: {
+      fontSize: 12,
+      color: tc.textFaint,
+      marginTop: 2,
+      fontWeight: '600',
+      fontStyle: 'italic',
     },
     seeAll: {
       paddingVertical: 11,

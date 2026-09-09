@@ -3,7 +3,8 @@
   "notifications": "الإشعارات",
   "search": {
     "placeholder": "ابحث عن أفلام أو كلمات أو ممثلين…",
-    "recentlyViewed": "شوهد مؤخرًا"
+    "recentlyViewed": "شوهد مؤخرًا",
+    "unavailable": "غير متاح بعد"
   },
   "rankedList": {
     "endOfLevel": "هذا كل ما لدينا في هذا المستوى",

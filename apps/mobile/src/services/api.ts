@@ -354,6 +354,29 @@ export async function enrichMoviesWithTmdb<
   );
 }
 
+/**
+ * No script exists for this film — in any source we have.
+ *
+ * A *permanent* miss, not a failure: the backend raises it only from
+ * `ScriptNotFoundError` after exhausting every source, and its ingest worker
+ * parks the job `dead` on the same signal. So it is the one script error a
+ * retry cannot fix, and the only one the reader should be told about in those
+ * terms. It carries the title so the screen can name the film rather than
+ * apologise in the abstract.
+ *
+ * It is not permanent forever — we add sources, and a film that fails today
+ * can succeed next month, which is why the copy says "yet" and why search
+ * asks `/movies/availability` fresh every time instead of remembering.
+ */
+export class ScriptUnavailableError extends Error {
+  title?: string;
+  constructor(title?: string) {
+    super(`No script available for ${title ?? 'this film'}`);
+    this.name = 'ScriptUnavailableError';
+    this.title = title;
+  }
+}
+
 // WordWise API
 export const wordwiseApi = {
   // Search for movies with scripts (requires an authenticated user — the
@@ -362,6 +385,33 @@ export const wordwiseApi = {
     const res = await authFetch(`${API_BASE_URL}/api/scripts/search?query=${encodeURIComponent(query)}`);
     if (!res.ok) throw new Error('Failed to search movies');
     return res.json();
+  },
+
+  /**
+   * Which of these TMDB ids our ingest tried and gave up on.
+   *
+   * Asked fresh rather than remembered. A film is only "unavailable" until the
+   * worker manages it, so a cached answer would be wrong in the one direction
+   * that matters — telling a reader they cannot study a film we have since
+   * ingested. The server sends `no-store` for the same reason.
+   *
+   * Best-effort by design: this decorates a search panel, and a search that
+   * still works but shows no badges is a far better outcome than a search that
+   * fails because an annotation call did. Returns an empty set on any error.
+   */
+  movieAvailability: async (tmdbIds: number[]): Promise<Set<number>> => {
+    const ids = tmdbIds.filter((id) => Number.isFinite(id));
+    if (ids.length === 0) return new Set();
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/movies/availability?tmdb_ids=${ids.join(',')}`,
+      );
+      if (!res.ok) return new Set();
+      const body = (await res.json()) as { unavailable?: number[] };
+      return new Set(body.unavailable ?? []);
+    } catch {
+      return new Set();
+    }
   },
 
   // Fetch script for a movie (requires an authenticated user)
@@ -379,6 +429,18 @@ export const wordwiseApi = {
         force_refresh: false,
       }),
     });
+    // A 404 here is not "the request failed" — it is an answer. The backend
+    // raises it only from `ScriptNotFoundError`, meaning it reached every
+    // source and none had this film, which is the same signal the ingest
+    // worker parks a job `dead` on. Everything else (a 500, a timeout, an
+    // offline device) is transient and worth retrying.
+    //
+    // Collapsing both into one `Error('Failed to fetch script')` is what put a
+    // Retry button in front of films where retrying can never work, and put
+    // the words "Failed to fetch script" in front of a reader who has done
+    // nothing wrong. The server had already made the distinction; the client
+    // was throwing it away one line before it mattered.
+    if (res.status === 404) throw new ScriptUnavailableError(movieTitle);
     if (!res.ok) throw new Error('Failed to fetch script');
     return res.json();
   },

@@ -7,7 +7,6 @@
     "hideWordTitle": "Hide word globally?",
     "hideWordFailed": "Failed to hide word",
     "hide": "Hide",
-    "scriptTooShort": "Script too short or not found",
     "less": "Less ▴",
     "more": "More ▾",
     "sortRarest": "Rarest first ⇅",
@@ -18,7 +17,13 @@
     "hideWordUnknownError": "Unknown error",
     "exampleSentenceLabel": "EXAMPLE SENTENCE",
     "wordsOfDialogue": "{{formatted}} WORDS OF DIALOGUE",
-    "viewPoster": "View poster"
+    "viewPoster": "View poster",
+    "unavailableTitle": "We don't have {{title}} yet",
+    "unavailableBody": "We couldn't find a script or subtitles for this film in any of our sources. We keep looking — check back later.",
+    "tooShortTitle": "Not enough to learn from",
+    "tooShortBody": "We found a script for this film, but it's too short to build a word list from.",
+    "loadFailedTitle": "Couldn't load this film",
+    "loadFailedBody": "Something went wrong on our end. Check your connection and try again."
   },
   "preview": {
     "inYourReel": "IN YOUR REEL",

@@ -18,7 +18,12 @@
  * Lives here rather than in the screen so it is reachable from tests without a
  * component render (see mobile testing rules in CLAUDE.md).
  */
-import { wordwiseApi, API_BASE_URL, type VocabularyResponse } from './api';
+import {
+  wordwiseApi,
+  API_BASE_URL,
+  ScriptUnavailableError,
+  type VocabularyResponse,
+} from './api';
 
 export type MovieDifficulty = { level: string; score: number };
 
@@ -29,7 +34,17 @@ export type MovieVocabularyResult =
       movieId: number;
       difficulty: MovieDifficulty | null;
     }
-  | { status: 'script_too_short' };
+  | { status: 'script_too_short' }
+  /**
+   * No script exists for this film in any source we have — a permanent miss
+   * rather than a failed request, and the one script outcome a retry cannot
+   * change. Kept distinct from `script_too_short` (we found something, it was
+   * a synopsis stub) because the two want different words on screen: one is
+   * "there is nothing here to learn from", the other is "we do not have this
+   * film". Both are distinct again from a thrown error, which is transient
+   * and *should* offer a retry.
+   */
+  | { status: 'unavailable' };
 
 /** Below this, a "script" is a synopsis stub with nothing to teach from. */
 export const MIN_SCRIPT_WORDS = 100;
@@ -55,7 +70,16 @@ export async function fetchMovieVocabulary(params: {
 }): Promise<MovieVocabularyResult> {
   const { title, tmdbId, targetLang, genreNames } = params;
 
-  const script = await wordwiseApi.fetchScript('', title, tmdbId);
+  let script;
+  try {
+    script = await wordwiseApi.fetchScript('', title, tmdbId);
+  } catch (err) {
+    // Turned into a result rather than rethrown, because it is an answer about
+    // the film and not a fault in the request. Everything else propagates and
+    // stays retryable.
+    if (err instanceof ScriptUnavailableError) return { status: 'unavailable' };
+    throw err;
+  }
   if (!script.cleaned_text || script.word_count < MIN_SCRIPT_WORDS) {
     return { status: 'script_too_short' };
   }
