@@ -73,7 +73,7 @@ import { SwipeableRow } from './SwipeableRow';
 import { filmVocabulary, type FilmVocabulary } from './filmVocabulary';
 import { LevelRing } from './LevelRing';
 import {
-  BACKDROP_OPACITY,
+  BACKDROP_TREATMENT,
   BACKDROP_W,
   CARD_BLOCK,
   CARD_EDGE,
@@ -756,12 +756,16 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       bottom: 0,
       end: 0,
       width: BACKDROP_W,
-      opacity: BACKDROP_OPACITY,
+      // Both the opacity and the grade come from cardVisuals, per theme. They
+      // are not two versions of one look: on near-black the still separates on
+      // brightness and is held back, on cream it has no brightness headroom at
+      // all and separates on colour instead. See BACKDROP_TREATMENT.
+      opacity: BACKDROP_TREATMENT[scheme].opacity,
       // Sepia stays at 0 — the still is neutral, never warm-graded.
       filter: [
-        { saturate: 0.7 },
-        { contrast: 0.95 },
-        { brightness: isDark ? 0.92 : 1.04 },
+        { saturate: BACKDROP_TREATMENT[scheme].saturate },
+        { contrast: BACKDROP_TREATMENT[scheme].contrast },
+        { brightness: BACKDROP_TREATMENT[scheme].brightness },
       ],
     },
     backdrop: { width: '100%', height: '100%' },

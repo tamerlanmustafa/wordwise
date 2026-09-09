@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   BACKDROP_OPACITY,
+  BACKDROP_TREATMENT,
   BACKDROP_W,
   EDGE_FADE_W,
   PLUS_INK_DARK,
@@ -150,6 +151,83 @@ describe('compositeOver', () => {
   it('blends at the backdrop opacity the card actually uses', () => {
     // 251 × 0.4 + 0 × 0.6 = 100.4
     expect(compositeOver([0, 0, 0], LIGHT_STOCK, BACKDROP_OPACITY)[0]).toBeCloseTo(100.4, 4);
+  });
+});
+
+/**
+ * The backdrop grade, which is where "light mode's stills look washed out"
+ * actually lived.
+ *
+ * The maths these assert, once, so the numbers above are not folklore: a still
+ * painted at opacity `o` over stock S shows as `S(1-o) + still·o`. Against
+ * near-black that lifts every non-black pixel clear of the ground; against
+ * cream it can only ever push *down* from a ground that is already almost as
+ * bright as the image's brightest pixel. So the light theme has no luminance
+ * headroom to tune, and turning the opacity up spends title legibility for
+ * almost nothing.
+ */
+describe('BACKDROP_TREATMENT', () => {
+  /** Weber contrast — the difference relative to the ground, which is what the
+   *  eye actually judges, rather than the absolute gap. */
+  function separation(still: Rgb, stock: Rgb, opacity: number): number {
+    const eff = compositeOver(still, stock, opacity);
+    return Math.abs(relativeLuminance(eff) - relativeLuminance(stock)) /
+      Math.max(relativeLuminance(stock), 1e-4);
+  }
+
+  const MID_STILL: Rgb = [110, 105, 100];
+
+  it('cannot separate a still from cream on brightness, at any opacity', () => {
+    // The reason the light theme is graded differently at all. If this ever
+    // stops being true the whole approach below can be revisited.
+    for (const o of [0.6, 0.7, 0.8, 0.9]) {
+      expect(separation(MID_STILL, LIGHT_STOCK, o)).toBeLessThan(1);
+    }
+    // The same still on the dark stock, for scale.
+    expect(separation(MID_STILL, DARK_STOCK, 0.6)).toBeGreaterThan(9);
+  });
+
+  it('turns the light theme up on colour, which is the free knob', () => {
+    // `saturate` is luminance-preserving, so it buys separation without
+    // touching how legible the dark title ink over it is. Every other knob
+    // trades one against the other.
+    expect(BACKDROP_TREATMENT.light.saturate).toBeGreaterThan(1);
+    expect(BACKDROP_TREATMENT.light.saturate).toBeGreaterThan(
+      BACKDROP_TREATMENT.dark.saturate,
+    );
+  });
+
+  it('stops short of clipping already-saturated stills', () => {
+    // Past ~1.35 the channels of a saturated poster red run out of range,
+    // clamp, and shift hue — which reads as a bad filter rather than as a
+    // brighter photograph.
+    expect(BACKDROP_TREATMENT.light.saturate).toBeLessThanOrEqual(1.3);
+  });
+
+  it('never pushes the light still toward the paper it must stand out from', () => {
+    // The old grade brightened it by 4%, moving the image toward the cream and
+    // making exactly the wash it was meant to relieve.
+    expect(BACKDROP_TREATMENT.light.brightness).toBeLessThanOrEqual(1);
+    expect(BACKDROP_TREATMENT.light.contrast).toBeGreaterThanOrEqual(
+      BACKDROP_TREATMENT.dark.contrast,
+    );
+  });
+
+  it('leaves the dark theme exactly as it shipped', () => {
+    // It never had this problem; a fix aimed at light mode must not restyle
+    // the theme most people use.
+    expect(BACKDROP_TREATMENT.dark).toEqual({
+      opacity: 0.6, saturate: 0.7, contrast: 0.95, brightness: 0.92,
+    });
+  });
+
+  it('keeps both themes on the opacity the plus-ink maths assumes', () => {
+    // `pickPlusInk` defaults to BACKDROP_OPACITY to decide the glyph's colour.
+    // If a theme ever paints at a different opacity, the ink would be chosen
+    // against a composite the card does not actually render — so either they
+    // stay equal or that call has to start passing the theme's own value.
+    expect(BACKDROP_TREATMENT.light.opacity).toBe(BACKDROP_OPACITY);
+    expect(BACKDROP_TREATMENT.dark.opacity).toBe(BACKDROP_OPACITY);
   });
 });
 

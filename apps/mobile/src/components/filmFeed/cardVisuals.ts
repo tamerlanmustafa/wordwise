@@ -49,6 +49,52 @@ function round4(n: number): number {
 export const BACKDROP_W = 206;
 export const BACKDROP_OPACITY = 0.6;
 
+/**
+ * How the still is treated before it is composited onto the card stock.
+ *
+ * ## Why the two themes cannot share one treatment
+ *
+ * The still is painted at `opacity` over the stock, so what the eye gets is
+ * `stock × (1 - opacity) + still × opacity`. On the dark theme's near-black
+ * stock (#0F1013) that puts every non-black pixel *above* the ground and the
+ * image separates on brightness alone — measured Weber contrast for a mid-tone
+ * still is ~10.7. On the light theme's cream (#FBF7EE) the same still lands
+ * *below* the ground by a fraction of it, and the Weber contrast is 0.61.
+ *
+ * That gap is not a tuning error, it is the ceiling: an image cannot be much
+ * brighter than cream, so on a light ground luminance has almost nothing left
+ * to say. Raising `opacity` barely moves it — 0.60 → 0.75 buys 0.61 → 0.71,
+ * while costing real title legibility where the scrim has eased off. Which is
+ * why the light theme's fix is **chroma, not luminance**: `saturate` is
+ * luminance-preserving, so it is the one knob that makes the still read as a
+ * photograph against paper while leaving the dark title ink over it exactly as
+ * legible as it was.
+ *
+ * So light desaturated to 0.7 and then *brightened* toward the very paper it
+ * had to stand out from — the two changes that most directly caused the wash.
+ * It now keeps its colour (1.25, measured: the point where already-saturated
+ * pixels begin to clip and shift hue) and is left alone on brightness.
+ *
+ * Dark is unchanged. It has never had this problem and every number here is
+ * the one it shipped with.
+ */
+export interface BackdropTreatment {
+  opacity: number;
+  saturate: number;
+  contrast: number;
+  brightness: number;
+}
+
+export const BACKDROP_TREATMENT: Record<'light' | 'dark', BackdropTreatment> = {
+  // Dark: the still glows off near-black, so it is held *back* — desaturated
+  // and dimmed — to keep it behind the type rather than competing with it.
+  dark: { opacity: BACKDROP_OPACITY, saturate: 0.7, contrast: 0.95, brightness: 0.92 },
+  // Light: the opposite problem, so the opposite treatment. Colour is all it
+  // has, and neutral beats flattering — a still pushed brighter than neutral
+  // is a still moving toward the paper.
+  light: { opacity: BACKDROP_OPACITY, saturate: 1.25, contrast: 1, brightness: 1 },
+};
+
 // ── Scrim ──────────────────────────────────────────────────────────────────
 
 /** Where the falloff begins. This is the readability dial — never a black layer. */
