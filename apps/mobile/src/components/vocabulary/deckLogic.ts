@@ -219,6 +219,104 @@ export function deckWordsOnly<T extends { word: string } | { phrase: string }>(
  */
 export const DECK_TARGET_CARDS = 60;
 
+/** The CEFR ladder, easiest first. One copy, so "the level above" is one idea. */
+export const CEFR_LADDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+
+/**
+ * How much of the deck may come from above the reader's level.
+ *
+ * The deck exists so a learner can follow a film's subtitles, and what stops
+ * them is the words above their level — so the stretch band leads. It is a
+ * CEILING rather than a quota, because the supply is a screenwriter's
+ * vocabulary and not ours to promise: measured across 300 scripts, a strict
+ * 70% stretch quota is satisfiable by 83% of films at B1, 18% at B2 and 1% at
+ * C1. As a ceiling it binds only where there is a surplus — which is exactly
+ * where the old rarest-first sort was over-reaching, at ~80% — and above B2 the
+ * supply constrains it first and the mix degrades on its own.
+ */
+export const DECK_STRETCH_SHARE = 0.7;
+export const DECK_STRETCH_CAP = Math.round(DECK_TARGET_CARDS * DECK_STRETCH_SHARE);
+
+/**
+ * Stretch words more common than this are skipped.
+ *
+ * The per-script CEFR classifier is noisy at the easy end: it puts `make`,
+ * `say` and `run` in B2, and a B1 reader does not need a card for "make". A
+ * floor on general frequency is a cheap, level-independent way to drop them —
+ * anything this common is either already known or misclassified, and both are
+ * wasted cards.
+ *
+ * Only the stretch band needs it. The own-level and fallback bands are ordered
+ * rarest-first, so their common words sort to the bottom and are never reached.
+ */
+export const DECK_STRETCH_RANK_FLOOR = 500;
+
+/** Anything the deck orders by general word frequency. Higher rank = rarer. */
+export interface RankedWord {
+  word: string;
+  frequency_rank?: number | null;
+}
+
+/** Unranked words sort last in both directions — an unknown is not a signal. */
+const rankOf = (item: RankedWord) => item.frequency_rank ?? null;
+
+/**
+ * Rarest first — the ordering for words AT or BELOW the reader's level.
+ *
+ * At their own level the common words are the ones they already know, so the
+ * rare tail is where the genuine gaps are.
+ */
+export function rarestFirst<T extends RankedWord>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const ar = rankOf(a);
+    const br = rankOf(b);
+    if (ar == null) return br == null ? 0 : 1;
+    if (br == null) return -1;
+    return br - ar;
+  });
+}
+
+/**
+ * Most common first — the ordering for words ABOVE it.
+ *
+ * The opposite direction, deliberately, and the reason is the goal: a stretch
+ * word is worth a card if the reader will meet it again, and the rarest words
+ * in a band are the ones they will not. Sorting a band by maximum rarity also
+ * selects for whatever is wrong with the data, because junk is rare by
+ * construction — measured on a real film, rarest-first B2 for a B1 reader
+ * opened with `psst, twig, bod, prudence, tamara, sitter, fragrant, whew`:
+ * two proper nouns, two interjections and a hapax. Common-first on the same
+ * band gives `petition, patch, nest, advisor, fury, persistent, obsession`.
+ */
+export function mostCommonFirst<T extends RankedWord>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const ar = rankOf(a);
+    const br = rankOf(b);
+    if (ar == null) return br == null ? 0 : 1;
+    if (br == null) return -1;
+    return ar - br;
+  });
+}
+
+/**
+ * The stretch band's candidates, in the order it wants them: level+1 first and
+ * exhausted before level+2 is touched, each most-common-first, each with the
+ * floor applied.
+ *
+ * Concatenated rather than merged and re-sorted, because the two levels are not
+ * interchangeable — a B1 reader should meet every worthwhile B2 word before
+ * being handed a C1 one, even though the C1 word may be the more common of the
+ * two.
+ */
+export function stretchBand<T extends RankedWord>(
+  levels: readonly (readonly T[])[],
+  floor: number = DECK_STRETCH_RANK_FLOOR,
+): T[] {
+  return levels.flatMap((level) =>
+    mostCommonFirst(level.filter((w) => (w.frequency_rank ?? -1) >= floor)),
+  );
+}
+
 export interface DeckPlan<T> {
   /** The cards to show — `target` of them whenever the pool can supply it. */
   cards: T[];
@@ -232,12 +330,30 @@ export interface DeckPlan<T> {
   scanned: T[];
 }
 
+export interface DeckBand<T> {
+  /** Candidates, already in the order this band wants them taken. */
+  items: readonly T[];
+  /**
+   * Most cards this band may contribute on the first pass, or undefined for
+   * "as many as it takes". A cap is a ceiling and never a floor: a band that
+   * cannot reach it simply contributes less, and the bands after it fill in.
+   */
+  cap?: number;
+}
+
 /**
- * Take the first `target` usable words from an ordered pool.
+ * Fill `target` cards from an ordered list of bands.
  *
- * `usable` is asked about a word, not handed the whole map, so this stays a
- * pure function of its arguments — the caller owns what "usable" means (today:
- * the backend has not told us the word has no example sentence).
+ * Two passes. The first respects every cap, which is what makes the mix a
+ * choice rather than an accident of what the film happens to contain. The
+ * second runs only if the deck is still short and ignores the caps entirely —
+ * a ceiling is there to stop one band crowding out the others, and once the
+ * others are exhausted it has nothing left to protect. Better a deck that is
+ * 90% stretch words than a deck of 34 cards.
+ *
+ * `usable` is asked about a word rather than handed the whole preview map, so
+ * this stays a pure function of its arguments — the caller owns what "usable"
+ * means (today: the backend has not told us the word has no example sentence).
  *
  * Optimism is deliberate: a word nobody has heard back about yet counts as
  * usable, so the deck is full from the first frame and only ever *replaces*
@@ -246,17 +362,39 @@ export interface DeckPlan<T> {
  * visibly, which is the same flicker in the other direction.
  */
 export function planDeck<T extends { word: string }>(
-  pool: readonly T[],
+  bands: readonly DeckBand<T>[],
   usable: (word: string) => boolean,
   target: number = DECK_TARGET_CARDS,
 ): DeckPlan<T> {
   const cards: T[] = [];
   const scanned: T[] = [];
-  for (const item of pool) {
-    if (cards.length >= target) break;
-    scanned.push(item);
-    if (usable(item.word)) cards.push(item);
-  }
+  const taken = new Set<string>();
+  const seen = new Set<string>();
+
+  const pull = (band: DeckBand<T>, cap: number | undefined) => {
+    let fromBand = 0;
+    for (const item of band.items) {
+      if (cards.length >= target) return;
+      if (cap != null && fromBand >= cap) return;
+      if (taken.has(item.word)) continue;
+      // `seen` is per-word, not per-visit: the relaxed pass walks the same
+      // bands again, and a rejected word counted twice would ask the sentence
+      // batch for it twice.
+      if (!seen.has(item.word)) {
+        seen.add(item.word);
+        scanned.push(item);
+      }
+      if (usable(item.word)) {
+        cards.push(item);
+        taken.add(item.word);
+        fromBand += 1;
+      }
+    }
+  };
+
+  for (const band of bands) pull(band, band.cap);
+  if (cards.length < target) for (const band of bands) pull(band, undefined);
+
   return { cards, scanned };
 }
 

@@ -97,15 +97,41 @@ const screen = () =>
     'utf8',
   );
 
-describe('MovieDetail feeds the deck one words-only pool', () => {
-  it('builds that pool once, from the shared helper, uncapped', () => {
-    // Uncapped is load-bearing: `planDeck` needs spare words behind the
-    // target to replace the ones with no example sentence, and a pool capped
-    // at 60 has none.
+describe('MovieDetail feeds the deck words-only bands', () => {
+  it('strips idioms from the level-tab band', () => {
+    // `activeItems` is the shared row list and keeps its idioms; the deck's
+    // copy of it must not.
+    expect(screen()).toMatch(/deckWordsOnly\(activeItems\)/);
+  });
+
+  it('builds the For You bands from a source that has no idioms in it', () => {
+    // `top_words_by_level` is words; idioms arrive in their own
+    // `vocabulary.idioms` array and are grouped into `idiomsByLevel` for the
+    // row list. Reading the word map directly is what makes the For You deck
+    // idiom-free by construction rather than by a filter someone can drop.
     const s = screen();
-    expect(s).toMatch(/deckWordsOnly\(suggestedWords\)/);
-    expect(s).toMatch(/deckWordsOnly\(activeItems\)/);
+    const bands = s.slice(s.indexOf('const deckBands = useMemo'), s.indexOf('const deckPool'));
+    expect(bands).toMatch(/vocabulary\.top_words_by_level\[level\]/);
+    expect(bands).not.toMatch(/idiomsByLevel/);
+  });
+
+  it('leaves the bands uncapped', () => {
+    // Load-bearing: `planDeck` applies the target and the stretch ceiling
+    // AFTER the usability filter, so every band needs spares behind it. A band
+    // capped at its own quota puts the ceiling back in front of the filter,
+    // which is the arrangement that made the card count shrink on screen.
+    const s = screen();
     expect(s).not.toMatch(/deckWordsOnly\(suggestedWords, SUGGESTED_CAP\)/);
+    expect(s).toMatch(/cap: DECK_STRETCH_CAP/);
+  });
+
+  it('sorts the two halves of the deck in opposite directions', () => {
+    // Above the reader: most common first, floored — the words they will meet
+    // again. At and below: rarest first — where their gaps are.
+    const s = screen();
+    expect(s).toMatch(/stretchBand\(\[at\(idx \+ 1\), at\(idx \+ 2\)\]\)/);
+    expect(s).toMatch(/\{ items: rarestFirst\(at\(idx\)\) \}/);
+    expect(s).toMatch(/rarestFirst\(at\(idx - 1\)\), \.\.\.rarestFirst\(at\(idx - 2\)\)/);
   });
 
   it('batches example sentences for exactly the prefix the plan walked', () => {
@@ -118,6 +144,7 @@ describe('MovieDetail feeds the deck one words-only pool', () => {
   it('derives the deck from the plan, not from the mixed lists', () => {
     const s = screen();
     expect(s).toMatch(/const deckItems = deckPlan\.cards;/);
+    expect(s).toMatch(/planDeck\(\s*\n\s*deckBands,/);
     expect(s).not.toMatch(/wordsView === 'foryou' \? suggestedVisible : activeItems/);
   });
 

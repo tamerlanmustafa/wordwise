@@ -65,11 +65,16 @@ import {
   parseViewMode,
   pickDefaultLevel,
   planDeck,
+  rarestFirst,
   resolveBookmarkLevel,
   resumeMarker,
+  stretchBand,
+  CEFR_LADDER,
+  DECK_STRETCH_CAP,
   DECK_TARGET_CARDS,
   DEFAULT_VIEW_MODE,
   VIEW_MODE_KEY,
+  type DeckBand,
   type StoredMovieBookmark,
   type VocabViewMode,
 } from '../vocabulary/deckLogic';
@@ -744,14 +749,13 @@ export const MovieDetailScreen = ({
   }, [activeWords, activeIdioms, wordSortOrder]);
 
   const SUGGESTED_CAP = 60;
-  const LEVEL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   type SuggestedItem = (WordInfo & { cefr_level: string }) | (IdiomInfo & { cefr_level: string });
   const suggestedWords = useMemo<SuggestedItem[]>(() => {
     if (!vocabulary) return [];
-    const idx = LEVEL_ORDER.indexOf(userProficiency);
+    const idx = CEFR_LADDER.indexOf(userProficiency as (typeof CEFR_LADDER)[number]);
     if (idx < 0) return [];
-    const targetLevels = new Set([userProficiency]);
-    if (idx + 1 < LEVEL_ORDER.length) targetLevels.add(LEVEL_ORDER[idx + 1]);
+    const targetLevels = new Set<string>([userProficiency]);
+    if (idx + 1 < CEFR_LADDER.length) targetLevels.add(CEFR_LADDER[idx + 1]);
 
     // Known words are NOT skipped here either, and this is the less obvious
     // half of it: "For You" looks like a ranking, where demoting a word the
@@ -787,24 +791,59 @@ export const MovieDetailScreen = ({
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
   /**
-   * The deck's candidate pool — single words, never idioms or phrasal verbs,
-   * and deliberately UNCAPPED.
+   * The deck's candidate bands, in the order the deck should draw from them.
    *
-   * The cap moved downstream to `deckPlan`, and that move is the fix for the
-   * number that would not sit still. Capping here and filtering after meant
-   * the deck was "60 words, minus however many turn out to have no example
-   * sentence" — a figure that only becomes known while the reader is looking
-   * at it. The pool runs to hundreds of words per level, so there is always a
-   * replacement; taking 60 usable ones instead of the first 60 costs nothing.
+   * ## For You: stretch, then consolidate, then fall back
+   *
+   *   1. **Stretch** — the level above, exhausted before the level above that,
+   *      each MOST-COMMON-FIRST and skipping anything below the rarity floor.
+   *      Capped at `DECK_STRETCH_CAP` (70%). These are the words that stop a
+   *      reader following the subtitles, which is what the deck is for.
+   *   2. **Own level** — RAREST first. The opposite direction on purpose: at
+   *      their own level the common words are already known, so the rare tail
+   *      is where the real gaps are.
+   *   3. **Below** — one level down, then two, rarest first. Only reached when
+   *      the two bands above cannot fill 60, which measurement says is every
+   *      film for a C1 reader (median C2 band: 6 words) and most for a B2 one.
+   *
+   * Uncapped bands, deliberately: `planDeck` applies the target and the 70%
+   * ceiling AFTER the sentence filter, so each band needs spares behind it.
+   * Capping here would put the ceiling back in front of the filter, which is
+   * the arrangement that made the card count shrink while the reader watched.
+   *
+   * ## A level tab: one band, the reader's own sort
+   *
+   * They asked for that level by name, so there is no mix to compose and no
+   * stretch to cap — just the level, in whatever order `wordSortOrder` says.
    *
    * `suggestedWords` and `activeItems` keep their idioms: they feed the row
    * list, the "items vs words" count and `freqFillMap`, none of which is the
-   * deck. Cutting at the source would have deleted a feature to fix a filter.
+   * deck. `top_words_by_level` carries no idioms at all, so the For You bands
+   * are word-only by construction.
    */
-  const deckPool = useMemo<(WordInfo & { cefr_level?: string })[]>(
-    () => (wordsView === 'foryou' ? deckWordsOnly(suggestedWords) : deckWordsOnly(activeItems)),
-    [wordsView, suggestedWords, activeItems],
-  );
+  type DeckWord = WordInfo & { cefr_level?: string };
+  const deckBands = useMemo<DeckBand<DeckWord>[]>(() => {
+    if (wordsView !== 'foryou') return [{ items: deckWordsOnly(activeItems) }];
+    if (!vocabulary) return [];
+    const idx = CEFR_LADDER.indexOf(userProficiency as (typeof CEFR_LADDER)[number]);
+    if (idx < 0) return [];
+    const at = (i: number): DeckWord[] => {
+      const level = CEFR_LADDER[i];
+      if (!level) return [];
+      return (vocabulary.top_words_by_level[level] || []).map((w) => ({
+        ...w,
+        cefr_level: level,
+      }));
+    };
+    return [
+      { items: stretchBand([at(idx + 1), at(idx + 2)]), cap: DECK_STRETCH_CAP },
+      { items: rarestFirst(at(idx)) },
+      { items: [...rarestFirst(at(idx - 1)), ...rarestFirst(at(idx - 2))] },
+    ];
+  }, [wordsView, vocabulary, userProficiency, activeItems]);
+
+  /** Flattened, for the one question that is about supply rather than order. */
+  const deckPool = useMemo(() => deckBands.flatMap((b) => b.items), [deckBands]);
 
   // Defer the heavy list inputs so tab taps update the header immediately
   // while the row re-render runs at lower priority on the next tick.
@@ -894,11 +933,11 @@ export const MovieDetailScreen = ({
   const deckPlan = useMemo(
     () =>
       planDeck(
-        deckPool,
+        deckBands,
         (word) => hasRenderableSentence(word, sentencePreviews),
         DECK_TARGET_CARDS,
       ),
-    [deckPool, sentencePreviews],
+    [deckBands, sentencePreviews],
   );
 
   // Chunked so fast-path words paint progressively. A single big batch blocks
