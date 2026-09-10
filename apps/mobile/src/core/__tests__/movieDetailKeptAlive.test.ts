@@ -101,7 +101,7 @@ describe('SwipeBackView stands down without unmounting', () => {
     // looks identical to a working one and is the whole bug.
     const body = host().slice(host().indexOf('if (children == null) return null;'));
     expect(body.match(/return \(/g) ?? []).toHaveLength(1);
-    expect(body).toMatch(/style=\{empty \? styles\.hidden : styles\.fill\}/);
+    expect(body).toMatch(/style=\{empty \? styles\.hidden : styles\.overlay\}/);
     expect(body).toMatch(/pointerEvents=\{empty \? 'none' : 'auto'\}/);
   });
 
@@ -110,6 +110,26 @@ describe('SwipeBackView stands down without unmounting', () => {
     // host that still took part in layout would halve the height of the tab
     // showing through.
     expect(host()).toMatch(/hidden: \{ display: 'none' \}/);
+  });
+
+  it('lays the deep screen OVER the tab layer, not beside it', () => {
+    // What makes the edge-swipe uncover anything. As a flex sibling exactly one
+    // of the two could be laid out, so the tab underneath was `display:none`
+    // for the whole gesture and the drag revealed the app's bare background —
+    // and the destination then had to be laid out and painted on the frame the
+    // animation ended, which is the one frame that could least afford it.
+    const s = host();
+    expect(s).toMatch(/overlay: StyleSheet\.absoluteFillObject/);
+    // …and App has to keep that tab laid out, or there is nothing to uncover.
+    expect(app()).toMatch(/visible=\{tabOf\(currentScreen\) === 'lists'\}/);
+    expect(app()).toMatch(/visible=\{tabOf\(currentScreen\) === 'films'\}/);
+  });
+
+  it('takes the movie unmount off the tab tap that pays for it', () => {
+    // Clearing `selectedMovie` unmounts a whole screen. Doing it in the same
+    // urgent update as the tab switch made Explore — the only tab that clears
+    // it — visibly slower to respond than every other tab.
+    expect(app()).toMatch(/startTransition\(\(\) => \{\s*\n\s*setSelectedMovie\(null\);/);
   });
 
   it('keeps the native views alive while hidden', () => {

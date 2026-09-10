@@ -165,13 +165,24 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
   // `collapsable={false}` keeps the native views (and any ScrollView offset
   // inside them) alive through the detour — the same bargain `KeepAlive` makes.
   //
-  // Nothing is painted behind the sliding screen on purpose: the drag uncovers
-  // whatever the app layers under this one — the tab layer, or App's themed
-  // root background. A backdrop of our own here would sit *over* the tab layer
-  // and hide it.
+  // An OVERLAY, not a flex sibling. That is what lets the drag actually uncover
+  // something: the tab this screen belongs to stays laid out underneath (see
+  // App's KeepAlive predicates, which key on `tabOf(currentScreen)` rather than
+  // on an exact match), so half a swipe shows half the destination the way
+  // every native navigator does.
+  //
+  // It used to be `flex: 1` alongside the tab layer, which meant exactly one of
+  // the two could be laid out at a time — so the tab underneath was
+  // `display: none` for the whole gesture and the drag revealed App's bare
+  // background. Worse, the destination then had to be laid out and painted at
+  // the instant the animation finished, which is the one frame that could least
+  // afford it, and read as the whole gesture being sluggish.
+  //
+  // Every deep screen paints an opaque root, so nothing shows through when the
+  // drag is at rest.
   return (
     <View
-      style={empty ? styles.hidden : styles.fill}
+      style={empty ? styles.hidden : styles.overlay}
       collapsable={false}
       pointerEvents={empty ? 'none' : 'auto'}
       {...pan.panHandlers}
@@ -185,5 +196,6 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  overlay: StyleSheet.absoluteFillObject,
   hidden: { display: 'none' },
 });

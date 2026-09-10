@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { StatusBar, Alert, Platform, UIManager, View, InteractionManager, BackHandler } from 'react-native';
@@ -323,9 +323,19 @@ export default function App() {
   };
 
   const navigateToFilms = () => {
-    setSelectedMovie(null);
-    setResolvedMovieId(null);
     setCurrentScreen('films');
+    // Deferred, and this is the whole reason the Explore tab used to take a
+    // visible moment to respond. Clearing `selectedMovie` unmounts the
+    // kept-alive movie detail — a screen with a card deck, a poster and a
+    // scroll view in it — and doing that in the same urgent update as the tab
+    // switch meant the tap paid for a teardown before it could paint anything.
+    // As a transition it happens after the new tab is on screen, where nobody
+    // is waiting on it. No other tab tap does this, which is exactly why
+    // Explore was the one that felt slow.
+    startTransition(() => {
+      setSelectedMovie(null);
+      setResolvedMovieId(null);
+    });
     // Home stays mounted under KeepAlive, so its mount-time refresh won't
     // re-run — recompute here so the bell dot reflects e.g. a just-finished
     // review session.
@@ -1057,13 +1067,25 @@ export default function App() {
             visit and then kept alive (hidden via display:none) so switching
             tabs — or opening a detail screen and pressing back — retains its
             scroll position and list/data state instead of remounting. Deep
-            screens render in the ternary below, on top of this layer. */}
-        <KeepAlive visible={currentScreen === 'films'}>
+            screens render in the overlay below, on top of this layer.
+            ────────────────────────────────────────────────────────────────
+            Visibility keys on `tabOf(currentScreen)`, not on an exact match,
+            so the tab a deep screen BELONGS to stays laid out underneath it.
+            That is what the edge-swipe-back uncovers: with an exact match the
+            tab was `display:none` for the whole gesture, so dragging a list
+            aside revealed the app's bare background instead of the Lists tab,
+            and the destination then had to be laid out and painted on the one
+            frame the animation ended — which is what made the whole gesture
+            feel sluggish.
+
+            `active` still keys on the exact screen: it means "the user is
+            looking at this", and a tab under an opaque deep screen is not. */}
+        <KeepAlive visible={tabOf(currentScreen) === 'films'}>
           <FilmFeedScreen onMoviePress={navigateToMovie} user={user} targetLanguage={targetLanguage} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Explore keeps its place in KeepAlive so the feed doesn't lose
             its scroll position when the user dips into Profile. */}
-        <KeepAlive visible={currentScreen === 'words' || currentScreen === 'journey'}>
+        <KeepAlive visible={tabOf(currentScreen) === 'words' || currentScreen === 'journey'}>
           <WordFeedScreen
             active={currentScreen === 'words'}
             proficiencyLevel={user?.proficiency_level}
@@ -1071,12 +1093,12 @@ export default function App() {
             bottomOffset={barHeight}
           />
         </KeepAlive>
-        <KeepAlive visible={currentScreen === 'practice'}>
+        <KeepAlive visible={tabOf(currentScreen) === 'practice'}>
           <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Lists keeps its place in KeepAlive so the selected segment and
             scroll position survive a tab switch, same as Home and Explore. */}
-        <KeepAlive visible={currentScreen === 'lists'}>
+        <KeepAlive visible={tabOf(currentScreen) === 'lists'}>
           <ListsIndexScreen
             active={currentScreen === 'lists'}
             onOpenList={navigateToListDetail}
