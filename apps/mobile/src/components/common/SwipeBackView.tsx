@@ -18,14 +18,17 @@
  *     mid-screen reaches the child first, so the word-card deck, the mix bar and
  *     the feed rows keep their own horizontal drags.
  *
- *   • On commit the screen is left translated off-screen and reset during the
- *     *next render*, when `screenKey` changes. Resetting in the animation
- *     callback instead would snap the outgoing screen back to centre for the one
- *     frame before React re-renders — the same ordering trap SwipeableRow
- *     documents for recycled rows.
+ *   • On commit the screen is left translated off-screen and reset when
+ *     `screenKey` changes — in a LAYOUT EFFECT, so the reset lands in the same
+ *     frame as the style that acts on it. Both of the other two places this
+ *     could go are wrong, and each was tried: the animation callback snaps the
+ *     outgoing screen back to centre for the frames before React re-renders
+ *     (the ordering trap SwipeableRow documents for recycled rows), and the
+ *     render phase snaps it back for the frames before React *commits*, which
+ *     under concurrent rendering measured 39ms. See the effect for the trace.
  */
 
-import { useMemo, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { directionSign, isRTL } from '../../i18n/rtl';
 import {
@@ -76,15 +79,44 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
   const widthRef = useRef(width);
   widthRef.current = width;
 
-  // Navigation happened — put the screen back at rest before it paints. During
-  // render on purpose (see the header note); writing to a ref-held
-  // Animated.Value is not React state, so there is nothing to loop on.
+  // Mirrors the prop for the responder's failsafe below, which runs on a timer
+  // and must be able to tell "navigation happened" from "it didn't" *before*
+  // the commit lands. Same shape as `onBackRef` / `widthRef` above.
+  const latestKey = useRef(screenKey);
+  latestKey.current = screenKey;
+
+  /**
+   * Navigation happened — put the drag offset back to rest.
+   *
+   * In a LAYOUT EFFECT, which is the whole point: it runs after React has
+   * committed this render and before the frame is drawn, so the reset lands in
+   * the same frame as the style that acts on it.
+   *
+   * This used to run during render, and that was a real bug rather than a
+   * style preference. On a committed swipe the outgoing screen sits at
+   * `translate = width` (off-screen) and the same render both snaps it back to
+   * 0 and marks the host `display:none` — but only the first of those takes
+   * effect during render. Writing an Animated.Value is an immediate native
+   * side effect; `display:none` waits for the commit. Under concurrent React
+   * those are not the same tick, and measured on device they were **39ms
+   * apart**:
+   *
+   *     +680ms  translate=402   (off-screen, animation finished)
+   *     +683ms  reset in render
+   *     +684ms  translate=0     ← centred again, and still visible
+   *     +723ms  commit          ← display:none finally applied
+   *
+   * so the film you had just swiped away flashed back over the feed for two or
+   * three frames. The render-phase write was also being executed twice per
+   * navigation, which is what a side effect in render gets you.
+   */
   const shownKey = useRef(screenKey);
-  if (shownKey.current !== screenKey) {
+  useLayoutEffect(() => {
+    if (shownKey.current === screenKey) return;
     shownKey.current = screenKey;
     translate.stopAnimation();
     translate.setValue(0);
-  }
+  }, [screenKey, translate]);
 
   // On a root tab the deep-screen layer renders nothing and the live tab shows
   // through from the KeepAlive layer underneath, so the host stands down rather
@@ -132,11 +164,17 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
             const back = onBackRef.current;
             back?.();
             // Failsafe: if that back handler did not actually change the
-            // screen, the offset would strand this screen off-canvas. The
-            // render-time reset above clears `shownKey` first when navigation
-            // did happen, so this only fires in the degenerate case.
+            // screen, the offset would strand this screen off-canvas.
+            //
+            // It asks `latestKey`, not `shownKey`. `shownKey` is only updated
+            // once the commit lands, and this timer can easily beat the commit
+            // — measured at 39ms behind — so reading it here would see a
+            // screen that had in fact navigated, snap a still-visible view
+            // back to centre, and reintroduce exactly the flash the layout
+            // effect above exists to remove. `latestKey` mirrors the prop, so
+            // it is already correct by the time React has rendered.
             setTimeout(() => {
-              if (shownKey.current === screenKey) translate.setValue(0);
+              if (latestKey.current === screenKey) translate.setValue(0);
             }, 0);
           });
         },

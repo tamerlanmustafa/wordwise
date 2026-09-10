@@ -132,6 +132,42 @@ describe('SwipeBackView stands down without unmounting', () => {
     expect(app()).toMatch(/startTransition\(\(\) => \{\s*\n\s*setSelectedMovie\(null\);/);
   });
 
+  it('resets the drag offset in a layout effect, never during render', () => {
+    // The film flashing back over the feed after a committed swipe.
+    //
+    // On commit the outgoing screen sits at `translate = width`, and the render
+    // that follows both snaps it back to 0 and marks the host `display:none`.
+    // Only the first of those takes effect during render: writing an
+    // Animated.Value is an immediate native side effect, while `display:none`
+    // waits for the commit. Under concurrent React they are not the same tick —
+    // measured on device at **39ms apart**, two or three frames of the film
+    // sitting centred over the feed you had just swiped to.
+    //
+    // A layout effect runs after the commit and before the frame is drawn, so
+    // the reset and the style that acts on it land together.
+    const s = host();
+    const body = s.slice(s.indexOf('export function SwipeBackView'));
+    const effect = body.match(
+      /useLayoutEffect\(\(\) => \{[\s\S]*?translate\.setValue\(0\);[\s\S]*?\}, \[screenKey, translate\]\);/,
+    );
+    expect(effect).not.toBeNull();
+    // And it must not ALSO be done in the render body, which is where it was.
+    // `shownKey.current = screenKey` outside an effect is the exact shape.
+    const beforeFirstHook = body.slice(0, body.indexOf('useLayoutEffect'));
+    expect(beforeFirstHook).not.toMatch(/translate\.setValue\(0\)/);
+  });
+
+  it('the commit failsafe reads the prop mirror, not the committed key', () => {
+    // `shownKey` only advances once the commit lands, and the failsafe runs on
+    // a zero-delay timer that beats the commit. Reading `shownKey` there would
+    // conclude "navigation did not happen" for a screen that had in fact
+    // navigated, snap a still-visible view back to centre, and put the flash
+    // straight back — from the other direction.
+    const s = host();
+    expect(s).toMatch(/latestKey\.current = screenKey;/);
+    expect(s).toMatch(/if \(latestKey\.current === screenKey\) translate\.setValue\(0\);/);
+  });
+
   it('keeps the native views alive while hidden', () => {
     // The point of not unmounting is the state inside — including the scroll
     // offset of the film's ScrollView, which only survives if the native view
