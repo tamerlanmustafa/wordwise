@@ -106,7 +106,13 @@ function WordFeedScreenInner({
   // Only word lists can hold a lemma, so film lists are filtered out rather
   // than shown as rows that cannot work.
   const allLists = useListsStore((st) => st.lists);
-  const listsLoading = useListsStore((st) => st.status === 'loading');
+  // `!== 'ready'`, not `=== 'loading'`: the store is created at `'idle'` and
+  // only reaches `'loading'` once `hydrate` has awaited its way to
+  // `fetchLists`. Asking for `'loading'` misses that whole window, and
+  // ListPanel renders `loading && lists.length === 0` — so a reader who opened
+  // the panel early was told they had no lists rather than shown a spinner.
+  // Same blind spot as ListsIndexScreen's, same store.
+  const listsLoading = useListsStore((st) => st.status !== 'ready');
   const wordLists = useMemo(() => allLists.filter((l) => l.kind === 'words'), [allLists]);
 
   const mixOpen = openPanel === 'mix';

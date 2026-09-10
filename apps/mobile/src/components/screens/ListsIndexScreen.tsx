@@ -148,7 +148,30 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
     onOpenList(list);
   }, [onOpenList]);
 
-  const loading = status === 'loading' && lists.length === 0;
+  /**
+   * Nothing to show yet, and we have not finished trying.
+   *
+   * `status !== 'ready'` rather than `status === 'loading'`, and the
+   * difference is a real bug rather than tidying. The store is created at
+   * `'idle'` and only reaches `'loading'` inside `fetchLists`, which `hydrate`
+   * calls after two awaits (the segment preference, then the cached index). So
+   * for the whole window between this screen mounting and that first await
+   * resolving, the status is `'idle'` — which the old test read as "not
+   * loading", fell through to the loaded branch, and rendered an **empty
+   * list**.
+   *
+   * Measured on the first tap of Lists after a cold start: `n=0 status=idle`
+   * at +157ms, rows at +198ms. Forty-one milliseconds of a reader being shown
+   * that they have no lists. That is the benign case — it is bounded by a
+   * disk read. With a cold cache the same window is bounded by the *network*
+   * instead, so a reader with a slow connection is told they have nothing for
+   * as long as the request takes.
+   *
+   * The skeleton is what that moment is for: it draws at the true row height
+   * (see `INITIAL_ROWS`), so filling it in is content arriving rather than the
+   * page changing shape.
+   */
+  const loading = status !== 'ready' && lists.length === 0;
 
   const keyOf = useCallback((list: ListSummary) => String(list.id), []);
 
