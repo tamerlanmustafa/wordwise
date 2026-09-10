@@ -5,17 +5,14 @@
  * Not render tests (mobile testing is logic + integration only — see
  * CLAUDE.md). What can actually regress here is arithmetic: a capsule that
  * overlaps the home indicator, a reserved height that disagrees with what
- * screens pad by, or a lens parked under the wrong cell.
+ * screens pad by.
  */
 
 import {
   CAPSULE_HEIGHT,
-  LENS_INSET_H,
-  LENS_INSET_V,
   SIDE_MARGIN,
   TOP_GAP,
   bottomMarginFor,
-  lensGeometry,
   navBarMetrics,
 } from '../navBarMetrics';
 
@@ -122,81 +119,5 @@ describe('reserved height is stable', () => {
     // Apple's 44pt minimum target — the capsule must not be squeezed below it.
     expect(navBarMetrics(INSET_FLAT, true).barHeight).toBeGreaterThanOrEqual(44);
     expect(navBarMetrics(INSET_FLAT, false).barHeight).toBeGreaterThanOrEqual(44);
-  });
-});
-
-describe('lensGeometry', () => {
-  const TAB_COUNT = 5;
-  const ROW = 320 - SIDE_MARGIN * 2; // iPhone SE, the narrowest we support
-  const CELL = ROW / TAB_COUNT;
-
-  /** Cell frames as React Native reports them — always left-origin, in both
-   *  reading directions. `order` is the physical left-to-right placement. */
-  const frameAt = (order: number) => ({ x: order * CELL, width: CELL });
-
-  it('returns null before the cell has been laid out', () => {
-    expect(lensGeometry({ x: 0, width: 0 })).toBeNull();
-  });
-
-  it('returns null when nothing is measured yet', () => {
-    expect(lensGeometry(undefined)).toBeNull();
-  });
-
-  it('returns null when no tab is active', () => {
-    // Deep screens (movie detail) have no selected tab. A lens parked under an
-    // arbitrary cell would claim the user is somewhere they are not.
-    expect(lensGeometry(null)).toBeNull();
-  });
-
-  it('centres the lens in the cell it was given', () => {
-    for (let i = 0; i < TAB_COUNT; i++) {
-      const cell = frameAt(i);
-      const lens = lensGeometry(cell)!;
-      expect(lens.x + lens.width / 2).toBeCloseTo(cell.x + cell.width / 2, 5);
-    }
-  });
-
-  it('keeps every lens inside the row, first cell to last', () => {
-    for (let i = 0; i < TAB_COUNT; i++) {
-      const lens = lensGeometry(frameAt(i))!;
-      expect(lens.x).toBeGreaterThanOrEqual(0);
-      expect(lens.x + lens.width).toBeLessThanOrEqual(ROW);
-    }
-  });
-
-  it('never overlaps the neighbouring cell', () => {
-    const a = lensGeometry(frameAt(0))!;
-    const b = lensGeometry(frameAt(1))!;
-    expect(a.x + a.width).toBeLessThanOrEqual(b.x);
-  });
-
-  it('follows the measured frame under RTL instead of the tab index', () => {
-    // RTL reverses `flexDirection: row`, so the FIRST tab (Home) is drawn at
-    // the far right and the LAST (Profile) at the far left. Deriving x from
-    // the index would light the mirrored tab; measurement gets it right, and
-    // this is the case that made the index version wrong.
-    const homeUnderRtl = frameAt(TAB_COUNT - 1); // Home, drawn rightmost
-    const lens = lensGeometry(homeUnderRtl)!;
-    expect(lens.x).toBeGreaterThan(ROW / 2);
-    expect(lens.x + lens.width).toBeLessThanOrEqual(ROW);
-  });
-
-  it('is a pure function of the frame — direction is never an input', () => {
-    // The same frame must produce the same lens no matter which tab it is or
-    // which way the row was laid out.
-    expect(lensGeometry({ x: 40, width: 60 })).toEqual(lensGeometry({ x: 40, width: 60 }));
-  });
-
-  it('stays positive-width on the narrowest device', () => {
-    expect(lensGeometry(frameAt(0))!.width).toBeGreaterThan(0);
-  });
-
-  it('degrades to null rather than inverting on a cell narrower than its insets', () => {
-    expect(lensGeometry({ x: 0, width: LENS_INSET_H })).toBeNull();
-  });
-
-  it('fits inside the capsule vertically', () => {
-    expect(LENS_INSET_V * 2).toBeLessThan(CAPSULE_HEIGHT);
-    expect(LENS_INSET_H).toBeGreaterThan(0);
   });
 });

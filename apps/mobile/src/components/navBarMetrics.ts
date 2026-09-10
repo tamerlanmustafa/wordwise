@@ -122,39 +122,3 @@ export function navBarMetrics(insetBottom: number, floating: boolean): NavBarMet
   };
 }
 
-/** Vertical inset of the active lens inside the capsule. */
-export const LENS_INSET_V = 6;
-/** Horizontal inset of the active lens inside its cell. */
-export const LENS_INSET_H = 5;
-
-/** A tab cell's measured frame, as reported by its own onLayout. */
-export interface CellFrame {
-  x: number;
-  width: number;
-}
-
-/**
- * Where the active-tab lens sits, given the active cell's *measured* frame.
- *
- * Deliberately measured rather than computed as `activeIndex * (rowWidth /
- * tabCount)`. Under RTL, `flexDirection: 'row'` reverses on its own, so tab 0
- * is drawn at the right-hand edge — index arithmetic would put the lens under
- * Profile while the user is on Home, and it would look perfectly correct in
- * every LTR test. Reading the frame back from layout is right in both
- * directions because React Native's layout coordinates are physical
- * (left-origin) regardless of reading direction, which is also what makes the
- * `left: 0` + translateX pairing in the component correct.
- *
- * Returns null before layout (width 0 on the first frame) and when no tab is
- * active — on a deep screen like a movie detail there is no selected tab, and
- * a lens parked under an arbitrary cell would claim the user is somewhere they
- * are not.
- */
-export function lensGeometry(cell: CellFrame | undefined | null): CellFrame | null {
-  if (!cell || cell.width <= 0) return null;
-  // On a very narrow cell the insets could eat the whole width; clamp so the
-  // lens degrades to a sliver rather than inverting.
-  const width = Math.max(0, cell.width - LENS_INSET_H * 2);
-  if (width <= 0) return null;
-  return { width, x: cell.x + LENS_INSET_H };
-}

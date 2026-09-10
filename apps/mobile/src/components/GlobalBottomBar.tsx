@@ -4,12 +4,16 @@
  *   Home · Explore · Practice · Lists · Profile
  *
  * On iOS 26 this is a floating Liquid Glass capsule: inset from all three
- * edges, refracting the content that scrolls underneath it, with a gold lens
- * sliding between cells to mark the active tab. Everywhere else — Android, and
+ * edges, refracting the content that scrolls underneath it. Everywhere else —
+ * Android, and
  * every iOS below 26 — it is exactly the bar it has always been: full width,
  * pinned, opaque, content stopping above it. That split is deliberate; see
  * `useGlassAvailable` for the three separate conditions and `navBarMetrics`
  * for the two geometries.
+ *
+ * A gold lens used to slide between cells to mark the active tab. It is gone —
+ * see the note in the body for why an animated indicator is the wrong way to
+ * report a state that has already changed.
  *
  * The bar has a **fixed size** and never retracts or shrinks. It briefly
  * minimized on a downward scroll (iOS 26's `tabBarMinimizeBehavior`); that was
@@ -33,9 +37,8 @@
  * pins the label lengths that fit.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -50,10 +53,7 @@ import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/token
 import { useFlightStore } from '../stores/flightStore';
 import { useGlassAvailable } from '../hooks/useGlassAvailable';
 import {
-  lensGeometry,
   navBarMetrics,
-  LENS_INSET_V,
-  type CellFrame,
   type NavBarMetrics,
 } from './navBarMetrics';
 import { withTap } from '../utils/feedback';
@@ -133,38 +133,18 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
     onHeightChange?.(m.reservedHeight);
   }, [m.reservedHeight, onHeightChange]);
 
-  // ── Active-tab lens ──────────────────────────────────────────────────────
-  // Cell frames come from each button's own onLayout rather than from
-  // `index * cellWidth`. RTL reverses the row for us, so index arithmetic
-  // would light up the mirrored tab; measurement is correct either way.
-  const [cells, setCells] = useState<Record<string, CellFrame>>({});
-  const handleCellLayout = useCallback((id: BottomTab, frame: CellFrame) => {
-    setCells((prev) => {
-      const seen = prev[id];
-      if (seen && seen.x === frame.x && seen.width === frame.width) return prev;
-      return { ...prev, [id]: frame };
-    });
-  }, []);
-  const lens = lensGeometry(active ? cells[active] : null);
-  const lensX = useRef(new Animated.Value(0)).current;
-  // First placement must be a jump, not a slide — otherwise the lens flies in
-  // from the left edge on cold start.
-  const lensPlaced = useRef(false);
-  useEffect(() => {
-    if (!lens) return;
-    if (!lensPlaced.current) {
-      lensPlaced.current = true;
-      lensX.setValue(lens.x);
-      return;
-    }
-    Animated.spring(lensX, {
-      toValue: lens.x,
-      useNativeDriver: true,
-      damping: 20,
-      stiffness: 260,
-      mass: 0.8,
-    }).start();
-  }, [lens, lensX]);
+  // ── No active-tab lens ───────────────────────────────────────────────────
+  // A gold pill used to sit behind the active tab and spring between cells on
+  // every switch. It has been removed, and the reason is worth keeping: the
+  // spring took ~250ms to arrive, so on two quick taps the indicator was still
+  // travelling toward the previous tab while the next screen was already
+  // painted. The screen was instant and the bar said it was not — which reads
+  // as the app being slow, because the moving thing is the thing the eye is
+  // following.
+  //
+  // The active tab is still marked, by the one cue that cannot lag: its icon
+  // and label change colour on the same frame as the tap. A state that is
+  // painted rather than animated has no travel time to be wrong about.
 
   return (
     <View
@@ -209,23 +189,6 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
           />
         )}
 
-        {m.floating && lens ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              s.lens,
-              {
-                width: lens.width,
-                top: LENS_INSET_V,
-                bottom: LENS_INSET_V,
-                borderRadius: (m.barHeight - LENS_INSET_V * 2) / 2,
-                backgroundColor: tc.goldWash,
-                borderColor: tc.goldLine,
-                transform: [{ translateX: lensX }],
-              },
-            ]}
-          />
-        ) : null}
 
         <View style={s.row}>
           {TABS.map((tab) => (
@@ -236,7 +199,6 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
               label={t(`nav.${tab.labelKey}`)}
               isActive={active === tab.id}
               onPress={withTap(() => onTabPress(tab.id))}
-              onCellLayout={handleCellLayout}
               tc={tc}
               s={s}
               viewRef={tab.id === 'lists' ? listsRef : undefined}
@@ -255,7 +217,6 @@ function TabBtn({
   label,
   isActive,
   onPress,
-  onCellLayout,
   tc,
   s,
   viewRef,
@@ -266,7 +227,6 @@ function TabBtn({
   label: string;
   isActive: boolean;
   onPress: () => void;
-  onCellLayout: (id: BottomTab, frame: CellFrame) => void;
   tc: ThemeColors;
   s: ReturnType<typeof makeStyles>;
   viewRef?: React.MutableRefObject<RNView | null>;
@@ -289,11 +249,10 @@ function TabBtn({
       accessibilityRole="button"
       accessibilityState={{ selected: isActive }}
       accessibilityLabel={label}
-      onLayout={(e) => {
-        const { x, width } = e.nativeEvent.layout;
-        onCellLayout(id, { x, width });
-        onMeasure?.();
-      }}
+      // Only the Lists tab passes `onMeasure`: PosterFlight needs that cell's
+      // window rect to fly a saved poster into it. No other tab is measured
+      // any more, now that nothing is positioned from a cell frame.
+      onLayout={onMeasure ? () => onMeasure() : undefined}
     >
       <NavIcon kind={icon} stroke={strokeColor} fillActive={isActive ? tc.gold : undefined} />
       <Text
@@ -392,11 +351,6 @@ const makeStyles = (_tc: ThemeColors) => StyleSheet.create({
   },
   pinnedFill: {
     borderTopWidth: 1,
-  },
-  lens: {
-    position: 'absolute',
-    left: 0,
-    borderWidth: 1,
   },
   row: {
     flexDirection: 'row',
