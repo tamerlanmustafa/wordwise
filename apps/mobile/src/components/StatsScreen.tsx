@@ -17,6 +17,7 @@ import { calendarIntensity } from './stats/statsSelectors';
 import { Skeleton } from './ui/Skeleton';
 import { alignEnd, BACK_ARROW } from '../i18n/rtl';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 const CALENDAR_WEEKS = 5;
 
@@ -223,13 +224,13 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
             <View style={styles.exportRow}>
               <TouchableOpacity
                 style={styles.exportBtn}
-                onPress={() => Linking.openURL(premiumApi.exportCsvUrl())}
+                onPress={withTap(() => Linking.openURL(premiumApi.exportCsvUrl()))}
               >
                 <Text style={styles.exportBtnText}>CSV</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.exportBtn}
-                onPress={() => Linking.openURL(premiumApi.exportAnkiUrl())}
+                onPress={withTap(() => Linking.openURL(premiumApi.exportAnkiUrl()))}
               >
                 <Text style={styles.exportBtnText}>Anki</Text>
               </TouchableOpacity>

@@ -15,6 +15,7 @@ import {
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { MedalIcon } from './ui/icons';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 // Medal/highlight colors are symbolic and stay constant across themes.
 const MEDAL = {
@@ -166,7 +167,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
           <TouchableOpacity
             key={s}
             style={[styles.sectionBtn, section === s && styles.sectionBtnActive]}
-            onPress={() => setSection(s)}
+            onPress={withTap(() => setSection(s))}
           >
             <Text style={[styles.sectionBtnText, section === s && styles.sectionBtnTextActive]}>
               {s === 'vocab' ? 'Vocabulary' : 'Quiz'}
@@ -182,7 +183,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
               <TouchableOpacity
                 key={b}
                 style={[styles.tab, vocabBoard === b && styles.tabActive]}
-                onPress={() => setVocabBoard(b)}
+                onPress={withTap(() => setVocabBoard(b))}
               >
                 <Text style={[styles.tabText, vocabBoard === b && styles.tabTextActive]}>
                   {t(`stats:leaderboard.${b}`)}
@@ -193,7 +194,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
               <TouchableOpacity
                 key={b}
                 style={[styles.tab, quizBoard === b && styles.tabActive]}
-                onPress={() => setQuizBoard(b)}
+                onPress={withTap(() => setQuizBoard(b))}
               >
                 <Text style={[styles.tabText, quizBoard === b && styles.tabTextActive]}>
                   {t(`stats:leaderboard.${b}`)}

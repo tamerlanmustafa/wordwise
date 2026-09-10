@@ -29,6 +29,7 @@ import {
   type NotificationTarget,
 } from '../stores/notificationsStore';
 import { HomeIcon } from './filmFeed/FilmFeedIcons';
+import { withTap } from '../utils/feedback';
 
 const KIND_ICON: Record<AppNotification['kind'], 'play' | 'star' | 'bell'> = {
   reviews_due: 'play',
@@ -111,7 +112,7 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
           <Text style={styles.eyebrow}>{t('notifications:sheet.title')}</Text>
           {hasUnread ? (
             <TouchableOpacity
-              onPress={() => void useNotificationsStore.getState().markAllRead()}
+              onPress={withTap(() => void useNotificationsStore.getState().markAllRead())}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={t('notifications:sheet.markAllReadA11y')}
@@ -136,7 +137,7 @@ export function NotificationsSheet({ visible, onClose, onNavigate, bottomOffset 
             <TouchableOpacity
               key={item.id}
               style={styles.row}
-              onPress={() => handleItemPress(item)}
+              onPress={withTap(() => handleItemPress(item))}
               activeOpacity={0.6}
               accessibilityRole="button"
               accessibilityLabel={item.title}

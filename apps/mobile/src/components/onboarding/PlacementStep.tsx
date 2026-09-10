@@ -13,6 +13,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import type { PlacementWord, PlacementRating } from './placement';
+import { withTap } from '../../utils/feedback';
 
 export interface PlacementStepProps {
   word: PlacementWord;
@@ -54,7 +55,7 @@ export function PlacementStep({ word, index, total, onRate, onSkip, onBack }: Pl
               key={o.rating}
               accessibilityRole="button"
               accessibilityLabel={o.label}
-              onPress={() => onRate(o.rating)}
+              onPress={withTap(() => onRate(o.rating))}
               style={({ pressed }) => [s.option, pressed && { borderColor: tc.primary, backgroundColor: tc.primaryTint }]}
             >
               <View style={[s.dot, { backgroundColor: o.dot }]} />

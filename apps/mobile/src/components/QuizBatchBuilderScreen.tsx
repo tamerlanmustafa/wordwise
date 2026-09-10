@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { colors, cefrColors } from '../theme/palette';
 import { wordwiseApi } from '../services/api';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 export interface QuizBatchBuilderScreenProps {
   userLevel?: string | null;
@@ -100,7 +101,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
           return (
             <TouchableOpacity
               key={lv}
-              onPress={() => setActiveLevel(lv)}
+              onPress={withTap(() => setActiveLevel(lv))}
               style={[
                 styles.chip,
                 isActive && { backgroundColor: cefrColors[lv], borderColor: cefrColors[lv] },
@@ -117,7 +118,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
       ) : error ? (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={() => load(activeLevel)} style={styles.retryBtn}>
+          <TouchableOpacity onPress={withTap(() => load(activeLevel))} style={styles.retryBtn}>
             <Text style={styles.retryText}>{t('action.retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -134,7 +135,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
             const isSelected = selected.has(item.movie_id);
             return (
               <TouchableOpacity
-                onPress={() => toggle(item.movie_id)}
+                onPress={withTap(() => toggle(item.movie_id))}
                 style={[styles.row, isSelected && styles.rowSelected]}
                 activeOpacity={0.7}
               >

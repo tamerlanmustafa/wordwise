@@ -39,6 +39,7 @@ import type {
   ListWordItem,
 } from '../../core/types';
 import type { SrsSessionStart } from '../../services/api';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   list: ListSummary;
@@ -189,7 +190,7 @@ export function ListDetailScreen({
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.sortBtn} onPress={() => setSortOpen(true)} activeOpacity={0.7}>
+        <TouchableOpacity style={s.sortBtn} onPress={withTap(() => setSortOpen(true))} activeOpacity={0.7}>
           <Text style={s.circleGlyph}>⇅</Text>
         </TouchableOpacity>
       </View>
@@ -212,7 +213,7 @@ export function ListDetailScreen({
               item={item}
               inList
               onToggle={() => void removeItem(list.id, item.tmdbId)}
-              onPress={() => onOpenFilm(item)}
+              onPress={withTap(() => onOpenFilm(item))}
             />
           ))
         ) : (

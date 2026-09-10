@@ -57,6 +57,7 @@ import { ListPanel } from './wordFeed/ListPanel';
 import { useListsStore } from '../stores/listsStore';
 import { showToast as globalToast } from '../stores/toastStore';
 import { Skeleton } from './ui/Skeleton';
+import { withTap } from '../utils/feedback';
 
 interface Props {
   /** Whether this tab is the visible one — drives panel reset on leave. */
@@ -414,7 +415,7 @@ export function WordFeedScreen({
         // swallow the tap.
         <Pressable
           style={StyleSheet.absoluteFill}
-          onPress={() => setOpenPanel(null)}
+          onPress={withTap(() => setOpenPanel(null))}
           accessibilityLabel="Close word mix"
         >
           <Animated.View style={[StyleSheet.absoluteFill, { opacity: liftAnim }]}>

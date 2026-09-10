@@ -122,10 +122,19 @@ describe('the face and the edge stay separate jobs', () => {
   });
 
   it('buzzes once, wrapped on the element that owns the press', () => {
-    // The row had no haptic at all; the index does not wrap either, so this is
-    // the one and only wrap.
+    // The row had no haptic at all, and it wraps the callback it is handed, so
+    // the screen that hands it one must not wrap as well.
+    //
+    // Scoped to the ListRow call site rather than to the whole file: the
+    // screen has its own buttons (Retry, New list) that own their presses and
+    // do wrap, and a file-wide ban read as "this screen may not have haptics",
+    // which is the opposite of the rule.
     expect(row()).toMatch(/onPress=\{withTap\(onPress\)\}/);
-    expect(index()).not.toMatch(/withTap/);
+    // Through `code()` like every other assertion here: the call site carries a
+    // comment explaining why it is bare, and that comment names `withTap`.
+    const stripped = code(index());
+    const usage = stripped.slice(stripped.indexOf('<ListRow'));
+    expect(usage.slice(0, usage.indexOf('/>'))).not.toMatch(/withTap/);
   });
 });
 

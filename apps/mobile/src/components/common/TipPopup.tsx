@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { withTap } from '../../utils/feedback';
 
 export interface TipPopupProps {
   visible: boolean;
@@ -73,7 +74,7 @@ export function TipPopup({
         {onDontShowAgain ? (
           <Pressable
             style={s.checkRow}
-            onPress={() => setDontShow((v) => !v)}
+            onPress={withTap(() => setDontShow((v) => !v))}
             hitSlop={6}
           >
             <View style={[s.checkBox, dontShow ? s.checkBoxOn : null]}>

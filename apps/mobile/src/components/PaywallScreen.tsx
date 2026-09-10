@@ -29,6 +29,7 @@ import {
 import { directionalIcon } from '../i18n/rtl';
 import { BlockIcon, BrainIcon, ChartIcon, FilmIcon } from './ui/icons';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -125,7 +126,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
               <PlanCard
                 tc={tc}
                 selected={plan === 'annual'}
-                onPress={() => setPlan('annual')}
+                onPress={withTap(() => setPlan('annual'))}
                 title="Annual"
                 price={ANNUAL_PRICE_LABEL}
                 cadence="/year"
@@ -134,7 +135,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
               <PlanCard
                 tc={tc}
                 selected={plan === 'monthly'}
-                onPress={() => setPlan('monthly')}
+                onPress={withTap(() => setPlan('monthly'))}
                 title="Monthly"
                 price={MONTHLY_PRICE_LABEL}
                 cadence="/month"

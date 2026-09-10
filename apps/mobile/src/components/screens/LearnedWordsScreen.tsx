@@ -15,6 +15,7 @@ import { wordwiseApi } from '../../services/api';
 import { makeSettingsStyles } from './settingsStyles';
 import { BACK_ARROW } from '../../i18n/rtl';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   onBack: () => void;
@@ -97,7 +98,7 @@ export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
             <TouchableOpacity
               key={w.id}
               style={styles.row}
-              onPress={() =>
+              onPress={withTap(() =>
                 Alert.alert(
                   t('vocabulary:learned.restoreTitle'),
                   t('vocabulary:learned.restoreBody', { word: w.word }),
@@ -105,8 +106,7 @@ export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
                     { text: t('action.cancel'), style: 'cancel' },
                     { text: t('vocabulary:learned.restore'), onPress: () => handleUnlearn(w.word) },
                   ],
-                )
-              }
+                ))}
             >
               <Text style={styles.rowWord}>{w.word}</Text>
               <Text style={styles.rowAction}>{t('vocabulary:learned.restore')}</Text>

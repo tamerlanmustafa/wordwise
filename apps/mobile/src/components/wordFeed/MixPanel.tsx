@@ -44,6 +44,7 @@ import {
 import { FEED_PAGE_SIZE, useWordFeedStore } from '../../stores/wordFeedStore';
 import { mixPanelLayout } from './mixPanelLayout';
 import { directionSign } from '../../i18n/rtl';
+import { withTap } from '../../utils/feedback';
 
 const SERIF_FAMILY = 'Source Serif 4';
 const MONO_FAMILY = 'Courier';
@@ -185,7 +186,7 @@ export function MixPanel({
             // than padding, so the legend row stays 30pt tall in the budget.
             hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
             activeOpacity={0.6}
-            onPress={() => apply(nudge(cuts, i, MIX_NUDGE_STEP))}
+            onPress={withTap(() => apply(nudge(cuts, i, MIX_NUDGE_STEP)))}
             // VoiceOver never touches the bar; the chips are the control.
             accessibilityRole="adjustable"
             accessibilityLabel={`${level} share`}

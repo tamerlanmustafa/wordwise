@@ -18,6 +18,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { showToast } from '../../stores/toastStore';
 import { formatAppleFullName } from '../../utils/appleName';
 import { getAppLanguage } from '../../i18n';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   onLogin: (user: any, token: string, refreshToken: string) => void;
@@ -388,7 +389,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
 
           <TouchableOpacity
             style={styles.switchButton}
-            onPress={() => setIsLoginMode(!isLoginMode)}
+            onPress={withTap(() => setIsLoginMode(!isLoginMode))}
           >
             <Text style={styles.switchButtonText}>
               {isLoginMode ? t('auth:switchToRegister') : t('auth:switchToLogin')}

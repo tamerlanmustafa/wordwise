@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { METRICS, listName, metaText } from './listStyles';
+import { withTap } from '../../utils/feedback';
 
 export interface Segment<T extends string> {
   key: T;
@@ -36,7 +37,7 @@ export function SegmentedControl<T extends string>({ segments, value, onChange }
           <TouchableOpacity
             key={segment.key}
             style={[s.segment, selected && s.segmentSelected]}
-            onPress={() => onChange(segment.key)}
+            onPress={withTap(() => onChange(segment.key))}
             activeOpacity={0.8}
             accessibilityRole="tab"
             accessibilityState={{ selected }}

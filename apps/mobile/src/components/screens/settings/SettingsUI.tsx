@@ -30,6 +30,7 @@ import {
 } from 'react-native';
 import { FORWARD_ARROW } from '../../../i18n/rtl';
 import { useThemeColors, type ThemeColors } from '../../../theme/tokens';
+import { withTap } from '../../../utils/feedback';
 
 /** A titled group. The card is what makes the rows read as one set. */
 export function Section({
@@ -221,7 +222,7 @@ export function Segmented<T extends string>({
         return (
           <TouchableOpacity
             key={opt.value}
-            onPress={() => onChange(opt.value)}
+            onPress={withTap(() => onChange(opt.value))}
             style={[s.segment, active && s.segmentActive]}
             activeOpacity={0.7}
             accessibilityRole="button"

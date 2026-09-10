@@ -43,6 +43,7 @@ import { KEYBOARD_EASING, liftDuration, useKeyboardHeight } from '../../hooks/us
 import { directionSign } from '../../i18n/rtl';
 import type { ListSummary } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
+import { withTap } from '../../utils/feedback';
 
 const SERIF_FAMILY = 'Source Serif 4';
 
@@ -239,7 +240,7 @@ export function ListPanel({
                 key={list.id}
                 list={list}
                 selected={memberOf.includes(list.id)}
-                onPress={() => onToggle(list.id)}
+                onPress={withTap(() => onToggle(list.id))}
                 showRule={i > 0}
                 tc={tc}
                 s={s}
@@ -290,7 +291,7 @@ export function ListPanel({
       ) : (
         <TouchableOpacity
           style={s.newList}
-          onPress={() => setCreating(true)}
+          onPress={withTap(() => setCreating(true))}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="New list"

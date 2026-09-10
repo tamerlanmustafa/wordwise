@@ -9,6 +9,7 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { Skeleton } from './ui/Skeleton';
 import { FamilyIcon } from './ui/icons';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 export interface FamilyPlanScreenProps {
   onBack: () => void;
@@ -156,7 +157,7 @@ export function FamilyPlanScreen({ onBack, backLabel, userId }: FamilyPlanScreen
                 <Text style={styles.memberUsername}>@{m.username}</Text>
               </View>
               {isOwner && (
-                <TouchableOpacity onPress={() => handleRemove(m.user_id, m.email)}>
+                <TouchableOpacity onPress={withTap(() => handleRemove(m.user_id, m.email))}>
                   <Text style={styles.removeBtn}>{t('billing:family.remove')}</Text>
                 </TouchableOpacity>
               )}

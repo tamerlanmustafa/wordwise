@@ -13,6 +13,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { DAILY_GOAL_OPTIONS } from './placement';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
+import { withTap } from '../../utils/feedback';
 
 export interface GoalStepProps {
   selected: number | null;
@@ -47,7 +48,7 @@ export function GoalStep({ selected, onSelect, onBack, onFinish, finishing }: Go
               accessibilityRole="radio"
               accessibilityState={{ selected: on }}
               accessibilityLabel={`${t(`onboarding:goalStep.option.${g.key}Label`)}, ${t(`onboarding:goalStep.option.${g.key}Sub`)}`}
-              onPress={() => onSelect(g.mins)}
+              onPress={withTap(() => onSelect(g.mins))}
               style={[s.row, { backgroundColor: on ? tc.primaryTint : tc.paper, borderColor: on ? tc.primary : tc.border }]}
             >
               <View style={s.info}>

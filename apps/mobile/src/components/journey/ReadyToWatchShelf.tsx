@@ -30,6 +30,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readyToWatchApi, reelApi, type ReadyToWatchMovie } from '../../services/api';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { withTap } from '../../utils/feedback';
 
 const DISMISS_KEY = 'journey.rtwShelf.dismissedDate';
 
@@ -156,7 +157,7 @@ export function ReadyToWatchShelf({ onAdded }: ReadyToWatchShelfProps) {
                 {m.year ?? '—'} · {m.comprehensibility_percent}%
               </Text>
               <Pressable
-                onPress={() => handleAdd(m)}
+                onPress={withTap(() => handleAdd(m))}
                 disabled={isAdding || m.tmdb_id == null}
                 style={({ pressed }) => [
                   s.addBtn,

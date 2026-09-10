@@ -28,6 +28,7 @@ import type { MovieData } from '../../core/types';
 import { BACK_ARROW } from '../../i18n/rtl';
 import { FilmIcon } from '../ui/icons';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   onBack: () => void;
@@ -103,7 +104,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
               <TouchableOpacity
                 style={s.rowMain}
                 activeOpacity={0.8}
-                onPress={() => onMoviePress(toMovieData(item))}
+                onPress={withTap(() => onMoviePress(toMovieData(item)))}
               >
                 {item.poster_path ? (
                   <Image
@@ -121,7 +122,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => remove(item)}
+                onPress={withTap(() => remove(item))}
                 hitSlop={10}
                 style={s.removeBtn}
                 accessibilityRole="button"

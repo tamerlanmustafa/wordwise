@@ -30,6 +30,7 @@ import {
   Segmented,
   SelectRow,
 } from './settings/SettingsUI';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   onBack: () => void;
@@ -213,10 +214,10 @@ export const SettingsScreen = ({
                     settingsStyles.modalItem,
                     item.code === selected && settingsStyles.modalItemSelected,
                   ]}
-                  onPress={() => {
+                  onPress={withTap(() => {
                     onSelect(item.code);
                     onClose();
-                  }}
+                  })}
                 >
                   <Text
                     style={[
@@ -304,12 +305,12 @@ export const SettingsScreen = ({
             <SelectRow
               label={t('settings:nativeLanguage')}
               value={getTargetLangName(targetLanguage)}
-              onPress={() => setShowNativeLangPicker(true)}
+              onPress={withTap(() => setShowNativeLangPicker(true))}
             />
             <SelectRow
               label={t('settings:proficiencyLevel')}
               value={getProfName(proficiencyLevel)}
-              onPress={() => setShowProficiencyPicker(true)}
+              onPress={withTap(() => setShowProficiencyPicker(true))}
             />
           </Rows>
         </Section>

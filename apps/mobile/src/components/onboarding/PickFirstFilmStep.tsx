@@ -20,6 +20,7 @@ import { TmdbPoster } from '../movies/TmdbPoster';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 import { Skeleton } from '../ui/Skeleton';
+import { withTap } from '../../utils/feedback';
 
 export interface FirstFilm {
   tmdb_id: number;
@@ -145,7 +146,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
           returnKeyType="search"
         />
         {query.length > 0 ? (
-          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel={t('action.clearSearch')}>
+          <Pressable onPress={withTap(() => setQuery(''))} hitSlop={8} accessibilityLabel={t('action.clearSearch')}>
             <Ionicons name="close-circle" size={16} color={tc.textFaint} />
           </Pressable>
         ) : null}
@@ -185,7 +186,7 @@ export function PickFirstFilmStep({ startingLevel, selected, onSelect, onBack, o
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={m.title}
-                  onPress={() => { Keyboard.dismiss(); onSelect(m); }}
+                  onPress={withTap(() => { Keyboard.dismiss(); onSelect(m); })}
                   style={[s.card, { borderColor: on ? tc.gold : tc.border }]}
                 >
                   <TmdbPoster tmdbId={m.tmdb_id} style={s.poster} />

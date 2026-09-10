@@ -27,6 +27,7 @@ import { EmptyState } from './common/EmptyState';
 import type { MoviePreviewPayload, NodeLevel } from './journey/sharedTypes';
 import { BACK_ARROW } from '../i18n/rtl';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 interface Props {
   onBack: () => void;
@@ -108,13 +109,12 @@ export function SavedMoviesScreen({
             <MovieRow
               key={`${tile.tmdb_id}-${idx}`}
               tile={tile}
-              onPress={() =>
+              onPress={withTap(() =>
                 onOpenMoviePreview({
                   tileIndex: idx,
                   level: inferLevelLabel(tile),
                   tile,
-                })
-              }
+                }))}
             />
           ))}
         </ScrollView>

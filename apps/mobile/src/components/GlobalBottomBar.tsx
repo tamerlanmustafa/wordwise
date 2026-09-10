@@ -56,6 +56,7 @@ import {
   type CellFrame,
   type NavBarMetrics,
 } from './navBarMetrics';
+import { withTap } from '../utils/feedback';
 
 export type BottomTab = 'films' | 'words' | 'practice' | 'lists' | 'profile';
 
@@ -234,7 +235,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
               icon={tab.icon}
               label={t(`nav.${tab.labelKey}`)}
               isActive={active === tab.id}
-              onPress={() => onTabPress(tab.id)}
+              onPress={withTap(() => onTabPress(tab.id))}
               onCellLayout={handleCellLayout}
               tc={tc}
               s={s}

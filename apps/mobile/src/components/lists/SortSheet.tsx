@@ -12,6 +12,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { BottomSheet } from '../common/BottomSheet';
 import { detailTitle, listName } from './listStyles';
 import type { ListKind, ListSort } from '../../core/types';
+import { withTap } from '../../utils/feedback';
 
 const FILM_SORTS: ListSort[] = ['added', 'title', 'rating'];
 const WORD_SORTS: ListSort[] = ['added', 'alpha'];
@@ -51,10 +52,10 @@ export function SortSheet({ visible, onClose, bottomOffset, kind, value, onChang
             <TouchableOpacity
               key={sort}
               style={s.option}
-              onPress={() => {
+              onPress={withTap(() => {
                 onChange(sort);
                 onClose();
-              }}
+              })}
               activeOpacity={0.8}
               accessibilityRole="radio"
               accessibilityState={{ selected }}

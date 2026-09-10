@@ -22,6 +22,7 @@ import {
   workerStats,
   type WorkerHealth,
 } from './workersContent';
+import { withTap } from '../../utils/feedback';
 
 export function WorkersView({
   data,
@@ -64,7 +65,7 @@ export function WorkersView({
           <View key={w.id} style={styles.workerBlock}>
             <TouchableOpacity
               style={styles.headerRow}
-              onPress={() => setOpenId(open ? null : w.id)}
+              onPress={withTap(() => setOpenId(open ? null : w.id))}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityState={{ expanded: open }}

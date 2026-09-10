@@ -18,6 +18,7 @@ import { BottomSheet } from '../common/BottomSheet';
 import { detailTitle, listName, metaText } from './listStyles';
 import { newListErrorKey } from './newListError';
 import type { ListKind } from '../../core/types';
+import { withTap } from '../../utils/feedback';
 
 interface Props {
   visible: boolean;
@@ -92,7 +93,7 @@ export function NewListSheet({
             <TouchableOpacity
               key={k}
               style={[s.tile, selected && s.tileSelected]}
-              onPress={() => setKind(k)}
+              onPress={withTap(() => setKind(k))}
               activeOpacity={0.85}
               accessibilityRole="radio"
               accessibilityState={{ selected }}

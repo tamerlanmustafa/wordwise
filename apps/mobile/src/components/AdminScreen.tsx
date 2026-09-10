@@ -62,6 +62,7 @@ import { alignEnd } from '../i18n/rtl';
 import { StarIcon } from './ui/icons';
 import { ScreenHeader } from './common/ScreenHeader';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
+import { withTap } from '../utils/feedback';
 
 // Mobile port of frontend/src/pages/AdminReportsPage.tsx with the
 // extra platform stats panel the user asked for at the top.
@@ -650,7 +651,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
   const errorBanner = error ? (
     <View style={styles.errorBanner}>
       <Text style={styles.errorBannerText}>{error}</Text>
-      <TouchableOpacity onPress={() => setError(null)}>
+      <TouchableOpacity onPress={withTap(() => setError(null))}>
         <Text style={styles.errorBannerClose}>✕</Text>
       </TouchableOpacity>
     </View>
@@ -700,7 +701,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                 <TouchableOpacity
                   style={[styles.grantBtn, styles.grantBtnRevoke]}
                   disabled={grantBusy === u.id}
-                  onPress={() => handleRevoke(u.id)}
+                  onPress={withTap(() => handleRevoke(u.id))}
                 >
                   <Text style={styles.grantBtnText}>
                     {grantBusy === u.id ? '…' : 'Revoke'}
@@ -711,14 +712,14 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                   <TouchableOpacity
                     style={[styles.grantBtn, styles.grantBtnTrial]}
                     disabled={grantBusy === u.id}
-                    onPress={() => handleGrant(u.id, 'trial')}
+                    onPress={withTap(() => handleGrant(u.id, 'trial'))}
                   >
                     <Text style={styles.grantBtnText}>7d trial</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.grantBtn, styles.grantBtnGrant]}
                     disabled={grantBusy === u.id}
-                    onPress={() => handleGrant(u.id, 'comped')}
+                    onPress={withTap(() => handleGrant(u.id, 'comped'))}
                   >
                     <Text style={styles.grantBtnText}>
                       {grantBusy === u.id ? '…' : 'Comp'}
@@ -744,7 +745,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           title={page.label}
           right={
             <TouchableOpacity
-              onPress={() => void openPage(view, true)}
+              onPress={withTap(() => void openPage(view, true))}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.refreshText}>↻</Text>
@@ -838,7 +839,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -855,7 +856,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           >
             <TouchableOpacity
               style={[styles.filterChip, processedFilter === null && styles.filterChipOn]}
-              onPress={() => changeProcessedLevel(null)}
+              onPress={withTap(() => changeProcessedLevel(null))}
             >
               <Text
                 style={[
@@ -870,7 +871,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               <TouchableOpacity
                 key={lv}
                 style={[styles.filterChip, processedFilter === lv && styles.filterChipOn]}
-                onPress={() => changeProcessedLevel(lv)}
+                onPress={withTap(() => changeProcessedLevel(lv))}
               >
                 <Text
                   style={[
@@ -893,7 +894,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               <TouchableOpacity
                 key={tab.id}
                 style={[styles.sortChip, processedSort === tab.id && styles.sortChipOn]}
-                onPress={() => changeProcessedSort(tab.id)}
+                onPress={withTap(() => changeProcessedSort(tab.id))}
               >
                 <Text
                   style={[
@@ -997,7 +998,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -1055,7 +1056,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           title={'Vocab coverage'}
           right={
             <TouchableOpacity
-              onPress={() => void loadCoverage(true)}
+              onPress={withTap(() => void loadCoverage(true))}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.refreshText}>↻</Text>
@@ -1066,7 +1067,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -1104,7 +1105,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -1142,7 +1143,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -1180,7 +1181,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         {error ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
+            <TouchableOpacity onPress={withTap(() => setError(null))}>
               <Text style={styles.errorBannerClose}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -1210,7 +1211,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           title="Reports"
           right={
             <TouchableOpacity
-              onPress={() => void fetchReports()}
+              onPress={withTap(() => void fetchReports())}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.refreshText}>{'\u21bb'}</Text>
@@ -1238,7 +1239,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               <TouchableOpacity
                 key={tab}
                 style={[styles.tab, active && styles.tabActive]}
-                onPress={() => setActiveTab(tab)}
+                onPress={withTap(() => setActiveTab(tab))}
               >
                 <Text style={[styles.tabText, active && styles.tabTextActive]}>
                   {tab === 'ALL' ? 'All' : REPORT_STATUS_LABELS[tab]} ({tabCounts[tab]})
@@ -1282,7 +1283,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               <View style={styles.reportActions}>
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.actionBtnGhost]}
-                  onPress={() => openDetails(report)}
+                  onPress={withTap(() => openDetails(report))}
                 >
                   <Text style={styles.actionBtnGhostText}>Details</Text>
                 </TouchableOpacity>
@@ -1330,7 +1331,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
                           styles.statusButton,
                           active && { backgroundColor: STATUS_COLOR[s], borderColor: STATUS_COLOR[s] },
                         ]}
-                        onPress={() => setDetailsStatus(s)}
+                        onPress={withTap(() => setDetailsStatus(s))}
                       >
                         <Text
                           style={[
@@ -1391,7 +1392,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         backLabel={backLabel}
         title="Admin"
         right={
-          <TouchableOpacity onPress={() => fetchOverview()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={withTap(() => fetchOverview())} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={styles.refreshText}>↻</Text>
           </TouchableOpacity>
         }
@@ -1400,7 +1401,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{error}</Text>
-          <TouchableOpacity onPress={() => setError(null)}>
+          <TouchableOpacity onPress={withTap(() => setError(null))}>
             <Text style={styles.errorBannerClose}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -1420,7 +1421,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             <TouchableOpacity
               key={page.id}
               style={styles.pageRow}
-              onPress={() => void openPage(page.id)}
+              onPress={withTap(() => void openPage(page.id))}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel={`${page.label}. ${page.blurb}`}
@@ -1454,7 +1455,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               <TouchableOpacity
                 key={mode}
                 style={[styles.viewModeBtn, active && styles.viewModeBtnActive]}
-                onPress={() => setAdminViewMode(mode)}
+                onPress={withTap(() => setAdminViewMode(mode))}
               >
                 <Text
                   style={[

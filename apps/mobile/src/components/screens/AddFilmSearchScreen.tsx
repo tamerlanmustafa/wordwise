@@ -19,6 +19,7 @@ import { Skeleton } from '../ui/Skeleton';
 import { StarIcon } from '../ui/icons';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { ScreenHeader } from '../common/ScreenHeader';
+import { withTap } from '../../utils/feedback';
 
 /**
  * AddFilmSearchScreen — search TMDB and add what you find to your reel.
@@ -228,7 +229,7 @@ export const AddFilmSearchScreen = ({ onBack }: Props) => {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.searchResultItem}
-              onPress={() => handlePress(item)}
+              onPress={withTap(() => handlePress(item))}
               onPressIn={() => {
                 if (item.poster_path) Image.prefetch(`https://image.tmdb.org/t/p/w500${item.poster_path}`).catch(() => {});
                 if (item.backdrop_path) Image.prefetch(`https://image.tmdb.org/t/p/w780${item.backdrop_path}`).catch(() => {});

@@ -54,6 +54,7 @@ import { showToast } from '../../stores/toastStore';
 import { SpeakerChip } from '../ui/SpeakerChip';
 import { CARD_PADDING_START, SPEAKER_GAP, wordRowLayout } from './wordRowLayout';
 import type { FeedItem } from '../../services/api';
+import { withTap } from '../../utils/feedback';
 
 /**
  * How far the renderer may shrink the word past our own floor.
@@ -256,12 +257,12 @@ function WordCardBase({
             <SpeakerChip
               size={wordRow.chipSize}
               playing={playing}
-              onPress={(e) => {
+              onPress={withTap((e) => {
                 // The whole card is the reveal target; without this a tap on
                 // the speaker would also flip the translation.
                 e.stopPropagation();
                 void handlePronounce();
-              }}
+              })}
               accessibilityLabel={t('vocabulary:row.pronounce')}
               style={s.speaker}
             />

@@ -34,6 +34,7 @@ import {
   type NodeState,
   type NodeLevel,
 } from './journey/JourneyNode';
+import { withTap } from '../utils/feedback';
 
 export interface QuizJourneyScreenProps {
   movieId?: number;
@@ -225,7 +226,7 @@ export function QuizJourneyScreen({
               key={t.id}
               style={[styles.tileWrapper, { left: t.x, top: t.y }]}
             >
-              <JourneyNode level={t.level} state={t.state} onPress={() => { /* no-op */ }} />
+              <JourneyNode level={t.level} state={t.state} onPress={withTap(() => { /* no-op */ })} />
             </View>
           ))}
         </ScrollView>

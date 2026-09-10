@@ -51,6 +51,7 @@ import {
   type MCQAnswerState,
   type MCQPhase,
 } from './mcqLogic';
+import { withTap } from '../../utils/feedback';
 
 interface MCQChoicePayload {
   word: string;
@@ -197,7 +198,13 @@ export function MCQCard({
                 // arrives by its colour change alone, 180ms later, so the eye
                 // lands on the miss before the correction.
                 popIn={phase === 'answered' && i === pickedIdx}
-                onPress={() => handleChoicePress(i)}
+                // Deliberately NOT withTap. `handleChoicePress` answers the
+                // card, and answering fires `feedback.correct()` or
+                // `feedback.wrong()` — a richer haptic that IS the response to
+                // this press. A tap buzz in front of it is two buzzes for one
+                // decision, and it lands a frame before the one that carries
+                // the meaning.
+                onPress={withTap(() => handleChoicePress(i))}
               />
             </Arriving>
           ))}

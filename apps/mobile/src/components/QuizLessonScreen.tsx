@@ -22,6 +22,7 @@ import { QuizHeader } from './quiz/QuizHeader';
 import { SessionFinishing } from './quiz/SessionFinishing';
 import { MCQCard } from './quiz/MCQCard';
 import { alignEnd } from '../i18n/rtl';
+import { withTap } from '../utils/feedback';
 
 // Minimum time the celebratory finish beat stays on screen, so the reward
 // always lands even when the network resolves instantly. The submit + score
@@ -169,7 +170,7 @@ export function QuizLessonScreen({
         <View style={s.centered}>
           <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity
-            onPress={() => finishSession(results)}
+            onPress={withTap(() => finishSession(results))}
             style={[s.exitBtn, { backgroundColor: accent }]}
           >
             <Text style={s.exitBtnText}>{t('action.retry')}</Text>
@@ -213,21 +214,21 @@ export function QuizLessonScreen({
 
             <View style={s.selfRateCol}>
               <TouchableOpacity
-                onPress={() => handleSelfRate('know')}
+                onPress={withTap(() => handleSelfRate('know'))}
                 style={[s.rateBtn, { backgroundColor: tc.success }]}
                 activeOpacity={0.8}
               >
                 <Text style={s.rateBtnText}>{t('quiz:lesson.know')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleSelfRate('kinda')}
+                onPress={withTap(() => handleSelfRate('kinda'))}
                 style={[s.rateBtn, { backgroundColor: tc.warning }]}
                 activeOpacity={0.8}
               >
                 <Text style={[s.rateBtnText, { color: tc.goldDeep }]}>{t('quiz:lesson.kindOf')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleSelfRate('dont')}
+                onPress={withTap(() => handleSelfRate('dont'))}
                 style={[s.rateBtn, { backgroundColor: tc.error }]}
                 activeOpacity={0.8}
               >

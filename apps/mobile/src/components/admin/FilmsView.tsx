@@ -16,6 +16,7 @@ import { CEFR_LEVELS } from '../../types/constants';
 import { type AdminColors, useAdminColors } from './adminTheme';
 import { Card, EmptyState, Section, StatGrid, StatTile } from './AdminUI';
 import { DonutChart, type ChartSlice } from './LevelCharts';
+import { withTap } from '../../utils/feedback';
 
 export function FilmsView({
   data,
@@ -57,7 +58,7 @@ export function FilmsView({
             value={`${data.movies_processed.toLocaleString()}`}
             sublabel={`of ${data.movies_total.toLocaleString()} in the catalogue`}
             color={c.primary}
-            onPress={() => onBrowse()}
+            onPress={withTap(() => onBrowse())}
           />
           <StatTile
             label="Still waiting"
@@ -85,7 +86,7 @@ export function FilmsView({
               label={lv}
               value={`${(data.movies_by_level[lv] ?? 0).toLocaleString()}`}
               color={cefrColors[lv]}
-              onPress={() => onBrowse(lv)}
+              onPress={withTap(() => onBrowse(lv))}
             />
           ))}
         </StatGrid>

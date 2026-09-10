@@ -28,6 +28,7 @@ import {
   groupMetricsByCategory,
   type CoverageCategoryId,
 } from './vocabCoverageContent';
+import { withTap } from '../../utils/feedback';
 
 type TabId = CoverageCategoryId | 'overview';
 
@@ -66,7 +67,7 @@ export function VocabCoverageView({ report }: { report: VocabCoverageReport }) {
               <TouchableOpacity
                 key={t.id}
                 style={[styles.tab, isActive && styles.tabActive]}
-                onPress={() => setTab(t.id)}
+                onPress={withTap(() => setTab(t.id))}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
@@ -209,7 +210,7 @@ function Overview({
           <TouchableOpacity
             key={s.category.id}
             style={[styles.card, styles.catRow]}
-            onPress={() => onJump(s.category.id)}
+            onPress={withTap(() => onJump(s.category.id))}
             activeOpacity={0.7}
           >
             <View style={styles.flex}>

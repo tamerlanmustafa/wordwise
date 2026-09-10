@@ -39,6 +39,7 @@ import { METRICS, listName, metaText, screenTitle } from '../lists/listStyles';
 import { useListsStore, subscribeToReel } from '../../stores/listsStore';
 import { track } from '../../services/analytics';
 import type { ListKind, ListSummary } from '../../core/types';
+import { withTap } from '../../utils/feedback';
 
 /**
  * Rows mounted before the list waits for a scroll.
@@ -156,6 +157,9 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
       <View>
         <ListRow
           list={item}
+          // Bare on purpose: `ListRow` wraps the callback it is handed
+          // (`onPress={withTap(onPress)}`), and wrapping here as well is two
+          // buzzes for one press. See listRowPill.test.ts.
           onPress={() => openList(item)}
           highlighted={item.id === newListId}
         />
@@ -182,7 +186,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
     () => (
       <>
         {loadError ? (
-          <TouchableOpacity style={s.retry} onPress={() => void fetchLists()} activeOpacity={0.7}>
+          <TouchableOpacity style={s.retry} onPress={withTap(() => void fetchLists())} activeOpacity={0.7}>
             <Text style={s.retryText}>{t('error.retry')}</Text>
           </TouchableOpacity>
         ) : null}
@@ -211,7 +215,7 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
         <Text style={s.title}>{t('title')}</Text>
         <TouchableOpacity
           style={s.addBtn}
-          onPress={() => setSheetOpen(true)}
+          onPress={withTap(() => setSheetOpen(true))}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={t('new.title')}

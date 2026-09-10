@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../../theme/palette';
+import { withTap } from '../../utils/feedback';
 
 const SNAP_CARD_WIDTH = 150;
 const SNAP_CARD_GAP = 12;
@@ -36,7 +37,7 @@ export const SnapPager = ({ movies, onMoviePress }: Props) => {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={snapStyles.card}
-            onPress={() => onMoviePress(item)}
+            onPress={withTap(() => onMoviePress(item))}
             activeOpacity={0.8}
           >
             <Image

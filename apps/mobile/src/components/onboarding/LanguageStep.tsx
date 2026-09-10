@@ -17,6 +17,7 @@ import { AVAILABLE_LANGUAGES, filterLanguages } from '../../types';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import { OnboardingCTA } from './OnboardingCTA';
 import { directionalIcon } from '../../i18n/rtl';
+import { withTap } from '../../utils/feedback';
 
 export interface LanguageStepProps {
   selected: string | null;
@@ -60,7 +61,7 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
         />
         {query.length > 0 ? (
           <Pressable
-            onPress={() => setQuery('')}
+            onPress={withTap(() => setQuery(''))}
             hitSlop={8}
             accessibilityLabel={t('action.clearSearch')}
           >
@@ -82,7 +83,7 @@ export function LanguageStep({ selected, onSelect, onBack, onContinue }: Languag
               accessibilityRole="radio"
               accessibilityState={{ selected: on }}
               accessibilityLabel={l.name}
-              onPress={() => onSelect(l.code)}
+              onPress={withTap(() => onSelect(l.code))}
               style={[s.row, { backgroundColor: on ? tc.primaryTint : tc.paper, borderColor: on ? tc.primary : tc.border }]}
             >
               <View style={s.code}>

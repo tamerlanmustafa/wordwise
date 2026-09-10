@@ -32,6 +32,7 @@ import {
   windowSummary,
   type RouteSortId,
 } from './latencyContent';
+import { withTap } from '../../utils/feedback';
 
 type TabId = 'overview' | 'endpoints';
 
@@ -69,7 +70,7 @@ export function LatencyView({ report }: { report: LatencyReport }) {
               <TouchableOpacity
                 key={t.id}
                 style={[styles.tab, isActive && styles.tabActive]}
-                onPress={() => setTab(t.id)}
+                onPress={withTap(() => setTab(t.id))}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
@@ -116,7 +117,7 @@ export function LatencyView({ report }: { report: LatencyReport }) {
             {report.routes.length > 0 ? (
               <TouchableOpacity
                 style={[styles.card, styles.jumpRow]}
-                onPress={() => setTab('endpoints')}
+                onPress={withTap(() => setTab('endpoints'))}
                 activeOpacity={0.7}
               >
                 <View style={styles.flex}>
@@ -190,7 +191,7 @@ function Endpoints({
             <TouchableOpacity
               key={s.id}
               style={[styles.sortBtn, isActive && styles.sortBtnActive]}
-              onPress={() => onSort(s.id)}
+              onPress={withTap(() => onSort(s.id))}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
@@ -209,7 +210,7 @@ function Endpoints({
           <TouchableOpacity
             key={key}
             style={styles.card}
-            onPress={() => onToggleRoute(key)}
+            onPress={withTap(() => onToggleRoute(key))}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityState={{ expanded }}

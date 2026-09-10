@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { StepHeader, ONBOARDING_TOTAL_STEPS } from './StepHeader';
 import type { SurveyQuestion } from './survey';
+import { withTap } from '../../utils/feedback';
 
 export interface SurveyStepProps {
   question: SurveyQuestion;
@@ -52,7 +53,7 @@ export function SurveyStep({ question, index, total, onAnswer, onSkip, onBack }:
               key={answerKey}
               accessibilityRole="button"
               accessibilityLabel={label}
-              onPress={() => onAnswer(answerKey)}
+              onPress={withTap(() => onAnswer(answerKey))}
               style={({ pressed }) => [
                 s.option,
                 pressed && { borderColor: tc.primary, backgroundColor: tc.primaryTint },
