@@ -1,10 +1,14 @@
 /**
  * ListDetailScreen — one open list.
  *
- * Exactly one gold action, and it always means the same thing: hand this
- * list to Practice. Its label changes with what the list actually holds
- * (`Practice 6 due` reads as a specific job; `Practice this list` as a
- * general one), but there is never a second competing primary action.
+ * A list is a collection, not a quiz. It shows what is in it and lets you
+ * reorder, remove and delete; practice lives on the Practice tab and nowhere
+ * else. The screen used to carry a gold "Practice these words" button that
+ * started an SRS session scoped to this list — films lists lost their version
+ * of it first, and words lists have now followed.
+ *
+ * There is deliberately no primary action left. Every control here is a small
+ * one in the corner, because the content *is* the screen.
  *
  * The overflow button is absent entirely on the two pinned lists rather than
  * present-and-disabled: there is nothing behind it for them, and a dead
@@ -30,7 +34,6 @@ import {
 import { useListsStore } from '../../stores/listsStore';
 import { showConfirm } from '../../stores/confirmStore';
 import { showToast } from '../../stores/toastStore';
-import { listsApi, ListApiError, SrsPaywallError } from '../../services/api';
 import { track } from '../../services/analytics';
 import type {
   ListFilmItem,
@@ -38,25 +41,19 @@ import type {
   ListSummary,
   ListWordItem,
 } from '../../core/types';
-import type { SrsSessionStart } from '../../services/api';
 import { withTap } from '../../utils/feedback';
 
 interface Props {
   list: ListSummary;
   onBack: () => void;
-  /** Hands the started session to the review screen. */
-  onStartSession: (session: SrsSessionStart, listId: number) => void;
   onOpenFilm: (item: ListFilmItem) => void;
-  onPaywall: () => void;
   bottomOffset: number;
 }
 
 export function ListDetailScreen({
   list,
   onBack,
-  onStartSession,
   onOpenFilm,
-  onPaywall,
   bottomOffset,
 }: Props) {
   const { t } = useTranslation('lists');
@@ -75,7 +72,6 @@ export function ListDetailScreen({
   // one its owner recognises.
   const [sort, setSort] = useState<ListSort>('added');
   const [sortOpen, setSortOpen] = useState(false);
-  const [starting, setStarting] = useState(false);
 
   // The summary on the store is fresher than the one we were handed.
   const summary = detail?.summary ?? list;
@@ -96,42 +92,6 @@ export function ListDetailScreen({
     }
     return parts.join(META_SEPARATOR);
   }, [isFilms, summary, t]);
-
-  // One label, whatever the list's SRS schedule says. It used to read
-  // "Practice 6 due" and fall back to "Practice this list" at zero, which made
-  // the button's own name flicker with a number the reader never asked about —
-  // and told them "0 due" was a reason not to press it, when a list is
-  // something you revise when you feel like it.
-  const practiceLabel = useMemo(
-    () => (summary.count === 0 ? t('practice.empty') : t('practice.none')),
-    [summary.count, t],
-  );
-
-  const startPractice = useCallback(async () => {
-    if (summary.count === 0 || starting) return;
-    setStarting(true);
-    try {
-      const session = await listsApi.practice(list.id);
-      track('list_practice_started', {
-        kind: summary.kind,
-        item_count: summary.count,
-      });
-      onStartSession(session, list.id);
-    } catch (e) {
-      // A free user who already did today's session hits the same daily cap
-      // here as on the Practice tab — same paywall, not a list-specific error.
-      if (e instanceof SrsPaywallError) {
-        onPaywall();
-      } else {
-        showToast({
-          message: e instanceof ListApiError ? e.message : t('practice.empty'),
-          tone: 'error',
-        });
-      }
-    } finally {
-      setStarting(false);
-    }
-  }, [summary, starting, list.id, onStartSession, onPaywall, t]);
 
   const confirmDelete = useCallback(() => {
     showConfirm({
@@ -171,33 +131,15 @@ export function ListDetailScreen({
         <Text style={s.meta}>{meta}</Text>
       </View>
 
+      {/* Sort only. A list used to carry a gold "Practice these words" button
+          that started an SRS session scoped to the list; films lists lost the
+          equivalent first, and now words lists have too. Practice is the
+          Practice tab's job — one deck, one place, one streak — and a second
+          entry point into the same machinery from a screen whose purpose is
+          *keeping* words was a second thing to reason about for both the
+          reader and the session-credit rules. A list is a collection you
+          revise from, not a quiz. */}
       <View style={s.actionRow}>
-        {/* Words lists only. A films list used to carry "Practice words from
-            these films", which pooled the vocabulary of everything in it into
-            one deck — a reasonable-sounding feature that nobody wants: a list
-            of films is a watchlist, and the place you practise a film's words
-            is that film, where the deck is scoped to what you are about to
-            watch. Removed rather than hidden, so the row is one control wide
-            on a films list instead of a gold button with nothing to say. */}
-        {isFilms ? null : (
-          <TouchableOpacity
-            style={[s.practiceBtn, summary.count === 0 && s.practiceBtnDisabled]}
-            onPress={startPractice}
-            disabled={summary.count === 0 || starting}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                s.practiceLabel,
-                summary.count === 0 && { color: tc.textFaint },
-              ]}
-              numberOfLines={1}
-            >
-              {practiceLabel}
-            </Text>
-          </TouchableOpacity>
-        )}
-
         <TouchableOpacity style={s.sortBtn} onPress={withTap(() => setSortOpen(true))} activeOpacity={0.7}>
           <Text style={s.circleGlyph}>⇅</Text>
         </TouchableOpacity>
@@ -274,26 +216,16 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    // Trailing edge, which only bites on a films list: with the practice
-    // button present it is `flex: 1` and fills the row anyway.
+    // Trailing edge. The row holds only the sort control now, so this is what
+    // parks it in the corner instead of stranding it on the left where the
+    // practice button used to start.
     justifyContent: 'flex-end',
     gap: 10,
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 12,
   },
-  practiceBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: tc.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  practiceBtnDisabled: { backgroundColor: tc.chipBg },
   // Gold-on-dark text is goldDeep, never white — white fails contrast.
-  practiceLabel: { ...listName, fontSize: 15, color: tc.goldDeep },
   sortBtn: {
     width: 44,
     height: 44,

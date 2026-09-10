@@ -28,10 +28,6 @@
     "errorDuplicate": "Bu adda bir listen zaten var.",
     "errorLimit": "En fazla liste sayısına ulaştın. Yer açmak için birini sil."
   },
-  "practice": {
-    "none": "Bu listeyi çalış",
-    "empty": "Henüz çalışılacak bir şey yok"
-  },
   "sort": {
     "title": "Sıralama",
     "added": "Son eklenen",

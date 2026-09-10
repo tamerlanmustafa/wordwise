@@ -34,7 +34,7 @@ import { SavedMoviesScreen } from '../components/SavedMoviesScreen';
 import { PracticeScreen } from '../components/PracticeScreen';
 import { MoviePreviewHub } from '../components/MoviePreviewHub';
 import { SetIntroScreen, type SetIntroWord } from '../components/SetIntroScreen';
-import type { ReelTile, SrsSessionStart } from '../services/api';
+import type { ReelTile } from '../services/api';
 import type { NodeLevel } from '../components/journey/JourneyNode';
 import { ProfileScreen } from '../components/screens/ProfileScreen';
 import { AccountScreen } from '../components/screens/AccountScreen';
@@ -392,18 +392,14 @@ export default function App() {
     origin: Screen;
   }>({ previewsUsed: 0, previewsLimit: 3, reason: null, origin: 'films' });
 
-  // Where a review session came from. The Practice tab and the other
-  // entry points (StatsScreen, notification deep links) pass nothing and
-  // get the server's `practice` default; only the Lists tab fills these in.
-  const [reviewLaunch, setReviewLaunch] = useState<{
-    kind?: import('../services/api').SessionKind;
-    listId?: number;
-    /** Set only by the Lists tab — see ReviewScreen's `initialSession`. */
-    session?: SrsSessionStart;
-  }>({});
+  // Every review session is now the Practice tab's one deck: the Lists tab
+  // used to start its own, scoped to a list, and was the only thing that ever
+  // filled in a kind, a list id or a pre-started session. With that gone there
+  // is nothing left to carry, so ReviewScreen is handed nothing and falls back
+  // to the server's `practice` default — which is what every other entry point
+  // (Practice, Stats, notification deep links) always did.
 
   const navigateToReview = useCallback(() => {
-    setReviewLaunch({});
     setCurrentScreen('review');
   }, []);
 
@@ -411,27 +407,15 @@ export default function App() {
   // could 409 an empty pool before we navigate). Hand it straight to
   // ReviewScreen rather than letting it start a second one, which would burn
   // two of a free user's one-per-day sessions.
-  const handleListPractice = (session: SrsSessionStart, listId: number) => {
-    setReviewLaunch({
-      kind: session.kind as import('../services/api').SessionKind,
-      listId,
-      session,
-    });
-    setCurrentScreen('review');
-  };
-
   const navigateToPaywall = (
     previewsUsed: number,
     previewsLimit: number,
     reason: PaywallReason = null,
   ) => {
-    // Where to return on Back. A review that 402s is launched from Practice
-    // (or the open list), and `currentScreen` is still 'review' here because
+    // Where to return on Back. A review that 402s is always launched from
+    // Practice now, and `currentScreen` is still 'review' here because
     // ReviewScreen calls this from its own start-session failure path.
-    const origin: Screen =
-      currentScreen === 'review'
-        ? (reviewLaunch.listId ? 'lists' : 'practice')
-        : currentScreen;
+    const origin: Screen = currentScreen === 'review' ? 'practice' : currentScreen;
     setPaywallProps({ previewsUsed, previewsLimit, reason, origin });
     setCurrentScreen('paywall');
   };
@@ -915,8 +899,7 @@ export default function App() {
         //
         // Chevron, Android hardware back and the edge swipe all resolve here,
         // so guarding this one place covers all three.
-        const leave = reviewLaunch.listId ? navigateToLists : navigateToPractice;
-        return () => guardQuizExit(quizExitCopy, leave);
+        return () => guardQuizExit(quizExitCopy, navigateToPractice);
       }
       case 'paywall':
         return leavePaywall;
@@ -1146,9 +1129,6 @@ export default function App() {
           <AdminScreen onBack={backFrom('admin')} backLabel={backLabelFor('admin')} />
         ) : currentScreen === 'review' ? (
           <ReviewScreen
-            kind={reviewLaunch.kind}
-            listId={reviewLaunch.listId}
-            initialSession={reviewLaunch.session}
             // Routed through `resolveBack`, not a second copy of the
             // destination. This prop *was* that second copy — it still said
             // `navigateToFilms` after the resolver moved to Practice, and
@@ -1172,14 +1152,12 @@ export default function App() {
           <ListDetailScreen
             list={openList}
             onBack={navigateToLists}
-            onStartSession={handleListPractice}
             onOpenFilm={(item) => navigateToMovie({
               id: item.tmdbId,
               title: item.title,
               poster_path: item.posterPath,
               release_date: item.year ? `${item.year}-01-01` : '',
             })}
-            onPaywall={() => navigateToPaywall(0, 0)}
             bottomOffset={barHeight}
           />
         ) : currentScreen === 'savedMovies' ? (

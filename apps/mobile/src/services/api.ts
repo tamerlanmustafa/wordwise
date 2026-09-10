@@ -2702,41 +2702,6 @@ export const listsApi = {
     });
   },
 
-  /** The gold action. Returns the standard session-start payload, so the
-   *  review screen consumes it with no new parsing. Throws SrsPaywallError
-   *  on 402 exactly as srsApi.startSession does — a free user who already
-   *  did today's session hits the same cap here. */
-  practice: async (id: number): Promise<SrsSessionStart> => {
-    const res = await authFetch(`${API_BASE_URL}/lists/${id}/practice`, {
-      method: 'POST',
-    });
-    if (res.status === 402) {
-      const body = await res.json().catch(() => ({}));
-      const detail = body?.detail ?? {};
-      throw new SrsPaywallError(
-        detail.message ?? 'Upgrade for unlimited sessions',
-        detail.previews_used ?? 0,
-        detail.previews_limit ?? 0,
-        detail.paywall === 'srs_daily_cap_reached' ? 'daily_cap_reached' : 'preview_exhausted',
-      );
-    }
-    if (!res.ok) {
-      let code = 'unknown';
-      let message = 'Something went wrong. Please try again.';
-      try {
-        const body = await res.json();
-        const detail = body?.detail;
-        if (detail && typeof detail === 'object') {
-          code = detail.code ?? code;
-          message = detail.message ?? message;
-        }
-      } catch {
-        // keep the generic message
-      }
-      throw new ListApiError(code, message, res.status);
-    }
-    return res.json();
-  },
 };
 
 // ─── Watched list + Not-interested (home-feed swipe actions) ─────────────

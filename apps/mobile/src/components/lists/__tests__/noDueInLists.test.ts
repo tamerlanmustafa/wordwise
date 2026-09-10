@@ -51,11 +51,13 @@ describe('word lists do not report the review schedule', () => {
     expect(read('components', 'screens', 'ListDetailScreen.tsx')).not.toContain('dueCount');
   });
 
-  it('gives the practice button one name', () => {
-    // "Practice 6 due" / "Practice this list" meant the button renamed itself
-    // as the schedule moved, and said "0 due" was a reason not to press it.
+  it('has no practice button to name', () => {
+    // This used to assert the button carried ONE label instead of renaming
+    // itself with the due count. The button is gone entirely now — practice
+    // is the Practice tab's job — so what is guarded is its absence. See
+    // `listsHaveNoPractice.test.ts` for the rest of that removal.
     const detail = read('components', 'screens', 'ListDetailScreen.tsx');
-    expect(detail).toContain("t('practice.none')");
+    expect(detail).not.toContain("practice.none");
     expect(detail).not.toContain("practice.due");
   });
 
@@ -68,16 +70,16 @@ describe('word lists do not report the review schedule', () => {
     /* eslint-disable @typescript-eslint/no-var-requires */
     const lists = require('../../../i18n/locales/en/lists.json');
     expect(lists.meta.dueCount_one).toBeUndefined();
-    expect(lists.practice.due_one).toBeUndefined();
     expect(lists.sort.due).toBeUndefined();
     expect(lists.srs.due).toBeUndefined();
+    // The whole `practice` block went with the button it labelled.
+    expect(lists.practice).toBeUndefined();
 
-    // The states that survive still need their words, and the button still
-    // needs its one label — this must not become "the copy is all gone".
+    // The states that survive still need their words — this must not become
+    // "the copy is all gone".
     expect(lists.srs.new).toBeTruthy();
     expect(lists.srs.learning).toBeTruthy();
     expect(lists.srs.learned).toBeTruthy();
-    expect(lists.practice.none).toBeTruthy();
   });
 
   it('no longer models a next-review date it never showed', () => {

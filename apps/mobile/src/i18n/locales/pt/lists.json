@@ -28,10 +28,6 @@
     "errorDuplicate": "Você já tem uma lista com esse nome.",
     "errorLimit": "Você atingiu o número máximo de listas. Exclua uma para abrir espaço."
   },
-  "practice": {
-    "none": "Praticar esta lista",
-    "empty": "Ainda não há nada para praticar"
-  },
   "sort": {
     "title": "Ordenar por",
     "added": "Adicionado recentemente",

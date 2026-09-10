@@ -276,34 +276,6 @@ describe('API endpoint wrappers', () => {
       expect(bodyOf(fetchMock)).toEqual({ ids: [12, 9, 30] });
     });
 
-    it('practice POSTs and returns the standard session payload', async () => {
-      fetchMock.mockResolvedValue(ok({
-        cards: [{ user_word_id: 1 }], total_due: 6, session_size: 10,
-        is_preview: false, previews_remaining: 0, kind: 'list_words',
-      }));
-      const session = await listsApi.practice(11);
-      expect(methodOf(fetchMock)).toBe('POST');
-      expect(urlOf(fetchMock)).toBe(`${API_BASE_URL}/lists/11/practice`);
-      expect(session.kind).toBe('list_words');
-    });
-
-    it('practice maps the free-tier daily cap to SrsPaywallError', async () => {
-      // Same cap as the Practice tab — a list is not a way around it.
-      fetchMock.mockResolvedValue(
-        ok({ detail: { paywall: 'srs_daily_cap_reached', message: 'Tomorrow', previews_used: 1, previews_limit: 1 } }, 402),
-      );
-      await expect(listsApi.practice(11)).rejects.toMatchObject({
-        name: 'SrsPaywallError',
-        kind: 'daily_cap_reached',
-      });
-    });
-
-    it('practice surfaces an empty pool as nothing_to_practice', async () => {
-      fetchMock.mockResolvedValue(
-        ok({ detail: { code: 'nothing_to_practice', message: "There's nothing to practise in this list yet" } }, 409),
-      );
-      await expect(listsApi.practice(30)).rejects.toMatchObject({ code: 'nothing_to_practice' });
-    });
   });
 
   describe('reelApi', () => {

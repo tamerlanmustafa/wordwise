@@ -28,10 +28,6 @@
     "errorDuplicate": "You already have a list with that name.",
     "errorLimit": "You've reached the maximum number of lists. Delete one to make room."
   },
-  "practice": {
-    "none": "Practice this list",
-    "empty": "Nothing to practise yet"
-  },
   "sort": {
     "title": "Sort by",
     "added": "Recently added",
