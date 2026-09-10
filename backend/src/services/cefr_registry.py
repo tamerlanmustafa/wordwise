@@ -79,6 +79,78 @@ def trusted_registry_sql(alias: str = "l") -> str:
     )
 
 
+#: The rarest a word may be and still be taught at each level.
+#:
+#: Levels track difficulty well at the centre — prod medians on 2026-09-10 run
+#: A1 263, A2 933, B1 1,122, B2 4,073, C1 28,183, C2 204,173 — and fall apart in
+#: the rare tail, where every level collects words nothing should teach:
+#:
+#:   A1  outgo parasail houseware murderess signalman carbuncle souk forceps
+#:   A2  wahoo ratatouille blithe swoosh settee rend yippee archeologist
+#:   B2  quarrelsome clearness helpfulness uneaten untalented dehumanize arnica
+#:   C2  bastinado mizzenmast googolplex poteen stridulation modiste nuncle
+#:
+#: Those arrive from at least four unrelated causes — over-stripped lemmas
+#: (`scissor`, `trouser`, `sunglass`), British spellings (`odour`,
+#: `amphitheatre`), dictionary derivations nobody teaches (`untalented`,
+#: `clearness`), and Zipf-ladder guesses. Fixing each at its source is the real
+#: work (see the lemma-purity track); this is the output-side guard that also
+#: catches the causes not yet diagnosed.
+#:
+#: Cost measured against the live decks: A1 2.7%, A2 6.7%, B1 3.3%, B2 1.7%,
+#: C1 0.7%, C2 22.5%. C2 is the outlier because rarity is most of what defines
+#: C2 — its ceiling is set far looser for that reason, and everything past it
+#: was still junk at 400k, 600k and 800k when sampled.
+TEACHABLE_FREQUENCY_CEILING: Dict[str, int] = {
+    "A1": 10_000,
+    "A2": 25_000,
+    "B1": 40_000,
+    "B2": 60_000,
+    "C1": 150_000,
+    "C2": 400_000,
+}
+
+
+def plausible_frequency_sql(alias: str = "l") -> str:
+    """WHERE-clause fragment: this row is not too rare for the level it claims.
+
+    A level and a frequency are two independent signals about the same word.
+    Where they agree the grade is probably right; where a word graded A1 turns
+    out to be the 457,088th most common word in English, one of them is wrong
+    and the word is not worth a card either way.
+
+    A NULL rank passes. "We have no frequency for this word" is the absence of
+    evidence, and turning that into a teaching decision is the mistake that put
+    684 dictionary-scrape words into the B2 deck (the Zipf=0 branch). Only 3
+    servable rows in prod are NULL anyway.
+
+    The CASE compares literals against the enum column rather than casting the
+    column to text — a `cefr_level::text` predicate is what mis-planned the
+    vocabulary queries in #118. `frequency_rank` carries `ix_lemmas_frequency_rank`.
+
+    Deliberately NOT folded into `trusted_registry_sql`: that fragment also
+    backs `registry_levels`, which is how an already-saved word gets the level
+    on its badge. A word being too obscure to teach is not the same as it
+    having no level, and a user who saved `bastinado` should still see what it
+    was graded.
+
+    `alias` is written by the caller, never user input, and is interpolated.
+    Pass "" for an unaliased single-table query.
+    """
+    p = f"{alias}." if alias else ""
+    whens = " ".join(
+        f"WHEN '{level}' THEN {ceiling}"
+        for level, ceiling in TEACHABLE_FREQUENCY_CEILING.items()
+    )
+    # UNKNOWN has no ceiling of its own; `trusted_registry_sql` is what keeps it
+    # off a screen, and this fragment must not quietly become a second filter
+    # for it.
+    return (
+        f"({p}frequency_rank IS NULL OR {p}frequency_rank <= "
+        f"CASE {p}cefr_level {whens} ELSE {p}frequency_rank END)"
+    )
+
+
 # `lemma` is unique, so the ANY(...) drives an index scan; the level and source
 # predicates only filter what it returns. The output casts are free: they shape
 # the returned row, not the plan.

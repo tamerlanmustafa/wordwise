@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from .cefr import EXCLUDED_A1_WORDS, should_keep_word
-from ..services.cefr_registry import trusted_registry_sql
+from ..services.cefr_registry import plausible_frequency_sql, trusted_registry_sql
 from ..services.hidden_words import get_hidden_word_set
 from ..services.quiz_service import (
     CARDS_PER_SESSION,
@@ -850,6 +850,13 @@ async def _get_journey_words_at_level(
     `l.lemma ASC` is a stable tiebreaker. frequency_rank is not unique, and
     without it two tiles paging by OFFSET can skip or repeat a word.
 
+    `plausible_frequency_sql` keeps a level's rare tail out. It matters more
+    here than in the feed: this deck is ordered easiest-first and paged by
+    OFFSET, so the junk is not scattered through the pool — it is all waiting
+    together at the last tiles, which is exactly where a committed learner
+    ends up. Composed from the same fragment `real_word_sql` uses, because
+    this query reads the registry directly rather than through it.
+
     Single alphabetic words only, the same predicate the Explore feed uses.
     `lemmas` also holds idioms and phrasal verbs, which word_classifications
     never did — and their frequency_rank puts them at the very front, so
@@ -874,6 +881,7 @@ async def _get_journey_words_at_level(
         FROM lemmas l
         WHERE l.cefr_level = $1::proficiencylevel
           AND {trusted_registry_sql("l")}
+          AND {plausible_frequency_sql("l")}
           AND l.lemma ~ '^[a-zA-Z]+$'
           AND NOT (l.lemma = ANY($4::text[]))
         ORDER BY l.frequency_rank ASC NULLS LAST, l.lemma ASC
@@ -920,6 +928,13 @@ async def _movie_specific_words(
     SRS-due words first (capped), then top-frequency unknowns from the
     movie in the user's CEFR ±1 band. Returns [] if the movie has no
     lemma mappings — caller should fall back to the legacy path.
+
+    Carries `plausible_frequency_sql` for the same reason its sibling
+    `_get_journey_words_at_level` does: this is the other half of a journey
+    session, and a rule that held on one half and not the other is the drift
+    `feed_pool.real_word_sql` exists to prevent. Ordering by
+    `frequency_in_movie` does not save it — a film with few mapped lemmas
+    reaches the tail on the first tile.
     """
     band = _band_levels(level)
 
@@ -959,6 +974,7 @@ async def _movie_specific_words(
         JOIN lemmas l  ON l.id = mlm.lemma_id
         WHERE m.tmdb_id = $1
           AND l.cefr_level IN ({band_placeholders})
+          AND {plausible_frequency_sql("l")}
           AND NOT EXISTS (
               SELECT 1 FROM user_words uw
               WHERE uw.user_id = $2

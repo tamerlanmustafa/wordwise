@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.services.cefr_registry import TEACHABLE_FREQUENCY_CEILING
 from src.services.feed_pool import (
     FEED_MIN_LEMMA_LENGTH,
     FEED_MIX_LEVELS,
@@ -61,16 +62,40 @@ class TestEligibilityFragment:
 
     def test_does_not_scope_to_a_band(self):
         # Level scoping belongs to the caller: /today asks for the user's band,
-        # /feed for whatever the mix names, the report for all of them. So no
-        # servable level may appear as a literal.
+        # /feed for whatever the mix names, the report for all of them. So the
+        # fragment may not privilege one level over another.
         #
-        # `cefr_level` itself does appear, via trusted_registry_sql's
-        # `<> 'UNKNOWN'`. That is not scoping: UNKNOWN is the "could not
-        # classify" holding pen (#91), never one of FEED_MIX_LEVELS, so no
-        # caller can ever ask for it.
+        # Originally that was "no servable level appears as a literal at all".
+        # `plausible_frequency_sql` broke the letter of it while keeping the
+        # intent: its CASE names every level, but to give each its own rarity
+        # ceiling, not to restrict the query to any of them. So the assertion
+        # is now symmetry — mention all six or none. A fragment that named
+        # only A1, which is what scoping would actually look like, still fails.
+        #
+        # `cefr_level` also appears via trusted_registry_sql's `<> 'UNKNOWN'`.
+        # That is not scoping either: UNKNOWN is the "could not classify"
+        # holding pen (#91), never one of FEED_MIX_LEVELS, so no caller can
+        # ever ask for it.
         frag = feed_eligibility_sql("l")
-        for level in FEED_MIX_LEVELS:
-            assert f"'{level}'" not in frag
+        named = [level for level in FEED_MIX_LEVELS if f"'{level}'" in frag]
+        assert named in ([], FEED_MIX_LEVELS), (
+            f"fragment names {named} but not every level — that is scoping"
+        )
+
+    def test_excludes_words_far_rarer_than_their_level(self):
+        # Every level collects a rare tail nothing should teach: `souk` and
+        # `carbuncle` at A1, `bastinado` and `mizzenmast` at C2. They arrive
+        # from at least four unrelated causes, so the guard is on the output.
+        frag = feed_eligibility_sql("l")
+        assert "frequency_rank" in frag
+        for level, ceiling in TEACHABLE_FREQUENCY_CEILING.items():
+            assert f"WHEN '{level}' THEN {ceiling}" in frag
+
+    def test_a_missing_frequency_rank_is_not_a_reason_to_hide_a_word(self):
+        # "No frequency for this word" is the absence of evidence. Turning that
+        # into a teaching decision is precisely the Zipf=0 mistake that put 684
+        # dictionary-scrape words into the B2 deck.
+        assert "frequency_rank IS NULL OR" in feed_eligibility_sql("l")
 
     def test_requires_a_level_something_actually_graded(self):
         # The quiz applied trusted_registry_sql and the feed did not, so the

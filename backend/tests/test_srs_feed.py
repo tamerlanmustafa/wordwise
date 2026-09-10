@@ -303,8 +303,16 @@ class TestDrawFeedRows:
         assert "user_words uw" in db.sql and "uw.user_id = $1" in db.sql
 
     async def test_zero_quota_levels_are_not_queried(self):
+        # "Not queried" means no branch selects C2 rows. It used to be checked
+        # as "the string 'C2' never appears", which `plausible_frequency_sql`
+        # broke without breaking the rule: its CASE names every level to give
+        # each its own rarity ceiling, and naming C2 there is a lookup, not a
+        # query for C2 rows. Assert on the level predicate instead.
         db = await self._draw({"B1": 20, "C2": 0})
-        assert "'C2'" not in db.sql
+        assert "cefr_level = 'C2'" not in db.sql
+        assert "'C2'::proficiencylevel" not in db.sql
+        # and the level that DID have quota is still asked for
+        assert "cefr_level = 'B1'" in db.sql
 
     async def test_an_empty_quota_asks_nothing_at_all(self):
         db = self._Db()

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Protocol
 
-from .cefr_registry import trusted_registry_sql
+from .cefr_registry import plausible_frequency_sql, trusted_registry_sql
 from .hidden_words import hidden_word_exclusion_sql
 
 # Levels the Explore mix can address — the whole CEFR range. The mix panel is a
@@ -53,6 +53,7 @@ def real_word_sql(alias: str = "l") -> str:
       over-stripped junk lemmas live, so this is the filter that keeps them off
       a screen)
     - carries a level something actually graded (`trusted_registry_sql`)
+    - isn't far rarer than the level it claims (`plausible_frequency_sql`)
 
     That third test used to be the quiz's alone, and the divergence is what
     let #91's dumping ground back onto a screen: on 2026-09-06 prod served
@@ -68,6 +69,13 @@ def real_word_sql(alias: str = "l") -> str:
     have cut the A2 feed from 6,745 words to 1,477, below A1, which is a worse
     product than the bug it fixes.
 
+    The frequency ceiling applies here rather than only to the feed for the
+    same reason: a distractor is read, so `bastinado` on a wrong-answer tile is
+    as much nonsense as `bastinado` on a card. `_get_journey_words_at_level` in
+    routes/quiz.py composes the same fragment for the same reason — it reads
+    the registry directly rather than through this function, so it is the one
+    place the pair can still drift.
+
     Split out of `feed_eligibility_sql` for the quiz's distractor pool, which
     needs everything here and none of the "has an example sentence" test below:
     a distractor is a word on a tile the user reads once, not a card with a
@@ -82,6 +90,7 @@ def real_word_sql(alias: str = "l") -> str:
           AND length({alias}.lemma) >= {FEED_MIN_LEMMA_LENGTH}
           AND {hidden_word_exclusion_sql(f"{alias}.lemma")}
           AND {trusted_registry_sql(alias)}
+          AND {plausible_frequency_sql(alias)}
     """
 
 
