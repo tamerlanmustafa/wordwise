@@ -12,25 +12,49 @@ surfaces a lemma that is graded AND has a global LLM example sentence
 `sentence_lemma_links.is_global`, so the feed came back empty from a healthy
 backend against a healthy database. Nothing logs an error for that.
 
-This copies enough to develop against, not a replica: N feed-eligible lemmas
-per CEFR band, their definitions, and one global example sentence each.
+This copies enough to develop against, not a replica.
+
+What it seeds
+-------------
+1. **Feed-eligible lemmas** — N per CEFR band, their definitions, and one
+   global LLM example sentence each. Without these the word feed is empty.
+2. **The translation cache** — every row, because it is small (~35k) and
+   because a cache miss locally now *fails*: both DeepL and Google are switched
+   off (see CLAUDE.md), so an uncached word has nowhere to go and the reveal
+   500s. Prod's cache is the only thing that makes translation work offline.
+3. **Translation passthroughs** — the small table recording terms a provider
+   handed back unchanged. It is what keeps `khat -> khat` from being written
+   into the cache as a real translation.
+4. **Vocab coverage snapshots** — the admin health card reads the latest row
+   and renders nothing at all without one.
 
 What it does NOT do
 -------------------
 * It never writes to prod. The prod connection issues SELECTs only.
-* It does not touch movies, users, or anything user-owned.
-* It does not delete. Re-running updates the same rows.
+* It does not touch movies, users, or anything user-owned. User rows are
+  supposed to come from using the app locally, not from copying real accounts.
+* It does not delete. Re-running updates or skips, never churns.
 
 Ids are not copied. Prod and local assign their own `lemmas.id`, so lemmas are
-matched **by text** and sentence links are rebuilt against local ids — copying
-ids would silently attach a definition to whichever unrelated word happened to
-hold that id locally.
+matched **by text**, sentence links are rebuilt against local ids, and every
+copied table is deduped on its natural key rather than its primary key —
+copying ids would silently attach a definition to whichever unrelated word
+happened to hold that id locally.
 
 Usage
 -----
-    python3 scripts/seed_local_from_prod.py --prod-url "postgresql://..." [--per-level 60]
+    python3 scripts/seed_local_from_prod.py --prod-url "postgresql://..." \\
+        [--per-level 60] [--translations 0] [--skip-lemmas]
+
+The prod URL is `DATABASE_PUBLIC_URL` from Railway's Postgres service; the
+service's own `DATABASE_URL` points at `postgres.railway.internal` and is not
+reachable from a laptop:
+
+    railway variables -s Postgres --json | python3 -c \\
+      "import json,sys; print(json.load(sys.stdin)['DATABASE_PUBLIC_URL'])"
 
 `--per-level` is per CEFR band (A1..C2), so the default seeds ~360 lemmas.
+`--translations` caps the cache copy (0 = all of it, the default).
 """
 
 from __future__ import annotations
@@ -152,6 +176,53 @@ COUNT_SQL = """
                     WHERE sll.lemma_id = l.id AND sll.is_global)
 """
 
+# ── Plain table copies ─────────────────────────────────────────────────────
+#
+# Each of these is derived, non-user-owned data with a natural unique key, so a
+# copy is a straight INSERT ... ON CONFLICT DO NOTHING and re-running is free.
+# The key named in each ON CONFLICT is the table's real unique index, not its
+# primary key — ids are prod's and mean nothing here.
+#
+# `updated_at DESC` on the cache is the closest thing to a hit counter the
+# table has: the row is touched when it is written, so the most recently
+# updated rows are the ones prod actually served.
+# `reads` is the SELECT list, which is not always the column list: a jsonb
+# column comes back to Python as a dict, and psycopg's COPY text formatter has
+# no dumper for one. Selecting it as ::text hands COPY a string and lets
+# Postgres parse it back into jsonb on the way in, which is both simpler and
+# faster than registering a dumper for a single column.
+COPIES: tuple[tuple[str, str, tuple[str, ...], str, str, str], ...] = (
+    (
+        "translation_cache",
+        "translation cache",
+        ("source_text", "source_lang", "target_lang", "translated", "provider",
+         "created_at", "updated_at"),
+        "",  # reads: same as the column list
+        "(source_text, target_lang)",
+        "ORDER BY updated_at DESC",
+    ),
+    (
+        "translation_passthroughs",
+        "passthroughs",
+        ("source_text", "target_lang", "provider", "times_seen",
+         "first_seen_at", "last_seen_at"),
+        "",
+        "(source_text, target_lang, provider)",
+        "ORDER BY last_seen_at DESC",
+    ),
+    (
+        "vocab_coverage_snapshots",
+        "coverage snapshots",
+        ("captured_at", "metrics"),
+        "captured_at, metrics::text",
+        # No natural unique index on this one, so there is nothing for
+        # ON CONFLICT to name — dedupe on captured_at with an anti-join
+        # instead (see copy_table).
+        "",
+        "ORDER BY captured_at DESC",
+    ),
+)
+
 
 def local_url() -> str:
     url = os.environ.get("DATABASE_URL")
@@ -165,16 +236,95 @@ def local_url() -> str:
     sys.exit("No DATABASE_URL in the environment or backend/.env")
 
 
+def copy_table(
+    src: "psycopg.Connection",
+    dst: "psycopg.Connection",
+    table: str,
+    label: str,
+    cols: tuple[str, ...],
+    reads: str,
+    conflict: str,
+    order: str,
+    limit: int,
+) -> None:
+    """Copy one derived table from prod, skipping rows already held locally.
+
+    Staged through a TEMP table rather than inserted row by row: the cache is
+    tens of thousands of rows and a per-row round trip over the public proxy
+    turns a two-second copy into a two-minute one.
+    """
+    collist = ", ".join(cols)
+    cap = f" LIMIT {limit}" if limit else ""
+    with src.cursor() as cur:
+        cur.execute(f"SELECT {reads or collist} FROM {table} {order}{cap}")
+        rows = cur.fetchall()
+    if not rows:
+        print(f"  {label:<20} source empty, skipped")
+        return
+
+    with dst.cursor() as cur:
+        before = cur.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        cur.execute(
+            f"CREATE TEMP TABLE stage_{table} "
+            f"(LIKE {table} INCLUDING DEFAULTS) ON COMMIT DROP"
+        )
+        with cur.copy(f"COPY stage_{table} ({collist}) FROM STDIN") as copy:
+            for row in rows:
+                copy.write_row(row)
+
+        if conflict:
+            cur.execute(
+                f"INSERT INTO {table} ({collist}) SELECT {collist} "
+                f"FROM stage_{table} ON CONFLICT {conflict} DO NOTHING"
+            )
+        else:
+            # Same intent, expressed as an anti-join because the table has no
+            # unique index for ON CONFLICT to name.
+            cur.execute(
+                f"INSERT INTO {table} ({collist}) SELECT s.{collist} "
+                f"FROM stage_{table} s WHERE NOT EXISTS ("
+                f"  SELECT 1 FROM {table} t WHERE t.captured_at = s.captured_at)"
+            )
+        added = cur.rowcount
+        after = cur.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+    print(f"  {label:<20} +{added:<7} ({before:,} -> {after:,})")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--prod-url", required=True, help="read-only source database")
     ap.add_argument("--per-level", type=int, default=60)
+    ap.add_argument(
+        "--translations",
+        type=int,
+        default=0,
+        help="cap on translation-cache rows to copy (0 = all)",
+    )
+    ap.add_argument(
+        "--skip-lemmas",
+        action="store_true",
+        help="only refresh the copied tables, leave the feed seeding alone",
+    )
     args = ap.parse_args()
 
     target = local_url()
     if "localhost" not in target and "127.0.0.1" not in target:
         sys.exit(f"Refusing to seed a non-local target: {target.split('@')[-1]}")
 
+    # The plain copies first: they are independent of the lemma seeding and
+    # cheap, so a run that fails halfway through the feed step still leaves the
+    # translation cache populated.
+    print("Copying derived tables:")
+    with psycopg.connect(args.prod_url) as src, psycopg.connect(target) as dst:
+        for table, label, cols, reads, conflict, order in COPIES:
+            limit = args.translations if table == "translation_cache" else 0
+            copy_table(src, dst, table, label, cols, reads, conflict, order, limit)
+        dst.commit()
+
+    if args.skip_lemmas:
+        return
+
+    print("\nSeeding feed-eligible lemmas:")
     rows: list[tuple] = []
     with psycopg.connect(args.prod_url) as src, src.cursor() as cur:
         for level in LEVELS:

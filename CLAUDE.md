@@ -111,8 +111,16 @@
 - Auth is per-machine: if `railway whoami` returns `Unauthorized`, ask the user to run `railway login` (it opens a browser) rather than trying to authenticate.
 - Read-only commands are fine unprompted. Never run `railway up`, `railway redeploy`, `railway variables --set`, or anything else that mutates the deployment without explicit approval.
 
+## A schema change lands in BOTH databases
+- **`prisma migrate` is not the migration path here.** The history has pre-existing drift, so `migrate dev` and `db push` both demand a destructive reset. Schema changes ship as hand-written, idempotent SQL in `backend/prisma/manual/`, with the matching `schema.prisma` edit in the same commit. `backend/prisma/manual/README.md` is the full procedure — read it before writing one.
+- **Applying it to prod is half the job; the other half is your local DB.** Nothing tracks whether a manual file was ever run locally, so local drifts behind one migration at a time and nothing tells you. Apply the file to prod **before the code lands** (the regenerated client selects every column in the schema), then to local — in the same sitting, not "later".
+- **A missing index does not fail loudly, and a missing UNIQUE index makes local *wrong* rather than slow.** Measured 2026-09-10: every Prisma table existed in both databases, but local was missing 11 of prod's indexes — including `unique_translation_passthrough`, which `TranslationService._record_passthroughs` names in an `ON CONFLICT`. That call raises `InvalidColumnReference` on every invocation locally, passes CI, and works in prod. You cannot find this by reading code; you find it by diffing `pg_indexes`.
+- **Catching a stale local DB up:** `psql "$DATABASE_URL" -f backend/prisma/manual/2026_09_10_local_index_catchup.sql` — idempotent, index-only, writes no rows. Extend that file when a new migration adds an index. To check for drift, diff `select tablename||indexname from pg_indexes where schemaname='public'` between the two.
+- **Data, not schema:** `backend/scripts/seed_local_from_prod.py` copies a testing-sized slice — feed-eligible lemmas with example sentences, the translation cache, passthroughs, coverage snapshots. It is read-only against prod, refuses a non-local target, and is safe to re-run. Local does **not** need to be a replica; it needs enough rows that a screen looks the way it will in prod. It deliberately copies nothing user-owned.
+- Prod's read-only URL is `DATABASE_PUBLIC_URL` from `railway variables -s Postgres --json`; the service's own `DATABASE_URL` is `postgres.railway.internal` and is unreachable from a laptop.
+
 ## Do not touch without asking
-- Never run destructive DB commands. Schema changes go through Prisma: `npm run db:migrate` (dev) — never hand-edit `backend/prisma/migrations/` or the generated Prisma client.
+- Never run destructive DB commands, and never hand-edit `backend/prisma/migrations/` or the generated Prisma client.
 - Never commit or edit `.env` files; copy from `backend/env.example` and keep secrets out of the repo.
 - Treat `frontend/dist/` and other generated/build output as read-only.
 
