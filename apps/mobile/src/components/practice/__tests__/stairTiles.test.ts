@@ -27,9 +27,6 @@ import {
   CHECK_LIP_W,
   LOCK_INK,
   MARK_TOP,
-  SCUFF_H,
-  SCUFF_START,
-  SCUFF_W,
 } from '../TileMarks';
 import {
   NOSING_H,
@@ -75,24 +72,36 @@ function alpha(color: string): number {
 
 // ── The depth cues ───────────────────────────────────────────────────────────
 
-describe('a value tuned on one theme is not inherited by the other', () => {
-  it('gives the light theme a lighter band than the dark theme, in every state', () => {
-    // The generalisable half of the bug, and the reason this is a test rather
-    // than a comment. An alpha is a proportion, so the SAME number is a
-    // heavier shadow on a light face than on a dark one — which means the two
-    // columns can never legitimately be equal. If a future re-tune sets them
-    // the same, it has almost certainly copied one into the other.
+describe('a tile is the same object in both appearances', () => {
+  it('takes no palette and no scheme', () => {
+    // The signature IS the contract. While `tileVisual` accepted a palette,
+    // every caller had to be handed the right one and the depth alphas had to
+    // be tuned twice — an alpha is `face × (1 - a)`, so the same number was a
+    // different shadow on cream than on near-black, and 0.85 over the light
+    // theme's cream was a black smear rather than a cast edge. One palette
+    // removes the question rather than answering it twice.
+    expect(tileVisual).toHaveLength(1);
+  });
+
+  it('paints the same face whichever appearance is active', () => {
+    // Nothing to compare against a theme any more, so this asserts the thing
+    // that could actually regress: that the faces come from one place and are
+    // the dark palette's, which is the appearance they were designed in.
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const light = tileVisual(state, themes.light, 'light').band;
-      const dark = tileVisual(state, themes.dark, 'dark').band;
-      expect(light).toBeLessThan(dark);
+      const v = tileVisual(state);
+      expect(v.face).not.toBe(themes.light.nodeLocked);
+      expect(v.face).not.toBe(themes.light.gold);
     }
+    expect(tileVisual('locked').face).toBe(themes.dark.nodeLocked);
+    expect(tileVisual('completed').face).toBe(themes.dark.nodeDone);
+    expect(tileVisual('active').face).toBe(themes.dark.gold);
+    expect(tileVisual('repair').face).toBe(themes.dark.error);
   });
 });
 
-describe.each(THEMES)('%s theme — the stair depth cues', (scheme, tc) => {
-  const band = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc, scheme).band;
-  const nosing = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc, scheme).nosing;
+describe('the stair depth cues', () => {
+  const band = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s).band;
+  const nosing = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s).nosing;
 
   it('shades the road ahead hardest and the tile in focus least', () => {
     // This ordering is the whole reason the values are per-state rather than
@@ -113,7 +122,7 @@ describe.each(THEMES)('%s theme — the stair depth cues', (scheme, tc) => {
   it.each(['active', 'completed', 'locked', 'repair'] as const)(
     '%s keeps both alphas inside 0–1',
     (state) => {
-      const v = tileVisual(state, tc, scheme);
+      const v = tileVisual(state);
       for (const a of [v.band, v.nosing]) {
         expect(a).toBeGreaterThanOrEqual(0);
         expect(a).toBeLessThanOrEqual(1);
@@ -124,38 +133,23 @@ describe.each(THEMES)('%s theme — the stair depth cues', (scheme, tc) => {
   it('lights the repair tile like the tile in focus, not like the road ahead', () => {
     // It is asking to be acted on now. A tile receding into the distance is
     // the opposite claim.
-    expect(tileVisual('repair', tc, scheme).band).toBe(tileVisual('active', tc, scheme).band);
-    expect(tileVisual('repair', tc, scheme).nosing).toBe(tileVisual('active', tc, scheme).nosing);
+    expect(tileVisual('repair').band).toBe(tileVisual('active').band);
+    expect(tileVisual('repair').nosing).toBe(tileVisual('active').nosing);
   });
 
-  it('never lets the band paint the tile’s own colour away', () => {
-    // The reported bug, in the one form a unit test can see it. Black at alpha
-    // `a` over a face is arithmetically `face × (1 - a)`, so the band is a
-    // fixed PROPORTION of whatever it lands on — and the values were tuned on
-    // dark, where the locked face is already near-black. Inherited by the
-    // light theme's cream they took 85% of it away: not a shadow, a black
-    // smear across the top of every stone tile.
-    //
-    // Two thirds is the floor because that is where a shadow stops being a
-    // stain: enough contrast to read as an edge cast from above, not enough to
-    // stop the face being the colour that tells you which state you are in.
+  it('always darkens the tread it lands on, in every state', () => {
+    // The band has to be doing something, or the flight is nine tiles that
+    // each happen to have a thickness rather than a staircase.
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const { face, band } = tileVisual(state, tc, scheme);
-      const under = luminance(face);
-      const banded = under * (1 - band);
-      if (scheme === 'light') {
-        expect(banded / under).toBeGreaterThan(0.6);
-      }
-      // Both themes: the band has to be doing something, or the flight is
-      // nine tiles that each happen to have a thickness.
+      const { face, band } = tileVisual(state);
       expect(band).toBeGreaterThan(0);
-      expect(banded).toBeLessThan(under);
+      expect(luminance(face) * (1 - band)).toBeLessThan(luminance(face));
     }
   });
 
   it('grades the riser darker at its foot than where it meets the tread', () => {
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const { edge } = tileVisual(state, tc, scheme);
+      const { edge } = tileVisual(state);
       expect(luminance(shade(edge, -RISER_FOOT_DARKEN))).toBeLessThan(luminance(edge));
     }
   });
@@ -164,7 +158,7 @@ describe.each(THEMES)('%s theme — the stair depth cues', (scheme, tc) => {
     // The riser already had to be darker than the face; grading it must not
     // find a way to overshoot back past that and light the tile from below.
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const { face, edge } = tileVisual(state, tc, scheme);
+      const { face, edge } = tileVisual(state);
       expect(luminance(shade(edge, -RISER_FOOT_DARKEN))).toBeLessThan(luminance(face));
     }
   });
@@ -226,11 +220,13 @@ describe('the tread has three fixed zones', () => {
     expect(NOSING_INSET).toBe(TILE_RADIUS);
   });
 
-  it('runs number → check → scuff across the tread without overlap', () => {
+  it('runs number → check across the tread without overlap', () => {
+    // A third zone used to sit past the check: a "scuff", two soft ellipses
+    // meant to read as a worn footprint. On a screen it read as two bubbles
+    // floating on the green and was removed, so the tread is two zones now.
     const zones = [
       ['number', NUMBER_START, 40],
       ['check', CHECK_START, CHECK_BOX],
-      ['scuff', SCUFF_START, SCUFF_W],
     ] as const;
     for (let i = 1; i < zones.length; i += 1) {
       const [, prevStart, prevW] = zones[i - 1];
@@ -251,19 +247,16 @@ describe('the tread has three fixed zones', () => {
     // The face clips its children (it has to, or the occlusion band grows
     // square corners), so a mark that overruns is silently cut rather than
     // overflowing — which looks intentional in a screenshot.
-    for (const [start, w] of [
-      [CHECK_START, CHECK_BOX],
-      [SCUFF_START, SCUFF_W],
-    ] as const) {
+    for (const [start, w] of [[CHECK_START, CHECK_BOX]] as const) {
       expect(start).toBeGreaterThanOrEqual(0);
       expect(start + w).toBeLessThanOrEqual(TILE_W);
     }
     expect(MARK_TOP).toBeGreaterThanOrEqual(0);
-    expect(MARK_TOP + Math.max(CHECK_BOX, SCUFF_H)).toBeLessThanOrEqual(TILE_H);
+    expect(MARK_TOP + CHECK_BOX).toBeLessThanOrEqual(TILE_H);
   });
 
-  it('clears the lit nosing, so a footprint never lands on the tread lip', () => {
-    expect(MARK_TOP + Math.max(CHECK_BOX, SCUFF_H)).toBeLessThanOrEqual(TILE_H - NOSING_H);
+  it('clears the lit nosing, so a mark never lands on the tread lip', () => {
+    expect(MARK_TOP + CHECK_BOX).toBeLessThanOrEqual(TILE_H - NOSING_H);
   });
 });
 
@@ -412,13 +405,13 @@ describe('a mark is engraved, not embossed', () => {
     expect(s).toMatch(/<LockShape color=\{dark\} keyhole=\{tc\.nodeLocked\} \/>/);
   });
 
-  it('softens the scuff with radial gradients, not a blur that does not exist', () => {
-    // Comments stripped first: the file names both banned techniques in prose
-    // to say why it is not using them, and reading the explanation as if it
-    // were code is how a guard fails on the change it was written for.
-    const s = marks().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
-    expect(s).not.toMatch(/feGaussianBlur|filter:\s*blur/);
-    expect(s.match(/<RadialGradient/g)).toHaveLength(2);
+  it('draws no scuff — the tread carries a check and nothing else', () => {
+    // Two soft radial-gradient ellipses used to sit past the check, meant as a
+    // worn footprint. They read as bubbles floating on the green. Removed, and
+    // this is what stops them coming back with the gradients that drew them.
+    const marks = src('TileMarks.tsx');
+    expect(marks).not.toMatch(/Ellipse/);
+    expect(marks).not.toMatch(/RadialGradient/);
   });
 
   it('takes every groove ink from the state mapping, never a literal', () => {

@@ -25,28 +25,27 @@
  * black and the nosing always white — a cast shadow and a caught highlight are
  * not palette decisions.
  *
- * ## Why the alphas are per theme, when the colours are not
+ * ## One palette, both appearances
  *
- * Black at alpha `a` over a face is arithmetically `face × (1 - a)`. So the
- * same alpha is not the same shadow: it is a fixed *proportion* of whatever it
- * lands on, and the two themes' faces are nowhere near each other.
+ * The tiles do not follow the theme. Stone, gold and green are the same
+ * colours on a cream page as on a black one, taken from `themes.dark` — the
+ * appearance they were designed against and the only one they were ever tuned
+ * in.
  *
- * The values were tuned on dark, where the locked face is `#2a2935` — already
- * near-black, so 0.85 of it away is a drop of about 36 luminance points and
- * reads as a tile receding into the distance. The same 0.85 on the light
- * theme's cream `#E5DCC4` is a drop of 187 points: not a shadow, a black smear
- * across the top of every stone tile, with the tile's own colour surviving only
- * in the bottom two-thirds. That is what "the practice tiles have no light-mode
- * colours" turned out to mean — they had them, and the band was painting over
- * them.
+ * That is a decision about *what a tile is* rather than about contrast. The
+ * flight is an object sitting on the page, like a photograph or a poster is,
+ * and a photograph does not invert when the room lights come on. The path
+ * around it still themes: the backdrop, the streak pills and the bottom bar
+ * all follow the appearance, and the flight reads as something placed on top
+ * of them.
  *
- * Neither a fixed alpha nor a fixed luminance drop is right, because
- * perception is neither purely proportional nor purely absolute. What is right
- * is the design intent, which survives both themes: the road ahead recedes
- * hardest, the tile under your feet recedes least, and in no case does the
- * shadow take the face's colour away. The light column is tuned to that, on a
- * device, rather than derived from the dark one by a formula that would only
- * look principled.
+ * It also makes the depth values honest again. `band` and `nosing` are alphas,
+ * and black at alpha `a` over a face is arithmetically `face × (1 - a)` — a
+ * fixed *proportion* of whatever it lands on, not a fixed amount of darkness.
+ * When the faces differed by theme the same alpha was two different shadows,
+ * and 0.85 over the light theme's cream was a black smear rather than a cast
+ * edge. With one set of faces there is one set of alphas, and they mean the
+ * same thing wherever they land.
  *
  * ## Marks
  *
@@ -58,49 +57,33 @@
  * the path but an interruption to it.
  */
 
-import { shade, type ColorScheme, type ThemeColors } from '../../theme/tokens';
+import { shade, themes } from '../../theme/tokens';
 import type { PracticeTileState } from './PracticeTile';
 
 /**
- * The two depth cues, per state, per theme. See the file docblock for why the
- * alphas cannot be shared: an alpha is a proportion of the face it lands on,
- * and the two themes' faces are nowhere near each other.
- *
- * Read down a column and the design intent is the same in both: `locked` >
- * `completed` > `active` on the band (the road ahead recedes hardest, the tile
- * under your feet least) and the exact inverse on the nosing. A test pins that
- * ordering, so a future re-tune can move the numbers but not the meaning.
+ * The two depth cues, per state. `locked` > `completed` > `active` on the band
+ * (the road ahead recedes hardest, the tile under your feet least), and the
+ * exact inverse on the nosing. A test pins that ordering, so a future re-tune
+ * can move the numbers but not the meaning.
  */
-const DEPTH: Record<PracticeTileState, Record<ColorScheme, { band: number; nosing: number }>> = {
+const DEPTH: Record<PracticeTileState, { band: number; nosing: number }> = {
   // Lit like the focused tile — it is asking for the same thing.
-  repair: {
-    dark: { band: 0.4, nosing: 0.5 },
-    light: { band: 0.18, nosing: 0.55 },
-  },
-  completed: {
-    dark: { band: 0.55, nosing: 0.28 },
-    light: { band: 0.22, nosing: 0.38 },
-  },
-  active: {
-    dark: { band: 0.4, nosing: 0.5 },
-    light: { band: 0.18, nosing: 0.55 },
-  },
-  // The heaviest band and the barely-there nosing are what make the road ahead
-  // recede. On light that still has to happen *without* the cream going grey,
-  // so the band drops to roughly a third of the dark theme's.
-  //
-  // The nosing rises a little — white has almost no headroom over cream, so it
-  // takes more of itself to register at all — but it stays the DIMMEST lip of
-  // the four, and that ordering is not negotiable. The first draft here set it
-  // to 0.45, above `completed`, on the reasoning that cream needed the help;
-  // `stairTiles.test.ts` rejected it, correctly. A tile deep enough in shadow
-  // to have the heaviest band cannot also have the brightest lit edge — that
-  // is not a dim tile, it is a tile lit from two directions at once.
-  locked: {
-    dark: { band: 0.85, nosing: 0.09 },
-    light: { band: 0.3, nosing: 0.2 },
-  },
+  repair: { band: 0.4, nosing: 0.5 },
+  completed: { band: 0.55, nosing: 0.28 },
+  active: { band: 0.4, nosing: 0.5 },
+  // The heaviest band and the barely-there nosing are what make the road
+  // ahead recede.
+  locked: { band: 0.85, nosing: 0.09 },
 };
+
+/**
+ * The tile palette, fixed to the dark theme in both appearances.
+ *
+ * Read from `themes.dark` rather than copied out of it, so retuning the dark
+ * palette's green retunes the tiles with it — they are not a separate design,
+ * they are that one, used everywhere.
+ */
+const TILE_PALETTE = themes.dark;
 
 /**
  * How much darker than its own face a groove's floor sits.
@@ -159,12 +142,14 @@ export interface TileVisual {
   faded: boolean;
 }
 
-export function tileVisual(
-  state: PracticeTileState,
-  tc: ThemeColors,
-  scheme: ColorScheme,
-): TileVisual {
-  const depth = (DEPTH[state] ?? DEPTH.locked)[scheme];
+/**
+ * Takes no palette and no scheme, and that absence is the point: a practice
+ * tile looks the same in both appearances, so there is nothing for a caller to
+ * get wrong by passing the wrong one.
+ */
+export function tileVisual(state: PracticeTileState): TileVisual {
+  const tc = TILE_PALETTE;
+  const depth = DEPTH[state] ?? DEPTH.locked;
   switch (state) {
     case 'repair':
       // Lit like the focused tile, because it is asking for the same thing:

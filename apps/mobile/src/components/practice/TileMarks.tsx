@@ -49,17 +49,13 @@
  * belongs on the right, where that reader's eye starts.
  */
 
-import { useId } from 'react';
 import { StyleSheet, Text, View, type TextStyle } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { shade, useThemeColors } from '../../theme/tokens';
 import { NOSING_INSET } from './TilePill';
-import { CHECK_FLOOR_DARKEN, type TileMark } from './tileVisuals';
-
-/** Kept for the scuff's trailing-side anchor; the marks no longer alternate. */
-export type MarkSide = 'left' | 'right';
+import { CHECK_FLOOR_DARKEN, tileVisual, type TileMark } from './tileVisuals';
 
 /** Painted size of the check. */
 export const CHECK_BOX = 30;
@@ -71,27 +67,11 @@ const CHECK_PATH = 'M4.4 12.9L9.7 18.1L19.8 6.7';
 export const CHECK_LIP_W = 3.7;
 export const CHECK_FLOOR_W = 2.9;
 
-/** Painted size of the scuff — wider and taller than the check, because the
- *  heel trails below and behind the ball. */
-export const SCUFF_W = 44;
-export const SCUFF_H = 40;
-
 /** Top of the scuff. The check needs no equivalent — it is centred on both
  *  axes, and on a 56pt tread a 30pt box centres to exactly this, which is why
  *  the two marks still share a baseline. */
 export const MARK_TOP = 13;
 
-/**
- * Where the scuff is worn, on the trailing side of the tread.
- *
- * It used to alternate sides by tile index, to stop a mark repeating in one
- * spot from drawing a vertical stripe down a path that bends. That job is
- * gone: the lesson number now occupies the leading end of EVERY tile on
- * purpose, so the flight has a deliberate column in it either way, and the
- * leading half is spoken for. Three fixed zones — number, check, scuff — read
- * as a layout; the same three with one of them jumping about reads as drift.
- */
-export const SCUFF_START = 132;
 
 /**
  * The lock's two layers, at both weights.
@@ -130,18 +110,19 @@ export function TileMarks({ mark, lesson, ink, nextUp = false }: TileMarksProps)
 }
 
 /**
- * A check cut into the tread, and a worn patch where a foot landed.
+ * A check cut into the tread.
  *
- * The scuff is what makes the check read as *history* rather than as a status
- * icon: someone walked here. Two soft ellipses, ball and heel, at opacities
- * low enough to be felt before they are seen.
+ * There used to be a scuff beside it — two soft white radial-gradient
+ * ellipses, a ball and a heel, meant to read as a worn patch where a foot
+ * landed and to make the check feel like *history* rather than like a status
+ * icon. On a real screen it did not read as wear. It read as two bubbles
+ * floating on the green, which is the failure mode of any texture drawn from
+ * an idea of a thing rather than from the thing: at the opacity where it was
+ * subtle enough not to be noticed as a footprint, it was still visible enough
+ * to be noticed as *something*, and something unexplained on a flat surface is
+ * a smudge. Removed rather than re-tuned.
  */
 function CompletedMark() {
-  const tc = useThemeColors();
-  // Unique per mount: react-native-svg resolves `url(#id)` per Svg root on
-  // native, and this keeps that true if the path is ever rendered on web.
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-
   return (
     <>
       <View pointerEvents="none" style={styles.centred}>
@@ -170,7 +151,7 @@ function CompletedMark() {
           <Path
             d={CHECK_PATH}
             fill="none"
-            stroke={shade(tc.nodeDone, -CHECK_FLOOR_DARKEN)}
+            stroke={shade(tileVisual('completed').face, -CHECK_FLOOR_DARKEN)}
             strokeWidth={CHECK_FLOOR_W}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -178,41 +159,6 @@ function CompletedMark() {
         </Svg>
       </View>
 
-      <View pointerEvents="none" style={[styles.mark, { top: MARK_TOP, start: SCUFF_START }]}>
-        <Svg width={SCUFF_W} height={SCUFF_H}>
-          {/* Radial-gradient fills rather than a blurred shape: CSS
-              `filter: blur()` has no React Native equivalent, and an SVG
-              `feGaussianBlur` is both slower and softer at the rim than this
-              on Android. Two gradients because the two prints differ in
-              weight — a heel bears less than a ball. */}
-          <Defs>
-            <RadialGradient id={`ball${uid}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#fff" stopOpacity={0.12} />
-              <Stop offset="1" stopColor="#fff" stopOpacity={0} />
-            </RadialGradient>
-            <RadialGradient id={`heel${uid}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#fff" stopOpacity={0.1} />
-              <Stop offset="1" stopColor="#fff" stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Ellipse
-            cx={22}
-            cy={12}
-            rx={15}
-            ry={10}
-            fill={`url(#ball${uid})`}
-            transform="rotate(-14, 22, 12)"
-          />
-          <Ellipse
-            cx={17}
-            cy={32}
-            rx={7.5}
-            ry={5.5}
-            fill={`url(#heel${uid})`}
-            transform="rotate(-14, 17, 32)"
-          />
-        </Svg>
-      </View>
     </>
   );
 }
@@ -348,9 +294,6 @@ function LockShape({ color, keyhole }: { color: string; keyhole?: string }) {
 const styles = StyleSheet.create({
   // Absolute, so no mark ever changes the face's layout — the face centres
   // whatever is left, and that is the repair tile's alarm alone.
-  mark: {
-    position: 'absolute',
-  },
   centred: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
