@@ -17,11 +17,11 @@ import path from 'path';
  * state's pair is checked rather than eyeballed once and trusted.
  */
 
-import { themes, type ThemeColors } from '../../../theme/tokens';
+import { themes, type ColorScheme, type ThemeColors } from '../../../theme/tokens';
 import { tileVisual } from '../tileVisuals';
 import { TILE_H, TILE_RADIUS, TILE_EDGE, TILE_EDGE_RADIUS } from '../TilePill';
 
-const THEMES: Array<[string, ThemeColors]> = [
+const THEMES: Array<[ColorScheme, ThemeColors]> = [
   ['light', themes.light],
   ['dark', themes.dark],
 ];
@@ -52,21 +52,21 @@ function greenness(color: string): number {
   return parseInt(hex[1].slice(2, 4), 16) - parseInt(hex[1].slice(0, 2), 16);
 }
 
-describe.each(THEMES)('%s theme', (_name, tc) => {
+describe.each(THEMES)('%s theme', (scheme, tc) => {
   describe('a completed tile', () => {
     it('is green, not gold', () => {
-      const done = tileVisual('completed', tc);
+      const done = tileVisual('completed', tc, scheme);
 
       expect(greenness(done.face)).toBeGreaterThan(0);
       expect(done.face).not.toBe(tc.gold);
     });
 
     it('carries no glyph — the colour is the whole message', () => {
-      expect(tileVisual('completed', tc).glyph).toBeNull();
+      expect(tileVisual('completed', tc, scheme).glyph).toBeNull();
     });
 
     it('stays slightly receded, so the road behind you sits back', () => {
-      expect(tileVisual('completed', tc).faded).toBe(true);
+      expect(tileVisual('completed', tc, scheme).faded).toBe(true);
     });
 
     it('is the same object as every other tile, in a different colour', () => {
@@ -74,7 +74,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
       // depth alphas, a glyph and a fade. No state gets a treatment of its
       // own, which is what keeps the tiles reading as one flight of stone
       // rather than as four differently-built widgets in a row.
-      const done = tileVisual('completed', tc);
+      const done = tileVisual('completed', tc, scheme);
 
       expect(Object.keys(done).sort()).toEqual([
         'band',
@@ -92,21 +92,21 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     it('is still gold', () => {
       // Deliberately unchanged: it is the one tile the user can tap, and it
       // already earns attention from the ring and the bounce.
-      expect(tileVisual('active', tc).face).toBe(tc.gold);
+      expect(tileVisual('active', tc, scheme).face).toBe(tc.gold);
     });
 
     it('carries no glyph either', () => {
-      expect(tileVisual('active', tc).glyph).toBeNull();
+      expect(tileVisual('active', tc, scheme).glyph).toBeNull();
     });
 
     it('is not faded — it is the one tile in focus', () => {
-      expect(tileVisual('active', tc).faded).toBe(false);
+      expect(tileVisual('active', tc, scheme).faded).toBe(false);
     });
   });
 
   describe('locked tiles', () => {
     it('are stone with nothing on them', () => {
-      const locked = tileVisual('locked', tc);
+      const locked = tileVisual('locked', tc, scheme);
 
       expect(locked.face).toBe(tc.nodeLocked);
       expect(locked.glyph).toBeNull();
@@ -115,13 +115,13 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     it('keep full opacity even so', () => {
       // Their colours are already dim; fading them on top of that made the
       // road ahead disappear rather than recede.
-      expect(tileVisual('locked', tc).faded).toBe(false);
+      expect(tileVisual('locked', tc, scheme).faded).toBe(false);
     });
   });
 
   describe('the repair tile', () => {
     it('keeps its alarm — it is an interruption, not a position', () => {
-      const repair = tileVisual('repair', tc);
+      const repair = tileVisual('repair', tc, scheme);
 
       expect(repair.glyph).toBe('alarm');
       expect(repair.face).toBe(tc.error);
@@ -132,7 +132,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     const states = ['active', 'completed', 'locked', 'repair'] as const;
 
     it.each(states)('%s has a lip darker than its face', (state) => {
-      const { face, edge } = tileVisual(state, tc);
+      const { face, edge } = tileVisual(state, tc, scheme);
 
       expect(luminance(edge)).toBeLessThan(luminance(face));
     });
@@ -150,7 +150,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
     it.each(states.filter((s) => s !== 'locked'))(
       '%s has a lip that is visibly darker, not a hairline',
       (state) => {
-        const { face, edge } = tileVisual(state, tc);
+        const { face, edge } = tileVisual(state, tc, scheme);
 
         expect(luminance(face) - luminance(edge)).toBeGreaterThan(20);
       },
@@ -159,7 +159,7 @@ describe.each(THEMES)('%s theme', (_name, tc) => {
 
   it('gives every state a distinguishable face', () => {
     const faces = (['active', 'completed', 'locked', 'repair'] as const).map(
-      (s) => tileVisual(s, tc).face,
+      (s) => tileVisual(s, tc, scheme).face,
     );
 
     expect(new Set(faces).size).toBe(faces.length);

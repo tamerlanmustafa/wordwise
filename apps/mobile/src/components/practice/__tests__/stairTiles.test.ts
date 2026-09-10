@@ -19,7 +19,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { themes, shade, type ThemeColors } from '../../../theme/tokens';
+import { themes, shade, type ColorScheme, type ThemeColors } from '../../../theme/tokens';
 import { tileVisual, tileMark, CHECK_FLOOR_DARKEN } from '../tileVisuals';
 import {
   CHECK_BOX,
@@ -41,7 +41,7 @@ import {
   TREAD_BAND_H,
 } from '../TilePill';
 
-const THEMES: Array<[string, ThemeColors]> = [
+const THEMES: Array<[ColorScheme, ThemeColors]> = [
   ['light', themes.light],
   ['dark', themes.dark],
 ];
@@ -75,9 +75,24 @@ function alpha(color: string): number {
 
 // ── The depth cues ───────────────────────────────────────────────────────────
 
-describe.each(THEMES)('%s theme — the stair depth cues', (_name, tc) => {
-  const band = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc).band;
-  const nosing = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc).nosing;
+describe('a value tuned on one theme is not inherited by the other', () => {
+  it('gives the light theme a lighter band than the dark theme, in every state', () => {
+    // The generalisable half of the bug, and the reason this is a test rather
+    // than a comment. An alpha is a proportion, so the SAME number is a
+    // heavier shadow on a light face than on a dark one — which means the two
+    // columns can never legitimately be equal. If a future re-tune sets them
+    // the same, it has almost certainly copied one into the other.
+    for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
+      const light = tileVisual(state, themes.light, 'light').band;
+      const dark = tileVisual(state, themes.dark, 'dark').band;
+      expect(light).toBeLessThan(dark);
+    }
+  });
+});
+
+describe.each(THEMES)('%s theme — the stair depth cues', (scheme, tc) => {
+  const band = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc, scheme).band;
+  const nosing = (s: Parameters<typeof tileVisual>[0]) => tileVisual(s, tc, scheme).nosing;
 
   it('shades the road ahead hardest and the tile in focus least', () => {
     // This ordering is the whole reason the values are per-state rather than
@@ -98,7 +113,7 @@ describe.each(THEMES)('%s theme — the stair depth cues', (_name, tc) => {
   it.each(['active', 'completed', 'locked', 'repair'] as const)(
     '%s keeps both alphas inside 0–1',
     (state) => {
-      const v = tileVisual(state, tc);
+      const v = tileVisual(state, tc, scheme);
       for (const a of [v.band, v.nosing]) {
         expect(a).toBeGreaterThanOrEqual(0);
         expect(a).toBeLessThanOrEqual(1);
@@ -109,13 +124,38 @@ describe.each(THEMES)('%s theme — the stair depth cues', (_name, tc) => {
   it('lights the repair tile like the tile in focus, not like the road ahead', () => {
     // It is asking to be acted on now. A tile receding into the distance is
     // the opposite claim.
-    expect(tileVisual('repair', tc).band).toBe(tileVisual('active', tc).band);
-    expect(tileVisual('repair', tc).nosing).toBe(tileVisual('active', tc).nosing);
+    expect(tileVisual('repair', tc, scheme).band).toBe(tileVisual('active', tc, scheme).band);
+    expect(tileVisual('repair', tc, scheme).nosing).toBe(tileVisual('active', tc, scheme).nosing);
+  });
+
+  it('never lets the band paint the tile’s own colour away', () => {
+    // The reported bug, in the one form a unit test can see it. Black at alpha
+    // `a` over a face is arithmetically `face × (1 - a)`, so the band is a
+    // fixed PROPORTION of whatever it lands on — and the values were tuned on
+    // dark, where the locked face is already near-black. Inherited by the
+    // light theme's cream they took 85% of it away: not a shadow, a black
+    // smear across the top of every stone tile.
+    //
+    // Two thirds is the floor because that is where a shadow stops being a
+    // stain: enough contrast to read as an edge cast from above, not enough to
+    // stop the face being the colour that tells you which state you are in.
+    for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
+      const { face, band } = tileVisual(state, tc, scheme);
+      const under = luminance(face);
+      const banded = under * (1 - band);
+      if (scheme === 'light') {
+        expect(banded / under).toBeGreaterThan(0.6);
+      }
+      // Both themes: the band has to be doing something, or the flight is
+      // nine tiles that each happen to have a thickness.
+      expect(band).toBeGreaterThan(0);
+      expect(banded).toBeLessThan(under);
+    }
   });
 
   it('grades the riser darker at its foot than where it meets the tread', () => {
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const { edge } = tileVisual(state, tc);
+      const { edge } = tileVisual(state, tc, scheme);
       expect(luminance(shade(edge, -RISER_FOOT_DARKEN))).toBeLessThan(luminance(edge));
     }
   });
@@ -124,7 +164,7 @@ describe.each(THEMES)('%s theme — the stair depth cues', (_name, tc) => {
     // The riser already had to be darker than the face; grading it must not
     // find a way to overshoot back past that and light the tile from below.
     for (const state of ['active', 'completed', 'locked', 'repair'] as const) {
-      const { face, edge } = tileVisual(state, tc);
+      const { face, edge } = tileVisual(state, tc, scheme);
       expect(luminance(shade(edge, -RISER_FOOT_DARKEN))).toBeLessThan(luminance(face));
     }
   });
@@ -228,7 +268,7 @@ describe('the tread has three fixed zones', () => {
 });
 
 describe('the groove floor is the tile in shadow, not a second colour', () => {
-  it.each(THEMES)('%s: reads darker than the face it is cut into', (_name, tc) => {
+  it.each(THEMES)('%s: reads darker than the face it is cut into', (scheme, tc) => {
     const floor = shade(tc.nodeDone, -CHECK_FLOOR_DARKEN);
     expect(luminance(floor)).toBeLessThan(luminance(tc.nodeDone));
   });

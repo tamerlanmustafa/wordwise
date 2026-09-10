@@ -405,7 +405,17 @@ const dark: ThemeColors = {
   labelFaint:         'rgba(255,255,255,0.40)',
 };
 
-export const themes: Record<'light' | 'dark', ThemeColors> = { light, dark };
+/**
+ * The two appearances, resolved — never 'system', which is a *preference* and
+ * is turned into one of these before anything renders.
+ *
+ * Named because several modules were spelling the union inline, and one of
+ * them now keys a lookup table on it (`practice/tileVisuals`), where an
+ * unnamed union is a table nobody can index safely.
+ */
+export type ColorScheme = 'light' | 'dark';
+
+export const themes: Record<ColorScheme, ThemeColors> = { light, dark };
 
 /** Hook — returns the correct colour set for the current theme. */
 export function useThemeColors(): ThemeColors {
@@ -414,7 +424,7 @@ export function useThemeColors(): ThemeColors {
 }
 
 /** Resolved scheme directly — for StatusBar bar style, BlurView tint, etc. */
-export function useColorScheme(): 'light' | 'dark' {
+export function useColorScheme(): ColorScheme {
   return useThemeStore((s) => s.resolved);
 }
 

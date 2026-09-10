@@ -40,7 +40,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useThemeColors, type ThemeColors } from '../../theme/tokens';
+import { useColorScheme, useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { TILE_BLOCK, TILE_W, GLYPH_BOX, TilePill } from './TilePill';
 import { TileCrack } from './TileCrack';
 import { TileMarks } from './TileMarks';
@@ -77,6 +77,7 @@ export function PracticeTile({
   marksOnAllLocked = true,
 }: PracticeTileProps) {
   const tc = useThemeColors();
+  const scheme = useColorScheme();
   const s = makeStyles(tc);
 
   // Active-state gentle bounce — draws the eye to the one tappable tile
@@ -172,7 +173,10 @@ export function PracticeTile({
   // The tile's entire vocabulary — kept pure and tested in `tileVisuals`,
   // because colour is what tells the user where on the path they are and the
   // marks only whisper it a second time.
-  const visual = tileVisual(state, tc);
+  // The scheme, not just the palette: the band and the nosing are alphas, and
+  // an alpha is a proportion of the face it lands on — so the same number is a
+  // different shadow on cream than on near-black. See tileVisuals.
+  const visual = tileVisual(state, tc, scheme);
   const mark = tileMark(state, { nextUp, marksOnAllLocked });
 
   return (
