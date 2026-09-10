@@ -42,6 +42,7 @@ def _merge_target():
         _wordlist_priority={},
         _wordlist_collisions=0,
         _wordlist_relaxations=0,
+        _wordlist_relaxed=set(),
     )
 
 
@@ -311,3 +312,18 @@ def test_low_priority_csv_cannot_regrade_a_word_a_real_list_placed():
 
     assert _record(t, "timid", CEFRLevel.C1, ClassificationSource.EFLLEX, priority=6)
     assert t.cefr_wordlist["timid"][0] == CEFRLevel.C1
+
+
+def test_relaxed_lemmas_are_named_not_just_counted():
+    """The repair pass needs the exact set, or it has to guess attribution."""
+    t = _merge_target()
+    t._wordlist_relaxed = set()
+
+    _record(t, "make", CEFRLevel.B2)
+    _record(t, "make", CEFRLevel.A1)     # relaxed
+    _record(t, "quiet", CEFRLevel.A1)
+    _record(t, "quiet", CEFRLevel.C1)    # collision, but not a relaxation
+
+    assert t._wordlist_relaxed == {"make"}
+    assert t._wordlist_relaxations == 1
+    assert t._wordlist_collisions == 2

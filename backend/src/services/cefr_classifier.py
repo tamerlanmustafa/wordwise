@@ -1504,6 +1504,7 @@ class HybridCEFRClassifier:
         # would have surfaced the `made`-beats-`make` bug before a user did.
         self._wordlist_collisions: int = 0
         self._wordlist_relaxations: int = 0
+        self._wordlist_relaxed: set = set()
         # Lemmas each source actually contributed, so a file that loads
         # successfully but adds nothing is visible — see `_WORDLIST_SOURCES`.
         self._wordlist_contributions: Dict[str, int] = {}
@@ -1630,6 +1631,12 @@ class HybridCEFRClassifier:
                 return False
             else:
                 self._wordlist_relaxations += 1
+                # Named, not just counted: this is the exact set of lemmas the
+                # old first-wins rule graded too hard, so it is the only set a
+                # re-grade of the stored registry can attribute to this fix.
+                # Without it the repair pass has to re-classify every efllex
+                # row and guess which differences were its doing.
+                self._wordlist_relaxed.add(lemma)
 
         self.cefr_wordlist[lemma] = (cefr_level, source)
         self._wordlist_priority[lemma] = priority
