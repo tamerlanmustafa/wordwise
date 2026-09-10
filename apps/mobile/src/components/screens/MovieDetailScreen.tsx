@@ -64,8 +64,10 @@ import {
   deckWordsOnly,
   parseViewMode,
   pickDefaultLevel,
+  planDeck,
   resolveBookmarkLevel,
   resumeMarker,
+  DECK_TARGET_CARDS,
   DEFAULT_VIEW_MODE,
   VIEW_MODE_KEY,
   type StoredMovieBookmark,
@@ -684,18 +686,24 @@ export const MovieDetailScreen = ({
     }));
   }, [vocabulary, t]);
 
-  const idioms = vocabulary?.idioms || [];
-
   // Idioms have their own CEFR level, so we group them the same way words are
   // grouped — by exact CEFR match. They render inline with the level's words.
+  //
+  // `vocabulary?.idioms` is read INSIDE the memo. It used to be lifted out as
+  // `const idioms = vocabulary?.idioms || []`, and on a film whose response
+  // omits the field that `|| []` minted a fresh array on every render — which
+  // made this memo, `activeItems` and everything downstream of them recompute
+  // every render too, including the effect that fires the sentence batch. The
+  // batch's own in-flight guard hid it, but the retry path did not: a word
+  // waiting out its 5 seconds was re-requested by the next render instead.
   const idiomsByLevel = useMemo(() => {
     const groups: Record<string, IdiomInfo[]> = { A1: [], A2: [], B1: [], B2: [], C1: [], C2: [] };
-    idioms.forEach((idiom) => {
+    (vocabulary?.idioms ?? []).forEach((idiom) => {
       const lvl = (idiom.cefr_level || 'C1').toUpperCase();
       if (groups[lvl]) groups[lvl].push(idiom);
     });
     return groups;
-  }, [idioms]);
+  }, [vocabulary]);
 
   const activeData = wordLevels.find((l) => l.level === activeLevel);
   // `learnedWords` used to be subtracted here, and that was the bug: a word
@@ -779,30 +787,22 @@ export const MovieDetailScreen = ({
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
   /**
-   * The deck's list — single words, never idioms or phrasal verbs.
+   * The deck's candidate pool — single words, never idioms or phrasal verbs,
+   * and deliberately UNCAPPED.
    *
-   * This is the ONE place the deck's contents are decided, and it is upstream
-   * of both consumers on purpose: the sentence batch below fetches for exactly
-   * this list, and `deckItems` is this list minus the words whose example
-   * sentence came back empty. Splitting them was the bug waiting to happen —
-   * a deck showing a word the batch never asked about sits on a skeleton
-   * sentence slot for ever, because "no entry yet" and "no sentence exists"
-   * are the same absence in the preview map.
-   *
-   * The cap counts WORDS, so "For You" is 60 cards of vocabulary rather than
-   * 60 slots that idioms were free to take. The level tabs stay uncapped —
-   * the level IS the filter there, and capping it would quietly hide part of
-   * a level the reader explicitly asked to see.
+   * The cap moved downstream to `deckPlan`, and that move is the fix for the
+   * number that would not sit still. Capping here and filtering after meant
+   * the deck was "60 words, minus however many turn out to have no example
+   * sentence" — a figure that only becomes known while the reader is looking
+   * at it. The pool runs to hundreds of words per level, so there is always a
+   * replacement; taking 60 usable ones instead of the first 60 costs nothing.
    *
    * `suggestedWords` and `activeItems` keep their idioms: they feed the row
    * list, the "items vs words" count and `freqFillMap`, none of which is the
    * deck. Cutting at the source would have deleted a feature to fix a filter.
    */
-  const deckWords = useMemo<(WordInfo & { cefr_level?: string })[]>(
-    () =>
-      wordsView === 'foryou'
-        ? deckWordsOnly(suggestedWords, SUGGESTED_CAP)
-        : deckWordsOnly(activeItems),
+  const deckPool = useMemo<(WordInfo & { cefr_level?: string })[]>(
+    () => (wordsView === 'foryou' ? deckWordsOnly(suggestedWords) : deckWordsOnly(activeItems)),
     [wordsView, suggestedWords, activeItems],
   );
 
@@ -862,6 +862,44 @@ export const MovieDetailScreen = ({
   const [sentencePreviews, setSentencePreviews] = useState<Record<string, SentenceEntry>>({});
   const [sentencesRetryTick, setSentencesRetryTick] = useState(0);
   const sentencesStatusRef = useRef<Record<string, FetchStatus>>({});
+  /**
+   * The tick this effect last acted on, so a re-run can tell whether it is the
+   * retry or just a re-render.
+   *
+   * The effect re-runs whenever the deck's plan changes, and the plan changes
+   * every time a chunk lands — that is the point, it is how a replacement word
+   * gets fetched. But a word waiting out its 5-second retry must not be
+   * re-requested by every one of those runs, or the delay is decorative and a
+   * film with slow-path misses turns into a request storm.
+   */
+  const sentencesRetryAppliedRef = useRef(0);
+
+  /**
+   * The plan drawn from `deckPool`: which words are on cards, and which words
+   * the sentence batch therefore has to ask about.
+   *
+   * Both come from one walk of the pool so they cannot disagree. A card the
+   * batch never covered would sit on a skeleton for ever — "not fetched yet"
+   * and "no sentence exists" are the same absence in the preview map, and the
+   * optimistic reading is the only safe one, so an unasked word looks
+   * permanently pending.
+   *
+   * Declared here, below `sentencePreviews`, because it reads them: this is a
+   * loop, and a deliberate one. A chunk lands → a word is judged unusable → the
+   * plan pulls its replacement out of the pool → `scanned` grows → the effect
+   * below fetches the replacement. It converges because every pass marks the
+   * words it asked about as in-flight, so the next pass has strictly less to
+   * do, and the pool is finite.
+   */
+  const deckPlan = useMemo(
+    () =>
+      planDeck(
+        deckPool,
+        (word) => hasRenderableSentence(word, sentencePreviews),
+        DECK_TARGET_CARDS,
+      ),
+    [deckPool, sentencePreviews],
+  );
 
   // Chunked so fast-path words paint progressively. A single big batch blocks
   // on the slowest word in it — if one of 60 words misses the cache and the
@@ -871,14 +909,19 @@ export const MovieDetailScreen = ({
   const SENTENCE_BATCH_CHUNK = 12;
   useEffect(() => {
     if (!movieId) return;
-    // Exactly the deck's list. It used to re-derive the same thing with its
-    // own copy of the cap and the idiom filter, which is two chances to
-    // disagree with the list actually on screen.
-    const words = deckWords.map((w) => w.word);
+    // Exactly what the deck's plan examined — cards and rejects alike. It used
+    // to re-derive the list with its own copy of the cap and the idiom filter,
+    // which is two chances to disagree with what is on screen.
+    const words = deckPlan.scanned.map((w) => w.word);
     const status = sentencesStatusRef.current;
+    // Only the run the retry timer actually woke may re-ask about a first-pass
+    // miss; every other run is a plan change and asks only about words nobody
+    // has asked about yet.
+    const isRetryRun = sentencesRetryTick !== sentencesRetryAppliedRef.current;
+    sentencesRetryAppliedRef.current = sentencesRetryTick;
     const missing = words.filter((w) => {
       const s = status[w];
-      return s === undefined || s === 'miss-recent';
+      return s === undefined || (isRetryRun && s === 'miss-recent');
     });
     if (!missing.length) return;
     missing.forEach((w) => {
@@ -936,7 +979,7 @@ export const MovieDetailScreen = ({
         });
       });
     });
-  }, [movieId, deckWords, sentencesRetryTick]);
+  }, [movieId, deckPlan, sentencesRetryTick]);
 
   // Chunked rendering: mount the first 25 rows immediately on a tab switch,
   // then progressively reveal the rest in batches. ~100 WordRow mounts in
@@ -975,21 +1018,21 @@ export const MovieDetailScreen = ({
   }, [renderLimit, activeListLength]);
 
   // ── Card-deck view mode (Ledger Reveal, mockup 1a) ───────────────────────
-  // `deckWords` (above) after the renderable-sentence filter the rows apply:
-  // long content steps down a type tier rather than being dropped, but a word
-  // with no AI-authored example has an empty sentence slot and no card worth
-  // showing. Unlike the rows (~100 mounts, hence the deferred inputs) the deck
-  // renders a couple of cards, so it reads the urgent values — with the
-  // deferred ones, the frame that lifts the loading splash showed an empty
-  // deck until the low-priority render caught up.
+  // `deckPlan.cards` — DECK_TARGET_CARDS usable words walked out of the pool.
+  // "Usable" is the same rule the rows apply: long content steps down a type
+  // tier rather than being dropped, but a word with no AI-authored example has
+  // an empty sentence slot and no card worth showing.
   //
-  // This filter is why the list has to be words-only BEFORE it gets here: an
-  // idiom is never batched, so it can never fail this test, and a deck built
-  // the other way round kept every phrasal verb while dropping the words.
-  const deckItems = useMemo(
-    () => deckWords.filter((item) => hasRenderableSentence(item.word, sentencePreviews)),
-    [deckWords, sentencePreviews],
-  );
+  // That rule is why the pool has to be words-only before it gets here: an
+  // idiom is never batched for a sentence, so it can never fail the test, and
+  // a deck built the other way round kept every phrasal verb while dropping
+  // the words.
+  //
+  // Unlike the rows (~100 mounts, hence the deferred inputs) the deck renders
+  // a couple of cards, so it reads the urgent values — with the deferred ones,
+  // the frame that lifts the loading splash showed an empty deck until the
+  // low-priority render caught up.
+  const deckItems = deckPlan.cards;
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
 
@@ -1193,12 +1236,14 @@ export const MovieDetailScreen = ({
                 lived in the explainer band; `wordSortOrder` still sorts
                 the deck at its 'rare' default, there is just nothing on
                 screen to change it with. */}
-            {/* `deckWords`, not `suggestedWords`: the question this line
-                answers is "is there anything to show you", and what gets shown
-                is the deck. A film whose only suggestions at the reader's level
-                are idioms has a non-empty `suggestedWords` and nothing to put
-                on a card, and used to answer it with "CARD 0 / 0". */}
-            {wordsView === 'foryou' && deckWords.length === 0 ? (
+            {/* `deckPool`, not `suggestedWords`: the question this line answers
+                is "is there anything to show you", and what gets shown is the
+                deck. A film whose only suggestions at the reader's level are
+                idioms has a non-empty `suggestedWords` and nothing to put on a
+                card, and used to answer it with "CARD 0 / 0". The pool rather
+                than the plan, because an empty plan over a full pool means the
+                sentences are still landing, not that there is nothing here. */}
+            {wordsView === 'foryou' && deckPool.length === 0 ? (
               <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
             ) : viewMode === 'cards' ? (
               /* Deck header row: CARD n / total, alone on its line. The deck's
@@ -1336,10 +1381,19 @@ export const MovieDetailScreen = ({
           style={{ flex: 1, paddingBottom: barInset }}
           onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
         >
-          {viewMode === 'cards' && !isSwitching ? (
+          {viewMode === 'cards' ? (
             // Card-deck view (mockup 2a). Remounts per tab/sort so each list
             // starts from its own bookmark restore, exactly like the rows'
             // scroll restore. Translations stay tap-on-demand inside the deck.
+            //
+            // NOT gated on `isSwitching`. That flag exists for the rows: ~100
+            // WordRow mounts in one frame is a real stall, so a 140ms bar
+            // skeleton covers it. The deck mounts ONE card, so the gate bought
+            // nothing and cost a full teardown — the deck was unmounted and
+            // rebuilt on every level tap, replaying its arrive animation and
+            // re-running the bookmark restore. Tap two tabs quickly and the
+            // 140ms timer re-armed before it fired, so the deck stayed
+            // unmounted and the header read CARD 0 / 0.
             <WordCardDeck
               key={`deck-${wordsView}-${activeLevel}-${wordSortOrder}`}
               items={deckItems}

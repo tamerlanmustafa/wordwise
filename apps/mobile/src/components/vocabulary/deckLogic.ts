@@ -202,6 +202,64 @@ export function deckWordsOnly<T extends { word: string } | { phrase: string }>(
   return words;
 }
 
+// ── How many cards, and which ─────────────────────────────────────────────
+
+/**
+ * How many cards a deck aims to hold.
+ *
+ * A target, not a cap, and the difference is the whole point. The old code
+ * capped the candidate list at 60 and *then* dropped every word whose example
+ * sentence came back missing, so the deck was 60 minus however many misses the
+ * film happened to have — and it shrank live, in front of the reader, as the
+ * batch responses landed. "CARD 3 / 60" became "CARD 3 / 42" a second later.
+ *
+ * A film's vocabulary at one level runs to hundreds of words, so there is
+ * always more where those came from. Taking 60 USABLE words instead of the
+ * first 60 words costs nothing and holds the number still.
+ */
+export const DECK_TARGET_CARDS = 60;
+
+export interface DeckPlan<T> {
+  /** The cards to show — `target` of them whenever the pool can supply it. */
+  cards: T[];
+  /**
+   * The pool prefix that had to be examined to fill them, cards and rejects
+   * alike. This is what the sentence batch must cover: a card can only be
+   * judged usable once the backend has answered for it, so the answer has to
+   * be asked for. Fetching only `cards` would leave every replacement word
+   * permanently unknown, and therefore permanently optimistic.
+   */
+  scanned: T[];
+}
+
+/**
+ * Take the first `target` usable words from an ordered pool.
+ *
+ * `usable` is asked about a word, not handed the whole map, so this stays a
+ * pure function of its arguments — the caller owns what "usable" means (today:
+ * the backend has not told us the word has no example sentence).
+ *
+ * Optimism is deliberate: a word nobody has heard back about yet counts as
+ * usable, so the deck is full from the first frame and only ever *replaces*
+ * entries as answers arrive. The alternative — admitting a word only once it is
+ * confirmed good — would start every deck at zero cards and fill it in
+ * visibly, which is the same flicker in the other direction.
+ */
+export function planDeck<T extends { word: string }>(
+  pool: readonly T[],
+  usable: (word: string) => boolean,
+  target: number = DECK_TARGET_CARDS,
+): DeckPlan<T> {
+  const cards: T[] = [];
+  const scanned: T[] = [];
+  for (const item of pool) {
+    if (cards.length >= target) break;
+    scanned.push(item);
+    if (usable(item.word)) cards.push(item);
+  }
+  return { cards, scanned };
+}
+
 // ── Deck cursor reducer ───────────────────────────────────────────────────
 
 export interface DeckState {

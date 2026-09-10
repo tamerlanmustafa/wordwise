@@ -91,14 +91,25 @@ describe('SwipeBackView stands down without unmounting', () => {
     expect(host()).toMatch(/if \(children == null\) return null;/);
   });
 
+  it('renders ONE tree, styled two ways', () => {
+    // The regression this file was written for and then shipped anyway. React
+    // reconciles by position and type: a hidden branch that returned
+    // `<View>{children}</View>` while the shown branch returned
+    // `<View><Animated.View>{children}</Animated.View></View>` puts the screen
+    // at a different depth in the two, so every toggle unmounts and remounts
+    // it — a "kept-alive" screen that quietly rebuilds from scratch, which
+    // looks identical to a working one and is the whole bug.
+    const body = host().slice(host().indexOf('if (children == null) return null;'));
+    expect(body.match(/return \(/g) ?? []).toHaveLength(1);
+    expect(body).toMatch(/style=\{empty \? styles\.hidden : styles\.fill\}/);
+    expect(body).toMatch(/pointerEvents=\{empty \? 'none' : 'auto'\}/);
+  });
+
   it('hides with display:none, which is out of layout and out of hit testing', () => {
     // These siblings are flex children of one column, not overlays. A hidden
     // host that still took part in layout would halve the height of the tab
     // showing through.
-    const s = host();
-    expect(s).toMatch(/style=\{styles\.hidden\}/);
-    expect(s).toMatch(/hidden: \{ display: 'none' \}/);
-    expect(s).toMatch(/pointerEvents="none"/);
+    expect(host()).toMatch(/hidden: \{ display: 'none' \}/);
   });
 
   it('keeps the native views alive while hidden', () => {

@@ -147,27 +147,35 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
     [translate, screenKey],
   );
 
-  // Standing down. With nothing mounted there is nothing to preserve, so the
-  // host leaves the tree entirely — exactly as it always has. With a screen
-  // kept alive inside it the host stays, hidden: `display:none` takes it out of
-  // the flex column and out of hit testing just as returning null did, and
-  // `collapsable={false}` keeps the native views (and any ScrollView offset
-  // inside them) alive through the detour, the same bargain `KeepAlive` makes.
-  if (empty) {
-    if (children == null) return null;
-    return (
-      <View style={styles.hidden} collapsable={false} pointerEvents="none">
-        {children}
-      </View>
-    );
-  }
+  // With nothing mounted there is nothing to preserve, so the host leaves the
+  // tree entirely — exactly as it always has.
+  if (children == null) return null;
 
+  // ONE tree, styled two ways. This must not become two `return`s with
+  // different shapes: React reconciles by position and type, so a hidden
+  // branch that dropped the Animated.View would make the screen underneath it
+  // a different child than the shown branch's — and React would unmount and
+  // remount the whole subtree on every toggle. That is a silent bug, because
+  // the result looks exactly like a working screen; it just rebuilds its state
+  // from scratch each time, which is the one thing keeping it mounted exists
+  // to prevent.
+  //
+  // Standing down is therefore `display:none` on the same host: out of the
+  // flex column and out of hit testing, just as returning null was, and
+  // `collapsable={false}` keeps the native views (and any ScrollView offset
+  // inside them) alive through the detour — the same bargain `KeepAlive` makes.
+  //
   // Nothing is painted behind the sliding screen on purpose: the drag uncovers
   // whatever the app layers under this one — the tab layer, or App's themed
   // root background. A backdrop of our own here would sit *over* the tab layer
   // and hide it.
   return (
-    <View style={styles.fill} {...pan.panHandlers}>
+    <View
+      style={empty ? styles.hidden : styles.fill}
+      collapsable={false}
+      pointerEvents={empty ? 'none' : 'auto'}
+      {...pan.panHandlers}
+    >
       <Animated.View style={[styles.fill, { transform: [{ translateX }] }]}>
         {children}
       </Animated.View>

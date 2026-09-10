@@ -97,31 +97,47 @@ const screen = () =>
     'utf8',
   );
 
-describe('MovieDetail feeds the deck one words-only list', () => {
-  it('builds that list once, from the shared helper', () => {
+describe('MovieDetail feeds the deck one words-only pool', () => {
+  it('builds that pool once, from the shared helper, uncapped', () => {
+    // Uncapped is load-bearing: `planDeck` needs spare words behind the
+    // target to replace the ones with no example sentence, and a pool capped
+    // at 60 has none.
     const s = screen();
-    expect(s).toMatch(/deckWordsOnly\(suggestedWords, SUGGESTED_CAP\)/);
+    expect(s).toMatch(/deckWordsOnly\(suggestedWords\)/);
     expect(s).toMatch(/deckWordsOnly\(activeItems\)/);
+    expect(s).not.toMatch(/deckWordsOnly\(suggestedWords, SUGGESTED_CAP\)/);
   });
 
-  it('batches example sentences for exactly that list', () => {
-    // The batch used to re-derive the same thing with its own copy of the cap
-    // and its own idiom filter — two chances to disagree with what is on
-    // screen, and the disagreement shows up as a card that never finishes
-    // loading.
-    expect(screen()).toMatch(/const words = deckWords\.map\(\(w\) => w\.word\);/);
+  it('batches example sentences for exactly the prefix the plan walked', () => {
+    // The batch used to re-derive the list with its own copy of the cap and
+    // its own idiom filter — two chances to disagree with what is on screen,
+    // and the disagreement shows up as a card that never finishes loading.
+    expect(screen()).toMatch(/const words = deckPlan\.scanned\.map\(\(w\) => w\.word\);/);
   });
 
-  it('derives the deck from that list, not from the mixed one', () => {
+  it('derives the deck from the plan, not from the mixed lists', () => {
     const s = screen();
-    expect(s).toMatch(
-      /const deckItems = useMemo\(\s*\n\s*\(\) => deckWords\.filter\(/,
-    );
-    // The mixed lists must not reach the deck by another route.
+    expect(s).toMatch(/const deckItems = deckPlan\.cards;/);
     expect(s).not.toMatch(/wordsView === 'foryou' \? suggestedVisible : activeItems/);
   });
 
-  it('asks the deck, not the mixed pool, whether there is anything to show', () => {
-    expect(screen()).toMatch(/wordsView === 'foryou' && deckWords\.length === 0/);
+  it('asks the pool, not the mixed list, whether there is anything to show', () => {
+    expect(screen()).toMatch(/wordsView === 'foryou' && deckPool\.length === 0/);
+  });
+
+  it('does not tear the deck down for the rows skeleton', () => {
+    // `isSwitching` covers ~100 WordRow mounts. The deck mounts one card, so
+    // gating it there bought nothing and cost a full remount on every level
+    // tap — and two fast taps re-armed the 140ms timer before it fired, which
+    // is how the header ended up reading CARD 0 / 0.
+    expect(screen()).not.toMatch(/viewMode === 'cards' && !isSwitching/);
+    expect(screen()).toMatch(/\{viewMode === 'cards' \? \(/);
+  });
+
+  it('retries a first-pass miss on the timer, not on every re-render', () => {
+    // The plan changes every time a chunk lands — that is how a replacement
+    // word gets fetched — so a re-run must not also re-ask about words still
+    // waiting out their 5 seconds, or the delay is decorative.
+    expect(screen()).toMatch(/isRetryRun && s === 'miss-recent'/);
   });
 });
