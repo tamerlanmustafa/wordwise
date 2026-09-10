@@ -50,6 +50,46 @@ exercises the harness but not the hypothesis, and says so:
 WW_TOKEN="$(...)" WW_MOVIE_ID=123 k6 run loadtest/head-of-line.js
 ```
 
+## What a prod run can and cannot tell you (measured 2026-09-10)
+
+Run against `api.getwordwise.us` at three ramps. The short version: **you
+cannot load-test this API from one machine, and the first run that looked
+healthy was measuring the wrong thing.**
+
+`GlobalRateLimitMiddleware` caps a single client at
+`settings.rate_limit_per_minute` — 600/min, and confirmed *not* overridden in
+Railway, so the code default is what prod runs. At ~0.29s per `by-cefr`
+request that is about three concurrent requests, which is nowhere near enough
+to saturate a one-process event loop. `/` and `/health` are on the
+middleware's `_EXEMPT_PATHS`, so the canary sails through no matter what.
+
+Those two facts combine into a trap. At 25 VUs the summary read
+`ratio 0.94x - the offloads are holding` and every threshold passed — while
+**84% of the load requests were 429s**, answered by middleware before any route
+ran. A 429 costs the event loop nothing, so the canary was measuring an idle
+server and reporting it as a clean bill of health.
+
+The script now refuses to do that: `heavy_ok` has a threshold, and the summary
+prints `INVALID` with the reason when the load did not land.
+
+Kept under the limit (3 VUs, 100% landed), the honest numbers are:
+
+| | med | p95 | max |
+|---|---|---|---|
+| `/health` baseline | 115ms | 201ms | 295ms |
+| `/health` under load | 95ms | 156ms | 485ms |
+| `by-cefr` (the load) | 210ms | 243ms | 532ms |
+
+Ratio 0.78x — no head-of-line blocking **at three concurrent requests**. That
+is a real result and a narrow one. It does not show the offloads hold under
+pressure; it shows they hold under the most a single legitimate client is
+allowed to apply. To test the actual hypothesis you need either a local run
+(no middleware limit in the way) or load from more than one address.
+
+The useful thing the prod runs *did* prove: the global rate limiter works, and
+`/health` stayed 100% available at ~170ms p95 throughout — so being throttled
+does not itself stall the loop.
+
 ## Never point this at production without saying so out loud
 
 `BASE_URL` defaults to `http://localhost:8000` and the script **refuses any

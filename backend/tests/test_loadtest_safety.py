@@ -94,6 +94,23 @@ def test_the_canary_measures_an_endpoint_that_does_no_work() -> None:
     assert "health_latency" in src
 
 
+def test_a_run_that_never_landed_cannot_report_a_clean_ratio() -> None:
+    """The trap this file's sibling README documents, caught in the source.
+
+    A 429 is answered by middleware before any route runs, so it costs the
+    event loop nothing. A run that was mostly throttled therefore measures an
+    idle server and reports a beautiful ratio — which is the worst failure a
+    load test has, because it is indistinguishable from good news. Measured on
+    prod on 2026-09-10: 84% of load requests 429'd and the summary said
+    "0.94x - the offloads are holding".
+    """
+    src = (LOADTEST / "head-of-line.js").read_text()
+    # k6 itself must fail the run...
+    assert re.search(r"'heavy_ok':\s*\['rate>", src), "heavy_ok needs a threshold, or a throttled run exits 0"
+    # ...and the human-readable summary must say so in words.
+    assert "INVALID" in src
+
+
 def test_the_two_phases_stay_comparable() -> None:
     """Baseline and under-load must be the same request, tagged, not two
     different scenarios — otherwise the comparison is between two connection
