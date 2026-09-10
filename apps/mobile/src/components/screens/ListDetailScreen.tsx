@@ -97,16 +97,15 @@ export function ListDetailScreen({
     return parts.join(META_SEPARATOR);
   }, [isFilms, summary, t]);
 
-  // One label for a words list, whatever its SRS schedule says. It used to
-  // read "Practice 6 due" and fall back to "Practice this list" at zero, which
-  // made the button's own name flicker with a number the reader never asked
-  // about — and told them "0 due" was a reason not to press it, when a list is
+  // One label, whatever the list's SRS schedule says. It used to read
+  // "Practice 6 due" and fall back to "Practice this list" at zero, which made
+  // the button's own name flicker with a number the reader never asked about —
+  // and told them "0 due" was a reason not to press it, when a list is
   // something you revise when you feel like it.
-  const practiceLabel = useMemo(() => {
-    if (summary.count === 0) return t('practice.empty');
-    if (isFilms) return t('practice.films');
-    return t('practice.none');
-  }, [isFilms, summary.count, t]);
+  const practiceLabel = useMemo(
+    () => (summary.count === 0 ? t('practice.empty') : t('practice.none')),
+    [summary.count, t],
+  );
 
   const startPractice = useCallback(async () => {
     if (summary.count === 0 || starting) return;
@@ -173,22 +172,31 @@ export function ListDetailScreen({
       </View>
 
       <View style={s.actionRow}>
-        <TouchableOpacity
-          style={[s.practiceBtn, summary.count === 0 && s.practiceBtnDisabled]}
-          onPress={startPractice}
-          disabled={summary.count === 0 || starting}
-          activeOpacity={0.85}
-        >
-          <Text
-            style={[
-              s.practiceLabel,
-              summary.count === 0 && { color: tc.textFaint },
-            ]}
-            numberOfLines={1}
+        {/* Words lists only. A films list used to carry "Practice words from
+            these films", which pooled the vocabulary of everything in it into
+            one deck — a reasonable-sounding feature that nobody wants: a list
+            of films is a watchlist, and the place you practise a film's words
+            is that film, where the deck is scoped to what you are about to
+            watch. Removed rather than hidden, so the row is one control wide
+            on a films list instead of a gold button with nothing to say. */}
+        {isFilms ? null : (
+          <TouchableOpacity
+            style={[s.practiceBtn, summary.count === 0 && s.practiceBtnDisabled]}
+            onPress={startPractice}
+            disabled={summary.count === 0 || starting}
+            activeOpacity={0.85}
           >
-            {practiceLabel}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                s.practiceLabel,
+                summary.count === 0 && { color: tc.textFaint },
+              ]}
+              numberOfLines={1}
+            >
+              {practiceLabel}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={s.sortBtn} onPress={withTap(() => setSortOpen(true))} activeOpacity={0.7}>
           <Text style={s.circleGlyph}>⇅</Text>
@@ -266,6 +274,9 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Trailing edge, which only bites on a films list: with the practice
+    // button present it is `flex: 1` and fills the row anyway.
+    justifyContent: 'flex-end',
     gap: 10,
     paddingHorizontal: 18,
     paddingTop: 16,

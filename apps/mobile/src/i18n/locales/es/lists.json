@@ -29,7 +29,6 @@
     "errorLimit": "Has alcanzado el número máximo de listas. Elimina una para hacer sitio."
   },
   "practice": {
-    "films": "Practicar palabras de estas películas",
     "none": "Practicar esta lista",
     "empty": "Aún no hay nada que practicar"
   },

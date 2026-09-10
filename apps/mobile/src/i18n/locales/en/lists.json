@@ -29,7 +29,6 @@
     "errorLimit": "You've reached the maximum number of lists. Delete one to make room."
   },
   "practice": {
-    "films": "Practice words from these films",
     "none": "Practice this list",
     "empty": "Nothing to practise yet"
   },
