@@ -37,7 +37,9 @@ import { wordTranslationDisplay } from './translationDisplay';
 import { glossLine } from '../../utils/glossLine';
 import { directionalIcon, directionSign } from '../../i18n/rtl';
 import {
+  behindRevealRamp,
   deckReducer,
+  peekNextIndex,
   restoreDeck,
   swipeDecision,
   shouldClaimHorizontalDrag,
@@ -46,6 +48,7 @@ import {
   type StackSlot,
 } from './deckLogic';
 import {
+  CARD_PADDING,
   CARD_HEIGHT,
   DECK_ZONE_HEIGHT,
   STACK_HEADROOM,
@@ -384,9 +387,17 @@ const WARM_SETTLE_MS = 600;
  * design (mockup 1a): one fixed-height focused card over two ghost cards,
  * translation zones permanently reserved as dashed placeholder rules that a
  * tap fills in place (both word + sentence translations together, cross-fade,
- * zero layout shift). Translations are fetched only on the first reveal (the
- * exact translate() + enrichment path VocabRow's expansion used) and cached
- * per word, so browsing the deck costs no translation calls.
+ * zero layout shift).
+ *
+ * The near ghost carries the NEXT card's face, uncovered as the top card
+ * slides: at rest the stack is blank paper, and the further the drag travels
+ * the more of what is coming the reader can read. That is what makes the swipe
+ * a choice rather than a jump — you can see what you are advancing to before
+ * you commit to it, and back out if it is not what you wanted.
+ *
+ * Translations are fetched only on the first reveal (the exact translate() +
+ * enrichment path VocabRow's expansion used) and cached per word, so browsing
+ * the deck costs no translation calls.
  */
 export const WordCardDeck = ({
   items,
@@ -505,6 +516,8 @@ export const WordCardDeck = ({
     reveal: Animated.Value;
     revealHiddenOpacity: Animated.AnimatedInterpolation<number>;
     revealRise: Animated.AnimatedInterpolation<number>;
+    /** The card behind, fading up with the drag — see `behindRevealRamp`. */
+    behindOpacity: Animated.AnimatedInterpolation<number>;
     mode: 'step' | 'return' | null;
     // transform mixes translateX/translateY/scale interpolations depending
     // on the mode, which RN's WithAnimatedObject unions can't express.
@@ -554,6 +567,11 @@ export const WordCardDeck = ({
       reveal,
       revealHiddenOpacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       revealRise: reveal.interpolate({ inputRange: [0, 1], outputRange: [REVEAL_RISE_PX, 0] }),
+      // Built here, alongside the value it reads, for the same reason every
+      // other node in this object is: `translate` is replaced per key, and an
+      // interpolation left over from the previous card would be listening to
+      // a value nothing writes to any more.
+      behindOpacity: translate.interpolate(behindRevealRamp(DRAG_CLAMP)),
       mode,
       focusedArrive,
     };
@@ -564,6 +582,7 @@ export const WordCardDeck = ({
     focusedArrive,
     revealHiddenOpacity,
     revealRise,
+    behindOpacity,
   } = animRef.current;
 
   // Play the enter choreography once per mounted key.
@@ -1124,6 +1143,24 @@ export const WordCardDeck = ({
   const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
   const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
 
+  /**
+   * The card the deck is about to step to — the one whose face shows through
+   * the near ghost as the top card slides off it.
+   *
+   * The advance target, not "the next in `items`": both commits wrap at the end
+   * of the deck, so on the last card the reader is looking at card 1 coming
+   * round again, and `peekNextIndex` is the same function `warmWindowKeys` uses
+   * to decide what to fetch. One answer to "what is behind this card", so the
+   * card that gets warmed and the card that gets shown cannot diverge.
+   *
+   * It renders the same `renderStaticBody` the fly-away overlay does, which is
+   * what makes an advance continuous: the face already on screen behind the
+   * drag is the face the arriving card lands with.
+   */
+  const behindIndex = peekNextIndex(displayDeck);
+  const behindItem =
+    behindIndex >= 0 ? itemByKey.get(displayDeck.keys[behindIndex]) : undefined;
+
   return (
     <View
       style={s.wrap}
@@ -1157,9 +1194,13 @@ export const WordCardDeck = ({
           },
         ]}
       >
-        {/* Ghost cards — pure styling; the incoming card's arrive animation
-            starts from the near ghost's slot so the deck reads as stepping
-            one card forward. */}
+        {/* Ghost cards — the stack behind. The incoming card's arrive
+            animation starts from the near ghost's slot so the deck reads as
+            stepping one card forward.
+
+            The FAR ghost stays blank paper. Only its rim is ever visible (the
+            near ghost covers it to within a few points), so a face on it would
+            be work nobody can see. */}
         {total > 2 ? (
           <View
             pointerEvents="none"
@@ -1172,11 +1213,34 @@ export const WordCardDeck = ({
         {total > 1 ? (
           <View
             pointerEvents="none"
+            // Hidden from assistive tech on BOTH platforms, which need
+            // different props for it. The face below is a visual preview of a
+            // card that is not in focus yet; opacity is not something VoiceOver
+            // or TalkBack respect, so without this the deck would announce two
+            // words, two definitions and two example sentences at once and the
+            // reader could not tell which one the swipe was on.
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
             style={[
               s.ghost,
               { top: GHOSTS[0].top, left: GHOSTS[0].inset, right: GHOSTS[0].inset, opacity: GHOSTS[0].opacity },
             ]}
-          />
+          >
+            {/* The next card's face, uncovered by the drag rather than by a
+                re-render: `behindOpacity` reads the same native-driven value
+                the top card's translateX does, so the whole reveal runs off
+                the JS thread and costs the gesture nothing.
+
+                Mounted from the moment the card is focused, not when the drag
+                starts. It is ~60 views of text; building them on the first
+                move event would spend the frame the finger is waiting on, and
+                at opacity 0 an already-mounted layer costs nothing to show. */}
+            {behindItem ? (
+              <Animated.View style={[s.ghostBody, { opacity: behindOpacity }]}>
+                {renderStaticBody(behindItem)}
+              </Animated.View>
+            ) : null}
+          </View>
         ) : null}
 
         <Animated.View
@@ -1539,6 +1603,19 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.goldOnSurface,
+      // The face inside is clipped to the rim: the ghost is inset 7pt on each
+      // side, so a line that would have fitted the focused card's width has
+      // nowhere to go here.
+      overflow: 'hidden',
+    },
+    // The near ghost's face. All three faces of a card inset their content by
+    // `CARD_PADDING` — the same constant `CARD_HEIGHT` is summed from — because
+    // the ghost, the focused card and the fly-away overlay are one card a
+    // moment apart, and type that moved between them would read as a jump at
+    // the instant of promotion rather than as a stack stepping forward.
+    ghostBody: {
+      flex: 1,
+      padding: CARD_PADDING,
     },
     // A swiped card mid-flight: same face as the focused card, floating
     // above the new focused card.
@@ -1552,7 +1629,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.goldOnSurface,
-      padding: 20,
+      padding: CARD_PADDING,
       overflow: 'hidden',
       shadowColor: light ? '#2D2418' : '#000',
       shadowOpacity: 0.1,
@@ -1578,7 +1655,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     cardPress: {
       flex: 1,
-      padding: 20,
+      padding: CARD_PADDING,
     },
     metaRow: {
       flexDirection: 'row',

@@ -115,6 +115,56 @@ export const STACK_SLOTS = [
 
 export type StackSlot = (typeof STACK_SLOTS)[number];
 
+// ── Reading the card behind ───────────────────────────────────────────────
+
+/**
+ * How far the finger must travel before the card behind starts showing its
+ * face. Not zero: a resting deck is a stack of blank paper on purpose, and a
+ * ghost that carried type would compete with the card in front of it. This is
+ * past the point where a stray touch becomes a drag, so the reveal reads as an
+ * answer to the gesture rather than as noise under a fingertip.
+ */
+export const BEHIND_REVEAL_START = 8;
+/**
+ * …and where it is fully legible. Deliberately well inside SWIPE_THRESHOLD
+ * (90): the reader is choosing whether to commit somewhere around the
+ * threshold, and the point of showing the next card is to inform that choice.
+ * Arriving at the same moment as the commit would be a reveal nobody had time
+ * to read.
+ */
+export const BEHIND_REVEAL_FULL = 56;
+
+/**
+ * Interpolation ramp for the behind-card's opacity, as a function of the
+ * LOGICAL drag offset — symmetric, because both commits ("Next" toward the
+ * trailing edge, "Knew it" toward the leading one) advance to the same card,
+ * so both deserve the same preview.
+ *
+ * Returned as ranges rather than as a `(dx) => opacity` function because the
+ * caller feeds it to `Animated.Value.interpolate`, which must own the
+ * evaluation to stay on the native driver — a JS function called per frame
+ * would drag the whole card back onto the JS thread mid-gesture.
+ *
+ * `clamp` is the drag's own limit (DRAG_CLAMP): the ranges have to cover the
+ * full travel or the interpolation would extrapolate past its last stop.
+ */
+export function behindRevealRamp(clamp: number): {
+  inputRange: number[];
+  outputRange: number[];
+} {
+  return {
+    inputRange: [
+      -clamp,
+      -BEHIND_REVEAL_FULL,
+      -BEHIND_REVEAL_START,
+      BEHIND_REVEAL_START,
+      BEHIND_REVEAL_FULL,
+      clamp,
+    ],
+    outputRange: [1, 1, 0, 0, 1, 1],
+  };
+}
+
 // ── Deck cursor reducer ───────────────────────────────────────────────────
 
 export interface DeckState {

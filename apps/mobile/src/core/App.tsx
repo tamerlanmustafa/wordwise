@@ -856,8 +856,18 @@ export default function App() {
   const handleMovieDetailBack = () => {
     // If we came from the reel preview hub, return there; otherwise drop back
     // to Home as before.
-    if (activePreviewTile) setCurrentScreen('moviePreview');
-    else navigateToFilms();
+    //
+    // Either way the film is cleared, because `selectedMovie` is now what keeps
+    // the detail screen mounted (see the layer in the render). Leaving it set on
+    // the hub branch would keep a film the user had explicitly closed alive
+    // behind the hub, and re-entering through "Study" would drop them back into
+    // the state they had just backed out of — with no splash, because there
+    // would be no mount. `navigateToFilms` already cleared it on the other
+    // branch; this makes both branches say the same thing.
+    if (activePreviewTile) {
+      setSelectedMovie(null);
+      setCurrentScreen('moviePreview');
+    } else navigateToFilms();
   };
 
   // ── One answer to "where does Back go from here" ──────────────────────
@@ -1224,21 +1234,57 @@ export default function App() {
             onDone={handleQuizResultDone}
             journey={journeyResultMeta}
           />
-        ) : currentScreen === 'movieDetail' && selectedMovie ? (
-          <MovieDetailScreen
-            movie={selectedMovie}
-            onBack={handleMovieDetailBack}
-            resumed={movieDetailResumed}
-            targetLanguage={targetLanguage}
-            onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
-          />
         ) : (
           // Home, My Movies and Practice are rendered by the persistent
-          // KeepAlive layer above, so the deep-screen ternary renders
-          // nothing for them — the live tab shows through.
+          // KeepAlive layer above, and the movie detail by the kept-alive
+          // layer below, so the deep-screen ternary renders nothing for them —
+          // the live tab (or the film) shows through.
           null
         )}
         </SwipeBackView>
+
+        {/* The open film, on its own layer and kept mounted.
+            ────────────────────────────────────────────────
+            Every other deep screen lives in the ternary above and is unmounted
+            the moment `currentScreen` moves off it. That is the right trade for
+            a screen you open, read and leave — but the film is the one deep
+            screen a *tab tap* comes back to (`core/tabMemory`), and remounting
+            it meant re-reading the offline cache, re-fetching the sentence
+            batch and rebuilding the deck every time. The user saw the film
+            blink and its cards refill after a two-second detour to Practice.
+
+            So it gets the tab layer's bargain instead: hidden with
+            `display:none`, mounted throughout, resumed in the state it was
+            left. `resumed` (the splash skip) stays as the fallback for the
+            mounts that are still real — a different film, or a cold start.
+
+            Keyed on the film, because the props of a mounted screen change
+            without its mount-time fetch re-running: without the key, opening a
+            second film would show the first one's vocabulary. And the whole
+            layer unmounts when `selectedMovie` clears, which is what every
+            "leave the film for good" path already does — so a film you backed
+            out of is genuinely gone, not merely hidden.
+
+            Its own SwipeBackView host, since it is no longer inside the
+            ternary's: `showing` is what tells that host to stand down without
+            unmounting what it is holding. */}
+        <SwipeBackView
+          screenKey={currentScreen}
+          onBack={currentScreen === 'movieDetail' ? resolveBack('movieDetail') : null}
+          showing={currentScreen === 'movieDetail' && !!selectedMovie}
+        >
+          {selectedMovie ? (
+            <MovieDetailScreen
+              key={selectedMovie.id}
+              movie={selectedMovie}
+              onBack={handleMovieDetailBack}
+              resumed={movieDetailResumed}
+              targetLanguage={targetLanguage}
+              onStartQuiz={(level) => handleMovieDetailQuiz(selectedMovie, level.toUpperCase() as NodeLevel)}
+            />
+          ) : null}
+        </SwipeBackView>
+
         <NotificationsSheet
           visible={showNotifSheet}
           onClose={() => setShowNotifSheet(false)}

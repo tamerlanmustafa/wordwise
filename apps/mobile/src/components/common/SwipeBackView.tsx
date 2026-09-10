@@ -46,12 +46,22 @@ interface Props {
    * is what snaps the drag offset back to zero before the new screen paints.
    */
   screenKey: string;
+  /**
+   * Whether this layer is showing a screen right now.
+   *
+   * Defaults to "there are children", which is the honest answer for a host
+   * whose children come and go with the screen. A host that KEEPS a hidden
+   * screen mounted inside it — the movie detail, so a tab detour doesn't
+   * remount and refetch it — has to say so, because its children outlive the
+   * screen on top of them and can no longer answer the question.
+   */
+  showing?: boolean;
 }
 
 /** How long the screen takes to finish leaving once the swipe commits. */
 const COMMIT_MS = 190;
 
-export function SwipeBackView({ children, onBack, screenKey }: Props) {
+export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
   const { width } = useWindowDimensions();
 
   // Logical drag offset: 0 at rest, growing toward the trailing edge. Converted
@@ -80,7 +90,7 @@ export function SwipeBackView({ children, onBack, screenKey }: Props) {
   // through from the KeepAlive layer underneath, so the host stands down rather
   // than laying an inert full-screen View over it. Computed here, acted on after
   // the last hook — an early return above one would break the hook order.
-  const empty = children == null;
+  const empty = showing != null ? !showing : children == null;
 
   const pan = useMemo(
     () =>
@@ -137,7 +147,20 @@ export function SwipeBackView({ children, onBack, screenKey }: Props) {
     [translate, screenKey],
   );
 
-  if (empty) return null;
+  // Standing down. With nothing mounted there is nothing to preserve, so the
+  // host leaves the tree entirely — exactly as it always has. With a screen
+  // kept alive inside it the host stays, hidden: `display:none` takes it out of
+  // the flex column and out of hit testing just as returning null did, and
+  // `collapsable={false}` keeps the native views (and any ScrollView offset
+  // inside them) alive through the detour, the same bargain `KeepAlive` makes.
+  if (empty) {
+    if (children == null) return null;
+    return (
+      <View style={styles.hidden} collapsable={false} pointerEvents="none">
+        {children}
+      </View>
+    );
+  }
 
   // Nothing is painted behind the sliding screen on purpose: the drag uncovers
   // whatever the app layers under this one — the tab layer, or App's themed
@@ -154,4 +177,5 @@ export function SwipeBackView({ children, onBack, screenKey }: Props) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  hidden: { display: 'none' },
 });

@@ -8,8 +8,14 @@
  * ceremony in front of a screen that has nothing left to wait for.
  *
  * This became reachable the moment tabs started remembering their screens
- * (`core/tabMemory`): MovieDetail is not in the KeepAlive layer, so returning
- * to it is a genuine remount, and every mount-time animation fires again.
+ * (`core/tabMemory`): returning to a film was a genuine remount, so every
+ * mount-time animation fired again.
+ *
+ * The film is kept mounted through a tab detour now (`movieDetailKeptAlive`),
+ * which removes that remount rather than dressing it — but `resumed` stays,
+ * and stays tested, because the mounts it was written for still exist: a cold
+ * start, and any path that lands on the screen without the layer having held
+ * it. The flag is the fallback; keeping the screen alive is the fix.
  *
  * No component-render library in this suite by project rule, so this pins the
  * source contract: the holds start cleared on a resume, and App marks its
