@@ -24,7 +24,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -141,7 +141,7 @@ function PracticeScreenInner({
   }, [onStartDailyReview]);
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
+    <TopInsetView style={s.root}>
       <LinearGradient
         colors={[tc.heroGlowStart, 'transparent']}
         locations={[0, 1]}
@@ -220,7 +220,7 @@ function PracticeScreenInner({
           ) : null}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

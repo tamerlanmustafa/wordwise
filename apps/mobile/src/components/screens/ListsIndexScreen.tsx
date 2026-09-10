@@ -28,7 +28,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { Skeleton } from '../ui/Skeleton';
@@ -210,7 +210,7 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
   );
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <View style={s.header}>
         <Text style={s.title}>{t('title')}</Text>
         <TouchableOpacity
@@ -266,7 +266,7 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
         onCreate={onCreate}
         initialKind={activeKind}
       />
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

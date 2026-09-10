@@ -8,7 +8,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -29,6 +28,7 @@ import { RankedMovieList } from '../filmFeed/RankedMovieList';
 import { SnapPager } from '../filmFeed/SnapPager';
 import { TodayWordCard, TodayWordCardSkeleton } from '../filmFeed/TodayWordCard';
 import { FeedSkeleton } from '../common/FeedSkeleton';
+import { TopInsetView } from '../common/TopInsetView';
 import { SearchBar } from '../filmFeed/SearchBar';
 import { SearchDimOverlay } from '../filmFeed/SearchDimOverlay';
 import { FeedFilterSheet } from '../filmFeed/FeedFilterSheet';
@@ -455,7 +455,7 @@ export const FilmFeedScreen = React.memo(({
   };
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
+    <TopInsetView style={s.root}>
       {/* Warm hero glow behind the top ~240px, matching the other tabs. */}
       <LinearGradient
         colors={[tc.heroGlowStart, 'transparent']}
@@ -683,7 +683,7 @@ export const FilmFeedScreen = React.memo(({
           }
         />
       ) : null}
-    </SafeAreaView>
+    </TopInsetView>
   );
 });
 FilmFeedScreen.displayName = 'FilmFeedScreen';
