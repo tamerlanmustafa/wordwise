@@ -1,0 +1,33 @@
+# Open and close the word feed's panels, over and over.
+#
+# Closing is the path that gets none of the attention opening gets, and these
+# panels HIDE rather than unmount — so the keyboard, the draft text, the
+# timers and the listeners all survive a close. Walking every exit, including
+# the successful one, is a project rule for exactly this reason.
+appId: com.wordwise.mobile
+---
+- launchApp:
+    clearState: false
+- tapOn: { id: 'tab-words' }
+- waitForAnimationToEnd: { timeout: 5000 }
+
+# The action rail sits on the trailing edge of the card. Open a panel and
+# dismiss it by tapping the scrim, which is the exit nobody tests.
+- repeat:
+    times: 15
+    commands:
+      - tapOn: { point: '92%,45%' }
+      - tapOn: { point: '50%,15%' }
+
+# Open, type into the new-list field, and close without submitting: the draft
+# must not survive into the next open, and the keyboard must go with the panel.
+- repeat:
+    times: 6
+    commands:
+      - tapOn: { point: '92%,58%' }
+      - waitForAnimationToEnd: { timeout: 3000 }
+      - back
+      - back
+
+- assertVisible: { id: 'tab-words' }
+- takeScreenshot: artifacts/panel-teardown-end

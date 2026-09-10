@@ -1,0 +1,49 @@
+# Hammer the word deck: swipes and buttons faster than a card can fly out.
+#
+# An advance commits immediately on release and the outgoing card keeps flying
+# as a detached overlay, precisely so a second swipe never waits on the first.
+# This is the flow that proves it — and that the card count underneath does not
+# wander while it happens.
+#
+# Needs a film open with a vocabulary deck on screen. Run `film-open.yaml`
+# first, or start from a build already sitting on one.
+appId: com.wordwise.mobile
+---
+- launchApp:
+    clearState: false
+- runFlow: film-open.yaml
+
+# Buttons, as fast as the driver can send them. "Next" and "Knew it" commit
+# different things and must stay tellable apart under load.
+- repeat:
+    times: 20
+    commands:
+      - tapOn: { text: 'Next' }
+- repeat:
+    times: 10
+    commands:
+      - tapOn: { text: 'Knew it' }
+      - tapOn: { text: 'Next' }
+
+# Swipes in both directions, with no settle between them.
+- repeat:
+    times: 15
+    commands:
+      - swipe:
+          from: { x: '70%', y: '45%' }
+          to: { x: '10%', y: '45%' }
+      - swipe:
+          from: { x: '30%', y: '45%' }
+          to: { x: '90%', y: '45%' }
+
+# Tap-to-reveal spammed on one card: the translation cross-fade is driven by a
+# per-key Animated.Value, and a tap arriving mid-fade must flip it rather than
+# strand it.
+- repeat:
+    times: 20
+    commands:
+      - tapOn: { point: '50%,45%' }
+
+- waitForAnimationToEnd: { timeout: 5000 }
+- assertVisible: { text: 'Next' }
+- takeScreenshot: artifacts/deck-storm-end

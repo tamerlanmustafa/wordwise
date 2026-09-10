@@ -280,6 +280,15 @@ function TabBtn({
       style={s.btn}
       onPress={onPress}
       activeOpacity={0.7}
+      // The handle the UI-automation flows tap (.maestro/). Keyed on the route
+      // id rather than the label, because the label is translated and the two
+      // were swapped once already — "Home" shows the word feed and "Explore"
+      // shows films, so a flow written against the visible text would tap the
+      // wrong tab in any locale, including this one.
+      testID={`tab-${id}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      accessibilityLabel={label}
       onLayout={(e) => {
         const { x, width } = e.nativeEvent.layout;
         onCellLayout(id, { x, width });

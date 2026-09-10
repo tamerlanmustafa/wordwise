@@ -1,0 +1,18 @@
+# Shared setup: land on a film with its vocabulary deck on screen.
+#
+# A subflow rather than a copy in every file — the path from launch to a deck
+# is the part most likely to change, and three copies of it is three places to
+# fix when it does.
+appId: com.wordwise.mobile
+---
+- tapOn: { id: 'tab-films' }
+- waitForAnimationToEnd: { timeout: 5000 }
+# The film feed is a vertical pager of cards; the first one is whatever the
+# recommendation seed put there, which is fine — this flow does not care WHICH
+# film, only that a deck opens.
+- tapOn: { point: '50%,40%' }
+# The wordmark splash holds for at least a second and then the doors part; the
+# deck's action row is the first thing that proves we are through it.
+- extendedWaitUntil:
+    visible: { text: 'Next' }
+    timeout: 30000

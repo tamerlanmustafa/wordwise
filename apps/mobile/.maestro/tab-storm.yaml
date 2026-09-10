@@ -1,0 +1,51 @@
+# Tap the bottom bar faster than it can settle.
+#
+# The rhythm that broke three separate things in one week: a screen that
+# remounted on every toggle, a deck torn down by a 140ms timer that kept
+# re-arming before it fired, and a card count still settling while the reader
+# was away. Every one of them survived a slow tab switch and failed a fast one.
+#
+# `testID` over the visible label on purpose — the tab labelled "Home" shows the
+# WORD feed and "Explore" shows films (the labels were swapped once and the
+# route ids were not), so a flow written against text taps the wrong tab.
+appId: com.wordwise.mobile
+---
+- launchApp:
+    clearState: false
+- assertVisible:
+    id: 'tab-words'
+
+# Round one: every tab in sequence, no waiting, ten times over.
+- repeat:
+    times: 10
+    commands:
+      - tapOn: { id: 'tab-words' }
+      - tapOn: { id: 'tab-films' }
+      - tapOn: { id: 'tab-practice' }
+      - tapOn: { id: 'tab-lists' }
+      - tapOn: { id: 'tab-profile' }
+
+# Round two: the same two tabs, back and forth. This is the shape that
+# re-armed the deck's teardown timer without ever letting it fire.
+- repeat:
+    times: 25
+    commands:
+      - tapOn: { id: 'tab-films' }
+      - tapOn: { id: 'tab-words' }
+
+# Round three: re-tapping the tab you are already on, which is the reset
+# gesture and takes a different branch from a switch.
+- repeat:
+    times: 15
+    commands:
+      - tapOn: { id: 'tab-lists' }
+      - tapOn: { id: 'tab-lists' }
+
+# Still alive: the bar is present and answers a tap. Deliberately NOT an
+# assertion about which screen we ended on — what this flow catches is a frozen
+# or blank UI, not a wrong route.
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: { id: 'tab-words' }
+- assertVisible: { id: 'tab-films' }
+- takeScreenshot: artifacts/tab-storm-end

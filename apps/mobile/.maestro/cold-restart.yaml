@@ -1,0 +1,23 @@
+# Kill and relaunch, repeatedly, from wherever the app happened to be.
+#
+# A cold start re-reads the auth token from SecureStore, rehydrates the stores
+# from AsyncStorage and re-runs every mount-time fetch. Doing it once works;
+# doing it from a half-finished state — mid-quiz, mid-download, with a film
+# open — is where a partially written cache or a stale bookmark shows up.
+appId: com.wordwise.mobile
+---
+- repeat:
+    times: 8
+    commands:
+      - launchApp:
+          clearState: false
+      - tapOn: { id: 'tab-films' }
+      - tapOn: { id: 'tab-practice' }
+      - stopApp
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: { id: 'tab-words' }
+    timeout: 30000
+- takeScreenshot: artifacts/cold-restart-end

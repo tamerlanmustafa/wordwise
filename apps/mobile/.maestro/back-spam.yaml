@@ -1,0 +1,30 @@
+# Spam Back out of deep screens.
+#
+# Every exit resolves through one function (`resolveBack`) so the chevron, the
+# Android hardware button and the edge swipe cannot disagree — but they can
+# still be fired faster than a screen unmounts. A back press that lands during
+# a transition used to be able to pop two screens, or none.
+appId: com.wordwise.mobile
+---
+- launchApp:
+    clearState: false
+
+# Go deep: Profile -> Settings, then straight back out, repeatedly.
+- repeat:
+    times: 12
+    commands:
+      - tapOn: { id: 'tab-profile' }
+      - tapOn: { text: 'Settings' }
+      - back
+      - back
+
+# Back on a root tab must be inert rather than exiting the app. On Android this
+# is the hardware button; the flow asserts we are still inside afterwards.
+- tapOn: { id: 'tab-words' }
+- repeat:
+    times: 8
+    commands:
+      - back
+
+- assertVisible: { id: 'tab-words' }
+- takeScreenshot: artifacts/back-spam-end
