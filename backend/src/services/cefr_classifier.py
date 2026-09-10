@@ -1068,6 +1068,18 @@ class ClassificationSource(str, Enum):
     FALLBACK = "fallback"
 
 
+# Easiest first. Used to pick between two wordlist entries that collapse onto
+# the same lemma; UNKNOWN is deliberately absent because it is not a level.
+_WORDLIST_LEVEL_ORDER: Tuple[CEFRLevel, ...] = (
+    CEFRLevel.A1,
+    CEFRLevel.A2,
+    CEFRLevel.B1,
+    CEFRLevel.B2,
+    CEFRLevel.C1,
+    CEFRLevel.C2,
+)
+
+
 @dataclass
 class WordClassification:
     word: str
@@ -1485,6 +1497,13 @@ class HybridCEFRClassifier:
 
         self.cefr_wordlist: Dict[str, Tuple[CEFRLevel, ClassificationSource]] = {}
         self.multi_word_expressions: Dict[str, Tuple[CEFRLevel, ClassificationSource]] = {}
+        # Which loader (by `_load_cefr_wordlists` priority) owns each
+        # `cefr_wordlist` key — see `_record_wordlist_entry`.
+        self._wordlist_priority: Dict[str, int] = {}
+        # Counted rather than silent: a collision rate is the only thing that
+        # would have surfaced the `made`-beats-`make` bug before a user did.
+        self._wordlist_collisions: int = 0
+        self._wordlist_relaxations: int = 0
         self.frequency_thresholds = {
             CEFRLevel.A1: (0, 1000),
             CEFRLevel.A2: (1000, 2000),
@@ -1529,7 +1548,66 @@ class HybridCEFRClassifier:
         if ngsl_path.exists():
             self._load_ngsl_wordlist(ngsl_path)
 
-        logger.info(f"Loaded {len(self.cefr_wordlist)} CEFR entries, {len(self.multi_word_expressions)} MWEs")
+        logger.info(
+            f"Loaded {len(self.cefr_wordlist)} CEFR entries, "
+            f"{len(self.multi_word_expressions)} MWEs "
+            f"({self._wordlist_collisions} lemma collisions, "
+            f"{self._wordlist_relaxations} resolved to an easier level)"
+        )
+
+    def _record_wordlist_entry(
+        self,
+        lemma: str,
+        cefr_level: CEFRLevel,
+        source: ClassificationSource,
+        priority: int,
+    ) -> bool:
+        """Merge one graded entry into `cefr_wordlist`. True if it set the level.
+
+        The wordlists grade **surface forms**, not lemmas, and every loader
+        collapses them onto `_get_lemma_simple(word)`. That is a many-to-one
+        map, so entries collide: `comprehensive_cefr.json` alone has 952
+        collisions. The old rule was whichever entry was read first, which is
+        no rule at all — it handed the key to whichever inflected form happened
+        to sit earlier in the file:
+
+            made B2   beat  make A1        say  <- said B2   (make/say/run are
+            babies C1 beat  baby A1        run  <- ran  B2    all top-40 words)
+
+        79 lemmas ended up graded harder than their own base form says, and the
+        damage doubles at lookup time because every inflected form resolves to
+        the same poisoned key — `amazing` read B2 off `amaze`.
+
+        The rule now: a higher-priority wordlist still wins outright (that
+        ordering in `_load_cefr_wordlists` is deliberate), but *within* one
+        list the **easiest** grade wins. A word is learned at the level its
+        easiest form is taught at; the harder inflections come along with it.
+        """
+        if cefr_level not in _WORDLIST_LEVEL_ORDER:
+            return False
+
+        existing = self.cefr_wordlist.get(lemma)
+        if existing is None:
+            self.cefr_wordlist[lemma] = (cefr_level, source)
+            self._wordlist_priority[lemma] = priority
+            return True
+
+        self._wordlist_collisions += 1
+        held_priority = self._wordlist_priority.get(lemma, priority)
+        if priority > held_priority:
+            return False
+        if priority == held_priority:
+            held_level = existing[0]
+            if held_level not in _WORDLIST_LEVEL_ORDER:
+                pass  # not a real level; anything graded beats it
+            elif _WORDLIST_LEVEL_ORDER.index(held_level) <= _WORDLIST_LEVEL_ORDER.index(cefr_level):
+                return False
+            else:
+                self._wordlist_relaxations += 1
+
+        self.cefr_wordlist[lemma] = (cefr_level, source)
+        self._wordlist_priority[lemma] = priority
+        return True
 
     def _load_comprehensive_wordlist(self, path: Path):
         """Load comprehensive CEFR wordlist (11k+ entries)."""
@@ -1547,8 +1625,9 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
                 lemma = self._get_lemma_simple(word)
-                if lemma not in self.cefr_wordlist:
-                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EFLLEX)
+                if self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=1
+                ):
                     count += 1
                 if ' ' in word:
                     self.multi_word_expressions[word] = (cefr_level, ClassificationSource.EFLLEX)
@@ -1573,8 +1652,9 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
                 lemma = self._get_lemma_simple(word)
-                if lemma not in self.cefr_wordlist:
-                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EFLLEX)
+                if self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=5
+                ):
                     count += 1
             if count > 0:
                 logger.info(f"Loaded {count} entries from NGSL")
@@ -1595,8 +1675,9 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
                 lemma = self._get_lemma_simple(word)
-                if lemma not in self.cefr_wordlist:
-                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.OXFORD_3000)
+                self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.OXFORD_3000, priority=2
+                )
                 if ' ' in word:
                     self.multi_word_expressions[word] = (cefr_level, ClassificationSource.OXFORD_3000)
         except Exception as e:
@@ -1616,8 +1697,9 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
                 lemma = self._get_lemma_simple(word)
-                if lemma not in self.cefr_wordlist:
-                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EFLLEX)
+                self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=3
+                )
         except Exception as e:
             logger.error(f"Error loading EFLLex wordlist: {e}")
 
@@ -1635,8 +1717,9 @@ class HybridCEFRClassifier:
                 except ValueError:
                     continue
                 lemma = self._get_lemma_simple(word)
-                if lemma not in self.cefr_wordlist:
-                    self.cefr_wordlist[lemma] = (cefr_level, ClassificationSource.EVP)
+                self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.EVP, priority=4
+                )
         except Exception as e:
             logger.error(f"Error loading EVP wordlist: {e}")
 
@@ -1898,6 +1981,7 @@ class HybridCEFRClassifier:
         - 3.0-4.0: Less common words → B2
         - 2.0-3.0: Uncommon words → C1
         - 0.0-2.0: Rare words → C2
+        - exactly 0.0: no corpus contains it → no opinion, returns None
         """
         rank, zipf = self._get_frequency_data(lemma)
         if rank is None or zipf is None:
@@ -1942,11 +2026,20 @@ class HybridCEFRClassifier:
             level = CEFRLevel.C2
             confidence = 0.35
         else:
-            # Zipf = 0.0 — word not found in any corpus at all
-            # More likely a typo, dialect, foreign word, or niche term than true C2
-            # Downgrade to B2 (benefit of the doubt)
-            level = CEFRLevel.B2
-            confidence = 0.20
+            # Zipf = 0.0 — the word appears in NO corpus wordfreq knows about.
+            # That is the absence of evidence, not evidence of difficulty, so
+            # this classifier has no opinion and says so: returning None lets
+            # the caller fall through to the UNKNOWN terminal case, which is
+            # stored and countable but never taught (#91).
+            #
+            # It used to return B2 at confidence 0.20 as "benefit of the
+            # doubt", which made B2 the drain for everything unrecognisable.
+            # In prod on 2026-09-10 that was 684 servable B2 cards of
+            # dictionary-scrape debris — `triregnum`, `bushwa`, `scrumple`,
+            # `quackster`, `muttonhead` — sitting in the deck of a learner who
+            # had asked for upper-intermediate English. Same shape as the A2
+            # default #91 removed, one band up.
+            return None
 
         return WordClassification(
             word=word,
