@@ -303,7 +303,11 @@ export default function App() {
     await logout();
   };
 
-  const navigateToMovie = (movie: MovieData) => {
+  // The three handlers below are the ones handed to the kept-alive tab screens,
+  // and they are `useCallback`ed for that reason alone: those screens are
+  // `memo`ed, and a prop rebuilt on every render would defeat the memo entirely.
+  // Each closes over nothing but state setters, so `[]` is honest.
+  const navigateToMovie = useCallback((movie: MovieData) => {
     // WordWise currently only processes English subtitles. If the user taps
     // a film whose original language isn't English, warn them up front
     // instead of letting them hit a script-fetch failure deep in the flow.
@@ -320,7 +324,7 @@ export default function App() {
     setSelectedMovie(movie);
     setMovieDetailResumed(false);
     setCurrentScreen('movieDetail');
-  };
+  }, []);
 
   const navigateToFilms = () => {
     setCurrentScreen('films');
@@ -398,10 +402,10 @@ export default function App() {
     session?: SrsSessionStart;
   }>({});
 
-  const navigateToReview = () => {
+  const navigateToReview = useCallback(() => {
     setReviewLaunch({});
     setCurrentScreen('review');
-  };
+  }, []);
 
   // The Lists tab's gold button already started the session (so the server
   // could 409 an empty pool before we navigate). Hand it straight to
@@ -451,10 +455,10 @@ export default function App() {
   // store because it is navigation state, not data — the store keeps the
   // list's contents, App keeps "which one is open".
   const [openList, setOpenList] = useState<ListSummary | null>(null);
-  const navigateToListDetail = (list: ListSummary) => {
+  const navigateToListDetail = useCallback((list: ListSummary) => {
     setOpenList(list);
     setCurrentScreen('listDetail');
-  };
+  }, []);
 
 
 

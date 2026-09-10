@@ -314,6 +314,60 @@ describe('syncFromReel', () => {
     await useListsStore.getState().syncFromReel();
     expect(mockDetail).not.toHaveBeenCalled();
   });
+
+  it('keeps the SAME lists array when the row has not drifted', async () => {
+    // The identity is the whole point, not a micro-optimisation. This runs
+    // every time the Lists tab regains focus — including on the way back out
+    // of a list detail, where nothing can have changed. A fresh array there
+    // invalidates the `films`/`words` useMemos in ListsIndexScreen, hands
+    // FlatList a new `data` prop and re-renders every row, which the user saw
+    // as the index glitching a beat after the back-swipe settled.
+    const before = [REEL, summary({ id: 30 })];
+    useListsStore.setState({ lists: before });
+    mockDetail.mockResolvedValue({ summary: { ...REEL }, items: [], nextCursor: null });
+
+    await useListsStore.getState().syncFromReel();
+
+    expect(useListsStore.getState().lists).toBe(before);
+  });
+
+  it('still swaps the array when the row really changed', async () => {
+    // The other half of the bargain: skipping the write when nothing moved
+    // must not turn into skipping a write that mattered.
+    const before = [REEL, summary({ id: 30 })];
+    useListsStore.setState({ lists: before });
+    mockDetail.mockResolvedValue({
+      summary: { ...REEL, count: 9 },
+      items: [],
+      nextCursor: null,
+    });
+
+    await useListsStore.getState().syncFromReel();
+
+    const after = useListsStore.getState().lists;
+    expect(after).not.toBe(before);
+    expect(after[0].count).toBe(9);
+    // Untouched rows keep their identity, so their own memoized children
+    // don't re-render either.
+    expect(after[1]).toBe(before[1]);
+  });
+
+  it('notices a change that lives only in the poster preview', async () => {
+    // `preview` is the one nested field, so a shallow compare would miss a
+    // film being added or removed when the count happened to stay level.
+    const before = [REEL];
+    useListsStore.setState({ lists: before });
+    mockDetail.mockResolvedValue({
+      summary: { ...REEL, preview: { posters: ['/different.jpg'], words: null } },
+      items: [],
+      nextCursor: null,
+    });
+
+    await useListsStore.getState().syncFromReel();
+
+    expect(useListsStore.getState().lists).not.toBe(before);
+    expect(useListsStore.getState().lists[0].preview.posters).toEqual(['/different.jpg']);
+  });
 });
 
 describe('reorder', () => {

@@ -76,7 +76,17 @@ interface Props {
  *  whole of search — there is no "see all" behind it. */
 const SUGGESTION_LIMIT = 3;
 
-export const FilmFeedScreen = ({
+/**
+ * Memoized, and that is load-bearing rather than a micro-optimisation.
+ *
+ * This screen is mounted for the life of the session (App's `KeepAlive`), so
+ * every `setCurrentScreen` anywhere in the app re-rendered it — including
+ * navigations it has nothing to do with. Backing out of a *list* re-rendered
+ * the film feed. Its props come from App state and a `useCallback`ed handler,
+ * so a plain `memo` holds; the feed's own data still arrives through hooks and
+ * stores, which `memo` does not block.
+ */
+export const FilmFeedScreen = React.memo(({
   onMoviePress,
   user,
   targetLanguage,
@@ -675,7 +685,8 @@ export const FilmFeedScreen = ({
       ) : null}
     </SafeAreaView>
   );
-};
+});
+FilmFeedScreen.displayName = 'FilmFeedScreen';
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({

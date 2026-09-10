@@ -31,7 +31,7 @@
  * component). Switching tabs closes the panel via the `active` reset.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -74,7 +74,7 @@ interface Props {
   bottomOffset?: number;
 }
 
-export function WordFeedScreen({
+function WordFeedScreenInner({
   active,
   proficiencyLevel,
   targetLanguage,
@@ -488,6 +488,11 @@ export function WordFeedScreen({
     </View>
   );
 }
+
+/** Memoized: kept mounted by App's `KeepAlive`, so without it every
+ *  `setCurrentScreen` in the app re-rendered the whole feed. Its props are
+ *  App state plus `active`; the words themselves come from the feed store. */
+export const WordFeedScreen = memo(WordFeedScreenInner);
 
 /** Shown only if paging somehow loses the race with the scroll — never a
  *  full-screen loader.

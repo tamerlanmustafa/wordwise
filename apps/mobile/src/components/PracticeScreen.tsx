@@ -22,7 +22,7 @@
  * route through `onPaywall`.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -62,7 +62,7 @@ export interface PracticeScreenProps {
   bottomOffset?: number;
 }
 
-export function PracticeScreen({
+function PracticeScreenInner({
   onStartDailyReview,
   active = true,
   bottomOffset = 0,
@@ -223,6 +223,10 @@ export function PracticeScreen({
     </SafeAreaView>
   );
 }
+
+/** Memoized: kept mounted by App's `KeepAlive`, so without it every
+ *  `setCurrentScreen` in the app re-rendered the whole path. */
+export const PracticeScreen = memo(PracticeScreenInner);
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({

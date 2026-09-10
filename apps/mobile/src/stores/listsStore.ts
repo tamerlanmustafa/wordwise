@@ -90,8 +90,42 @@ function omit(byId: Record<number, ListDetail>, id: number): Record<number, List
   return next;
 }
 
+/** Whether two summaries carry the same row content. `preview` is the only
+ *  nested field, and both of its sides are short (<=3) string arrays. */
+function sameSummary(a: ListSummary, b: ListSummary): boolean {
+  const sameStrings = (x: string[] | null, y: string[] | null) =>
+    x === y || (!!x && !!y && x.length === y.length && x.every((v, i) => v === y[i]));
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.kind === b.kind &&
+    a.systemKey === b.systemKey &&
+    a.count === b.count &&
+    a.totalWords === b.totalWords &&
+    a.updatedAt === b.updatedAt &&
+    sameStrings(a.preview.posters, b.preview.posters) &&
+    sameStrings(a.preview.words, b.preview.words)
+  );
+}
+
+/**
+ * Swap one summary into the index, returning the SAME array when the row is
+ * unchanged.
+ *
+ * The identity is the point. `map` always allocates, so re-reading a row that
+ * had not drifted still handed every subscriber a new `lists` — which
+ * invalidates the `films`/`words` useMemos in ListsIndexScreen, hands FlatList
+ * a new `data` prop and re-renders every row for nothing. That fired on the
+ * way back out of a list detail (`syncFromReel` runs whenever the tab regains
+ * focus), so backing out of a list visibly re-rendered the index behind it.
+ */
 function replaceSummary(lists: ListSummary[], next: ListSummary): ListSummary[] {
-  return lists.map((l) => (l.id === next.id ? next : l));
+  const i = lists.findIndex((l) => l.id === next.id);
+  if (i === -1) return lists;
+  if (sameSummary(lists[i], next)) return lists;
+  const copy = lists.slice();
+  copy[i] = next;
+  return copy;
 }
 
 export const useListsStore = create<ListsState>((set, get) => ({

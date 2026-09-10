@@ -26,7 +26,7 @@
  * API would buy a loading tail and a merge path to save nothing.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +68,7 @@ interface Props {
   bottomOffset: number;
 }
 
-export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
+function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -269,6 +269,12 @@ export function ListsIndexScreen({ active, onOpenList, bottomOffset }: Props) {
     </SafeAreaView>
   );
 }
+
+/** Memoized for the same reason the film feed is: this screen stays mounted
+ *  under App's `KeepAlive`, so without it every navigation in the app re-ran
+ *  the whole index. `active` and the `useCallback`ed `onOpenList` are the only
+ *  props that move, and the lists themselves arrive from the store. */
+export const ListsIndexScreen = memo(ListsIndexScreenInner);
 
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: tc.feedBg },
