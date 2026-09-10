@@ -19,6 +19,8 @@ served `make` (the 8th most frequent English word) as a B2 card.
 3. Collisions are counted, because a silent merge is what hid this.
 4. Zipf=0 ("in no corpus at all") is no opinion, not B2.
 5. End to end against the real data file: the top-40 words come out easy.
+6. Every declared source loads: the table names real loaders, the CSV
+   parser works, and a source that contributes nothing is reported.
 """
 from __future__ import annotations
 
@@ -225,3 +227,87 @@ def test_common_words_are_not_graded_by_their_hardest_inflection(
 ):
     assert word in loaded_wordlist, f"{word!r} missing from the loaded wordlist"
     assert loaded_wordlist[word][0] == expected
+
+
+# ---------------------------------------------------------------------------
+# 6. Every declared source actually loads
+# ---------------------------------------------------------------------------
+
+def test_every_declared_source_names_a_real_loader():
+    """A typo in the table would silently drop a whole wordlist."""
+    for filename, loader_name, priority in HybridCEFRClassifier._WORDLIST_SOURCES:
+        assert callable(
+            getattr(HybridCEFRClassifier, loader_name, None)
+        ), f"{filename} names {loader_name}, which does not exist"
+        assert isinstance(priority, int)
+
+
+def test_source_priorities_are_unique_and_ordered():
+    priorities = [p for _, _, p in HybridCEFRClassifier._WORDLIST_SOURCES]
+    assert priorities == sorted(priorities)
+    assert len(set(priorities)) == len(priorities)
+
+
+def test_the_two_csv_wordlists_are_declared():
+    """They shipped in data/cefr/ unread because no loader named them."""
+    declared = {f for f, _, _ in HybridCEFRClassifier._WORDLIST_SOURCES}
+    assert "cefrj_vocabulary.csv" in declared
+    assert "octanove_c1c2.csv" in declared
+
+
+def test_csv_loader_reads_headwords_and_splits_spelling_variants(tmp_path):
+    path = tmp_path / "graded.csv"
+    path.write_text(
+        "headword,pos,CEFR,notes\n"
+        "cloak,noun,C1,\n"
+        "a.m./A.M./am/AM,adverb,A1,\n"
+        "not-a-word,noun,B1,\n"
+        "blank,noun,,\n"
+        "bogus,noun,Z9,\n",
+        encoding="utf-8",
+    )
+    target = _merge_target()
+    target._get_lemma_simple = lambda w: w
+    target._record_wordlist_entry = (
+        lambda lemma, level, source, priority: (
+            HybridCEFRClassifier._record_wordlist_entry(
+                target, lemma, level, source, priority
+            )
+        )
+    )
+    HybridCEFRClassifier._load_graded_csv(target, path, 6, "test")
+
+    assert target.cefr_wordlist["cloak"][0] == CEFRLevel.C1
+    # every alphabetic spelling variant is recorded, punctuated ones dropped
+    assert target.cefr_wordlist["am"][0] == CEFRLevel.A1
+    assert "a.m." not in target.cefr_wordlist
+    # a hyphenated headword is not a lemma we can key on
+    assert "not-a-word" not in target.cefr_wordlist
+    # missing and unparseable levels are skipped rather than raising
+    assert "blank" not in target.cefr_wordlist
+    assert "bogus" not in target.cefr_wordlist
+
+
+def test_csv_loader_survives_a_missing_file():
+    """Loaders log and continue; one bad file must not lose the others."""
+    from pathlib import Path
+
+    target = _merge_target()
+    target._get_lemma_simple = lambda w: w
+    target._record_wordlist_entry = lambda *a: True
+    HybridCEFRClassifier._load_graded_csv(
+        target, Path("/nonexistent/graded.csv"), 6, "test"
+    )
+    assert target.cefr_wordlist == {}
+
+
+def test_low_priority_csv_cannot_regrade_a_word_a_real_list_placed():
+    """CEFR-J disagrees with the shipped list on ~25% of words; it must only
+    fill gaps, not re-open settled grades."""
+    t = _merge_target()
+    _record(t, "cloak", CEFRLevel.B1, ClassificationSource.EFLLEX, priority=1)
+    _record(t, "cloak", CEFRLevel.C1, ClassificationSource.EFLLEX, priority=6)
+    assert t.cefr_wordlist["cloak"][0] == CEFRLevel.B1
+
+    assert _record(t, "timid", CEFRLevel.C1, ClassificationSource.EFLLEX, priority=6)
+    assert t.cefr_wordlist["timid"][0] == CEFRLevel.C1

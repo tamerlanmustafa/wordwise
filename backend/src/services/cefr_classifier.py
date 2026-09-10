@@ -1504,6 +1504,9 @@ class HybridCEFRClassifier:
         # would have surfaced the `made`-beats-`make` bug before a user did.
         self._wordlist_collisions: int = 0
         self._wordlist_relaxations: int = 0
+        # Lemmas each source actually contributed, so a file that loads
+        # successfully but adds nothing is visible — see `_WORDLIST_SOURCES`.
+        self._wordlist_contributions: Dict[str, int] = {}
         self.frequency_thresholds = {
             CEFRLevel.A1: (0, 1000),
             CEFRLevel.A2: (1000, 2000),
@@ -1520,33 +1523,56 @@ class HybridCEFRClassifier:
             logger.warning("Embedding classifier enabled - will slow down classification!")
             self._load_embedding_classifier()
 
+    #: Every graded source, in priority order: (filename, loader, priority).
+    #: A table rather than a run of `if path.exists()` blocks so that "which
+    #: sources exist" and "which sources actually loaded" are the same list —
+    #: `oxford_3000_5000.json` and `evp.json` shipped for months as the 2-entry
+    #: templates `download_cefr_data.py` writes, were dutifully loaded, and
+    #: contributed nothing, while `cefrj_vocabulary.csv` (7,798 graded words)
+    #: and `octanove_c1c2.csv` (2,136) sat unread beside them because no loader
+    #: named them. Nothing in the logs said so either way.
+    _WORDLIST_SOURCES: Tuple[Tuple[str, str, int], ...] = (
+        ("comprehensive_cefr.json", "_load_comprehensive_wordlist", 1),
+        ("oxford_3000_5000.json", "_load_oxford_wordlist", 2),
+        ("efllex.json", "_load_efllex_wordlist", 3),
+        ("evp.json", "_load_evp_wordlist", 4),
+        ("ngsl.json", "_load_ngsl_wordlist", 5),
+        ("cefrj_vocabulary.csv", "_load_cefrj_wordlist", 6),
+        ("octanove_c1c2.csv", "_load_octanove_wordlist", 7),
+    )
+
+    #: A real graded wordlist has thousands of entries. Anything under this is
+    #: almost certainly one of the `download_cefr_data.py` templates, which are
+    #: syntactically valid and semantically empty — the failure mode that hides
+    #: from every check except a count.
+    _TEMPLATE_STUB_MAX_ENTRIES = 50
+
     def _load_cefr_wordlists(self):
         logger.info("Loading CEFR wordlists...")
 
-        # Priority 1: Comprehensive CEFR (best coverage - 11k+ words)
-        comprehensive_path = self.data_dir / "comprehensive_cefr.json"
-        if comprehensive_path.exists():
-            self._load_comprehensive_wordlist(comprehensive_path)
+        for filename, loader_name, priority in self._WORDLIST_SOURCES:
+            path = self.data_dir / filename
+            if not path.exists():
+                logger.warning(f"  {filename}: MISSING — contributes nothing")
+                continue
 
-        # Priority 2: Oxford 3000/5000 (high quality, authoritative)
-        oxford_path = self.data_dir / "oxford_3000_5000.json"
-        if oxford_path.exists():
-            self._load_oxford_wordlist(oxford_path)
+            before = len(self.cefr_wordlist)
+            getattr(self, loader_name)(path, priority)
+            added = len(self.cefr_wordlist) - before
+            self._wordlist_contributions[filename] = added
 
-        # Priority 3: EFLLex (good coverage)
-        efllex_path = self.data_dir / "efllex.json"
-        if efllex_path.exists():
-            self._load_efllex_wordlist(efllex_path)
-
-        # Priority 4: EVP (phrasal verbs and expressions)
-        evp_path = self.data_dir / "evp.json"
-        if evp_path.exists():
-            self._load_evp_wordlist(evp_path)
-
-        # Priority 5: NGSL (New General Service List - most useful 2800 words)
-        ngsl_path = self.data_dir / "ngsl.json"
-        if ngsl_path.exists():
-            self._load_ngsl_wordlist(ngsl_path)
+            if added == 0:
+                logger.warning(
+                    f"  {filename}: added 0 lemmas — already fully covered by a "
+                    f"higher-priority source, or an unfilled template"
+                )
+            elif added <= self._TEMPLATE_STUB_MAX_ENTRIES:
+                logger.warning(
+                    f"  {filename}: added only {added} lemmas — looks like the "
+                    f"placeholder download_cefr_data.py writes, not real data"
+                )
+            else:
+                logger.info(f"  {filename}: added {added} lemmas")
 
         logger.info(
             f"Loaded {len(self.cefr_wordlist)} CEFR entries, "
@@ -1609,59 +1635,8 @@ class HybridCEFRClassifier:
         self._wordlist_priority[lemma] = priority
         return True
 
-    def _load_comprehensive_wordlist(self, path: Path):
+    def _load_comprehensive_wordlist(self, path: Path, priority: int = 1):
         """Load comprehensive CEFR wordlist (11k+ entries)."""
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            count = 0
-            for entry in data:
-                word = entry.get('word', '').lower().strip()
-                level = entry.get('cefr_level', '').upper()
-                if not word or not level:
-                    continue
-                try:
-                    cefr_level = CEFRLevel(level)
-                except ValueError:
-                    continue
-                lemma = self._get_lemma_simple(word)
-                if self._record_wordlist_entry(
-                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=1
-                ):
-                    count += 1
-                if ' ' in word:
-                    self.multi_word_expressions[word] = (cefr_level, ClassificationSource.EFLLEX)
-            logger.info(f"Loaded {count} entries from comprehensive CEFR")
-        except Exception as e:
-            logger.error(f"Error loading comprehensive wordlist: {e}")
-
-    def _load_ngsl_wordlist(self, path: Path):
-        """Load NGSL (New General Service List) - 2800 most useful words."""
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            count = 0
-            for entry in data:
-                word = entry.get('word', '').lower().strip()
-                # NGSL uses rank-based CEFR assignment
-                level = entry.get('cefr_level', entry.get('cefr', '')).upper()
-                if not word or not level:
-                    continue
-                try:
-                    cefr_level = CEFRLevel(level)
-                except ValueError:
-                    continue
-                lemma = self._get_lemma_simple(word)
-                if self._record_wordlist_entry(
-                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=5
-                ):
-                    count += 1
-            if count > 0:
-                logger.info(f"Loaded {count} entries from NGSL")
-        except Exception as e:
-            logger.error(f"Error loading NGSL wordlist: {e}")
-
-    def _load_oxford_wordlist(self, path: Path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -1676,14 +1651,58 @@ class HybridCEFRClassifier:
                     continue
                 lemma = self._get_lemma_simple(word)
                 self._record_wordlist_entry(
-                    lemma, cefr_level, ClassificationSource.OXFORD_3000, priority=2
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority
+                )
+                if ' ' in word:
+                    self.multi_word_expressions[word] = (cefr_level, ClassificationSource.EFLLEX)
+        except Exception as e:
+            logger.error(f"Error loading comprehensive wordlist: {e}")
+
+    def _load_ngsl_wordlist(self, path: Path, priority: int = 5):
+        """Load NGSL (New General Service List) - 2800 most useful words."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for entry in data:
+                word = entry.get('word', '').lower().strip()
+                # NGSL uses rank-based CEFR assignment
+                level = entry.get('cefr_level', entry.get('cefr', '')).upper()
+                if not word or not level:
+                    continue
+                try:
+                    cefr_level = CEFRLevel(level)
+                except ValueError:
+                    continue
+                lemma = self._get_lemma_simple(word)
+                self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority
+                )
+        except Exception as e:
+            logger.error(f"Error loading NGSL wordlist: {e}")
+
+    def _load_oxford_wordlist(self, path: Path, priority: int = 2):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for entry in data:
+                word = entry.get('word', '').lower().strip()
+                level = entry.get('cefr_level', '').upper()
+                if not word or not level:
+                    continue
+                try:
+                    cefr_level = CEFRLevel(level)
+                except ValueError:
+                    continue
+                lemma = self._get_lemma_simple(word)
+                self._record_wordlist_entry(
+                    lemma, cefr_level, ClassificationSource.OXFORD_3000, priority
                 )
                 if ' ' in word:
                     self.multi_word_expressions[word] = (cefr_level, ClassificationSource.OXFORD_3000)
         except Exception as e:
             logger.error(f"Error loading Oxford wordlist: {e}")
 
-    def _load_efllex_wordlist(self, path: Path):
+    def _load_efllex_wordlist(self, path: Path, priority: int = 3):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -1698,12 +1717,12 @@ class HybridCEFRClassifier:
                     continue
                 lemma = self._get_lemma_simple(word)
                 self._record_wordlist_entry(
-                    lemma, cefr_level, ClassificationSource.EFLLEX, priority=3
+                    lemma, cefr_level, ClassificationSource.EFLLEX, priority
                 )
         except Exception as e:
             logger.error(f"Error loading EFLLex wordlist: {e}")
 
-    def _load_evp_wordlist(self, path: Path):
+    def _load_evp_wordlist(self, path: Path, priority: int = 4):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -1718,10 +1737,65 @@ class HybridCEFRClassifier:
                     continue
                 lemma = self._get_lemma_simple(word)
                 self._record_wordlist_entry(
-                    lemma, cefr_level, ClassificationSource.EVP, priority=4
+                    lemma, cefr_level, ClassificationSource.EVP, priority
                 )
         except Exception as e:
             logger.error(f"Error loading EVP wordlist: {e}")
+
+    def _load_graded_csv(self, path: Path, priority: int, label: str):
+        """Load a `headword,pos,CEFR,...` wordlist. CEFR-J and Octanove share it.
+
+        Both files shipped in `data/cefr/` from the start and neither was ever
+        read, because `_load_cefr_wordlists` only named JSON files. Between them
+        that is 9,934 graded entries — CEFR-J covers A1-B2, Octanove is a
+        dedicated C1/C2 list, so they are complementary rather than redundant.
+
+        They sit at the bottom of the priority order because
+        `comprehensive_cefr.json` was itself built by merging these very
+        sources: they add 31 lemmas nothing else covers, and re-asserting the
+        rest at low priority keeps them from silently re-grading words a
+        higher-priority list already placed.
+
+        Headwords carry spelling variants as `a.m./A.M./am/AM`; each alphabetic
+        variant is recorded, the rest dropped.
+
+        Recorded under EFLLEX rather than a source of their own: adding enum
+        members means a `classificationsource` migration against prod, which is
+        not worth it for 31 lemmas. `_wordlist_contributions` is where the real
+        per-file provenance lives.
+        """
+        import csv
+
+        try:
+            with open(path, 'r', encoding='utf-8-sig', newline='') as f:
+                for row in csv.DictReader(f):
+                    level = (row.get('CEFR') or '').strip().upper()
+                    if not level:
+                        continue
+                    try:
+                        cefr_level = CEFRLevel(level)
+                    except ValueError:
+                        continue
+                    for variant in (row.get('headword') or '').split('/'):
+                        word = variant.strip().lower()
+                        if not word or not word.isalpha():
+                            continue
+                        self._record_wordlist_entry(
+                            self._get_lemma_simple(word),
+                            cefr_level,
+                            ClassificationSource.EFLLEX,
+                            priority,
+                        )
+        except Exception as e:
+            logger.error(f"Error loading {label} wordlist: {e}")
+
+    def _load_cefrj_wordlist(self, path: Path, priority: int = 6):
+        """CEFR-J (Tono et al.) — A1-B2, expert-reviewed against learner data."""
+        self._load_graded_csv(path, priority, "CEFR-J")
+
+    def _load_octanove_wordlist(self, path: Path, priority: int = 7):
+        """Octanove C1/C2 — the only dedicated list for the top two bands."""
+        self._load_graded_csv(path, priority, "Octanove C1/C2")
 
     def _load_frequency_data(self):
         try:
