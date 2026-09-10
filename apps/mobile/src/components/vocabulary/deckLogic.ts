@@ -165,6 +165,43 @@ export function behindRevealRamp(clamp: number): {
   };
 }
 
+// ── What the deck is allowed to contain ───────────────────────────────────
+
+/**
+ * Single words, never phrases — and the first `cap` WORDS, not the words
+ * among the first `cap` items.
+ *
+ * A film's vocabulary arrives as words plus idioms and phrasal verbs, and the
+ * deck used to shuffle them together. Two things went wrong with that.
+ *
+ * The visible one: idioms are not batched for example sentences (they carry
+ * their own), so `hasRenderableSentence` lets every one of them through while
+ * a word whose sentence the generator never produced is dropped. On a level
+ * where SentenceBank is thin the words fall away and the idioms do not, and
+ * the deck ends up being nothing but phrasal verbs — which is what a reader
+ * switching to a level tab actually saw.
+ *
+ * The quiet one: mixed into the top 60, every idiom took a slot a word could
+ * have had. Counting the cap in words is what makes "60 cards" mean 60 words.
+ *
+ * Cheaper than filter-then-slice, and that is not the reason for the loop —
+ * the reason is that the cap has to be applied AFTER the filter to mean
+ * anything, and writing it as one pass makes that impossible to get backwards.
+ */
+export function deckWordsOnly<T extends { word: string } | { phrase: string }>(
+  items: readonly T[],
+  cap?: number,
+): Exclude<T, { phrase: string }>[] {
+  type Word = Exclude<T, { phrase: string }>;
+  const words: Word[] = [];
+  for (const item of items) {
+    if ('phrase' in item) continue;
+    words.push(item as Word);
+    if (cap != null && words.length >= cap) break;
+  }
+  return words;
+}
+
 // ── Deck cursor reducer ───────────────────────────────────────────────────
 
 export interface DeckState {

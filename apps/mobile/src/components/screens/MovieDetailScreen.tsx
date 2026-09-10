@@ -61,6 +61,7 @@ import {
   SHOW_LEVEL_FILTER_BAR,
 } from '../vocabulary/deckMetrics';
 import {
+  deckWordsOnly,
   parseViewMode,
   pickDefaultLevel,
   resolveBookmarkLevel,
@@ -777,6 +778,34 @@ export const MovieDetailScreen = ({
   const suggestedVisible = suggestedWords.slice(0, SUGGESTED_CAP);
   const suggestedHidden = Math.max(0, suggestedWords.length - SUGGESTED_CAP);
 
+  /**
+   * The deck's list — single words, never idioms or phrasal verbs.
+   *
+   * This is the ONE place the deck's contents are decided, and it is upstream
+   * of both consumers on purpose: the sentence batch below fetches for exactly
+   * this list, and `deckItems` is this list minus the words whose example
+   * sentence came back empty. Splitting them was the bug waiting to happen —
+   * a deck showing a word the batch never asked about sits on a skeleton
+   * sentence slot for ever, because "no entry yet" and "no sentence exists"
+   * are the same absence in the preview map.
+   *
+   * The cap counts WORDS, so "For You" is 60 cards of vocabulary rather than
+   * 60 slots that idioms were free to take. The level tabs stay uncapped —
+   * the level IS the filter there, and capping it would quietly hide part of
+   * a level the reader explicitly asked to see.
+   *
+   * `suggestedWords` and `activeItems` keep their idioms: they feed the row
+   * list, the "items vs words" count and `freqFillMap`, none of which is the
+   * deck. Cutting at the source would have deleted a feature to fix a filter.
+   */
+  const deckWords = useMemo<(WordInfo & { cefr_level?: string })[]>(
+    () =>
+      wordsView === 'foryou'
+        ? deckWordsOnly(suggestedWords, SUGGESTED_CAP)
+        : deckWordsOnly(activeItems),
+    [wordsView, suggestedWords, activeItems],
+  );
+
   // Defer the heavy list inputs so tab taps update the header immediately
   // while the row re-render runs at lower priority on the next tick.
   const deferredWordsView = useDeferredValue(wordsView);
@@ -842,14 +871,10 @@ export const MovieDetailScreen = ({
   const SENTENCE_BATCH_CHUNK = 12;
   useEffect(() => {
     if (!movieId) return;
-    const words = wordsView === 'foryou'
-      ? suggestedWords
-          .slice(0, SUGGESTED_CAP)
-          .filter((w): w is WordInfo & { cefr_level: string } => !isIdiom(w))
-          .map((w) => w.word)
-      : activeItems
-          .filter((w): w is WordInfo => !isIdiom(w))
-          .map((w) => w.word);
+    // Exactly the deck's list. It used to re-derive the same thing with its
+    // own copy of the cap and the idiom filter, which is two chances to
+    // disagree with the list actually on screen.
+    const words = deckWords.map((w) => w.word);
     const status = sentencesStatusRef.current;
     const missing = words.filter((w) => {
       const s = status[w];
@@ -911,7 +936,7 @@ export const MovieDetailScreen = ({
         });
       });
     });
-  }, [movieId, wordsView, suggestedWords, activeItems, sentencesRetryTick]);
+  }, [movieId, deckWords, sentencesRetryTick]);
 
   // Chunked rendering: mount the first 25 rows immediately on a tab switch,
   // then progressively reveal the rest in batches. ~100 WordRow mounts in
@@ -950,22 +975,20 @@ export const MovieDetailScreen = ({
   }, [renderLimit, activeListLength]);
 
   // ── Card-deck view mode (Ledger Reveal, mockup 1a) ───────────────────────
-  // The deck is fed the active tab's items after the level filter and sort,
-  // then the same renderable-sentence filter the rows apply:
+  // `deckWords` (above) after the renderable-sentence filter the rows apply:
   // long content steps down a type tier rather than being dropped, but a word
   // with no AI-authored example has an empty sentence slot and no card worth
   // showing. Unlike the rows (~100 mounts, hence the deferred inputs) the deck
   // renders a couple of cards, so it reads the urgent values — with the
   // deferred ones, the frame that lifts the loading splash showed an empty
   // deck until the low-priority render caught up.
-  const deckItems = useMemo<RowItem[]>(
-    () =>
-      (wordsView === 'foryou' ? suggestedVisible : activeItems).filter((item) =>
-        hasRenderableSentence(itemKey(item), sentencePreviews),
-      ),
-    // suggestedVisible is an unmemoized slice; depend on its memoized source.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wordsView, suggestedWords, activeItems, sentencePreviews],
+  //
+  // This filter is why the list has to be words-only BEFORE it gets here: an
+  // idiom is never batched, so it can never fail this test, and a deck built
+  // the other way round kept every phrasal verb while dropping the words.
+  const deckItems = useMemo(
+    () => deckWords.filter((item) => hasRenderableSentence(item.word, sentencePreviews)),
+    [deckWords, sentencePreviews],
   );
   const deckTotal = deckItems.length;
   const deckCardClamped = deckTotal ? Math.min(Math.max(deckCardNumber, 1), deckTotal) : 0;
@@ -1170,7 +1193,12 @@ export const MovieDetailScreen = ({
                 lived in the explainer band; `wordSortOrder` still sorts
                 the deck at its 'rare' default, there is just nothing on
                 screen to change it with. */}
-            {wordsView === 'foryou' && suggestedWords.length === 0 ? (
+            {/* `deckWords`, not `suggestedWords`: the question this line
+                answers is "is there anything to show you", and what gets shown
+                is the deck. A film whose only suggestions at the reader's level
+                are idioms has a non-empty `suggestedWords` and nothing to put
+                on a card, and used to answer it with "CARD 0 / 0". */}
+            {wordsView === 'foryou' && deckWords.length === 0 ? (
               <Text style={[styles.forYouEmpty, { color: tc.textSecondary }]}>{t('movies:detail.noNewWords')}</Text>
             ) : viewMode === 'cards' ? (
               /* Deck header row: CARD n / total, alone on its line. The deck's
