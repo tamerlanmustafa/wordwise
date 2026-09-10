@@ -7,12 +7,22 @@ appId: com.wordwise.mobile
 ---
 - tapOn: { id: 'tab-films' }
 - waitForAnimationToEnd: { timeout: 5000 }
-# The film feed is a vertical pager of cards; the first one is whatever the
-# recommendation seed put there, which is fine — this flow does not care WHICH
-# film, only that a deck opens.
-- tapOn: { point: '50%,40%' }
-# The wordmark splash holds for at least a second and then the doors part; the
-# deck's action row is the first thing that proves we are through it.
+# Which film sits first is a recommendation seed, so the id is matched by
+# pattern and whichever card is there gets tapped. A blind tap at a screen
+# percentage worked until the card layout moved; an id survives that.
+#
+# Opening a film is a NETWORK operation — the vocabulary comes from the API,
+# and only films already in the offline cache open without one. If this step
+# lands on "Couldn't load this film", the API is not running: see the backend
+# section of .maestro/README.md. That is a real failure, not a flaky flow.
+- tapOn:
+    id: 'film-card-.*'
+    index: 0
+# The wordmark splash holds for at least a second and then the doors part. The
+# deck's Next button is the first thing that proves we are through it — and it
+# is matched by testID, because React Native only exposes a view to iOS
+# accessibility when it is explicitly marked, so the *visible* label "Next" is
+# invisible to XCUITest.
 - extendedWaitUntil:
-    visible: { text: 'Next' }
-    timeout: 30000
+    visible: { id: 'deck-next' }
+    timeout: 40000

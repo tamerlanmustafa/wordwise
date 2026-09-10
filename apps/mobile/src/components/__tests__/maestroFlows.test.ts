@@ -27,6 +27,18 @@ const allFlows = () => flowFiles().map(flow).join('\n');
 const bottomBar = () =>
   fs.readFileSync(path.join(SRC, 'components', 'GlobalBottomBar.tsx'), 'utf8');
 
+function walk(dir: string, out: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== '__tests__') walk(full, out);
+    } else if (entry.name.endsWith('.tsx')) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 /** Route ids from the one place content, label and position meet. */
 function tabIds(): string[] {
   const src = bottomBar();
@@ -39,6 +51,42 @@ describe('the flows address handles the app still renders', () => {
     // A source guard whose input silently became empty reports zero problems
     // and looks like success for ever.
     expect(flowFiles().length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('gives the controls the flows drive a testID', () => {
+    // React Native exposes a view to iOS accessibility only when it is
+    // explicitly marked, and XCUITest can see nothing else. Dumped on a
+    // running build, the whole app produced four text nodes and all four were
+    // the iOS status bar — so a flow cannot match on visible text here, and
+    // any control a flow touches has to carry one of these.
+    const files: [string, string[]][] = [
+      ['components/GlobalBottomBar.tsx', ['tab-${id}']],
+      ['components/filmFeed/RankedMovieList.tsx', ['film-card-']],
+      [
+        'components/vocabulary/WordCardDeck.tsx',
+        ['deck-next', 'deck-knew-it', 'deck-previous', 'deck-card'],
+      ],
+    ];
+    for (const [file, ids] of files) {
+      const src = fs.readFileSync(path.join(SRC, file), 'utf8');
+      for (const id of ids) expect(src).toContain(id);
+    }
+  });
+
+  it('never reaches for a testID nothing renders', () => {
+    // The other direction: a flow addressing an id the app dropped fails six
+    // weeks later, in front of whoever was cutting a store build.
+    const rendered = new Set<string>();
+    for (const file of walk(SRC)) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/testID=\{?["'`]([a-z-]+)/g)) rendered.add(m[1]);
+      for (const m of src.matchAll(/testID=\{`([a-z-]+)-\$/g)) rendered.add(m[1] + '-');
+    }
+    const referenced = [...allFlows().matchAll(/id:\s*'([a-z][a-z-]*)/g)].map((m) => m[1]);
+    const unknown = [...new Set(referenced)].filter(
+      (id) => !rendered.has(id) && ![...rendered].some((r) => r.endsWith('-') && id.startsWith(r)),
+    );
+    expect(unknown).toEqual([]);
   });
 
   it('gives every bottom-bar tab a stable testID', () => {

@@ -18,23 +18,23 @@ appId: com.wordwise.mobile
 - repeat:
     times: 20
     commands:
-      - tapOn: { text: 'Next' }
+      - tapOn: { id: 'deck-next' }
 - repeat:
     times: 10
     commands:
-      - tapOn: { text: 'Knew it' }
-      - tapOn: { text: 'Next' }
+      - tapOn: { id: 'deck-knew-it' }
+      - tapOn: { id: 'deck-next' }
 
 # Swipes in both directions, with no settle between them.
 - repeat:
     times: 15
     commands:
       - swipe:
-          from: { x: '70%', y: '45%' }
-          to: { x: '10%', y: '45%' }
+          start: 70%, 45%
+          end: 10%, 45%
       - swipe:
-          from: { x: '30%', y: '45%' }
-          to: { x: '90%', y: '45%' }
+          start: 30%, 45%
+          end: 90%, 45%
 
 # Tap-to-reveal spammed on one card: the translation cross-fade is driven by a
 # per-key Animated.Value, and a tap arriving mid-fade must flip it rather than
@@ -42,8 +42,8 @@ appId: com.wordwise.mobile
 - repeat:
     times: 20
     commands:
-      - tapOn: { point: '50%,45%' }
+      - tapOn: { id: 'deck-card' }
 
 - waitForAnimationToEnd: { timeout: 5000 }
-- assertVisible: { text: 'Next' }
+- assertVisible: { id: 'deck-next' }
 - takeScreenshot: artifacts/deck-storm-end

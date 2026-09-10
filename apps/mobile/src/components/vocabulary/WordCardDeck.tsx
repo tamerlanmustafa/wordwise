@@ -1259,6 +1259,7 @@ export const WordCardDeck = ({
           <Pressable
             style={s.cardPress}
             onPress={withTap(handleCardPress)}
+            testID="deck-card"
             accessibilityRole="button"
             accessibilityLabel={expanded ? t('vocabulary:deck.hideTranslation') : t('vocabulary:deck.showTranslation')}
           >
@@ -1489,6 +1490,7 @@ export const WordCardDeck = ({
             onPress={withTap(() => doLearn('button'))}
             accessibilityRole="button"
             accessibilityLabel={t('vocabulary:deck.iKnowThisWord')}
+            testID="deck-knew-it"
           >
             {({ pressed }) => (
               <View style={s.pillWrap}>
@@ -1510,6 +1512,7 @@ export const WordCardDeck = ({
           disabled={!canGoBack}
           accessibilityRole="button"
           accessibilityLabel={t('vocabulary:deck.previousCard')}
+          testID="deck-previous"
         >
           {({ pressed }) => (
             // No edge layer under this one. The pills are raised because they
@@ -1537,6 +1540,7 @@ export const WordCardDeck = ({
           onPress={withTap(() => doAdvance('button'))}
           accessibilityRole="button"
           accessibilityLabel={t('vocabulary:deck.nextCard')}
+          testID="deck-next"
         >
           {({ pressed }) => (
             <View style={s.pillWrap}>

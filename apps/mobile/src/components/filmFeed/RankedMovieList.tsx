@@ -386,6 +386,12 @@ const MovieCard = React.memo(({
         press.setValue(1);
       }}
       onPressOut={() => press.setValue(0)}
+      // The handle .maestro/film-open.yaml taps. A UI test cannot know which
+      // film the recommendation seed put first, so it matches the id by
+      // pattern (`film-card-.*`) and takes whichever it finds.
+      testID={`film-card-${movie.tmdb_id ?? movie.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={movie.title}
     >
       {/* Static, and the only layer carrying the shadow: it is the bottom-most
           solid, so the whole card casts one. A blurred shadow under the *face*
