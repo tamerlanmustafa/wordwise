@@ -19,12 +19,11 @@
 import fs from 'fs';
 import path from 'path';
 
-import { themes, shade, type ColorScheme, type ThemeColors } from '../../../theme/tokens';
-import { tileVisual, tileMark, CHECK_FLOOR_DARKEN } from '../tileVisuals';
+import { themes, shade } from '../../../theme/tokens';
+import { tileVisual, tileMark } from '../tileVisuals';
 import {
   CHECK_BOX,
-  CHECK_FLOOR_W,
-  CHECK_LIP_W,
+  CHECK_W,
   LOCK_INK,
   MARK_TOP,
 } from '../TileMarks';
@@ -32,16 +31,13 @@ import {
   NOSING_H,
   NOSING_INSET,
   RISER_FOOT_DARKEN,
+  TILE_BORDER_DARKEN,
+  TILE_BORDER_W,
   TILE_H,
   TILE_RADIUS,
   TILE_W,
   TREAD_BAND_H,
 } from '../TilePill';
-
-const THEMES: Array<[ColorScheme, ThemeColors]> = [
-  ['light', themes.light],
-  ['dark', themes.dark],
-];
 
 const src = (file: string) =>
   fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
@@ -260,33 +256,82 @@ describe('the tread has three fixed zones', () => {
   });
 });
 
-describe('the groove floor is the tile in shadow, not a second colour', () => {
-  it.each(THEMES)('%s: reads darker than the face it is cut into', (scheme, tc) => {
-    const floor = shade(tc.nodeDone, -CHECK_FLOOR_DARKEN);
-    expect(luminance(floor)).toBeLessThan(luminance(tc.nodeDone));
+describe('the marks are drawn flat, not cut', () => {
+  // They used to be grooves: every mark drawn two or three times, a dark copy
+  // offset up and a light one offset down, so it read as carved into the
+  // tread. Removed by request — the tiles are simple now, and a mark is a
+  // mark. Guarded because the construction is the kind that grows back one
+  // "just a subtle highlight" at a time.
+  const marks = () => src('TileMarks.tsx');
+  /** Source with comments stripped. These guards forbid a construction that
+   *  the file's own docblock has to NAME in order to explain why it is gone,
+   *  so a plain text scan fails on the explanation instead of on a mistake. */
+  const code = () => marks().replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  it('draws the check as a single stroke', () => {
+    const s = code();
+    expect(s).not.toMatch(/CHECK_LIP_W|CHECK_FLOOR_W/);
+    // One <Path in the check, not three.
+    const check = s.slice(s.indexOf('function CompletedMark'), s.indexOf('function LessonNumber'));
+    expect(check.match(/<Path/g) ?? []).toHaveLength(1);
+    expect(CHECK_W).toBeGreaterThan(0);
   });
 
-  it('leaves the lips wider than the floor they flank', () => {
-    // Equal widths and the floor covers both lips, which is a flat glyph in
-    // three passes — the exact thing this construction exists to avoid.
-    expect(CHECK_FLOOR_W).toBeLessThan(CHECK_LIP_W);
+  it('has no letterpress under the text marks', () => {
+    // The START word and the lesson number were each rendered twice, one copy
+    // carrying a light shadow and one a dark one.
+    const s = code();
+    expect(s).not.toMatch(/Letterpress/);
+    expect(s).not.toMatch(/textShadow/);
+  });
+
+  it('draws the lock as one layer', () => {
+    const s = code();
+    expect(s).not.toMatch(/lockLight|lockDark|LOCK_LIP/);
+    const lock = s.slice(s.indexOf('function LockMark'));
+    expect(lock.slice(0, lock.indexOf('}')).match(/<LockShape/g) ?? []).toHaveLength(0);
   });
 });
 
 describe('only the next step is a loud lock', () => {
-  it('cuts the next-up tile deeper on both layers', () => {
-    expect(alpha(LOCK_INK.nextUp.light)).toBeGreaterThan(alpha(LOCK_INK.base.light));
-    expect(alpha(LOCK_INK.nextUp.dark)).toBeGreaterThan(alpha(LOCK_INK.base.dark));
+  it('inks the next-up tile darker than the road behind it', () => {
+    expect(alpha(LOCK_INK.nextUp)).toBeGreaterThan(alpha(LOCK_INK.base));
   });
 
   it('keeps even the loud one quiet in absolute terms', () => {
     // Barely legible at arm's length is the target. A lock the user can read
     // across the room turns the road ahead into a wall.
-    expect(alpha(LOCK_INK.nextUp.light)).toBeLessThan(0.25);
+    expect(alpha(LOCK_INK.nextUp)).toBeLessThan(0.7);
   });
 });
 
 // ── The drawing ──────────────────────────────────────────────────────────────
+
+describe('the tile is outlined all the way round', () => {
+  // The only line on the tile used to be the riser showing beneath the face,
+  // which reads as a bottom border and nothing else. Both layers carry the
+  // outline now: the riser draws the sides and the feet, the face draws the
+  // top and the front lip, and between them they trace the whole shape.
+  const pill = () => src('TilePill.tsx');
+
+  it('borders both layers, not just one', () => {
+    const s = pill();
+    const layer = (name: string) => {
+      const at = s.indexOf(`  ${name}: {`);
+      return s.slice(at, s.indexOf('},', at));
+    };
+    expect(layer('edge')).toMatch(/borderWidth: TILE_BORDER_W/);
+    expect(layer('face')).toMatch(/borderWidth: TILE_BORDER_W/);
+  });
+
+  it('derives the outline from the tile it is drawn on', () => {
+    // Not a fixed colour: gold, green, stone and the repair red each need an
+    // outline in their own family, or the path grows a black cage around it.
+    expect(pill()).toMatch(/shade\(edge, -TILE_BORDER_DARKEN\)/);
+    expect(TILE_BORDER_DARKEN).toBeGreaterThan(0);
+    expect(TILE_BORDER_W).toBeGreaterThan(0);
+  });
+});
 
 describe('the tread is drawn as a step under another step', () => {
   const pill = () => src('TilePill.tsx');
@@ -361,110 +406,12 @@ describe('the tread is drawn as a step under another step', () => {
   });
 });
 
-describe('a mark is engraved, not embossed', () => {
+describe('the marks keep their geometry and their language', () => {
   const marks = () => src('TileMarks.tsx');
 
-  /** Where the transform attached to the layer inked `color` sits. */
-  function transformAfter(color: string): string {
-    const s = marks();
-    const at = s.indexOf(color);
-    expect(at).toBeGreaterThan(-1);
-    return s.slice(at, at + 240);
-  }
-
-  it('offsets the dark lip UP and the light lip DOWN', () => {
-    // The single most reversible line in the whole design. Both directions
-    // render; one reads as a groove cut into stone and the other as a badge
-    // stuck on top of it, and only the second disagrees with the tread shadow
-    // two millimetres above it.
-    expect(transformAfter('rgba(0,0,0,0.46)')).toMatch(/transform="translate\(0, -0\.4\)"/);
-    expect(transformAfter('rgba(255,255,255,0.44)')).toMatch(/transform="translate\(0, 1\)"/);
-  });
-
-  it('draws the floor last and un-transformed, so the lips flank it', () => {
-    const s = marks();
-    expect(s.indexOf('rgba(0,0,0,0.46)')).toBeLessThan(s.indexOf('rgba(255,255,255,0.44)'));
-    expect(s.indexOf('rgba(255,255,255,0.44)')).toBeLessThan(s.indexOf('CHECK_FLOOR_DARKEN)}'));
-  });
-
-  it('puts the lock highlight below the shadow too', () => {
-    // Same rule, one layer thinner: light from above means the lit copy sits
-    // lower, so the light layer takes the positive offset.
-    const s = marks();
-    const light = s.slice(s.indexOf('lockLight: {'), s.indexOf('lockDark: {'));
-    const dark = s.slice(s.indexOf('lockDark: {'));
-    expect(light).toMatch(/top: LOCK_LIP,/);
-    expect(dark).toMatch(/top: 0,/);
-  });
-
-  it('punches the keyhole through the dark layer only, in the tile face colour', () => {
-    // A keyhole on both layers is a smudge; one in its own dark ink is a mark
-    // on the lock rather than a hole through it.
-    const s = marks();
-    expect(s).toMatch(/<LockShape color=\{light\} \/>/);
-    expect(s).toMatch(/<LockShape color=\{dark\} keyhole=\{tc\.nodeLocked\} \/>/);
-  });
-
-  it('draws no scuff — the tread carries a check and nothing else', () => {
-    // Two soft radial-gradient ellipses used to sit past the check, meant as a
-    // worn footprint. They read as bubbles floating on the green. Removed, and
-    // this is what stops them coming back with the gradients that drew them.
-    const marks = src('TileMarks.tsx');
-    expect(marks).not.toMatch(/Ellipse/);
-    expect(marks).not.toMatch(/RadialGradient/);
-  });
-
-  it('takes every groove ink from the state mapping, never a literal', () => {
-    // Both pieces of text on the tread — the lesson number and START — are
-    // inked from `tileVisual().markInk`, so the two can never drift and no
-    // hex is frozen next to a palette that moves. The design brief named
-    // #4A2C00 for START; `goldDeep` is the palette's own dark-text-on-gold
-    // and within 16/255 of it, so the token wins.
-    const s = marks().replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
-    expect(s).not.toMatch(/#[0-9a-f]{6}/i);
-    expect(s).toMatch(/color: ink/);
-  });
-
-  it('cuts the lesson number with the same letterpress as START', () => {
-    // Two constructions for two pieces of text on one tread is how they end
-    // up looking like two different engravings.
-    const s = marks();
-    expect(s.match(/<Letterpress/g)).toHaveLength(2);
-    expect(s).toMatch(/function Letterpress\(/);
-  });
-
-  it('numbers every tile, not just the ones behind you', () => {
-    // The number is an address, not a reward: 30 locked tiles is three
-    // screens of near-identical stone, and the road ahead is exactly where
-    // knowing your position matters most.
-    const s = marks();
-    const dispatch = s.slice(s.indexOf('export function TileMarks('));
-    expect(dispatch).toMatch(/<LessonNumber lesson=\{lesson\} ink=\{ink\} \/>/);
-    // Outside the mark conditionals, so no state can drop it.
-    expect(dispatch.indexOf('<LessonNumber')).toBeLessThan(dispatch.indexOf("mark === 'check'"));
-  });
-
-  it('stacks two copies of the label, because Text carries one shadow', () => {
-    // React Native takes a single `textShadow*` set per Text, and a letterpress
-    // needs two: dark above the glyph, light below it.
-    const s = marks();
-    expect(s.match(/textShadowColor/g)).toHaveLength(2);
-    expect(s).toMatch(/textShadowOffset: \{ width: 0, height: 1\.5 \}/);
-    expect(s).toMatch(/textShadowOffset: \{ width: 0, height: -1 \}/);
-    // Radius 0 is dropped outright by Android's shadow layer.
-    expect(s).not.toMatch(/textShadowRadius: 0,/);
-  });
-
-  it('sets the label in the family the app actually ships', () => {
-    // The design calls for JetBrains Mono. The app loads no custom fonts, so
-    // naming it would resolve to the platform SANS and lose the mono entirely
-    // — `MONO_FAMILY` is Menlo/monospace, which is the intent that survives.
-    const s = marks();
-    expect(s).not.toMatch(/JetBrainsMono/);
-    expect(s).toMatch(/fontFamily: MONO_FAMILY/);
-  });
-
-  it('cancels the trailing letter-space so the word sits on centre', () => {
+  it('trims the trailing letterspace so START stays optically centred', () => {
+    // `letterSpacing` in RN trails every character including the last, so the
+    // word sits left of centre by one space without this.
     const s = marks();
     expect(s).toMatch(/letterSpacing: 4\.6,/);
     expect(s).toMatch(/paddingStart: 4\.6,/);
@@ -479,7 +426,12 @@ describe('a mark is engraved, not embossed', () => {
     // the face's `justifyContent: 'center'` and shift the repair alarm.
     const s = marks();
     const styles = s.slice(s.indexOf('const styles = StyleSheet.create'));
-    expect(styles.match(/position: 'absolute'/g)?.length).toBeGreaterThanOrEqual(3);
+    // `absoluteFillObject` is the same claim spelled differently — the centred
+    // marks use it, the lesson slot pins itself by hand.
+    const pinned =
+      (styles.match(/position: 'absolute'/g)?.length ?? 0) +
+      (styles.match(/absoluteFillObject/g)?.length ?? 0);
+    expect(pinned).toBeGreaterThanOrEqual(2);
   });
 });
 

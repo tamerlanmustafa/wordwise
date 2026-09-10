@@ -126,6 +126,35 @@ export const NOSING_INSET = TILE_RADIUS;
  *  away from the tread rather than facing the same way it does. */
 export const RISER_FOOT_DARKEN = 0.3;
 
+/**
+ * The outline around the whole tile.
+ *
+ * Both layers carry it, which is what makes it read as one border rather than
+ * two. The riser is the lower, taller silhouette, so its outline draws the
+ * tile's sides and its rounded feet; the face's outline draws the top and the
+ * front lip where the tread meets the riser. Between them they trace the
+ * complete shape.
+ *
+ * Before this the only line on the tile was the riser showing beneath the
+ * face, which reads as a bottom border and nothing else — an outline on one
+ * side of a shape looks like an unfinished border, not a deliberate one.
+ */
+export const TILE_BORDER_W = 2;
+/**
+ * How much darker than the riser the outline is.
+ *
+ * Derived rather than a fixed colour, so every tile state — gold, green,
+ * stone, the repair red — gets an outline in its own family instead of a black
+ * rectangle around it.
+ *
+ * Tuned on a device rather than picked: the riser is already the dark member
+ * of each pair, so a gentle darkening of it disappeared into the tile on the
+ * two states that matter most (gold, because it is the only one you tap, and
+ * the locked stone, because it is nearly black to begin with). This is the two
+ * knobs worth touching if the outline ever needs to be louder or quieter.
+ */
+export const TILE_BORDER_DARKEN = 0.72;
+
 export interface TilePillProps {
   /** Face colour, flat. */
   face: string;
@@ -171,14 +200,18 @@ export function TilePill({
           depth rather than as the whole tile sliding down. */}
       <LinearGradient
         colors={[edge, shade(edge, -RISER_FOOT_DARKEN)]}
-        style={[styles.layer, styles.edge]}
+        style={[
+          styles.layer,
+          styles.edge,
+          { borderColor: shade(edge, -TILE_BORDER_DARKEN) },
+        ]}
         pointerEvents="none"
       />
       <View
         style={[
           styles.layer,
           styles.face,
-          { backgroundColor: face },
+          { backgroundColor: face, borderColor: shade(edge, -TILE_BORDER_DARKEN) },
           pressed && styles.facePressed,
         ]}
       >
@@ -221,6 +254,7 @@ const styles = StyleSheet.create({
   edge: {
     top: TILE_EDGE,
     borderRadius: TILE_EDGE_RADIUS,
+    borderWidth: TILE_BORDER_W,
     // Android clips a gradient to its own bounds, not to the border radius,
     // without this — which squares off the riser's feet under a rounded face.
     overflow: 'hidden',
@@ -228,6 +262,7 @@ const styles = StyleSheet.create({
   face: {
     top: 0,
     borderRadius: TILE_RADIUS,
+    borderWidth: TILE_BORDER_W,
     // Load-bearing: the band is a full-width rectangle at the top of the
     // tread, and this is the only thing rounding its top corners to match the
     // tile's. Without it the tread grows two dark square ears.

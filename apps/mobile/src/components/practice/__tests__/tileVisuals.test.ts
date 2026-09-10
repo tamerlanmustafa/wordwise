@@ -241,7 +241,12 @@ describe('the tile is built like the deck buttons', () => {
     const s = pill();
     const edgeAt = s.indexOf('styles.edge');
     expect(s.slice(edgeAt - 400, edgeAt)).toMatch(/Static/);
-    expect(s).toMatch(/\[styles\.layer, styles\.edge\]/);
+    // The riser carries `layer` + `edge` + its own border colour, and
+    // crucially NOT `facePressed` — that transform is the face's alone, which
+    // is what makes a press read as the face sinking onto a riser that stays.
+    expect(s).toMatch(/styles\.layer,\s*\n?\s*styles\.edge,/);
+    const edgeBlock = s.slice(s.indexOf('styles.edge,') - 200, s.indexOf('styles.edge,') + 300);
+    expect(edgeBlock).not.toMatch(/facePressed/);
     expect(s).toMatch(/pointerEvents="none"/);
   });
 });

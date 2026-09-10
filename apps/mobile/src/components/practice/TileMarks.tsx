@@ -1,35 +1,25 @@
 /**
- * TileMarks — what is cut into a practice tile's tread.
+ * TileMarks — what is drawn on a practice tile's tread.
  *
- * ## Every mark is a groove, never a glyph
+ * ## Every mark is flat
  *
- * A flat check drawn on a stair tread reads as a sticker. The same check
- * *engraved* reads as part of the stone, and the difference is three layers
- * drawn in one order:
+ * They used to be grooves. Each mark was drawn two or three times — a dark
+ * copy offset up for the lip in shadow, a light copy offset down for the lip
+ * catching the light, and the shape itself between them as the floor — so a
+ * check read as cut into stone rather than stuck onto it. The text marks did
+ * the same trick with two stacked `Text` copies carrying opposite shadows,
+ * because React Native gives a `Text` exactly one `textShadow` and a
+ * letterpress needs two.
  *
- *   1. a dark copy offset **up**    — the lip of the groove in shadow,
- *   2. a light copy offset **down** — the lip catching the light,
- *   3. the shape itself at zero offset, thinner, in a colour darker than the
- *      tile face — the floor of the groove.
+ * All of it is gone, by decision: the tiles are simple now. A mark is one
+ * stroke, one glyph, one colour. The tile's own depth still comes from
+ * `TilePill` — the occlusion band, the lit nosing and the riser beneath the
+ * face — so the flight still reads as a stack of steps; the things *written*
+ * on it just no longer pretend to be carved.
  *
- * The direction is the whole trick and it is easy to get backwards. Light in
- * this design comes from above: that is what the tread's occlusion band and
- * its lit nosing already say (see `TilePill`). Swap layers 1 and 2 and the
- * mark embosses instead of engraving — it stands *out* of a surface that
- * everything around it says is lit from above, and the tile stops reading as
- * stone. The giveaway on a screenshot is which side of the stroke carries the
- * light edge: lower is cut, upper is raised.
- *
- * Drawn in SVG rather than as text or an icon font because a groove needs the
- * same path stroked three times at two widths, which is a drawing and not a
- * character.
- *
- * Grooves come in two builds, and which one a mark uses is decided by what it
- * is made of rather than by taste. The check and the lock are *drawings*, so
- * they stroke and fill the same shape three times in SVG. The lesson number
- * and START are *characters*, and no amount of SVG will set a numeral as well
- * as the text engine will — so they stack two copies of a `Text` with opposite
- * shadows instead. Same three layers either way; see {@link Letterpress}.
+ * Worth knowing if the grooves are ever missed: they came back subtle enough
+ * that the cost was never one obvious mistake, it was three drawing passes per
+ * mark on every tile of a thirty-tile path.
  *
  * ## Three fixed zones
  *
@@ -49,23 +39,21 @@
  * belongs on the right, where that reader's eye starts.
  */
 
-import { StyleSheet, Text, View, type TextStyle } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { MONO_FAMILY } from '../../theme/fonts';
-import { shade, useThemeColors } from '../../theme/tokens';
+import { useThemeColors } from '../../theme/tokens';
 import { NOSING_INSET } from './TilePill';
-import { CHECK_FLOOR_DARKEN, tileVisual, type TileMark } from './tileVisuals';
+import { type TileMark } from './tileVisuals';
 
 /** Painted size of the check. */
 export const CHECK_BOX = 30;
 /** The check, as one stroke. Drawn in a 24×24 box and scaled up, so the three
  *  layers' offsets stay in one coordinate system. */
 const CHECK_PATH = 'M4.4 12.9L9.7 18.1L19.8 6.7';
-/** Stroke width of the two lip layers, and of the groove floor. The floor is
- *  thinner so the lips show either side of it. */
-export const CHECK_LIP_W = 3.7;
-export const CHECK_FLOOR_W = 2.9;
+/** Stroke width of the check. One stroke — the mark is drawn flat, not cut. */
+export const CHECK_W = 3.0;
 
 /** Top of the scuff. The check needs no equivalent — it is centred on both
  *  axes, and on a 56pt tread a 30pt box centres to exactly this, which is why
@@ -74,16 +62,18 @@ export const MARK_TOP = 13;
 
 
 /**
- * The lock's two layers, at both weights.
+ * The lock's ink, at both weights.
  *
  * `nextUp` is the tile immediately above the active one — the next step you
  * will actually take, and the only one on the road ahead worth reading. Every
  * other locked tile stays at `base`, so the flight recedes into the distance
- * instead of ending in a wall of locks.
+ * instead of ending in a wall of locks. That distinction is about *legibility*
+ * and survives the marks going flat; the second, lighter layer that used to
+ * sit under each lock does not.
  */
 export const LOCK_INK = {
-  base: { light: 'rgba(255,255,255,0.13)', dark: 'rgba(0,0,0,0.50)' },
-  nextUp: { light: 'rgba(255,255,255,0.17)', dark: 'rgba(0,0,0,0.58)' },
+  base: 'rgba(0,0,0,0.50)',
+  nextUp: 'rgba(0,0,0,0.62)',
 } as const;
 
 export interface TileMarksProps {
@@ -102,7 +92,7 @@ export function TileMarks({ mark, lesson, ink, nextUp = false }: TileMarksProps)
   return (
     <>
       <LessonNumber lesson={lesson} ink={ink} />
-      {mark === 'check' ? <CompletedMark /> : null}
+      {mark === 'check' ? <CompletedMark ink={ink} /> : null}
       {mark === 'start' ? <StartMark ink={ink} /> : null}
       {mark === 'lock' ? <LockMark emphasised={nextUp} /> : null}
     </>
@@ -122,66 +112,19 @@ export function TileMarks({ mark, lesson, ink, nextUp = false }: TileMarksProps)
  * to be noticed as *something*, and something unexplained on a flat surface is
  * a smudge. Removed rather than re-tuned.
  */
-function CompletedMark() {
+function CompletedMark({ ink }: { ink: string }) {
   return (
-    <>
-      <View pointerEvents="none" style={styles.centred}>
-        <Svg width={CHECK_BOX} height={CHECK_BOX} viewBox="0 0 24 24">
-          {/* 1 — the lip in shadow, above the stroke. */}
-          <Path
-            d={CHECK_PATH}
-            fill="none"
-            stroke="rgba(0,0,0,0.46)"
-            strokeWidth={CHECK_LIP_W}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            transform="translate(0, -0.4)"
-          />
-          {/* 2 — the lip catching light, below it. */}
-          <Path
-            d={CHECK_PATH}
-            fill="none"
-            stroke="rgba(255,255,255,0.44)"
-            strokeWidth={CHECK_LIP_W}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            transform="translate(0, 1)"
-          />
-          {/* 3 — the floor of the groove: the tile's own green, in shadow. */}
-          <Path
-            d={CHECK_PATH}
-            fill="none"
-            stroke={shade(tileVisual('completed').face, -CHECK_FLOOR_DARKEN)}
-            strokeWidth={CHECK_FLOOR_W}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </View>
-
-    </>
-  );
-}
-
-/**
- * Text cut into the tread.
- *
- * React Native gives a `Text` exactly one `textShadow*` set, and a letterpress
- * needs two — dark above the glyph, light below it. So the string is drawn
- * twice in the same place: the lower copy first carrying the light shadow, the
- * upper copy over it carrying the dark one. The glyphs are identical and
- * opaque, so they cover each other exactly and only the shadows survive the
- * overlap.
- *
- * The absolute-fill second copy is sized by the first, which is why the pair
- * is wrapped in a bare `View` — that wrapper is the shared box, and without it
- * the copy would fill the whole tread and set its text somewhere else.
- */
-function Letterpress({ text, style }: { text: string; style: TextStyle }) {
-  return (
-    <View>
-      <Text style={[style, styles.pressLit]}>{text}</Text>
-      <Text style={[style, styles.pressCut, StyleSheet.absoluteFill]}>{text}</Text>
+    <View pointerEvents="none" style={styles.centred}>
+      <Svg width={CHECK_BOX} height={CHECK_BOX} viewBox="0 0 24 24">
+        <Path
+          d={CHECK_PATH}
+          fill="none"
+          stroke={ink}
+          strokeWidth={CHECK_W}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
     </View>
   );
 }
@@ -205,7 +148,7 @@ function Letterpress({ text, style }: { text: string; style: TextStyle }) {
 function LessonNumber({ lesson, ink }: { lesson: number; ink: string }) {
   return (
     <View pointerEvents="none" style={styles.lessonSlot}>
-      <Letterpress text={String(lesson)} style={{ ...styles.lesson, color: ink }} />
+      <Text style={[styles.lesson, { color: ink }]}>{String(lesson)}</Text>
     </View>
   );
 }
@@ -218,25 +161,22 @@ function LessonNumber({ lesson, ink }: { lesson: number; ink: string }) {
  * claim made twice on the one tile the user can actually tap, and nowhere
  * else on the flight competes with it.
  *
- * Cut with the same {@link Letterpress} the lesson number uses — they are the
- * two pieces of text on the tread, and one construction for both is what stops
- * them drifting into two different-looking engravings.
+ * Set in the same flat `Text` the lesson number uses — they are the two pieces
+ * of text on the tread, and one construction for both is what stops them
+ * drifting into two different-looking labels.
  */
 function StartMark({ ink }: { ink: string }) {
   const { t } = useTranslation('practice');
 
   return (
     <View pointerEvents="none" style={styles.centred}>
-      <Letterpress text={t('start')} style={{ ...styles.start, color: ink }} />
+      <Text style={[styles.start, { color: ink }]}>{t('start')}</Text>
     </View>
   );
 }
 
 /** Painted size of one lock layer. */
 const LOCK_BOX = 20;
-/** How far the light layer sits below the dark one. The container is this much
- *  taller than a layer so the offset copy is not clipped. */
-const LOCK_LIP = 1.2;
 /** Shackle and body, shared by both layers. Stroked open on top, solid below —
  *  a lock is a bar over a block, and drawing it as one path loses that. */
 const LOCK_SHACKLE = 'M8.4 10.6V7.4a3.6 3.6 0 0 1 7.2 0v3.2';
@@ -254,18 +194,11 @@ const LOCK_SHACKLE = 'M8.4 10.6V7.4a3.6 3.6 0 0 1 7.2 0v3.2';
  */
 function LockMark({ emphasised }: { emphasised: boolean }) {
   const tc = useThemeColors();
-  const { light, dark } = emphasised ? LOCK_INK.nextUp : LOCK_INK.base;
+  const ink = emphasised ? LOCK_INK.nextUp : LOCK_INK.base;
 
   return (
     <View pointerEvents="none" style={styles.centred}>
-      <View style={styles.lockBox}>
-        <View style={styles.lockLight}>
-          <LockShape color={light} />
-        </View>
-        <View style={styles.lockDark}>
-          <LockShape color={dark} keyhole={tc.nodeLocked} />
-        </View>
-      </View>
+      <LockShape color={ink} keyhole={tc.nodeLocked} />
     </View>
   );
 }
@@ -326,28 +259,4 @@ const styles = StyleSheet.create({
   },
   // A hairline radius keeps both shadows crisp; Android drops a shadow layer
   // of radius 0 entirely, so this is not the same as omitting it.
-  pressLit: {
-    textShadowColor: 'rgba(255,255,255,0.60)',
-    textShadowOffset: { width: 0, height: 1.5 },
-    textShadowRadius: 0.6,
-  },
-  pressCut: {
-    textShadowColor: 'rgba(0,0,0,0.20)',
-    textShadowOffset: { width: 0, height: -1 },
-    textShadowRadius: 0.6,
-  },
-  lockBox: {
-    width: LOCK_BOX,
-    height: LOCK_BOX + LOCK_LIP,
-  },
-  lockLight: {
-    position: 'absolute',
-    top: LOCK_LIP,
-    start: 0,
-  },
-  lockDark: {
-    position: 'absolute',
-    top: 0,
-    start: 0,
-  },
 });
