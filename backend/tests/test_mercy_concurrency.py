@@ -171,3 +171,49 @@ async def test_a_gap_too_big_to_cover_spends_nothing_under_concurrency():
     finally:
         await _cleanup(db, user_id)
         await db.disconnect()
+
+
+async def test_only_the_first_completion_of_a_deal_wins():
+    """The claim that makes session completion idempotent.
+
+    `record_session_day` is date-guarded and the chest is date-guarded, but
+    `practice_lessons_completed` was guarded by neither — so a retry, a
+    double-tap, or a second device finishing the same cached deck advanced the
+    tile again. Measured against the running API before the fix: three
+    completions of one session moved it 7 -> 10, where 8 was correct.
+
+    The fix is the statement below: `WHERE completed_at IS NULL` makes the
+    first completion the only one that updates a row, and its result is what
+    now gates every once-per-session write.
+    """
+    db = await _connect()
+    if db is None:
+        pytest.skip("no local database — this needs a real UPDATE ... WHERE")
+
+    user_id = await _seed(db, armed=0, missed_days=0)
+    deal = await db.practicesession.create(data={
+        "userId": user_id, "kind": "practice", "cardsDealt": 10,
+    })
+    try:
+        async def claim():
+            return await db.execute_raw(
+                """
+                UPDATE practice_sessions
+                   SET completed_at = $3::timestamptz,
+                       correct_count = $4,
+                       total_count = $5,
+                       local_date = $6::date
+                 WHERE id = $1 AND user_id = $2 AND completed_at IS NULL
+                """,
+                deal.id, user_id, datetime.now(timezone.utc), 8, 10,
+                datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc),
+            )
+
+        results = await asyncio.gather(*[claim() for _ in range(8)])
+        # Exactly one caller may see a row updated; the rest must see zero and
+        # skip the once-per-session work.
+        assert sum(1 for r in results if r) == 1, results
+    finally:
+        await db.practicesession.delete_many(where={"userId": user_id})
+        await _cleanup(db, user_id)
+        await db.disconnect()

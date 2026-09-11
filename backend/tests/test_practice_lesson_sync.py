@@ -114,6 +114,13 @@ class _FakeDb:
 
     async def execute_raw(self, sql: str, *args):
         self.statements.append(sql)
+        # Dispatch on the statement. Session completion issues three different
+        # raw statements now — the lesson bump, the weekly freeze grant, and
+        # the completion claim — and a fake that treats "any raw call" as a
+        # lesson bump reports lessons the code never counted.
+        if "practice_lessons_completed" not in sql:
+            # The grant reports a row inserted; nothing else here writes.
+            return 1 if "INSERT INTO user_streak_freezes" in sql else 0
         u = self.user._user
         if u is None or args[0] != u.id:
             return 0

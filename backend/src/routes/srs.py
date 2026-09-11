@@ -1462,23 +1462,44 @@ async def complete_session(
         total_count = min(total_count, deal.cardsDealt)
         correct_count = min(correct_count, total_count)
 
-    # Close the row before anything is derived from it. `localDate` is stamped
-    # here rather than computed later so a user who changes timezone cannot
-    # retroactively move days they have already earned, and it is what the
-    # week strip reads. Idempotent by `completedAt`: a retry of this endpoint
-    # must not write a second completion for one deal.
-    if deal is not None and deal.completedAt is None:
-        await db.practicesession.update(
-            where={"id": deal.id},
-            data={
-                "completedAt": now,
-                "correctCount": correct_count,
-                "totalCount": total_count,
-                "localDate": utc_midnight(today),
-            },
+    # ── Claim the completion, and let that decide the once-per-session work ──
+    #
+    # One statement, and its result is the idempotency key for everything
+    # below. `completed_at IS NULL` in the WHERE means only the FIRST
+    # completion of a deal wins; a retry, a double-tap, or a second device
+    # finishing the same cached deck updates zero rows and knows it.
+    #
+    # This matters because the once-a-day writes were guarded unevenly.
+    # `record_session_day` is date-guarded and the chest is date-guarded, but
+    # `practice_lessons_completed` was guarded by neither — so completing one
+    # session three times advanced the tile by three. Measured: 7 -> 10 where
+    # 8 was correct. The tile is an address on the path, and it was drifting
+    # ahead of the lessons that earned it.
+    #
+    # `localDate` is stamped here rather than derived later so a user who
+    # changes timezone cannot retroactively move days they already earned, and
+    # it is what the week strip reads.
+    first_completion = True
+    if deal is not None:
+        claimed = await db.execute_raw(
+            """
+            UPDATE practice_sessions
+               SET completed_at = $3::timestamptz,
+                   correct_count = $4,
+                   total_count = $5,
+                   local_date = $6::date
+             WHERE id = $1 AND user_id = $2 AND completed_at IS NULL
+            """,
+            deal.id,
+            current_user.id,
+            now,
+            correct_count,
+            total_count,
+            utc_midnight(today),
         )
+        first_completion = bool(claimed)
 
-    if total_count > 0 and credited:
+    if total_count > 0 and credited and first_completion:
         await record_session_day(db, user_id=current_user.id, today=today)
         # Mercy is earned by practising, not by opening the app. This used to
         # live inside `GET /daily/state`, where it keyed on the ISO week of a
@@ -1498,7 +1519,7 @@ async def complete_session(
             "COALESCE(practice_lessons_completed, 0) + 1 WHERE id = $1",
             current_user.id,
         )
-    elif total_count > 0:
+    elif total_count > 0 and first_completion:
         # An uncredited session still costs the free tier its list budget for
         # the day. Nothing else here moves: no streak, no tile, no chest.
         #

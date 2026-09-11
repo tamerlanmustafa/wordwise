@@ -425,13 +425,44 @@ async def grant_weekly_if_due(
     *opening the app* — and, because the grant keyed on the ISO week of a read,
     opening on a Sunday and again on the Monday paid two freezes in two days
     for no practice at all. Mercy for a habit should be earned by the habit.
+
+    ## One statement
+
+    `count` then `find` then `create` is the same lost-update shape as the
+    freeze consume: two completions landing together both see "none granted
+    this week" and both grant. `INSERT ... SELECT ... WHERE NOT EXISTS` makes
+    the cap check and the insert one statement, so a retry or a double-tap
+    cannot pay twice.
+
+    Honest limit: under READ COMMITTED two *truly simultaneous* transactions
+    can each fail to see the other's uncommitted row, so this closes retries
+    and sequential double-calls but is not a hard guarantee. A guarantee needs
+    a uniqueness constraint on (user, week), which needs a stored week column —
+    a migration whose cost is not obviously worth an occasional extra freeze.
+    Recorded here rather than silently accepted.
     """
-    held = await count_held_freezes(db, user_id)
-    last_weekly = await find_last_weekly_grant(db, user_id)
-    if not should_auto_grant_weekly(today, held, last_weekly):
-        return False
-    await grant_freeze(db, user_id=user_id, via="auto_weekly", now=now)
-    return True
+    when = now if now is not None else datetime.now(timezone.utc)
+    granted = await db.execute_raw(
+        """
+        INSERT INTO user_streak_freezes (user_id, acquired_at, acquired_via)
+        SELECT $1, $2::timestamptz, 'auto_weekly'::freezeacquisition
+         WHERE (
+                 SELECT count(*) FROM user_streak_freezes
+                  WHERE user_id = $1 AND consumed_at IS NULL
+               ) < $3
+           AND NOT EXISTS (
+                 SELECT 1 FROM user_streak_freezes
+                  WHERE user_id = $1
+                    AND acquired_via = 'auto_weekly'
+                    AND date_trunc('week', acquired_at)
+                        = date_trunc('week', $2::timestamptz)
+               )
+        """,
+        user_id,
+        when,
+        MAX_FREEZES_HELD,
+    )
+    return bool(granted)
 
 
 # ── The week strip ──────────────────────────────────────────────────────────

@@ -139,6 +139,13 @@ class _FakeDb:
         in `test_practice_lesson_sync.py` and in prod.
         """
         self.raw.append((sql, args))
+        # Dispatch on the statement, not on "any raw call with my id in it".
+        # Session completion now issues three different raw statements — the
+        # lesson bump, the weekly freeze grant, and the completion claim — and
+        # a fake that increments on all of them reports lessons the code never
+        # counted.
+        if "practice_lessons_completed" not in sql:
+            return 1 if "INSERT INTO user_streak_freezes" in sql else 0
         u = self.user._user
         if u is None or args[0] != u.id:
             return 0
