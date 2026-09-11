@@ -15,16 +15,37 @@ users get the same baseline plus a higher cadence in a future iteration.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+import logging
 from typing import Optional
 
 from prisma import Prisma
 
 from ..utils.dates import as_date, local_today, utc_midnight
 
+logger = logging.getLogger(__name__)
+
 # Cap on simultaneously-held freezes. Goes well past the "one freeze per
 # week" baseline to allow IAP top-ups, but small enough that we don't
 # accumulate a hoard that defeats the mercy intent.
 MAX_FREEZES_HELD: int = 5
+
+# Cap on how many freezes may be ARMED at once.
+#
+# Without a cap the arming "decision" is not one: consumption is all-or-
+# nothing, so more armed is strictly better with no downside, and the rational
+# move is always to arm everything — which makes the equip UI decoration.
+#
+# A cap does not turn it into a free choice either, and it is worth being
+# honest about that: with one fungible resource and no cost to arming, a user
+# will still arm up to the cap every time. What the cap actually buys is a
+# BOUND on automatic mercy — a long absence can no longer quietly drain a hoard
+# of five — and a legible promise: "you are covered for up to two days". Making
+# arming a genuine trade-off needs unarmed freezes to be good for something
+# else (a manual repair of an already-broken streak, say), which is a separate
+# feature rather than a constant.
+#
+# Two, matching the shape this model was taken from.
+MAX_EQUIPPED_FREEZES: int = 2
 
 
 # ── Pure helpers ────────────────────────────────────────────────────────────
@@ -133,12 +154,14 @@ async def count_equipped_freezes(db: Prisma, user_id: int) -> int:
 
 
 async def equip_freeze(db: Prisma, *, user_id: int, now: Optional[datetime] = None) -> bool:
-    """Arm the oldest unarmed freeze. False when there is nothing to arm.
+    """Arm the oldest unarmed freeze. False when nothing to arm, or at the cap.
 
     Oldest-first for the same reason `consume_freeze` is: freezes are
     fungible, and spending the one that has been sitting longest keeps the
     inventory from developing a permanently-stuck tail.
     """
+    if await count_equipped_freezes(db, user_id) >= MAX_EQUIPPED_FREEZES:
+        return False
     spare = await db.userstreakfreeze.find_first(
         where={"userId": user_id, "consumedAt": None, "equippedAt": None},
         order={"acquiredAt": "asc"},
@@ -203,26 +226,51 @@ async def consume_freeze(
     now: Optional[datetime] = None,
     covered_date: Optional[date] = None,
 ) -> bool:
-    """Consume the oldest ARMED freeze. False when none is armed.
+    """Claim and spend the oldest ARMED freeze. False when none is claimable.
 
     Armed only. An unarmed freeze is inventory the user has not chosen to put
-    at risk, and spending it is precisely the thing this model exists to stop.
+    at risk, and spending it is what this model exists to stop.
+
+    ## One statement, not find-then-update
+
+    This was `find_first` followed by `update`, which is a lost update waiting
+    to happen: two callers read the same row and both write it, so one freeze
+    pays for two days. The claim is now a single `UPDATE ... WHERE id = (SELECT
+    ... FOR UPDATE SKIP LOCKED)` — the database picks the row and marks it in
+    one statement, `SKIP LOCKED` hands a concurrent caller the *next* row
+    instead of blocking on the same one, and `consumed_at IS NULL` in the outer
+    WHERE means a loser updates nothing rather than overwriting a spend.
+
+    `auto_apply_mercy` additionally serialises the *decision* above this (see
+    its compare-and-swap), because atomic claims alone would still let two
+    callers spend N rows each. Both guards are wanted: this one makes the
+    function correct on its own terms, that one makes the policy correct.
     """
-    held = await db.userstreakfreeze.find_first(
-        where={"userId": user_id, "consumedAt": None, "equippedAt": {"not": None}},
-        order={"acquiredAt": "asc"},
-    )
-    if held is None:
-        return False
     when = now if now is not None else datetime.now(timezone.utc)
-    data: dict = {"consumedAt": when, "consumedReason": reason}
-    if covered_date is not None:
-        # `utc_midnight`, not the bare date — `@db.Date` and prisma-client-py
-        # 0.11 has no encoder for `datetime.date`. Same trap as the rolled
-        # session date above it.
-        data["coveredDate"] = utc_midnight(covered_date)
-    await db.userstreakfreeze.update(where={"id": held.id}, data=data)
-    return True
+    covered = utc_midnight(covered_date) if covered_date is not None else None
+    claimed = await db.execute_raw(
+        """
+        UPDATE user_streak_freezes
+           SET consumed_at = $2::timestamptz,
+               consumed_reason = $3,
+               covered_date = $4::date
+         WHERE id = (
+               SELECT id FROM user_streak_freezes
+                WHERE user_id = $1
+                  AND consumed_at IS NULL
+                  AND equipped_at IS NOT NULL
+                ORDER BY acquired_at ASC
+                LIMIT 1
+                  FOR UPDATE SKIP LOCKED
+               )
+           AND consumed_at IS NULL
+        """,
+        user_id,
+        when,
+        reason,
+        covered,
+    )
+    return bool(claimed)
 
 
 async def auto_apply_mercy(
@@ -286,48 +334,71 @@ async def auto_apply_mercy(
     # this purpose and then fail to find them.
     burn = freezes_to_consume_for_gap(today, last_date, equipped)
     consumed = 0
-    for _ in range(burn):
-        # The day this particular freeze pays for: the one right after the
-        # last day the user was active, which the loop then rolls forward. It
-        # is recorded rather than inferred because `consumedAt` is when the
-        # mercy pass *noticed* — a Tuesday covered by a freeze spent on
-        # Thursday — and the week strip has to tell a frozen day from a missed
-        # one.
-        covers = (last_date or today) + timedelta(days=1)
-        ok = await consume_freeze(
-            db,
-            user_id=user_id,
-            reason="equipped_covered_missed_day",
-            now=when,
-            covered_date=covers,
+
+    if burn > 0 and last_date is not None:
+        # ── Win the right to spend, THEN spend ──────────────────────────────
+        #
+        # This pass runs on a GET that the Practice tab fires on mount and on
+        # every hidden→visible transition, so two devices — or one app
+        # double-mounting — reach here at the same moment, both read the same
+        # gap, and both decide to burn it. Reproduced before this guard: five
+        # concurrent /daily/state calls against 3 armed freezes and ONE missed
+        # day consumed TWO freezes and rolled the date twice.
+        #
+        # An atomic claim on the freeze rows alone does not fix that: both
+        # callers still computed `burn` from the same stale read, so they claim
+        # different rows and spend 2N between them. The thing that has to be
+        # serialised is the DECISION, and the anchor it was derived from is
+        # `srs_last_session_date`. So: compare-and-swap it from exactly the
+        # value we read. Whoever moves it first has bought the right to spend;
+        # everyone else sees 0 rows affected and goes home having spent
+        # nothing.
+        #
+        # Deliberately ordered anchor-first. If the process dies between the
+        # two steps the user gets the mercy without paying for it — the wrong
+        # way round is spending the freeze and then failing to roll the date,
+        # which is the exact "paid and got nothing" failure the previous bug in
+        # this function produced.
+        rolled = last_date + timedelta(days=burn)
+        won = await db.execute_raw(
+            # Explicit ::date casts. prisma-client-py sends raw parameters as
+            # text, and Postgres will not compare `date = text` — it raises
+            # rather than coercing. The same date-type trap `utils/dates`
+            # documents for the ORM path, in its SQL form.
+            "UPDATE users SET srs_last_session_date = $2::date "
+            "WHERE id = $1 AND srs_last_session_date = $3::date",
+            user_id,
+            utc_midnight(rolled),
+            utc_midnight(last_date),
         )
-        if not ok:
-            break
-        # Roll the last-session-date forward by one to simulate "user
-        # was active yesterday-ish." Keeps streak math monotonic.
-        last_date = (last_date or today) + timedelta(days=1)
-        consumed += 1
-    if consumed > 0:
-        await db.user.update(
-            where={"id": user_id},
-            # `utc_midnight`, not the bare date. `srsLastSessionDate` is
-            # `@db.Date`, and prisma-client-py 0.11 serialises query arguments
-            # itself with no encoder for `datetime.date` — it raises
-            # `TypeError: Type <class 'datetime.date'> not serializable`.
-            #
-            # This has always been wrong here, and it fails in the worst
-            # possible order: the freeze rows are already updated by the loop
-            # above, so the spend COMMITS and then the request 500s before the
-            # date is rolled — the user loses the freeze and the streak breaks
-            # anyway, which is precisely what the freeze was spent to prevent.
-            # It stayed hidden because it only fires on the days a freeze is
-            # actually consumed. Same defect, same column family, as the chest
-            # date that meant the daily chest had never once been handed out —
-            # see utils/dates.
-            data={"srsLastSessionDate": utc_midnight(last_date)},
-        )
-        held -= consumed
-        equipped -= consumed
+        if won:
+            for step in range(burn):
+                # The day THIS freeze pays for. Recorded rather than inferred,
+                # because `consumedAt` is when the pass noticed — a Tuesday
+                # covered by a freeze spent on Thursday — and the week strip
+                # has to tell a frozen day from a missed one.
+                covers = last_date + timedelta(days=step + 1)
+                ok = await consume_freeze(
+                    db,
+                    user_id=user_id,
+                    reason="equipped_covered_missed_day",
+                    now=when,
+                    covered_date=covers,
+                )
+                if not ok:
+                    # Cannot normally happen: we hold the anchor, and the armed
+                    # count was read before it. If it does, the user keeps the
+                    # mercy already granted by the roll — failing toward them.
+                    logger.warning(
+                        "[mercy] user=%s claimed %s days but only %s freezes were "
+                        "claimable; the difference was granted unpaid",
+                        user_id, burn, step,
+                    )
+                    break
+                consumed += 1
+            last_date = rolled
+            held -= consumed
+            equipped -= consumed
 
     return {
         "freezes_held": held,

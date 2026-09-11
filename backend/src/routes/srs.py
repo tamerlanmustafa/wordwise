@@ -1439,6 +1439,23 @@ async def complete_session(
         deal = await db.practicesession.find_first(
             where={"id": body.session_id, "userId": current_user.id},
         )
+    if deal is None and credited:
+        # The compatibility path is also the bypass, and that is worth saying
+        # out loud rather than leaving implicit: a completion with no session
+        # id — or one naming a deal that is not this user's — skips the clamp
+        # entirely and the counts are taken on trust, exactly as they were
+        # before Phase 2. That is required today, because installed builds do
+        # not send the field.
+        #
+        # It is only defensible with an expiry, and an expiry needs a number.
+        # This log is that number: watch it fall as the OTA rolls out, and
+        # when it reaches zero make `session_id` required for a credited
+        # completion. Without the log, "temporary" has no end.
+        logger.info(
+            "[srs.complete] unclamped completion user=%s session_id=%s "
+            "reported_total=%s — no server record to check against",
+            current_user.id, body.session_id, body.total_count,
+        )
     total_count = body.total_count
     correct_count = body.correct_count
     if deal is not None:
