@@ -5,5 +5,14 @@
   "freeze_other": "FREEZES",
   "start": "START",
   "freezeUsed_one": "Streak saved — {{count}} freeze used",
-  "freezeUsed_other": "Streak saved — {{count}} freezes used"
+  "freezeUsed_other": "Streak saved — {{count}} freezes used",
+  "weekday": {
+    "mon": "M",
+    "tue": "T",
+    "wed": "W",
+    "thu": "T",
+    "fri": "F",
+    "sat": "S",
+    "sun": "S"
+  }
 }

@@ -113,3 +113,9 @@ CREATE INDEX IF NOT EXISTS ix_practice_sessions_user_started
 CREATE INDEX IF NOT EXISTS ix_user_streak_freezes_equipped
   ON public.user_streak_freezes (user_id, equipped_at)
   WHERE consumed_at IS NULL;
+
+-- from 2026_09_11_freeze_covered_date.sql. The week strip reads this to draw a
+-- frozen day differently from a missed one.
+CREATE INDEX IF NOT EXISTS ix_user_streak_freezes_covered
+  ON public.user_streak_freezes (user_id, covered_date)
+  WHERE covered_date IS NOT NULL;

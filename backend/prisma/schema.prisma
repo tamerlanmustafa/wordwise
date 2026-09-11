@@ -1086,12 +1086,20 @@ model UserStreakFreeze {
   /// arming is the decision, and nothing is spent that the user did not first
   /// choose to put at risk.
   equippedAt     DateTime?         @map("equipped_at") @db.Timestamptz(6)
+  /// The local calendar day this freeze PAID FOR — distinct from
+  /// `consumedAt`, which is when the mercy pass noticed. A user who misses
+  /// Tuesday and reopens on Thursday has a freeze consumed on Thursday
+  /// covering Tuesday. The week strip needs the covered day to draw a frozen
+  /// square differently from a missed one. NULL for freezes spent before this
+  /// column existed.
+  coveredDate    DateTime?         @map("covered_date") @db.Date
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Hot index for "how many freezes does this user have?"
   @@index([userId, consumedAt], map: "ix_user_streak_freezes_held")
   @@index([userId, equippedAt], map: "ix_user_streak_freezes_equipped")
+  @@index([userId, coveredDate], map: "ix_user_streak_freezes_covered")
   @@map("user_streak_freezes")
 }
 

@@ -23,11 +23,10 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useAuthStore } from '../stores/authStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
@@ -40,14 +39,12 @@ import {
 } from '../services/api';
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
-import { StreakFlame } from './ui/StreakFlame';
+import { StreakWeek, WEEK_PANEL_H } from './practice/StreakWeek';
 
-const MONO_FAMILY = 'JetBrains Mono';
-
-// The header's height, stated rather than derived. Its tallest child is the
-// 20pt streak flame inside 8pt of vertical padding and a 1pt border.
-const CHIP_H = 38;
-const HEADER_H = CHIP_H + 8;
+// The header's height, stated rather than derived — see StreakWeek's note on
+// why. Its only child is the week panel, so the header is that panel's height
+// plus the breathing room under it.
+const HEADER_H = WEEK_PANEL_H + 8;
 
 export interface PracticeScreenProps {
   /** Open the ReviewScreen on a new practice session. */
@@ -142,10 +139,9 @@ function PracticeScreenInner({
     wasActive.current = active;
   }, [active, refreshServerState]);
 
-  // Effective streak — prefer server when present, fall back to the
-  // local optimistic counter for the brief gap before the network
-  // resolves on cold start.
-  const effectiveStreak = serverState?.streak ?? dailyStreak;
+  // The panel takes both: the server's streak when it has answered, and the
+  // local optimistic one for the moment before it does. Merging them here as
+  // well would be a second copy of that rule.
 
   // ── Session-start handler ───────────────────────────────────────
   // The daily cap is server-side: free users get one session/day, the
@@ -166,25 +162,7 @@ function PracticeScreenInner({
       <PracticeBackdrop />
 
       <View style={s.header}>
-        <View style={s.headerChips}>
-          <View style={s.streakChip}>
-            <Ionicons name="shield-checkmark" size={15} color={tc.goldOnSurface} style={s.streakIcon} />
-            <Text style={s.streakNumber} numberOfLines={1}>
-              {serverState?.freezes_held ?? 0}
-            </Text>
-            <Text style={s.streakLabel} numberOfLines={1}>
-              {t('practice:freeze', { count: serverState?.freezes_held ?? 0 })}
-            </Text>
-          </View>
-          <View style={s.streakChip}>
-            <StreakFlame size={20} lit={effectiveStreak > 0} style={s.streakIcon} />
-            <Text style={s.streakNumber} numberOfLines={1}>{effectiveStreak}</Text>
-            <Text style={s.streakLabel} numberOfLines={1}>
-              {t('practice:dayLabel', { count: effectiveStreak })}
-            </Text>
-
-          </View>
-        </View>
+        <StreakWeek state={serverState} fallbackStreak={dailyStreak} />
       </View>
 
       {/* Opens at the BOTTOM, not the top. The path climbs the screen, so the
@@ -261,48 +239,14 @@ const makeStyles = (tc: ThemeColors) =>
     // and cost ~60pt of the path's vertical room to do it.
     header: {
       // Fixed, not content-sized. Everything in it arrives from the network —
-      // freeze count, streak, singular vs plural label — and anything above
-      // the path that changes height after first paint moves every tile below
-      // it. The numbers are free to change; the box they sit in is not.
+      // the streak, the freeze counts, the seven day states — and anything
+      // above the path that changes height after first paint moves every tile
+      // below it. The numbers are free to change; the box they sit in is not.
       height: HEADER_H,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      paddingHorizontal: 18,
-    },
-    headerChips: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    streakChip: {
-      height: CHIP_H,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 14,
-      borderRadius: 999,
-      backgroundColor: tc.paper,
-      borderWidth: 1,
-      borderColor: tc.border,
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 2,
-    },
-    streakIcon: { marginEnd: 3 },
-    streakNumber: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 14,
-      fontWeight: '900',
-      color: tc.text,
-    },
-    streakLabel: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: tc.textFaint,
-      letterSpacing: 0.6,
+      justifyContent: 'center',
+      // No horizontal padding and no row layout: the panel is one full-width
+      // block that owns its own margins. `flex-end` here was the old two-chip
+      // layout, and it left the panel pinned to the right of the screen.
     },
     scrollPad: {
       // paddingBottom is applied inline from `bottomOffset` — the floating

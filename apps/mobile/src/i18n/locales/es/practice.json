@@ -5,5 +5,14 @@
   "freeze_other": "CONGELACIONES",
   "start": "EMPEZAR",
   "freezeUsed_one": "Racha salvada: {{count}} congelación usada",
-  "freezeUsed_other": "Racha salvada: {{count}} congelaciones usadas"
+  "freezeUsed_other": "Racha salvada: {{count}} congelaciones usadas",
+  "weekday": {
+    "mon": "L",
+    "tue": "M",
+    "wed": "X",
+    "thu": "J",
+    "fri": "V",
+    "sat": "S",
+    "sun": "D"
+  }
 }

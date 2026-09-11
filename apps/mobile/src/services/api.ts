@@ -1401,6 +1401,16 @@ export interface FreezeState {
   changed: boolean;
 }
 
+/** One square in the Practice header's week strip. */
+export interface WeekDay {
+  /** YYYY-MM-DD, in the user's own calendar. */
+  date: string;
+  /** `frozen` is deliberately distinct from `done`: a day a freeze paid for,
+   *  drawn as a gap, would report the freeze as having failed. */
+  state: 'done' | 'frozen' | 'missed' | 'future';
+  is_today: boolean;
+}
+
 export interface DailyState {
   today_done: boolean;
   streak: number;
@@ -1419,6 +1429,9 @@ export interface DailyState {
   /** v0.7.2 — Practice tile picked today, or null when today's session
    *  hasn't started yet. Drives the tile-state matrix on PracticeScreen. */
   last_session_kind?: SessionKind | null;
+  /** The user's current Monday–Sunday. Optional: a server that predates the
+   *  strip sends nothing, and the panel renders an empty week. */
+  week?: WeekDay[];
 }
 
 interface CreditedFreezesResponse {

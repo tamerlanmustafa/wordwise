@@ -34,6 +34,7 @@ from ..services.milestone_service import parse_unlocked
 from ..services.streak_service import (
     MAX_FREEZES_HELD,
     auto_apply_mercy,
+    build_week,
     count_equipped_freezes,
     count_held_freezes,
     equip_freeze,
@@ -43,6 +44,17 @@ from ..utils.dates import as_date, local_today
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/daily", tags=["daily"])
+
+
+class WeekDay(BaseModel):
+    """One square in the Practice header's week strip."""
+
+    date: str  # YYYY-MM-DD, in the user's own calendar
+    #: done | frozen | missed | future. `frozen` is kept distinct from `done`
+    #: on purpose: a covered day drawn as a gap reports the freeze as having
+    #: failed, which is the opposite of what happened.
+    state: str
+    is_today: bool
 
 
 class DailyStateResponse(BaseModel):
@@ -75,6 +87,9 @@ class DailyStateResponse(BaseModel):
     # tile-state derivation reads this so the right tile renders as
     # "done today".
     last_session_kind: str | None = None
+    #: The user's current Monday–Sunday. Defaulted to empty so a client that
+    #: predates the strip keeps parsing this response unchanged.
+    week: list[WeekDay] = []
 
 
 @router.get("/state", response_model=DailyStateResponse)
@@ -131,6 +146,7 @@ async def daily_state(
         auto_consumed=mercy["auto_consumed"],
         unlocked_cosmetics=parse_unlocked(user.unlockedCosmetics) if user else [],
         last_session_kind=last_kind,
+        week=[WeekDay(**d) for d in await build_week(db, user_id=current_user.id, today=today)],
     )
 
 

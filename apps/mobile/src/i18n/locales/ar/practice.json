@@ -17,5 +17,14 @@
   "freezeUsed_two": "تم إنقاذ السلسلة — استُخدم {{count}} تجميدان",
   "freezeUsed_few": "تم إنقاذ السلسلة — استُخدمت {{count}} تجميدات",
   "freezeUsed_many": "تم إنقاذ السلسلة — استُخدم {{count}} تجميدًا",
-  "freezeUsed_other": "تم إنقاذ السلسلة — استُخدم {{count}} تجميد"
+  "freezeUsed_other": "تم إنقاذ السلسلة — استُخدم {{count}} تجميد",
+  "weekday": {
+    "mon": "ن",
+    "tue": "ث",
+    "wed": "ر",
+    "thu": "خ",
+    "fri": "ج",
+    "sat": "س",
+    "sun": "ح"
+  }
 }

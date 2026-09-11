@@ -19,7 +19,7 @@ from typing import Optional
 
 from prisma import Prisma
 
-from ..utils.dates import local_today, utc_midnight
+from ..utils.dates import as_date, local_today, utc_midnight
 
 # Cap on simultaneously-held freezes. Goes well past the "one freeze per
 # week" baseline to allow IAP top-ups, but small enough that we don't
@@ -201,6 +201,7 @@ async def consume_freeze(
     user_id: int,
     reason: str,
     now: Optional[datetime] = None,
+    covered_date: Optional[date] = None,
 ) -> bool:
     """Consume the oldest ARMED freeze. False when none is armed.
 
@@ -214,10 +215,13 @@ async def consume_freeze(
     if held is None:
         return False
     when = now if now is not None else datetime.now(timezone.utc)
-    await db.userstreakfreeze.update(
-        where={"id": held.id},
-        data={"consumedAt": when, "consumedReason": reason},
-    )
+    data: dict = {"consumedAt": when, "consumedReason": reason}
+    if covered_date is not None:
+        # `utc_midnight`, not the bare date — `@db.Date` and prisma-client-py
+        # 0.11 has no encoder for `datetime.date`. Same trap as the rolled
+        # session date above it.
+        data["coveredDate"] = utc_midnight(covered_date)
+    await db.userstreakfreeze.update(where={"id": held.id}, data=data)
     return True
 
 
@@ -283,8 +287,19 @@ async def auto_apply_mercy(
     burn = freezes_to_consume_for_gap(today, last_date, equipped)
     consumed = 0
     for _ in range(burn):
+        # The day this particular freeze pays for: the one right after the
+        # last day the user was active, which the loop then rolls forward. It
+        # is recorded rather than inferred because `consumedAt` is when the
+        # mercy pass *noticed* — a Tuesday covered by a freeze spent on
+        # Thursday — and the week strip has to tell a frozen day from a missed
+        # one.
+        covers = (last_date or today) + timedelta(days=1)
         ok = await consume_freeze(
-            db, user_id=user_id, reason="equipped_covered_missed_day", now=when
+            db,
+            user_id=user_id,
+            reason="equipped_covered_missed_day",
+            now=when,
+            covered_date=covers,
         )
         if not ok:
             break
@@ -346,3 +361,81 @@ async def grant_weekly_if_due(
         return False
     await grant_freeze(db, user_id=user_id, via="auto_weekly", now=now)
     return True
+
+
+# ── The week strip ──────────────────────────────────────────────────────────
+
+#: What a single day in the strip can be. `done` and `frozen` both keep the
+#: streak alive; the distinction matters because a frozen day drawn as a gap
+#: reports the freeze as having failed, which is the opposite of what happened.
+WEEK_DAY_STATES = ("done", "frozen", "missed", "future")
+
+
+def week_bounds(today: date) -> tuple[date, date]:
+    """The user's current Monday–Sunday, in their own calendar.
+
+    Monday-first because `date.weekday()` is, and because the alternative is a
+    per-locale first-day-of-week rule that the strip does not need: what the
+    user reads off it is "how did this week go", and any seven consecutive days
+    ending at or after today answers that. Worth revisiting only if the copy
+    ever names the days.
+    """
+    monday = today - timedelta(days=today.weekday())
+    return monday, monday + timedelta(days=6)
+
+
+async def build_week(
+    db: Prisma,
+    *,
+    user_id: int,
+    today: date,
+) -> list[dict]:
+    """Seven days of the user's current week, for the Practice header.
+
+    Two queries, both index-covered, both bounded to seven days:
+
+      * completed `practice_sessions` by `local_date`
+        (`ix_practice_sessions_user_day`, partial on `completed_at IS NOT NULL`)
+      * spent freezes by `covered_date` (`ix_user_streak_freezes_covered`)
+
+    Deliberately derived rather than stored. A denormalised "week" column would
+    be a second copy of the same fact and would need invalidating on every
+    completion, every freeze spend and every timezone change; seven rows off
+    two indexes is cheaper than the bug that eventually follows from that.
+
+    A day can be both practised and frozen only if something has gone wrong
+    upstream — a freeze covering a day the user was active. `done` wins,
+    because that is the fact the user experienced.
+    """
+    start, end = week_bounds(today)
+
+    done_rows = await db.practicesession.find_many(
+        where={
+            "userId": user_id,
+            "completedAt": {"not": None},
+            "localDate": {"gte": utc_midnight(start), "lte": utc_midnight(end)},
+        },
+    )
+    done = {as_date(r.localDate) for r in done_rows if r.localDate is not None}
+
+    frozen_rows = await db.userstreakfreeze.find_many(
+        where={
+            "userId": user_id,
+            "coveredDate": {"gte": utc_midnight(start), "lte": utc_midnight(end)},
+        },
+    )
+    frozen = {as_date(r.coveredDate) for r in frozen_rows if r.coveredDate is not None}
+
+    week: list[dict] = []
+    for i in range(7):
+        day = start + timedelta(days=i)
+        if day in done:
+            state = "done"
+        elif day in frozen:
+            state = "frozen"
+        elif day > today:
+            state = "future"
+        else:
+            state = "missed"
+        week.append({"date": day.isoformat(), "state": state, "is_today": day == today})
+    return week

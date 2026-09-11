@@ -41,6 +41,7 @@ class FakeFreeze:
         self.equippedAt = equipped_at
         self.consumedAt = consumed_at
         self.consumedReason = None
+        self.coveredDate = None
 
 
 class FakeFreezeTable:
@@ -78,11 +79,14 @@ class FakeFreezeTable:
         return rows[0]
 
     async def update(self, where, data):
+        # Generic `setattr`, not a field whitelist. A fake that enumerates the
+        # columns it accepts throws the moment production writes a new one —
+        # and the test then fails for a reason that has nothing to do with the
+        # behaviour it guards.
         for r in self.rows:
             if r.id == where["id"]:
                 for k, v in data.items():
-                    setattr(r, {"equippedAt": "equippedAt", "consumedAt": "consumedAt",
-                                "consumedReason": "consumedReason"}[k], v)
+                    setattr(r, k, v)
                 return r
         return None
 

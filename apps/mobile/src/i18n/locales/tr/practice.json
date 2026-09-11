@@ -5,5 +5,14 @@
   "freeze_other": "DONDURMA",
   "start": "BAŞLA",
   "freezeUsed_one": "Seri kurtarıldı — {{count}} dondurma kullanıldı",
-  "freezeUsed_other": "Seri kurtarıldı — {{count}} dondurma kullanıldı"
+  "freezeUsed_other": "Seri kurtarıldı — {{count}} dondurma kullanıldı",
+  "weekday": {
+    "mon": "P",
+    "tue": "S",
+    "wed": "Ç",
+    "thu": "P",
+    "fri": "C",
+    "sat": "C",
+    "sun": "P"
+  }
 }
