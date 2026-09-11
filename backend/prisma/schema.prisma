@@ -24,6 +24,14 @@ model User {
   nativeLanguage           String?                  @default("en") @map("native_language") @db.VarChar(10)
   learningLanguage         String?                  @default("en") @map("learning_language") @db.VarChar(10)
   proficiencyLevel         proficiencylevel?        @map("proficiency_level")
+  // IANA zone reported by the client on launch (e.g. "Europe/Istanbul"), and
+  // the day boundary every streak calculation uses. NULL means the client has
+  // not told us — `utils/dates.local_today` falls back to UTC, which is what
+  // every account did before this column existed. An IANA name rather than an
+  // offset on purpose: an offset is wrong twice a year wherever daylight
+  // saving applies, and a streak that breaks on the clock change is the bug
+  // this exists to remove.
+  timezone                 String?                  @db.VarChar
   defaultTab               String?                  @default("movies") @map("default_tab") @db.VarChar(10)
   isActive                 Boolean                  @default(true) @map("is_active")
   isAdmin                  Boolean                  @default(false) @map("is_admin")

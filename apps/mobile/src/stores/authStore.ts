@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceTimezone } from '../utils/deviceTimezone';
 import type { CefrLevel, User } from '../types';
 import { tokenStorage } from '../services/auth/tokenStorage';
 // Safe to import statically: accountState reaches the stores through `require`
@@ -27,6 +28,36 @@ interface AuthState {
    *  session intact) if the server call fails. App Store 5.1.1(v). */
   deleteAccount: () => Promise<void>;
   initialize: () => Promise<void>;
+}
+
+/**
+ * Tell the server which calendar day this user is living in.
+ *
+ * The streak, the free tier's one lesson a day, the chest and the freeze gap
+ * are all decided server-side, and the server needs a zone to decide them in —
+ * without one it falls back to UTC, which rolls the day over at 4pm for a user
+ * in Los Angeles.
+ *
+ * Sent on every cold start rather than once at sign-up, because people travel
+ * and a stale zone is a streak that rolls over at the wrong hour. Written only
+ * when it actually changed, so the ordinary launch costs nothing: the common
+ * case is one comparison and no request.
+ *
+ * Fire-and-forget on purpose. A user whose timezone PATCH failed is a user on
+ * the previous zone for one more session, which is the status quo — not a
+ * reason to hold up a launch or surface an error they cannot act on.
+ */
+async function syncTimezone(user: User, set: (partial: Partial<AuthState>) => void): Promise<void> {
+  const zone = getDeviceTimezone();
+  if (!zone || zone === user.timezone) return;
+  try {
+    const { authApi } = await import('../services/api');
+    const fresh = await authApi.updateProfile({ timezone: zone });
+    set({ user: fresh });
+    await AsyncStorage.setItem('user', JSON.stringify(fresh)).catch(() => {});
+  } catch (e) {
+    console.warn('[AuthStore] timezone sync failed:', (e as Error)?.message);
+  }
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -111,6 +142,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             if (fresh) {
               set({ user: fresh });
               AsyncStorage.setItem('user', JSON.stringify(fresh)).catch(() => {});
+              void syncTimezone(fresh, set);
             }
           })
           .catch((e) => console.warn('[AuthStore] /auth/me refresh failed:', e));

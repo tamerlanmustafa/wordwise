@@ -26,6 +26,10 @@ export interface User {
    *  install inherits it and emails go out in it. Optional because the user
    *  objects the login screens assemble by hand don't carry it. */
   language_preference?: string | null;
+  /** IANA zone the client last reported (e.g. "Europe/Istanbul"). The server
+   *  derives "today" from it for the streak, the daily lesson budget, the
+   *  chest and the freeze gap; NULL means it falls back to UTC. */
+  timezone?: string | null;
   /** Whether this ACCOUNT has finished onboarding. Was an AsyncStorage flag,
    *  so a second device replayed the whole first-run flow. Optional because
    *  the login screens assemble user objects by hand and an older server does

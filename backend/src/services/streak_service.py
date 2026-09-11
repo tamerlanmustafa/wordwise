@@ -19,6 +19,8 @@ from typing import Optional
 
 from prisma import Prisma
 
+from ..utils.dates import local_today
+
 # Cap on simultaneously-held freezes. Goes well past the "one freeze per
 # week" baseline to allow IAP top-ups, but small enough that we don't
 # accumulate a hoard that defeats the mercy intent.
@@ -154,7 +156,13 @@ async def auto_apply_mercy(
     auto_granted, auto_consumed }`.
     """
     when = now if now is not None else datetime.now(timezone.utc)
-    today = when.date()
+
+    # The user is fetched FIRST so every date below is the user's own calendar
+    # day. It used to be `when.date()` — the server's UTC day — which decided
+    # both which ISO week a weekly grant belonged to and how many days the gap
+    # arithmetic thought had been missed. See utils/dates.local_today.
+    user = await db.user.find_unique(where={"id": user_id})
+    today = local_today(user, now=when) if user is not None else when.date()
 
     held = await count_held_freezes(db, user_id)
     last_weekly = await find_last_weekly_grant(db, user_id)
@@ -164,7 +172,6 @@ async def auto_apply_mercy(
         held += 1
         auto_granted = True
 
-    user = await db.user.find_unique(where={"id": user_id})
     if user is None:
         return {
             "freezes_held": held,

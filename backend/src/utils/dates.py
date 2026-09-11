@@ -31,7 +31,8 @@ neither mistake is available to make.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Optional, Union
+from typing import Any, Optional, Union
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def utc_midnight(day: Union[date, datetime]) -> datetime:
@@ -58,3 +59,39 @@ def as_date(value: Union[date, datetime, None]) -> Optional[date]:
     if isinstance(value, datetime):
         return value.date()
     return value
+
+
+def local_today(user: Any, *, now: Optional[datetime] = None) -> date:
+    """The calendar day it is **for this user**, for every streak decision.
+
+    The streak, the free tier's one-lesson-a-day budget, the chest and the
+    freeze gap arithmetic all used `datetime.now(timezone.utc).date()`. That
+    was recorded as a deliberate choice — the server had no reliable client
+    timezone — and the premise stopped being true once the mobile client began
+    reporting one.
+
+    What it cost while it was UTC: at UTC+13 a session practised at 10am local
+    on Monday is stamped Sunday 21:00 UTC, so two consecutive local mornings
+    can share one UTC day (the streak does not advance, and the user is told
+    they have already practised) or straddle two (a single sitting spends two
+    days of a free budget). At UTC-8 the day rolls over at 4pm local instead.
+
+    Falls back to UTC on every failure path, and they are all real:
+
+      * `user.timezone` is NULL — every account before the column existed, and
+        every account whose client has not reported one yet.
+      * the stored name is not a zone this machine knows. `zoneinfo` reads the
+        host tzdata, so a name that resolves on a developer laptop can raise in
+        a slim container. A wrong-but-consistent day beats a 500 on the streak.
+
+    Takes the whole user rather than a zone string so call sites cannot pass
+    the wrong field, and so the fallback lives in exactly one place.
+    """
+    moment = now if now is not None else datetime.now(timezone.utc)
+    name = getattr(user, "timezone", None)
+    if not name:
+        return moment.astimezone(timezone.utc).date()
+    try:
+        return moment.astimezone(ZoneInfo(name)).date()
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        return moment.astimezone(timezone.utc).date()

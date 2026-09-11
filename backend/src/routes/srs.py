@@ -65,7 +65,7 @@ from ..services.srs_engine import (
 from ..services.translation_service import TranslationService
 from ..utils.nlp_executor import run_nlp
 from ..utils.pos_labels import friendly_pos
-from ..utils.dates import as_date, utc_midnight
+from ..utils.dates import local_today, as_date, utc_midnight
 from ..utils.subscription import is_premium
 
 
@@ -400,7 +400,9 @@ async def srs_stats(
         # refuse. It used to read the *start* stamp, which is why a user who
         # abandoned a deck saw "0 remaining" having answered nothing.
         last_finished = getattr(current_user, "srsLastSessionDate", None)
-        remaining = 1 if can_free_user_start_session_today(last_finished, now=now) else 0
+        remaining = 1 if can_free_user_start_session_today(
+            last_finished, today=local_today(current_user, now=now)
+        ) else 0
 
     total_reviews = getattr(current_user, "srsTotalReviews", 0) or 0
     total_correct = getattr(current_user, "srsTotalCorrect", 0) or 0
@@ -741,7 +743,9 @@ async def start_session(
             if kind in LIST_KINDS
             else getattr(current_user, "srsLastSessionDate", None)
         )
-        if not can_free_user_start_session_today(last_finished, now=now):
+        if not can_free_user_start_session_today(
+            last_finished, today=local_today(current_user, now=now)
+        ):
             raise HTTPException(
                 status_code=402,
                 detail={
@@ -1308,7 +1312,7 @@ async def record_review(
         user_id=current_user.id,
         correct_count=1 if body.correct else 0,
         total_count=1,
-        today=now.date(),
+        today=local_today(current_user, now=now),
     )
 
     # Refresh the per-movie progress cache so the reel tile reflects this
@@ -1375,7 +1379,9 @@ async def complete_session(
     `practice`, so no installed build loses its streak over this.
     """
     now = datetime.now(timezone.utc)
-    today = now.date()
+    # The user's day, not the server's — this is the date the streak, the
+    # chest and the free budget are all stamped with. See utils/dates.
+    today = local_today(current_user, now=now)
 
     # `srsLastSessionKind` is the fallback rather than the source: it is
     # whatever was started *last*, which is the session being finished in every

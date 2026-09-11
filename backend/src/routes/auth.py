@@ -1,4 +1,6 @@
 import logging
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
 from prisma import Prisma, Json
@@ -261,6 +263,23 @@ async def update_user_profile(
                 detail="Username already taken"
             )
         update_data["username"] = user_update.username
+
+    if user_update.timezone is not None:
+        # Validated, not trusted. An unresolvable name would be stored and then
+        # silently fall back to UTC on every read — a streak rolling over at
+        # the wrong hour with nothing anywhere saying why. Rejecting it means
+        # the client finds out, and the column keeps only names that work.
+        if user_update.timezone == "":
+            update_data["timezone"] = None
+        else:
+            try:
+                ZoneInfo(user_update.timezone)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unknown timezone: {user_update.timezone}",
+                )
+            update_data["timezone"] = user_update.timezone
 
     if user_update.language_preference is not None:
         # "" clears the pin so the app falls back to deriving the UI language

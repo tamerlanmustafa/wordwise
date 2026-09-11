@@ -27,6 +27,10 @@ export interface User {
   is_admin: boolean;
   /** App UI locale pinned in Settings, mirrored to the account (#98). */
   language_preference?: string | null;
+  /** IANA zone the client last reported (e.g. "Europe/Istanbul"). The server
+   *  derives "today" from it for the streak, the daily lesson budget, the
+   *  chest and the freeze gap; NULL means it falls back to UTC. */
+  timezone?: string | null;
   entitlements?: Entitlements | null;
 }
 

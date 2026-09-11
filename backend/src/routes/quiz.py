@@ -40,6 +40,7 @@ from ..services.quiz_service import (
 from ..services.movie_cefr import cefr_from_score
 from ..services.movie_progress_service import recompute_for_user_movie
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
+from ..utils.dates import local_today
 from ..services.srs_engine import (
     advance_user_rollup_after_review,
     advance_word_after_review,
@@ -408,7 +409,7 @@ async def complete_session(
                 user_id=current_user.id,
                 correct_count=srs_correct,
                 total_count=srs_scored,
-                today=now.date(),
+                today=local_today(current_user, now=now),
             )
             # Recompute the reel-tile progress for this movie so the status
             # badge + comprehensibility % reflect the cards we just advanced.

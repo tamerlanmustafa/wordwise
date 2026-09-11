@@ -133,6 +133,10 @@ class UserResponse(BaseModel):
     email: str
     username: str
     language_preference: Optional[str] = None
+    # Echoed back so the client can tell whether the zone it is about to
+    # report is already the stored one. Without it every launch re-sent the
+    # same value: the comparison was against `undefined` and never matched.
+    timezone: Optional[str] = None
     native_language: Optional[str] = None
     learning_language: Optional[str] = None
     proficiency_level: Optional[proficiencylevel] = None
@@ -165,6 +169,10 @@ class UserResponse(BaseModel):
                 'email': obj.email,
                 'username': obj.username,
                 'language_preference': obj.languagePreference,
+                # Same column name either side, but it still has to be listed:
+                # this branch is a whitelist, so a field absent from it is
+                # silently dropped however correctly it is declared above.
+                'timezone': getattr(obj, 'timezone', None),
                 'native_language': getattr(obj, 'nativeLanguage', None),
                 'learning_language': getattr(obj, 'learningLanguage', None),
                 'proficiency_level': obj.proficiencyLevel,
@@ -198,6 +206,13 @@ class UserUpdate(BaseModel):
     # would push an existing user back through the placement quiz.
     onboarding_completed: Optional[bool] = None
     feed_level_mix: Optional[dict[str, int]] = None
+    # IANA zone reported by the client on launch (e.g. "Europe/Istanbul"). It
+    # is the day boundary every streak calculation uses, so the client sends it
+    # on every launch rather than once — people travel, and a stale zone is a
+    # streak that rolls over at the wrong hour. Validated server-side against
+    # the host tzdata; an unknown name is rejected rather than stored, because
+    # a name we cannot resolve would silently fall back to UTC forever.
+    timezone: Optional[str] = None
 
     _check_mix = field_validator("feed_level_mix")(_validate_mix)
 

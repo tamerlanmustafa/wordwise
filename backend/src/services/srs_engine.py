@@ -22,7 +22,7 @@ from typing import Optional, Union
 from prisma import Prisma
 
 from .milestone_service import apply_milestone_unlocks, parse_unlocked
-from ..utils.dates import as_date, utc_midnight
+from ..utils.dates import as_date, local_today, utc_midnight
 
 # Leitner intervals in days, indexed by (box - 1). Box 1 → 1 day after a
 # correct answer, box 5 → 30 days. A card at box 5 that the user still
@@ -50,6 +50,7 @@ def compute_new_box(current_box: Optional[int], correct: bool) -> int:
 def can_free_user_start_session_today(
     last_session_finished_on: Optional[Union[date, datetime]],
     *,
+    today: Optional[date] = None,
     now: Optional[datetime] = None,
 ) -> bool:
     """Daily-cap gate for /srs/session/start.
@@ -83,18 +84,30 @@ def can_free_user_start_session_today(
     not reach this endpoint at all. What is left is a user repeatedly dealing
     decks they never answer, which earns them nothing.
 
-    UTC was picked over user-local time deliberately: the server has no
-    reliable client timezone, and a single timezone shift at midnight UTC
-    is easier to explain than per-user resets that vary by location.
+    ## Whose day
+
+    `today` is now the CALLER's day, and callers pass `local_today(user)`.
+    This used to compute `now.date()` itself, with the reasoning that "the
+    server has no reliable client timezone, and a single shift at midnight UTC
+    is easier to explain than per-user resets." The first half stopped being
+    true when the client began reporting an IANA zone; the second half was
+    wrong in the way that matters — a shift at midnight UTC is easy to explain
+    to whoever is *in* UTC, and it is a budget that resets at 4pm to a user in
+    Los Angeles and at 1pm to one in Auckland.
+
+    `now` is still accepted for the degenerate call with no user in hand, and
+    falls back to the UTC day exactly as before.
     """
     # `as_date` because both callers pass an `@db.Date` column, which prisma
-    # hands back as a `datetime`. Comparing that to `n.date()` directly is
+    # hands back as a `datetime`. Comparing that to a `date` directly is
     # False on the one day it must be True — see utils/dates.
     finished = as_date(last_session_finished_on)
     if finished is None:
         return True
-    n = now if now is not None else datetime.now(timezone.utc)
-    return finished != n.date()
+    if today is None:
+        n = now if now is not None else datetime.now(timezone.utc)
+        today = n.date()
+    return finished != today
 
 
 def compute_new_streak(
@@ -182,7 +195,10 @@ async def advance_user_rollup_after_review(
     if user is None:
         return  # user disappeared mid-flight; nothing to do
 
-    day = today if today is not None else datetime.now(timezone.utc).date()
+    # The user row is already in hand, so the fallback is the USER's day
+    # rather than the server's — a caller that forgets to pass one still
+    # stamps the right date. See utils/dates.local_today.
+    day = today if today is not None else local_today(user)
     prev_total = user.srsTotalReviews or 0
     prev_correct = user.srsTotalCorrect or 0
     prev_streak = user.srsCurrentStreak or 0
@@ -252,7 +268,10 @@ async def record_session_day(
     if user is None:
         return 0
 
-    day = today if today is not None else datetime.now(timezone.utc).date()
+    # The user row is already in hand, so the fallback is the USER's day
+    # rather than the server's — a caller that forgets to pass one still
+    # stamps the right date. See utils/dates.local_today.
+    day = today if today is not None else local_today(user)
     last_date = user.srsLastSessionDate
     if isinstance(last_date, datetime):
         last_date = last_date.date()

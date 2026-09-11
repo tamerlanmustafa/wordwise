@@ -30,7 +30,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.milestone_service import parse_unlocked
 from ..services.streak_service import auto_apply_mercy
-from ..utils.dates import as_date
+from ..utils.dates import as_date, local_today
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/daily", tags=["daily"])
@@ -67,11 +67,15 @@ async def daily_state(
 
     Runs `auto_apply_mercy` first (grants a weekly freeze if eligible,
     burns held freezes to cover missed days) and then reads the resulting
-    User state for the response. Idempotent for repeat calls in the same
-    UTC day.
+    User state for the response. Idempotent for repeat calls on the same
+    local day.
+
+    "Today" is the caller's own calendar day — see `utils/dates.local_today`.
+    It used to be the server's UTC day, which meant a user at UTC+13 asking
+    this at 10am local was answered about yesterday.
     """
     now = datetime.now(timezone.utc)
-    today = now.date()
+    today = local_today(current_user, now=now)
 
     mercy = await auto_apply_mercy(db, user_id=current_user.id, now=now)
 
@@ -93,7 +97,7 @@ async def daily_state(
     last_kind: str | None = None
     if user is not None:
         started = getattr(user, "srsLastSessionStartedAt", None)
-        if started is not None and started.date() == today:
+        if started is not None and local_today(current_user, now=started) == today:
             last_kind = getattr(user, "srsLastSessionKind", None)
 
     return DailyStateResponse(
