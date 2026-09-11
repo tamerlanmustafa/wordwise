@@ -107,3 +107,9 @@ CREATE INDEX IF NOT EXISTS ix_practice_sessions_user_day
   WHERE completed_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_practice_sessions_user_started
   ON public.practice_sessions (user_id, started_at DESC);
+
+-- from 2026_09_11_equipped_freezes.sql. Counting what is armed, on every
+-- /daily/state read.
+CREATE INDEX IF NOT EXISTS ix_user_streak_freezes_equipped
+  ON public.user_streak_freezes (user_id, equipped_at)
+  WHERE consumed_at IS NULL;

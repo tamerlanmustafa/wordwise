@@ -3,5 +3,7 @@
   "dayLabel_other": "DIAS",
   "freeze_one": "CONGELAMENTO",
   "freeze_other": "CONGELAMENTOS",
-  "start": "COMEÇAR"
+  "start": "COMEÇAR",
+  "freezeUsed_one": "Sequência salva — {{count}} congelamento usado",
+  "freezeUsed_other": "Sequência salva — {{count}} congelamentos usados"
 }

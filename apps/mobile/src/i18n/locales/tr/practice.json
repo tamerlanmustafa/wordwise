@@ -3,5 +3,7 @@
   "dayLabel_other": "GÜN",
   "freeze_one": "DONDURMA",
   "freeze_other": "DONDURMA",
-  "start": "BAŞLA"
+  "start": "BAŞLA",
+  "freezeUsed_one": "Seri kurtarıldı — {{count}} dondurma kullanıldı",
+  "freezeUsed_other": "Seri kurtarıldı — {{count}} dondurma kullanıldı"
 }

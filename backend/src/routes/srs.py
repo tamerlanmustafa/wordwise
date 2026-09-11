@@ -53,6 +53,7 @@ from ..services.quiz_service import (
     order_for_definition_slots,
 )
 from ..services.sentence_bank_service import get_llm_examples_for_lemmas
+from ..services.streak_service import grant_weekly_if_due
 from ..services.srs_engine import (
     BOX_INTERVALS_DAYS,
     MAX_BOX,
@@ -1462,6 +1463,11 @@ async def complete_session(
 
     if total_count > 0 and credited:
         await record_session_day(db, user_id=current_user.id, today=today)
+        # Mercy is earned by practising, not by opening the app. This used to
+        # live inside `GET /daily/state`, where it keyed on the ISO week of a
+        # READ — so opening on a Sunday and again on the Monday paid two
+        # freezes in two days for no practice at all.
+        await grant_weekly_if_due(db, user_id=current_user.id, today=today, now=now)
         # Same guard as the streak, for the same reason: a deck whose every
         # card turned out to be unrenderable "finishes" without asking the
         # user anything, and that is no more a lesson than it is a streak day.

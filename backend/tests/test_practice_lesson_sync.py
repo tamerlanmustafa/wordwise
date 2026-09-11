@@ -77,6 +77,22 @@ class _FakeUserTable:
         return self._user
 
 
+class _FakeFreezeTable:
+    """Inert stand-in for `user_streak_freezes` — see `_FakeDb`."""
+
+    async def count(self, where):
+        return 0
+
+    async def find_first(self, where, order=None):
+        return None
+
+    async def create(self, data):
+        return None
+
+    async def update(self, where, data):
+        return None
+
+
 class _FakeDb:
     """Stands in for the two raw statements the counter is written with.
 
@@ -88,6 +104,12 @@ class _FakeDb:
 
     def __init__(self, user):
         self.user = _FakeUserTable(user)
+        # Completion now also grants the weekly freeze (it moved off
+        # `GET /daily/state`, where freezes accrued by opening the app). These
+        # tests are about the lesson counter, so this answers "holds none,
+        # never granted" — but it has to EXIST, or the handler raises before
+        # reaching the counter and the test measures a different code path.
+        self.userstreakfreeze = _FakeFreezeTable()
         self.statements: list[str] = []
 
     async def execute_raw(self, sql: str, *args):

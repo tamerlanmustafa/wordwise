@@ -6,7 +6,7 @@ user + freeze inventory). Here we lock down the decision math.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from src.services.streak_service import (
     MAX_FREEZES_HELD,
@@ -75,10 +75,42 @@ class TestFreezesToConsumeForGap:
         last = date(2026, 5, 14)
         assert freezes_to_consume_for_gap(self.TODAY, last, held_count=5) == 4
 
-    def test_gap_larger_than_held_consumes_all_held(self):
-        # Missed 4 days but only have 2 freezes — burn what we have.
-        last = date(2026, 5, 14)
-        assert freezes_to_consume_for_gap(self.TODAY, last, held_count=2) == 2
+    def test_a_gap_larger_than_held_burns_NOTHING(self):
+        # The reversal. This case used to assert `== 2`, commented "burn what
+        # we have" — a deliberate choice, and the wrong one: a freeze that does
+        # not bridge the WHOLE gap saves nothing, because compute_new_streak
+        # resets on any remaining gap of two or more days. The partial burn
+        # bought a shorter gap and an identical broken streak, so the user lost
+        # the freezes AND the streak. Doing nothing at least keeps the freezes.
+        last = date(2026, 5, 14)  # 4 days missed
+        assert freezes_to_consume_for_gap(self.TODAY, last, held_count=2) == 0
+
+    def test_exact_cover_still_burns_everything_it_needs(self):
+        # The other half: when they DO cover the gap, spend them all. A freeze
+        # hoarded through the day it was meant to cover is a freeze that failed.
+        last = date(2026, 5, 14)  # 4 days missed
+        assert freezes_to_consume_for_gap(self.TODAY, last, held_count=4) == 4
+
+    def test_the_measured_table(self):
+        """The simulation that motivated the change, as a table.
+
+        Columns: (gap in days, armed freezes) -> freezes burned. Before the
+        fix the right-hand column read 1, 2, 8 for the last three rows, and in
+        every one of those the streak reset anyway.
+        """
+        cases = {
+            (1, 2): 0,   # nothing missed
+            (2, 2): 1,   # one day missed, covered
+            (3, 2): 2,   # two missed, covered exactly
+            (3, 1): 0,   # two missed, only one freeze -> spend none
+            (5, 2): 0,   # four missed, two freezes    -> spend none
+            (10, 8): 0,  # nine missed, eight freezes  -> spend none
+        }
+        for (gap, armed), expected in cases.items():
+            last = self.TODAY - timedelta(days=gap)
+            assert freezes_to_consume_for_gap(self.TODAY, last, held_count=armed) == expected, (
+                f"gap={gap} armed={armed}"
+            )
 
 
 class TestRepairWindowActive:

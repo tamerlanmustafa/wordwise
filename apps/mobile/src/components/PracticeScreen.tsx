@@ -32,6 +32,7 @@ import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useAuthStore } from '../stores/authStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
+import { showToast } from '../stores/toastStore';
 import {
   dailyApi,
   srsApi,
@@ -109,10 +110,24 @@ function PracticeScreenInner({
     try {
       const next = await dailyApi.state();
       setServerState(next);
+      // Say it out loud when a freeze was spent.
+      //
+      // `auto_consumed` has been on this response since the feature shipped
+      // and NOTHING has ever read it — the backend's own comment says the
+      // client should toast it. So a freeze was taken to cover a missed day
+      // and the only evidence was the counter quietly being one lower than
+      // the user remembered. That silence is half of why the mechanic felt
+      // like something the app did *to* them; arming it is the other half.
+      if (next.auto_consumed > 0) {
+        showToast({
+          message: t('practice:freezeUsed', { count: next.auto_consumed }),
+          tone: 'success',
+        });
+      }
     } catch (e) {
       console.warn('[PracticeScreen] daily/state failed:', (e as Error)?.message);
     }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void refreshServerState();
   }, [refreshServerState]);

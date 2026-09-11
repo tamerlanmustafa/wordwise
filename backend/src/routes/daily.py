@@ -9,7 +9,9 @@ cold start (and on app-foreground) to learn:
   • whether the repair window is active (missed yesterday, no freezes)
 
 Side effects on read (lazy mercy pass — no cron required):
-  • Auto-grant a weekly freeze (Sunday rollover, ISO week, cap 2 held)
+  • The weekly freeze grant MOVED to POST /srs/session/complete — mercy
+    is earned by practising, not by opening the app. The cap is
+    MAX_FREEZES_HELD (5), not the 2 this line claimed for months.
   • Auto-consume held freezes for each missed UTC day, rolling
     `srsLastSessionDate` forward so the streak math stays monotonic
 
@@ -29,7 +31,14 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.milestone_service import parse_unlocked
-from ..services.streak_service import auto_apply_mercy
+from ..services.streak_service import (
+    MAX_FREEZES_HELD,
+    auto_apply_mercy,
+    count_equipped_freezes,
+    count_held_freezes,
+    equip_freeze,
+    unequip_freeze,
+)
 from ..utils.dates import as_date, local_today
 
 logger = logging.getLogger(__name__)
@@ -41,10 +50,20 @@ class DailyStateResponse(BaseModel):
     streak: int
     longest_streak: int
     freezes_held: int
+    # How many of those are ARMED. Held-but-unarmed freezes are inventory; only
+    # an armed one is ever spent to cover a missed day, which is what makes the
+    # spend the user's decision rather than the app's. Defaulted so a client
+    # that predates the field keeps parsing.
+    freezes_equipped: int = 0
     last_session_date: str | None  # YYYY-MM-DD or null
     repair_window_active: bool
-    # Side-effects from this read — frontend can show "🛡️ freeze used"
-    # or "🎁 free freeze granted" toasts when nonzero / true.
+    # Side-effect from this read: how many armed freezes were just spent to
+    # cover missed days. The client shows it — a freeze consumed invisibly is
+    # the complaint this whole model exists to answer.
+    #
+    # `auto_granted_weekly` is retained and now always False: the weekly grant
+    # moved to session completion, so it is earned by practising rather than by
+    # opening the app. Kept in the shape so installed clients keep parsing.
     auto_granted_weekly: bool
     auto_consumed: int
     # v0.6 W10: full inventory of cinema-named milestone slugs. Client
@@ -105,10 +124,57 @@ async def daily_state(
         streak=streak,
         longest_streak=longest,
         freezes_held=mercy["freezes_held"],
+        freezes_equipped=mercy["freezes_equipped"],
         last_session_date=last_date.isoformat() if last_date else None,
         repair_window_active=mercy["repair_window_active"],
         auto_granted_weekly=mercy["auto_granted"],
         auto_consumed=mercy["auto_consumed"],
         unlocked_cosmetics=parse_unlocked(user.unlockedCosmetics) if user else [],
         last_session_kind=last_kind,
+    )
+
+
+class FreezeStateResponse(BaseModel):
+    """What the user holds and what is armed, after an equip/unequip."""
+
+    freezes_held: int
+    freezes_equipped: int
+    #: False when there was nothing to arm (or nothing armed to disarm). Not an
+    #: error: tapping "equip" with an empty inventory is a reasonable thing to
+    #: do and the honest answer is "nothing changed", not a 400 the UI has to
+    #: translate into a message.
+    changed: bool
+
+
+@router.post("/freeze/equip", response_model=FreezeStateResponse)
+async def equip_a_freeze(
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """Arm one held freeze, so it can cover a missed day.
+
+    The arming IS the decision. A freeze can only be spent while the user is
+    not in the app — that is what a missed day means — so the choice has to be
+    made in advance. Before this, every held freeze was implicitly armed and
+    the app spent them without asking or reporting.
+    """
+    changed = await equip_freeze(db, user_id=current_user.id)
+    return FreezeStateResponse(
+        freezes_held=await count_held_freezes(db, current_user.id),
+        freezes_equipped=await count_equipped_freezes(db, current_user.id),
+        changed=changed,
+    )
+
+
+@router.post("/freeze/unequip", response_model=FreezeStateResponse)
+async def unequip_a_freeze(
+    current_user=Depends(get_current_active_user),
+    db: Prisma = Depends(get_db),
+):
+    """Disarm the most recently armed freeze. It stays in the inventory."""
+    changed = await unequip_freeze(db, user_id=current_user.id)
+    return FreezeStateResponse(
+        freezes_held=await count_held_freezes(db, current_user.id),
+        freezes_equipped=await count_equipped_freezes(db, current_user.id),
+        changed=changed,
     )

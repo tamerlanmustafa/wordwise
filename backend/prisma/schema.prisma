@@ -1070,7 +1070,8 @@ model UserMovieProgress {
 
 // Per-user inventory of streak freezes (v0.6 mercy infrastructure).
 // One row per freeze; `consumedAt IS NULL` means the freeze is still
-// held. Auto-granted weekly to free users (cap 2 held), credited in
+// held. Auto-granted weekly on session completion (cap MAX_FREEZES_HELD = 5,
+// not the 2 this comment claimed), credited in
 // batches by the consumable freeze-pack IAP, and lazily consumed at
 // the next /daily/state read after a missed day.
 model UserStreakFreeze {
@@ -1080,11 +1081,17 @@ model UserStreakFreeze {
   acquiredVia    freezeacquisition @map("acquired_via")
   consumedAt     DateTime?         @map("consumed_at") @db.Timestamptz(6)
   consumedReason String?           @map("consumed_reason") @db.VarChar
+  /// When the user armed this freeze. NULL = held but not armed. Only an
+  /// armed, unconsumed freeze is ever spent to cover a missed day — the
+  /// arming is the decision, and nothing is spent that the user did not first
+  /// choose to put at risk.
+  equippedAt     DateTime?         @map("equipped_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Hot index for "how many freezes does this user have?"
   @@index([userId, consumedAt], map: "ix_user_streak_freezes_held")
+  @@index([userId, equippedAt], map: "ix_user_streak_freezes_equipped")
   @@map("user_streak_freezes")
 }
 

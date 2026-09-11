@@ -94,9 +94,39 @@ class _FakeUserTable:
         return self._user
 
 
+class _FakeFreezeTable:
+    """Enough of `user_streak_freezes` for the weekly grant.
+
+    Completion now grants the weekly freeze — it used to happen inside
+    `GET /daily/state`, which made freezes accrue by *opening the app*. These
+    tests are about crediting, not about mercy, so the table answers "you hold
+    none and have never been granted one" and records what would be written.
+    Present at all because a fake missing the attribute makes the handler raise
+    instead of run, and the test then exercises a different code path than
+    production does.
+    """
+
+    def __init__(self):
+        self.created: list[dict] = []
+
+    async def count(self, where):
+        return 0
+
+    async def find_first(self, where, order=None):
+        return None
+
+    async def create(self, data):
+        self.created.append(dict(data))
+        return None
+
+    async def update(self, where, data):
+        return None
+
+
 class _FakeDb:
     def __init__(self, user):
         self.user = _FakeUserTable(user)
+        self.userstreakfreeze = _FakeFreezeTable()
         self.raw: list[tuple[str, tuple]] = []
 
     async def execute_raw(self, sql: str, *args):

@@ -1393,11 +1393,23 @@ interface CompleteSessionResponse {
   unlocked_cosmetics: string[];
 }
 
+export interface FreezeState {
+  freezes_held: number;
+  freezes_equipped: number;
+  /** False when there was nothing to arm (or nothing armed to disarm). Not an
+   *  error — the honest answer to tapping equip with an empty inventory. */
+  changed: boolean;
+}
+
 export interface DailyState {
   today_done: boolean;
   streak: number;
   longest_streak: number;
   freezes_held: number;
+  /** How many held freezes are ARMED. Only an armed freeze is ever spent to
+   *  cover a missed day — that is what makes the spend the user's decision.
+   *  Optional: a server that predates the field sends nothing. */
+  freezes_equipped?: number;
   last_session_date: string | null;
   repair_window_active: boolean;
   auto_granted_weekly: boolean;
@@ -1620,6 +1632,20 @@ export const dailyApi = {
   /** Dev-only shortcut to credit a freeze pack without the IAP. Returns
    *  401/403 in production for non-admin callers. Useful for exercising
    *  the full mercy UX before Apple/Google credentials land. */
+  /** Arm one held freeze so it can cover a missed day. */
+  equipFreeze: async (): Promise<FreezeState> => {
+    const res = await authFetch(`${API_BASE_URL}/daily/freeze/equip`, { method: 'POST' });
+    if (!res.ok) throw new Error(`POST /daily/freeze/equip → ${res.status}`);
+    return res.json();
+  },
+
+  /** Disarm the most recently armed freeze. It stays in the inventory. */
+  unequipFreeze: async (): Promise<FreezeState> => {
+    const res = await authFetch(`${API_BASE_URL}/daily/freeze/unequip`, { method: 'POST' });
+    if (!res.ok) throw new Error(`POST /daily/freeze/unequip → ${res.status}`);
+    return res.json();
+  },
+
   debugGrantFreezes: async (): Promise<CreditedFreezesResponse> => {
     const res = await authFetch(
       `${API_BASE_URL}/consumables/freeze-pack/debug-grant`,
