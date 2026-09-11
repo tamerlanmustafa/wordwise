@@ -99,3 +99,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_words_global_word_unique
 -- from 2026_07_21_add_vocab_coverage_snapshots.sql
 CREATE INDEX IF NOT EXISTS ix_vocab_coverage_snapshots_captured_at
   ON public.vocab_coverage_snapshots USING btree (captured_at DESC);
+
+-- from 2026_09_11_practice_sessions.sql. The week strip reads the first of
+-- these on every /daily/state, so it is not optional.
+CREATE INDEX IF NOT EXISTS ix_practice_sessions_user_day
+  ON public.practice_sessions (user_id, local_date)
+  WHERE completed_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_practice_sessions_user_started
+  ON public.practice_sessions (user_id, started_at DESC);

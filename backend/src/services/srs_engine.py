@@ -202,25 +202,32 @@ async def advance_user_rollup_after_review(
     prev_total = user.srsTotalReviews or 0
     prev_correct = user.srsTotalCorrect or 0
     prev_streak = user.srsCurrentStreak or 0
-    prev_longest = user.srsLongestStreak or 0
-    last_date = user.srsLastSessionDate
 
-    new_streak = compute_new_streak(prev_streak, last_date, day)
-    new_longest = max(prev_longest, new_streak)
-
-    # Prisma Python's JSON encoder rejects bare `date` — must hand it
-    # a `datetime`. The @db.Date column stores just the date part.
-    day_dt = utc_midnight(day)
+    # ── This function no longer touches the streak ─────────────────────────
+    #
+    # It used to write `srsCurrentStreak`, `srsLongestStreak` and
+    # `srsLastSessionDate` here, unconditionally and with no `credited` check —
+    # and it is called per-card from `POST /srs/review` AND from
+    # `POST /quiz/sessions/{id}/complete`. So finishing a MOVIE QUIZ moved the
+    # Practice streak and, because `srsLastSessionDate` is also the free tier's
+    # Practice budget, silently spent that day's lesson — with no chest and no
+    # tile to show for it.
+    #
+    # That contradicted `counts_toward_streak`, which exists precisely to say
+    # which decks are allowed to claim the day. A second writer that never
+    # consulted it made the rule advisory.
+    #
+    # `record_session_day`, called from `POST /srs/session/complete`, is now
+    # the only writer of the streak. What stays here is the genuinely per-card
+    # rollup — totals — which is what this function is named for.
     await db.user.update(
         where={"id": user_id},
         data={
             "srsTotalReviews": prev_total + total_count,
             "srsTotalCorrect": prev_correct + correct_count,
-            "srsCurrentStreak": new_streak,
-            "srsLongestStreak": new_longest,
-            "srsLastSessionDate": day_dt,
         },
     )
+    new_streak = prev_streak
 
     # v0.6 W10: persist any cinema-named milestone unlocks crossed by
     # this bump. Same-day re-bumps return [] from crossed_milestones

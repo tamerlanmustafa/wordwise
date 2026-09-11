@@ -158,6 +158,11 @@ export function ReviewScreen({
    * cards forever, which is precisely what a "Next" button would trigger.
    */
   const initialSessionSpent = useRef(false);
+  /** The server's `practice_sessions` row for the deck on screen, from
+   *  `session/start`. Null for a resumed deck dealt by an older server, and
+   *  for a session adopted from `initialSession` — the completion then falls
+   *  back to trusting the counts, exactly as it always did. */
+  const sessionIdRef = useRef<number | null>(null);
 
   const loadSession = useCallback(async () => {
     setPhase('loading');
@@ -211,6 +216,12 @@ export function ReviewScreen({
       setPreviewsRemaining(session.previews_remaining);
       setAnsweredBefore(0);
       setDeckStatus(session.deck_status);
+      // The server's id for this deal. Handed back on completion so it can
+      // clamp our reported counts to the cards it actually dealt — before
+      // this, the streak was whatever this screen claimed it was. A ref
+      // rather than state: nothing renders from it, and a re-render between
+      // the last card and the completion call must not lose it.
+      sessionIdRef.current = session.session_id ?? null;
       if (session.cards.length === 0) {
         setPhase('empty');
       } else {
@@ -365,7 +376,12 @@ export function ReviewScreen({
         // otherwise be *claimed* as practice; sending nothing instead lets the
         // server fall back to the kind it stamped at session start, which is
         // the right one.
-        srsApi.completeSession(justCorrect, total, isPracticePath ? 'practice' : kind)
+        srsApi.completeSession(
+          justCorrect,
+          total,
+          isPracticePath ? 'practice' : kind,
+          sessionIdRef.current,
+        )
           .then((res) => {
             if (res.chest) {
               setChest(res.chest);

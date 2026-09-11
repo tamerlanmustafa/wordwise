@@ -99,6 +99,11 @@ def _user_word(id: int, word: str):
     )
 
 
+async def _async_value(value):
+    """A coroutine that yields `value` — the fakes above are awaited."""
+    return value
+
+
 def _fake_db(*, glossed=()):
     """Enough of the Prisma client for session start.
 
@@ -133,6 +138,17 @@ def _fake_db(*, glossed=()):
         lemma=SimpleNamespace(find_many=lemma_find_many),
         movie=SimpleNamespace(find_many=empty),
         user=SimpleNamespace(update=update),
+        # The server's record of the deal (`practice_sessions`). Present for
+        # the same reason `lemma` is: session start writes a row here, and a
+        # fake without the attribute makes the handler raise instead of run —
+        # the test would then be exercising a different code path than
+        # production does. `create` has to hand back something with an `.id`,
+        # because the response carries it for the completion clamp.
+        practicesession=SimpleNamespace(
+            create=lambda **kw: _async_value(SimpleNamespace(id=1)),
+            find_first=lambda **kw: _async_value(None),
+            update=lambda **kw: _async_value(None),
+        ),
         query_raw=query_raw,
     )
 

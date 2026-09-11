@@ -199,6 +199,11 @@ class SessionStartResponse(BaseModel):
     # Always "ok" when `cards` is non-empty. Optional-with-default so older
     # builds, which ignore the field, keep parsing the response.
     deck_status: str = "ok"
+    # The server's record of this deal. The client hands it back on completion
+    # so the server can clamp the reported count against the cards it actually
+    # dealt — see `practice_sessions`. Optional: a build that predates this
+    # sends nothing back and is handled exactly as it was before.
+    session_id: Optional[int] = None
 
 
 class TodaysWordResponse(BaseModel):
@@ -300,6 +305,13 @@ class CompleteSessionBody(BaseModel):
     #: builds shipped before this field existed send nothing, and `None` reads
     #: as `practice` (see `counts_toward_streak`).
     kind: Optional[str] = None
+    #: The id returned by `/srs/session/start`. With it, the server clamps
+    #: `total_count` to the cards it actually dealt and records the session as
+    #: completed; without it — a build that predates the field — the endpoint
+    #: behaves exactly as it did, trusting the reported counts. The clamp is
+    #: the point: `total_count` decides whether the day is credited at all,
+    #: and until now the client was the only thing that knew it.
+    session_id: Optional[int] = None
 
 
 class PracticeProgressBody(BaseModel):
@@ -1235,6 +1247,7 @@ async def start_session(
     #
     # Still guarded on `cards`: an empty queue dealt nothing, so there is no
     # session to describe.
+    session_id: Optional[int] = None
     if cards:
         await db.user.update(
             where={"id": current_user.id},
@@ -1243,6 +1256,20 @@ async def start_session(
                 "srsLastSessionKind": kind,
             },
         )
+        # The server's own record of what it dealt. `cardsDealt` is written
+        # here, from the deck we just built, which is what makes the clamp on
+        # completion possible at all: the ceiling is known before the client
+        # has reported anything. Guarded on `cards` for the same reason the
+        # user stamp above is — an empty queue dealt no session to describe.
+        deal = await db.practicesession.create(
+            data={
+                "userId": current_user.id,
+                "kind": kind,
+                "startedAt": now,
+                "cardsDealt": len(cards),
+            },
+        )
+        session_id = deal.id
 
     # `previews_remaining` is preserved in the response shape for legacy
     # mobile clients. Under the new daily-cap model it answers a different
@@ -1278,6 +1305,7 @@ async def start_session(
         previews_remaining=remaining,
         kind=kind,
         deck_status=deck_status,
+        session_id=session_id,
     )
 
 
@@ -1390,7 +1418,49 @@ async def complete_session(
     kind = body.kind or getattr(current_user, "srsLastSessionKind", None)
     credited = counts_toward_streak(kind)
 
-    if body.total_count > 0 and credited:
+    # ── The counts the server is willing to believe ────────────────────────
+    #
+    # `total_count` decides whether this day is credited at all, and until now
+    # it was whatever the client said — trusted, echoed straight back, never
+    # checked. With a session row we know the ceiling: the server built that
+    # deck and recorded how many cards were in it.
+    #
+    # Clamped rather than rejected. A mismatch is far more likely to be an
+    # honest client (a card dropped as unrenderable, a retry, a resumed deck)
+    # than an attack, and refusing the completion would cost a real user their
+    # streak to punish a number being too big. The clamp keeps the day and
+    # discards only the excess.
+    #
+    # No session id — a build older than this field — falls through with the
+    # reported counts untouched, exactly as before.
+    deal = None
+    if body.session_id is not None:
+        deal = await db.practicesession.find_first(
+            where={"id": body.session_id, "userId": current_user.id},
+        )
+    total_count = body.total_count
+    correct_count = body.correct_count
+    if deal is not None:
+        total_count = min(total_count, deal.cardsDealt)
+        correct_count = min(correct_count, total_count)
+
+    # Close the row before anything is derived from it. `localDate` is stamped
+    # here rather than computed later so a user who changes timezone cannot
+    # retroactively move days they have already earned, and it is what the
+    # week strip reads. Idempotent by `completedAt`: a retry of this endpoint
+    # must not write a second completion for one deal.
+    if deal is not None and deal.completedAt is None:
+        await db.practicesession.update(
+            where={"id": deal.id},
+            data={
+                "completedAt": now,
+                "correctCount": correct_count,
+                "totalCount": total_count,
+                "localDate": utc_midnight(today),
+            },
+        )
+
+    if total_count > 0 and credited:
         await record_session_day(db, user_id=current_user.id, today=today)
         # Same guard as the streak, for the same reason: a deck whose every
         # card turned out to be unrenderable "finishes" without asking the
@@ -1405,7 +1475,7 @@ async def complete_session(
             "COALESCE(practice_lessons_completed, 0) + 1 WHERE id = $1",
             current_user.id,
         )
-    elif body.total_count > 0:
+    elif total_count > 0:
         # An uncredited session still costs the free tier its list budget for
         # the day. Nothing else here moves: no streak, no tile, no chest.
         #
@@ -1453,8 +1523,8 @@ async def complete_session(
             # not earn one" is not the same explanation as "you already have
             # today's".
             already_claimed=False,
-            correct_count=body.correct_count,
-            total_count=body.total_count,
+            correct_count=correct_count,
+            total_count=total_count,
             streak=streak,
             lessons_completed=lessons,
             unlocked_cosmetics=unlocked,
@@ -1464,8 +1534,8 @@ async def complete_session(
         return CompleteSessionResponse(
             chest=None,
             already_claimed=True,
-            correct_count=body.correct_count,
-            total_count=body.total_count,
+            correct_count=correct_count,
+            total_count=total_count,
             streak=streak,
             lessons_completed=lessons,
             unlocked_cosmetics=unlocked,
@@ -1494,8 +1564,8 @@ async def complete_session(
     return CompleteSessionResponse(
         chest=ChestPayload(**reward.as_dict()),
         already_claimed=False,
-        correct_count=body.correct_count,
-        total_count=body.total_count,
+        correct_count=correct_count,
+        total_count=total_count,
         streak=streak,
         lessons_completed=lessons,
         unlocked_cosmetics=unlocked,

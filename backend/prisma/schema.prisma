@@ -108,6 +108,7 @@ model User {
   hiddenMovies             UserHiddenMovie[]
   movieProgress            UserMovieProgress[]
   streakFreezes            UserStreakFreeze[]
+  practiceSessions         PracticeSession[]
   featureFlags             UserFeatureFlag[]
   achievements             UserAchievement[]
   familyPlanOwned          FamilyPlan?
@@ -1085,6 +1086,41 @@ model UserStreakFreeze {
   // Hot index for "how many freezes does this user have?"
   @@index([userId, consumedAt], map: "ix_user_streak_freezes_held")
   @@map("user_streak_freezes")
+}
+
+/// One row per Practice session, and the thing the streak is derived FROM.
+///
+/// `srs_current_streak` on `users` stays as the hot read, but it used to be
+/// the only record that anything had happened — a scalar with no history
+/// behind it. That left the streak client-reported (the body's `total_count`
+/// was trusted and echoed back unvalidated), unauditable, unrebuildable, and
+/// left the week strip with nothing to draw. Worse, the one date that was kept
+/// is rolled FORWARD by the freeze logic onto days the user did not practise,
+/// so it cannot be read as "a day they practised" either.
+///
+/// `cardsDealt` is written at session start from the deck the server built —
+/// that is the ceiling `session/complete` clamps the reported count against.
+/// `localDate` is the user's own calendar day (utils/dates.local_today),
+/// stamped at completion so a later timezone change cannot move days already
+/// earned.
+model PracticeSession {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  kind         String    @db.VarChar(40)
+  startedAt    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  /// NULL ⇒ dealt but never finished. Kept on purpose: "how often is a deck
+  /// abandoned" is worth being able to ask.
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  cardsDealt   Int       @default(0) @map("cards_dealt")
+  correctCount Int?      @map("correct_count")
+  totalCount   Int?      @map("total_count")
+  localDate    DateTime? @map("local_date") @db.Date
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, localDate], map: "ix_practice_sessions_user_day")
+  @@index([userId, startedAt], map: "ix_practice_sessions_user_started")
+  @@map("practice_sessions")
 }
 
 // ============================================================

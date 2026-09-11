@@ -1272,6 +1272,11 @@ export interface SrsSessionStart {
    *  for any of them). The screen showed "You're all caught up" for both.
    *  Optional — older servers don't send it; see `quiz/emptyDeck.ts`. */
   deck_status?: 'ok' | 'caught_up' | 'unavailable';
+  /** The server's record of this deal. Handed back on completion so the
+   *  server can clamp the reported count to the cards it actually dealt —
+   *  the streak used to be whatever this client claimed. Optional: a server
+   *  that predates it sends nothing and the completion behaves as before. */
+  session_id?: number | null;
 }
 
 export interface SavedWordEntry {
@@ -1497,6 +1502,9 @@ export const srsApi = {
     correctCount: number,
     totalCount: number,
     kind?: SessionKind,
+    /** From `session/start`. Lets the server check the counts below against
+     *  the deck it dealt rather than trusting them. */
+    sessionId?: number | null,
   ): Promise<CompleteSessionResponse> => {
     const res = await authFetch(`${API_BASE_URL}/srs/session/complete`, {
       method: 'POST',
@@ -1504,6 +1512,7 @@ export const srsApi = {
         correct_count: correctCount,
         total_count: totalCount,
         kind,
+        session_id: sessionId ?? undefined,
       }),
     });
     if (!res.ok) {

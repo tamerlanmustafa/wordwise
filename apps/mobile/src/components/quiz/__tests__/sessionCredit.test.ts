@@ -120,9 +120,23 @@ describe('the once-a-day writes are inside the gate', () => {
     // The client's gate is optimistic; the server is the authority, and it
     // cannot be one without being told which deck this was. Installed builds
     // that send nothing are handled there, not here.
-    expect(source).toContain(
-      "completeSession(justCorrect, total, isPracticePath ? 'practice' : kind)",
+    //
+    // Matched loosely across newlines: the call gained a fourth argument and
+    // wrapped, and an assertion that pins one exact line breaks on formatting
+    // while the behaviour it cares about is unchanged.
+    expect(source).toMatch(
+      /completeSession\(\s*justCorrect,\s*total,\s*isPracticePath \? 'practice' : kind,/,
     );
+  });
+
+  it('hands back the id of the deck the server dealt', () => {
+    // The server clamps our reported counts to the cards it actually dealt,
+    // and it can only do that if we say which deal this was. Without it the
+    // streak is whatever this screen claims — which is what it used to be.
+    expect(source).toMatch(/sessionIdRef\.current,\s*\)/);
+    // Captured at deal time, from the response. A re-render between the last
+    // card and the completion call must not lose it, hence a ref.
+    expect(source).toContain('sessionIdRef.current = session.session_id ?? null');
   });
 
   it('does not overwrite the streak from the server on a list deck', () => {
