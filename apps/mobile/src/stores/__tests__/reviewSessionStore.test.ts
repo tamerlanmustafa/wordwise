@@ -19,9 +19,15 @@ const card = (id: number): SrsReviewCard =>
     cefr_level: null,
   } as SrsReviewCard);
 
-const session = (kind: SessionKind, cards: number[], scopeId: number | null = null) => ({
+const session = (
+  kind: SessionKind,
+  cards: number[],
+  scopeId: number | null = null,
+  sessionId: number | null = 77,
+) => ({
   kind,
   scopeId,
+  sessionId,
   remaining: cards.map(card),
   got: 0,
   forgot: 0,
@@ -55,6 +61,59 @@ describe('reviewSessionStore', () => {
       await flush();
       const raw = await AsyncStorage.getItem(KEY);
       expect(JSON.parse(raw!).kind).toBe('list_films');
+    });
+  });
+
+  /**
+   * The deal id has to survive everything the deck survives.
+   *
+   * `/srs/session/complete` uses it to clamp the reported counts, to stamp the
+   * `local_date` the week strip reads, and to make the completion idempotent —
+   * all three are skipped when it arrives null. It used to live only in a ref
+   * inside `ReviewScreen`, so quitting mid-deck and finishing it the next
+   * morning completed with no id: the day drew as a gap in the strip while the
+   * streak counted it, and the tile counter could advance twice on a retry.
+   */
+  describe('the deal id survives a quit and resume', () => {
+    it('round-trips through AsyncStorage', async () => {
+      useReviewSessionStore.getState().start(session('practice', [1, 2, 3], null, 4321));
+      await flush();
+
+      // A cold start: nothing in memory, everything from disk.
+      useReviewSessionStore.setState({ cached: null, hydrated: false });
+      await useReviewSessionStore.getState().hydrate();
+
+      expect(useReviewSessionStore.getState().resumable('practice')!.sessionId).toBe(4321);
+    });
+
+    it('is still there after the cards are answered down', () => {
+      // `consume` and `skip` rebuild the cached object. The id is carried by
+      // the spread, and the completion call happens on the LAST card — i.e.
+      // after every one of those rebuilds.
+      useReviewSessionStore.getState().start(session('practice', [1, 2, 3], null, 99));
+      useReviewSessionStore.getState().consume(true);
+      useReviewSessionStore.getState().skip();
+      expect(useReviewSessionStore.getState().cached!.sessionId).toBe(99);
+    });
+
+    it('reads null for a deck cached before the field existed', async () => {
+      // Forward compatibility in the other direction: an install that cached a
+      // deck on the previous build must still resume it. The completion falls
+      // back to the old unclamped path for that one deck rather than throwing
+      // away cards the user already paid for.
+      await AsyncStorage.setItem(KEY, JSON.stringify({
+        kind: 'practice',
+        scopeId: null,
+        remaining: [card(1)],
+        got: 0,
+        forgot: 0,
+        totalCards: 1,
+        savedAt: clock,
+      }));
+      await useReviewSessionStore.getState().hydrate();
+      const c = useReviewSessionStore.getState().resumable('practice');
+      expect(c).not.toBeNull();
+      expect(c!.sessionId).toBeNull();
     });
   });
 

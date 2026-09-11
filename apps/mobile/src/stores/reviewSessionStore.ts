@@ -35,6 +35,23 @@ interface CachedSession {
   /** The list this deck came from, for the two Lists-tab kinds. Null for
    *  `practice`, which has exactly one deck. */
   scopeId: number | null;
+  /**
+   * The server's `practice_sessions` row for this deal, from
+   * `/srs/session/start`.
+   *
+   * It has to be cached with the deck, not held in a ref, because the ref
+   * dies with the process: a deck quit and resumed the next morning used to
+   * complete with no id at all. That is not a cosmetic loss — the id is what
+   * clamps the reported counts, what stamps `local_date` so the week strip
+   * can draw the day as practised, and what makes the completion idempotent.
+   * Without it the strip drew a gap on a day the streak counted, which is the
+   * precise contradiction the strip exists to rule out.
+   *
+   * Null for a deck cached before this field existed (those resume on the old
+   * fallback and self-heal within 24h) and for an empty deal, which the
+   * server does not record.
+   */
+  sessionId: number | null;
   /** Cards not yet answered. First entry is the next card to show. */
   remaining: SrsReviewCard[];
   /** Cumulative running totals across the WHOLE session (resumed +
@@ -95,6 +112,10 @@ async function readPersisted(): Promise<CachedSession | null> {
     return {
       kind: parsed.kind as SessionKind,
       scopeId: typeof parsed.scopeId === 'number' ? parsed.scopeId : null,
+      // Absent on decks cached before the field existed. Null rather than a
+      // rejection: the deck itself is still perfectly resumable, and dropping
+      // it would cost the user their cards to fix a bookkeeping gap.
+      sessionId: typeof parsed.sessionId === 'number' ? parsed.sessionId : null,
       remaining: parsed.remaining as SrsReviewCard[],
       got: typeof parsed.got === 'number' ? parsed.got : 0,
       forgot: typeof parsed.forgot === 'number' ? parsed.forgot : 0,

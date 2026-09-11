@@ -111,6 +111,7 @@ describe('user stories (cross-store integration)', () => {
     useReviewSessionStore.getState().start({
       kind: 'practice',
       scopeId: null,
+      sessionId: 501,
       remaining: [card(1), card(2)],
       got: 0,
       forgot: 0,
@@ -143,6 +144,7 @@ describe('user stories (cross-store integration)', () => {
     useReviewSessionStore.getState().start({
       kind: 'practice',
       scopeId: null,
+      sessionId: 502,
       remaining: [card(1)],
       got: 1,
       forgot: 0,
@@ -157,6 +159,7 @@ describe('user stories (cross-store integration)', () => {
     useReviewSessionStore.getState().start({
       kind: 'list_words',
       scopeId: 777,
+      sessionId: 503,
       remaining: [card(1), card(2), card(3)],
       got: 0,
       forgot: 0,
@@ -373,6 +376,7 @@ describe('user stories (cross-store integration)', () => {
     useReviewSessionStore.getState().start({
       kind: 'practice',
       scopeId: null,
+      sessionId: session.session_id ?? null,
       remaining: session.cards,
       got: 0,
       forgot: 0,

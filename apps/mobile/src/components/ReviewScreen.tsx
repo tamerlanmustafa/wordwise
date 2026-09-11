@@ -159,9 +159,10 @@ export function ReviewScreen({
    */
   const initialSessionSpent = useRef(false);
   /** The server's `practice_sessions` row for the deck on screen, from
-   *  `session/start`. Null for a resumed deck dealt by an older server, and
-   *  for a session adopted from `initialSession` — the completion then falls
-   *  back to trusting the counts, exactly as it always did. */
+   *  `session/start` — or from the cache, for a deck resumed after the app was
+   *  quit. Null only for a deck dealt by an older server or cached before the
+   *  store carried the id; the completion then falls back to trusting the
+   *  counts, exactly as it always did. */
   const sessionIdRef = useRef<number | null>(null);
 
   const loadSession = useCallback(async () => {
@@ -185,6 +186,11 @@ export function ReviewScreen({
     const resumable = useReviewSessionStore.getState().resumable(resolvedKind, scopeId);
     if (resumable) {
       setCards(resumable.remaining);
+      // The deal this deck came from, recovered with it. A resumed deck is
+      // still the SAME deal on the server — finishing it must clamp, stamp and
+      // claim against that row, or the day the user just practised draws as a
+      // gap in the week strip while the streak counts it.
+      sessionIdRef.current = resumable.sessionId ?? null;
       setIsPreview(false);
       setPreviewsRemaining(null);
       setStats({ got: resumable.got, forgot: resumable.forgot });
@@ -231,6 +237,10 @@ export function ReviewScreen({
         useReviewSessionStore.getState().start({
           kind: resolvedKind,
           scopeId: scopeId ?? null,
+          // Cached WITH the deck: the ref above dies with the process, and a
+          // deck resumed tomorrow morning has to complete against the same
+          // deal row it was dealt from.
+          sessionId: sessionIdRef.current,
           remaining: session.cards,
           got: 0,
           forgot: 0,
