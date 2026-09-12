@@ -71,9 +71,9 @@
   "deleteAccountFooter": "Remove permanentemente a sua conta e tudo o que foi guardado nela. Isto não pode ser desfeito.",
   "notificationsFooter": "O app decide quando lembrar você; as configurações de notificação do seu aparelho sempre prevalecem.",
   "dailyReminder": "Lembrete diário",
-  "dailyReminderDesc": "Um aviso se você não praticou. Ele para sozinho após alguns dias sem resposta.",
+  "dailyReminderDesc": "Um aviso diário no horário que você escolher, até você desativar.",
   "reminderTime": "Lembrar às",
-  "reminderTitle": "Mantenha sua sequência",
-  "reminderBody": "Você não praticou hoje — uma lição mantém tudo de pé.",
+  "reminderTitle": "Hora da lição de hoje",
+  "reminderBody": "Alguns minutos mantêm sua sequência viva.",
   "reminderDenied": "As notificações estão desativadas para o WordWise nos ajustes do aparelho."
 }

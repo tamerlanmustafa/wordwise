@@ -1,6 +1,11 @@
 /**
  * The one notification, and the rule that killed the last one.
  *
+ * It is a REPEATING daily trigger: the OS fires it at the chosen time every day
+ * until the user switches it off. That means there is no series to schedule and
+ * no date arithmetic to get wrong — the parts of this that can still break are
+ * the preference and the copy, and the preference is the one with a history.
+ *
  * A review reminder shipped here before and was deleted rather than repaired.
  * It was not broken in an interesting way: `App.tsx` scheduled it on every
  * launch *without consulting the stored preference*, so switching it off
@@ -12,30 +17,26 @@
  * asking. `reschedule` reads `enabled` itself, and callers pass copy, not
  * intent. Two of the tests below exist only to pin that.
  *
- * The date arithmetic gets the same treatment for the opposite reason: it is
- * invisible. A reminder scheduled for a time that has already passed never
- * fires and reports no error, so "today's slot has gone by" and "the month
- * rolled over" are bugs you would only find by waiting a day.
+ * What is NOT tested here, deliberately: that the notification actually fires.
+ * The OS owns the trigger once it is handed over, so the only honest check is
+ * on a device with the clock rolled forward. These cover the decision to hand
+ * it over at all, which is the part that has gone wrong before.
  */
 
-import { reminderDates, REMINDER_DAYS } from '../../services/notifications';
 import {
   DEFAULT_HOUR,
   REMINDER_HOURS,
   useReminderStore,
 } from '../reminderStore';
 
-jest.mock('../../services/notifications', () => {
-  const actual = jest.requireActual('../../services/notifications');
-  return {
-    ...actual,
-    schedulePracticeReminders: jest.fn(async () => actual.REMINDER_DAYS),
-    cancelPracticeReminders: jest.fn(async () => undefined),
-  };
-});
+jest.mock('../../services/notifications', () => ({
+  schedulePracticeReminders: jest.fn(async () => true),
+  cancelPracticeReminders: jest.fn(async () => undefined),
+  requestNotificationPermission: jest.fn(async () => true),
+}));
 
 const notifications = jest.requireMock('../../services/notifications');
-const copy = { title: 'Keep your streak', body: 'One lesson keeps it going.' };
+const copy = { title: "Time for today's lesson", body: 'A couple of minutes keeps it going.' };
 
 const reset = (over: Partial<{ enabled: boolean; hour: number; hydrated: boolean }> = {}) =>
   useReminderStore.setState({
@@ -45,56 +46,6 @@ const reset = (over: Partial<{ enabled: boolean; hour: number; hydrated: boolean
     hydrated: true,
     ...over,
   });
-
-describe('reminderDates', () => {
-  it('starts today when the slot is still ahead', () => {
-    const now = new Date(2026, 8, 12, 9, 0);     // 09:00, reminder at 20:00
-    const [first] = reminderDates(20, 0, now);
-    expect(first.getDate()).toBe(12);
-    expect(first.getHours()).toBe(20);
-    expect(first.getMinutes()).toBe(0);
-  });
-
-  it('starts tomorrow when the slot has already passed', () => {
-    // The invisible bug: a date in the past is accepted by the scheduler and
-    // simply never fires. The user loses their first night and nothing says so.
-    const now = new Date(2026, 8, 12, 21, 30);   // 21:30, reminder at 20:00
-    const [first] = reminderDates(20, 0, now);
-    expect(first.getDate()).toBe(13);
-  });
-
-  it('treats the exact minute as passed', () => {
-    // 20:00:00 on the dot is not "ahead"; scheduling it races the clock.
-    const now = new Date(2026, 8, 12, 20, 0, 0, 0);
-    expect(reminderDates(20, 0, now)[0].getDate()).toBe(13);
-  });
-
-  it('returns consecutive days', () => {
-    const now = new Date(2026, 8, 12, 9, 0);
-    const days = reminderDates(20, 0, now).map((d) => d.getDate());
-    expect(days).toEqual([12, 13, 14]);
-  });
-
-  it('rolls over a month boundary', () => {
-    const now = new Date(2026, 8, 29, 9, 0);     // 29 Sept, 30 days in Sept
-    const d = reminderDates(20, 0, now);
-    expect(d.map((x) => [x.getMonth(), x.getDate()])).toEqual([[8, 29], [8, 30], [9, 1]]);
-  });
-
-  it('rolls over a year boundary', () => {
-    const now = new Date(2026, 11, 30, 9, 0);    // 30 Dec
-    const d = reminderDates(20, 0, now);
-    expect(d.map((x) => x.getFullYear())).toEqual([2026, 2026, 2027]);
-  });
-
-  it('arms a finite series, so it runs out on its own', () => {
-    // The whole anti-nagging design. Nothing re-arms for a user who stopped
-    // opening the app, so the reminders stop after this many days without
-    // anyone having to find a setting.
-    expect(reminderDates(20, 0, new Date())).toHaveLength(REMINDER_DAYS);
-    expect(REMINDER_DAYS).toBeLessThanOrEqual(3);
-  });
-});
 
 describe('the preference decides, not the caller', () => {
   beforeEach(() => {

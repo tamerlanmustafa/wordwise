@@ -106,88 +106,62 @@ export async function cancelAllReminders(): Promise<void> {
 // ## Why local, and not a server push
 //
 // A server push needs token storage, a scheduler that respects every user's
-// timezone, and a sender to maintain. A local notification needs none of that,
-// works with no connectivity, and for this particular message is not a
-// compromise: "you have not practised today" is a fact the phone already knows.
+// timezone, and a sender to maintain. A local notification needs none of that
+// and works with no connectivity. A repeating one also keeps working when the
+// app is never opened again, which a server-driven reminder only manages if
+// the server is still running and the token is still valid.
 //
-// ## Why several one-off triggers instead of one repeating daily trigger
+// ## One repeating trigger, by decision
 //
-// A `DAILY` trigger fires every day forever, including the days the user already
-// practised and the months after they stopped. That is the reminder everyone
-// mutes. Instead this schedules the next `REMINDER_DAYS` days as individual
-// dated triggers, and every re-arm cancels the old set first — so:
+// This first shipped as three dated one-off triggers that ran out on their own,
+// so an app nobody opened eventually stopped asking. That was changed to a
+// repeating DAILY trigger on request: it fires every day at the chosen time and
+// keeps firing until the user switches it off, which is what the setting says
+// it does and what a daily-habit app is expected to do.
 //
-//   * someone who practises re-arms on completion and only ever has future
-//     days pending; the one for today is gone before it can fire;
-//   * someone who stops gets REMINDER_DAYS nudges on consecutive days and then
-//     silence, because nothing re-armed the set.
-//
-// That second property is the point. The app stops asking on its own, without
-// needing a server to notice, and without the user having to find a setting to
-// make it stop.
+// The consequence, recorded rather than hidden: the OS owns this trigger and
+// will deliver it whether or not the user practised that day — a local trigger
+// cannot consult app state at fire time. That is why the copy is written to be
+// true on any day ("time for today's lesson"), not as an accusation ("you
+// haven't practised"). Getting that wrong would mean telling a user who
+// finished at breakfast that they have not started.
 
-/** Identifier prefix, so the set can be cancelled without touching anything
- *  else the OS is holding for this app. */
-const REMINDER_ID = 'practice-reminder';
+/** Identifier for the repeating trigger, so it can be replaced rather than
+ *  stacked. Scheduling twice under one id updates it; scheduling under two ids
+ *  is how an app ends up notifying you twice every evening. */
+const REMINDER_ID = 'practice-reminder-daily';
 
-/** How many consecutive days to arm. Three is "we noticed, twice", not a
- *  campaign — a fourth unanswered notification is how an app gets muted. */
-export const REMINDER_DAYS = 3;
-
-/** Cancel every pending reminder in the set. Safe when none exist. */
+/** Cancel the reminder. Safe when none is scheduled. */
 export async function cancelPracticeReminders(): Promise<void> {
   if (!Notifications) return;
-  for (let i = 0; i < REMINDER_DAYS; i += 1) {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(REMINDER_ID);
+  } catch {}
+  // The previous implementation left up to three dated triggers in the OS, and
+  // those outlive the code that made them — the same trap `cancelWordReminder`
+  // above exists for. Clear them too, or an install that had the reminder on
+  // before this change gets both the old series and the new repeat. Cheap, and
+  // a no-op once no install predates it.
+  for (let i = 0; i < 3; i += 1) {
     try {
-      await Notifications.cancelScheduledNotificationAsync(`${REMINDER_ID}-${i}`);
+      await Notifications.cancelScheduledNotificationAsync(`practice-reminder-${i}`);
     } catch {}
   }
 }
 
 /**
- * The next `REMINDER_DAYS` occurrences of `hour:minute`, starting from the
- * first one still in the future.
+ * Arm the repeating reminder. Cancels first, so this is the only call a caller
+ * needs and calling it twice is harmless.
  *
- * Exported and pure so the date arithmetic can be tested — the parts that go
- * wrong here (today's slot has already passed; a month or year boundary) are
- * invisible in a UI and obvious in a test.
- */
-export function reminderDates(
-  hour: number,
-  minute: number,
-  from: Date = new Date(),
-  days: number = REMINDER_DAYS,
-): Date[] {
-  const out: Date[] = [];
-  const first = new Date(from);
-  first.setHours(hour, minute, 0, 0);
-  // Today's slot has already gone by, so the series starts tomorrow. Scheduling
-  // a past date is not an error the OS reports — it simply never fires, which
-  // would silently cost the user their first night.
-  if (first.getTime() <= from.getTime()) first.setDate(first.getDate() + 1);
-  for (let i = 0; i < days; i += 1) {
-    const d = new Date(first);
-    // `setDate` past the end of the month rolls the month (and the year) for
-    // us; building the date from a day-count would not.
-    d.setDate(first.getDate() + i);
-    out.push(d);
-  }
-  return out;
-}
-
-/**
- * Re-arm the reminder set. Cancels first, so this is the only call a caller
- * ever needs and calling it twice is harmless.
- *
- * Returns how many were scheduled: 0 means the user has not granted
- * permission, or the native module is unavailable (Expo Go, simulator).
+ * Returns true when it is scheduled; false means permission is not granted, or
+ * the native module is unavailable (Expo Go, simulator without a dev client).
  */
 export async function schedulePracticeReminders(
   hour: number,
   minute: number,
   body: { title: string; body: string },
-): Promise<number> {
-  if (!Notifications) return 0;
+): Promise<boolean> {
+  if (!Notifications) return false;
   await cancelPracticeReminders();
 
   try {
@@ -196,29 +170,25 @@ export async function schedulePracticeReminders(
     // after finishing a lesson; a permission sheet at either moment is an
     // interruption the user did not ask for. The toggle asks — see the
     // settings screen.
-    if (status !== 'granted') return 0;
+    if (status !== 'granted') return false;
   } catch {
-    return 0;
+    return false;
   }
 
-  const dates = reminderDates(hour, minute);
-  let scheduled = 0;
-  for (let i = 0; i < dates.length; i += 1) {
-    try {
-      await Notifications.scheduleNotificationAsync({
-        identifier: `${REMINDER_ID}-${i}`,
-        content: { title: body.title, body: body.body },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: dates[i],
-        },
-      });
-      scheduled += 1;
-    } catch {
-      // One failure should not lose the rest of the series.
-    }
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: REMINDER_ID,
+      content: { title: body.title, body: body.body },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
+      },
+    });
+    return true;
+  } catch {
+    return false;
   }
-  return scheduled;
 }
 
 /** Ask for permission, for the one place that should: the toggle itself. */

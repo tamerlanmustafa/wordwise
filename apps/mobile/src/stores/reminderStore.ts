@@ -8,9 +8,8 @@
  *
  * ## Why the store re-arms rather than the screens
  *
- * Three unrelated moments have to re-arm the set: app launch, finishing a
- * lesson, and changing the setting. Wiring `expo-notifications` into all three
- * is how the *last* reminder feature broke — `App.tsx` scheduled on every
+ * Two moments have to re-arm it: app launch, and changing the setting. Wiring
+ * `expo-notifications` into both is how the *last* reminder feature broke — `App.tsx` scheduled on every
  * launch without consulting the stored preference, so switching it off lasted
  * until the next cold start, and the toggle was eventually deleted rather than
  * fixed. One entry point, which reads the preference itself, cannot drift from
@@ -60,8 +59,9 @@ interface ReminderState {
    * Re-arm from the stored preference. Safe to call at any time and as often
    * as you like — it cancels before it schedules.
    *
-   * Call it on launch, and after a completed session so the reminder that
-   * would have fired tonight is replaced by tomorrow's.
+   * Called on launch and when the setting changes, and that is the whole list.
+   * The trigger repeats on its own, so there is nothing to re-arm after a
+   * lesson: the OS fires it again tomorrow whatever the app does.
    */
   reschedule: (copy: ReminderCopy) => Promise<void>;
 }

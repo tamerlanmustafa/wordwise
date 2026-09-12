@@ -71,9 +71,9 @@
   "deleteAccountFooter": "Hesabını ve kayıtlı her şeyi kalıcı olarak siler. Bu işlem geri alınamaz.",
   "notificationsFooter": "Uygulama seni ne zaman hatırlatacağına karar verir; cihazının bildirim ayarları her zaman önceliklidir.",
   "dailyReminder": "Günlük hatırlatma",
-  "dailyReminderDesc": "Çalışmadıysan tek bir hatırlatma. Birkaç gün yanıtsız kalırsa kendiliğinden durur.",
+  "dailyReminderDesc": "Seçtiğin saatte günlük bir hatırlatma; kapatana kadar sürer.",
   "reminderTime": "Şu saatte hatırlat",
-  "reminderTitle": "Serini koru",
-  "reminderBody": "Bugün çalışmadın — bir ders serini sürdürür.",
+  "reminderTitle": "Bugünün dersi zamanı",
+  "reminderBody": "Birkaç dakika serini sürdürmeye yeter.",
   "reminderDenied": "WordWise için bildirimler cihaz ayarlarında kapalı."
 }

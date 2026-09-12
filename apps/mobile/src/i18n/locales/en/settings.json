@@ -71,9 +71,9 @@
   "deleteAccountFooter": "Permanently removes your account and everything saved to it. This cannot be undone.",
   "notificationsFooter": "The app decides when to remind you; your device’s own notification settings always win.",
   "dailyReminder": "Daily reminder",
-  "dailyReminderDesc": "One nudge if you haven't practised. It stops on its own after a few unanswered days.",
+  "dailyReminderDesc": "A daily nudge at the time you choose, until you turn it off.",
   "reminderTime": "Remind me at",
-  "reminderTitle": "Keep your streak",
-  "reminderBody": "You haven't practised today — one lesson keeps it going.",
+  "reminderTitle": "Time for today's lesson",
+  "reminderBody": "A couple of minutes keeps your streak going.",
   "reminderDenied": "Notifications are off for WordWise in your device settings."
 }
