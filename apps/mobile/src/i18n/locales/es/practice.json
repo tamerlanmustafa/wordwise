@@ -27,6 +27,10 @@
     "atCap": "Las dos ranuras ya están activadas.",
     "noneLeft": "No te quedan congelaciones para activar.",
     "openA11y": "Congelaciones de racha",
-    "closeA11y": "Cerrar"
+    "closeA11y": "Cerrar",
+    "lockedA11y": "Segunda ranura — solo Plus",
+    "upsell": "Plus cubre dos días seguidos",
+    "autoArmed_one": "{{count}} congelación activada y lista",
+    "autoArmed_other": "{{count}} congelaciones activadas y listas"
   }
 }

@@ -262,7 +262,7 @@ class TestSessionCompletionIncrements:
             def as_dict(self):
                 return {"kind": "xp_small", "label": "XP", "payload": {"xp": 10}}
 
-        async def _award(db, *, user_id):
+        async def _award(db, *, user_id, max_held=None):
             return _Reward()
 
         monkeypatch.setattr("src.routes.srs.award_session_chest", _award)

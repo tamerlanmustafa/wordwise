@@ -27,6 +27,10 @@
     "atCap": "As duas vagas já estão ativadas.",
     "noneLeft": "Não há congelamentos para ativar.",
     "openA11y": "Congelamentos de sequência",
-    "closeA11y": "Fechar"
+    "closeA11y": "Fechar",
+    "lockedA11y": "Segunda vaga — só no Plus",
+    "upsell": "O Plus cobre dois dias seguidos",
+    "autoArmed_one": "{{count}} congelamento ativado e pronto",
+    "autoArmed_other": "{{count}} congelamentos ativados e prontos"
   }
 }

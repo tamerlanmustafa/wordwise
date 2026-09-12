@@ -63,6 +63,13 @@ model User {
   // UTC date of the last chest claim. Used to enforce one chest per
   // completed daily session — see /srs/session/complete.
   srsLastChestDate         DateTime?                @map("srs_last_chest_date") @db.Date
+  // When the ONE-TIME auto-arm of pre-existing freezes ran. Arming shipped as
+  // a user decision and left every existing freeze unarmed on purpose, but the
+  // consume path now spends only armed ones — so every freeze already in the
+  // wild became inert. The app arms them once, up to the tier cap, on the next
+  // Practice visit. This marker is what makes it once: "has never armed
+  // anything" would re-arm a user who deliberately stood theirs down.
+  freezeAutoarmAt          DateTime?                @map("freeze_autoarm_at") @db.Timestamptz
   // v0.6 cinema-named streak milestones (W10). JSON array of unlocked
   // keys: "opening_weekend" (7d), "box_office" (30d), "cult_classic"
   // (100d), "criterion_collection" (365d). Frontend diffs against a

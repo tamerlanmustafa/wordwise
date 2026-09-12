@@ -8,9 +8,16 @@ Two layers:
   • Async DB-touching wrappers: read the user's freeze inventory, apply
     the decisions, and update `users` + `user_streak_freezes` atomically.
 
-Free users: 1 freeze auto-granted on the first /daily/state read each
-ISO week (Sunday rollover, UTC), capped at MAX_FREEZES_HELD held. Premium
-users get the same baseline plus a higher cadence in a future iteration.
+Accrual is the same for everyone: one freeze per ISO week, earned by
+COMPLETING a session (not by opening the app), plus a 20% chest roll once a
+day. Deliberately not tiered — the grant rewards the habit, and slowing it for
+free users would punish the exact behaviour the feature exists to encourage.
+
+What is tiered is what you can do with them: free arms one at a time and banks
+two, Plus arms two and banks five (`max_equipped_for` / `max_held_for`). Since
+consumption is all-or-nothing and only ARMED freezes are ever spent, the armed
+count is the whole promise — one covers a one-day absence, two covers two
+consecutive days.
 """
 from __future__ import annotations
 
@@ -21,12 +28,17 @@ from typing import Optional
 from prisma import Prisma
 
 from ..utils.dates import as_date, local_today, utc_midnight
+from ..utils.subscription import is_premium
 
 logger = logging.getLogger(__name__)
 
-# Cap on simultaneously-held freezes. Goes well past the "one freeze per
-# week" baseline to allow IAP top-ups, but small enough that we don't
-# accumulate a hoard that defeats the mercy intent.
+# Ceiling on simultaneously-held freezes, ACROSS ALL TIERS. Goes well past the
+# "one freeze per week" baseline to allow IAP top-ups, but small enough that we
+# don't accumulate a hoard that defeats the mercy intent.
+#
+# The per-tier caps are `max_held_for` / `max_equipped_for` below; these two
+# constants remain the widest any account can go, which is what the chest's
+# reroll and the pure helpers' defaults are written against.
 MAX_FREEZES_HELD: int = 5
 
 # Cap on how many freezes may be ARMED at once.
@@ -44,8 +56,51 @@ MAX_FREEZES_HELD: int = 5
 # else (a manual repair of an already-broken streak, say), which is a separate
 # feature rather than a constant.
 #
-# Two, matching the shape this model was taken from.
+# Two, matching the shape this model was taken from. This is the PREMIUM cap
+# and the ceiling across all tiers; free accounts get `FREE_MAX_EQUIPPED`.
 MAX_EQUIPPED_FREEZES: int = 2
+
+
+# ── Per-tier caps ───────────────────────────────────────────────────────────
+#
+# Exactly one knob differs between the tiers, and it is the armed-slot count,
+# because it is the only one that turns into a sentence a user can hold in
+# their head: free is "covered if you miss a day", Plus is "covered if you miss
+# two in a row".
+#
+# What deliberately does NOT differ: the weekly grant and the chest odds. Those
+# are earned by practising, and slowing accrual for free users would punish the
+# exact behaviour the whole feature exists to encourage. The tier difference
+# lives entirely in what you can DO with what you earned.
+#
+# The hold cap moves with the slot count only to keep the UI honest: letting a
+# free user bank five freezes they can never arm more than one of reads as a
+# broken screen ("why do I have five if only one works?"), not as generosity.
+FREE_MAX_HELD: int = 2
+FREE_MAX_EQUIPPED: int = 1
+
+
+def max_held_for(user: object) -> int:
+    """How many freezes this account may bank.
+
+    **A grant gate, never a confiscation.** A free user who is already holding
+    five — every free user is, since the caps used to be uniform — keeps all
+    five. The cap only stops new ones arriving until they have spent down. Any
+    other reading means taking something a user already earned, on a release
+    they did not ask for.
+    """
+    return MAX_FREEZES_HELD if is_premium(user) else FREE_MAX_HELD
+
+
+def max_equipped_for(user: object) -> int:
+    """How many freezes this account may have standing guard at once.
+
+    Because consumption is all-or-nothing and only armed freezes are ever
+    spent, this number IS the promise: one armed covers a one-day absence, two
+    covers two consecutive days, and a longer gap breaks the streak whatever is
+    in the inventory.
+    """
+    return MAX_EQUIPPED_FREEZES if is_premium(user) else FREE_MAX_EQUIPPED
 
 
 # ── Pure helpers ────────────────────────────────────────────────────────────
@@ -153,8 +208,18 @@ async def count_equipped_freezes(db: Prisma, user_id: int) -> int:
     )
 
 
-async def equip_freeze(db: Prisma, *, user_id: int, now: Optional[datetime] = None) -> bool:
+async def equip_freeze(
+    db: Prisma,
+    *,
+    user_id: int,
+    max_equipped: int = MAX_EQUIPPED_FREEZES,
+    now: Optional[datetime] = None,
+) -> bool:
     """Arm the oldest unarmed freeze. False when nothing to arm, or at the cap.
+
+    `max_equipped` is the caller's tier cap (`max_equipped_for`). It defaults
+    to the widest any account can go, so a caller that forgets it is permissive
+    rather than silently punitive — the failure the user would never report.
 
     Oldest-first for the same reason `consume_freeze` is: freezes are
     fungible, and spending the one that has been sitting longest keeps the
@@ -194,7 +259,7 @@ async def equip_freeze(db: Prisma, *, user_id: int, now: Optional[datetime] = No
         # same user waits here rather than racing the count below.
         await tx.query_raw("SELECT id FROM users WHERE id = $1 FOR UPDATE", user_id)
 
-        if await count_equipped_freezes(tx, user_id) >= MAX_EQUIPPED_FREEZES:
+        if await count_equipped_freezes(tx, user_id) >= max_equipped:
             return False
         spare = await tx.userstreakfreeze.find_first(
             where={"userId": user_id, "consumedAt": None, "equippedAt": None},
@@ -224,6 +289,60 @@ async def unequip_freeze(db: Prisma, *, user_id: int) -> bool:
         where={"id": armed.id}, data={"equippedAt": None}
     )
     return True
+
+
+async def autoarm_freezes_once(db: Prisma, *, user: object) -> int:
+    """Arm a pre-existing inventory, one time only. Returns how many were armed.
+
+    ## The seam this patches
+
+    Two decisions, each right on its own. The migration that added `equipped_at`
+    left every existing freeze UNARMED, because nobody should lose a freeze to a
+    rule they were never shown. The consume path then started spending only
+    ARMED freezes, because the spend is the user's decision. Together they made
+    every freeze already in the wild inert — earned, counted in the header, and
+    incapable of covering anything. No user chose that and no user can see it.
+
+    So the app arms up to the tier cap once, on the next visit, and says so.
+
+    ## Why a stored marker rather than "has never armed anything"
+
+    They are different questions. A user who deliberately stands every freeze
+    down is, by that second test, indistinguishable from a user who has never
+    touched the control — so the app would silently re-arm them on the next
+    launch, overriding the decision this whole feature exists to hand over.
+    `users.freeze_autoarm_at` answers the question that was actually asked.
+
+    Idempotent by the same compare-and-swap shape as the rest of this module:
+    the stamp is claimed in one statement, and only the caller that claims it
+    arms anything. A second device racing the first finds the marker already
+    set and does nothing.
+    """
+    user_id = getattr(user, "id")
+    if getattr(user, "freezeAutoarmAt", None) is not None:
+        return 0
+
+    # Claim the marker BEFORE arming. Losing this race means another request is
+    # already doing the work, and doing nothing is the correct response — the
+    # opposite order would let two callers each arm up to the cap.
+    claimed = await db.execute_raw(
+        "UPDATE users SET freeze_autoarm_at = $2::timestamptz "
+        "WHERE id = $1 AND freeze_autoarm_at IS NULL",
+        user_id,
+        datetime.now(timezone.utc),
+    )
+    if not claimed:
+        return 0
+
+    cap = max_equipped_for(user)
+    armed = 0
+    while armed < cap:
+        if not await equip_freeze(db, user_id=user_id, max_equipped=cap):
+            break
+        armed += 1
+    if armed:
+        logger.info("[streak] auto-armed %s freeze(s) for user=%s", armed, user_id)
+    return armed
 
 
 async def find_last_weekly_grant(db: Prisma, user_id: int) -> Optional[date]:
@@ -450,6 +569,7 @@ async def grant_weekly_if_due(
     *,
     user_id: int,
     today: date,
+    max_held: int = MAX_FREEZES_HELD,
     now: Optional[datetime] = None,
 ) -> bool:
     """Earn the weekly freeze by practising. Called from session completion.
@@ -493,7 +613,7 @@ async def grant_weekly_if_due(
         """,
         user_id,
         when,
-        MAX_FREEZES_HELD,
+        max_held,
     )
     return bool(granted)
 

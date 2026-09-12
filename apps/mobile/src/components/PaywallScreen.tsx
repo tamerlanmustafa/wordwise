@@ -27,7 +27,7 @@ import {
   type PaywallReason,
 } from './paywallPricing';
 import { directionalIcon } from '../i18n/rtl';
-import { BlockIcon, BrainIcon, ChartIcon, FilmIcon } from './ui/icons';
+import { BlockIcon, BrainIcon, ChartIcon, FilmIcon, ShieldIcon } from './ui/icons';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 import { withTap } from '../utils/feedback';
 
@@ -105,6 +105,7 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
               <View style={s.featureIcon}>
                 {f.icon === 'brain' ? <BrainIcon size={22} color={tc.gold} />
                   : f.icon === 'film' ? <FilmIcon size={22} color={tc.gold} />
+                  : f.icon === 'shield' ? <ShieldIcon size={22} animate={false} />
                   : f.icon === 'block' ? <BlockIcon size={22} color={tc.gold} />
                   : <ChartIcon size={22} color={tc.gold} />}
               </View>

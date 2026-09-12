@@ -1396,6 +1396,10 @@ interface CompleteSessionResponse {
 export interface FreezeState {
   freezes_held: number;
   freezes_equipped: number;
+  /** Echoed on every mutation, not just on /daily/state: a subscription
+   *  starting is exactly the moment someone opens this sheet. */
+  max_freezes_equipped?: number;
+  max_freezes_held?: number;
   /** False when there was nothing to arm (or nothing armed to disarm). Not an
    *  error — the honest answer to tapping equip with an empty inventory. */
   changed: boolean;
@@ -1432,6 +1436,18 @@ export interface DailyState {
   /** The user's current Monday–Sunday. Optional: a server that predates the
    *  strip sends nothing, and the panel renders an empty week. */
   week?: WeekDay[];
+  /** This account's caps. Tier-dependent — free arms one and banks two, Plus
+   *  arms two and banks five — so the client must never hardcode them: a phone
+   *  drawing two slots for a one-slot account offers a control the server
+   *  refuses every time it is tapped. Optional for a server that predates the
+   *  fields; the client falls back to the FREE values, understating rather
+   *  than overstating what is available. */
+  max_freezes_equipped?: number;
+  max_freezes_held?: number;
+  /** Freezes armed by the one-time backfill on this request — non-zero exactly
+   *  once per account, ever. Toasted, because a freeze that silently went
+   *  inert and silently came back is two invisible events. */
+  auto_armed?: number;
 }
 
 interface CreditedFreezesResponse {

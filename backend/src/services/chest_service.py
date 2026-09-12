@@ -69,6 +69,7 @@ class ChestReward:
 def pick_chest_reward(
     *,
     freezes_held: int,
+    max_held: int = MAX_FREEZES_HELD,
     rng: Optional[random.Random] = None,
 ) -> ChestReward:
     """Pick one chest reward.
@@ -77,6 +78,13 @@ def pick_chest_reward(
     (avoids a wasted reveal). When the would-be-freeze is rerolled we
     fall through to xp_small — a small consolation rather than a
     re-roll into another premium type.
+
+    `max_held` is the caller's tier cap (`streak_service.max_held_for`). The
+    ODDS are deliberately identical across tiers — a free user rolls the same
+    20% — because the chest rewards the daily habit and tiering the habit is
+    the one thing this design does not do. What differs is only how many the
+    account can bank, which is why this shows up here as a reroll threshold and
+    nowhere else.
     """
     r = rng or random.Random()
     total = sum(w for w, _ in CHEST_WEIGHTS)
@@ -89,7 +97,7 @@ def pick_chest_reward(
             chosen = kind
             break
 
-    if chosen == "freeze" and freezes_held >= MAX_FREEZES_HELD:
+    if chosen == "freeze" and freezes_held >= max_held:
         chosen = "xp_small"
 
     if chosen == "xp_small":
@@ -167,12 +175,17 @@ async def award_session_chest(
     db: Prisma,
     *,
     user_id: int,
+    max_held: int = MAX_FREEZES_HELD,
     rng: Optional[random.Random] = None,
 ) -> ChestReward:
     """End-to-end entry point used by /srs/session/complete: pick a
     reward (informed by current freeze inventory), apply it, return it
-    so the client can animate the reveal."""
+    so the client can animate the reveal.
+
+    `max_held` defaults to the widest any tier allows, so a caller that forgets
+    to pass it is permissive rather than silently stingy — a user quietly
+    denied a reward they earned is a bug nobody ever reports."""
     held = await count_held_freezes(db, user_id)
-    reward = pick_chest_reward(freezes_held=held, rng=rng)
+    reward = pick_chest_reward(freezes_held=held, max_held=max_held, rng=rng)
     await apply_chest_reward(db, user_id=user_id, reward=reward)
     return reward

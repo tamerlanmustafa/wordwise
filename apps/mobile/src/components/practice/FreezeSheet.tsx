@@ -40,6 +40,7 @@ import {
   Animated,
   StyleSheet,
   Text,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
   type LayoutChangeEvent,
@@ -48,12 +49,12 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { PressablePill } from '../ui/PressablePill';
-import { ShieldIcon } from '../ui/icons';
+import { LockIcon, ShieldIcon } from '../ui/icons';
 import { withTap } from '../../utils/feedback';
 import { alignEnd } from '../../i18n/rtl';
 import { showToast } from '../../stores/toastStore';
 import { dailyApi, type FreezeState } from '../../services/api';
-import { ARMED_SLOTS, canArm, canDisarm, reserveCount } from './freezeArming';
+import { armedSlots, canArm, canDisarm, lockedSlots, reserveCount } from './freezeArming';
 
 interface Props {
   visible: boolean;
@@ -62,6 +63,12 @@ interface Props {
   held: number;
   /** Of those, how many are standing guard. */
   equipped: number;
+  /** This account's armed-slot cap, from `/daily/state`. Undefined until the
+   *  server answers; the helpers fall back to the free tier's one slot. */
+  maxEquipped?: number;
+  /** Tapped on the locked slot. Undefined for an account that has no locked
+   *  slot, which is how the sheet knows not to make it pressable. */
+  onUpsell?: () => void;
   /** Settled counts from the server, for the caller to fold into its own
    *  copy of `/daily/state`. */
   onChange: (next: FreezeState) => void;
@@ -74,7 +81,9 @@ export function FreezeSheet({
   onClose,
   held,
   equipped,
+  maxEquipped,
   onChange,
+  onUpsell,
   bottomOffset,
 }: Props) {
   const { t } = useTranslation();
@@ -139,9 +148,12 @@ export function FreezeSheet({
     [busy, onChange, t],
   );
 
-  const armable = !busy && canArm({ held, equipped });
-  const disarmable = !busy && canDisarm({ held, equipped });
-  const reserve = reserveCount({ held, equipped });
+  const counts = { held, equipped, maxEquipped };
+  const armable = !busy && canArm(counts);
+  const disarmable = !busy && canDisarm(counts);
+  const reserve = reserveCount(counts);
+  const slots = armedSlots(counts);
+  const locked = lockedSlots(counts);
 
   return (
     <View
@@ -175,7 +187,7 @@ export function FreezeSheet({
             dashed outline, so "you could put one here" is legible without
             reading the buttons. */}
         <View style={s.slots}>
-          {Array.from({ length: ARMED_SLOTS }, (_, i) => {
+          {Array.from({ length: slots }, (_, i) => {
             const armed = i < equipped;
             return (
               <View key={i} style={[s.slot, armed ? s.slotArmed : s.slotEmpty]}>
@@ -183,10 +195,32 @@ export function FreezeSheet({
               </View>
             );
           })}
+
+          {/* The slot this account does not have.
+              Drawn rather than hidden, because the upsell only lands if the
+              user can see the shape of what they are missing — and this is the
+              one moment they are already thinking about protecting a streak,
+              which is what makes it welcome here and an interruption anywhere
+              else. It is a padlock, not a second shield: a greyed shield would
+              read as a freeze the app had taken away. */}
+          {Array.from({ length: locked }, (_, i) => (
+            <TouchableOpacity
+              key={`locked-${i}`}
+              style={[s.slot, s.slotLocked]}
+              onPress={onUpsell ? withTap(onUpsell) : undefined}
+              disabled={!onUpsell}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel={t('practice:freezeSheet.lockedA11y')}
+            >
+              <LockIcon size={18} color={tc.textFaint} />
+            </TouchableOpacity>
+          ))}
+
           <View style={s.slotsSpacer} />
           <View>
             <Text style={s.armedCount}>
-              {equipped}/{ARMED_SLOTS}
+              {equipped}/{slots}
             </Text>
             <Text style={s.armedLabel}>{t('practice:freezeSheet.armed')}</Text>
           </View>
@@ -195,6 +229,21 @@ export function FreezeSheet({
         <Text style={s.body}>
           {held === 0 ? t('practice:freezeSheet.empty') : t('practice:freezeSheet.body')}
         </Text>
+
+        {/* One line, only for an account that has a locked slot. Says what the
+            upgrade buys in the unit the sheet is already using — days covered,
+            not a feature name. */}
+        {locked > 0 ? (
+          <TouchableOpacity
+            onPress={onUpsell ? withTap(onUpsell) : undefined}
+            disabled={!onUpsell}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel={t('practice:freezeSheet.upsell')}
+          >
+            <Text style={s.upsell}>{t('practice:freezeSheet.upsell')}</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={s.actions}>
           <PressablePill
@@ -300,6 +349,13 @@ const makeStyles = (tc: ThemeColors) =>
       borderStyle: 'dashed',
       borderColor: tc.divider,
     },
+    // Solid and flat, deliberately unlike `slotEmpty`: a dashed border says
+    // "put one here", which is the opposite of what this slot means.
+    slotLocked: {
+      backgroundColor: tc.wordBoxBg,
+      borderWidth: 1,
+      borderColor: tc.border,
+    },
     slotsSpacer: { flex: 1 },
     armedCount: {
       fontFamily: MONO_FAMILY,
@@ -321,6 +377,13 @@ const makeStyles = (tc: ThemeColors) =>
       lineHeight: 19,
       color: tc.textSecondary,
       paddingTop: 14,
+      paddingBottom: 16,
+    },
+
+    upsell: {
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: tc.goldOnSurface,
       paddingBottom: 16,
     },
 

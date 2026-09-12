@@ -60,12 +60,19 @@ export interface PracticeScreenProps {
   /** Height the floating bottom bar reserves, so the tile path can scroll
    *  clear of it instead of ending underneath the glass. */
   bottomOffset?: number;
+  /** Open the paywall from the freeze sheet's locked second slot. A free
+   *  account arms one freeze; the second slot is drawn locked rather than
+   *  hidden, because an upsell only lands if the user can see the shape of
+   *  what it buys. Omitted in standalone usage, which simply makes the slot
+   *  unpressable. */
+  onUpsell?: () => void;
 }
 
 function PracticeScreenInner({
   onStartDailyReview,
   active = true,
   bottomOffset = 0,
+  onUpsell,
 }: PracticeScreenProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -123,6 +130,19 @@ function PracticeScreenInner({
           tone: 'success',
         });
       }
+      // The one-time backfill. Arming shipped as a user decision and left
+      // every freeze already in the wild unarmed, which the new consume rule
+      // then made unspendable — so the server arms them once, on the next
+      // visit. Non-zero exactly once per account, ever. Said out loud for the
+      // same reason the spend is: a freeze that silently went inert and
+      // silently came back is two invisible events, and the user is owed the
+      // one that gives something back.
+      if ((next.auto_armed ?? 0) > 0) {
+        showToast({
+          message: t('practice:freezeSheet.autoArmed', { count: next.auto_armed }),
+          tone: 'success',
+        });
+      }
     } catch (e) {
       console.warn('[PracticeScreen] daily/state failed:', (e as Error)?.message);
     }
@@ -155,7 +175,17 @@ function PracticeScreenInner({
   const applyFreezeState = useCallback((next: FreezeState) => {
     setServerState((prev) =>
       prev
-        ? { ...prev, freezes_held: next.freezes_held, freezes_equipped: next.freezes_equipped }
+        ? {
+            ...prev,
+            freezes_held: next.freezes_held,
+            freezes_equipped: next.freezes_equipped,
+            // The caps ride along: a subscription starting is exactly the
+            // moment someone opens this sheet, and this response is the
+            // cheapest place to learn the slot count changed.
+            max_freezes_equipped:
+              next.max_freezes_equipped ?? prev.max_freezes_equipped,
+            max_freezes_held: next.max_freezes_held ?? prev.max_freezes_held,
+          }
         : prev,
     );
   }, []);
@@ -242,7 +272,9 @@ function PracticeScreenInner({
         onClose={closeFreezeSheet}
         held={serverState?.freezes_held ?? 0}
         equipped={serverState?.freezes_equipped ?? 0}
+        maxEquipped={serverState?.max_freezes_equipped}
         onChange={applyFreezeState}
+        onUpsell={onUpsell}
         bottomOffset={bottomOffset}
       />
     </TopInsetView>

@@ -422,6 +422,15 @@ export default function App() {
 
   const leavePaywall = () => setCurrentScreen(paywallProps.origin);
 
+  // The freeze sheet's locked second slot. Not a 402 — nothing was refused —
+  // so it carries no counts and takes the generic subtitle. `origin` resolves
+  // to 'practice' here because that is where the sheet lives, so Back returns
+  // the user to the tab they were on rather than to Home.
+  const upsellFromPractice = useCallback(() => {
+    setPaywallProps({ previewsUsed: 0, previewsLimit: 0, reason: null, origin: 'practice' });
+    setCurrentScreen('paywall');
+  }, []);
+
 
   // Back from a Profile-sheet-launched screen returns to the sheet (its
   // origin) rather than teleporting to Home (UX audit F-006). We drop back to
@@ -1081,7 +1090,7 @@ export default function App() {
           />
         </KeepAlive>
         <KeepAlive visible={tabOf(currentScreen) === 'practice'}>
-          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} />
+          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} onUpsell={upsellFromPractice} />
         </KeepAlive>
         {/* Lists keeps its place in KeepAlive so the selected segment and
             scroll position survive a tab switch, same as Home and Explore. */}

@@ -25,7 +25,7 @@ export function annualSavingsPercent(
  *  🧠 🎬 🚫 📊, four system emoji sitting in the one screen that asks for
  *  money, each drawn by the OS in a font we do not control and none of them
  *  matching the app's palette. */
-export type PaywallFeatureIcon = 'brain' | 'film' | 'block' | 'chart';
+export type PaywallFeatureIcon = 'brain' | 'film' | 'block' | 'chart' | 'shield';
 
 export interface PaywallFeature {
   icon: PaywallFeatureIcon;
@@ -36,6 +36,11 @@ export interface PaywallFeature {
 export const PAYWALL_FEATURES: ReadonlyArray<PaywallFeature> = [
   { icon: 'brain', title: 'Unlimited SRS reviews', desc: 'Review all your saved words with spaced repetition — no session limits.' },
   { icon: 'film',  title: 'Unlimited reels', desc: 'Add as many films as you like and analyze every script.' },
+  // The row the freeze sheet's locked slot promises. Without it, a user who
+  // taps "Plus covers two days in a row" lands on a page that never mentions
+  // freezes — an upsell that forgets its own pitch between the tap and the
+  // screen.
+  { icon: 'shield', title: 'Two streak freezes armed', desc: 'Cover two missed days in a row instead of one.' },
   { icon: 'block', title: 'No ads', desc: 'A clean, distraction-free learning experience.' },
   { icon: 'chart', title: 'Detailed stats', desc: 'Track retention and comprehension over time.' },
 ];

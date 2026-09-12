@@ -43,6 +43,14 @@
     "atCap": "كلتا الخانتين مُفعَّلتان بالفعل.",
     "noneLeft": "لا توجد تجميدات لتفعيلها.",
     "openA11y": "تجميدات السلسلة",
-    "closeA11y": "إغلاق"
+    "closeA11y": "إغلاق",
+    "lockedA11y": "الخانة الثانية — لمشتركي Plus",
+    "upsell": "Plus يغطّي يومين متتاليين",
+    "autoArmed_zero": "{{count}} تجميد مُفعَّل وجاهز",
+    "autoArmed_one": "{{count}} تجميد مُفعَّل وجاهز",
+    "autoArmed_two": "{{count}} تجميدان مُفعَّلان وجاهزان",
+    "autoArmed_few": "{{count}} تجميدات مُفعَّلة وجاهزة",
+    "autoArmed_many": "{{count}} تجميدًا مُفعَّلة وجاهزة",
+    "autoArmed_other": "{{count}} تجميد مُفعَّل وجاهز"
   }
 }

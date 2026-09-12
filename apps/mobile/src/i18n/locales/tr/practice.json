@@ -27,6 +27,10 @@
     "atCap": "Her iki yuva da zaten etkin.",
     "noneLeft": "Etkinleştirecek dondurma kalmadı.",
     "openA11y": "Seri dondurmaları",
-    "closeA11y": "Kapat"
+    "closeA11y": "Kapat",
+    "lockedA11y": "İkinci yuva — yalnızca Plus",
+    "upsell": "Plus arka arkaya iki günü karşılar",
+    "autoArmed_one": "{{count}} dondurma etkin ve hazır",
+    "autoArmed_other": "{{count}} dondurma etkin ve hazır"
   }
 }

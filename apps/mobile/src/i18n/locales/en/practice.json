@@ -27,6 +27,10 @@
     "atCap": "Both slots are already armed.",
     "noneLeft": "No freezes left to arm.",
     "openA11y": "Streak freezes",
-    "closeA11y": "Close"
+    "closeA11y": "Close",
+    "lockedA11y": "Second slot — Plus only",
+    "upsell": "Plus covers two days in a row",
+    "autoArmed_one": "{{count}} freeze armed and ready",
+    "autoArmed_other": "{{count}} freezes armed and ready"
   }
 }
