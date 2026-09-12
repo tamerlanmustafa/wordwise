@@ -32,6 +32,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
 import { showToast } from '../stores/toastStore';
+import { useIsPremium } from '../stores/entitlementsStore';
+import { openPremiumSheet } from '../stores/premiumSheetStore';
 import {
   dailyApi,
   srsApi,
@@ -60,19 +62,12 @@ export interface PracticeScreenProps {
   /** Height the floating bottom bar reserves, so the tile path can scroll
    *  clear of it instead of ending underneath the glass. */
   bottomOffset?: number;
-  /** Open the paywall from the freeze sheet's locked second slot. A free
-   *  account arms one freeze; the second slot is drawn locked rather than
-   *  hidden, because an upsell only lands if the user can see the shape of
-   *  what it buys. Omitted in standalone usage, which simply makes the slot
-   *  unpressable. */
-  onUpsell?: () => void;
 }
 
 function PracticeScreenInner({
   onStartDailyReview,
   active = true,
   bottomOffset = 0,
-  onUpsell,
 }: PracticeScreenProps) {
   const { t } = useTranslation();
   const tc = useThemeColors();
@@ -172,6 +167,19 @@ function PracticeScreenInner({
   // The equip endpoints return the settled counts, so the panel updates from
   // the same response that made the change — no second `/daily/state` round
   // trip, and no locally-guessed number that a cap could contradict.
+  // The locked second slot. Closes the freeze sheet first — two stacked
+  // sheets would leave the user dismissing the premium one onto a freeze sheet
+  // they had already finished with, and the back gesture would then have two
+  // things to undo where the user did one.
+  //
+  // Routes to the same invite as the capped tile rather than to the full
+  // PaywallScreen: they sit one tap apart in this tab, and two differently
+  // shaped upgrade surfaces that close range would read as two products.
+  const upsellFromFreezeSlot = useCallback(() => {
+    setFreezeSheetOpen(false);
+    openPremiumSheet(null);
+  }, []);
+
   const applyFreezeState = useCallback((next: FreezeState) => {
     setServerState((prev) =>
       prev
@@ -191,12 +199,30 @@ function PracticeScreenInner({
   }, []);
 
   // ── Session-start handler ───────────────────────────────────────
-  // The daily cap is server-side: free users get one session/day, the
-  // server returns 402 and we route through `onPaywall`. Progression is
-  // purely sequential, so any tap that reaches here is on the active tile.
+  //
+  // The cap itself is the server's — `/srs/session/start` answers 402 and
+  // `ReviewScreen` routes that to the paywall, which stays as the backstop and
+  // is the only authority. This check is about WHERE the user finds out.
+  //
+  // Without it, tapping the tile after today's lesson opened the review
+  // screen, fired a session request, took a 402 and pushed a full paywall —
+  // three screens of travel and a network round trip to say "not today". The
+  // answer is already in `/daily/state`: `today_done` is the same column the
+  // 402 gate reads, so a free user who has finished today can be told here,
+  // over the path they are still looking at.
+  //
+  // Deliberately falls THROUGH when `serverState` is null. An unanswered
+  // network call is not evidence the user is capped, and guessing wrong in
+  // that direction denies a lesson someone is entitled to; guessing wrong the
+  // other way costs a 402 they were going to get anyway.
+  const isPremium = useIsPremium();
   const handleTilePress = useCallback(() => {
+    if (!isPremium && serverState?.today_done) {
+      openPremiumSheet('daily_cap_reached');
+      return;
+    }
     onStartDailyReview();
-  }, [onStartDailyReview]);
+  }, [isPremium, serverState?.today_done, onStartDailyReview]);
 
   return (
     <TopInsetView style={s.root}>
@@ -274,7 +300,7 @@ function PracticeScreenInner({
         equipped={serverState?.freezes_equipped ?? 0}
         maxEquipped={serverState?.max_freezes_equipped}
         onChange={applyFreezeState}
-        onUpsell={onUpsell}
+        onUpsell={upsellFromFreezeSlot}
         bottomOffset={bottomOffset}
       />
     </TopInsetView>

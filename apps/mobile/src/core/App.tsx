@@ -56,6 +56,7 @@ import { OnboardingFlow } from '../components/onboarding/OnboardingFlow';
 import { AddFilmFlow } from '../components/movies/AddFilmFlow';
 import { ToastHost } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { PremiumSheet } from '../components/premium/PremiumSheet';
 import { showToast } from '../stores/toastStore';
 import { PosterFlight } from '../components/PosterFlight';
 import { useReelBadgeStore } from '../stores/reelBadgeStore';
@@ -422,14 +423,6 @@ export default function App() {
 
   const leavePaywall = () => setCurrentScreen(paywallProps.origin);
 
-  // The freeze sheet's locked second slot. Not a 402 — nothing was refused —
-  // so it carries no counts and takes the generic subtitle. `origin` resolves
-  // to 'practice' here because that is where the sheet lives, so Back returns
-  // the user to the tab they were on rather than to Home.
-  const upsellFromPractice = useCallback(() => {
-    setPaywallProps({ previewsUsed: 0, previewsLimit: 0, reason: null, origin: 'practice' });
-    setCurrentScreen('paywall');
-  }, []);
 
 
   // Back from a Profile-sheet-launched screen returns to the sheet (its
@@ -1090,7 +1083,7 @@ export default function App() {
           />
         </KeepAlive>
         <KeepAlive visible={tabOf(currentScreen) === 'practice'}>
-          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} onUpsell={upsellFromPractice} />
+          <PracticeScreen onStartDailyReview={navigateToReview} active={currentScreen === 'practice'} bottomOffset={barHeight} />
         </KeepAlive>
         {/* Lists keeps its place in KeepAlive so the selected segment and
             scroll position survive a tab switch, same as Home and Explore. */}
@@ -1323,6 +1316,10 @@ export default function App() {
       {/* Themed confirm dialogs (logout, delete account, …) — honors the
           in-app light/dark theme, unlike a native Alert. */}
       <ConfirmDialog />
+      {/* Mounted once, driven by `premiumSheetStore`. Any screen asks with
+          `openPremiumSheet()`; nothing else imports the component. Sits after
+          ConfirmDialog so a confirm raised from inside it still draws on top. */}
+      <PremiumSheet />
 
       {/* First-launch splash — absolute over everything, auto-dismisses */}
       <SplashIntro />
