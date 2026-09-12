@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import {
   srsApi,
   SrsPaywallError,
-  type ChestPayload,
   type SessionKind,
   type SrsReviewCard,
   type SrsSessionStart,
@@ -19,7 +18,6 @@ import { usePracticePathStore } from '../stores/practicePathStore';
 import { useQuizGuardStore } from '../stores/quizGuardStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
-import { ChestReveal } from './journey/ChestReveal';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
@@ -115,11 +113,15 @@ export function ReviewScreen({
     streak: number;
     justHitGoal: boolean;
   } | null>(null);
-  // Chest reward returned by /srs/session/complete. `chest` is the
-  // payload to render; `chestVisible` controls the overlay so the user
-  // can dismiss it without re-firing the API call.
-  const [chest, setChest] = useState<ChestPayload | null>(null);
-  const [chestVisible, setChestVisible] = useState(false);
+  // The chest used to live here — two pieces of state and an overlay, fed by
+  // `res.chest` from the completion call.
+  //
+  // It is OFF: `backend/src/services/chest_service.py` holds the switch and
+  // the whole reasoning, and the server answers every completion with
+  // `chest: null`. The state is gone rather than left inert, because state
+  // that can never change is a trap for the next reader — two `useState` lines
+  // are cheap to restore, and `ChestReveal` is still on disk with the picker,
+  // the weights and their tests untouched. Paused, not abandoned.
   // Answer chimes, loaded for the length of the session (see QuizLessonScreen).
   useEffect(() => {
     void feedback.preload();
@@ -282,8 +284,6 @@ export function ReviewScreen({
    */
   const startNextTile = useCallback(() => {
     setDailySummary(null);
-    setChest(null);
-    setChestVisible(false);
     setMilestoneQueue([]);
     setAnsweredBefore(0);
     setDeckStatus(undefined);
@@ -369,10 +369,9 @@ export function ReviewScreen({
         // The deck is finished, so leaving is no longer destructive — drop the
         // guard before the done screen renders, or its own CTAs would prompt.
         useQuizGuardStore.getState().setInProgress(false);
-        // Award the variable-reward chest. Fire and forget — if the
-        // network is flaky we still show the done screen; the chest
-        // simply won't appear. Server enforces one-per-day so a retry
-        // won't double-credit.
+        // Report the completion. Fire and forget — if the network is flaky we
+        // still show the done screen. The server enforces one-per-day on
+        // everything this credits, so a retry won't double-count.
         const scored = record ? 1 : 0;
         const justCorrect = correct && record ? stats.got + 1 : stats.got;
         const total = stats.got + stats.forgot + scored;
@@ -393,10 +392,10 @@ export function ReviewScreen({
           sessionIdRef.current,
         )
           .then((res) => {
-            if (res.chest) {
-              setChest(res.chest);
-              setChestVisible(true);
-            }
+            // `res.chest` is null for every completion while the chest is off.
+            // The branch that rendered it is gone rather than left behind a
+            // condition that is always false — a reader should not have to
+            // check the server to know whether an overlay can appear.
             // Correct the optimistic local streak with the server's. The
             // local one is computed from the device calendar and the server's
             // from UTC, and a fresh install starts at zero however long the
@@ -546,9 +545,6 @@ export function ReviewScreen({
             </Text>
           ) : null}
         </SessionComplete>
-        {chestVisible && chest ? (
-          <ChestReveal chest={chest} onCollect={() => setChestVisible(false)} />
-        ) : null}
         <MilestoneUnlockModal
           slug={milestoneQueue[0] ?? null}
           onDismiss={() => {

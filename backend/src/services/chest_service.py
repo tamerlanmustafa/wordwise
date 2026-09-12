@@ -1,6 +1,34 @@
 """
 v0.6 variable-reward chest, awarded once per completed SRS session.
 
+## TURNED OFF — 2026-09-12. This module is deliberately dead code.
+
+`CHEST_ENABLED` is False and `/srs/session/complete` returns no chest. Nothing
+below has been deleted, and nothing about it has been weakened: the picker, the
+weights, the reroll and every test still run, so re-enabling is a one-line
+change rather than an archaeology project.
+
+**Why it was switched off.** Three of the four rewards were not real. XP
+accumulates on `UserQuizStats.xp` and the only screen that renders the total is
+the leaderboard, which nothing in the app navigates to — so 65% of rolls paid a
+number no user could ever look at. The cosmetic (15%) is a name with no
+collection behind it, as the pool's own comment admits. That left the freeze at
+20% as the only outcome with consequences, wrapped in a reveal animation that
+implied four.
+
+**What this costs, stated plainly.** The chest was a second freeze source, so
+removing it takes accrual from roughly 2.4/week to exactly 1/week — the weekly
+grant alone. That is a real reduction and it was accepted on purpose: "you earn
+one freeze a week by practising" is a rule a user can hold in their head, and
+with the free cap at 2 held the inventory still fills in a fortnight.
+
+**Coming back to it** means fixing the reason it left: give XP a surface that
+displays the total, or a sink that spends it, before turning the tap back on.
+Flipping the flag alone restores a 65% chance of paying in a currency that does
+not exist yet.
+
+---
+
 The chest is the visible payoff for the daily habit — Skinner-style
 variable reward to keep dopamine engaged. Server-side selection avoids
 client tamper; the response shape is small enough that the chest reveal
@@ -29,6 +57,19 @@ from .streak_service import (
     count_held_freezes,
     grant_freeze,
 )
+
+# The switch. False means `/srs/session/complete` returns no chest, stamps no
+# `srsLastChestDate`, and credits no XP — see the module docstring for why.
+#
+# A constant rather than an env var on purpose: an env var invites someone to
+# flip it in Railway without reading the paragraph above, and the reason this
+# is off is a product gap (XP has no surface and no sink), not a configuration
+# preference. Turning it back on should be a commit that someone reviews.
+#
+# Because the date is never stamped while this is False, re-enabling is clean:
+# there is no stale ledger to unwind, and the next completed session opens a
+# chest as if the feature had never paused.
+CHEST_ENABLED: bool = False
 
 # Reward amounts. Round numbers, easy to tune.
 XP_SMALL_AMOUNT: int = 25

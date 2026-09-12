@@ -32,7 +32,7 @@ from prisma import Prisma
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.cefr_registry import registry_levels, registry_pos
-from ..services.chest_service import award_session_chest
+from ..services.chest_service import CHEST_ENABLED, award_session_chest
 from ..services.feed_pool import FEED_MIX_LEVELS, feed_eligibility_sql
 from ..services.milestone_service import parse_unlocked
 from ..services.movie_progress_service import recompute_for_user_movie
@@ -1576,6 +1576,26 @@ async def complete_session(
             # only ever read to explain a *missing* chest, and "your list did
             # not earn one" is not the same explanation as "you already have
             # today's".
+            already_claimed=False,
+            correct_count=correct_count,
+            total_count=total_count,
+            streak=streak,
+            lessons_completed=lessons,
+            unlocked_cosmetics=unlocked,
+        )
+
+    if not CHEST_ENABLED:
+        # The chest is off (see `services/chest_service`). Return before the
+        # ledger is touched, exactly as the not-credited branch does: leaving
+        # `srsLastChestDate` unstamped is what makes re-enabling clean, because
+        # there is no half-written day to unwind.
+        #
+        # `already_claimed=False` for the same reason it is False there —
+        # nothing was claimed and nothing is owed. The flag exists only to
+        # explain a missing chest, and "the feature is off" is not the same
+        # explanation as "you already have today's".
+        return CompleteSessionResponse(
+            chest=None,
             already_claimed=False,
             correct_count=correct_count,
             total_count=total_count,

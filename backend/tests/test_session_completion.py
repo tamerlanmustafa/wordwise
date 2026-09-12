@@ -448,8 +448,10 @@ class TestListSessionsAreNotCredited:
 
     async def test_practice_after_a_list_still_gets_its_day(self):
         """The end-to-end shape of the fix: drill a list at breakfast, do the
-        real lesson at lunch, and the lesson is still worth a streak day, a
-        tile and a chest."""
+        real lesson at lunch, and the lesson is still worth a streak day and a
+        tile. (It was worth a chest too, until the chest was switched off —
+        see `services/chest_service`. The separation this test is about is
+        unaffected by that.)"""
         db = _FakeDb(_user(
             srsCurrentStreak=4,
             srsLastSessionDate=_dt(REAL_YESTERDAY),
@@ -461,7 +463,6 @@ class TestListSessionsAreNotCredited:
 
         assert res.streak == 5
         assert res.lessons_completed == 13
-        assert res.chest is not None
 
     async def test_an_unlabelled_completion_is_still_credited(self):
         """Every build shipped before the client sent its kind posts nothing
@@ -590,6 +591,13 @@ class TestChestLedgerDateHandling:
             return _Reward()
 
         monkeypatch.setattr("src.routes.srs.award_session_chest", _award)
+        # The chest ships OFF (see `services/chest_service` for why). These
+        # tests pin two serialisation bugs on `srsLastChestDate` that cost
+        # every user the feature for months, and a paused feature is exactly
+        # the kind that rots unnoticed — so they keep running against the
+        # enabled path rather than being deleted or skipped. Whoever flips the
+        # switch back inherits a covered code path instead of a rediscovery.
+        monkeypatch.setattr("src.routes.srs.CHEST_ENABLED", True)
 
     _complete = staticmethod(_complete)
 
