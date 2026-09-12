@@ -27,11 +27,14 @@
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
+import { Ionicons } from '@expo/vector-icons';
 import { StreakFlame } from '../ui/StreakFlame';
+import { withTap } from '../../utils/feedback';
+import { directionalIcon } from '../../i18n/rtl';
 import type { DailyState } from '../../services/api';
 
 /** One square's diameter. Seven of these plus their gaps have to fit the
@@ -55,9 +58,12 @@ interface Props {
   /** Local optimistic streak, shown for the moment before the server answers.
    *  The server's value wins as soon as there is one. */
   fallbackStreak: number;
+  /** Open the arming sheet. The freeze readout is the only entry point to it,
+   *  which is why that readout is a control rather than a label. */
+  onPressFreezes: () => void;
 }
 
-export function StreakWeek({ state, fallbackStreak }: Props) {
+export function StreakWeek({ state, fallbackStreak, onPressFreezes }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -81,13 +87,35 @@ export function StreakWeek({ state, fallbackStreak }: Props) {
         {/* Armed out of held. "1/3" says both things the user needs: how much
             mercy they have, and how much of it is actually standing guard —
             a distinction that did not exist while the app spent them all
-            automatically. */}
-        <Text style={s.freezeCount} numberOfLines={1}>
-          {equipped}/{held}
-        </Text>
-        <Text style={s.freezeLabel} numberOfLines={1}>
-          {t('practice:freeze', { count: held })}
-        </Text>
+            automatically.
+
+            It is also the way in to arming one. A separate button would have
+            to be labelled, and the panel has no room for a label that competes
+            with the streak; the count is already the thing a user reaches for
+            when they want to know about freezes, so it is the control. The
+            chevron is what says it is pressable at all — without it this reads
+            as two more numbers. */}
+        <TouchableOpacity
+          onPress={withTap(onPressFreezes)}
+          style={s.freezeButton}
+          hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={t('practice:freezeSheet.openA11y')}
+        >
+          <Text style={s.freezeCount} numberOfLines={1}>
+            {equipped}/{held}
+          </Text>
+          <Text style={s.freezeLabel} numberOfLines={1}>
+            {t('practice:freeze', { count: held })}
+          </Text>
+          <Ionicons
+            name={directionalIcon('chevron-forward')}
+            size={13}
+            color={tc.textFaint}
+            style={s.chevron}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={s.strip}>
@@ -144,6 +172,11 @@ const makeStyles = (tc: ThemeColors) =>
       color: tc.textFaint,
     },
     spacer: { flex: 1 },
+    // The whole readout is one target — count, label and chevron. Tapping the
+    // number but not the word beside it would be a 30pt-wide hit area on the
+    // only route into the mechanic.
+    freezeButton: { flexDirection: 'row', alignItems: 'center' },
+    chevron: { marginStart: 3, marginTop: 1 },
     freezeCount: {
       fontFamily: MONO_FAMILY,
       fontSize: 13,

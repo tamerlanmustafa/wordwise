@@ -14,5 +14,19 @@
     "fri": "S",
     "sat": "S",
     "sun": "D"
+  },
+  "freezeSheet": {
+    "title": "CONGELAMENTOS DE SEQUÊNCIA",
+    "body": "Um congelamento ativado cobre sozinho um dia que você perder. Ative-o com antecedência: ele só salva um dia em que você não esteve aqui.",
+    "armed": "ATIVADOS",
+    "reserve_one": "mais {{count}} na reserva",
+    "reserve_other": "mais {{count}} na reserva",
+    "arm": "Ativar um",
+    "disarm": "Guardar um",
+    "empty": "Ainda sem congelamentos. Termine uma lição e abra o baú para ganhar um.",
+    "atCap": "As duas vagas já estão ativadas.",
+    "noneLeft": "Não há congelamentos para ativar.",
+    "openA11y": "Congelamentos de sequência",
+    "closeA11y": "Fechar"
   }
 }

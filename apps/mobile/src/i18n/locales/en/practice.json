@@ -14,5 +14,19 @@
     "fri": "F",
     "sat": "S",
     "sun": "S"
+  },
+  "freezeSheet": {
+    "title": "STREAK FREEZES",
+    "body": "An armed freeze covers one missed day on its own. Arm it in advance — a freeze can only save a day you were not here for.",
+    "armed": "ARMED",
+    "reserve_one": "{{count}} more in reserve",
+    "reserve_other": "{{count}} more in reserve",
+    "arm": "Arm one",
+    "disarm": "Put one back",
+    "empty": "No freezes yet. Finish a lesson and open the chest to earn one.",
+    "atCap": "Both slots are already armed.",
+    "noneLeft": "No freezes left to arm.",
+    "openA11y": "Streak freezes",
+    "closeA11y": "Close"
   }
 }

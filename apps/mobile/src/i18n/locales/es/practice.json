@@ -14,5 +14,19 @@
     "fri": "V",
     "sat": "S",
     "sun": "D"
+  },
+  "freezeSheet": {
+    "title": "CONGELACIONES DE RACHA",
+    "body": "Una congelación activada cubre sola un día que faltes. Actívala con antelación: solo puede salvar un día en el que no estuviste.",
+    "armed": "ACTIVADAS",
+    "reserve_one": "{{count}} más en reserva",
+    "reserve_other": "{{count}} más en reserva",
+    "arm": "Activar una",
+    "disarm": "Guardar una",
+    "empty": "Aún no tienes congelaciones. Termina una lección y abre el cofre para ganar una.",
+    "atCap": "Las dos ranuras ya están activadas.",
+    "noneLeft": "No te quedan congelaciones para activar.",
+    "openA11y": "Congelaciones de racha",
+    "closeA11y": "Cerrar"
   }
 }

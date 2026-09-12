@@ -36,10 +36,12 @@ import {
   dailyApi,
   srsApi,
   type DailyState,
+  type FreezeState,
 } from '../services/api';
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
 import { StreakWeek, WEEK_PANEL_H } from './practice/StreakWeek';
+import { FreezeSheet } from './practice/FreezeSheet';
 
 // The header's height, stated rather than derived — see StreakWeek's note on
 // why. Its only child is the week panel, so the header is that panel's height
@@ -143,6 +145,21 @@ function PracticeScreenInner({
   // local optimistic one for the moment before it does. Merging them here as
   // well would be a second copy of that rule.
 
+  // ── Freeze arming ───────────────────────────────────────────────
+  const [freezeSheetOpen, setFreezeSheetOpen] = useState(false);
+  const openFreezeSheet = useCallback(() => setFreezeSheetOpen(true), []);
+  const closeFreezeSheet = useCallback(() => setFreezeSheetOpen(false), []);
+  // The equip endpoints return the settled counts, so the panel updates from
+  // the same response that made the change — no second `/daily/state` round
+  // trip, and no locally-guessed number that a cap could contradict.
+  const applyFreezeState = useCallback((next: FreezeState) => {
+    setServerState((prev) =>
+      prev
+        ? { ...prev, freezes_held: next.freezes_held, freezes_equipped: next.freezes_equipped }
+        : prev,
+    );
+  }, []);
+
   // ── Session-start handler ───────────────────────────────────────
   // The daily cap is server-side: free users get one session/day, the
   // server returns 402 and we route through `onPaywall`. Progression is
@@ -162,7 +179,11 @@ function PracticeScreenInner({
       <PracticeBackdrop />
 
       <View style={s.header}>
-        <StreakWeek state={serverState} fallbackStreak={dailyStreak} />
+        <StreakWeek
+          state={serverState}
+          fallbackStreak={dailyStreak}
+          onPressFreezes={openFreezeSheet}
+        />
       </View>
 
       {/* Opens at the BOTTOM, not the top. The path climbs the screen, so the
@@ -213,6 +234,17 @@ function PracticeScreenInner({
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Last child, so it overlays the path. Absolute rather than a Modal,
+          like every other sheet here — the bottom bar behind it stays live. */}
+      <FreezeSheet
+        visible={freezeSheetOpen}
+        onClose={closeFreezeSheet}
+        held={serverState?.freezes_held ?? 0}
+        equipped={serverState?.freezes_equipped ?? 0}
+        onChange={applyFreezeState}
+        bottomOffset={bottomOffset}
+      />
     </TopInsetView>
   );
 }

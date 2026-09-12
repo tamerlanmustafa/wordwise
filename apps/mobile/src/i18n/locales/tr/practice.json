@@ -14,5 +14,19 @@
     "fri": "C",
     "sat": "C",
     "sun": "P"
+  },
+  "freezeSheet": {
+    "title": "SERİ DONDURMALARI",
+    "body": "Etkin bir dondurma, kaçırdığın bir günü kendiliğinden karşılar. Önceden etkinleştir — dondurma yalnızca burada olmadığın bir günü kurtarabilir.",
+    "armed": "ETKİN",
+    "reserve_one": "Yedekte {{count}} tane daha",
+    "reserve_other": "Yedekte {{count}} tane daha",
+    "arm": "Birini etkinleştir",
+    "disarm": "Birini geri koy",
+    "empty": "Henüz dondurman yok. Bir dersi bitirip sandığı açarak kazan.",
+    "atCap": "Her iki yuva da zaten etkin.",
+    "noneLeft": "Etkinleştirecek dondurma kalmadı.",
+    "openA11y": "Seri dondurmaları",
+    "closeA11y": "Kapat"
   }
 }
