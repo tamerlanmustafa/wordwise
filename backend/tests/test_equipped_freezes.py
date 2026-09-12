@@ -105,6 +105,33 @@ class FakeDB:
         self.userstreakfreeze = FakeFreezeTable(rows)
         self.user = None
         self.user_row_date = None
+        self.locks_taken: list[str] = []
+
+    def tx(self):
+        """`equip_freeze` runs inside a transaction to serialise the cap check.
+
+        The fake yields ITSELF, so the arming policy is exercised exactly as
+        before. What that cannot show is the thing the transaction is for —
+        a fake has no concurrency, so it would pass just as happily without
+        the lock. `test_equip_cap_concurrency.py` covers that against real
+        Postgres; this only records that the lock was asked for.
+        """
+        fake = self
+
+        class _Tx:
+            async def __aenter__(self):
+                return fake
+
+            async def __aexit__(self, *exc):
+                return False
+
+        return _Tx()
+
+    async def query_raw(self, sql: str, *args):
+        if "FOR UPDATE" in sql and "users" in sql:
+            self.locks_taken.append(sql)
+            return [{"id": args[0]}]
+        raise AssertionError(f"unexpected raw query: {sql[:60]}")
 
     async def execute_raw(self, sql: str, *args):
         if "UPDATE user_streak_freezes" in sql:

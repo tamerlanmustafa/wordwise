@@ -159,20 +159,53 @@ async def equip_freeze(db: Prisma, *, user_id: int, now: Optional[datetime] = No
     Oldest-first for the same reason `consume_freeze` is: freezes are
     fungible, and spending the one that has been sitting longest keeps the
     inventory from developing a permanently-stuck tail.
+
+    ## Why this takes a lock, when `consume_freeze` needed only one statement
+
+    Both guard a limit against concurrent callers, and the cheap trick that
+    works for one does not work for the other.
+
+    `consume_freeze` claims a *specific row*, so `UPDATE ... WHERE id = (SELECT
+    ... FOR UPDATE SKIP LOCKED)` is enough: two callers contend over the same
+    row and exactly one wins. The cap here is not a property of any row — it is
+    a property of a COUNT over rows, and no row lock covers a count. Folding
+    the count into the statement as a subquery reads no better: under READ
+    COMMITTED the subquery sees the snapshot taken when the statement began, so
+    two equips that start together both count 1, both find a *different* unarmed
+    freeze (the second one's `find` runs after the first one's commit), and both
+    arm. Three armed, against a cap of two. That is a phantom read, and the
+    classic fix is to serialise on a row that all the contending statements must
+    hold — the parent.
+
+    So: lock `users` for this user, then count and arm inside that transaction.
+    The lock is per-user and held for two short statements, which is the right
+    granularity — it blocks this user's own second device and nobody else's
+    request, and the server's rule is that one user must never block another.
+
+    The alternative, a `slot` column with a partial unique index, would make the
+    cap structurally impossible to exceed rather than merely serialised. Worth
+    revisiting if arming ever becomes frequent enough for the lock to show up,
+    but it is a migration to solve a problem this does not have.
     """
-    if await count_equipped_freezes(db, user_id) >= MAX_EQUIPPED_FREEZES:
-        return False
-    spare = await db.userstreakfreeze.find_first(
-        where={"userId": user_id, "consumedAt": None, "equippedAt": None},
-        order={"acquiredAt": "asc"},
-    )
-    if spare is None:
-        return False
     when = now if now is not None else datetime.now(timezone.utc)
-    await db.userstreakfreeze.update(
-        where={"id": spare.id}, data={"equippedAt": when}
-    )
-    return True
+    async with db.tx() as tx:
+        # The serialisation point. Nothing reads this row's contents — taking
+        # the lock IS the statement's purpose, so a concurrent equip for the
+        # same user waits here rather than racing the count below.
+        await tx.query_raw("SELECT id FROM users WHERE id = $1 FOR UPDATE", user_id)
+
+        if await count_equipped_freezes(tx, user_id) >= MAX_EQUIPPED_FREEZES:
+            return False
+        spare = await tx.userstreakfreeze.find_first(
+            where={"userId": user_id, "consumedAt": None, "equippedAt": None},
+            order={"acquiredAt": "asc"},
+        )
+        if spare is None:
+            return False
+        await tx.userstreakfreeze.update(
+            where={"id": spare.id}, data={"equippedAt": when}
+        )
+        return True
 
 
 async def unequip_freeze(db: Prisma, *, user_id: int) -> bool:

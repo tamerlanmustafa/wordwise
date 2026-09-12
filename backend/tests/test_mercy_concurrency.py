@@ -78,14 +78,28 @@ async def _connect():
 
 
 async def _seed(db, *, armed: int, missed_days: int) -> int:
-    """A throwaway user with `armed` armed freezes and a gap of `missed_days`."""
+    """A throwaway user with `armed` armed freezes and a gap of `missed_days`.
+
+    The anchor is measured back from **today in UTC**, which is the clock the
+    service will use: these users are created with no `timezone`, and
+    `local_today` falls back to UTC for exactly that case.
+
+    This used to say `date.today()`, the machine's LOCAL date, and the two
+    agree for most of the day — so the file passed every run until it was run
+    in the evening, when UTC had already rolled over and every gap was one day
+    wider than intended. A test that fails for five hours a day is worse than
+    one that fails always: it gets rerun, passes, and teaches the team that the
+    suite is flaky rather than that the test was wrong.
+    """
+    now = datetime.now(timezone.utc)
+    today_utc = now.date()
     user = await db.user.create(data={
-        "email": f"mercy-race-{datetime.now(timezone.utc).timestamp()}@example.test",
-        "username": f"mercyrace{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        "email": f"mercy-race-{now.timestamp()}@example.test",
+        "username": f"mercyrace{int(now.timestamp() * 1000)}",
         "oauthProvider": "email",
         "srsCurrentStreak": 40,
         "srsLastSessionDate": datetime.combine(
-            date.today() - timedelta(days=missed_days + 1), datetime.min.time(),
+            today_utc - timedelta(days=missed_days + 1), datetime.min.time(),
             tzinfo=timezone.utc,
         ),
     })
@@ -206,7 +220,10 @@ async def test_only_the_first_completion_of_a_deal_wins():
                  WHERE id = $1 AND user_id = $2 AND completed_at IS NULL
                 """,
                 deal.id, user_id, datetime.now(timezone.utc), 8, 10,
-                datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc),
+                datetime.combine(
+                    datetime.now(timezone.utc).date(), datetime.min.time(),
+                    tzinfo=timezone.utc,
+                ),
             )
 
         results = await asyncio.gather(*[claim() for _ in range(8)])
