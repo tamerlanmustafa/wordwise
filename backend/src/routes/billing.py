@@ -63,9 +63,18 @@ class RestoreResponse(BaseModel):
 
 
 async def _activate_subscription(
-    db: Prisma, user_id: int, tier: str, days: int, product_id: str
+    db: Prisma, user_id: int, tier: str, days: Optional[int], product_id: str
 ):
-    expires = datetime.now(timezone.utc) + timedelta(days=days)
+    """Grant a tier. `days=None` means it never expires.
+
+    Lifetime is a non-consumable, not a subscription, so it has no renewal date
+    to store and must not be given a synthetic one — "premium for 36500 days"
+    is a bug with a very long fuse, and the kind that is only discovered by the
+    person it expires on. `is_premium` already treats a premium tier with a
+    NULL expiry as perpetual (the same path admin grants use), so the honest
+    representation costs nothing extra.
+    """
+    expires = None if days is None else datetime.now(timezone.utc) + timedelta(days=days)
     await db.user.update(
         where={"id": user_id},
         data={
@@ -77,10 +86,13 @@ async def _activate_subscription(
     return expires
 
 
-PRODUCT_DURATION_DAYS = {
+#: Product id -> how long the grant lasts. `None` is perpetual.
+PRODUCT_DURATION_DAYS: dict[str, Optional[int]] = {
     "com.wordwise.plus.monthly": 30,
     "com.wordwise.plus.annual": 365,
     "com.wordwise.plus.trial": 7,
+    # Non-consumable: bought once, never renews, never lapses.
+    "com.wordwise.plus.lifetime": None,
 }
 
 

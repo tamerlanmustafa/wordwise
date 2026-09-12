@@ -12,7 +12,10 @@
     "heroTitle": "Unlock your full\nvocabulary potential",
     "subDailyCap": "You've done today's free review. Upgrade to keep going now — and every day.",
     "subPreviews": "You've used {{used}} of {{limit}} free review sessions. Upgrade to keep learning with spaced repetition.",
-    "subGeneric": "Upgrade to review as much as you like, with spaced repetition that keeps words from slipping away."
+    "subGeneric": "Upgrade to review as much as you like, with spaced repetition that keeps words from slipping away.",
+    "lifetimeOffer": "Or pay once — {{price}}",
+    "buyLifetime": "Unlock forever",
+    "lifetimeHint": "One payment · Yours for good"
   },
   "family": {
     "title": "Family Plan",

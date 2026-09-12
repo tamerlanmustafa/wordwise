@@ -32,6 +32,9 @@
     "heroTitle": "Libere todo o seu\npotencial de vocabulário",
     "subDailyCap": "Você já fez a revisão gratuita de hoje. Assine para continuar agora — e todos os dias.",
     "subPreviews": "Você usou {{used}} de {{limit}} sessões de revisão gratuitas. Assine para continuar aprendendo com repetição espaçada.",
-    "subGeneric": "Assine para revisar quanto quiser, com repetição espaçada para as palavras não escaparem."
+    "subGeneric": "Assine para revisar quanto quiser, com repetição espaçada para as palavras não escaparem.",
+    "lifetimeOffer": "Ou pague uma vez — {{price}}",
+    "buyLifetime": "Desbloquear para sempre",
+    "lifetimeHint": "Pagamento único · Seu para sempre"
   }
 }

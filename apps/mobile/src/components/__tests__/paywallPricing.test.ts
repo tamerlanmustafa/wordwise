@@ -3,13 +3,23 @@ import {
   annualSavingsPercent,
   MONTHLY_PRICE_USD,
   ANNUAL_PRICE_USD,
+  LIFETIME_PRICE_USD,
   PAYWALL_FEATURES,
 } from '../paywallPricing';
 
 describe('annualSavingsPercent', () => {
   it('computes the real savings from the default prices', () => {
-    // 29.99 vs 4.99×12 = 59.88 → ~50%.
-    expect(annualSavingsPercent()).toBe(50);
+    // 34.99 vs 4.99×12 = 59.88 → ~42%. Raised from 29.99/50% on 2026-09-12:
+    // a 50% discount was steeper than the category norm and steeper than the
+    // annual plan needed, given it is already the default and already badged.
+    expect(annualSavingsPercent()).toBe(42);
+  });
+
+  it('keeps the annual discount obviously worth taking', () => {
+    // The badge is the reason most people pick annual. Below ~30% it stops
+    // reading as a deal and the default loses its justification; this is the
+    // floor, not the target.
+    expect(annualSavingsPercent()).toBeGreaterThanOrEqual(30);
   });
 
   it('rounds to a whole percent', () => {
@@ -23,6 +33,22 @@ describe('annualSavingsPercent', () => {
 
   it('default prices are sane (annual cheaper than a year of monthly)', () => {
     expect(ANNUAL_PRICE_USD).toBeLessThan(MONTHLY_PRICE_USD * 12);
+  });
+});
+
+describe('lifetime', () => {
+  it('costs more than a year but less than three', () => {
+    // The two failure modes it sits between. Priced at or below one year it
+    // cannibalises every renewal from people who would have stayed; priced
+    // like a lifetime of renewals nobody treats it as a decision.
+    expect(LIFETIME_PRICE_USD).toBeGreaterThan(ANNUAL_PRICE_USD);
+    expect(LIFETIME_PRICE_USD).toBeLessThan(ANNUAL_PRICE_USD * 3);
+  });
+
+  it('is worth more than a year of monthly', () => {
+    // Otherwise the cheapest way to own the app forever is to not subscribe,
+    // which makes every other price on the screen decorative.
+    expect(LIFETIME_PRICE_USD).toBeGreaterThan(MONTHLY_PRICE_USD * 12);
   });
 });
 

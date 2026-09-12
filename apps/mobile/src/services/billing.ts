@@ -25,6 +25,10 @@ try {
 export const PRODUCTS = {
   MONTHLY: 'com.wordwise.plus.monthly',
   ANNUAL: 'com.wordwise.plus.annual',
+  /** Non-consumable, not a subscription: bought once and never renews. Both
+   *  stores treat that as a different product type, so it needs its own id
+   *  and its own entry in App Store Connect / Play Console. */
+  LIFETIME: 'com.wordwise.plus.lifetime',
 } as const;
 
 export type ProductId = (typeof PRODUCTS)[keyof typeof PRODUCTS];

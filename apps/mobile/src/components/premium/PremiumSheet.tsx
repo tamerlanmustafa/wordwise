@@ -71,6 +71,7 @@ import {
   paywallSubtitle,
   MONTHLY_PRICE_LABEL,
   ANNUAL_PRICE_LABEL,
+  LIFETIME_PRICE_LABEL,
 } from '../paywallPricing';
 import {
   BlockIcon,
@@ -81,7 +82,11 @@ import {
   useReduceMotion,
 } from '../ui/icons';
 
-type Plan = 'annual' | 'monthly';
+/** `lifetime` is a non-consumable, not a subscription — no renewal and no
+ *  trial, which is why the CTA below changes label when it is selected.
+ *  Offering "Start 7-day free trial" on a one-off purchase would be a lie the
+ *  store itself would then contradict. */
+type Plan = 'annual' | 'monthly' | 'lifetime';
 
 /** Where the sheet starts and returns to. Larger than any phone, so the
  *  first frame is off-screen even before layout has reported a height. */
@@ -173,7 +178,10 @@ export function PremiumSheet() {
     if (busy) return;
     setBusy(true);
     try {
-      const product = plan === 'annual' ? PRODUCTS.ANNUAL : PRODUCTS.MONTHLY;
+      const product =
+        plan === 'lifetime' ? PRODUCTS.LIFETIME
+          : plan === 'annual' ? PRODUCTS.ANNUAL
+          : PRODUCTS.MONTHLY;
       const success = await purchaseProduct(product);
       // The store sheet is native and can sit open for minutes. By the time it
       // resolves the user may have dismissed this one entirely.
@@ -202,6 +210,9 @@ export function PremiumSheet() {
   if (!rendered) return null;
 
   const subtitle = paywallSubtitle(reason, 0, 0);
+  // A one-off purchase has no trial to start.
+  const ctaKey =
+    plan === 'lifetime' ? 'billing:paywall.buyLifetime' : 'billing:paywall.startTrial';
   const savings = annualSavingsPercent();
   const translateY = anim.interpolate({
     inputRange: [0, 1],
@@ -256,7 +267,7 @@ export function PremiumSheet() {
           </View>
 
           <View style={s.plans}>
-            {(['annual', 'monthly'] as Plan[]).map((p) => {
+            {(['annual', 'monthly'] as const).map((p) => {
               const active = plan === p;
               return (
                 <TouchableOpacity
@@ -291,6 +302,24 @@ export function PremiumSheet() {
             })}
           </View>
 
+          {/* Deliberately NOT a third card. Three equal options turn a simple
+              "yearly or monthly" into a comparison exercise, and the people who
+              want this one are looking for it rather than weighing it. A quiet
+              row keeps the default decision two-way and still gives the
+              no-subscriptions segment somewhere to go. */}
+          <TouchableOpacity
+            style={[s.lifetime, plan === 'lifetime' && s.lifetimeOn]}
+            onPress={withTap(() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime'))}
+            activeOpacity={0.75}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: plan === 'lifetime' }}
+            accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+          >
+            <Text style={[s.lifetimeText, plan === 'lifetime' && s.lifetimeTextOn]}>
+              {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+            </Text>
+          </TouchableOpacity>
+
           <PressablePill
             edge={tc.goldDeep}
             radius={16}
@@ -300,10 +329,10 @@ export function PremiumSheet() {
             onPress={withTap(() => void buy())}
             accessibilityRole="button"
             accessibilityState={{ disabled: busy }}
-            accessibilityLabel={t('billing:paywall.startTrial')}
+            accessibilityLabel={t(ctaKey)}
           >
             <Text style={s.ctaText}>
-              {busy ? t('billing:paywall.starting') : t('billing:paywall.startTrial')}
+              {busy ? t('billing:paywall.starting') : t(ctaKey)}
             </Text>
           </PressablePill>
 
@@ -425,6 +454,18 @@ const makeStyles = (tc: ThemeColors) =>
       marginTop: 10,
     },
     radioOn: { backgroundColor: tc.gold, borderColor: tc.gold },
+
+    lifetime: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: tc.border,
+      paddingVertical: 11,
+      alignItems: 'center',
+      marginBottom: 14,
+    },
+    lifetimeOn: { borderColor: tc.gold, backgroundColor: tc.goldWash },
+    lifetimeText: { fontSize: 12.5, fontWeight: '700', color: tc.textSecondary },
+    lifetimeTextOn: { color: tc.text },
 
     cta: { marginBottom: 14 },
     ctaFace: {

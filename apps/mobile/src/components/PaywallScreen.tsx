@@ -24,6 +24,7 @@ import {
   paywallSubtitle,
   MONTHLY_PRICE_LABEL,
   ANNUAL_PRICE_LABEL,
+  LIFETIME_PRICE_LABEL,
   type PaywallReason,
 } from './paywallPricing';
 import { directionalIcon } from '../i18n/rtl';
@@ -44,7 +45,9 @@ export interface PaywallScreenProps {
   reason?: PaywallReason;
 }
 
-type Plan = 'annual' | 'monthly';
+/** `lifetime` is a non-consumable: no renewal, and therefore no trial — which
+ *  is why the CTA changes label when it is picked. */
+type Plan = 'annual' | 'monthly' | 'lifetime';
 
 export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = null }: PaywallScreenProps) {
   const { t } = useTranslation();
@@ -55,13 +58,18 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
   const [busy, setBusy] = useState(false);
   const savings = annualSavingsPercent();
   const subtitle = paywallSubtitle(reason, previewsUsed, previewsLimit);
+  const ctaKey =
+    plan === 'lifetime' ? 'billing:paywall.buyLifetime' : 'billing:paywall.startTrial';
   const barInset = useBottomBarInset();
 
   const buy = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const product = plan === 'annual' ? PRODUCTS.ANNUAL : PRODUCTS.MONTHLY;
+      const product =
+        plan === 'lifetime' ? PRODUCTS.LIFETIME
+          : plan === 'annual' ? PRODUCTS.ANNUAL
+          : PRODUCTS.MONTHLY;
       const success = await purchaseProduct(product);
       if (success) {
         Alert.alert(t('billing:paywall.welcomeTitle'), t('billing:paywall.welcomeBody'));
@@ -143,18 +151,36 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
               />
             </View>
 
+            {/* Not a third card — see PremiumSheet for the reasoning. The two
+                surfaces have to offer the same prices in the same shape, or
+                the one a user happens to reach decides what they pay. */}
+            <PressableScale
+              style={[s.lifetimeRow, plan === 'lifetime' && s.lifetimeRowOn]}
+              onPress={withTap(() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime'))}
+              accessibilityRole="button"
+              accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+            >
+              <Text style={[s.lifetimeRowText, plan === 'lifetime' && s.lifetimeRowTextOn]}>
+                {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+              </Text>
+            </PressableScale>
+
             <PressableScale
               style={[s.trialBtn, busy && { opacity: 0.6 }]}
               onPress={buy}
               accessibilityRole="button"
-              accessibilityLabel={t('billing:paywall.startTrial')}
+              accessibilityLabel={t(ctaKey)}
             >
-              <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t('billing:paywall.startTrial')}</Text>
+              <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t(ctaKey)}</Text>
             </PressableScale>
-            <Text style={s.priceHint}>
-              Then {plan === 'annual' ? `${ANNUAL_PRICE_LABEL}/year` : `${MONTHLY_PRICE_LABEL}/month`} · Cancel
-              anytime
-            </Text>
+            {plan === 'lifetime' ? (
+              <Text style={s.priceHint}>{t('billing:paywall.lifetimeHint')}</Text>
+            ) : (
+              <Text style={s.priceHint}>
+                Then {plan === 'annual' ? `${ANNUAL_PRICE_LABEL}/year` : `${MONTHLY_PRICE_LABEL}/month`} · Cancel
+                anytime
+              </Text>
+            )}
 
             <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel={t('billing:paywall.restore')}>
               <Text style={s.restoreBtnText}>{t('billing:paywall.restore')}</Text>
@@ -260,6 +286,18 @@ const makeStyles = (tc: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    lifetimeRow: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: tc.border,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginBottom: 14,
+    },
+    lifetimeRowOn: { borderColor: tc.gold, backgroundColor: tc.goldWash },
+    lifetimeRowText: { fontSize: 13, fontWeight: '700', color: tc.textSecondary },
+    lifetimeRowTextOn: { color: tc.text },
+
     trialBtn: {
       backgroundColor: tc.gold,
       paddingVertical: 16,

@@ -7,10 +7,36 @@
  */
 
 export const MONTHLY_PRICE_USD = 4.99;
-export const ANNUAL_PRICE_USD = 29.99;
+/**
+ * Annual, raised from 29.99 on 2026-09-12.
+ *
+ * 29.99 was a 50% discount on twelve months — steeper than the category norm
+ * of roughly 30–40%, and steeper than it needed to be. The annual plan is
+ * already the default, already carries the savings badge, and is what almost
+ * everyone picks for that reason rather than for the size of the number; the
+ * extra 20 points of discount bought very little conversion and cost real
+ * money on every subscriber. 34.99 keeps the badge comfortably in the
+ * "obviously the better deal" range (~42%) while giving back a third of the
+ * gap.
+ */
+export const ANNUAL_PRICE_USD = 34.99;
+/**
+ * One payment, no renewal.
+ *
+ * Exists for the segment that will not start a subscription at any price — a
+ * real and stubborn group, and one that otherwise contributes nothing. It also
+ * pays now rather than over twelve months, which matters far more early than
+ * lifetime-value arithmetic does.
+ *
+ * Priced at a bit over two years of annual: high enough that it does not
+ * cannibalise renewals from people who would have stayed, low enough to read
+ * as a decision rather than a splurge.
+ */
+export const LIFETIME_PRICE_USD = 79.99;
 
 export const MONTHLY_PRICE_LABEL = '$4.99';
-export const ANNUAL_PRICE_LABEL = '$29.99';
+export const ANNUAL_PRICE_LABEL = '$34.99';
+export const LIFETIME_PRICE_LABEL = '$79.99';
 
 /** Annual savings vs paying monthly for a year, as a whole percent. */
 export function annualSavingsPercent(
