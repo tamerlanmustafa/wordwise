@@ -19,6 +19,7 @@ import { PaywallScreen } from '../components/PaywallScreen';
 import type { PaywallReason } from '../components/paywallPricing';
 import { StatsScreen } from '../components/StatsScreen';
 import { registerForPushNotifications, cancelWordReminder, cancelReviewReminder } from '../services/notifications';
+import { useReminderStore } from '../stores/reminderStore';
 import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
@@ -79,6 +80,7 @@ import { ListDetailScreen } from '../components/screens/ListDetailScreen';
 import { WatchedScreen } from '../components/screens/WatchedScreen';
 import { FilmFeedScreen } from '../components/screens/FilmFeedScreen';
 import { MovieDetailScreen } from '../components/screens/MovieDetailScreen';
+import i18next from 'i18next';
 import { initI18n, hydrateAppLanguage } from '../i18n';
 import { syncRtlLayout, reloadForRtl } from '../i18n/rtl';
 
@@ -208,6 +210,19 @@ export default function App() {
         cancelWordReminder();
         cancelReviewReminder();
       }).catch(() => {});
+
+      // Re-arm the daily practice reminder from the stored preference.
+      //
+      // `reschedule` reads the preference itself and does nothing until the
+      // store has hydrated, which is what stops this launch path from
+      // re-enabling something the user switched off — the exact bug that got
+      // the previous reminder toggle deleted rather than fixed.
+      void useReminderStore.getState().hydrate().then(() =>
+        useReminderStore.getState().reschedule({
+          title: i18next.t('settings:reminderTitle'),
+          body: i18next.t('settings:reminderBody'),
+        }),
+      );
     });
     return () => task.cancel();
   }, [initialize]);
@@ -1038,6 +1053,173 @@ export default function App() {
     }
   })();
 
+  /**
+   * Render one deep screen by id.
+   *
+   * Extracted from the JSX so it can be called for a screen that is NOT the
+   * current one: the swipe-back gesture needs the screen you are going back
+   * TO painted underneath the one you are dragging, and every settings page
+   * goes back to another deep screen (Profile, Account, Legal, Vocabulary)
+   * rather than to a tab. Before this, dragging revealed whichever tab
+   * happened to be behind the deep layer, so backing out of Notification
+   * Settings showed the word feed sliding in and then Profile appearing at
+   * the end.
+   *
+   * Returns null for the tabs, which is what keeps it correct for the other
+   * half: a screen whose parent IS a tab (an open list going back to Lists)
+   * renders nothing here, and the kept-alive tab underneath shows through
+   * exactly as it already did.
+   */
+  const renderDeepScreen = (screen: Screen) => (
+          screen === 'settings' ? (
+            <SettingsScreen onBack={backFrom('settings')} user={user} onUserUpdated={handleUserUpdated} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
+          ) : screen === 'profile' ? (
+            <ProfileScreen
+              user={user}
+              isAdmin={!!user?.is_admin}
+              onNavigateToSettings={navigateToSettings}
+              onNavigateToNotifications={navigateToNotificationSettings}
+              onNavigateToAccount={navigateToAccount}
+              onNavigateToLegal={navigateToLegal}
+              onNavigateToAdmin={navigateToAdmin}
+              onLogout={handleLogout}
+            />
+          ) : screen === 'notificationSettings' ? (
+            <NotificationSettingsScreen onBack={backFrom('notificationSettings')} />
+          ) : screen === 'account' ? (
+            <AccountScreen onBack={backFrom('account')} onNavigateToFamilyPlan={navigateToFamilyPlan} />
+          ) : screen === 'legal' ? (
+            <LegalScreen
+              onBack={backFrom('legal')}
+              onNavigateToPrivacy={navigateToPrivacy}
+              onNavigateToTerms={navigateToTerms}
+            />
+          ) : screen === 'vocabulary' ? (
+            <VocabularyScreen onBack={backFrom('vocabulary')} backLabel={backLabelFor('vocabulary')} onNavigateToLearnedWords={navigateToLearnedWords} />
+          ) : screen === 'learnedWords' ? (
+            <LearnedWordsScreen onBack={backFrom('learnedWords')} backLabel={backLabelFor('learnedWords')} />
+          ) : screen === 'admin' ? (
+            <AdminScreen onBack={backFrom('admin')} backLabel={backLabelFor('admin')} />
+          ) : screen === 'review' ? (
+            <ReviewScreen
+              // Routed through `resolveBack`, not a second copy of the
+              // destination. This prop *was* that second copy — it still said
+              // `navigateToFilms` after the resolver moved to Practice, and
+              // because the header chevron calls it directly it also skipped
+              // the quit guard entirely. One resolver, so the chevron, hardware
+              // back, the swipe and a tab tap cannot disagree about either
+              // where they go or whether they ask first.
+              onBack={() => resolveBack('review')?.()}
+              onPaywall={navigateToPaywall}
+            />
+          ) : screen === 'paywall' ? (
+            <PaywallScreen
+              onBack={leavePaywall}
+              previewsUsed={paywallProps.previewsUsed}
+              previewsLimit={paywallProps.previewsLimit}
+              reason={paywallProps.reason}
+            />
+          ) : screen === 'stats' ? (
+            <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
+          ) : screen === 'listDetail' && openList ? (
+            <ListDetailScreen
+              list={openList}
+              onBack={navigateToLists}
+              onOpenFilm={(item) => navigateToMovie({
+                id: item.tmdbId,
+                title: item.title,
+                poster_path: item.posterPath,
+                release_date: item.year ? `${item.year}-01-01` : '',
+              })}
+              bottomOffset={barHeight}
+            />
+          ) : screen === 'savedMovies' ? (
+            <SavedMoviesScreen
+              onBack={backFrom('savedMovies')}
+              backLabel={backLabelFor('savedMovies')}
+              onSearchPress={navigateToAddToReel}
+              onOpenMoviePreview={handleOpenMoviePreview}
+            />
+          ) : screen === 'watched' ? (
+            <WatchedScreen onBack={backFrom('watched')} backLabel={backLabelFor('watched')} onMoviePress={navigateToMovie} />
+          ) : screen === 'achievements' ? (
+            <AchievementsScreen onBack={backFrom('achievements')} backLabel={backLabelFor('achievements')} />
+          ) : screen === 'leaderboard' ? (
+            <LeaderboardScreen onBack={backFrom('leaderboard')} backLabel={backLabelFor('leaderboard')} />
+          ) : screen === 'familyPlan' ? (
+            <FamilyPlanScreen onBack={backFrom('familyPlan')} backLabel={backLabelFor('familyPlan')} userId={user!.id} />
+          ) : screen === 'privacy' ? (
+            <PrivacyScreen onBack={backFrom('privacy')} backLabel={backLabelFor('privacy')} mode="privacy" />
+          ) : screen === 'terms' ? (
+            <PrivacyScreen onBack={backFrom('terms')} backLabel={backLabelFor('terms')} mode="terms" />
+          ) : screen === 'moviePreview' && activePreviewTile ? (
+            <MoviePreviewHub
+              tile={activePreviewTile.tile}
+              level={activePreviewTile.level}
+              onBack={handleHubBack}
+              onStudy={handleHubStudy}
+              onQuiz={handleHubQuiz}
+              onRemove={handleHubRemove}
+              quizStarting={hubQuizStarting}
+            />
+          ) : screen === 'setIntro' && setIntroData ? (
+            <SetIntroScreen
+              setNumber={setIntroData.setNumber}
+              reelNumber={setIntroData.reelNumber}
+              movie={setIntroData.movie}
+              level={setIntroData.level}
+              words={setIntroData.session.cards.map<SetIntroWord>((c) => ({
+                word: c.word,
+                rank: null,
+              }))}
+              onBack={handleSetIntroBack}
+              onStart={handleSetIntroStart}
+            />
+          ) : screen === 'addToReel' ? (
+            <AddFilmSearchScreen onBack={navigateToSavedMovies} />
+          ) : screen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
+            <QuizJourneyScreen
+              movieId={resolvedMovieId}
+              movieTitle={selectedMovie.title}
+              onBack={returnToMovieDetail}
+              onStartSession={handleQuizSessionStart}
+            />
+          ) : screen === 'quizBatchBuilder' ? (
+            <QuizBatchBuilderScreen
+              userLevel={user?.proficiency_level}
+              onBack={navigateToFilms}
+              onStart={handleBatchBuilt}
+            />
+          ) : screen === 'quizBatchJourney' && batch ? (
+            <QuizJourneyScreen
+              movieIds={batch.ids}
+              movieTitle={batch.title}
+              onBack={() => setCurrentScreen('quizBatchBuilder')}
+              onStartSession={handleQuizSessionStart}
+            />
+          ) : screen === 'quizLesson' && quizSession ? (
+            <QuizLessonScreen
+              session={quizSession.session}
+              level={quizSession.level}
+              onExit={handleQuizExit}
+              onComplete={handleQuizComplete}
+            />
+          ) : screen === 'quizResult' && quizResult ? (
+            <QuizResultScreen
+              result={quizResult.result}
+              level={quizResult.level}
+              onDone={handleQuizResultDone}
+              journey={journeyResultMeta}
+            />
+          ) : (
+            // Home, My Movies and Practice are rendered by the persistent
+            // KeepAlive layer above, and the movie detail by the kept-alive
+            // layer below, so the deep-screen ternary renders nothing for them —
+            // the live tab (or the film) shows through.
+            null
+          )
+  );
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"} backgroundColor={tc.paper} />
@@ -1099,154 +1281,25 @@ export default function App() {
             The swipe reads the same `resolveBack` the header chevron and
             Android's back button do, so all three land in the same place; it
             goes inert on a root tab, where the ternary renders nothing. */}
-        <SwipeBackView screenKey={currentScreen} onBack={resolveBack(currentScreen)}>
-        {currentScreen === 'settings' ? (
-          <SettingsScreen onBack={backFrom('settings')} user={user} onUserUpdated={handleUserUpdated} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
-        ) : currentScreen === 'profile' ? (
-          <ProfileScreen
-            user={user}
-            isAdmin={!!user?.is_admin}
-            onNavigateToSettings={navigateToSettings}
-            onNavigateToNotifications={navigateToNotificationSettings}
-            onNavigateToAccount={navigateToAccount}
-            onNavigateToLegal={navigateToLegal}
-            onNavigateToAdmin={navigateToAdmin}
-            onLogout={handleLogout}
-          />
-        ) : currentScreen === 'notificationSettings' ? (
-          <NotificationSettingsScreen onBack={backFrom('notificationSettings')} />
-        ) : currentScreen === 'account' ? (
-          <AccountScreen onBack={backFrom('account')} onNavigateToFamilyPlan={navigateToFamilyPlan} />
-        ) : currentScreen === 'legal' ? (
-          <LegalScreen
-            onBack={backFrom('legal')}
-            onNavigateToPrivacy={navigateToPrivacy}
-            onNavigateToTerms={navigateToTerms}
-          />
-        ) : currentScreen === 'vocabulary' ? (
-          <VocabularyScreen onBack={backFrom('vocabulary')} backLabel={backLabelFor('vocabulary')} onNavigateToLearnedWords={navigateToLearnedWords} />
-        ) : currentScreen === 'learnedWords' ? (
-          <LearnedWordsScreen onBack={backFrom('learnedWords')} backLabel={backLabelFor('learnedWords')} />
-        ) : currentScreen === 'admin' ? (
-          <AdminScreen onBack={backFrom('admin')} backLabel={backLabelFor('admin')} />
-        ) : currentScreen === 'review' ? (
-          <ReviewScreen
-            // Routed through `resolveBack`, not a second copy of the
-            // destination. This prop *was* that second copy — it still said
-            // `navigateToFilms` after the resolver moved to Practice, and
-            // because the header chevron calls it directly it also skipped
-            // the quit guard entirely. One resolver, so the chevron, hardware
-            // back, the swipe and a tab tap cannot disagree about either
-            // where they go or whether they ask first.
-            onBack={() => resolveBack('review')?.()}
-            onPaywall={navigateToPaywall}
-          />
-        ) : currentScreen === 'paywall' ? (
-          <PaywallScreen
-            onBack={leavePaywall}
-            previewsUsed={paywallProps.previewsUsed}
-            previewsLimit={paywallProps.previewsLimit}
-            reason={paywallProps.reason}
-          />
-        ) : currentScreen === 'stats' ? (
-          <StatsScreen onBack={backFrom('stats')} backLabel={backLabelFor('stats')} onStartReview={navigateToReview} />
-        ) : currentScreen === 'listDetail' && openList ? (
-          <ListDetailScreen
-            list={openList}
-            onBack={navigateToLists}
-            onOpenFilm={(item) => navigateToMovie({
-              id: item.tmdbId,
-              title: item.title,
-              poster_path: item.posterPath,
-              release_date: item.year ? `${item.year}-01-01` : '',
-            })}
-            bottomOffset={barHeight}
-          />
-        ) : currentScreen === 'savedMovies' ? (
-          <SavedMoviesScreen
-            onBack={backFrom('savedMovies')}
-            backLabel={backLabelFor('savedMovies')}
-            onSearchPress={navigateToAddToReel}
-            onOpenMoviePreview={handleOpenMoviePreview}
-          />
-        ) : currentScreen === 'watched' ? (
-          <WatchedScreen onBack={backFrom('watched')} backLabel={backLabelFor('watched')} onMoviePress={navigateToMovie} />
-        ) : currentScreen === 'achievements' ? (
-          <AchievementsScreen onBack={backFrom('achievements')} backLabel={backLabelFor('achievements')} />
-        ) : currentScreen === 'leaderboard' ? (
-          <LeaderboardScreen onBack={backFrom('leaderboard')} backLabel={backLabelFor('leaderboard')} />
-        ) : currentScreen === 'familyPlan' ? (
-          <FamilyPlanScreen onBack={backFrom('familyPlan')} backLabel={backLabelFor('familyPlan')} userId={user!.id} />
-        ) : currentScreen === 'privacy' ? (
-          <PrivacyScreen onBack={backFrom('privacy')} backLabel={backLabelFor('privacy')} mode="privacy" />
-        ) : currentScreen === 'terms' ? (
-          <PrivacyScreen onBack={backFrom('terms')} backLabel={backLabelFor('terms')} mode="terms" />
-        ) : currentScreen === 'moviePreview' && activePreviewTile ? (
-          <MoviePreviewHub
-            tile={activePreviewTile.tile}
-            level={activePreviewTile.level}
-            onBack={handleHubBack}
-            onStudy={handleHubStudy}
-            onQuiz={handleHubQuiz}
-            onRemove={handleHubRemove}
-            quizStarting={hubQuizStarting}
-          />
-        ) : currentScreen === 'setIntro' && setIntroData ? (
-          <SetIntroScreen
-            setNumber={setIntroData.setNumber}
-            reelNumber={setIntroData.reelNumber}
-            movie={setIntroData.movie}
-            level={setIntroData.level}
-            words={setIntroData.session.cards.map<SetIntroWord>((c) => ({
-              word: c.word,
-              rank: null,
-            }))}
-            onBack={handleSetIntroBack}
-            onStart={handleSetIntroStart}
-          />
-        ) : currentScreen === 'addToReel' ? (
-          <AddFilmSearchScreen onBack={navigateToSavedMovies} />
-        ) : currentScreen === 'quizJourney' && selectedMovie && resolvedMovieId != null ? (
-          <QuizJourneyScreen
-            movieId={resolvedMovieId}
-            movieTitle={selectedMovie.title}
-            onBack={returnToMovieDetail}
-            onStartSession={handleQuizSessionStart}
-          />
-        ) : currentScreen === 'quizBatchBuilder' ? (
-          <QuizBatchBuilderScreen
-            userLevel={user?.proficiency_level}
-            onBack={navigateToFilms}
-            onStart={handleBatchBuilt}
-          />
-        ) : currentScreen === 'quizBatchJourney' && batch ? (
-          <QuizJourneyScreen
-            movieIds={batch.ids}
-            movieTitle={batch.title}
-            onBack={() => setCurrentScreen('quizBatchBuilder')}
-            onStartSession={handleQuizSessionStart}
-          />
-        ) : currentScreen === 'quizLesson' && quizSession ? (
-          <QuizLessonScreen
-            session={quizSession.session}
-            level={quizSession.level}
-            onExit={handleQuizExit}
-            onComplete={handleQuizComplete}
-          />
-        ) : currentScreen === 'quizResult' && quizResult ? (
-          <QuizResultScreen
-            result={quizResult.result}
-            level={quizResult.level}
-            onDone={handleQuizResultDone}
-            journey={journeyResultMeta}
-          />
-        ) : (
-          // Home, My Movies and Practice are rendered by the persistent
-          // KeepAlive layer above, and the movie detail by the kept-alive
-          // layer below, so the deep-screen ternary renders nothing for them —
-          // the live tab (or the film) shows through.
-          null
-        )}
+        <SwipeBackView
+          screenKey={currentScreen}
+          onBack={resolveBack(currentScreen)}
+          /* Paint the screen Back leads to underneath the drag. `PARENT_OF` is
+             the same map the chevron and Android back read, so what the swipe
+             uncovers is guaranteed to be what it lands on.
+
+             Returns null for a parent that is a tab — an open list going back
+             to Lists — and that is correct rather than a gap: the kept-alive
+             tab is already laid out under this layer and shows through on its
+             own. Only the account area needs this, because there every parent
+             is another deep screen and the layer below it is some unrelated
+             tab. */
+          renderBehind={() => {
+            const parent = PARENT_OF[currentScreen];
+            return parent ? renderDeepScreen(parent) : null;
+          }}
+        >
+        {renderDeepScreen(currentScreen)}
         </SwipeBackView>
 
         {/* The open film, on its own layer and kept mounted.

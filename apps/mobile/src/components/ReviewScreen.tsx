@@ -18,6 +18,7 @@ import { usePracticePathStore } from '../stores/practicePathStore';
 import { useQuizGuardStore } from '../stores/quizGuardStore';
 import { useMilestoneTrackerStore } from '../stores/milestoneTrackerStore';
 import { useReviewSessionStore } from '../stores/reviewSessionStore';
+import { useReminderStore } from '../stores/reminderStore';
 import { MilestoneUnlockModal } from './journey/MilestoneUnlockModal';
 import { QuizHeader } from './quiz/QuizHeader';
 import { MCQCard } from './quiz/MCQCard';
@@ -369,6 +370,18 @@ export function ReviewScreen({
         // The deck is finished, so leaving is no longer destructive — drop the
         // guard before the done screen renders, or its own CTAs would prompt.
         useQuizGuardStore.getState().setInProgress(false);
+        // Today is done, so tonight's reminder would be a lie. Re-arming
+        // cancels the pending set and schedules from tomorrow — which is also
+        // what keeps a daily user from ever seeing the notification at all,
+        // and what makes the series run out for someone who stops.
+        //
+        // Not awaited: it touches the OS scheduler, and the done screen should
+        // not wait on it.
+        void useReminderStore.getState().reschedule({
+          title: t('settings:reminderTitle'),
+          body: t('settings:reminderBody'),
+        });
+
         // Report the completion. Fire and forget — if the network is flaky we
         // still show the done screen. The server enforces one-per-day on
         // everything this credits, so a retry won't double-count.
@@ -438,7 +451,7 @@ export function ReviewScreen({
         // Phase stays 'card' — the next card mounts on the same surface.
       }
     },
-    [currentCard, index, cards.length, fade, stats, isPracticePath, kind]
+    [currentCard, index, cards.length, fade, stats, isPracticePath, kind, t]
   );
 
   if (phase === 'loading') {

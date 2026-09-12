@@ -28,7 +28,7 @@
  *     under concurrent rendering measured 39ms. See the effect for the trace.
  */
 
-import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { directionSign, isRTL } from '../../i18n/rtl';
 import {
@@ -59,12 +59,24 @@ interface Props {
    * screen on top of them and can no longer answer the question.
    */
   showing?: boolean;
+  /**
+   * The screen this one goes BACK to, rendered underneath while a drag is in
+   * progress. Optional; omit it and the drag uncovers whatever is already
+   * below this layer, which is the right answer when the destination is a
+   * kept-alive tab.
+   *
+   * A function, not a node, and called only once a drag has started: the
+   * destination is a whole screen, and mounting one on every navigation to pay
+   * for a gesture most users never make would be a permanent cost for an
+   * occasional benefit.
+   */
+  renderBehind?: () => ReactNode;
 }
 
 /** How long the screen takes to finish leaving once the swipe commits. */
 const COMMIT_MS = 190;
 
-export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
+export function SwipeBackView({ children, onBack, screenKey, showing, renderBehind }: Props) {
   const { width } = useWindowDimensions();
 
   // Logical drag offset: 0 at rest, growing toward the trailing edge. Converted
@@ -110,12 +122,32 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
    * three frames. The render-phase write was also being executed twice per
    * navigation, which is what a side effect in render gets you.
    */
+  /**
+   * Is a drag happening right now? Gates the layer underneath.
+   *
+   * State rather than a ref, because mounting the destination is a render —
+   * which is exactly the point: nothing is paid until a finger is on the
+   * screen, and the cost is one mount at the start of a gesture rather than
+   * one on every navigation.
+   */
+  const [dragging, setDragging] = useState(false);
+  const draggingRef = useRef(false);
+  const setDrag = (on: boolean) => {
+    if (draggingRef.current === on) return;
+    draggingRef.current = on;
+    setDragging(on);
+  };
+
   const shownKey = useRef(screenKey);
   useLayoutEffect(() => {
     if (shownKey.current === screenKey) return;
     shownKey.current = screenKey;
     translate.stopAnimation();
     translate.setValue(0);
+    // Navigation landed, so the real destination is now `children` and the
+    // stand-in underneath has done its job. Dropping it here rather than when
+    // the animation ends keeps the two from ever being on screen together.
+    setDrag(false);
   }, [screenKey, translate]);
 
   // On a root tab the deep-screen layer renders nothing and the live tab shows
@@ -139,6 +171,10 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
         // Once the screen is following the finger, a bit of vertical drift must
         // not hand the gesture back to a scroll view underneath.
         onPanResponderTerminationRequest: () => false,
+        // Claimed, so the destination goes up before the first frame of
+        // movement is drawn. Painting it on the first MOVE instead would show
+        // one frame of whatever is really behind this layer.
+        onPanResponderGrant: () => setDrag(true),
         onPanResponderMove: (_e, g) => {
           // Clamped at 0: dragging back past the start should not push the
           // screen off the other edge.
@@ -153,7 +189,7 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
               useNativeDriver: true,
               bounciness: 0,
               speed: 14,
-            }).start();
+            }).start(() => setDrag(false));
             return;
           }
           Animated.timing(translate, {
@@ -179,7 +215,8 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
           });
         },
         onPanResponderTerminate: () => {
-          Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+          Animated.spring(translate, { toValue: 0, useNativeDriver: true, bounciness: 0 })
+            .start(() => setDrag(false));
         },
       }),
     [translate, screenKey],
@@ -225,6 +262,21 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
       pointerEvents={empty ? 'none' : 'auto'}
       {...pan.panHandlers}
     >
+      {/* The destination, uncovered by the drag.
+          ────────────────────────────────────────
+          Always mounted as a host, always empty until a drag starts. The host
+          itself is unconditional on purpose: React reconciles children by
+          position, so a wrapper that came and went would shift the
+          Animated.View's index and remount the entire screen inside it on
+          every gesture — the same trap the comment above describes.
+
+          Inert to touch throughout. The finger that uncovered this is still
+          dragging the screen in front of it, and a tap landing on a
+          half-revealed row is a navigation nobody asked for. */}
+      <View style={styles.behind} pointerEvents="none" collapsable={false}>
+        {dragging && renderBehind ? renderBehind() : null}
+      </View>
+
       <Animated.View style={[styles.fill, { transform: [{ translateX }] }]}>
         {children}
       </Animated.View>
@@ -234,6 +286,7 @@ export function SwipeBackView({ children, onBack, screenKey, showing }: Props) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  behind: StyleSheet.absoluteFillObject,
   overlay: StyleSheet.absoluteFillObject,
   hidden: { display: 'none' },
 });

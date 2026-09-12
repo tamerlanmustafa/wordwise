@@ -69,5 +69,11 @@
   "account": "Hesap",
   "nativeLanguageFooter": "Kelimeler ve cümleler İngilizceden bu dile çevrilir.",
   "deleteAccountFooter": "Hesabını ve kayıtlı her şeyi kalıcı olarak siler. Bu işlem geri alınamaz.",
-  "notificationsFooter": "Uygulama seni ne zaman hatırlatacağına karar verir; cihazının bildirim ayarları her zaman önceliklidir."
+  "notificationsFooter": "Uygulama seni ne zaman hatırlatacağına karar verir; cihazının bildirim ayarları her zaman önceliklidir.",
+  "dailyReminder": "Günlük hatırlatma",
+  "dailyReminderDesc": "Çalışmadıysan tek bir hatırlatma. Birkaç gün yanıtsız kalırsa kendiliğinden durur.",
+  "reminderTime": "Şu saatte hatırlat",
+  "reminderTitle": "Serini koru",
+  "reminderBody": "Bugün çalışmadın — bir ders serini sürdürür.",
+  "reminderDenied": "WordWise için bildirimler cihaz ayarlarında kapalı."
 }

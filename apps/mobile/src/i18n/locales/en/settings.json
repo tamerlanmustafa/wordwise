@@ -69,5 +69,11 @@
   "account": "Account",
   "nativeLanguageFooter": "Words and sentences are translated from English into this language.",
   "deleteAccountFooter": "Permanently removes your account and everything saved to it. This cannot be undone.",
-  "notificationsFooter": "The app decides when to remind you; your device’s own notification settings always win."
+  "notificationsFooter": "The app decides when to remind you; your device’s own notification settings always win.",
+  "dailyReminder": "Daily reminder",
+  "dailyReminderDesc": "One nudge if you haven't practised. It stops on its own after a few unanswered days.",
+  "reminderTime": "Remind me at",
+  "reminderTitle": "Keep your streak",
+  "reminderBody": "You haven't practised today — one lesson keeps it going.",
+  "reminderDenied": "Notifications are off for WordWise in your device settings."
 }

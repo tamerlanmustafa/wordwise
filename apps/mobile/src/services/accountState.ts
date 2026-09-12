@@ -69,6 +69,11 @@ export const ACCOUNT_KEYS: readonly string[] = [
   'sync.queue.v1',                 // queued writes must never replay as someone else
   'offline_vocab_index',           // index for the offline_vocab_ blobs below
   'practice.path.cursor.v1',       // pre-2026-09-04 lesson cursor, un-scoped
+  // The daily reminder. Account-scoped rather than device-scoped because the
+  // message is about an account — "you haven't practised today" is meaningless
+  // once nobody is signed in, and the next person to use this phone did not
+  // ask to be nudged about someone else's streak.
+  'reminders.practice.v1',
 ];
 
 /**
@@ -168,4 +173,14 @@ export function resetAccountStores(): void {
 export async function resetAccountState(): Promise<void> {
   resetAccountStores();
   await clearAccountStorage();
+  // Clearing the preference is not enough. A scheduled local notification
+  // lives in the OS, not in this bundle, so the reminders already queued would
+  // keep arriving for days after sign-out — telling whoever holds the phone to
+  // keep up a streak that belongs to an account no longer on it. This is the
+  // same lesson `cancelWordReminder` exists to record.
+  try {
+    await require('./notifications').cancelPracticeReminders();
+  } catch {
+    /* best-effort — sign-out must not fail on a scheduler call */
+  }
 }

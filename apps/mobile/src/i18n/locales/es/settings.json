@@ -69,5 +69,11 @@
   "account": "Cuenta",
   "nativeLanguageFooter": "Las palabras y frases se traducen del inglés a este idioma.",
   "deleteAccountFooter": "Elimina permanentemente tu cuenta y todo lo guardado en ella. Esto no se puede deshacer.",
-  "notificationsFooter": "La app decide cuándo recordártelo; los ajustes de notificaciones de tu dispositivo siempre mandan."
+  "notificationsFooter": "La app decide cuándo recordártelo; los ajustes de notificaciones de tu dispositivo siempre mandan.",
+  "dailyReminder": "Recordatorio diario",
+  "dailyReminderDesc": "Un aviso si no has practicado. Se detiene solo tras unos días sin respuesta.",
+  "reminderTime": "Avísame a las",
+  "reminderTitle": "Mantén tu racha",
+  "reminderBody": "Hoy no has practicado: una lección la mantiene viva.",
+  "reminderDenied": "Las notificaciones están desactivadas para WordWise en los ajustes del dispositivo."
 }
