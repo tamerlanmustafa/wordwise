@@ -210,9 +210,20 @@ export function PremiumSheet() {
   if (!rendered) return null;
 
   const subtitle = paywallSubtitle(reason, 0, 0);
-  // A one-off purchase has no trial to start.
+  // The trial belongs to the MONTHLY plan now, so the button has to say three
+  // different things. A single "Start 7-day free trial" across all three was a
+  // promise two of them do not keep — the store would have contradicted it at
+  // checkout, which is the worst possible place to be caught out.
   const ctaKey =
-    plan === 'lifetime' ? 'billing:paywall.buyLifetime' : 'billing:paywall.startTrial';
+    plan === 'lifetime' ? 'billing:paywall.buyLifetime'
+      : plan === 'monthly' ? 'billing:paywall.startTrial'
+      : 'billing:paywall.getPlus';
+  const hint =
+    plan === 'lifetime'
+      ? t('billing:paywall.lifetimeHint')
+      : plan === 'monthly'
+        ? t('billing:paywall.hintTrial', { price: MONTHLY_PRICE_LABEL })
+        : t('billing:paywall.hintAnnual', { price: ANNUAL_PRICE_LABEL });
   const savings = annualSavingsPercent();
   const translateY = anim.interpolate({
     inputRange: [0, 1],
@@ -248,24 +259,6 @@ export function PremiumSheet() {
           <Text style={s.hero}>{t('billing:paywall.heroTitle')}</Text>
           <Text style={s.sub}>{t(subtitle.key, subtitle.params)}</Text>
 
-          <View style={s.features}>
-            {PAYWALL_FEATURES.map((f) => (
-              <View key={f.title} style={s.featureRow}>
-                <View style={s.featureIcon}>
-                  {f.icon === 'brain' ? <BrainIcon size={20} color={tc.gold} />
-                    : f.icon === 'film' ? <FilmIcon size={20} color={tc.gold} />
-                    : f.icon === 'shield' ? <ShieldIcon size={20} animate={false} />
-                    : f.icon === 'block' ? <BlockIcon size={20} color={tc.gold} />
-                    : <ChartIcon size={20} color={tc.gold} />}
-                </View>
-                <View style={s.featureText}>
-                  <Text style={s.featureTitle}>{f.title}</Text>
-                  <Text style={s.featureDesc}>{f.desc}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
           <View style={s.plans}>
             {(['annual', 'monthly'] as const).map((p) => {
               const active = plan === p;
@@ -284,6 +277,17 @@ export function PremiumSheet() {
                       <Text style={s.saveText}>{`SAVE ${savings}%`}</Text>
                     </View>
                   ) : null}
+                  {/* The trial rides on monthly, in the same badge slot the
+                      annual card uses for its discount — so both cards lead
+                      with their own reason to be picked, and neither has to
+                      be read to find one. */}
+                  {p === 'monthly' ? (
+                    <View style={[s.saveBadge, s.trialBadge]}>
+                      <Text style={[s.saveText, s.trialText]}>
+                        {t('billing:paywall.trialBadge')}
+                      </Text>
+                    </View>
+                  ) : null}
                   {/* Untranslated, exactly as `PaywallScreen` has them. The
                       plan names, the badge and the feature list are all
                       English on that screen, so translating only this one
@@ -293,9 +297,13 @@ export function PremiumSheet() {
                       it belongs to both surfaces at once, not to this file. */}
                   <Text style={s.planName}>{p === 'annual' ? 'ANNUAL' : 'MONTHLY'}</Text>
                   <Text style={s.planPrice}>
-                    {p === 'annual' ? ANNUAL_PRICE_LABEL : MONTHLY_PRICE_LABEL}
+                    {p === 'annual' ? ANNUAL_PRICE_LABEL : t('billing:paywall.free')}
                   </Text>
-                  <Text style={s.planCadence}>{p === 'annual' ? '/year' : '/month'}</Text>
+                  <Text style={s.planCadence}>
+                    {p === 'annual'
+                      ? '/year'
+                      : t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
+                  </Text>
                   <View style={[s.radio, active && s.radioOn]} />
                 </TouchableOpacity>
               );
@@ -335,6 +343,26 @@ export function PremiumSheet() {
               {busy ? t('billing:paywall.starting') : t(ctaKey)}
             </Text>
           </PressablePill>
+
+          <Text style={s.hint}>{hint}</Text>
+
+          <View style={s.features}>
+            {PAYWALL_FEATURES.map((f) => (
+              <View key={f.title} style={s.featureRow}>
+                <View style={s.featureIcon}>
+                  {f.icon === 'brain' ? <BrainIcon size={20} color={tc.gold} />
+                    : f.icon === 'film' ? <FilmIcon size={20} color={tc.gold} />
+                    : f.icon === 'shield' ? <ShieldIcon size={20} animate={false} />
+                    : f.icon === 'block' ? <BlockIcon size={20} color={tc.gold} />
+                    : <ChartIcon size={20} color={tc.gold} />}
+                </View>
+                <View style={s.featureText}>
+                  <Text style={s.featureTitle}>{f.title}</Text>
+                  <Text style={s.featureDesc}>{f.desc}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
 
           <View style={s.footer}>
             <TouchableOpacity
@@ -436,6 +464,11 @@ const makeStyles = (tc: ThemeColors) =>
       paddingVertical: 2,
     },
     saveText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: tc.goldDeep },
+    // The trial badge is the same shape as the savings badge but reads as a
+    // gift rather than a discount, so it takes the surface colour rather than
+    // the gold one — two identical gold pills side by side would compete.
+    trialBadge: { backgroundColor: tc.text },
+    trialText: { color: tc.paper },
     planName: {
       fontSize: 10,
       fontWeight: '800',
@@ -466,6 +499,13 @@ const makeStyles = (tc: ThemeColors) =>
     lifetimeOn: { borderColor: tc.gold, backgroundColor: tc.goldWash },
     lifetimeText: { fontSize: 12.5, fontWeight: '700', color: tc.textSecondary },
     lifetimeTextOn: { color: tc.text },
+
+    hint: {
+      fontSize: 11.5,
+      color: tc.textFaint,
+      textAlign: 'center',
+      paddingBottom: 16,
+    },
 
     cta: { marginBottom: 14 },
     ctaFace: {

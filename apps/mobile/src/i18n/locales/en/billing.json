@@ -15,7 +15,13 @@
     "subGeneric": "Upgrade to review as much as you like, with spaced repetition that keeps words from slipping away.",
     "lifetimeOffer": "Or pay once — {{price}}",
     "buyLifetime": "Unlock forever",
-    "lifetimeHint": "One payment · Yours for good"
+    "lifetimeHint": "One payment · Yours for good",
+    "trialBadge": "7 DAYS FREE",
+    "afterTrial": "then {{price}}/mo",
+    "getPlus": "Get Plus",
+    "hintTrial": "Free for 7 days, then {{price}} a month · Cancel anytime",
+    "hintAnnual": "{{price}} a year · Cancel anytime",
+    "free": "Free"
   },
   "family": {
     "title": "Family Plan",

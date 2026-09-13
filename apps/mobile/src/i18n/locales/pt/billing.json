@@ -35,6 +35,12 @@
     "subGeneric": "Assine para revisar quanto quiser, com repetição espaçada para as palavras não escaparem.",
     "lifetimeOffer": "Ou pague uma vez — {{price}}",
     "buyLifetime": "Desbloquear para sempre",
-    "lifetimeHint": "Pagamento único · Seu para sempre"
+    "lifetimeHint": "Pagamento único · Seu para sempre",
+    "trialBadge": "7 DIAS GRÁTIS",
+    "afterTrial": "depois {{price}}/mês",
+    "getPlus": "Obter o Plus",
+    "hintTrial": "Grátis por 7 dias, depois {{price}} por mês · Cancele quando quiser",
+    "hintAnnual": "{{price}} por ano · Cancele quando quiser",
+    "free": "Grátis"
   }
 }

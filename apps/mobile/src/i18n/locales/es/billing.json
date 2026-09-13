@@ -35,6 +35,12 @@
     "subGeneric": "Mejora tu plan para repasar todo lo que quieras, con repetición espaciada para que no se te olviden las palabras.",
     "lifetimeOffer": "O paga una vez — {{price}}",
     "buyLifetime": "Desbloquear para siempre",
-    "lifetimeHint": "Un solo pago · Tuyo para siempre"
+    "lifetimeHint": "Un solo pago · Tuyo para siempre",
+    "trialBadge": "7 DÍAS GRATIS",
+    "afterTrial": "luego {{price}}/mes",
+    "getPlus": "Obtener Plus",
+    "hintTrial": "Gratis 7 días, luego {{price}} al mes · Cancela cuando quieras",
+    "hintAnnual": "{{price}} al año · Cancela cuando quieras",
+    "free": "Gratis"
   }
 }

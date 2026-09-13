@@ -35,6 +35,12 @@
     "subGeneric": "İstediğin kadar tekrar yapmak için yükselt — aralıklı tekrar kelimelerin unutulmasını önler.",
     "lifetimeOffer": "Ya da tek seferde öde — {{price}}",
     "buyLifetime": "Sonsuza dek aç",
-    "lifetimeHint": "Tek ödeme · Sonsuza dek senin"
+    "lifetimeHint": "Tek ödeme · Sonsuza dek senin",
+    "trialBadge": "7 GÜN ÜCRETSİZ",
+    "afterTrial": "sonra {{price}}/ay",
+    "getPlus": "Plus'ı al",
+    "hintTrial": "7 gün ücretsiz, sonra ayda {{price}} · İstediğin zaman iptal et",
+    "hintAnnual": "Yılda {{price}} · İstediğin zaman iptal et",
+    "free": "Ücretsiz"
   }
 }

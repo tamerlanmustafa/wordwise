@@ -58,8 +58,12 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
   const [busy, setBusy] = useState(false);
   const savings = annualSavingsPercent();
   const subtitle = paywallSubtitle(reason, previewsUsed, previewsLimit);
+  // The trial belongs to MONTHLY now, so one label across all three plans
+  // would be a promise two of them do not keep.
   const ctaKey =
-    plan === 'lifetime' ? 'billing:paywall.buyLifetime' : 'billing:paywall.startTrial';
+    plan === 'lifetime' ? 'billing:paywall.buyLifetime'
+      : plan === 'monthly' ? 'billing:paywall.startTrial'
+      : 'billing:paywall.getPlus';
   const barInset = useBottomBarInset();
 
   const buy = async () => {
@@ -146,8 +150,10 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
                 selected={plan === 'monthly'}
                 onPress={withTap(() => setPlan('monthly'))}
                 title="Monthly"
-                price={MONTHLY_PRICE_LABEL}
-                cadence="/month"
+                price={t('billing:paywall.free')}
+                cadence={t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
+                badge={t('billing:paywall.trialBadge')}
+                badgeTone="trial"
               />
             </View>
 
@@ -173,14 +179,13 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
             >
               <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t(ctaKey)}</Text>
             </PressableScale>
-            {plan === 'lifetime' ? (
-              <Text style={s.priceHint}>{t('billing:paywall.lifetimeHint')}</Text>
-            ) : (
-              <Text style={s.priceHint}>
-                Then {plan === 'annual' ? `${ANNUAL_PRICE_LABEL}/year` : `${MONTHLY_PRICE_LABEL}/month`} · Cancel
-                anytime
-              </Text>
-            )}
+            <Text style={s.priceHint}>
+              {plan === 'lifetime'
+                ? t('billing:paywall.lifetimeHint')
+                : plan === 'monthly'
+                  ? t('billing:paywall.hintTrial', { price: MONTHLY_PRICE_LABEL })
+                  : t('billing:paywall.hintAnnual', { price: ANNUAL_PRICE_LABEL })}
+            </Text>
 
             <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel={t('billing:paywall.restore')}>
               <Text style={s.restoreBtnText}>{t('billing:paywall.restore')}</Text>
@@ -200,6 +205,7 @@ function PlanCard({
   price,
   cadence,
   badge,
+  badgeTone = 'save',
 }: {
   tc: ThemeColors;
   selected: boolean;
@@ -208,6 +214,9 @@ function PlanCard({
   price: string;
   cadence: string;
   badge?: string;
+  /** Paints the badge as an offer rather than a discount. Two identical gold
+   *  pills side by side would compete; the trial is a gift, not a saving. */
+  badgeTone?: 'save' | 'trial';
 }) {
   const s = useMemo(() => makeStyles(tc), [tc]);
   return (
@@ -219,8 +228,10 @@ function PlanCard({
       accessibilityLabel={`${title} ${price} ${cadence}`}
     >
       {badge ? (
-        <View style={s.planBadge}>
-          <Text style={s.planBadgeText}>{badge}</Text>
+        <View style={[s.planBadge, badgeTone === 'trial' && s.planBadgeTrial]}>
+          <Text style={[s.planBadgeText, badgeTone === 'trial' && s.planBadgeTextTrial]}>
+            {badge}
+          </Text>
         </View>
       ) : null}
       <Text style={s.planTitle}>{title}</Text>
@@ -273,6 +284,8 @@ const makeStyles = (tc: ThemeColors) =>
       paddingVertical: 3,
       borderRadius: 999,
     },
+    planBadgeTrial: { backgroundColor: tc.text },
+    planBadgeTextTrial: { color: tc.paper },
     planBadgeText: { fontSize: 10, fontWeight: '900', color: tc.goldDeep, letterSpacing: 0.4 },
     planTitle: { fontSize: 13, fontWeight: '800', color: tc.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 },
     planPrice: { fontFamily: SERIF_FAMILY, fontSize: 26, fontWeight: '800', color: tc.text, marginTop: 6 },
