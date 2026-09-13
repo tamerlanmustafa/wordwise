@@ -26,7 +26,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { NAMESPACES } from '../resources';
+import { DEFAULT_NAMESPACE, NAMESPACES } from '../resources';
 import { FALLBACK_LANGUAGE } from '../languages';
 
 const SRC = path.join(__dirname, '..', '..');
@@ -88,6 +88,24 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 /** `t('ns:key')` / `t("ns:key")` with a literal, namespaced key. */
 const T_CALL = /\bt\(\s*['"]([a-zA-Z0-9_]+:[a-zA-Z0-9_.]+)['"]/g;
 
+/**
+ * `t('dotted.key')` with NO namespace — resolved against `DEFAULT_NAMESPACE`.
+ *
+ * These are invisible to the guard above, which requires a colon — so a
+ * mistyped un-namespaced key would render as its own name, exactly the way
+ * `quiz:mcq.exerciseType` once did.
+ *
+ * Resolving them needs the file's OWN default namespace, not the global one:
+ * `useTranslation('lists')` makes every bare key in that file a `lists:` key.
+ * Reading that per file is the difference between a useful guard and 38 false
+ * positives.
+ *
+ * Deliberately excludes anything containing a colon (handled above) and
+ * anything without a dot — `t(key)` with a variable, and the handful of
+ * single-word keys, are not worth the noise.
+ */
+const T_CALL_DEFAULT_NS = /\bt\(\s*['"]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['"]/g;
+
 describe('i18n keys referenced in code', () => {
   const missing: string[] = [];
 
@@ -97,6 +115,15 @@ describe('i18n keys referenced in code', () => {
       const key = m[1];
       if (!KNOWN.has(key)) {
         missing.push(`${path.relative(SRC, file)}  ${key}`);
+      }
+    }
+    // `useTranslation('x')` sets this file's default namespace; a bare
+    // `useTranslation()` leaves it at the global one.
+    const nsMatch = src.match(/useTranslation\(\s*['"]([a-zA-Z0-9_]+)['"]/);
+    const fileNs = nsMatch ? nsMatch[1] : DEFAULT_NAMESPACE;
+    for (const m of src.matchAll(T_CALL_DEFAULT_NS)) {
+      if (!KNOWN.has(`${fileNs}:${m[1]}`)) {
+        missing.push(`${path.relative(SRC, file)}  ${m[1]} (ns: ${fileNs})`);
       }
     }
   }

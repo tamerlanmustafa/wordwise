@@ -48,6 +48,7 @@
  * rather than erroring.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { classifyFailure, type ConnectionFailure } from '../services/connection';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../services/api';
 import { readCache, writeCache } from '../services/swrCache';
 import {
@@ -101,6 +102,11 @@ export function useInfiniteCefrMovies(
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** The same failure, classified. `error` is a message for logs; this is what
+   *  decides which sentence the reader gets, and it has to be captured HERE —
+   *  by the time the string exists the thrown object is gone, and with it the
+   *  only reliable way to tell "no network" from "our server". */
+  const [failure, setFailure] = useState<ConnectionFailure | null>(null);
 
   const [nextRotationAt, setNextRotationAt] = useState<string | null>(null);
 
@@ -205,9 +211,11 @@ export function useInfiniteCefrMovies(
         setHasMore(!!res.has_more);
         setMovies((prev) => (reset ? enriched : [...prev, ...enriched]));
         setError(null);
+        setFailure(null);
       } catch (e: any) {
         if (reqId !== reqIdRef.current) return;
         setError(e?.message || 'Failed to load movies');
+        setFailure(classifyFailure(e));
         // Empty the list only when there is nothing better to show. If the
         // cache painted, the user keeps last session's films — which is the
         // whole point of caching a read: on a plane or a bad connection, a
@@ -261,6 +269,7 @@ export function useInfiniteCefrMovies(
     loadingMore,
     hasMore,
     error,
+    failure,
     loadMore,
     reload: () => fetchPage(true),
     removeMovie,

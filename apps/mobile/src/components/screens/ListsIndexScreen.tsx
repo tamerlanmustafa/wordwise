@@ -28,6 +28,8 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ConnectionStrip, SlowConnectionStrip } from '../common/ConnectionError';
+import { useSlowConnection } from '../../hooks/useSlowConnection';
 import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
@@ -76,6 +78,7 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
   const lists = useListsStore((st) => st.lists);
   const status = useListsStore((st) => st.status);
   const loadError = useListsStore((st) => st.loadError);
+  const failure = useListsStore((st) => st.failure);
   const activeKind = useListsStore((st) => st.activeKind);
   const setActiveKind = useListsStore((st) => st.setActiveKind);
   const hydrate = useListsStore((st) => st.hydrate);
@@ -172,6 +175,9 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
    * page changing shape.
    */
   const loading = status !== 'ready' && lists.length === 0;
+  // `loading` is already "nothing to show yet", so this needs no extra guard:
+  // a slow refresh behind rows the reader can see is not worth a banner.
+  const slow = useSlowConnection(loading);
 
   const keyOf = useCallback((list: ListSummary) => String(list.id), []);
 
@@ -208,11 +214,13 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
   const header = useMemo(
     () => (
       <>
-        {loadError ? (
-          <TouchableOpacity style={s.retry} onPress={withTap(() => void fetchLists())} activeOpacity={0.7}>
-            <Text style={s.retryText}>{t('error.retry')}</Text>
-          </TouchableOpacity>
+        {/* Was a bare "Couldn't refresh. Tap to try again." link, which told
+            the reader nothing about WHY — the one thing that decides whether
+            waiting or checking their signal is the useful next move. */}
+        {loadError && failure ? (
+          <ConnectionStrip failure={failure} onRetry={() => void fetchLists()} />
         ) : null}
+        {slow ? <SlowConnectionStrip /> : null}
         {loading
           ? [0, 1, 2].map((i) => (
               // The row's full painted height — face plus the edge under it —
@@ -229,7 +237,7 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
           : null}
       </>
     ),
-    [loadError, loading, fetchLists, s.retry, s.retryText, s.rowSkeleton, t],
+    [loadError, failure, slow, loading, fetchLists, s.rowSkeleton],
   );
 
   return (

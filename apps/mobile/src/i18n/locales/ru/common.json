@@ -106,5 +106,14 @@
   "wordCount_few": "{{count}} слова",
   "wordCount_many": "{{count}} слов",
   "wordCount_one": "{{count}} слово",
-  "wordCount_other": "{{count}} слова"
+  "wordCount_other": "{{count}} слова",
+  "connection": {
+    "offlineTitle": "Нет соединения",
+    "offlineBody": "Сейчас соединения нет. Проверьте сигнал или Wi-Fi и попробуйте снова.",
+    "serverTitle": "У нас неполадки",
+    "serverBody": "Сбой на нашей стороне, а не у вас. Попробуйте через минуту.",
+    "unknownTitle": "Не удалось загрузить",
+    "unknownBody": "Не получилось. Попробуйте снова.",
+    "slowTitle": "Медленное соединение — загружаем"
+  }
 }

@@ -45,6 +45,12 @@ import {
 } from '../filmFeed/filterOptions';
 import { useFeedLevel } from '../../hooks/useFeedLevel';
 import { useInfiniteCefrMovies } from '../../hooks/useInfiniteCefrMovies';
+import { useSlowConnection } from '../../hooks/useSlowConnection';
+import {
+  ConnectionError,
+  ConnectionStrip,
+  SlowConnectionStrip,
+} from '../common/ConnectionError';
 import { reduceCollapse, initialCollapseState, type CollapseState } from '../../utils/collapseOnScroll';
 import { withTap } from '../../utils/feedback';
 
@@ -159,6 +165,8 @@ export const FilmFeedScreen = React.memo(({
     loadMore: loadMoreLevel,
     removeMovie: removeLevelMovie,
     insertMovie: insertLevelMovie,
+    failure: levelFailure,
+    reload: reloadLevel,
   } = useInfiniteCefrMovies(
     selectedLevel,
     levelSort,
@@ -166,6 +174,7 @@ export const FilmFeedScreen = React.memo(({
     movieType,
   );
   const [loading, setLoading] = useState(true);
+  const levelSlow = useSlowConnection(levelLoading && levelMovies.length === 0);
   const [todaysWord, setTodaysWord] = useState<TodaysWord | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -600,9 +609,24 @@ export const FilmFeedScreen = React.memo(({
           and keyboard-dismiss now that the outer ScrollView is gone, and its
           scroll offset drives the Word-of-the-Hour collapse above. The cards
           themselves are untouched; the container just trims side padding. */}
+      {/* Cached films painted, but the refresh behind them failed. Reported
+          above the list rather than instead of it: a slightly stale feed beats
+          an empty screen, which is the whole reason the cache exists. */}
+      {homeTab === 'level' && levelFailure && levelMovies.length > 0 ? (
+        <ConnectionStrip failure={levelFailure} onRetry={reloadLevel} />
+      ) : null}
+
       <View style={s.feedSection}>
         {(homeTab === 'level' ? levelLoading : loading) ? (
-          <FeedSkeleton />
+          <>
+            {levelSlow ? <SlowConnectionStrip /> : null}
+            <FeedSkeleton />
+          </>
+        ) : homeTab === 'level' && levelFailure && levelMovies.length === 0 ? (
+          // The feed failed with nothing cached behind it. This used to be an
+          // empty list with no message and nothing to tap — the hook returned
+          // both the error and a `reload`, and the screen discarded them.
+          <ConnectionError failure={levelFailure} onRetry={reloadLevel} />
         ) : homeTab === 'level' ? (
           <RankedMovieList
             movies={levelMovies}

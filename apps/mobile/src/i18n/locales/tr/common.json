@@ -102,5 +102,14 @@
     "dontShowAgain": "Bir daha gösterme"
   },
   "wordCount_one": "{{count}} kelime",
-  "wordCount_other": "{{count}} kelime"
+  "wordCount_other": "{{count}} kelime",
+  "connection": {
+    "offlineTitle": "Bağlantı yok",
+    "offlineBody": "Şu anda bağlı değilsin. Sinyalini veya Wi-Fi'ı kontrol edip tekrar dene.",
+    "serverTitle": "Bir sorun yaşıyoruz",
+    "serverBody": "Sorun bizim tarafımızda, seninkinde değil. Birazdan tekrar dene.",
+    "unknownTitle": "Yüklenemedi",
+    "unknownBody": "Bu işlem geçmedi. Tekrar dene.",
+    "slowTitle": "Yavaş bağlantı — yükleniyor"
+  }
 }

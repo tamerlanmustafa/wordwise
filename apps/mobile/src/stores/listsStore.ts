@@ -15,6 +15,7 @@
 
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { classifyFailure, type ConnectionFailure } from '../services/connection';
 import {
   ListApiError,
   listsApi,
@@ -62,6 +63,10 @@ interface ListsState {
   /** True when the last fetch couldn't reach the server. An empty `lists`
    *  here means "we don't know", not "you have none". */
   loadError: boolean;
+  /** WHY the last load failed, for the error view. `loadError` says something
+   *  went wrong; this says whether it is the reader's network or our server,
+   *  which are different sentences and different advice. */
+  failure: ConnectionFailure | null;
   error: string | null;
   activeKind: ListKind;
   hydrated: boolean;
@@ -133,6 +138,7 @@ export const useListsStore = create<ListsState>((set, get) => ({
   byId: {},
   status: 'idle',
   loadError: false,
+  failure: null,
   error: null,
   // Words, not films. The Lists tab is where saved vocabulary lives — the
   // film lists are a way of grouping the words, not the point of the screen.
@@ -174,13 +180,13 @@ export const useListsStore = create<ListsState>((set, get) => ({
     set({ status: get().lists.length ? 'ready' : 'loading', loadError: false });
     try {
       const lists = await listsApi.list();
-      set({ lists, status: 'ready', loadError: false, error: null });
+      set({ lists, status: 'ready', loadError: false, failure: null, error: null });
       // Fire-and-forget: caching is an optimisation, never a step the user
       // waits behind.
       void writeCache(LISTS_CACHE_KEY, lists);
     } catch (e) {
       console.warn('[listsStore] fetchLists failed:', e);
-      set({ status: 'ready', loadError: true });
+      set({ status: 'ready', loadError: true, failure: classifyFailure(e) });
     }
   },
 
@@ -193,10 +199,11 @@ export const useListsStore = create<ListsState>((set, get) => ({
         // the index so a count changed elsewhere doesn't linger.
         lists: replaceSummary(get().lists, detail.summary),
         loadError: false,
+        failure: null,
       });
     } catch (e) {
       console.warn('[listsStore] fetchDetail failed:', e);
-      set({ loadError: true });
+      set({ loadError: true, failure: classifyFailure(e) });
     }
   },
 

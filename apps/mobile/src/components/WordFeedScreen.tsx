@@ -57,6 +57,12 @@ import { ListPanel } from './wordFeed/ListPanel';
 import { useListsStore } from '../stores/listsStore';
 import { showToast as globalToast } from '../stores/toastStore';
 import { Skeleton } from './ui/Skeleton';
+import {
+  ConnectionError,
+  ConnectionStrip,
+  SlowConnectionStrip,
+} from './common/ConnectionError';
+import { useSlowConnection } from '../hooks/useSlowConnection';
 import { withTap } from '../utils/feedback';
 
 interface Props {
@@ -91,6 +97,10 @@ function WordFeedScreenInner({
   const saved = useWordFeedStore((st) => st.saved);
   const activeIndex = useWordFeedStore((st) => st.activeIndex);
   const loading = useWordFeedStore((st) => st.loading);
+  const failure = useWordFeedStore((st) => st.failure);
+  // Only while the screen has nothing to show. A slow background page-2 fetch
+  // behind a readable card is not worth a banner.
+  const slow = useSlowConnection(loading && items.length === 0);
   const exhausted = useWordFeedStore((st) => st.exhausted);
   const hydrate = useWordFeedStore((st) => st.hydrate);
   const fetchNext = useWordFeedStore((st) => st.fetchNext);
@@ -371,11 +381,25 @@ function WordFeedScreenInner({
             // list outright avoids a half-scrolled card behind it.
             scrollEnabled={!anyPanelOpen}
             ListEmptyComponent={
-              loading ? <CardSkeleton height={cardHeight} s={s} /> : null
+              loading ? (
+                <>
+                  {slow ? <SlowConnectionStrip /> : null}
+                  <CardSkeleton height={cardHeight} s={s} />
+                </>
+              ) : failure ? (
+                // The gap this closes: the feed tracked `loadError` and
+                // rendered nothing for it, so a cold start with no signal was
+                // a blank screen with no explanation and nothing to tap.
+                <ConnectionError failure={failure} onRetry={() => void fetchNext()} />
+              ) : null
             }
             ListFooterComponent={
               loading && items.length > 0 ? (
                 <CardSkeleton height={cardHeight} s={s} />
+              ) : failure && items.length > 0 ? (
+                // Cards already on screen, so the failure reports quietly
+                // rather than replacing a feed the reader is part-way through.
+                <ConnectionStrip failure={failure} onRetry={() => void fetchNext()} />
               ) : null
             }
           />

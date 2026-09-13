@@ -27,6 +27,7 @@
 
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { classifyFailure, type ConnectionFailure } from '../services/connection';
 import { authApi, srsApi, wordwiseApi, type FeedItem, type LevelMix } from '../services/api';
 import { useAuthStore } from './authStore';
 import { useListsStore } from './listsStore';
@@ -68,6 +69,10 @@ interface WordFeedState {
   /** True once the server says there are no more pages. */
   exhausted: boolean;
   loadError: boolean;
+  /** WHY the last fetch failed. `loadError` says something went wrong; this
+   *  says whether it was the reader's network or our server — different
+   *  sentences, and different advice. */
+  failure: ConnectionFailure | null;
   mix: LevelMix;
   /** What the server actually honoured on the last page. */
   mixApplied: LevelMix;
@@ -194,6 +199,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
   loading: false,
   exhausted: false,
   loadError: false,
+  failure: null,
   mix: defaultMixForLevel('B1'),
   mixApplied: {},
   activeIndex: 0,
@@ -254,7 +260,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
     const { loading, exhausted, mix, items } = get();
     if (loading || exhausted) return;
 
-    set({ loading: true, loadError: false });
+    set({ loading: true, loadError: false, failure: null });
     try {
       const res = await srsApi.feed({
         limit: FEED_PAGE_SIZE,
@@ -302,7 +308,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       persistBuffer(next, get().saved);
     } catch (e) {
       console.warn('[wordFeedStore] fetchNext failed:', e);
-      set({ loading: false, loadError: true });
+      set({ loading: false, loadError: true, failure: classifyFailure(e) });
     }
   },
 
@@ -439,6 +445,7 @@ export const useWordFeedStore = create<WordFeedState>((set, get) => ({
       loading: false,
       exhausted: false,
       loadError: false,
+      failure: null,
       activeIndex: 0,
       saved: new Set<number>(),
       hydrated: false,

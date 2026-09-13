@@ -102,5 +102,14 @@
     "dontShowAgain": "No volver a mostrar"
   },
   "wordCount_one": "{{count}} palabra",
-  "wordCount_other": "{{count}} palabras"
+  "wordCount_other": "{{count}} palabras",
+  "connection": {
+    "offlineTitle": "Sin conexión",
+    "offlineBody": "Ahora mismo no tienes conexión. Revisa tu señal o el Wi-Fi e inténtalo de nuevo.",
+    "serverTitle": "Tenemos un problema",
+    "serverBody": "Algo falló de nuestro lado, no del tuyo. Inténtalo en un momento.",
+    "unknownTitle": "No se pudo cargar",
+    "unknownBody": "No salió bien. Inténtalo de nuevo.",
+    "slowTitle": "Conexión lenta: seguimos cargando"
+  }
 }

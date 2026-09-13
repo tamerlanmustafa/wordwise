@@ -102,5 +102,14 @@
     "53": "Thriller",
     "10752": "War",
     "37": "Western"
+  },
+  "connection": {
+    "offlineTitle": "No connection",
+    "offlineBody": "You're not connected right now. Check your signal or Wi-Fi and try again.",
+    "serverTitle": "We're having trouble",
+    "serverBody": "Something broke on our end, not yours. Try again in a moment.",
+    "unknownTitle": "Couldn't load",
+    "unknownBody": "That didn't go through. Try again.",
+    "slowTitle": "Slow connection — still loading"
   }
 }
