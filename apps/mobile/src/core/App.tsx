@@ -127,6 +127,10 @@ export default function App() {
   // account one is all a fresh install has.
   const onboardingDone = onboardingDoneLocally || user?.onboarding_completed === true;
 
+  /** Whether there is an account to derive anything from. See the app-language
+   *  effect below, which must re-run when this flips. */
+  const signedIn = !!user;
+
   // Navigation state
   // The word feed. It is the first tab and the one now labelled "Home", so it
   // is what a launch lands on — a tab bar whose leftmost cell says Home while
@@ -261,7 +265,17 @@ export default function App() {
   // immediately and refreshes /auth/me in the background.
   useEffect(() => {
     if (!targetLanguageLoaded) return;
-    void hydrateAppLanguage(targetLanguage, user?.language_preference).then((resolved) => {
+    // `user ? … : null` — the initial `targetLanguage` is the literal 'ES'
+    // below, which is a placeholder for the picker, not an opinion about the
+    // interface. Signing out clears the stored value (it is an account key),
+    // so a signed-out app fell back to that placeholder and rendered its login
+    // screen in Spanish to everyone. Measured: sign out of an English account
+    // and the whole screen turns Spanish.
+    //
+    // With no account there is no translation language to follow, so this
+    // hands `null` and lets the device locale decide — which is what a person
+    // who has never signed in should see.
+    void hydrateAppLanguage(signedIn ? targetLanguage : null, user?.language_preference).then((resolved) => {
       // Layout direction is native state fixed when the bridge boots, so a
       // language that disagrees with it only takes effect after a reload. Doing
       // it here, silently, is safe: this runs during startup, before there is
@@ -269,7 +283,11 @@ export default function App() {
       // Settings is prompted for instead.
       if (syncRtlLayout(resolved)) void reloadForRtl();
     });
-  }, [targetLanguage, targetLanguageLoaded, user?.language_preference]);
+    // `signedIn`, not `user?.language_preference` alone: an account whose
+    // preference is null goes undefined → undefined across a sign-out, so the
+    // dep would not change and the effect would never re-run to drop the
+    // translation language.
+  }, [targetLanguage, targetLanguageLoaded, user?.language_preference, signedIn]);
 
   // Warm the Explore feed during boot instead of on the first tab tap. The
   // tab is lazily mounted (KeepAlive), so without this its first request

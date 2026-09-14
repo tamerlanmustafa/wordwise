@@ -94,3 +94,36 @@ describe('the Settings picker clears the pin rather than moving it', () => {
     expect(read()).toContain('clearExplicitAppLanguage(');
   });
 });
+
+describe('a signed-out app does not inherit a translation language', () => {
+  const read = () =>
+    fs
+      .readFileSync(path.join(__dirname, '..', '..', 'core', 'App.tsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('passes null rather than the picker placeholder when nobody is signed in', () => {
+    // `targetLanguage` initialises to the literal 'ES' — a placeholder so the
+    // picker has a value, not an opinion about the interface. Signing out
+    // clears the stored override (it is an account key), so the placeholder
+    // was what reached hydrateAppLanguage and the login screen rendered in
+    // Spanish for everyone. Measured on device before this.
+    expect(read()).toContain('hydrateAppLanguage(signedIn ? targetLanguage : null');
+  });
+
+  it('re-runs the effect when sign-in state flips', () => {
+    // An account whose language_preference is null goes undefined → undefined
+    // across a sign-out, so depending on that alone would never re-run and the
+    // interface would keep the signed-out user's last language.
+    const src = read();
+    const deps = src.match(/\}, \[targetLanguage, targetLanguageLoaded[^\]]*\]/);
+    expect(deps?.[0]).toContain('signedIn');
+  });
+
+  it('resolves to the device language with no account', () => {
+    // The behaviour the source guard above is protecting.
+    expect(
+      resolveAppLanguage({ stored: null, server: null, translationLanguage: null, device: 'tr' }),
+    ).toBe('tr');
+  });
+});
