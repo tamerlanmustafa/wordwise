@@ -8,6 +8,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
+import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
+import { Ionicons } from '@expo/vector-icons';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useFeedbackPrefsStore, getFeedbackPrefs } from '../stores/feedbackPrefsStore';
 import { setPronunciationGate } from '../utils/pronunciation';
@@ -194,6 +196,21 @@ export default function App() {
     useEntitlementsStore.getState().hydrate();
     useThemeStore.getState().hydrate();
     useDailyGoalStore.getState().hydrate();
+    // Before the Practice tab can be tapped, not when it mounts — a disk read
+    // started on mount resolves a frame after the first paint, which is the
+    // "0 DAYS" flash all over again. See streakSnapshotStore.
+    void useStreakSnapshotStore.getState().hydrate();
+    // The icon font, before anything draws an icon. @expo/vector-icons checks
+    // `Font.isLoaded` when an icon is created and, if the font is not in yet,
+    // renders an empty <Text /> and loads it on mount — so the first screen to
+    // use an icon draws without it and then pops it in. Measured on the Practice
+    // header: the freezes chevron absent for ~120ms on the first tap after a
+    // cold start, after everything around it had already painted. Ionicons is
+    // the only family the app imports (24 files), and loading it once here
+    // makes every one of them draw on its first frame.
+    void Ionicons.loadFont().catch(() => {
+      // An icon that pops in late is cosmetic; a boot that throws is not.
+    });
     useOnboardingStore.getState().hydrate();
     useFeedbackPrefsStore.getState().hydrate();
     // The Sound switch covers word audio too, so the player asks the same

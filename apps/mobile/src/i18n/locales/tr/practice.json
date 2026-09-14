@@ -32,5 +32,6 @@
     "upsell": "Plus arka arkaya iki günü karşılar",
     "autoArmed_one": "{{count}} dondurma etkin ve hazır",
     "autoArmed_other": "{{count}} dondurma etkin ve hazır"
-  }
+  },
+  "streakLoading": "Serin yükleniyor"
 }

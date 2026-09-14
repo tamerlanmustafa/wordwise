@@ -158,6 +158,10 @@ export function resetAccountStores(): void {
     () => require('../stores/notificationsStore').useNotificationsStore.getState().reset(),
     () => require('../stores/milestoneTrackerStore').useMilestoneTrackerStore.getState().reset(),
     () => require('../stores/tipDismissalsStore').useTipDismissalsStore.getState().reset(),
+    // The last streak panel. Its disk copy goes with the `swr_` family below;
+    // this drops the copy in memory, or the next account would open Practice
+    // to the previous one's streak.
+    () => require('../stores/streakSnapshotStore').useStreakSnapshotStore.getState().reset(),
   ];
   for (const resetOne of stores) {
     try {

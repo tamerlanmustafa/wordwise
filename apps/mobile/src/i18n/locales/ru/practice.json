@@ -42,5 +42,6 @@
     "autoArmed_few": "{{count}} заморозки активны и готовы",
     "autoArmed_many": "{{count}} заморозок активны и готовы",
     "autoArmed_other": "{{count}} заморозки активны и готовы"
-  }
+  },
+  "streakLoading": "Загружаем вашу серию"
 }

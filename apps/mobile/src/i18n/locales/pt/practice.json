@@ -32,5 +32,6 @@
     "upsell": "O Plus cobre dois dias seguidos",
     "autoArmed_one": "{{count}} congelamento ativado e pronto",
     "autoArmed_other": "{{count}} congelamentos ativados e prontos"
-  }
+  },
+  "streakLoading": "Carregando sua sequência"
 }

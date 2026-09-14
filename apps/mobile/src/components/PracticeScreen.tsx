@@ -43,6 +43,8 @@ import {
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
 import { PracticeTilePath } from './practice/PracticeTilePath';
 import { StreakWeek, WEEK_PANEL_H } from './practice/StreakWeek';
+import { carryForward, localIsoDate } from './practice/streakSnapshot';
+import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
 import { FreezeSheet } from './practice/FreezeSheet';
 
 // The header's height, stated rather than derived — see StreakWeek's note on
@@ -73,9 +75,9 @@ function PracticeScreenInner({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  // Local mirror of the streak — reads optimistic, then gets corrected
-  // once /daily/state resolves.
-  const dailyStreak = useDailyGoalStore((st) => st.streak);
+  // The local daily-goal mirror still hydrates here for the surfaces that read
+  // it. It no longer feeds the streak panel: an optimistic local number shown
+  // before the server answered is how the panel came to announce "0 DAYS".
   const dailyHydrated = useDailyGoalStore((st) => st.hydrated);
   const hydrateDaily = useDailyGoalStore((st) => st.hydrate);
   useEffect(() => {
@@ -103,6 +105,33 @@ function PracticeScreenInner({
 
   // Authoritative server state — streak + freezes for the header chip.
   const [serverState, setServerState] = useState<DailyState | null>(null);
+
+  // What the panel DRAWS: the live answer once there is one, and until then the
+  // last one this account saw, carried forward to today's calendar.
+  //
+  // Before this the panel drew `null` as facts — "0 DAYS", an unlit flame,
+  // "0/0 FREEZES", seven empty circles — for the length of the round trip after
+  // every cold start, then snapped to the real 41. The snapshot is loaded at
+  // launch (App), so it is already here on the tab's first frame.
+  //
+  // Display only. Anything that DECIDES — the free tier's "today is used up"
+  // gate below — still reads `serverState`, which is only ever a live answer:
+  // an unverified copy is not grounds to deny someone a lesson.
+  const snapshot = useStreakSnapshotStore((st) => st.snapshot);
+  const snapshotHydrated = useStreakSnapshotStore((st) => st.hydrated);
+  useEffect(() => {
+    // Covers sign-in, which resets the store after launch has already run.
+    if (!snapshotHydrated) void useStreakSnapshotStore.getState().hydrate();
+  }, [snapshotHydrated]);
+  const displayState = useMemo(
+    () => serverState ?? (snapshot ? carryForward(snapshot, localIsoDate(new Date())) : null),
+    [serverState, snapshot],
+  );
+  // The freeze sheet can be opened from a snapshot, before the live answer. An
+  // equip made then must still land somewhere — merging into `null` dropped it.
+  const displayStateRef = useRef(displayState);
+  displayStateRef.current = displayState;
+
   const refreshServerState = useCallback(async () => {
     // The lesson number is account state now, exactly like the streak beside
     // it, so it rides the same refresh: a phone that was behind catches up
@@ -111,6 +140,7 @@ function PracticeScreenInner({
     try {
       const next = await dailyApi.state();
       setServerState(next);
+      useStreakSnapshotStore.getState().remember(next);
       // Say it out loud when a freeze was spent.
       //
       // `auto_consumed` has been on this response since the feature shipped
@@ -181,21 +211,25 @@ function PracticeScreenInner({
   }, []);
 
   const applyFreezeState = useCallback((next: FreezeState) => {
-    setServerState((prev) =>
-      prev
-        ? {
-            ...prev,
-            freezes_held: next.freezes_held,
-            freezes_equipped: next.freezes_equipped,
-            // The caps ride along: a subscription starting is exactly the
-            // moment someone opens this sheet, and this response is the
-            // cheapest place to learn the slot count changed.
-            max_freezes_equipped:
-              next.max_freezes_equipped ?? prev.max_freezes_equipped,
-            max_freezes_held: next.max_freezes_held ?? prev.max_freezes_held,
-          }
-        : prev,
-    );
+    // From the ref, not a `setServerState` updater: React may run an updater
+    // twice, and remembering the snapshot is a side effect.
+    const prev = displayStateRef.current;
+    if (!prev) return;
+    const merged: DailyState = {
+      ...prev,
+      freezes_held: next.freezes_held,
+      freezes_equipped: next.freezes_equipped,
+      // The caps ride along: a subscription starting is exactly the
+      // moment someone opens this sheet, and this response is the
+      // cheapest place to learn the slot count changed.
+      max_freezes_equipped:
+        next.max_freezes_equipped ?? prev.max_freezes_equipped,
+      max_freezes_held: next.max_freezes_held ?? prev.max_freezes_held,
+    };
+    setServerState(merged);
+    // Keep the snapshot in step, or the next cold start would open on the
+    // counts from before this change.
+    useStreakSnapshotStore.getState().remember(merged);
   }, []);
 
   // ── Session-start handler ───────────────────────────────────────
@@ -235,11 +269,7 @@ function PracticeScreenInner({
       <PracticeBackdrop />
 
       <View style={s.header}>
-        <StreakWeek
-          state={serverState}
-          fallbackStreak={dailyStreak}
-          onPressFreezes={openFreezeSheet}
-        />
+        <StreakWeek state={displayState} onPressFreezes={openFreezeSheet} />
       </View>
 
       {/* Opens at the BOTTOM, not the top. The path climbs the screen, so the
@@ -296,9 +326,9 @@ function PracticeScreenInner({
       <FreezeSheet
         visible={freezeSheetOpen}
         onClose={closeFreezeSheet}
-        held={serverState?.freezes_held ?? 0}
-        equipped={serverState?.freezes_equipped ?? 0}
-        maxEquipped={serverState?.max_freezes_equipped}
+        held={displayState?.freezes_held ?? 0}
+        equipped={displayState?.freezes_equipped ?? 0}
+        maxEquipped={displayState?.max_freezes_equipped}
         onChange={applyFreezeState}
         onUpsell={upsellFromFreezeSlot}
         bottomOffset={bottomOffset}

@@ -70,6 +70,53 @@ describe('the seven states are all drawn, and drawn differently', () => {
   });
 });
 
+describe('the panel never draws "not loaded yet" as facts', () => {
+  // Measured on the first tap of Practice after a cold start: "0 DAYS", an
+  // unlit flame, "0/0 FREEZES" and seven empty circles until the request
+  // landed, then the real 41. Every piece of that was a claim about the user.
+
+  it('draws a placeholder for a null state, not zeros', () => {
+    const s = panel();
+    expect(s).toMatch(/if \(!state\) return <StreakWeekPlaceholder/);
+    // The old shape: a number with a fallback that was 0 before hydration.
+    expect(s).not.toMatch(/fallbackStreak/);
+    expect(s).not.toMatch(/state\?\.streak \?\?/);
+  });
+
+  it('gives the placeholder the real panel’s geometry, not numbers of its own', () => {
+    // A placeholder that states its own sizes drifts from what it stands in
+    // for, and the panel below re-lays-out when the data lands.
+    const s = panel();
+    const ph = s.slice(s.indexOf('function StreakWeekPlaceholder'), s.indexOf('const makeStyles'));
+    expect(ph).toMatch(/style=\{s\.panel\}/);
+    expect(ph).toMatch(/width=\{FLAME\} height=\{FLAME\}/);
+    expect(ph).toMatch(/width=\{CELL\} height=\{CELL\}/);
+    expect(s).toMatch(/fontSize: STREAK_SIZE/);
+    expect(s).toMatch(/fontSize: FREEZE_SIZE/);
+  });
+
+  it('opens on the last known state, loaded before the tab can be tapped', () => {
+    const s = screen();
+    expect(s).toMatch(/<StreakWeek state=\{displayState\}/);
+    expect(s).toMatch(/serverState \?\? \(snapshot \? carryForward\(snapshot/);
+    // Hydrated at launch — a read started when the lazy tab mounts resolves a
+    // frame after its first paint, which is the same flash, shorter.
+    expect(read('core', 'App.tsx')).toMatch(/useStreakSnapshotStore\.getState\(\)\.hydrate\(\)/);
+  });
+
+  it('keeps the free tier’s lesson gate on the live answer only', () => {
+    // A carried-forward copy is for display. An unverified copy is not grounds
+    // to tell someone today's lesson is used up.
+    const s = screen();
+    expect(s).toMatch(/if \(!isPremium && serverState\?\.today_done\)/);
+    expect(s).not.toMatch(/displayState\?\.today_done/);
+  });
+
+  it('forgets the snapshot on sign-out', () => {
+    expect(read('services', 'accountState.ts')).toMatch(/useStreakSnapshotStore\.getState\(\)\.reset\(\)/);
+  });
+});
+
 describe('the date is drawn inside each circle', () => {
   it('puts the number inside the cell, not in a new row that would grow the panel', () => {
     // The panel's height is load-bearing (see the top of this file). A date

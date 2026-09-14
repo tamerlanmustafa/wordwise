@@ -43,6 +43,7 @@ import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
 import { Ionicons } from '@expo/vector-icons';
 import { StreakFlame } from '../ui/StreakFlame';
+import { Skeleton } from '../ui/Skeleton';
 import { withTap } from '../../utils/feedback';
 import { directionalIcon } from '../../i18n/rtl';
 import type { DailyState } from '../../services/api';
@@ -51,6 +52,12 @@ import { dayNumberTone, dayOfMonth, type DayNumberTone } from './weekDates';
 /** One square's diameter. Seven of these plus their gaps have to fit the
  *  narrowest phone we support, which is what caps it. */
 const CELL = 26;
+/** The flame, the streak number and the freeze count, as sizes both the real
+ *  panel and its placeholder read — a placeholder that states its own sizes
+ *  drifts from the thing it stands in for (see skeletons.test.ts). */
+const FLAME = 22;
+const STREAK_SIZE = 18;
+const FREEZE_SIZE = 13;
 /** Total painted height of the panel. Stated, never derived — see the note
  *  above on why a content-sized header is a bug here rather than a style. */
 export const WEEK_PANEL_H = 92;
@@ -63,31 +70,39 @@ type WeekDay = NonNullable<DailyState['week']>[number];
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 interface Props {
-  /** Null until `/daily/state` resolves. The panel renders its own skeleton at
-   *  the identical height rather than collapsing. */
+  /**
+   * The live answer, or the last one this account saw carried to today
+   * (`streakSnapshot`). Null only when there is neither — a first launch, or
+   * the first visit after signing in — and then the panel draws a placeholder
+   * at the identical height.
+   *
+   * It used to draw `null` as facts instead: "0 DAYS", an unlit flame,
+   * "0/0 FREEZES" and seven empty circles, on every cold start, until the
+   * request landed and the real streak replaced it. A local optimistic streak
+   * filled the gap and was 0 too, because it had not hydrated either.
+   */
   state: DailyState | null;
-  /** Local optimistic streak, shown for the moment before the server answers.
-   *  The server's value wins as soon as there is one. */
-  fallbackStreak: number;
   /** Open the arming sheet. The freeze readout is the only entry point to it,
    *  which is why that readout is a control rather than a label. */
   onPressFreezes: () => void;
 }
 
-export function StreakWeek({ state, fallbackStreak, onPressFreezes }: Props) {
+export function StreakWeek({ state, onPressFreezes }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  const streak = state?.streak ?? fallbackStreak;
-  const held = state?.freezes_held ?? 0;
-  const equipped = state?.freezes_equipped ?? 0;
-  const week = state?.week ?? [];
+  if (!state) return <StreakWeekPlaceholder s={s} t={t} />;
+
+  const streak = state.streak;
+  const held = state.freezes_held ?? 0;
+  const equipped = state.freezes_equipped ?? 0;
+  const week = state.week ?? [];
 
   return (
     <View style={s.panel}>
       <View style={s.topRow}>
-        <StreakFlame size={22} lit={streak > 0} style={s.flame} />
+        <StreakFlame size={FLAME} lit={streak > 0} style={s.flame} />
         <Text style={s.streakNumber} numberOfLines={1}>{streak}</Text>
         <Text style={s.streakLabel} numberOfLines={1}>
           {t('practice:dayLabel', { count: streak })}
@@ -171,6 +186,45 @@ export function StreakWeek({ state, fallbackStreak, onPressFreezes }: Props) {
   );
 }
 
+/**
+ * The panel before there is anything true to show.
+ *
+ * Only reachable with no live answer AND no snapshot — a first launch, or the
+ * first visit after signing in. Everything that would be a claim is a shape
+ * instead: no number, no unlit flame (which reads as "no streak"), no empty
+ * rings (which read as "missed"). The weekday letters stay, because they are
+ * the calendar rather than data. Same box, same row geometry, so nothing below
+ * moves when the real panel replaces it.
+ */
+function StreakWeekPlaceholder({
+  s,
+  t,
+}: {
+  s: ReturnType<typeof makeStyles>;
+  t: (key: string) => string;
+}) {
+  return (
+    <View style={s.panel} accessibilityLabel={t('practice:streakLoading')}>
+      <View style={s.topRow}>
+        <Skeleton width={FLAME} height={FLAME} radius={FLAME / 2} style={s.flame} />
+        <Skeleton width={STREAK_SIZE * 3.4} height={STREAK_SIZE} radius={5} />
+        <View style={s.spacer} />
+        <Skeleton width={FREEZE_SIZE * 6.5} height={FREEZE_SIZE} radius={4} />
+      </View>
+      <View style={s.strip}>
+        {DAY_KEYS.map((key) => (
+          <View key={key} style={s.dayCol}>
+            <Text style={s.dayLetter} numberOfLines={1}>
+              {t(`practice:weekday.${key}`)}
+            </Text>
+            <Skeleton width={CELL} height={CELL} radius={CELL / 2} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     panel: {
@@ -188,7 +242,7 @@ const makeStyles = (tc: ThemeColors) =>
     flame: { marginEnd: 6 },
     streakNumber: {
       fontFamily: MONO_FAMILY,
-      fontSize: 18,
+      fontSize: STREAK_SIZE,
       fontWeight: '900',
       color: tc.text,
       marginEnd: 5,
@@ -207,7 +261,7 @@ const makeStyles = (tc: ThemeColors) =>
     chevron: { marginStart: 3, marginTop: 1 },
     freezeCount: {
       fontFamily: MONO_FAMILY,
-      fontSize: 13,
+      fontSize: FREEZE_SIZE,
       fontWeight: '900',
       color: tc.goldOnSurface,
       marginEnd: 5,

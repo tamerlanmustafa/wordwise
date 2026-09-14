@@ -69,9 +69,14 @@ describe('there is a way in', () => {
   it('the sheet is fed the same counts the panel shows', () => {
     // Two sources for one number is how a sheet ends up disagreeing with the
     // header that opened it.
+    //
+    // Both read `displayState` now: the live answer, or the account's last one
+    // carried to today, so the panel is never "0 DAYS" on a cold start. What
+    // this pins is unchanged — the panel and the sheet share ONE source.
     const s = screen();
-    expect(s).toMatch(/held=\{serverState\?\.freezes_held \?\? 0\}/);
-    expect(s).toMatch(/equipped=\{serverState\?\.freezes_equipped \?\? 0\}/);
+    expect(s).toMatch(/<StreakWeek state=\{displayState\}/);
+    expect(s).toMatch(/held=\{displayState\?\.freezes_held \?\? 0\}/);
+    expect(s).toMatch(/equipped=\{displayState\?\.freezes_equipped \?\? 0\}/);
   });
 });
 

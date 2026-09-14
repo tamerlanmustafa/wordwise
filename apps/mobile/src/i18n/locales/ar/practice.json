@@ -52,5 +52,6 @@
     "autoArmed_few": "{{count}} تجميدات مُفعَّلة وجاهزة",
     "autoArmed_many": "{{count}} تجميدًا مُفعَّلة وجاهزة",
     "autoArmed_other": "{{count}} تجميد مُفعَّل وجاهز"
-  }
+  },
+  "streakLoading": "جارٍ تحميل سلسلتك"
 }
