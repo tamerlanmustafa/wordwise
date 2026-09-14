@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 from ..utils.ui_languages import normalize_ui_language
+from .user import UserResponse
 
 
 def _narrow_app_language(v: Optional[str]) -> Optional[str]:
@@ -42,21 +43,12 @@ class GoogleLoginRequest(BaseModel):
         }
 
 
-class UserInfo(BaseModel):
-    """User information in OAuth responses"""
-    id: int
-    email: str
-    username: str
-    oauth_provider: str
-    profile_picture_url: str | None = None
-    native_language: str | None = None
-    learning_language: str | None = None
-    proficiency_level: str | None = None
-    default_tab: str | None = "movies"
-    is_admin: bool = False
-
-    class Config:
-        from_attributes = True
+# A user is described by `UserResponse` and nothing else. This module used to
+# declare its own narrower `UserInfo` for the OAuth responses, which carried no
+# `entitlements`, no `onboarding_completed` and no `language_preference` — so a
+# Google or Apple sign-in produced a user the app could not tell was premium or
+# already onboarded. Two schemas for one entity is how those fields go missing
+# on one path and nobody notices; there is now one.
 
 
 class GoogleLoginResponse(BaseModel):
@@ -64,7 +56,7 @@ class GoogleLoginResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: UserInfo
+    user: UserResponse
 
     class Config:
         json_schema_extra = {
@@ -98,7 +90,7 @@ class GoogleSignupResponse(BaseModel):
     """Response for successful Google OAuth signup"""
     access_token: str
     token_type: str = "bearer"
-    user: UserInfo
+    user: UserResponse
     is_new_user: bool = True
 
     class Config:

@@ -11,8 +11,8 @@ from ..schemas.oauth import (
     AppleLoginRequest,
     GoogleLoginRequest,
     GoogleLoginResponse,
-    UserInfo,
 )
+from ..schemas.user import USERNAME_MAX, USERNAME_MIN, UserResponse
 from ..utils.apple_auth import verify_apple_token, AppleAuthError
 from ..utils.google_auth import verify_google_token, generate_username_from_email
 from ..utils.auth import create_access_token, create_refresh_token
@@ -123,7 +123,7 @@ async def _create_or_update_user(
                     detail="No account found with this Google account. Please sign up first."
                 )
 
-            username = generate_username_from_email(email)
+            username = _fit_username(generate_username_from_email(email))
 
             # Ensure username is unique
             base_username = username
@@ -173,20 +173,31 @@ async def _create_or_update_user(
     return user, is_new_user
 
 
-def _create_user_response(user) -> UserInfo:
-    """Create UserInfo response object from Prisma User model."""
-    return UserInfo(
-        id=user.id,
-        email=user.email,
-        username=user.username,
-        oauth_provider=user.oauthProvider,
-        profile_picture_url=user.profilePictureUrl,
-        native_language=user.nativeLanguage,
-        learning_language=user.learningLanguage,
-        proficiency_level=user.proficiencyLevel.value if hasattr(user.proficiencyLevel, 'value') else user.proficiencyLevel,
-        default_tab=user.defaultTab or "movies",
-        is_admin=user.isAdmin or False
-    )
+def _fit_username(base: str) -> str:
+    """Trim a derived username to something the account rules will accept.
+
+    Google and Apple names are built here rather than parsed out of a request,
+    so they never pass through `UserCreate` and never hit its validator. A long
+    email local part could therefore mint a 40-character username that the
+    owner could never re-save from Settings, because the PATCH would 422 on a
+    name the server itself had chosen. Four characters are held back for the
+    uniqueness counter appended below.
+    """
+    fitted = base[: USERNAME_MAX - 4].strip("_") or "user"
+    return fitted if len(fitted) >= USERNAME_MIN else f"{fitted}_u"
+
+
+def _create_user_response(user) -> UserResponse:
+    """Serialise a Prisma user for an OAuth response.
+
+    One line, and it is the same one `/auth/me` and the password routes use.
+    This used to hand-map ten fields into a narrower `UserInfo`, which meant
+    every field nobody remembered to add — `entitlements` and
+    `onboarding_completed` among them — was simply absent from a Google or
+    Apple sign-in. A hand-written mapping is a list that silently goes stale
+    each time the model gains a column.
+    """
+    return UserResponse.model_validate(user)
 
 
 @router.post("/login", response_model=GoogleLoginResponse, status_code=status.HTTP_200_OK)
@@ -310,7 +321,7 @@ async def _create_or_update_apple_user(
 
         # Username: prefer the client-forwarded name (first auth only),
         # fall back to the email local part; both deduped with a counter.
-        base_username = (
+        base_username = _fit_username(
             "_".join(full_name.split()).lower()
             if full_name
             else generate_username_from_email(email)

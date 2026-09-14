@@ -37,6 +37,38 @@ def _reject_non_learner_level(
     return v
 
 
+# A username is shown to other people — on the leaderboard, and as the `@name`
+# on a family plan's member rows — so the rules cannot live only in the client
+# that happens to be asking.
+#
+# They didn't. Onboarding enforced 2–30 and no spaces via `utils/username.ts`;
+# Settings trimmed and nothing else; this schema had no validator at all. A
+# PATCH of `"   "`, of 300 characters, or of `"a\nb\n<script>x</script>"` was
+# accepted and stored. The client rule stays as the fast, local answer — but it
+# is a convenience, never the guarantee, because any client can decline to run
+# it. Kept deliberately loose on *character set*: names are not ASCII, and the
+# real risks here are length and whitespace.
+USERNAME_MIN = 2
+USERNAME_MAX = 30
+
+
+def _validate_username(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    name = v.strip()
+    if len(name) < USERNAME_MIN:
+        raise ValueError(f"Username must be at least {USERNAME_MIN} characters long")
+    if len(name) > USERNAME_MAX:
+        raise ValueError(f"Username must be at most {USERNAME_MAX} characters long")
+    # Covers tabs and newlines, not just the space bar — a name with a newline
+    # in it renders as two lines in every list that shows it.
+    if any(ch.isspace() for ch in name):
+        raise ValueError("Username cannot contain spaces")
+    # Store the trimmed form, so " bob " and "bob" cannot both exist and read
+    # as the same person.
+    return name
+
+
 # The Explore feed's CEFR mix, as stored on the account. Same six bands and
 # same "must total 100" rule /srs/feed already enforces — validated here too
 # because this column is what the client hydrates from on a fresh device, and
@@ -98,6 +130,7 @@ class UserCreate(BaseModel):
         return normalize_ui_language(v)
 
     _check_level = field_validator("proficiency_level")(_reject_non_learner_level)
+    _check_username = field_validator("username")(_validate_username)
 
     @field_validator("password")
     @classmethod
@@ -215,6 +248,7 @@ class UserUpdate(BaseModel):
     timezone: Optional[str] = None
 
     _check_mix = field_validator("feed_level_mix")(_validate_mix)
+    _check_username = field_validator("username")(_validate_username)
 
     # Unlike signup, which drops a bad `language_preference` rather than fail
     # account creation, PATCH rejects: this is where a client finds out it sent

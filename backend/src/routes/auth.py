@@ -1,3 +1,22 @@
+"""Authentication routes.
+
+## Every route that returns a user must call `UserResponse.model_validate`
+
+Declaring `response_model=AuthResponse` is **not** enough. Prisma hands back an
+object with camelCase attributes (`nativeLanguage`, `isAdmin`); FastAPI's
+default serializer then reads the snake_case names the schema declares, finds
+nothing, and emits `null` for every one of them — no exception, no warning, a
+200 with a hollow body. `UserResponse.model_validate` is the only thing that
+does the camelCase→snake_case mapping *and* attaches `entitlements`.
+
+This was live for months on register, login and refresh while `/auth/me` alone
+was correct, because `/auth/me` is the one a cold start calls and the others run
+once at a moment nobody re-tests. The visible symptoms were an onboarded user
+being sent back through onboarding, and a paying subscriber reading as free for
+the whole session after signing in. Fixing it at one route is what let it
+survive: the mapping belongs at every exit, or it belongs at none.
+"""
+
 import logging
 from zoneinfo import ZoneInfo
 
@@ -124,7 +143,7 @@ async def register(
     )
 
     return {
-        "user": new_user,
+        "user": UserResponse.model_validate(new_user),
         "token": access_token,
         "refresh_token": refresh_token,
     }
@@ -169,7 +188,7 @@ async def login(
     access_token, refresh_token = _issue_tokens(user)
 
     return {
-        "user": user,
+        "user": UserResponse.model_validate(user),
         "token": access_token,
         "refresh_token": refresh_token,
     }
@@ -178,10 +197,8 @@ async def login(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user = Depends(get_current_user)):
     """Get current user information"""
-    # Prisma returns camelCase attrs; UserResponse.model_validate handles
-    # the camelCase→snake_case mapping AND attaches entitlements. Calling
-    # it explicitly avoids FastAPI's default serializer, which would read
-    # snake_case attributes that don't exist on the Prisma object.
+    # See the module note on `UserResponse.model_validate`: declaring the
+    # response_model is not enough, the call has to be explicit.
     return UserResponse.model_validate(current_user)
 
 
@@ -239,7 +256,7 @@ async def refresh_token(
     return {
         "token": access_token,
         "refresh_token": new_refresh_token,
-        "user": user,
+        "user": UserResponse.model_validate(user),
     }
 
 
