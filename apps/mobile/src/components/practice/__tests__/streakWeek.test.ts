@@ -70,6 +70,39 @@ describe('the seven states are all drawn, and drawn differently', () => {
   });
 });
 
+describe('the date is drawn inside each circle', () => {
+  it('puts the number inside the cell, not in a new row that would grow the panel', () => {
+    // The panel's height is load-bearing (see the top of this file). A date
+    // row under the circles would push the tile path; inside the circle it
+    // costs no height at all.
+    const s = panel();
+    expect(s).toMatch(/dayOfMonth\(day\?\.date\)/);
+    const cellOpen = s.indexOf('s.cellToday,');
+    const cellClose = s.indexOf('</View>', cellOpen);
+    expect(s.slice(cellOpen, cellClose)).toContain('{date}');
+  });
+
+  it('keeps the frozen fill off the circle itself, so the date is not faded with it', () => {
+    // `opacity` on the circle applied to everything inside it. The fill is a
+    // layer now, and the circle carries no opacity of its own.
+    const s = panel();
+    const frozen = s.slice(s.indexOf('cellFrozen: {'), s.indexOf('cellFuture: {'));
+    const cellFrozenDecl = frozen.slice(0, frozen.indexOf('}'));
+    expect(cellFrozenDecl).not.toMatch(/opacity/);
+    expect(s).toMatch(/frozenFill: \{[\s\S]*?opacity: 0\.45/);
+  });
+
+  it('never draws white on the gold fill', () => {
+    // White on this gold measures about 2:1.
+    const s = panel();
+    expect(s).toMatch(/inkOnGold: \{ color: tc\.goldDeep \}/);
+  });
+
+  it('caps text scaling inside the fixed circle', () => {
+    expect(panel()).toMatch(/maxFontSizeMultiplier=\{1\.25\}/);
+  });
+});
+
 describe('the weekday letters come from the locale files', () => {
   it('does not reach for Intl', () => {
     // React Native's Hermes build has shipped without full ICU, so

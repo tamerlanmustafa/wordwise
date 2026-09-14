@@ -24,6 +24,16 @@
  * resolves would shove the path down under the user's thumb mid-scroll. So
  * `WEEK_PANEL_H` is a constant, the skeleton occupies exactly the same box as
  * the loaded state, and nothing here is content-sized.
+ *
+ * ## The date sits inside the circle
+ *
+ * A row of letters says "a week"; the numbers say *which* week, and let a
+ * reader place a missed day without counting back from today. They go inside
+ * the circle rather than under it so the panel keeps its height — the number
+ * is drawn within a box that already exists. `weekDates` reads the number
+ * straight from the server's `YYYY-MM-DD` (a `new Date` would label every
+ * circle in the Americas with yesterday) and picks an ink that stays readable
+ * on each fill.
  */
 
 import { useMemo } from 'react';
@@ -36,6 +46,7 @@ import { StreakFlame } from '../ui/StreakFlame';
 import { withTap } from '../../utils/feedback';
 import { directionalIcon } from '../../i18n/rtl';
 import type { DailyState } from '../../services/api';
+import { dayNumberTone, dayOfMonth, type DayNumberTone } from './weekDates';
 
 /** One square's diameter. Seven of these plus their gaps have to fit the
  *  narrowest phone we support, which is what caps it. */
@@ -121,6 +132,7 @@ export function StreakWeek({ state, fallbackStreak, onPressFreezes }: Props) {
       <View style={s.strip}>
         {DAY_KEYS.map((key, i) => {
           const day: WeekDay | undefined = week[i];
+          const date = dayOfMonth(day?.date);
           return (
             <View key={key} style={s.dayCol}>
               <Text style={s.dayLetter} numberOfLines={1}>
@@ -134,7 +146,23 @@ export function StreakWeek({ state, fallbackStreak, onPressFreezes }: Props) {
                   day?.state === 'future' && s.cellFuture,
                   day?.is_today && s.cellToday,
                 ]}
-              />
+              >
+                {/* The frozen fill is its own layer. Its muted look used to be
+                    `opacity` on the whole circle, which would have faded the
+                    number inside it to 45% along with the fill. */}
+                {day?.state === 'frozen' ? <View style={s.frozenFill} /> : null}
+                {date ? (
+                  <Text
+                    style={[s.dayNumber, INK_STYLE[dayNumberTone(day)](s)]}
+                    numberOfLines={1}
+                    // Inside a fixed 26pt circle: past this, a two-digit date
+                    // spills out of the ring at the largest text sizes.
+                    maxFontSizeMultiplier={1.25}
+                  >
+                    {date}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           );
         })}
@@ -209,11 +237,45 @@ const makeStyles = (tc: ThemeColors) =>
       borderWidth: 1.5,
       borderColor: tc.border,
       backgroundColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
     },
     cellDone: { backgroundColor: tc.gold, borderColor: tc.gold },
     // Distinct from done, and deliberately cooler: a covered day is not a day
     // you practised, and drawing it identically would overstate the week.
-    cellFrozen: { backgroundColor: tc.goldOnSurface, borderColor: tc.goldOnSurface, opacity: 0.45 },
+    // The fill lives in `frozenFill` so the date on top keeps full strength.
+    cellFrozen: { borderWidth: 0 },
+    frozenFill: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: tc.goldOnSurface,
+      opacity: 0.45,
+    },
     cellFuture: { borderColor: tc.divider },
     cellToday: { borderColor: tc.goldOnSurface, borderWidth: 2.5 },
+
+    dayNumber: {
+      fontFamily: MONO_FAMILY,
+      fontSize: 10.5,
+      fontWeight: '800',
+      // Android pads text above and below by default, which drops a number
+      // visibly below centre in a circle this small.
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    },
+    // Never white on gold: it measures about 2:1. Dark ink reads in both modes.
+    inkOnGold: { color: tc.goldDeep },
+    inkOnFrozen: { color: tc.text },
+    inkToday: { color: tc.goldOnSurface, fontWeight: '900' },
+    inkFaint: { color: tc.textFaint },
   });
+
+type Styles = ReturnType<typeof makeStyles>;
+
+/** Tone → style, as a table so every tone must have an entry the compiler checks. */
+const INK_STYLE: Record<DayNumberTone, (s: Styles) => Styles[keyof Styles]> = {
+  onGold: (s) => s.inkOnGold,
+  onFrozen: (s) => s.inkOnFrozen,
+  today: (s) => s.inkToday,
+  faint: (s) => s.inkFaint,
+};
