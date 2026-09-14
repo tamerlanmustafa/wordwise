@@ -57,6 +57,22 @@ describe('launch reads what the lazy tabs open on', () => {
   });
 });
 
+describe('the film feed knows about its ad slot before it draws', () => {
+  // For a free reader the slot sits above the list. Decided late, it arrived a
+  // frame after the cards and pushed every one of them 48pt down.
+  const feed = () => read('components', 'screens', 'FilmFeedScreen.tsx');
+
+  it('reads whether this is the first session at launch', () => {
+    expect(read('core', 'App.tsx')).toMatch(/useFirstSessionStore\.getState\(\)\.hydrate\(\)/);
+  });
+
+  it('takes the answer from the store, not from its own read on mount', () => {
+    expect(feed()).toMatch(/const showAds = showAdsEntitlement && openedBefore;/);
+    expect(feed()).not.toMatch(/getItem\('has_opened_before'\)/);
+    expect(feed()).not.toMatch(/setIsFirstSession/);
+  });
+});
+
 describe('the practice path is not drawn before it is anchored', () => {
   const screen = () => read('components', 'PracticeScreen.tsx');
 

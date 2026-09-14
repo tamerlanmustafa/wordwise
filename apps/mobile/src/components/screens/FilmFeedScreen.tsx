@@ -24,6 +24,7 @@ import { showToast } from '../../stores/toastStore';
 import { useNotificationsStore } from '../../stores/notificationsStore';
 import type { SwipeAction } from '../../utils/swipeDecision';
 import { useShowAds } from '../../stores/entitlementsStore';
+import { useFirstSessionStore } from '../../stores/firstSessionStore';
 import { RankedMovieList } from '../filmFeed/RankedMovieList';
 import { SnapPager } from '../filmFeed/SnapPager';
 import { TodayWordCard, TodayWordCardSkeleton } from '../filmFeed/TodayWordCard';
@@ -108,8 +109,11 @@ export const FilmFeedScreen = React.memo(({
   }, []);
   const s = useMemo(() => makeStyles(tc), [tc]);
   const showAdsEntitlement = useShowAds();
-  const [isFirstSession, setIsFirstSession] = useState(true);
-  const showAds = showAdsEntitlement && !isFirstSession;
+  // Read at launch, not here: a read started on mount answered a frame after
+  // the first paint, and the slot then arrived and pushed the whole list down.
+  // See firstSessionStore.
+  const openedBefore = useFirstSessionStore((st) => st.openedBefore);
+  const showAds = showAdsEntitlement && openedBefore;
   const [homeTab] = useState<'level' | 'trending'>('level');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -233,10 +237,7 @@ export const FilmFeedScreen = React.memo(({
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem('has_opened_before').then((val) => {
-      if (val) setIsFirstSession(false);
-      else AsyncStorage.setItem('has_opened_before', '1');
-    });
+    void useFirstSessionStore.getState().markOpened();
   }, []);
 
   // Word of the hour is cached per-hour per-language inside srsApi.todaysWord,

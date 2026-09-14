@@ -10,6 +10,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
 import { usePracticePathStore } from '../stores/practicePathStore';
+import { useFirstSessionStore } from '../stores/firstSessionStore';
 import { primeCefrMoviesCache } from '../hooks/useInfiniteCefrMovies';
 import { DEFAULT_LEVEL } from '../components/filmFeed/filterOptions';
 import { cardBackdropUri } from '../components/filmFeed/RankedMovieList';
@@ -204,6 +205,9 @@ export default function App() {
     // started on mount resolves a frame after the first paint, which is the
     // "0 DAYS" flash all over again. See streakSnapshotStore.
     void useStreakSnapshotStore.getState().hydrate();
+    // Same reason, for the film feed's ad slot: known late, it arrived after
+    // the list had drawn and pushed every card down. See firstSessionStore.
+    void useFirstSessionStore.getState().hydrate();
     // The icon font, before anything draws an icon. @expo/vector-icons checks
     // `Font.isLoaded` when an icon is created and, if the font is not in yet,
     // renders an empty <Text /> and loads it on mount — so the first screen to
