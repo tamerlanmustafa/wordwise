@@ -126,6 +126,94 @@ export const STACK_HEADROOM = 18;
 /** Deck zone height: headroom + the card itself. */
 export const DECK_ZONE_HEIGHT = STACK_HEADROOM + CARD_HEIGHT;
 
+// ── The compact card (short phones only) ─────────────────────────────────
+
+/**
+ * The slots that differ between the regular card and the compact one. The meta
+ * row, the word, the definition, the word translation and the footer are the
+ * same on both.
+ */
+export interface CardGeometry {
+  padding: number;
+  sentenceLabelTop: number;
+  sentenceSlotTop: number;
+  sentenceSlotHeight: number;
+  sentenceTrSlotTop: number;
+  sentenceTrSlotHeight: number;
+  /** The whole card, summed from its slots. */
+  cardHeight: number;
+  /** The ghost stack's headroom plus the card. */
+  zoneHeight: number;
+}
+
+type VaryingSlots = Omit<CardGeometry, 'cardHeight' | 'zoneHeight'>;
+
+function withHeights(slots: VaryingSlots): CardGeometry {
+  const cardHeight =
+    slots.padding +
+    META_ROW_HEIGHT +
+    WORD_SLOT_TOP +
+    WORD_SLOT_HEIGHT +
+    DEFINITION_SLOT_TOP +
+    DEFINITION_SLOT_HEIGHT +
+    WORD_TR_SLOT_TOP +
+    WORD_TR_SLOT_HEIGHT +
+    slots.sentenceLabelTop +
+    SENTENCE_LABEL_HEIGHT +
+    slots.sentenceSlotTop +
+    slots.sentenceSlotHeight +
+    slots.sentenceTrSlotTop +
+    slots.sentenceTrSlotHeight +
+    FOOTER_TOP +
+    FOOTER_HEIGHT +
+    slots.padding;
+  return { ...slots, cardHeight, zoneHeight: STACK_HEADROOM + cardHeight };
+}
+
+/** The card as designed, on every phone that seats it at full size. */
+export const REGULAR_CARD: CardGeometry = withHeights({
+  padding: CARD_PADDING,
+  sentenceLabelTop: SENTENCE_LABEL_TOP,
+  sentenceSlotTop: SENTENCE_SLOT_TOP,
+  sentenceSlotHeight: SENTENCE_SLOT_HEIGHT,
+  sentenceTrSlotTop: SENTENCE_TR_SLOT_TOP,
+  sentenceTrSlotHeight: SENTENCE_TR_SLOT_HEIGHT,
+});
+
+/**
+ * The compact card, for a phone that would still shrink the regular one after
+ * the screen has tightened its own column (`deckMetrics.deckLayoutFor`): an
+ * iPhone SE, a short Android phone.
+ *
+ * The tab bar stays on screen, so the card has to get shorter or get smaller,
+ * and smaller is what made it hard to read — scaled to 76% on the SE, the
+ * example sentence was ~13pt. So it gets shorter, by 36pt:
+ *
+ * - Padding 20 → 14, which also gives the text a wider column.
+ * - The gaps above the eyebrow, the sentence and its translation, 12/12/10 →
+ *   8/8/6.
+ * - Sentence 88 → 78: the short tier's three 26pt lines. The long tier gets
+ *   three 22pt lines instead of four, so the very longest sentences ellipsize.
+ * - Sentence translation 68 → 66: the short tier's three 22pt lines. The long
+ *   tier gets three 17pt lines instead of four.
+ *
+ * It is exactly as fixed as the regular card — nothing moves on reveal — it
+ * just has different fixed numbers, and a phone only ever uses one of the two.
+ * Where even the compact card does not fit, it scales like the regular one.
+ */
+export const COMPACT_CARD: CardGeometry = withHeights({
+  padding: 14,
+  sentenceLabelTop: 8,
+  sentenceSlotTop: 8,
+  sentenceSlotHeight: 78,
+  sentenceTrSlotTop: 6,
+  sentenceTrSlotHeight: 66,
+});
+
+export function cardGeometry(compact: boolean): CardGeometry {
+  return compact ? COMPACT_CARD : REGULAR_CARD;
+}
+
 /** Ghost card offsets: { top offset inside the zone, horizontal inset }. */
 export const GHOSTS = [
   { top: 10, inset: 7, opacity: 0.85 },
@@ -182,11 +270,12 @@ export function definitionTier(line: string): TypeTier {
 }
 
 export const SENTENCE_TIER_MAX_CHARS = 95;
-/** Sentence: 3 comfortable lines, or 4 tighter ones for long sentences. */
-export function sentenceTier(sentence: string): TypeTier {
+/** Sentence: 3 comfortable lines, or 4 tighter ones for long sentences — 3 on
+ *  the compact card, whose slot has no room for a fourth. */
+export function sentenceTier(sentence: string, compact = false): TypeTier {
   return sentence.length <= SENTENCE_TIER_MAX_CHARS
     ? { fontSize: 17, lineHeight: 26, lines: 3 }
-    : { fontSize: 14.5, lineHeight: 22, lines: 4 };
+    : { fontSize: 14.5, lineHeight: 22, lines: compact ? 3 : 4 };
 }
 
 export const MOVIE_TITLE_TIER_MAX_CHARS = 26;
@@ -200,11 +289,12 @@ export function movieTitleTier(title: string): TypeTier {
 }
 
 export const SENTENCE_TR_TIER_MAX_CHARS = 85;
-/** Sentence translation: same step-down pattern inside its 68px slot. */
-export function sentenceTranslationTier(translation: string): TypeTier {
+/** Sentence translation: same step-down pattern inside its 68px slot — three
+ *  lines on the compact card's 66px one. */
+export function sentenceTranslationTier(translation: string, compact = false): TypeTier {
   return translation.length <= SENTENCE_TR_TIER_MAX_CHARS
     ? { fontSize: 14.5, lineHeight: 22, lines: 3 }
-    : { fontSize: 12.5, lineHeight: 17, lines: 4 };
+    : { fontSize: 12.5, lineHeight: 17, lines: compact ? 3 : 4 };
 }
 
 // ── Reveal + transition timing ────────────────────────────────────────────

@@ -81,7 +81,7 @@ export interface MovieDetailHeroProps {
    *  tappable — see `VocabularySheet`. */
   onRingPress?: () => void;
   onBack: () => void;
-  /** The short-screen column (`compactColumnFor`): the plate sits closer to
+  /** The short-screen column (`deckLayoutFor`): the plate sits closer to
    *  the back button and `deckCount` rides on the band line. */
   compact?: boolean;
   /**

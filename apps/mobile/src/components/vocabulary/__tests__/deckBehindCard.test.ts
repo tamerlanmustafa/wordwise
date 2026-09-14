@@ -174,16 +174,20 @@ describe('the deck wires the face to the drag', () => {
     expect(src.slice(start, src.indexOf('\n    },', start))).toMatch(/overflow: 'hidden'/);
   });
 
-  it('insets all three faces by the same constant', () => {
+  it('insets all three faces by the same number', () => {
     // `ghost`, `card` (via `cardPress`) and `outgoingCard` are one card a
     // moment apart. Type that moved between them would read as a jump at the
     // instant of promotion rather than as a stack stepping forward.
+    //
+    // The number is the card geometry's padding now, because a short phone
+    // gets the compact card — which is exactly why all three have to read the
+    // same one: a face left on the regular card's 20 would jump on the SE.
     const src = deck();
     for (const name of ['ghostBody', 'cardPress', 'outgoingCard']) {
       const start = src.indexOf(`    ${name}: {`);
       expect(start).toBeGreaterThan(-1);
       expect(src.slice(start, src.indexOf('\n    },', start))).toMatch(
-        /padding: CARD_PADDING,/,
+        /padding: g\.padding,/,
       );
     }
   });

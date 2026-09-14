@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -48,9 +47,6 @@ import {
   type StackSlot,
 } from './deckLogic';
 import {
-  CARD_PADDING,
-  CARD_HEIGHT,
-  DECK_ZONE_HEIGHT,
   STACK_HEADROOM,
   GHOSTS,
   META_ROW_HEIGHT,
@@ -60,12 +56,7 @@ import {
   DEFINITION_SLOT_HEIGHT,
   WORD_TR_SLOT_TOP,
   WORD_TR_SLOT_HEIGHT,
-  SENTENCE_LABEL_TOP,
   SENTENCE_LABEL_HEIGHT,
-  SENTENCE_SLOT_TOP,
-  SENTENCE_SLOT_HEIGHT,
-  SENTENCE_TR_SLOT_TOP,
-  SENTENCE_TR_SLOT_HEIGHT,
   FOOTER_TOP,
   FOOTER_HEIGHT,
   DECK_SPEAKER_CHIP,
@@ -78,13 +69,17 @@ import {
   definitionTier,
   sentenceTier,
   sentenceTranslationTier,
+  cardGeometry,
+  type CardGeometry,
 } from './cardLayout';
 import {
   deckMetrics,
   ACTIONS_ROW_HEIGHT,
   ACTIONS_GAP,
+  ACTIONS_GAP_COMPACT,
   deckSideMargin,
   DECK_GAP_TOP,
+  DECK_GAP_TOP_COMPACT,
   PILL_WIDTH,
   PILL_HEIGHT,
   PILL_EDGE,
@@ -361,6 +356,11 @@ export interface WordCardDeckProps {
   /** Fires when a card drag starts/ends so the parent can freeze its
    *  vertical scroll — otherwise the ScrollView pans under the slide. */
   onDragStateChange?: (dragging: boolean) => void;
+  /** The short-screen column (`deckLayoutFor`): tighter gaps above the deck
+   *  and above its buttons. */
+  compactColumn?: boolean;
+  /** The compact card (`deckLayoutFor`) — see `cardLayout.COMPACT_CARD`. */
+  compactCard?: boolean;
 }
 
 const FLY_DURATION = 300;
@@ -416,11 +416,20 @@ export const WordCardDeck = ({
   sentencePreviews,
   onCursorChange,
   onDragStateChange,
+  compactColumn = false,
+  compactCard = false,
 }: WordCardDeckProps) => {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
-  const s = useMemo(() => makeDeckStyles(tc, scheme), [tc, scheme]);
+  // One of two fixed cards: the compact one on a phone that would otherwise
+  // shrink the regular card (see `deckLayoutFor`). Either is a module constant,
+  // so the memo below holds.
+  const geometry = cardGeometry(compactCard);
+  const s = useMemo(
+    () => makeDeckStyles(tc, scheme, geometry, compactColumn),
+    [tc, scheme, geometry, compactColumn],
+  );
   // Placeholder-rule dash colours (Ledger mockup); no light token matches.
   const dashColor = scheme === 'light' ? '#DCD2B8' : 'rgba(255,255,255,0.14)';
   const dashColorSoft = scheme === 'light' ? '#E3D9BE' : 'rgba(255,255,255,0.12)';
@@ -448,7 +457,10 @@ export const WordCardDeck = ({
   // Width as well as height: the scale is decided by the height, and the side
   // inset then gives back what that scale took off the sides.
   const [deckWidth, setDeckWidth] = useState(0);
-  const metrics = useMemo(() => deckMetrics({ available }), [available]);
+  const metrics = useMemo(
+    () => deckMetrics({ available, compactColumn, compactCard }),
+    [available, compactColumn, compactCard],
+  );
 
   // Keep the committed state in step with the parent's item list (learned
   // words leaving, undo re-adding, previews resolving). `displayDeck` applies
@@ -1028,7 +1040,7 @@ export const WordCardDeck = ({
     const staticPreview = !staticIdiom ? sentencePreviews[term] : undefined;
     const staticSentence = staticPreview && staticPreview.sentence ? staticPreview : null;
     const wTier = wordTier(term);
-    const sTier = staticSentence ? sentenceTier(staticSentence.sentence) : null;
+    const sTier = staticSentence ? sentenceTier(staticSentence.sentence, compactCard) : null;
     return (
       <>
         <View style={s.metaRow}>
@@ -1140,8 +1152,10 @@ export const WordCardDeck = ({
         ? t('vocabulary:deck.sameAsSource')
         : '—';
   const wtTier = wordTranslationTier(wtText);
-  const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence) : null;
-  const stTier = sentenceTranslation ? sentenceTranslationTier(sentenceTranslation) : null;
+  const sTier = visibleSentence ? sentenceTier(visibleSentence.sentence, compactCard) : null;
+  const stTier = sentenceTranslation
+    ? sentenceTranslationTier(sentenceTranslation, compactCard)
+    : null;
 
   /**
    * The card the deck is about to step to — the one whose face shows through
@@ -1181,14 +1195,10 @@ export const WordCardDeck = ({
         style={[
           s.deckWrap,
           {
-            // Android aims the scaled card at the film-edge sprockets; iOS
-            // keeps the inset it has, which was looked at on a device and
-            // signed off. Same solve, two targets — see `deckSideMargin`.
-            marginHorizontal: deckSideMargin(
-              deckWidth,
-              metrics.scale,
-              Platform.OS === 'android',
-            ),
+            // A scaled card aims at the film-edge sprockets on both
+            // platforms, so a short phone gets back the width the scale took
+            // off its sides — see `deckSideMargin`.
+            marginHorizontal: deckSideMargin(deckWidth, metrics.scale, true),
             transform: [{ scale: metrics.scale }],
             transformOrigin: 'top center',
           },
@@ -1564,7 +1574,12 @@ export const WordCardDeck = ({
   );
 };
 
-const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
+const makeDeckStyles = (
+  tc: ThemeColors,
+  scheme: 'light' | 'dark',
+  g: CardGeometry,
+  compactColumn: boolean,
+) => {
   const light = scheme === 'light';
   return StyleSheet.create({
     // Claims what the fixed column leaves, and reports it back through
@@ -1583,12 +1598,12 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     wrap: {
       flex: 1,
       justifyContent: 'center',
-      paddingTop: DECK_GAP_TOP,
+      paddingTop: compactColumn ? DECK_GAP_TOP_COMPACT : DECK_GAP_TOP,
     },
     deckWrap: {
       // marginHorizontal is supplied per render — see `deckSideMargin`.
       marginTop: 0,
-      height: DECK_ZONE_HEIGHT,
+      height: g.zoneHeight,
     },
     // All three card faces — the ghosts behind, the focused card, and a card
     // mid-swipe — wear the same rim as "Knew it" below them (`knowFace`), and
@@ -1602,7 +1617,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     // on them without a second colour needing to exist.
     ghost: {
       position: 'absolute',
-      height: CARD_HEIGHT,
+      height: g.cardHeight,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
@@ -1613,13 +1628,13 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       overflow: 'hidden',
     },
     // The near ghost's face. All three faces of a card inset their content by
-    // `CARD_PADDING` — the same constant `CARD_HEIGHT` is summed from — because
-    // the ghost, the focused card and the fly-away overlay are one card a
-    // moment apart, and type that moved between them would read as a jump at
-    // the instant of promotion rather than as a stack stepping forward.
+    // the geometry's `padding` — the same number the card's height is summed
+    // from — because the ghost, the focused card and the fly-away overlay are
+    // one card a moment apart, and type that moved between them would read as a
+    // jump at the instant of promotion rather than as a stack stepping forward.
     ghostBody: {
       flex: 1,
-      padding: CARD_PADDING,
+      padding: g.padding,
     },
     // A swiped card mid-flight: same face as the focused card, floating
     // above the new focused card.
@@ -1628,12 +1643,12 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       top: STACK_HEADROOM,
       left: 0,
       right: 0,
-      height: CARD_HEIGHT,
+      height: g.cardHeight,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
       borderColor: tc.goldOnSurface,
-      padding: CARD_PADDING,
+      padding: g.padding,
       overflow: 'hidden',
       shadowColor: light ? '#2D2418' : '#000',
       shadowOpacity: 0.1,
@@ -1646,7 +1661,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       top: STACK_HEADROOM,
       left: 0,
       right: 0,
-      height: CARD_HEIGHT,
+      height: g.cardHeight,
       backgroundColor: tc.paper,
       borderRadius: 22,
       borderWidth: 1,
@@ -1659,7 +1674,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     cardPress: {
       flex: 1,
-      padding: CARD_PADDING,
+      padding: g.padding,
     },
     metaRow: {
       flexDirection: 'row',
@@ -1837,7 +1852,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      marginTop: SENTENCE_LABEL_TOP,
+      marginTop: g.sentenceLabelTop,
       height: SENTENCE_LABEL_HEIGHT,
     },
     sentenceLabelText: {
@@ -1854,8 +1869,8 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.divider,
     },
     sentenceSlot: {
-      marginTop: SENTENCE_SLOT_TOP,
-      height: SENTENCE_SLOT_HEIGHT,
+      marginTop: g.sentenceSlotTop,
+      height: g.sentenceSlotHeight,
       overflow: 'hidden',
     },
     sentence: {
@@ -1878,8 +1893,8 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       backgroundColor: tc.skeleton,
     },
     sentenceTrSlot: {
-      marginTop: SENTENCE_TR_SLOT_TOP,
-      height: SENTENCE_TR_SLOT_HEIGHT,
+      marginTop: g.sentenceTrSlotTop,
+      height: g.sentenceTrSlotHeight,
     },
     sentenceTrHidden: {
       justifyContent: 'center',
@@ -1941,7 +1956,7 @@ const makeDeckStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       alignItems: 'center',
       justifyContent: 'space-between',
       height: ACTIONS_ROW_HEIGHT,
-      marginTop: ACTIONS_GAP,
+      marginTop: compactColumn ? ACTIONS_GAP_COMPACT : ACTIONS_GAP,
       marginHorizontal: 18,
     },
     // Edge + face "3D" button: the face translates down onto its edge while

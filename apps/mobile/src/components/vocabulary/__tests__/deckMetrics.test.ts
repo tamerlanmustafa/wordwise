@@ -1,60 +1,68 @@
 /**
  * Movie-detail column budget.
  *
- * The thing these guard: the screen is now one fixed viewport, so there is no
- * scroll to rescue a block that does not fit. Everything below is really two
- * claims — the action buttons are never pushed out of the viewport, and the
- * card is never made to fit by editing its slot constants.
+ * The thing these guard: the screen is one fixed viewport, so there is no
+ * scroll to rescue a block that does not fit. Everything below is really three
+ * claims — the action buttons are never pushed out of the viewport, the tab bar
+ * is always in the budget, and a short phone gives up its header, its gaps and
+ * then its card slots, in that order and only as far as it has to.
  *
- * Device rows are computed from the exported block constants via
- * `deckBlockHeightFor`, not typed in, so a change to any block moves them and
- * a phone that stops fitting fails here rather than on hardware.
+ * Device rows are computed from the exported block constants and the bar's own
+ * metrics, not typed in, so a change to any block moves them and a phone that
+ * stops fitting fails here rather than on hardware.
  */
+import fs from 'fs';
+import path from 'path';
 import {
   deckMetrics,
   deckBlockHeightFor,
-  compactColumnFor,
+  deckChromeHeight,
+  deckLayoutFor,
+  deckSideMargin,
   columnAboveDeck,
-  deckBottomClearance,
   ACTIONS_ROW_HEIGHT,
-  DECK_SIDE_MARGIN,
-  DECK_MIN_SIDE_MARGIN,
+  ACTIONS_GAP,
+  ACTIONS_GAP_COMPACT,
+  COLUMN_ABOVE_DECK,
   DECK_EDGE_INSET,
-  DECK_BOTTOM_MIN,
+  DECK_GAP_TOP,
+  DECK_GAP_TOP_COMPACT,
   DECK_HEADER_ROW,
+  DECK_MIN_SIDE_MARGIN,
+  DECK_SIDE_MARGIN,
   HERO_PLATE,
   HERO_PLATE_GAP_COMPACT,
-  deckSideMargin,
-  ACTIONS_GAP,
-  DECK_GAP_TOP,
-  COLUMN_ABOVE_DECK,
   MIN_SCALE,
   SHOW_LEVEL_FILTER_BAR,
   type DeckDevice,
+  type DeckLayout,
 } from '../deckMetrics';
 import { CARD_HEIGHT, DECK_ZONE_HEIGHT, movieTitleTier } from '../cardLayout';
+import { navBarMetrics } from '../../navBarMetrics';
 
-// No tab bar in any of these: it is hidden while a film is open, and the
-// bottom inset is the deck's clearance instead (`deckBottomClearance`).
+/** The bar's reserved height, as `useBottomBarInset` computes it: the iOS 26
+ *  glass capsule on the iPhones, the pinned bar on Android. */
+const bar = (bottomInset: number, glass: boolean) =>
+  navBarMetrics(bottomInset, glass).reservedHeight;
 
 /** The device the mockup was drawn at. */
-const IPHONE_16_PRO = { screenHeight: 874, topInset: 59, bottomInset: 34 };
+const IPHONE_16_PRO: DeckDevice = { screenHeight: 874, topInset: 59, barHeight: bar(34, true) };
 /** Smallest phone we ship to: a 20pt status bar and no home indicator. */
-const IPHONE_SE = { screenHeight: 667, topInset: 20, bottomInset: 0 };
+const IPHONE_SE: DeckDevice = { screenHeight: 667, topInset: 20, barHeight: bar(0, true) };
 /** The shortest notched iPhone. */
-const IPHONE_13_MINI = { screenHeight: 812, topInset: 50, bottomInset: 34 };
+const IPHONE_13_MINI: DeckDevice = { screenHeight: 812, topInset: 50, barHeight: bar(34, true) };
 /** Tall Android, gesture navigation. */
-const PIXEL_8 = { screenHeight: 915, topInset: 24, bottomInset: 24 };
-/** Same phone with 3-button navigation — a deeper bottom inset, so the deck
- *  gets less. */
-const PIXEL_8_3BUTTON = { screenHeight: 915, topInset: 24, bottomInset: 48 };
+const PIXEL_8: DeckDevice = { screenHeight: 915, topInset: 24, barHeight: bar(24, false) };
+/** Same phone with 3-button navigation — a deeper bottom inset, so the bar
+ *  grows and the deck gets less. */
+const PIXEL_8_3BUTTON: DeckDevice = { screenHeight: 915, topInset: 24, barHeight: bar(48, false) };
 /** An Android phone as short as the SE, with a status bar and a gesture strip
  *  the SE does not have. */
-const SHORT_ANDROID = { screenHeight: 640, topInset: 24, bottomInset: 24 };
+const SHORT_ANDROID: DeckDevice = { screenHeight: 640, topInset: 24, barHeight: bar(24, false) };
 /** …and with 3-button navigation: the least room of anything we ship to. */
-const SHORT_ANDROID_3BUTTON = { screenHeight: 640, topInset: 24, bottomInset: 48 };
+const SHORT_ANDROID_3BUTTON: DeckDevice = { screenHeight: 640, topInset: 24, barHeight: bar(48, false) };
 
-const DEVICES = [
+const DEVICES: [string, DeckDevice][] = [
   ['iPhone 16 Pro', IPHONE_16_PRO],
   ['iPhone SE', IPHONE_SE],
   ['iPhone 13 mini', IPHONE_13_MINI],
@@ -62,15 +70,18 @@ const DEVICES = [
   ['Pixel 8 (3-button)', PIXEL_8_3BUTTON],
   ['short Android', SHORT_ANDROID],
   ['short Android (3-button)', SHORT_ANDROID_3BUTTON],
-] as const;
+];
 
-/** What the deck block ends up laying out, as the screen does it: the column
- *  `compactColumnFor` picks, and the deck measured into what that leaves. */
-const layout = (device: DeckDevice, compact = compactColumnFor(device)) => {
-  const available = deckBlockHeightFor({ ...device, compact });
-  const m = deckMetrics({ available });
-  const used = DECK_GAP_TOP + m.zoneHeight + ACTIONS_GAP + ACTIONS_ROW_HEIGHT;
-  return { ...m, available, used, compact };
+const NONE: DeckLayout = { compactColumn: false, compactCard: false };
+
+/** What the deck block ends up laying out, as the screen does it: the steps
+ *  `deckLayoutFor` picks, unless a test forces them. */
+const layout = (device: DeckDevice, forced: Partial<DeckLayout> = {}) => {
+  const steps = { ...deckLayoutFor(device), ...forced };
+  const available = deckBlockHeightFor({ ...device, compact: steps.compactColumn });
+  const m = deckMetrics({ available, ...steps });
+  const used = deckChromeHeight(steps.compactColumn) + m.zoneHeight;
+  return { ...m, ...steps, available, used };
 };
 
 describe('the fixed screen — the buttons must never leave the viewport', () => {
@@ -90,8 +101,7 @@ describe('the fixed screen — the buttons must never leave the viewport', () =>
   it('caps the zone rather than overflowing, even on a viewport we do not ship to', () => {
     // Below the scale floor the card is cropped; the buttons still render.
     const m = deckMetrics({ available: 200 });
-    const used = DECK_GAP_TOP + m.zoneHeight + ACTIONS_GAP + ACTIONS_ROW_HEIGHT;
-    expect(used).toBeLessThanOrEqual(200);
+    expect(deckChromeHeight(false) + m.zoneHeight).toBeLessThanOrEqual(200);
     expect(m.cropped).toBe(true);
   });
 
@@ -102,7 +112,27 @@ describe('the fixed screen — the buttons must never leave the viewport', () =>
   });
 });
 
-describe('the card is scaled, never re-cut', () => {
+describe('the tab bar is always in the budget', () => {
+  it('counts every block above the deck, and the bar, exactly once', () => {
+    // Guards against a block being added to the screen but not to the budget,
+    // which would silently overflow the smallest phone first.
+    const device = { screenHeight: 1000, topInset: 50, barHeight: 80 };
+    expect(deckBlockHeightFor({ ...device, compact: false })).toBe(
+      1000 - 80 - 50 - COLUMN_ABOVE_DECK,
+    );
+  });
+
+  it('gives a deeper navigation inset to the bar, not to the card', () => {
+    // Android 3-button navigation reports a deeper bottom inset than gesture
+    // nav; GlobalBottomBar grows by it, so the deck must shrink by it.
+    const gesture = layout(PIXEL_8);
+    const buttons = layout(PIXEL_8_3BUTTON);
+    expect(buttons.available).toBeLessThan(gesture.available);
+    expect(buttons.used).toBeLessThanOrEqual(buttons.available);
+  });
+});
+
+describe('the regular card on a tall phone', () => {
   it('never scales above the mockup, however tall the phone', () => {
     const m = deckMetrics({ available: 2000 });
     expect(m.scale).toBe(1);
@@ -110,161 +140,71 @@ describe('the card is scaled, never re-cut', () => {
     expect(m.scaled).toBe(false);
   });
 
-  it('holds the card at its full 427pt contract', () => {
-    // The escape hatch for a small screen is a uniform scale. A card whose
-    // slots were re-tuned per device would be a different design, and the
-    // reveal's zero-layout-shift promise would go with it.
-    //
-    // 389 → 427 when the definition slot landed (6 top + 32 slot). The
-    // alternative was taking those 38pt out of the sentence-translation slot
-    // to hold 389, which would have cost a line of every revealed translation
-    // on every device; growing the card costs scale on the SE alone (see the
-    // pinned scales below) and nothing at all on the reference phones.
+  it('holds the regular card at its full 427pt contract', () => {
     expect(CARD_HEIGHT).toBe(427);
     expect(DECK_ZONE_HEIGHT).toBeGreaterThan(CARD_HEIGHT);
   });
 
-  it('leaves the reference device essentially unscaled', () => {
-    // 874 minus the bottom bar is not the 874 the mockup was drawn at, so the
-    // 16 Pro used to pay a few percent; with the filter bar hidden it seats the
-    // design whole. Anything worse than this means a block above the deck has
-    // grown and the budget needs re-cutting, not a smaller card.
-    const m = layout(IPHONE_16_PRO);
-    expect(m.scale).toBeGreaterThan(0.93);
-    expect(m.scale).toBeLessThanOrEqual(1);
-  });
-
-  it('seats the mockup whole on the reference device with the filter bar hidden', () => {
-    // The 58pt the level chips used to occupy is the difference between the
-    // 16 Pro scaling to 0.951 and seating DECK_ZONE_HEIGHT at full size. This
-    // is the assertion that fails first if a block is added back to the column
-    // — before the pinned numbers below, and with a clearer reason.
+  it('seats the mockup whole on the reference device with the full header', () => {
+    // The first assertion to fail if a block is added back to the column.
     expect(SHOW_LEVEL_FILTER_BAR).toBe(false);
-    const forZone = layout(IPHONE_16_PRO).available - DECK_GAP_TOP - ACTIONS_GAP - ACTIONS_ROW_HEIGHT;
-    expect(forZone).toBeGreaterThanOrEqual(DECK_ZONE_HEIGHT);
+    expect(layout(IPHONE_16_PRO)).toMatchObject({ ...NONE, scale: 1 });
   });
 
-  it('gives Pixel 8 the design at full size', () => {
-    expect(layout(PIXEL_8).scale).toBe(1);
-  });
-
-  it('reaches iPhone SE without hitting the legibility floor', () => {
-    // The floor exists so a smaller-than-shipping viewport degrades sanely;
-    // if the SE ever lands *on* it, the card is being cropped and the budget
-    // above the deck is what has to give.
-    const m = layout(IPHONE_SE);
-    expect(m.scaled).toBe(true);
-    expect(m.cropped).toBe(false);
-    expect(m.scale).toBeGreaterThan(MIN_SCALE);
-    // Upper bound only says the SE is still the device that scales — the exact
-    // figure is pinned below, where a change has to be explained.
-    expect(m.scale).toBeLessThan(1);
+  it('gives Pixel 8 the design at full size, with either navigation', () => {
+    expect(layout(PIXEL_8)).toMatchObject({ ...NONE, scale: 1 });
+    expect(layout(PIXEL_8_3BUTTON)).toMatchObject({ ...NONE, scale: 1 });
   });
 });
 
-describe('invariants', () => {
-  it('pins the scale each shipping device gets', () => {
-    // Deliberately brittle. The measured height is now the ONLY input to the
-    // card's size — the resume note used to be a second one, and while it was
-    // up the 16 Pro rendered at 0.857 and jumped to 0.951 the instant it went,
-    // while the SE was cropped outright. If a block is added to the column, a
-    // number here moves and someone has to decide which device pays for it
-    // rather than finding out on hardware.
-    //
-    // Hiding the level chips (SHOW_LEVEL_FILTER_BAR) took 58pt back out of the
-    // column, which is why the 16 Pro is now unscaled and the SE moved 0.577 →
-    // 0.720. Flipping the flag on restores the old numbers.
-    //
-    // The definition slot then grew the CARD (not the column), which is the
-    // other way a number here moves: the large phones had slack above 1 and
-    // absorbed 38pt without leaving the clamp, so they still render the
-    // mockup 1:1, and the SE — the only device already scaling — paid the
-    // whole cost, 0.720 → 0.658. Still well clear of MIN_SCALE, so nothing
-    // crops. That asymmetry is the reason this was worth doing as a card
-    // change rather than by shrinking a neighbouring slot.
-    //
-    // Dropping the poster's paper frame then handed 19pt back to the column
-    // (HERO_PLATE 119 → 100) and the SE — again the only device below the
-    // clamp — is again the only one that moves: 0.658 → 0.701.
-    //
-    // Then the hero poster was removed, taking that block down to what the
-    // film's own lines need and handing the difference back to the column —
-    // 100 → 86 once the band chip moved above the title and claimed a row of
-    // its own. The SE is still the only device under the clamp, so once more
-    // it is the only one that moves: 0.701 → 0.733. The big phones stay at 1
-    // and take theirs as air, which is what the deck's new
-    // `justifyContent: 'center'` distributes above and below it.
-    //
-    // That 0.733 was optimistic. This file modelled the old pinned bar
-    // (47 + the inset, 65pt on the SE); the 81pt floating capsule is what
-    // shipped on iOS 26, and it left the real SE card at 0.697 — the example
-    // sentence at ~12pt. So the bar is now hidden while a film is open, and a
-    // phone that would still scale gets the short-screen column: the counter
-    // row joins the band line and the plate moves up. 0.697 → 0.917 on the SE,
-    // with the card's slots untouched. Short Android lands at 0.820 (0.766
-    // with three buttons). The mini seats the card whole on the full header.
-    expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.917, 3);
-    expect(layout(IPHONE_13_MINI).scale).toBe(1);
-    expect(layout(PIXEL_8).scale).toBe(1);
-    expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
-    expect(layout(SHORT_ANDROID).scale).toBeCloseTo(0.82, 3);
-    expect(layout(SHORT_ANDROID_3BUTTON).scale).toBeCloseTo(0.766, 3);
+describe('a short phone gives way in steps, and only as far as it must', () => {
+  it.each(DEVICES)('tightens the column on %s only if the full layout would shrink the card', (_name, device) => {
+    expect(layout(device).compactColumn).toBe(layout(device, NONE).scaled);
   });
 
-  it('takes a deeper navigation inset out of the deck, never off the screen', () => {
-    // Android 3-button navigation reports a deeper bottom inset than gesture
-    // nav. The buttons stand on it, so the deck shrinks by it.
-    const gesture = layout(PIXEL_8);
-    const buttons = layout(PIXEL_8_3BUTTON);
-    expect(buttons.available).toBeLessThan(gesture.available);
-    expect(buttons.used).toBeLessThanOrEqual(buttons.available);
+  it.each(DEVICES)('switches to the compact card on %s only if the tighter column still would', (_name, device) => {
+    const steps = layout(device);
+    const columnOnly = layout(device, { compactColumn: true, compactCard: false });
+    expect(steps.compactCard).toBe(steps.compactColumn && columnOnly.scaled);
   });
 
-  it('rounds the zone to whole pixels — onLayout reports fractions', () => {
-    const m = deckMetrics({ available: 476.6667 });
-    expect(Number.isInteger(m.zoneHeight)).toBe(true);
+  it('seats the regular card whole on the 13 mini after the first step', () => {
+    // So its long sentences keep their fourth line. The card step costs lines
+    // of real content, which is why it is the last thing to give.
+    expect(layout(IPHONE_13_MINI)).toMatchObject({
+      compactColumn: true,
+      compactCard: false,
+      scale: 1,
+    });
   });
 
-  it('counts every block above the deck exactly once', () => {
-    // Guards against a block being added to the screen but not to the budget,
-    // which would silently overflow the smallest phone first.
-    const device = { screenHeight: 1000, topInset: 50, bottomInset: 30 };
-    expect(deckBlockHeightFor({ ...device, compact: false })).toBe(
-      1000 - 50 - COLUMN_ABOVE_DECK - 30,
-    );
-  });
-});
-
-describe('short screens: the header gives way, the card does not', () => {
-  it.each(DEVICES)('tightens the header on %s only if the full one would shrink the card', (_name, device) => {
-    // The rule, rather than a list of phones: compact exactly when the full
-    // column would scale the card.
-    expect(compactColumnFor(device)).toBe(layout(device, false).scaled);
-  });
-
-  it('keeps the full header on every phone that seats the card whole', () => {
-    for (const device of [IPHONE_16_PRO, IPHONE_13_MINI, PIXEL_8, PIXEL_8_3BUTTON]) {
-      expect(compactColumnFor(device)).toBe(false);
-    }
-  });
-
-  it('tightens it on the SE and on short Android', () => {
+  it('takes both steps on the SE and on short Android', () => {
     for (const device of [IPHONE_SE, SHORT_ANDROID, SHORT_ANDROID_3BUTTON]) {
-      expect(compactColumnFor(device)).toBe(true);
+      expect(layout(device)).toMatchObject({ compactColumn: true, compactCard: true });
     }
   });
 
-  it.each(DEVICES)('never makes the card smaller on %s', (_name, device) => {
-    expect(layout(device, true).scale).toBeGreaterThanOrEqual(layout(device, false).scale);
+  it.each(DEVICES)('never makes the text smaller on %s', (_name, device) => {
+    // The scale is what sets the rendered type size, on either card.
+    expect(layout(device).scale).toBeGreaterThanOrEqual(layout(device, NONE).scale);
   });
 
-  it('gives up only the counter row and part of the plate gap', () => {
-    // The title keeps both lines and the progress rule stays. If the compact
-    // column starts saving more than this, something the reader needs went.
+  it('keeps every short phone clear of the legibility floor', () => {
+    for (const device of [IPHONE_SE, SHORT_ANDROID, SHORT_ANDROID_3BUTTON]) {
+      expect(layout(device).scale).toBeGreaterThan(MIN_SCALE);
+    }
+  });
+
+  it('the column step gives up the counter row, part of the plate gap and the deck gaps', () => {
+    // Nothing on the card: that is the second step's job. The title keeps both
+    // lines and the progress rule stays.
     expect(COLUMN_ABOVE_DECK - columnAboveDeck(true)).toBe(
       DECK_HEADER_ROW.gap + DECK_HEADER_ROW.height + (HERO_PLATE.gap - HERO_PLATE_GAP_COMPACT),
     );
+    expect(deckChromeHeight(false) - deckChromeHeight(true)).toBe(
+      DECK_GAP_TOP - DECK_GAP_TOP_COMPACT + (ACTIONS_GAP - ACTIONS_GAP_COMPACT),
+    );
+    expect(deckChromeHeight(true)).toBe(DECK_GAP_TOP_COMPACT + ACTIONS_GAP_COMPACT + ACTIONS_ROW_HEIGHT);
   });
 
   it('still leaves air between the back button and a two-line title', () => {
@@ -278,16 +218,70 @@ describe('short screens: the header gives way, the card does not', () => {
   });
 });
 
-describe('the buttons stand on the bottom edge, not inside it', () => {
-  it('clears a home indicator by exactly its inset', () => {
-    expect(deckBottomClearance(34)).toBe(34);
-    expect(deckBottomClearance(48)).toBe(48);
+describe('invariants', () => {
+  it('pins the scale each shipping device gets', () => {
+    // Deliberately brittle: if a block is added to the column, a number here
+    // moves and someone has to decide which device pays for it rather than
+    // finding out on hardware.
+    //
+    // Every change so far has been paid by the SE alone, the only device below
+    // the clamp. The filter bar, the poster frame and the poster left the
+    // column and it went 0.577 → 0.733 by this file's arithmetic — but that
+    // arithmetic modelled the old pinned bar, and the 81pt glass capsule that
+    // ships left the real card at 0.697. Hiding the bar on this screen took it
+    // to 0.917 and was reverted by request the same day: the bar stays. With
+    // the bar in the budget, a short phone tightens its column and then
+    // switches to the compact card. The mini seats the regular card whole
+    // after the first step.
+    expect(layout(IPHONE_16_PRO).scale).toBe(1);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.8631, 4);
+    expect(layout(IPHONE_13_MINI).scale).toBe(1);
+    expect(layout(PIXEL_8).scale).toBe(1);
+    expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
+    expect(layout(SHORT_ANDROID).scale).toBeCloseTo(0.7922, 4);
+    expect(layout(SHORT_ANDROID_3BUTTON).scale).toBeCloseTo(0.7335, 4);
   });
 
-  it('keeps a margin on a phone with no inset at all', () => {
-    // The SE: without it, the pills' edge layer would sit on the glass edge.
-    expect(deckBottomClearance(0)).toBe(DECK_BOTTOM_MIN);
-    expect(DECK_BOTTOM_MIN).toBeGreaterThan(0);
+  it('rounds the zone to whole pixels — onLayout reports fractions', () => {
+    const m = deckMetrics({ available: 476.6667 });
+    expect(Number.isInteger(m.zoneHeight)).toBe(true);
+  });
+});
+
+describe('the screen wires the steps through', () => {
+  const read = (...parts: string[]) =>
+    fs.readFileSync(path.join(__dirname, '..', '..', ...parts), 'utf8');
+  /** Source with comments stripped — this is about code, not the prose. */
+  const code = (src: string) =>
+    src
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('decides the steps from the bar it reserves', () => {
+    const screen = code(read('screens', 'MovieDetailScreen.tsx'));
+    expect(screen).toMatch(/const barInset = useBottomBarInset\(\)/);
+    expect(screen).toMatch(/deckLayoutFor\(\{[\s\S]*?barHeight: barInset/);
+    expect(screen).toMatch(/compactColumn=\{compactColumn\}/);
+    expect(screen).toMatch(/compactCard=\{compactCard\}/);
+  });
+
+  it('draws every card face from the geometry, not the regular card constants', () => {
+    // The ghost, the focused card and the fly-away overlay are one card a
+    // moment apart. A face still reading the regular numbers on a compact phone
+    // would jump at the instant of promotion.
+    const deck = code(read('vocabulary', 'WordCardDeck.tsx'));
+    expect(deck).not.toMatch(
+      /\b(CARD_HEIGHT|CARD_PADDING|DECK_ZONE_HEIGHT|SENTENCE_SLOT_HEIGHT|SENTENCE_TR_SLOT_HEIGHT)\b/,
+    );
+    expect(deck).toMatch(/height: g\.zoneHeight/);
+    expect(deck.match(/sentenceTier\([^)]*, compactCard\)/g) ?? []).toHaveLength(2);
+    expect(deck.match(/sentenceTranslationTier\([^)]*, compactCard\)/g) ?? []).toHaveLength(1);
+  });
+
+  it('lets a scaled card reach the film edge on both platforms', () => {
+    const deck = code(read('vocabulary', 'WordCardDeck.tsx'));
+    expect(deck).toMatch(/deckSideMargin\(deckWidth, metrics\.scale, true\)/);
   });
 });
 
@@ -332,12 +326,11 @@ describe('the deck uses the width it has', () => {
   });
 
   it('holds the non-reclaiming card at its resting inset', () => {
-    // iOS keeps what it has: the solve targets 18 rather than the sprockets,
-    // and stops at the 8pt floor it already had.
+    // The non-reclaiming target: the solve aims at 18 rather than the
+    // sprockets, and stops at the 8pt floor.
     for (const scale of [0.96, 0.98]) {
       expect(renderedInset(375, scale, false)).toBeCloseTo(DECK_SIDE_MARGIN, 5);
     }
-    // Below that the floor takes over, exactly as it does today.
     expect(deckSideMargin(375, 0.9, false)).toBe(DECK_MIN_SIDE_MARGIN);
   });
 

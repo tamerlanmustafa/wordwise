@@ -23,7 +23,7 @@
  * Pure on purpose, same as explore/metrics: testable without rendering.
  */
 
-import { DECK_ZONE_HEIGHT } from './cardLayout';
+import { cardGeometry } from './cardLayout';
 
 // ── The controls' own dimensions (unchanged; owned here so the geometry
 //    below and WordCardDeck's styles cannot drift apart) ──────────────────
@@ -89,8 +89,9 @@ export const HERO_PLATE_GAP_COMPACT = 8;
  * `compact` is the short-screen column. The `CARD n / total` row joins the
  * band line inside the hero and the plate sits closer to the back button;
  * nothing else changes size — the title keeps both its lines and the progress
- * rule stays where it is. The card's own slots are never part of this: the
- * header gives way, the card does not (see `compactColumnFor`).
+ * rule stays where it is. The card's own slots are not part of this step: the
+ * header gives way first, and the card only if that was not enough (see
+ * `deckLayoutFor`).
  */
 export function columnAboveDeck(compact: boolean): number {
   return (
@@ -108,28 +109,26 @@ export function columnAboveDeck(compact: boolean): number {
 /** The full column, as every tall phone lays it out. */
 export const COLUMN_ABOVE_DECK = columnAboveDeck(false);
 
-/**
- * The least room left under the deck's buttons.
- *
- * The tab bar is hidden on this screen, so the buttons stand on the screen's
- * own bottom edge rather than above a capsule. Where the phone has a bottom
- * inset — a home indicator, Android's gesture strip or its three buttons — that
- * inset is the edge, because a control inside it competes with the system's
- * swipe. The SE has no inset at all and gets the 12pt the floating bar kept
- * under itself there.
- */
-export const DECK_BOTTOM_MIN = 12;
-
-export function deckBottomClearance(bottomInset: number): number {
-  return Math.max(bottomInset, DECK_BOTTOM_MIN);
-}
-
 // ── Inside the deck block ─────────────────────────────────────────────────
 
 /** Gap above the deck zone, inside the deck block. */
 export const DECK_GAP_TOP = 14;
 /** Gap between the deck zone and the actions row. */
 export const ACTIONS_GAP = 18;
+/** The same two gaps on the short-screen column (`deckLayoutFor`). Before the
+ *  card gives up anything of its own, the air around it does. */
+export const DECK_GAP_TOP_COMPACT = 8;
+export const ACTIONS_GAP_COMPACT = 10;
+
+/** The deck block's fixed parts: the gap above the zone, the gap above the
+ *  actions row, and the row itself. */
+export function deckChromeHeight(compact: boolean): number {
+  return (
+    (compact ? DECK_GAP_TOP_COMPACT : DECK_GAP_TOP) +
+    (compact ? ACTIONS_GAP_COMPACT : ACTIONS_GAP) +
+    ACTIONS_ROW_HEIGHT
+  );
+}
 
 /** Legibility backstop, not a fit constraint. iPhone SE lands at ~0.577 of
  *  its own accord and renders below this only on a screen smaller than any
@@ -183,11 +182,12 @@ export const DECK_MIN_SIDE_MARGIN = 8;
  * the resting margin because a scaled card should never sit *further* in than
  * an unscaled one.
  *
- * `reclaim` is the caller's platform decision, not this function's. Android
- * aims at the sprockets; iOS keeps the resting inset as its target and a
- * floor under it, which is the behaviour already on that platform and which
- * has been looked at on a device and signed off. The maths is identical — only
- * the two numbers differ — so this stays one function with one test.
+ * `reclaim` is the caller's decision, not this function's. The deck reclaims on
+ * both platforms now: iOS used to keep the resting inset as its target, and on
+ * an iPhone SE that left the scaled card with empty gutters either side — the
+ * width the short-screen work was asked to give back. The non-reclaiming target
+ * stays because the maths is identical, so this is still one function with one
+ * test.
  */
 export function deckSideMargin(width: number, scale: number, reclaim: boolean): number {
   if (width <= 0 || scale >= 1) return DECK_SIDE_MARGIN;
@@ -207,6 +207,10 @@ export interface DeckMetricsInput {
    *  and made the 16 Pro's card jump 9.3% larger the moment it vanished. It
    *  floats over the deck now and costs the budget nothing. */
   available: number;
+  /** The short-screen column's tighter deck gaps (`deckLayoutFor`). */
+  compactColumn?: boolean;
+  /** Scale the compact card's zone rather than the regular card's. */
+  compactCard?: boolean;
 }
 
 export interface DeckMetrics {
@@ -224,12 +228,17 @@ export interface DeckMetrics {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
-export function deckMetrics({ available }: DeckMetricsInput): DeckMetrics {
+export function deckMetrics({
+  available,
+  compactColumn = false,
+  compactCard = false,
+}: DeckMetricsInput): DeckMetrics {
+  const zone = cardGeometry(compactCard).zoneHeight;
   // What is left for the zone once the block's own fixed parts are paid for.
-  const forZone = Math.max(0, available - DECK_GAP_TOP - ACTIONS_GAP - ACTIONS_ROW_HEIGHT);
+  const forZone = Math.max(0, available - deckChromeHeight(compactColumn));
 
-  const scale = clamp(forZone / DECK_ZONE_HEIGHT, MIN_SCALE, 1);
-  const wanted = Math.round(DECK_ZONE_HEIGHT * scale);
+  const scale = clamp(forZone / zone, MIN_SCALE, 1);
+  const wanted = Math.round(zone * scale);
   // The cap is what makes "the buttons never leave the viewport" true by
   // construction rather than by trusting the arithmetic above. Floored, not
   // rounded: `available` arrives from onLayout as a fraction, and rounding up
@@ -244,41 +253,63 @@ export function deckMetrics({ available }: DeckMetricsInput): DeckMetrics {
   };
 }
 
-/** A phone, as far as this screen's column is concerned. */
+/** A phone, as far as this screen's column is concerned. `barHeight` is the
+ *  tab bar's reserved height (`useBottomBarInset`), which owns the
+ *  home-indicator inset on this screen. */
 export interface DeckDevice {
   screenHeight: number;
   topInset: number;
-  bottomInset: number;
+  barHeight: number;
 }
 
 /** Height the deck block gets on a device, for tests and for reasoning about
- *  a new phone without booting one. There is no tab bar in the sum: the bar is
- *  hidden on this screen, and the bottom inset is the buttons' clearance. */
+ *  a new phone without booting one. */
 export function deckBlockHeightFor({
   screenHeight,
   topInset,
-  bottomInset,
+  barHeight,
   compact,
 }: DeckDevice & { compact: boolean }): number {
-  return Math.max(
-    0,
-    screenHeight - topInset - columnAboveDeck(compact) - deckBottomClearance(bottomInset),
-  );
+  return Math.max(0, screenHeight - barHeight - topInset - columnAboveDeck(compact));
+}
+
+export interface DeckLayout {
+  /** The tighter header and deck gaps. */
+  compactColumn: boolean;
+  /** The compact card — see `cardLayout.COMPACT_CARD`. */
+  compactCard: boolean;
 }
 
 /**
- * Whether a phone gets the short-screen column.
+ * How much of the short-screen layout a phone needs.
  *
- * Decided by the budget, not by a height threshold: compact exactly when the
- * full column would make the card scale. A phone that seats the card whole
- * keeps the full header, because tightening it there buys nothing; a phone
- * that would shrink the card gives the header's slack to the card first. A
- * threshold would be one more number to re-tune every time a block changed.
+ * Two steps, each taken only if the one before still leaves the card scaled:
  *
- * Computed from the window and the insets rather than measured, so the first
- * frame already has the right header. A measured answer would lay the screen
- * out once, then swap the header and rescale the card in front of the reader.
+ * 1. **The column.** The card counter joins the band line, the plate moves up,
+ *    and the deck's own gaps tighten. Nothing on the card changes.
+ * 2. **The card.** Less padding, smaller gaps, and three lines instead of four
+ *    for the longest sentences and translations.
+ *
+ * The tab bar is on screen at every step. It was hidden on this screen for an
+ * afternoon to give the SE's card height, and put back by request: the screen
+ * gives way on a short phone, the navigation does not.
+ *
+ * In that order because each step costs more than the one before. The 13 mini
+ * seats the regular card whole after step 1, so its long sentences keep their
+ * fourth line; the SE and short Android phones need both.
+ *
+ * Decided by the budget rather than by a height threshold, which would be one
+ * more number to re-tune whenever a block changed. Computed from the window,
+ * the insets and the bar rather than measured, so the first frame already has
+ * the layout it keeps — a measured answer would lay the screen out once, then
+ * swap the header and the card in front of the reader.
  */
-export function compactColumnFor(device: DeckDevice): boolean {
-  return deckMetrics({ available: deckBlockHeightFor({ ...device, compact: false }) }).scaled;
+export function deckLayoutFor(device: DeckDevice): DeckLayout {
+  const full = deckMetrics({ available: deckBlockHeightFor({ ...device, compact: false }) });
+  if (!full.scaled) return { compactColumn: false, compactCard: false };
+  const column = deckMetrics({
+    available: deckBlockHeightFor({ ...device, compact: true }),
+    compactColumn: true,
+  });
+  return { compactColumn: true, compactCard: column.scaled };
 }

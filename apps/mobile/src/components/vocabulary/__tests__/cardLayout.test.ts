@@ -1,5 +1,9 @@
 import {
   CARD_HEIGHT,
+  CARD_PADDING,
+  COMPACT_CARD,
+  REGULAR_CARD,
+  cardGeometry,
   DECK_ZONE_HEIGHT,
   STACK_HEADROOM,
   WORD_SLOT_HEIGHT,
@@ -242,5 +246,56 @@ describe('FOOTER_ICON_HIT_SLOP', () => {
     // minimum touch target on either platform.
     const height = FOOTER_HEIGHT + FOOTER_ICON_HIT_SLOP.top + FOOTER_ICON_HIT_SLOP.bottom;
     expect(height).toBeGreaterThanOrEqual(44);
+  });
+});
+
+describe('the compact card (short phones only)', () => {
+  // The bar stays on screen, so on an iPhone SE the card has to get shorter or
+  // get smaller — and smaller is what made it hard to read. These pin what
+  // "shorter" is allowed to cost.
+
+  it('is 36pt shorter, and the regular card keeps its 427', () => {
+    expect(REGULAR_CARD.cardHeight).toBe(CARD_HEIGHT);
+    expect(REGULAR_CARD.zoneHeight).toBe(DECK_ZONE_HEIGHT);
+    expect(COMPACT_CARD.cardHeight).toBe(391);
+    expect(COMPACT_CARD.zoneHeight).toBe(STACK_HEADROOM + 391);
+  });
+
+  it('is chosen by one flag', () => {
+    expect(cardGeometry(false)).toBe(REGULAR_CARD);
+    expect(cardGeometry(true)).toBe(COMPACT_CARD);
+  });
+
+  it('seats both sentence tiers in its shorter slot, the long one on three lines', () => {
+    for (const sentence of ['Sometimes a leap of faith is the only way across.', LONG_SENTENCE]) {
+      const tier = sentenceTier(sentence, true);
+      expect(tier.lines).toBe(3);
+      expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(COMPACT_CARD.sentenceSlotHeight);
+    }
+  });
+
+  it('seats both translation tiers in its shorter slot, the long one on three lines', () => {
+    for (const translation of ['A veces un acto de fe es la única forma de cruzar.', LONG_SENTENCE_TR]) {
+      const tier = sentenceTranslationTier(translation, true);
+      expect(tier.lines).toBe(3);
+      expect(tier.lines * tier.lineHeight).toBeLessThanOrEqual(COMPACT_CARD.sentenceTrSlotHeight);
+    }
+  });
+
+  it('gives up lines and air, never type size', () => {
+    expect(sentenceTier(LONG_SENTENCE, true).fontSize).toBe(sentenceTier(LONG_SENTENCE).fontSize);
+    expect(sentenceTranslationTier(LONG_SENTENCE_TR, true).fontSize).toBe(
+      sentenceTranslationTier(LONG_SENTENCE_TR).fontSize,
+    );
+  });
+
+  it('leaves the regular tiers exactly as they were', () => {
+    expect(sentenceTier(LONG_SENTENCE).lines).toBe(4);
+    expect(sentenceTranslationTier(LONG_SENTENCE_TR).lines).toBe(4);
+  });
+
+  it('still insets its content, just by less', () => {
+    expect(COMPACT_CARD.padding).toBeGreaterThan(0);
+    expect(COMPACT_CARD.padding).toBeLessThan(CARD_PADDING);
   });
 });
