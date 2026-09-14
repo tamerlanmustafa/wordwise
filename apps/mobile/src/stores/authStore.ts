@@ -60,6 +60,26 @@ async function syncTimezone(user: User, set: (partial: Partial<AuthState>) => vo
   }
 }
 
+/**
+ * Pull the authoritative user from `/auth/me` and reconcile.
+ *
+ * Shared by `login()` and `initialize()` so the two cannot drift — they were
+ * two different behaviours before, and the one without the refresh was the one
+ * that shipped the bug.
+ */
+async function refreshMe(set: (partial: Partial<AuthState>) => void): Promise<void> {
+  try {
+    const { authApi } = await import('../services/api');
+    const fresh = await authApi.me();
+    if (!fresh) return;
+    set({ user: fresh });
+    await AsyncStorage.setItem('user', JSON.stringify(fresh)).catch(() => {});
+    void syncTimezone(fresh, set);
+  } catch (e) {
+    console.warn('[AuthStore] /auth/me refresh failed:', (e as Error)?.message);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   status: 'loading',
   user: null,
@@ -97,6 +117,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await tokenStorage.saveTokens(accessToken, refreshToken);
     await AsyncStorage.setItem('user', JSON.stringify(user));
     set({ user, status: 'authenticated' });
+
+    // Reconcile against /auth/me, exactly as `initialize()` does on a cold
+    // start. The sign-in response is now complete — but the client should not
+    // *depend* on that, because it is the one thing this app got wrong for
+    // months and the symptom (an onboarded user replaying onboarding, a
+    // subscriber reading as free) is invisible until someone signs out.
+    //
+    // An OTA also reaches phones before a backend deploy finishes, so for a
+    // few minutes a new client talks to a server that still strips the
+    // payload. This closes that window from the side we control.
+    //
+    // Non-blocking and non-fatal: the user is already signed in and on screen,
+    // and a failure here just leaves them with the response they got.
+    void refreshMe(set);
   },
 
   logout: async () => {
@@ -136,16 +170,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Background-refresh /auth/me so entitlements (and any other
         // server-side fields like is_admin) stay fresh after a cold start.
         // Failure is non-fatal — we already have the cached user on screen.
-        import('../services/api')
-          .then(({ authApi }) => authApi.me())
-          .then((fresh) => {
-            if (fresh) {
-              set({ user: fresh });
-              AsyncStorage.setItem('user', JSON.stringify(fresh)).catch(() => {});
-              void syncTimezone(fresh, set);
-            }
-          })
-          .catch((e) => console.warn('[AuthStore] /auth/me refresh failed:', e));
+        void refreshMe(set);
       } else {
         set({ status: 'unauthenticated' });
       }

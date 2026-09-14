@@ -19,6 +19,9 @@ import { showToast } from '../../stores/toastStore';
 import { formatAppleFullName } from '../../utils/appleName';
 import { getAppLanguage } from '../../i18n';
 import { withTap } from '../../utils/feedback';
+import { mapAuthUser, readAuthTokens } from '../../services/auth/authUser';
+import { readApiError } from '../../services/apiError';
+import { credentialProblem } from './credentialForm';
 
 interface Props {
   onLogin: (user: any, token: string, refreshToken: string) => void;
@@ -103,23 +106,12 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await backendResponse.json();
 
       if (!backendResponse.ok) {
-        throw new Error(data.detail || t('auth:error.googleLoginFailed'));
+        throw new Error(readApiError(data) || t('auth:error.googleLoginFailed'));
       }
 
-      // Map backend user format to app user format
-      const user = {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
-        profile_picture_url: data.user.profile_picture_url || data.user.profilePictureUrl,
-        native_language: data.user.native_language || data.user.nativeLanguage || 'en',
-        learning_language: data.user.learning_language || data.user.learningLanguage || 'es',
-        proficiency_level: data.user.proficiency_level || data.user.proficiencyLevel || 'B1',
-        default_tab: (data.user.default_tab || data.user.defaultTab || 'movies') as 'movies' | 'books',
-        is_admin: data.user.is_admin || data.user.isAdmin || false,
-      };
-
-      onLogin(user, data.access_token || data.token, data.refresh_token);
+      const tokens = readAuthTokens(data);
+      if (!tokens) throw new Error(t('auth:error.googleLoginFailed'));
+      onLogin(mapAuthUser(data.user), tokens.access, tokens.refresh);
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
         setError(t('auth:error.googleCancelled'));
@@ -171,22 +163,12 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await backendResponse.json();
 
       if (!backendResponse.ok) {
-        throw new Error(data.detail || t('auth:error.appleFailed'));
+        throw new Error(readApiError(data) || t('auth:error.appleFailed'));
       }
 
-      const user = {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
-        profile_picture_url: data.user.profile_picture_url || null,
-        native_language: data.user.native_language || 'en',
-        learning_language: data.user.learning_language || 'es',
-        proficiency_level: data.user.proficiency_level || 'B1',
-        default_tab: (data.user.default_tab || 'movies') as 'movies' | 'books',
-        is_admin: data.user.is_admin || false,
-      };
-
-      onLogin(user, data.access_token, data.refresh_token);
+      const tokens = readAuthTokens(data);
+      if (!tokens) throw new Error(t('auth:error.appleFailed'));
+      onLogin(mapAuthUser(data.user), tokens.access, tokens.refresh);
     } catch (err: any) {
       // User dismissed the Apple sheet — not an error.
       if (err?.code !== 'ERR_REQUEST_CANCELED') {
@@ -201,6 +183,19 @@ export const LoginScreen = ({ onLogin }: Props) => {
     if (!email || !password || (!isLoginMode && !username)) {
       setError(t('auth:error.fillAllFields'));
       return;
+    }
+
+    // Check the rules the server is going to check anyway, before spending a
+    // round trip and ~173ms of bcrypt on a password we already know is too
+    // short. Only on the way IN to an account — a sign-IN must never reject
+    // credentials locally, because the rules have changed over time and an
+    // existing user's valid password may not satisfy today's minimum.
+    if (!isLoginMode) {
+      const problem = credentialProblem({ email, password, username }, t);
+      if (problem) {
+        setError(problem);
+        return;
+      }
     }
 
     setLoading(true);
@@ -231,22 +226,16 @@ export const LoginScreen = ({ onLogin }: Props) => {
       const data = await authResponse.json();
 
       if (!authResponse.ok) {
-        throw new Error(data.detail || t('auth:error.authFailed'));
+        // `readApiError`, not `data.detail`. A 422 sends an array of objects,
+        // which `new Error(detail)` rendered to the user as the literal text
+        // "[object Object]" — the response to a mistyped email and to a short
+        // password, i.e. the two commonest ways a signup goes wrong.
+        throw new Error(readApiError(data) || t('auth:error.authFailed'));
       }
 
-      const user = {
-        id: data.user.id,
-        email: data.user.email,
-        username: data.user.username,
-        profile_picture_url: data.user.profilePictureUrl,
-        native_language: data.user.nativeLanguage || 'en',
-        learning_language: data.user.learningLanguage || 'es',
-        proficiency_level: data.user.proficiencyLevel || 'B1',
-        default_tab: (data.user.defaultTab || 'movies') as 'movies' | 'books',
-        is_admin: data.user.isAdmin,
-      };
-
-      onLogin(user, data.token, data.refresh_token);
+      const tokens = readAuthTokens(data);
+      if (!tokens) throw new Error(t('auth:error.authFailed'));
+      onLogin(mapAuthUser(data.user), tokens.access, tokens.refresh);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth:error.generic'));
     } finally {
@@ -379,7 +368,7 @@ export const LoginScreen = ({ onLogin }: Props) => {
             disabled={isLoading}
           >
             {loading ? (
-              <ActivityIndicator color={tc.textInverse} />
+              <ActivityIndicator color={tc.goldDeep} />
             ) : (
               <Text style={styles.primaryButtonText}>
                 {isLoginMode ? t('auth:login') : t('auth:register')}
@@ -407,7 +396,11 @@ export const LoginScreen = ({ onLogin }: Props) => {
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: tc.background },
   loginContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-  logo: { fontSize: 36, fontWeight: '700', color: tc.primaryOnSurface, marginBottom: 8 },
+  // Gold, not `primary`. The rest of the app moved off the older purple in
+  // a68f254 — "a purple Save button on a gold app reads as a different
+  // product" — and this screen was missed, which made the very first thing a
+  // new user sees the one screen that does not look like WordWise.
+  logo: { fontSize: 36, fontWeight: '700', color: tc.goldOnSurface, marginBottom: 8 },
   tagline: { fontSize: 16, color: tc.textSecondary, marginBottom: 48, textAlign: 'center' },
   formContainer: { width: '100%', gap: 12 },
   googleButton: {
@@ -439,12 +432,14 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     fontSize: 16,
     color: tc.text,
   },
-  primaryButton: { backgroundColor: tc.primary, paddingVertical: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  primaryButton: { backgroundColor: tc.gold, paddingVertical: 16, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.7 },
-  primaryButtonText: { color: tc.textInverse, fontSize: 16, fontWeight: '600' },
+  // Ink on gold is `goldDeep`, never white — white on this gold measures
+  // about 2:1, which is below the floor for body text at any size.
+  primaryButtonText: { color: tc.goldDeep, fontSize: 16, fontWeight: '600' },
   forgotButton: { alignSelf: 'flex-end', paddingVertical: 2, paddingHorizontal: 4 },
   forgotButtonText: { color: tc.textSecondary, fontSize: 13.5, fontWeight: '600' },
   switchButton: { alignItems: 'center', paddingVertical: 12 },
-  switchButtonText: { color: tc.primaryOnSurface, fontSize: 14 },
+  switchButtonText: { color: tc.goldOnSurface, fontSize: 14 },
   loginError: { color: tc.error, fontSize: 14, textAlign: 'center' },
 });

@@ -37,7 +37,7 @@ export function UsernameStep({ onBack, onContinue }: UsernameStepProps) {
 
   const handleContinue = async () => {
     const trimmed = name.trim();
-    const problem = usernameProblem(trimmed);
+    const problem = usernameProblem(trimmed, t);
     if (problem) {
       setError(problem);
       return;

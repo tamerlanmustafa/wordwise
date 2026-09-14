@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../config/env';
 import { tokenStorage } from './auth/tokenStorage';
+import { readResponseError } from './apiError';
 import type {
   ListDetail,
   ListItem,
@@ -1770,9 +1771,12 @@ export const authApi = {
       body: JSON.stringify(patch),
     });
     if (!res.ok) {
-      // Surface the backend's reason ("Username already taken", …) so forms
-      // can show it verbatim instead of a generic status code.
-      const detail = await res.json().then((d) => d?.detail).catch(() => null);
+      // Surface the backend's reason ("Username already taken", "Username
+      // cannot contain spaces", …) so forms can show it verbatim. Read through
+      // `readApiError` because this endpoint answers a bad username with a 422
+      // whose `detail` is an array — the old `d?.detail` put the string
+      // "[object Object]" in front of the user.
+      const detail = await readResponseError(res);
       throw new Error(detail || `Failed to update profile (${res.status})`);
     }
     return res.json();
