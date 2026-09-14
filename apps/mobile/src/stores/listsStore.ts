@@ -148,6 +148,25 @@ interface PendingRemoval {
 const pendingRemovals = new Map<string, PendingRemoval>();
 const pendingId = (listId: number, key: number | string) => `${listId}:${String(key)}`;
 
+/**
+ * Lists this session has deleted, or is deleting.
+ *
+ * A tombstone, not an "in flight" flag, and the difference was measured. Delete
+ * returns to the index before the request resolves, and returning to the index
+ * refreshes it. That refresh can reach the server BEFORE the delete commits and
+ * arrive back AFTER the delete has resolved — so a flag cleared on completion
+ * is already gone by the time the stale response lands, and the deleted list
+ * comes back. On device: "List deleted" in the toast, 404 from the server, and
+ * the row still sitting in the index, tappable, opening a list that no longer
+ * exists.
+ *
+ * Server ids are never reused, so a deleted id can never legitimately reappear
+ * and there is no timing to reason about: the filter holds whatever order the
+ * responses arrive in. A delete that fails removes its tombstone, so nothing
+ * real is ever hidden.
+ */
+const deletedListIds = new Set<number>();
+
 /** Items of `listId` that are hidden but not yet deleted on the server. */
 function pendingFor(listId: number): PendingRemoval[] {
   return [...pendingRemovals.values()].filter((p) => p.listId === listId);
@@ -226,12 +245,20 @@ export const useListsStore = create<ListsState>((set, get) => ({
     // refresh must never blank a populated list.
     set({ status: get().lists.length ? 'ready' : 'loading', loadError: false });
     try {
-      const fresh = (await listsApi.list()).map(summaryWithoutPending);
+      const fresh = (await listsApi.list())
+        // A response can predate a delete this session already made. See
+        // `deletedListIds`.
+        .filter((l) => !deletedListIds.has(l.id))
+        .map(summaryWithoutPending);
+      // A list being created right now has a negative temp id the server has
+      // never heard of. Dropping it here would lose the row: `create` swaps
+      // the temp for the real one by finding it, and would find nothing.
+      const creating = get().lists.filter((l) => l.id < 0);
       // Reconciled, not replaced. This runs on every focus of the tab now, and
       // a new array each time would re-render every row on the way back out of
       // a list — see listsReconcile.
       set({
-        lists: reconcileLists(get().lists, fresh),
+        lists: reconcileLists(get().lists, [...fresh, ...creating]),
         status: 'ready',
         loadError: false,
         failure: null,
@@ -333,15 +360,25 @@ export const useListsStore = create<ListsState>((set, get) => ({
       clearTimeout(p.timer);
       pendingRemovals.delete(pendingId(p.listId, p.key));
     }
-    const before = get().lists;
-    set({ lists: before.filter((l) => l.id !== id) });
+    const index = get().lists.findIndex((l) => l.id === id);
+    const removed = index >= 0 ? get().lists[index] : undefined;
+    deletedListIds.add(id);
+    set({ lists: get().lists.filter((l) => l.id !== id) });
     try {
       await listsApi.remove(id);
       set({ byId: omit(get().byId, id) });
       return true;
     } catch (e) {
       console.warn('[listsStore] destroy failed, rolling back:', e);
-      set({ lists: before });
+      deletedListIds.delete(id);
+      // Put the ONE row back, into the index as it is now — not the whole
+      // array from before, which would also undo anything a refresh brought in
+      // while the delete was failing.
+      const current = get().lists;
+      if (removed && !current.some((l) => l.id === id)) {
+        const at = Math.min(index, current.length);
+        set({ lists: [...current.slice(0, at), removed, ...current.slice(at)] });
+      }
       showToast({ message: mutationError('lists:error.deleteFailed'), tone: 'error' });
       return false;
     }
@@ -517,6 +554,8 @@ export const useListsStore = create<ListsState>((set, get) => ({
     // server; the signed-out account simply keeps them.
     for (const p of pendingRemovals.values()) clearTimeout(p.timer);
     pendingRemovals.clear();
+    // Tombstones belong to the account that made them.
+    deletedListIds.clear();
     set({
       lists: [],
       byId: {},
