@@ -46,21 +46,10 @@ describe('buildWindow', () => {
     expect(w.slice(COMPLETED_BEHIND + 1).every((t) => t.state === 'locked')).toBe(true);
   });
 
-  it('puts the active tile 5th from the bottom of the path', () => {
-    // The whole point of COMPLETED_BEHIND. `buildWindow` runs past → future
-    // and `visualOrder` flips it, so "N completed below" in display order is
-    // "N completed before" here — and the active tile lands in a fixed slot
-    // counted up from the end of the rendered path.
-    for (const cursor of [COMPLETED_BEHIND, 12, 99]) {
-      const display = visualOrder(buildWindow(cursor));
-      const fromBottom = display.length - display.findIndex((t) => t.state === 'active');
-      expect(fromBottom).toBe(5);
-    }
-  });
-
-  it('lets a new user sit lower rather than padding the slot', () => {
+  it('never draws an empty row below a new user — history is only what happened', () => {
     // Day one has nothing behind you, and an empty row is a promise the path
-    // cannot keep. The tile settles into its slot once four sessions are done.
+    // cannot keep. The screen pads the scroll instead, so the tile can still
+    // be centred (see pathCentering's `bottomRunway`).
     for (let cursor = 0; cursor < COMPLETED_BEHIND; cursor += 1) {
       const display = visualOrder(buildWindow(cursor));
       const fromBottom = display.length - display.findIndex((t) => t.state === 'active');
@@ -69,10 +58,27 @@ describe('buildWindow', () => {
     }
   });
 
+  it('keeps history scrollable below the active tile once there is some', () => {
+    for (const cursor of [COMPLETED_BEHIND, 12, 99]) {
+      const display = visualOrder(buildWindow(cursor));
+      const below = display.slice(display.findIndex((t) => t.state === 'active') + 1);
+      expect(below).toHaveLength(COMPLETED_BEHIND);
+      expect(below.every((t) => t.state === 'completed')).toBe(true);
+    }
+  });
+
+  it('stays inside the render budget it was measured at', () => {
+    // Every tile is paid for on the tab's first tap after a cold start. On the
+    // iPhone 17 Pro simulator: 35 tiles drew at the baseline, 41 about 25ms
+    // later, 61 about 85ms later. Raising either buffer is a decision to
+    // re-measure, not a constant to bump.
+    expect(WINDOW_SIZE).toBeLessThanOrEqual(41);
+  });
+
   it('renders enough road ahead to scroll about three screens into', () => {
     // The shortest supported phone shows roughly eight 82pt tiles at once, and
-    // four of the locked ones are already visible when the path opens at the
-    // bottom. This is the assertion that fails if someone trims the window
+    // with the active tile centred about four of the locked ones are already
+    // visible. This is the assertion that fails if someone trims the window
     // back for render cost without noticing what it was sized for.
     const TILES_PER_SCREEN = 8;
     const VISIBLE_AHEAD_AT_REST = 4;
@@ -110,8 +116,9 @@ describe('buildWindow', () => {
 
 describe('visualOrder (path climbs up the screen)', () => {
   it('renders future tiles first (top) and past tiles last (bottom)', () => {
-    const display = visualOrder(buildWindow(5));
-    const start = 5 - COMPLETED_BEHIND;
+    const cursor = COMPLETED_BEHIND + 5;
+    const display = visualOrder(buildWindow(cursor));
+    const start = cursor - COMPLETED_BEHIND;
     expect(display.map((t) => t.index)).toEqual(
       Array.from({ length: WINDOW_SIZE }, (_, i) => start + WINDOW_SIZE - 1 - i),
     );
@@ -128,11 +135,12 @@ describe('visualOrder (path climbs up the screen)', () => {
   });
 
   it('does not mutate the window it is given', () => {
-    const w = buildWindow(5);
+    const cursor = COMPLETED_BEHIND + 5;
+    const w = buildWindow(cursor);
     const before = w.map((t) => t.index);
     visualOrder(w);
     expect(w.map((t) => t.index)).toEqual(before);
-    expect(before[0]).toBe(5 - COMPLETED_BEHIND);
+    expect(before[0]).toBe(cursor - COMPLETED_BEHIND);
   });
 });
 

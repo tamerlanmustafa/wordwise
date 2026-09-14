@@ -12,6 +12,7 @@
   "freeze_two": "تجميد",
   "freeze_zero": "تجميد",
   "start": "ابدأ",
+  "backToStart": "العودة إلى درسك",
   "freezeUsed_zero": "تم إنقاذ السلسلة — {{count}} تجميد",
   "freezeUsed_one": "تم إنقاذ السلسلة — استُخدم {{count}} تجميد",
   "freezeUsed_two": "تم إنقاذ السلسلة — استُخدم {{count}} تجميدان",

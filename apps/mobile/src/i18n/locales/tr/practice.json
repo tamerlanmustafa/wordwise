@@ -4,6 +4,7 @@
   "freeze_one": "DONDURMA",
   "freeze_other": "DONDURMA",
   "start": "BAŞLA",
+  "backToStart": "Dersine geri dön",
   "freezeUsed_one": "Seri kurtarıldı — {{count}} dondurma kullanıldı",
   "freezeUsed_other": "Seri kurtarıldı — {{count}} dondurma kullanıldı",
   "weekday": {

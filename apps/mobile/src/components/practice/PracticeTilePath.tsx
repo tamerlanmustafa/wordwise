@@ -16,10 +16,12 @@
  *
  * ## The active tile's two positions
  *
- * Vertically it is pinned: always the 5th tile from the bottom of the path,
- * because `COMPLETED_BEHIND` tiles sit under it. The screen opens scrolled to
- * the bottom, so that slot is where the user's eye lands every time they open
- * the tab.
+ * Vertically it is pinned: the screen opens with it in the middle of the
+ * visible path, on every screen height. Its place in the path is arithmetic
+ * ({@link activeTileCenterY}), so the screen scrolls to it without measuring
+ * the tiles. It used to open scrolled to the bottom with four completed tiles
+ * under it, which on a 667pt iPhone SE left the active tile pressed against
+ * the header with no road ahead in view.
  *
  * Horizontally it is the opposite — it must NOT be pinned. `offsetForIndex` is
  * keyed on the tile's absolute index, so as the cursor advances the active
@@ -45,38 +47,79 @@
  * side-effects.
  */
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { PracticeTile, type PracticeTileState } from './PracticeTile';
+import { TILE_BLOCK } from './TilePill';
 import { withTap } from '../../utils/feedback';
 
-/**
- * How many completed tiles sit below the active one — which is the same thing
- * as saying the active tile is the **5th from the bottom of the path**, and
- * that is the point of the number.
- *
- * Capped by `cursor`, so a brand-new user shows fewer and the active tile
- * simply sits lower until they have four sessions behind them. Nothing is
- * padded to hold the slot: an empty row is a promise the path cannot keep, and
- * a road with nothing behind you is the honest picture on day one.
- */
-export const COMPLETED_BEHIND = 4;
 /**
  * How many locked tiles to render above the active one.
  *
  * Sized by how far the user should be able to scroll, not by what fits: on the
- * shortest phone the app supports the scroller shows roughly eight tiles, and
- * the ask is at least three full screens of road ahead. Four of these are
- * already on screen when the path opens at the bottom, so the remaining ~26
- * are what the user climbs into — call it 3.4 screens with a little margin.
+ * shortest phone the app supports the scroller shows roughly six tiles, and
+ * the ask is at least three full screens of road ahead. About three of these
+ * are already on screen when the path opens with the active tile centred, so
+ * the rest are what the user climbs into.
  *
  * It is the one number to change if the path should feel longer or shorter,
  * and it is the one that costs: every tile here is a `TilePill` plus a lock,
  * so raising it raises the mount cost of the whole tab.
  */
 export const LOCKED_AHEAD = 30;
+/**
+ * How many completed tiles to render below the active one.
+ *
+ * History to scroll back into. It used to be 4, which was the point when the
+ * path opened scrolled to the bottom: four tiles fixed the active one's slot.
+ * Now the active tile is centred, so about half a screen of these is already
+ * in view and the rest is scroll.
+ *
+ * Not the same 30 as the road ahead, and the reason is measured: every tile
+ * rendered is paid for on the tab's first tap. On the iPhone 17 Pro simulator
+ * after a cold start, 35 tiles drew their first frame at the baseline, 41 (this
+ * value) about 25ms later, and 61 (thirty each way) about 85ms later — roughly
+ * 3ms a tile, and more on a real phone. Ten is well over a screen of history on
+ * every phone for a third of that.
+ *
+ * Capped by `cursor`, so a brand-new user has none — the screen pads the
+ * bottom instead (see `bottomRunway`), because an empty row would be a
+ * promise the path cannot keep.
+ */
+export const COMPLETED_BEHIND = 10;
 /** Total tiles rendered at once. */
 export const WINDOW_SIZE = COMPLETED_BEHIND + 1 + LOCKED_AHEAD;
+
+/** The path's own padding above its first row and below its last. */
+export const PATH_PAD_TOP = 6;
+export const PATH_PAD_BOTTOM = 24;
+
+/** How many completed tiles sit below the active one at this cursor — the
+ *  one rule `buildWindow` and the geometry below both follow. */
+export function completedBelow(cursor: number): number {
+  return Math.min(COMPLETED_BEHIND, Math.max(0, cursor));
+}
+
+/**
+ * The active tile's vertical centre, measured from the top of the path.
+ *
+ * Arithmetic, not a measurement: every row is one TILE_BLOCK tall, and the
+ * window is always WINDOW_SIZE rows, so the rows above the active tile are
+ * whatever the completed ones below it leave. That count moves with the cursor
+ * until the history fills: a user on lesson 16 has 15 completed tiles below
+ * and 45 locked above, not 30 — the window tops itself up with road ahead.
+ * Assuming a constant here centred the path on tile 30-odd, measured.
+ */
+export function activeTileCenterY(cursor: number): number {
+  const rowsAbove = WINDOW_SIZE - 1 - completedBelow(cursor);
+  return PATH_PAD_TOP + rowsAbove * TILE_BLOCK + TILE_BLOCK / 2;
+}
+
+/** How much path lies below the active tile's centre at this cursor. Short
+ *  for a new user, who has nothing completed under them yet. */
+export function pathBelowActiveCenter(cursor: number): number {
+  return TILE_BLOCK / 2 + completedBelow(cursor) * TILE_BLOCK + PATH_PAD_BOTTOM;
+}
 
 /** Horizontal sway of the road, as a smooth wave rather than a jitter: four
  *  steps out and four back, so consecutive tiles lean into each other the way
@@ -167,7 +210,13 @@ interface RenderedTile {
   state: PracticeTileState;
 }
 
-export function PracticeTilePath({
+/**
+ * Memoized. The screen around it re-renders on things that have nothing to do
+ * with the tiles — its measured height, the way-back button showing and
+ * hiding as the user scrolls — and up to 61 tiles, each with its own SVG mark,
+ * is too much to redraw for any of them.
+ */
+export const PracticeTilePath = memo(function PracticeTilePath({
   cursor,
   onTilePress,
   depth = 1,
@@ -203,13 +252,13 @@ export function PracticeTilePath({
       })}
     </View>
   );
-}
+});
 
 /** Pure — given the cursor, return WINDOW_SIZE consecutive tiles in index
  *  order (past → future) with their absolute indices and per-tile state.
  *  Exported for unit testing. */
 export function buildWindow(cursor: number): RenderedTile[] {
-  const completedBehind = Math.min(COMPLETED_BEHIND, Math.max(0, cursor));
+  const completedBehind = completedBelow(cursor);
   const startIndex = Math.max(0, cursor - completedBehind);
   const out: RenderedTile[] = [];
   for (let i = 0; i < WINDOW_SIZE; i += 1) {
@@ -232,8 +281,8 @@ export function visualOrder(tiles: RenderedTile[]): RenderedTile[] {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingTop: 6,
-    paddingBottom: 24,
+    paddingTop: PATH_PAD_TOP,
+    paddingBottom: PATH_PAD_BOTTOM,
     // No flex gap and no per-row margin — tiles sit flush.
     // The shadow belongs here rather than on a tile: see FLIGHT_SHADOW. Note
     // this view must never gain a background colour — iOS would then shadow

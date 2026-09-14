@@ -23,7 +23,13 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,7 +47,19 @@ import {
   type FreezeState,
 } from '../services/api';
 import { PracticeBackdrop } from './practice/PracticeBackdrop';
-import { PracticeTilePath } from './practice/PracticeTilePath';
+import {
+  PracticeTilePath,
+  activeTileCenterY,
+  pathBelowActiveCenter,
+} from './practice/PracticeTilePath';
+import { TILE_BLOCK } from './practice/TilePill';
+import {
+  activeTileSide,
+  bottomRunway,
+  centeredOffset,
+  type TileSide,
+} from './practice/pathCentering';
+import { BackToStartButton } from './practice/BackToStartButton';
 import { StreakWeek, WEEK_PANEL_H } from './practice/StreakWeek';
 import { carryForward, localIsoDate } from './practice/streakSnapshot';
 import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
@@ -51,6 +69,9 @@ import { FreezeSheet } from './practice/FreezeSheet';
 // why. Its only child is the week panel, so the header is that panel's height
 // plus the breathing room under it.
 const HEADER_H = WEEK_PANEL_H + 8;
+
+/** Space between the top of the scroll content and the tile path. */
+const PATH_WRAP_PAD_TOP = 8;
 
 export interface PracticeScreenProps {
   /** Open the ReviewScreen on a new practice session. */
@@ -92,19 +113,84 @@ function PracticeScreenInner({
   const pathHydrated = usePracticePathStore((st) => st.hydrated);
   const hydratePath = usePracticePathStore((st) => st.hydrate);
 
-  // Parks the path at its bottom once per cursor — see the ScrollView below.
+  // ── Centring the active tile ────────────────────────────────────
+  //
+  // The path opens with the active tile in the middle of what is visible, on
+  // every screen height. It used to open scrolled to the bottom with four
+  // completed tiles under the active one, which fixed its slot counted up from
+  // the bottom — so how much road showed above it was whatever the screen had
+  // left. On a 667pt iPhone SE that was nothing: START pressed against the
+  // header, 8pt below it.
+  //
+  // The tile's place in the content is arithmetic (see `activeTileCenterY`);
+  // the scroller's height is the one measurement.
   const scrollRef = useRef<ScrollView>(null);
-  const didAnchor = useRef(false);
-  // False until the first anchor has landed. A ScrollView's first frame is at
-  // offset 0, which on this path is the TOP — the far end of the road, all
-  // locked tiles — and the scroll to the bottom arrives a frame later. Measured
-  // after a cold start: one frame of tiles 38–46, then a jump to START on 16.
-  // Only the first anchor hides anything; later re-anchors (a finished
-  // session moving the cursor) move a path that is already on screen.
+  const activeCenterY = PATH_WRAP_PAD_TOP + activeTileCenterY(cursor);
+  const [viewportH, setViewportH] = useState(0);
+  const contentH = useRef(0);
+  const viewport = useMemo(
+    () => ({ height: viewportH, bottomObstruction: bottomOffset }),
+    [viewportH, bottomOffset],
+  );
+  // Which cursor the path was last centred for. Centring runs once per cursor:
+  // doing it on every layout would yank the path back while the user scrolls.
+  const anchoredFor = useRef<number | null>(null);
+  // False until the first centring has landed. A ScrollView's first frame is
+  // at offset 0, the far top of the road, and the scroll arrives a frame
+  // later. Measured after a cold start: one frame of locked tiles 38–46, then
+  // a jump to START. Only the first centring hides anything; a later one (a
+  // finished session moving the cursor) moves a path already on screen.
   const [pathSettled, setPathSettled] = useState(false);
+  // The way back, once the active tile is out of sight.
+  const [tileSide, setTileSide] = useState<TileSide>(null);
+  const tileSideRef = useRef<TileSide>(null);
+  // Takes the height explicitly so the layout handler can centre in the same
+  // pass that measured it, rather than a render later through state.
+  const centerPath = useCallback((height: number = viewport.height) => {
+    // Not while hidden: KeepAlive hides the tab with `display: none`, which a
+    // scroll cannot be applied to. Re-shown, this runs again.
+    if (!pathHydrated || !active || height <= 0) return;
+    if (anchoredFor.current === cursor) return;
+    const measured = { height, bottomObstruction: bottomOffset };
+    const y = centeredOffset(activeCenterY, measured);
+    // The content has to be long enough to scroll that far, or the offset is
+    // clamped and the tile lands low. The runway below guarantees it once the
+    // content has laid out at this height; until then, wait for that layout.
+    if (contentH.current < y + height - 1) return;
+    const first = anchoredFor.current === null;
+    anchoredFor.current = cursor;
+    scrollRef.current?.scrollTo({ y, animated: !first });
+    // A scroll without animation fires no scroll event, so the way-back
+    // button would keep whatever it last saw. Centred is on screen by
+    // definition.
+    tileSideRef.current = null;
+    setTileSide(null);
+    // After the scroll, so the path is shown where it was sent.
+    if (first) setPathSettled(true);
+  }, [pathHydrated, active, viewport.height, bottomOffset, cursor, activeCenterY]);
   useEffect(() => {
-    didAnchor.current = false;
-  }, [cursor]);
+    centerPath();
+  }, [centerPath]);
+
+  const handlePathScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const next = activeTileSide(
+        e.nativeEvent.contentOffset.y,
+        activeCenterY,
+        TILE_BLOCK,
+        viewport,
+      );
+      if (next === tileSideRef.current) return;
+      tileSideRef.current = next;
+      setTileSide(next);
+    },
+    [viewport, activeCenterY],
+  );
+  const scrollBackToTile = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: centeredOffset(activeCenterY, viewport), animated: true });
+  }, [viewport, activeCenterY]);
+  const runway = bottomRunway(pathBelowActiveCenter(cursor), viewport, bottomOffset + 24);
+
   const userId = useAuthStore((st) => st.user?.id ?? null);
   useEffect(() => {
     void hydratePath();
@@ -279,57 +365,67 @@ function PracticeScreenInner({
         <StreakWeek state={displayState} onPressFreezes={openFreezeSheet} />
       </View>
 
-      {/* Opens at the BOTTOM, not the top. The path climbs the screen, so the
-          bottom is where the user is — the active tile sits four completed
-          tiles up from the end and the rest of the content is road ahead to
-          climb into. Anchored on content size rather than on mount, because
-          the tiles lay out a frame after the cursor arrives and scrolling
-          before that lands on the wrong offset.
+      {/* The path, with the active tile centred in what is visible — road
+          ahead above it, history below, both scrollable. Centred from the
+          scroller's measured height and the content's laid-out size, whichever
+          arrives last (see `centerPath`), and once per cursor: finishing a
+          session re-centres on the new tile instead of leaving the user
+          wherever they had scrolled. */}
+      <View style={s.pathArea}>
+        <ScrollView
+          ref={scrollRef}
+          style={s.fill}
+          contentContainerStyle={[s.scrollPad, { paddingBottom: runway }]}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={handlePathScroll}
+          onLayout={(e) => {
+            // Ignore the zero a hidden tab can report; the last real height
+            // still describes the screen it will be shown on.
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && h !== viewportH) {
+              setViewportH(h);
+              centerPath(h);
+            }
+          }}
+          onContentSizeChange={(_w, h) => {
+            contentH.current = h;
+            centerPath();
+          }}
+        >
+          {/* The tile chain. The active tile is at the cursor; the rest
+              are completed (past) or locked (future). The path itself
+              doesn't know about the paywall / daily cap; the parent's
+              `handleTilePress` does. */}
+          <View style={[s.pathWrap, !pathSettled && s.pathUnsettled]}>
+            {/* No heading and no lesson number. The path is the only thing on
+                the tab, so a label saying so was telling the user where they
+                already were, and the lesson count was a number with nothing to
+                compare it against — the coins themselves say how far along the
+                road you are.
 
-          Re-armed whenever the cursor moves (see `didAnchor`), so finishing a
-          session re-settles the active tile in its slot instead of leaving the
-          user looking at whatever scroll position they had before. Guarded so
-          it fires ONCE per cursor: running on every content-size change would
-          yank the view back down while the user is scrolling. */}
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={[s.scrollPad, { paddingBottom: bottomOffset + 24 }]}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => {
-          if (!pathHydrated || didAnchor.current) return;
-          didAnchor.current = true;
-          scrollRef.current?.scrollToEnd({ animated: false });
-          // After the scroll, in the same handler, so the path is shown at
-          // the offset it was sent to rather than the one it was drawn at.
-          setPathSettled(true);
-        }}
-      >
-        {/* The tile chain. The active tile is at the cursor; the rest
-            are completed (past) or locked (future). The path itself
-            doesn't know about the paywall / daily cap; the parent's
-            `handleTilePress` does. */}
-        <View style={[s.pathWrap, !pathSettled && s.pathUnsettled]}>
-          {/* No heading and no lesson number. The path is the only thing on
-              the tab, so a label saying so was telling the user where they
-              already were, and the lesson count was a number with nothing to
-              compare it against — the coins themselves say how far along the
-              road you are.
+                Held until the cursor is known. The store starts at 0, so the
+                first paint used to be lesson 1's window — a different set of
+                tiles, with the section dividers falling in different rows —
+                and it re-laid-out the moment the real cursor arrived a few
+                milliseconds later. That jump read as the header shoving the
+                tiles down. The wait is an AsyncStorage read, not a request. */}
+            {pathHydrated ? (
+              <PracticeTilePath
+                cursor={cursor}
+                onTilePress={handleTilePress}
+              />
+            ) : null}
+          </View>
+        </ScrollView>
 
-              Held until the cursor is known. The store starts at 0, so the
-              first paint used to be lesson 1's window — a different set of
-              tiles, with the section dividers falling in different rows —
-              and it re-laid-out the moment the real cursor arrived a few
-              milliseconds later. That jump read as the header shoving the
-              tiles down. The wait is an AsyncStorage read, not a request. */}
-          {pathHydrated ? (
-            <PracticeTilePath
-              cursor={cursor}
-              onTilePress={handleTilePress}
-            />
-          ) : null}
-        </View>
-      </ScrollView>
+        {/* Over the path, under the freeze sheet. */}
+        <BackToStartButton
+          side={tileSide}
+          onPress={scrollBackToTile}
+          bottomOffset={bottomOffset}
+        />
+      </View>
 
       {/* Last child, so it overlays the path. Absolute rather than a Modal,
           like every other sheet here — the bottom bar behind it stays live. */}
@@ -378,14 +474,21 @@ const makeStyles = (tc: ThemeColors) =>
       // block that owns its own margins. `flex-end` here was the old two-chip
       // layout, and it left the panel pinned to the right of the screen.
     },
+    // The path and the button that leads back to the active tile. A box of
+    // its own so that button is positioned against the path, not the screen.
+    pathArea: {
+      flex: 1,
+    },
+    fill: {
+      flex: 1,
+    },
     scrollPad: {
-      // paddingBottom is applied inline from `bottomOffset` — the floating
-      // bar's height isn't known until it reports it.
+      // paddingBottom is applied inline as the runway — see `bottomRunway`.
       paddingBottom: 0,
     },
     pathWrap: {
       paddingHorizontal: 18,
-      paddingTop: 8,
+      paddingTop: PATH_WRAP_PAD_TOP,
     },
     // Laid out, so its content size reaches the anchor; just not drawn yet.
     pathUnsettled: {

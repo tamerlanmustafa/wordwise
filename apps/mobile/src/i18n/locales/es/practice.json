@@ -4,6 +4,7 @@
   "freeze_one": "CONGELACIÓN",
   "freeze_other": "CONGELACIONES",
   "start": "EMPEZAR",
+  "backToStart": "Volver a tu lección",
   "freezeUsed_one": "Racha salvada: {{count}} congelación usada",
   "freezeUsed_other": "Racha salvada: {{count}} congelaciones usadas",
   "weekday": {

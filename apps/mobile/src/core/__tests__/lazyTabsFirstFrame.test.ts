@@ -76,17 +76,17 @@ describe('the film feed knows about its ad slot before it draws', () => {
 describe('the practice path is not drawn before it is anchored', () => {
   const screen = () => read('components', 'PracticeScreen.tsx');
 
-  it('hides the path until the first scroll to the bottom has been sent', () => {
+  it('hides the path until the first centring scroll has been sent', () => {
     const s = screen();
     expect(s).toMatch(/style=\{\[s\.pathWrap, !pathSettled && s\.pathUnsettled\]\}/);
     expect(s).toMatch(/pathUnsettled: \{\s*opacity: 0,/);
   });
 
-  it('reveals it after the scroll, in the same handler', () => {
+  it('reveals it after the scroll, in the same call', () => {
     const s = screen();
-    const handler = s.slice(s.indexOf('onContentSizeChange={'), s.indexOf('onContentSizeChange={') + 400);
-    expect(handler.indexOf('scrollToEnd')).toBeGreaterThan(-1);
-    expect(handler.indexOf('setPathSettled(true)')).toBeGreaterThan(handler.indexOf('scrollToEnd'));
+    const fn = s.slice(s.indexOf('const centerPath'), s.indexOf('useEffect(() => {\n    centerPath();'));
+    expect(fn.indexOf('scrollTo(')).toBeGreaterThan(-1);
+    expect(fn.indexOf('setPathSettled(true)')).toBeGreaterThan(fn.indexOf('scrollTo('));
   });
 
   it('never hides it again — a later re-anchor moves a path already on screen', () => {
