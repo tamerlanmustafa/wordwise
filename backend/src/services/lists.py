@@ -36,6 +36,7 @@ from prisma import Prisma
 
 from .movie_cefr import CEFR_LEVELS, cefr_from_score
 from .session_kinds import PRACTICE_SOURCE, user_owned_where_fragment
+from .saved_words import release_saved_rows
 
 # ── Rules ──────────────────────────────────────────────────────────────────
 
@@ -971,10 +972,19 @@ async def remove_item(
     else:
         word = str(key).lower()
         if row.systemKey == "favourites":
-            # Unhearting: drop the global row, exactly as the save toggle does.
-            await db.userword.delete_many(
-                where={"userId": user_id, "word": word, "movieId": None},
+            # Un-hearting takes the word out of Favourites — it does not erase
+            # what the user learned about it. This used to `delete_many` the
+            # global row, and that row is where the word's SRS box and review
+            # history live: a mis-tap and a re-heart reset a box-2 word to a
+            # never-reviewed box 1. See services/saved_words.py.
+            #
+            # `find_many`, not `find_first`: pre-#93 data can still hold
+            # duplicate global rows, and releasing only one would leave the
+            # word in Favourites.
+            rows = await db.userword.find_many(
+                where={"userId": user_id, "word": word, "movieId": None, "isLearned": False},
             )
+            await release_saved_rows(db, rows)
         else:
             await db.userlistword.delete_many(
                 where={"listId": int(row.id), "word": word},

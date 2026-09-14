@@ -290,14 +290,21 @@ class TestFavouritesAdapter:
         for sql in db.sql_touching("user_words"):
             assert "ON CONFLICT" not in sql
 
-    async def test_remove_deletes_only_the_global_row(self):
+    async def test_remove_touches_only_the_global_row(self):
         # Per-movie saved rows are a different thing from the heart, and
         # unhearting must not clear them.
+        #
+        # This used to assert a `delete_many` on the global row — which pinned
+        # the bug as well as the scope: that row also holds the word's SRS box
+        # and review history, so un-hearting erased them. Removal now releases
+        # the row through services/saved_words.py (demote if it has progress,
+        # delete if not); what stays pinned here is the scope.
         db = db_with_list(FAVS)
         await svc.remove_item(db, 7, FAVS.id, "Reluctant")
-        assert db.called("userword.delete_many") == [
-            {"where": {"userId": 7, "word": "reluctant", "movieId": None}}
+        assert db.called("userword.find_many") == [
+            {"where": {"userId": 7, "word": "reluctant", "movieId": None, "isLearned": False}}
         ]
+        assert db.called("userword.delete_many") == []
 
     async def test_custom_word_list_does_not_touch_user_words(self):
         db = db_with_list(CUSTOM_WORDS)

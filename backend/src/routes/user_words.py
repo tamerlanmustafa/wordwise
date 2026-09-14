@@ -6,6 +6,7 @@ from prisma.errors import UniqueViolationError
 from ..database import get_db
 from ..middleware.auth import get_current_active_user
 from ..services.session_kinds import PRACTICE_SOURCE, user_owned_where_fragment
+from ..services.saved_words import release_saved_rows
 
 router = APIRouter(prefix="/user/words", tags=["user_words"])
 
@@ -36,13 +37,16 @@ async def save_word(
     current_user=Depends(get_current_active_user),
     db: Prisma = Depends(get_db)
 ):
+    # Always scoped to ONE row: this film's, or the global one. The movie id
+    # used to be added to the filter only when present, so a global heart (the
+    # word feed sends no movie) matched ANY row for the word — including one
+    # the user had saved from a film — and the toggle deleted that instead.
+    # Tap to save "kitchen" on Home, lose the "kitchen" you saved from a film.
     where_clause = {
         "userId": current_user.id,
-        "word": request.word
+        "word": request.word,
+        "movieId": request.movie_id or None,
     }
-
-    if request.movie_id:
-        where_clause["movieId"] = request.movie_id
 
     existing = await db.userword.find_first(where=where_clause)
 
@@ -58,7 +62,17 @@ async def save_word(
                 data={"source": None},
             )
             return {"saved": True, "word": request.word}
-        await db.userword.delete(where={"id": existing.id})
+        if existing.isLearned:
+            # A learned marker, not a save — unchanged legacy behaviour, and
+            # out of reach from the feed, which hides learned words.
+            await db.userword.delete(where={"id": existing.id})
+            return {"saved": False, "word": request.word}
+        # Un-saving must not erase what the user learned. This was a plain
+        # delete of the row that holds the SRS box and review history, so
+        # saving and un-saving a word reset it to never-studied. Now a row
+        # with progress is demoted back to a Practice row — the inverse of the
+        # promotion just above — and re-saving finds it intact.
+        await release_saved_rows(db, [existing])
         return {"saved": False, "word": request.word}
 
     data = {
