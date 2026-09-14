@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../../theme/palette';
 import { wordwiseApi, tmdbApi } from '../../services/api';
@@ -176,7 +176,7 @@ export const AddFilmSearchScreen = ({ onBack }: Props) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <ScreenHeader onBack={onBack} title={displayTitle} />
 
       <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
@@ -278,6 +278,6 @@ export const AddFilmSearchScreen = ({ onBack }: Props) => {
           }
         />
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 };

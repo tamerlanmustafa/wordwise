@@ -12,7 +12,7 @@ import {
   View,
   FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import {
   adminApi,
   reportsApi,
@@ -738,7 +738,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
     const page = adminPage(view);
     const busy = pageLoading === view;
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView('main')}
           backLabel="Admin"
@@ -766,13 +766,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             <UsersView data={usersData}>{grantPlusPanel}</UsersView>
           )}
         </View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'health') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader onBack={() => setView('main')} backLabel="Admin" title="Health" />
         {errorBanner}
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: barInset + 24 }]}>
@@ -815,7 +815,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             </StatGrid>
           </Section>
         </ScrollView>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -824,7 +824,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
       ? `${processedFilter} movies`
       : 'Processed movies';
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -977,13 +977,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             }}
           />
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'dead') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -1043,13 +1043,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
             ))}
           </ScrollView>
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'coverage') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -1084,13 +1084,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         ) : (
           <VocabCoverageView report={coverage} />
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'latency') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -1122,13 +1122,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         ) : (
           <LatencyView report={latency} />
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'eventLoop') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -1160,13 +1160,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         ) : (
           <EventLoopView report={eventLoop} />
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'clientIp') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView(PARENT_OF[view] ?? 'main')}
           backLabel={parentLabel}
@@ -1198,13 +1198,13 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
         ) : (
           <ClientIpView report={clientIp} />
         )}
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (view === 'reports') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <ScreenHeader
           onBack={() => setView('main')}
           backLabel="Admin"
@@ -1381,12 +1381,12 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </TopInsetView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <ScreenHeader
         onBack={onBack}
         backLabel={backLabel}
@@ -1477,7 +1477,7 @@ export function AdminScreen({ onBack, backLabel }: AdminScreenProps) {
               : 'Simulating a free user. Ads will show, paywalls will trigger. Admin tools still work.'}
         </Text>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

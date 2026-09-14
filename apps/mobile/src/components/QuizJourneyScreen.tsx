@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/palette';
 import {
@@ -203,7 +203,7 @@ export function QuizJourneyScreen({
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
 
       {loading ? (
         <View style={styles.centered}>
@@ -231,7 +231,7 @@ export function QuizJourneyScreen({
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

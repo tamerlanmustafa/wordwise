@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { ConfettiBurst } from './ConfettiBurst';
@@ -62,7 +62,7 @@ export function SessionFinishing() {
   const checkColor = scheme === 'dark' ? tc.goldDeep : tc.textInverse;
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       {/* Correct-tinted, because reaching this screen means the deck is done —
           the backdrop should have already settled to green behind the last
           answer, and this continues it rather than flashing back to accent. */}
@@ -95,7 +95,7 @@ export function SessionFinishing() {
           {t('quiz:finishing.sub')}
         </Animated.Text>
       </View>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

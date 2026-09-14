@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
 import {
@@ -86,14 +86,14 @@ export function QuizLessonScreen({
 
   if (!card) {
     return (
-      <SafeAreaView style={s.container} edges={['top']}>
+      <TopInsetView style={s.container}>
         <View style={s.centered}>
           <Text style={s.emptyText}>{t('quiz:lesson.empty')}</Text>
           <TouchableOpacity onPress={onExit} style={s.exitBtn}>
             <Text style={s.exitBtnText}>{t('action.back')}</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -166,7 +166,7 @@ export function QuizLessonScreen({
 
   if (error) {
     return (
-      <SafeAreaView style={s.container} edges={['top']}>
+      <TopInsetView style={s.container}>
         <View style={s.centered}>
           <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity
@@ -179,12 +179,12 @@ export function QuizLessonScreen({
             <Text style={s.exitGhostText}>{t('quiz:lesson.exit')}</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <QuizHeader
         index={idx + 1}
         total={total}
@@ -238,7 +238,7 @@ export function QuizLessonScreen({
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

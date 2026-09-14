@@ -178,3 +178,51 @@ describe('sheets dim the whole screen, bar included', () => {
     expect(code(file)).not.toMatch(/layout\.height \+ bottomOffset/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4. A primary action is not allowed to rest behind the bar
+// ---------------------------------------------------------------------------
+
+/**
+ * Section 2 guarantees the LAST element of a scroller can be scrolled clear of
+ * the bar. It says nothing about where things sit at rest, and that gap is
+ * where the paywall broke: the scroll reserved the bar's height exactly as
+ * required, the plans filled the first screen, and "Get Plus" — the one
+ * control that screen exists for — rested underneath the translucent capsule.
+ * Every rule in this file passed while it happened.
+ *
+ * The fix is structural rather than numeric: the buy button is a sibling BELOW
+ * the ScrollView, padded by the bar inset, so layout places it above the bar
+ * and the scroll shrinks to what is left. Nothing is measured, and nothing can
+ * drift out of step with the bar's height.
+ */
+describe('a screen whose job is one button keeps that button above the bar', () => {
+  const PAYWALL = path.join('components', 'PaywallScreen.tsx');
+
+  it('renders the buy button outside the ScrollView', () => {
+    const src = code(PAYWALL);
+    const scrollEnd = src.indexOf('</ScrollView>');
+    const cta = src.indexOf('s.trialBtn');
+    expect(scrollEnd).toBeGreaterThan(-1);
+    // After the scroll closes — i.e. not something the user has to scroll to.
+    expect(cta).toBeGreaterThan(scrollEnd);
+  });
+
+  it('pads that footer by the bar inset, so layout puts it above the bar', () => {
+    expect(code(PAYWALL)).toMatch(/style=\{\[s\.footer,\s*\{\s*paddingBottom:\s*barInset\s*\}\]\}/);
+  });
+
+  it('does not reserve the bar twice when the footer is present', () => {
+    // The footer already sits above the bar; the scroll above it only needs its
+    // own breathing room. Reserving the bar again there would leave a band of
+    // empty space above the button.
+    expect(code(PAYWALL)).toMatch(/paddingBottom:\s*isPremium\s*\?\s*barInset\s*\+\s*24\s*:\s*24/);
+  });
+
+  it('gives the footer an opaque ground', () => {
+    // The strip below the button is behind the bar's glass. Transparent, it
+    // would show whatever scrolled there last through the capsule.
+    const src = code(PAYWALL);
+    expect(src).toMatch(/footer:\s*\{[^}]*backgroundColor:\s*tc\.background/);
+  });
+});

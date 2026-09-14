@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { BackButton } from '../common/BackButton';
@@ -112,7 +112,7 @@ export function ListDetailScreen({
   const loading = !detail;
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <View style={s.topRow}>
         {/* The app's one back control — a circle with a text arrow in it was
             a fourth variant of the same affordance. */}
@@ -188,7 +188,7 @@ export function ListDetailScreen({
         value={sort}
         onChange={setSort}
       />
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { getFormattingLocale } from '../i18n';
 import { BACK_ARROW } from '../i18n/rtl';
@@ -152,7 +152,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
   const activeLabel = t(`stats:leaderboard.${section === 'vocab' ? vocabBoard : quizBoard}`);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
@@ -236,7 +236,7 @@ export function LeaderboardScreen({ onBack, backLabel }: LeaderboardScreenProps)
           }
         />
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

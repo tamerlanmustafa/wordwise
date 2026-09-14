@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { ScreenHeader } from './common/ScreenHeader';
@@ -21,7 +21,7 @@ export function PrivacyScreen({ onBack, mode }: PrivacyScreenProps) {
   const isPrivacy = mode === 'privacy';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <ScreenHeader
         onBack={onBack}
         title={isPrivacy ? 'Privacy Policy' : 'Terms of Service'}
@@ -31,7 +31,7 @@ export function PrivacyScreen({ onBack, mode }: PrivacyScreenProps) {
           {isPrivacy ? <PrivacyContent /> : <TermsContent />}
         </StyleContext.Provider>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

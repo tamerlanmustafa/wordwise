@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { purchaseProduct, restorePurchases, PRODUCTS } from '../services/billing';
@@ -30,7 +30,7 @@ import {
 import { directionalIcon } from '../i18n/rtl';
 import { BlockIcon, BrainIcon, ChartIcon, FilmIcon, ShieldIcon } from './ui/icons';
 import { useBottomBarInset } from '../hooks/useBottomBarInset';
-import { withTap } from '../utils/feedback';
+import { useAuthStore } from '../stores/authStore';
 
 export interface PaywallScreenProps {
   onBack: () => void;
@@ -86,12 +86,19 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
 
   const restore = async () => {
     const result = await restorePurchases();
-    Alert.alert(result.restored ? t('billing:paywall.restoredTitle') : t('billing:paywall.notFoundTitle'), result.message);
+    if (result.restored) await useAuthStore.getState().refreshUser();
+    Alert.alert(
+      result.restored ? t('billing:paywall.restoredTitle') : t('billing:paywall.notFoundTitle'),
+      // The key, not the English `message` — the same fix Account got. This
+      // screen had its own copy of the old call and kept printing English
+      // under a translated title.
+      result.messageKey ? t(result.messageKey) : result.message,
+    );
     if (result.restored) onBack();
   };
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <View style={s.header}>
         <PressableScale onPress={onBack} accessibilityRole="button" accessibilityLabel={t('action.back')}>
           <Ionicons name={directionalIcon('chevron-back')} size={22} color={tc.text} />
@@ -101,7 +108,15 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: barInset + 24 }]}
+        style={s.scroll}
+        contentContainerStyle={[
+          s.content,
+          // With the buy footer on screen, the footer is what sits above the
+          // bar — so the scroll only needs its own breathing room. Without it
+          // (a Plus account sees "Done" in the scroll instead) the scroll is
+          // the last thing above the bar and has to reserve it itself.
+          { paddingBottom: isPremium ? barInset + 24 : 24 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={s.heroTitle}>{t('billing:paywall.heroTitle')}</Text>
@@ -110,6 +125,54 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
         ) : (
           <Text style={s.heroSub}>{t(subtitle.key, subtitle.params)}</Text>
         )}
+
+        {/* Plans before features, the same order as PremiumSheet. The choice is
+            what this screen is for, and with the buy button pinned in the
+            footer, plans placed under a five-row feature list rested cut in half
+            by it — the button visible, the thing it buys not. */}
+        {!isPremium ? (
+          <>
+            {/* No `withTap` on these. PressableScale fires its own haptic on
+                press-in, so wrapping the handler as well was two buzzes per
+                press — the double-wrap CLAUDE.md warns about, on the panel
+                people touch most before paying. */}
+            <View style={s.plans}>
+              <PlanCard
+                tc={tc}
+                selected={plan === 'annual'}
+                onPress={() => setPlan('annual')}
+                title="Annual"
+                price={ANNUAL_PRICE_LABEL}
+                cadence="/year"
+                badge={`SAVE ${savings}%`}
+              />
+              <PlanCard
+                tc={tc}
+                selected={plan === 'monthly'}
+                onPress={() => setPlan('monthly')}
+                title="Monthly"
+                price={t('billing:paywall.free')}
+                cadence={t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
+                badge={t('billing:paywall.trialBadge')}
+                badgeTone="trial"
+              />
+            </View>
+
+            {/* Not a third card — see PremiumSheet for the reasoning. The two
+                surfaces have to offer the same prices in the same shape, or
+                the one a user happens to reach decides what they pay. */}
+            <PressableScale
+              style={[s.lifetimeRow, plan === 'lifetime' && s.lifetimeRowOn]}
+              onPress={() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime')}
+              accessibilityRole="button"
+              accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+            >
+              <Text style={[s.lifetimeRowText, plan === 'lifetime' && s.lifetimeRowTextOn]}>
+                {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+              </Text>
+            </PressableScale>
+          </>
+        ) : null}
 
         <View style={s.featureList}>
           {PAYWALL_FEATURES.map((f) => (
@@ -134,66 +197,46 @@ export function PaywallScreen({ onBack, previewsUsed, previewsLimit, reason = nu
             <Text style={s.manageBtnText}>{t('action.done')}</Text>
           </PressableScale>
         ) : (
-          <>
-            <View style={s.plans}>
-              <PlanCard
-                tc={tc}
-                selected={plan === 'annual'}
-                onPress={withTap(() => setPlan('annual'))}
-                title="Annual"
-                price={ANNUAL_PRICE_LABEL}
-                cadence="/year"
-                badge={`SAVE ${savings}%`}
-              />
-              <PlanCard
-                tc={tc}
-                selected={plan === 'monthly'}
-                onPress={withTap(() => setPlan('monthly'))}
-                title="Monthly"
-                price={t('billing:paywall.free')}
-                cadence={t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
-                badge={t('billing:paywall.trialBadge')}
-                badgeTone="trial"
-              />
-            </View>
-
-            {/* Not a third card — see PremiumSheet for the reasoning. The two
-                surfaces have to offer the same prices in the same shape, or
-                the one a user happens to reach decides what they pay. */}
-            <PressableScale
-              style={[s.lifetimeRow, plan === 'lifetime' && s.lifetimeRowOn]}
-              onPress={withTap(() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime'))}
-              accessibilityRole="button"
-              accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
-            >
-              <Text style={[s.lifetimeRowText, plan === 'lifetime' && s.lifetimeRowTextOn]}>
-                {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
-              </Text>
-            </PressableScale>
-
-            <PressableScale
-              style={[s.trialBtn, busy && { opacity: 0.6 }]}
-              onPress={buy}
-              accessibilityRole="button"
-              accessibilityLabel={t(ctaKey)}
-            >
-              <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t(ctaKey)}</Text>
-            </PressableScale>
-            <Text style={s.priceHint}>
-              {plan === 'lifetime'
-                ? t('billing:paywall.lifetimeHint')
-                : plan === 'monthly'
-                  ? t('billing:paywall.hintTrial', { price: MONTHLY_PRICE_LABEL })
-                  : t('billing:paywall.hintAnnual', { price: ANNUAL_PRICE_LABEL })}
-            </Text>
-
-            <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel={t('billing:paywall.restore')}>
-              <Text style={s.restoreBtnText}>{t('billing:paywall.restore')}</Text>
-            </PressableScale>
-          </>
+          <PressableScale style={s.restoreBtn} onPress={restore} accessibilityRole="button" accessibilityLabel={t('billing:paywall.restore')}>
+            <Text style={s.restoreBtnText}>{t('billing:paywall.restore')}</Text>
+          </PressableScale>
         )}
       </ScrollView>
-    </SafeAreaView>
+
+      {/* The buy button, pinned ABOVE the bottom bar.
+
+          It used to be the last thing in the scroll. The scroll did reserve the
+          bar's height, which is the rule the rest of the app follows — but that
+          rule only guarantees the LAST element can be scrolled clear. At rest
+          the plans filled the screen and "Get Plus" sat underneath the
+          translucent capsule: the most important control on a screen whose
+          only job is to be pressed, drawn behind the tab bar.
+
+          A sibling below the ScrollView rather than an absolute overlay, so
+          nothing has to be measured: layout itself places it above the bar's
+          reserved height, and the ScrollView shrinks to what is left. The
+          price hint travels with it because the trial terms have to be read
+          next to the button that starts the trial. */}
+      {!isPremium ? (
+        <View style={[s.footer, { paddingBottom: barInset }]}>
+          <PressableScale
+            style={[s.trialBtn, busy && { opacity: 0.6 }]}
+            onPress={buy}
+            accessibilityRole="button"
+            accessibilityLabel={t(ctaKey)}
+          >
+            <Text style={s.trialBtnText}>{busy ? t('billing:paywall.starting') : t(ctaKey)}</Text>
+          </PressableScale>
+          <Text style={s.priceHint}>
+            {plan === 'lifetime'
+              ? t('billing:paywall.lifetimeHint')
+              : plan === 'monthly'
+                ? t('billing:paywall.hintTrial', { price: MONTHLY_PRICE_LABEL })
+                : t('billing:paywall.hintAnnual', { price: ANNUAL_PRICE_LABEL })}
+          </Text>
+        </View>
+      ) : null}
+    </TopInsetView>
   );
 }
 
@@ -221,7 +264,7 @@ function PlanCard({
   const s = useMemo(() => makeStyles(tc), [tc]);
   return (
     <PressableScale
-      style={[s.planCard, { borderColor: selected ? tc.gold : tc.border, backgroundColor: selected ? tc.primaryTint : tc.paper }]}
+      style={[s.planCard, { borderColor: selected ? tc.gold : tc.border, backgroundColor: selected ? tc.goldWash : tc.paper }]}
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
@@ -305,28 +348,33 @@ const makeStyles = (tc: ThemeColors) =>
       borderColor: tc.border,
       paddingVertical: 12,
       alignItems: 'center',
-      marginBottom: 14,
+      marginTop: 12,
     },
     lifetimeRowOn: { borderColor: tc.gold, backgroundColor: tc.goldWash },
     lifetimeRowText: { fontSize: 13, fontWeight: '700', color: tc.textSecondary },
     lifetimeRowTextOn: { color: tc.text },
 
+    scroll: { flex: 1 },
+    // Opaque, with a hairline above: scrolled content passes under its top
+    // edge cleanly, and the strip below the button — behind the bar's glass —
+    // shows the page background rather than whatever scrolled there last.
+    footer: {
+      backgroundColor: tc.background,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: tc.border,
+      paddingHorizontal: 24,
+      paddingTop: 14,
+    },
     trialBtn: {
       backgroundColor: tc.gold,
       paddingVertical: 16,
       borderRadius: 14,
       alignItems: 'center',
-      marginTop: 24,
-      shadowColor: '#000',
-      shadowOpacity: 0.25,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 5,
     },
     trialBtnText: { color: tc.goldDeep, fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
-    priceHint: { fontSize: 12, color: tc.textFaint, marginTop: 10, textAlign: 'center' },
+    priceHint: { fontSize: 12, color: tc.textFaint, marginTop: 8, marginBottom: 10, textAlign: 'center' },
     manageBtn: { backgroundColor: tc.gold, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 28 },
     manageBtnText: { color: tc.goldDeep, fontSize: 16, fontWeight: '900' },
-    restoreBtn: { marginTop: 16, alignItems: 'center' },
+    restoreBtn: { marginTop: 24, alignItems: 'center' },
     restoreBtnText: { fontSize: 13, color: tc.textSecondary, textDecorationLine: 'underline' },
   });

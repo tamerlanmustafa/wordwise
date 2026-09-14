@@ -4,7 +4,7 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import {
   srsApi,
@@ -449,16 +449,16 @@ export function ReviewScreen({
     // the counter and the progress bar and holds their slot with a spacer, so
     // loading gains those two pieces rather than being replaced.
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <QuizHeader onBack={onBack} />
         <QuizCardSkeleton />
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (phase === 'error') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <QuizHeader onBack={onBack} />
         <EmptyState
           icon="cloud-offline-outline"
@@ -470,7 +470,7 @@ export function ReviewScreen({
           subCtaLabel="Continue offline"
           onSubCta={onBack}
         />
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -479,7 +479,7 @@ export function ReviewScreen({
     // "come back tomorrow" vs "try again in a moment". See `quiz/emptyDeck`.
     const copy = emptyDeckCopy(deckStatus);
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <QuizHeader onBack={onBack} />
         <EmptyState
           icon={copy.icon}
@@ -491,7 +491,7 @@ export function ReviewScreen({
           subCtaLabel={copy.retry ? t('quiz:review.backHome') : undefined}
           onSubCta={copy.retry ? onBack : undefined}
         />
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -509,7 +509,7 @@ export function ReviewScreen({
       isPracticePath ? 'quiz:review.dailyReview' : 'quiz:review.listPractice',
     );
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         {/* Same chrome as the card screens the user just came through —
             round back button, gold-edged chip on the app background — minus
             the counter and progress bar, which have nothing left to report.
@@ -558,7 +558,7 @@ export function ReviewScreen({
             setMilestoneQueue(rest);
           }}
         />
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -572,10 +572,10 @@ export function ReviewScreen({
     // and it appeared with no header at all. The card outline says "next one
     // is coming" using the shape that is actually coming.
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <QuizHeader onBack={onBack} />
         <QuizCardSkeleton />
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -596,7 +596,7 @@ export function ReviewScreen({
   );
   if (isChoiceCard(currentCard.card_type) && currentCard.choices) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         {sharedHeader}
         <Animated.View style={[{ flex: 1 }, { opacity: fade }]}>
           <MCQCard
@@ -616,17 +616,17 @@ export function ReviewScreen({
             onAnswer={(correct) => advance(correct)}
           />
         </Animated.View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   // Unrenderable card — the skip effect above has already queued the skip.
   // Same card outline as every other gap, so nothing on screen moves.
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       {sharedHeader}
       <QuizCardSkeleton />
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

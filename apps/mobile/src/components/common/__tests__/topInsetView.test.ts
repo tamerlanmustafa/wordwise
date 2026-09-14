@@ -56,6 +56,87 @@ describe('lazily-mounted tab screens pad in the same commit as their content', (
   });
 });
 
+/**
+ * The same bug, and a worse case of it: the deep screens.
+ *
+ * Profile, Settings, Account, Legal, the paywall — every screen reached by
+ * navigating INTO it — is not kept alive at all. It is rendered by App's
+ * deep-screen overlay and REMOUNTS every time it is shown. A lazily-mounted
+ * tab pays the one-frame jump once per launch; these paid it on every visit.
+ *
+ * Reported as "going back to the Profile tab from the views within glitches
+ * it". Measured by recording the simulator and reading frames with
+ * AVFoundation (a screenshot loop is ~110ms per frame, far too coarse for a
+ * one-frame flash): on an edge-swipe back from Account, the swipe reveals a
+ * correctly-placed Profile underneath, then on commit a NEW Profile mounts and
+ * its first frame (+2655ms) is drawn ~60pt too high — title under the Dynamic
+ * Island, avatar jammed against it — before snapping down at +2666ms.
+ *
+ * So this is not a list of screens. It is the whole source tree, because the
+ * next deep screen will be written by copying the shape of an existing one, and
+ * `SafeAreaView` is the obvious thing to copy.
+ */
+describe('no screen gets its top inset from a native view', () => {
+  /** Files where the pattern is allowed, each for a stated reason. */
+  const ALLOWED: Record<string, string> = {
+    // Quotes the JSX it replaces in its own docblock.
+    [path.join('components', 'common', 'TopInsetView.tsx')]: 'documents the pattern it replaces',
+    // A toast host, not a screen: it is mounted once and never navigated to,
+    // and it needs `pointerEvents` that TopInsetView does not forward.
+    [path.join('components', 'common', 'Toast.tsx')]: 'overlay mounted once, needs pointerEvents',
+  };
+
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== '__tests__' && e.name !== 'node_modules') walk(full, out);
+      } else if (e.name.endsWith('.tsx')) {
+        out.push(full);
+      }
+    }
+    return out;
+  };
+
+  /** Comments stripped — plenty of files explain why they stopped using it. */
+  const code = (f: string) =>
+    fs
+      .readFileSync(f, 'utf8')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('uses no top-edge SafeAreaView anywhere outside the named exceptions', () => {
+    const offenders = walk(SRC)
+      .map((f) => path.relative(SRC, f))
+      .filter((rel) => !(rel in ALLOWED))
+      .filter((rel) => /<SafeAreaView[^>]*edges=\{\[\s*'top'\s*\]\}/.test(code(path.join(SRC, rel))));
+    expect(offenders).toEqual([]);
+  });
+
+  it('covers the account area specifically', () => {
+    // The screens the report was about. Named, so a regression here reads as
+    // "Profile glitches again" rather than as a line in a long list.
+    for (const file of [
+      ['components', 'screens', 'ProfileScreen.tsx'],
+      ['components', 'screens', 'SettingsScreen.tsx'],
+      ['components', 'screens', 'AccountScreen.tsx'],
+      ['components', 'screens', 'LegalScreen.tsx'],
+      ['components', 'screens', 'NotificationSettingsScreen.tsx'],
+      ['components', 'PaywallScreen.tsx'],
+      ['components', 'PrivacyScreen.tsx'],
+    ]) {
+      expect(read(...file)).toMatch(/<TopInsetView/);
+    }
+  });
+
+  it('keeps each exception pointing at a file that exists', () => {
+    for (const rel of Object.keys(ALLOWED)) {
+      expect(fs.existsSync(path.join(SRC, rel))).toBe(true);
+    }
+  });
+});
+
 describe('TopInsetView', () => {
   const src = () => read('components', 'common', 'TopInsetView.tsx');
 

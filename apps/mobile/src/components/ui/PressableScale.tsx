@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import {
   Animated,
   Pressable,
+  StyleSheet,
   type GestureResponderEvent,
   type PressableProps,
   type StyleProp,
@@ -67,8 +68,50 @@ export function PressableScale({
   };
 
   return (
-    <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} {...rest}>
+    <Pressable
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={flexItemStyle(style)}
+      {...rest}
+    >
       <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
     </Pressable>
   );
+}
+
+/**
+ * The properties that describe how an element sits AMONG ITS SIBLINGS.
+ *
+ * This component is two views: an outer `Pressable` that takes the touch, and
+ * an inner `Animated.View` that scales. `style` goes on the inner one, because
+ * that is where padding, background and radius have to live for the press dip
+ * to scale them. But the element that actually sits in the parent's layout is
+ * the OUTER one — so `flex: 1` on `style` stretched the inner view to fill a
+ * Pressable that was itself only as wide as its content, and did nothing.
+ *
+ * That is exactly what broke the paywall's plan cards: two `flex: 1` cards in a
+ * row that each sized to their text, leaving a gap on the right, and a
+ * "7-DAY TRIAL" badge that wrapped onto two lines because its card was only as
+ * wide as "then $4.99/mo".
+ *
+ * So these are COPIED to the outer view as well, not moved. Kept on the inner
+ * view too, because `flex: 1` there is what makes it fill the outer one's
+ * height — which is how two cards in a row come out the same height.
+ *
+ * Margins are deliberately not in the list: a margin places the box identically
+ * from either view, and every existing call site uses them inside.
+ */
+const FLEX_ITEM_KEYS = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf'] as const;
+
+export function flexItemStyle(style: StyleProp<ViewStyle>): ViewStyle | undefined {
+  const flat = StyleSheet.flatten(style);
+  if (!flat) return undefined;
+  let out: ViewStyle | undefined;
+  for (const key of FLEX_ITEM_KEYS) {
+    if (flat[key] !== undefined) {
+      out = out ?? {};
+      (out as Record<string, unknown>)[key] = flat[key];
+    }
+  }
+  return out;
 }

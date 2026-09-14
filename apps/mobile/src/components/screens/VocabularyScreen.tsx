@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
@@ -34,7 +34,7 @@ export const VocabularyScreen = ({ onBack, backLabel, onNavigateToLearnedWords }
   }, []);
 
   return (
-    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+    <TopInsetView style={settingsStyles.container}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
           <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
@@ -59,6 +59,6 @@ export const VocabularyScreen = ({ onBack, backLabel, onNavigateToLearnedWords }
           <Text style={settingsStyles.settingsLinkArrow}>{FORWARD_ARROW}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 };

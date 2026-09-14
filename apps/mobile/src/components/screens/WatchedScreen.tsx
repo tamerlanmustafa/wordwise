@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../../core/styles';
@@ -75,7 +75,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: tc.background }]} edges={['top']}>
+    <TopInsetView style={[styles.container, { backgroundColor: tc.background }]}>
       <View style={[styles.detailHeader, { backgroundColor: tc.paper, borderBottomColor: tc.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={[styles.backButtonText, { color: tc.primary }]}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
@@ -134,7 +134,7 @@ export const WatchedScreen = ({ onBack, backLabel, onMoviePress }: Props) => {
           )}
         />
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 };
 

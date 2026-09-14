@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { srsApi, premiumApi, wordwiseApi, type SrsStats } from '../services/api';
 import { useIsPremium } from '../stores/entitlementsStore';
@@ -82,7 +82,7 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
     // Skeleton that mirrors the dashboard's shape (hero stat row + cards) so
     // the screen reads as "almost there" rather than a dead spinner (F-015).
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <Header onBack={onBack} backLabel={backLabel} styles={styles} />
         <View style={styles.scrollContent}>
           <View style={styles.heroRow}>
@@ -92,13 +92,13 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
           <Skeleton height={150} radius={14} sheen delay={120} />
           <Skeleton height={190} radius={14} sheen delay={180} />
         </View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
   if (!stats || stats.total_saved === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <TopInsetView style={styles.container}>
         <Header onBack={onBack} backLabel={backLabel} styles={styles} />
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>{t('stats:emptyTitle')}</Text>
@@ -106,7 +106,7 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
             {t('stats:emptyBody')}
           </Text>
         </View>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -117,7 +117,7 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
   const maxBox = Math.max(...boxEntries.map(([, v]) => v), 1);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <Header onBack={onBack} backLabel={backLabel} styles={styles} />
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: barInset + 24 }]}>
         {/* Streak + Retention hero */}
@@ -238,7 +238,7 @@ export function StatsScreen({ onBack, backLabel, onStartReview }: StatsScreenPro
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

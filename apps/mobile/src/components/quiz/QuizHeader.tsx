@@ -5,7 +5,7 @@
  *
  * Layout (top → bottom):
  *   Total 62px from device top to first row (clears dynamic island).
- *   Parents wrap in `SafeAreaView edges={['top']}` so `insets.top` is
+ *   Parents wrap in `TopInsetView` so `insets.top` is
  *   already applied above us; we add `max(12, 62 - insets.top)` to
  *   reach the canvas value on every device.
  *   ─ Row: 36×36 round back · centered movie chip (CEFR badge +
@@ -28,7 +28,7 @@ import { MONO_FAMILY } from '../../theme/fonts';
 import { quizHeaderProgress, quizSegments } from './quizHeaderLayout';
 
 // Spec §7: 62px total clearance from the device top to the first row.
-// Parents wrap in `SafeAreaView edges={['top']}`, which already pushes
+// Parents wrap in `TopInsetView`, which already pushes
 // content down by `insets.top`. We add whatever's needed to reach 62.
 const HEADER_TOP_TARGET = 62;
 

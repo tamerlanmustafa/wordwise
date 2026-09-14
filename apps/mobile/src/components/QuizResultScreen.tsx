@@ -26,7 +26,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { cefrColors } from '../theme/palette';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../theme/tokens';
@@ -118,7 +118,7 @@ export function QuizResultScreen({
     const hitWall = journey.justHitGoal;
 
     return (
-      <SafeAreaView style={s.container} edges={['top']}>
+      <TopInsetView style={s.container}>
         <SessionComplete
           eyebrow={t('quiz:result.setComplete')}
           title={`${result.correct_count} of ${result.total_scored} correct`}
@@ -166,7 +166,7 @@ export function QuizResultScreen({
             ) : null}
           </View>
         </SessionComplete>
-      </SafeAreaView>
+      </TopInsetView>
     );
   }
 
@@ -175,7 +175,7 @@ export function QuizResultScreen({
     t(`quiz:result.stars${Math.min(3, Math.max(0, result.stars))}`);
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       {result.stars > 0 ? <Confetti /> : null}
       <View style={s.body}>
         <View style={[s.levelBadge, { backgroundColor: accent }]}>
@@ -237,7 +237,7 @@ export function QuizResultScreen({
           </PressableScale>
         </View>
       </View>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { wordwiseApi } from '../../services/api';
@@ -66,7 +66,7 @@ export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
   };
 
   return (
-    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+    <TopInsetView style={settingsStyles.container}>
       <View style={settingsStyles.header}>
         <TouchableOpacity onPress={onBack} style={settingsStyles.backButton}>
           <Text style={settingsStyles.backButtonText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
@@ -114,7 +114,7 @@ export const LearnedWordsScreen = ({ onBack, backLabel }: Props) => {
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 };
 

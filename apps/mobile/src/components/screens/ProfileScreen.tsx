@@ -27,7 +27,7 @@
 
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
@@ -71,7 +71,7 @@ export function ProfileScreen({
     });
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <View style={s.header}>
         <Text style={s.headerTitle}>{t('nav.profile')}</Text>
       </View>
@@ -116,7 +116,7 @@ export function ProfileScreen({
           <LinkRow label={t('settings:menu.logout')} muted onPress={confirmLogout} />
         </Section>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 
@@ -153,7 +153,7 @@ const makeStyles = (tc: ThemeColors) =>
     // No fill and no rule. A paper-coloured bar across the top read as a
     // banner sitting on the page rather than as the page's own title, and it
     // was the only header in the account area with nothing in it but text.
-    // `SafeAreaView edges={['top']}` already clears the notch and the Dynamic
+    // `TopInsetView` already clears the notch and the Dynamic
     // Island; the padding here is breathing room below that, not the inset.
     header: {
       paddingHorizontal: 16,

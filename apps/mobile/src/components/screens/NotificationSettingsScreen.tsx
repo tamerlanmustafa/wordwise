@@ -38,7 +38,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
@@ -108,7 +108,7 @@ export function NotificationSettingsScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <ScreenHeader onBack={onBack} title={t('settings:notifications')} />
       <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: barInset + 24 }]}>
         <Section title={t('settings:soundAndHaptics')} footer={t('settings:notificationsFooter')}>
@@ -192,7 +192,7 @@ export function NotificationSettingsScreen({ onBack }: { onBack: () => void }) {
           </View>
         </Modal>
       ) : null}
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

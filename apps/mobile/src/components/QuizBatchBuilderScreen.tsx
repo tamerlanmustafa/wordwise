@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { colors, cefrColors } from '../theme/palette';
 import { wordwiseApi } from '../services/api';
@@ -82,7 +82,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>← Back</Text>
@@ -166,7 +166,7 @@ export function QuizBatchBuilderScreen({ userLevel, onBack, onStart }: QuizBatch
           <Text style={styles.startBtnText}>{t('quiz:batchBuilder.start')}</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

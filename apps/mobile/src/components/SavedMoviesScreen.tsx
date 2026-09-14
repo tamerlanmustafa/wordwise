@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../theme/tokens';
 import { useReelStore } from '../stores/reelStore';
@@ -74,7 +74,7 @@ export function SavedMoviesScreen({
   }, [hydrated, hydrate]);
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
+    <TopInsetView style={s.root}>
       <View style={s.header}>
         <TouchableOpacity onPress={onBack} style={s.backBtn}>
           <Text style={s.backText}>
@@ -119,7 +119,7 @@ export function SavedMoviesScreen({
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from './common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { BACK_ARROW } from '../i18n/rtl';
 import { achievementsApi, type Achievement, type AchievementsResponse } from '../services/api';
@@ -62,7 +62,7 @@ export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProp
   }, {});
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TopInsetView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} hitSlop={8}>
           <Text style={styles.backText}>{BACK_ARROW} {backLabel ?? t('action.back')}</Text>
@@ -120,7 +120,7 @@ export function AchievementsScreen({ onBack, backLabel }: AchievementsScreenProp
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 

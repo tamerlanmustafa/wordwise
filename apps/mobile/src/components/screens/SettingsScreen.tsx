@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useThemeColors } from '../../theme/tokens';
@@ -277,7 +277,7 @@ export const SettingsScreen = ({
   };
 
   return (
-    <SafeAreaView style={settingsStyles.container} edges={['top']}>
+    <TopInsetView style={settingsStyles.container}>
       {/* No `backLabel`: every other pushed screen in the app renders a plain
           "← Back", and Settings was the only one naming where you came from. */}
       <ScreenHeader onBack={handleBack} title={t('settings:title')} />
@@ -390,7 +390,7 @@ export const SettingsScreen = ({
         (code) => commitField('proficiency_level', code, setProficiencyLevel, proficiencyLevel),
         t('settings:proficiencyLevel'),
       )}
-    </SafeAreaView>
+    </TopInsetView>
   );
 };
 

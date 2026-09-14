@@ -24,7 +24,7 @@
 
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
@@ -112,7 +112,7 @@ export function AccountScreen({ onBack, onNavigateToPaywall }: Props) {
     });
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <TopInsetView style={s.container}>
       <ScreenHeader onBack={onBack} title={t('settings:account')} />
       <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: barInset + 24 }]}>
         <Section
@@ -158,7 +158,7 @@ export function AccountScreen({ onBack, onNavigateToPaywall }: Props) {
           <LinkRow label={t('settings:menu.deleteAccount')} muted onPress={handleDeleteAccount} />
         </Section>
       </ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }
 
