@@ -19,19 +19,34 @@
  * Selecting an option does NOT close the sheet — three groups, and people
  * change more than one — so there's an explicit Done. (The old LevelSheet did
  * close on pick; it was one group with one choice.)
+ *
+ * ## Three grids, no copy
+ *
+ * Sort and film type used to be full-width rows, under a line explaining that
+ * the level is the feed's scope and beside a line saying how often Recommended
+ * reshuffles. On an iPhone SE that pushed the sheet 53pt past the top of the
+ * screen, taking the title and Reset with it; on a short Android phone with
+ * three-button navigation, 102pt. Every group is now the level ladder's shape
+ * — cells of one fixed height — so the sheet's height is the sum in
+ * `filterSheetMetrics`, and a test holds it against the shortest phones.
  */
 
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
-import { MONO_FAMILY } from '../../theme/fonts';
 import { BottomSheet } from '../common/BottomSheet';
-import { SheetOptionRow, SheetSectionLabel } from './SheetOptionRow';
+import { SheetChoiceGrid, SheetSectionLabel } from './SheetChoiceGrid';
+import {
+  DONE_BUTTON,
+  LEVEL_COLUMNS,
+  SORT_COLUMNS,
+  TITLE_LINE,
+  TYPE_COLUMNS,
+} from './filterSheetMetrics';
 import {
   LEVEL_OPTIONS,
   MOVIE_TYPE_OPTIONS,
-  RECOMMENDED_ROTATION_HOURS,
   SORT_OPTIONS,
   activeFilterCount,
   sortHasDirection,
@@ -79,6 +94,29 @@ export function FeedFilterSheet({
 
   const count = activeFilterCount({ sort, sortAsc, movieType });
 
+  // The cell prints the code. The prose label ("B1 Intermediate") does not fit
+  // a sixth of the sheet, so it is what a screen reader says instead.
+  const levelChoices = LEVEL_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: opt.value,
+    accessibilityLabel: opt.label,
+  }));
+  const sortChoices = SORT_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: t(opt.labelKey),
+    // Drawn on the selected cell only. Recommended is a shuffle, so it has no
+    // direction to show.
+    trailing: sortHasDirection(opt.value) ? (sortAsc ? '↑' : '↓') : undefined,
+    accessibilityHint:
+      opt.value === sort && sortHasDirection(opt.value)
+        ? t('home:filters.sort.tapToFlip')
+        : undefined,
+  }));
+  const typeChoices = MOVIE_TYPE_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: t(opt.labelKey),
+  }));
+
   return (
     <BottomSheet visible={visible} onClose={onClose} bottomOffset={bottomOffset}>
       <View style={s.titleRow}>
@@ -94,71 +132,29 @@ export function FeedFilterSheet({
       </View>
 
       <SheetSectionLabel>{t('home:level.label')}</SheetSectionLabel>
-      <Text style={s.caption}>{t('home:level.scopeNote')}</Text>
-      {/* A ladder, not six rows: six SheetOptionRows are 288pt, and a CEFR
-          level is a scale — six cells side by side say that, a menu does not.
-          `flexDirection: 'row'` mirrors under RTL along with everything else,
-          so A1 stays on the leading edge. */}
-      <View style={s.ladder} accessibilityRole="radiogroup">
-        {LEVEL_OPTIONS.map((opt) => {
-          const active = opt.value === level;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              style={[s.rung, active && s.rungOn]}
-              onPress={withTap(() => onLevelChange(opt.value))}
-              activeOpacity={0.8}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: active }}
-              // The prose label ("B1 Intermediate") does not fit a 52pt cell,
-              // so it lives here — the cell prints the code alone.
-              accessibilityLabel={opt.label}
-            >
-              <Text style={[s.rungLabel, active && s.rungLabelOn]}>{opt.value}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <SheetChoiceGrid
+        choices={levelChoices}
+        selected={level}
+        onSelect={onLevelChange}
+        columns={LEVEL_COLUMNS}
+        mono
+      />
 
       <SheetSectionLabel>{t('home:filters.sortLabel')}</SheetSectionLabel>
-      {SORT_OPTIONS.map((opt, i) => (
-        <SheetOptionRow
-          key={opt.value}
-          label={t(opt.labelKey)}
-          active={opt.value === sort}
-          onPress={withTap(() => onSortPress(opt.value))}
-          // No leading glyph — the empty swatch column keeps these labels
-          // aligned with the film-type rows below, which do have one.
-          trailing={
-            sortHasDirection(opt.value) ? (sortAsc ? '↑' : '↓') : undefined
-          }
-          note={
-            opt.value === 'recommended'
-              ? t('home:filters.sort.recommendedNote', {
-                  hours: RECOMMENDED_ROTATION_HOURS,
-                })
-              : undefined
-          }
-          divider={i < SORT_OPTIONS.length - 1}
-          accessibilityHint={
-            opt.value === sort && sortHasDirection(opt.value)
-              ? t('home:filters.sort.tapToFlip')
-              : undefined
-          }
-        />
-      ))}
+      <SheetChoiceGrid
+        choices={sortChoices}
+        selected={sort}
+        onSelect={onSortPress}
+        columns={SORT_COLUMNS}
+      />
 
       <SheetSectionLabel>{t('home:filters.typeLabel')}</SheetSectionLabel>
-      {MOVIE_TYPE_OPTIONS.map((opt, i) => (
-        <SheetOptionRow
-          key={opt.value}
-          label={t(opt.labelKey)}
-          active={opt.value === movieType}
-          onPress={withTap(() => onMovieTypeChange(opt.value))}
-          icon={opt.icon}
-          divider={i < MOVIE_TYPE_OPTIONS.length - 1}
-        />
-      ))}
+      <SheetChoiceGrid
+        choices={typeChoices}
+        selected={movieType}
+        onSelect={onMovieTypeChange}
+        columns={TYPE_COLUMNS}
+      />
 
       <TouchableOpacity
         style={s.doneBtn}
@@ -182,6 +178,7 @@ const makeStyles = (tc: ThemeColors) =>
     },
     title: {
       fontSize: 17,
+      lineHeight: TITLE_LINE,
       fontWeight: '800',
       color: tc.text,
       letterSpacing: -0.2,
@@ -191,44 +188,9 @@ const makeStyles = (tc: ThemeColors) =>
       fontWeight: '800',
       color: tc.goldOnSurface,
     },
-    caption: {
-      fontSize: 11.5,
-      lineHeight: 16,
-      color: tc.textSecondary,
-      paddingHorizontal: 12,
-      marginBottom: 8,
-    },
-    ladder: {
-      flexDirection: 'row',
-      gap: 6,
-      paddingHorizontal: 12,
-    },
-    rung: {
-      flex: 1,
-      height: 44,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: tc.border,
-      backgroundColor: tc.chipBg,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    rungOn: {
-      backgroundColor: tc.gold,
-      borderColor: tc.gold,
-    },
-    rungLabel: {
-      fontFamily: MONO_FAMILY,
-      fontSize: 12.5,
-      fontWeight: '700',
-      color: tc.textSecondary,
-    },
-    rungLabelOn: {
-      color: tc.goldDeep,
-    },
     doneBtn: {
-      marginTop: 16,
-      height: 48,
+      marginTop: DONE_BUTTON.gap,
+      height: DONE_BUTTON.height,
       borderRadius: 13,
       backgroundColor: tc.gold,
       alignItems: 'center',

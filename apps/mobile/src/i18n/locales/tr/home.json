@@ -41,15 +41,13 @@
       "popularity": "Popülerlik",
       "level": "Seviye uyumu",
       "tapToFlip": "Sırayı ters çevirmek için tekrar dokunun",
-      "recommended": "Önerilenler",
-      "recommendedNote": "Her {{hours}} saatte bir yeni seçki"
+      "recommended": "Önerilenler"
     },
     "resetSortAndType": "Sıralamayı ve filmleri sıfırla",
     "a11yWithLevel": "Seviye {{level}}. Filtreler, {{count}} etkin."
   },
   "level": {
-    "label": "Seviye",
-    "scopeNote": "Tüm akışın hangi seviyeye göre derecelendirildiği. Varsayılan olarak seninki — Sıfırla buna dokunmaz."
+    "label": "Seviye"
   },
   "feed": {},
   "vocabSheet": {

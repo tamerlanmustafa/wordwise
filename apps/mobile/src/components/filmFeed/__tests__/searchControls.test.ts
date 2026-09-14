@@ -299,7 +299,9 @@ describe('every pressable on Home taps back', () => {
     ['filmFeed/SearchBar.tsx', 6],
     ['filmFeed/RankedMovieList.tsx', 5],
     ['filmFeed/TodayWordCard.tsx', 4],
-    ['filmFeed/FeedFilterSheet.tsx', 5],
+    // Reset and Done. The three groups' cells tap back inside the grid.
+    ['filmFeed/FeedFilterSheet.tsx', 2],
+    ['filmFeed/SheetChoiceGrid.tsx', 1],
   ] as const;
 
   const componentsDir = path.join(HOME, '..');
@@ -337,10 +339,17 @@ describe('every pressable on Home taps back', () => {
     expect(body.indexOf('feedback.tap()')).toBeLessThan(body.indexOf('handler?.('));
   });
 
-  it('the sheet option row is NOT wrapped, because its parent already is', () => {
-    // Two wrappers is two buzzes for one press.
-    expect(readRel('filmFeed/SheetOptionRow.tsx')).not.toMatch(/withTap/);
-    expect(readRel('filmFeed/FeedFilterSheet.tsx')).toMatch(/onPress=\{withTap\(\(\) => onSortPress/);
+  it('a choice cell taps back once, and the sheet hands the grid bare callbacks', () => {
+    // The cell owns the press, so it wraps. Two wrappers is two buzzes for one
+    // press, so nothing the sheet passes down may be wrapped as well.
+    expect(readRel('filmFeed/SheetChoiceGrid.tsx')).toMatch(
+      /onPress=\{withTap\(\(\) => onSelect\(choice\.value\)\)\}/,
+    );
+    const sheet = readRel('filmFeed/FeedFilterSheet.tsx');
+    expect(sheet).toMatch(/onSelect=\{onLevelChange\}/);
+    expect(sheet).toMatch(/onSelect=\{onSortPress\}/);
+    expect(sheet).toMatch(/onSelect=\{onMovieTypeChange\}/);
+    expect(sheet).not.toMatch(/onSelect=\{withTap/);
   });
 });
 

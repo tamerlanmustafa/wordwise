@@ -2,7 +2,6 @@ import {
   DEFAULT_FEED_FILTERS,
   LEVEL_OPTIONS,
   MOVIE_TYPE_OPTIONS,
-  RECOMMENDED_ROTATION_HOURS,
   SORT_OPTIONS,
   activeFilterCount,
   animatedParam,
@@ -51,10 +50,13 @@ describe('MOVIE_TYPE_OPTIONS (animation filter, #114)', () => {
     expect(MOVIE_TYPE_OPTIONS.map((o) => o.value)).toEqual(['all', 'animation', 'live']);
   });
 
-  it('names a drawn icon rather than carrying a glyph', () => {
-    // 🎬 ✨ 🎥 previously. A name resolves to a component the row renders in
-    // the app's own palette; a glyph is whatever the OS font decides.
-    expect(MOVIE_TYPE_OPTIONS.map((o) => o.icon)).toEqual(['clapper', 'sparkle', 'camera']);
+  it('carries no icon — the sheet draws these as text cells', () => {
+    // Emoji first (🎬 ✨ 🎥), then drawn icons while the group was full-width
+    // rows. A third of a 375pt sheet holds a translated label or a glyph beside
+    // it, not both, so the field went with the rows.
+    MOVIE_TYPE_OPTIONS.forEach((o) => {
+      expect(o).not.toHaveProperty('icon');
+    });
   });
 
   it('carries i18n keys, not literal labels', () => {
@@ -129,15 +131,6 @@ describe('sortHasDirection (which sorts get an ↑/↓)', () => {
     expect(SORT_OPTIONS.filter((o) => !sortHasDirection(o.value)).map((o) => o.value)).toEqual([
       'recommended',
     ]);
-  });
-});
-
-describe('RECOMMENDED_ROTATION_HOURS', () => {
-  it('is a whole number of hours the copy can print', () => {
-    // Interpolated straight into "A fresh set every {{hours}} hours"; a
-    // fractional value would read as "every 6.5 hours".
-    expect(Number.isInteger(RECOMMENDED_ROTATION_HOURS)).toBe(true);
-    expect(RECOMMENDED_ROTATION_HOURS).toBeGreaterThan(0);
   });
 });
 

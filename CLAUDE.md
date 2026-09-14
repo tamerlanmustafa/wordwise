@@ -29,7 +29,7 @@
 ## Every button taps back
 - **A new pressable gets a haptic.** Wrap its handler: `onPress={withTap(handleThing)}` from `apps/mobile/src/utils/feedback`. Anything a user presses — a button, a card, a row, a chip, a sheet option, a tap-to-flip zone — counts.
 - Wrap in the JSX rather than calling `feedback.tap()` inside the handler. A reviewer looking at a new button can then see the feedback on the element that owns it, and it can be grepped for; a call buried on line 4 of a handler can be neither.
-- **Wrap at one level only.** If a parent already wraps the callback it passes down, the child must not wrap it again — two wrappers is two buzzes for one press. `FeedFilterSheet` wraps before handing `onPress` to `SheetOptionRow`, which is why that row is bare.
+- **Wrap at one level only.** If a parent already wraps the callback it passes down, the child must not wrap it again — two wrappers is two buzzes for one press. `SheetChoiceGrid` wraps each cell's press itself, which is why `FeedFilterSheet` hands it bare callbacks.
 - **`PressableScale` taps back on its own** — leave its `onPress` bare. `PressablePill` does not — wrap its `onPress`. `SettingsUI`'s `Row` (and so `LinkRow`/`SelectRow`) wraps what it is handed, so its callers stay bare.
 - `utils/feedback` is the single owner of haptics and sound, and a source guard fails the build on anything else importing the native module. Never call `expo-haptics` directly — and do not name it in a comment either, because the guard scans source text.
 - Don't add one to scroll, swipe-in-progress, or anything that fires repeatedly while a finger moves. Haptics mark a decision, not a movement.

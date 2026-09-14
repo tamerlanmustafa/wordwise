@@ -41,15 +41,13 @@
       "popularity": "Popularity",
       "level": "Level match",
       "tapToFlip": "Tap again to reverse the order",
-      "recommended": "Recommended",
-      "recommendedNote": "A fresh set every {{hours}} hours"
+      "recommended": "Recommended"
     },
     "resetSortAndType": "Reset sort & films",
     "a11yWithLevel": "Level {{level}}. Filters, {{count}} active."
   },
   "level": {
-    "label": "Level",
-    "scopeNote": "What the whole feed is graded for. Yours by default — Reset leaves it alone."
+    "label": "Level"
   },
   "feed": {},
   "vocabSheet": {

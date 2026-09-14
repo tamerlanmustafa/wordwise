@@ -19,9 +19,9 @@
  * dot rather than a full swatch.
  *
  * `label` is the prose form ("B1 Intermediate"). The LEVEL group in
- * `FeedFilterSheet` is a six-cell ladder — 52pt per cell — so it prints
- * `value` and keeps `label` as the cell's accessibility label, which is the
- * only place the prose still fits.
+ * `FeedFilterSheet` is one row of six cells, so each prints `value` and keeps
+ * `label` as its accessibility label, which is the only place the prose still
+ * fits.
  */
 export const LEVEL_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'A1', label: 'A1 Beginner' },
@@ -51,18 +51,19 @@ export const DEFAULT_LEVEL = 'B1';
  */
 export type MovieType = 'all' | 'animation' | 'live';
 
-/** Which drawn icon each type row shows. Names, not glyphs — the row resolves
- *  them to components, so the sheet is not an emoji font's idea of a film. */
-export type MovieTypeIcon = 'clapper' | 'sparkle' | 'camera';
-
+/**
+ * No icons. The sheet draws these as a row of three text cells, and a third of
+ * a 375pt sheet has room for "Todas las películas" or for a glyph beside a
+ * label, not both. They carried drawn icons (clapper, sparkle, camera) while
+ * the group was full-width rows.
+ */
 export const MOVIE_TYPE_OPTIONS: Array<{
   value: MovieType;
   labelKey: string;
-  icon: MovieTypeIcon;
 }> = [
-  { value: 'all',       labelKey: 'home:filters.type.all',       icon: 'clapper' },
-  { value: 'animation', labelKey: 'home:filters.type.animation', icon: 'sparkle' },
-  { value: 'live',      labelKey: 'home:filters.type.live',      icon: 'camera' },
+  { value: 'all',       labelKey: 'home:filters.type.all' },
+  { value: 'animation', labelKey: 'home:filters.type.animation' },
+  { value: 'live',      labelKey: 'home:filters.type.live' },
 ];
 
 /**
@@ -99,14 +100,6 @@ export const SORT_OPTIONS: Array<{ value: LevelSort; labelKey: string }> = [
   { value: 'popularity',  labelKey: 'home:filters.sort.popularity' },
   { value: 'level',       labelKey: 'home:filters.sort.level' },
 ];
-
-/**
- * How long one recommendation draw lasts. The server owns the real clock
- * (`RECOMMENDED_ROTATION_SECONDS` in `routes/movies.py`); this copy only
- * writes the sheet's "a fresh set every 6 hours" line, so a drift between the
- * two is cosmetic rather than a feed that pages wrong.
- */
-export const RECOMMENDED_ROTATION_HOURS = 6;
 
 /**
  * Whether a sort has an ↑/↓ to flip. A shuffle does not: "ascending random"

@@ -47,11 +47,6 @@ const EXEMPT: { file: string; match: string; why: string }[] = [
     match: 'openList(item)',
     why: 'ListRow wraps the callback it is handed (see listRowPill.test.ts)',
   },
-  {
-    file: 'components/filmFeed/SheetOptionRow.tsx',
-    match: 'onPress',
-    why: 'FeedFilterSheet wraps before handing the callback down (CLAUDE.md)',
-  },
   // The settings list primitive wraps what it is handed. It did not until the
   // Profile audit — every navigation row in the account area was silent while
   // the theme control two rows below buzzed — and these three call sites were

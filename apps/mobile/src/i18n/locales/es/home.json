@@ -41,15 +41,13 @@
       "popularity": "Popularidad",
       "level": "Coincidencia de nivel",
       "tapToFlip": "Toca de nuevo para invertir el orden",
-      "recommended": "Recomendadas",
-      "recommendedNote": "Una selección nueva cada {{hours}} horas"
+      "recommended": "Recomendadas"
     },
     "resetSortAndType": "Restablecer orden y películas",
     "a11yWithLevel": "Nivel {{level}}. Filtros, {{count}} activos."
   },
   "level": {
-    "label": "Nivel",
-    "scopeNote": "El nivel para el que está calibrado todo el feed. El tuyo por defecto: Restablecer no lo cambia."
+    "label": "Nivel"
   },
   "feed": {},
   "vocabSheet": {

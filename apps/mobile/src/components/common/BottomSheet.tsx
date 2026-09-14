@@ -49,6 +49,7 @@ import { BlurView } from 'expo-blur';
 import { useThemeColors, useColorScheme, type ThemeColors } from '../../theme/tokens';
 import { KEYBOARD_EASING, liftDuration, useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { Vignette } from './Vignette';
+import { SHEET_GRABBER, SHEET_PAD_BOTTOM, SHEET_PAD_H, SHEET_PAD_TOP } from './bottomSheetMetrics';
 
 /** Pulls the top and bottom edges down past the flat scrim tint. Deeper than
  *  the tint itself, or it would not read as an edge at all. */
@@ -229,9 +230,6 @@ export function BottomSheet({ visible, onClose, bottomOffset = 0, children }: Pr
   );
 }
 
-/** The sheet's own bottom padding, before the bar's height is added. */
-const SHEET_PAD_BOTTOM = 24;
-
 const makeStyles = (tc: ThemeColors) => StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
@@ -254,16 +252,16 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     // are the sheet's visible bottom edge, and two hard corners there made it
     // look torn off rather than floating.
     borderRadius: 24,
-    paddingTop: 10,
+    paddingTop: SHEET_PAD_TOP,
     paddingBottom: SHEET_PAD_BOTTOM,
-    paddingHorizontal: 20,
+    paddingHorizontal: SHEET_PAD_H,
   },
   grabber: {
     width: 38,
-    height: 4,
+    height: SHEET_GRABBER.height,
     borderRadius: 2,
     backgroundColor: tc.border,
     alignSelf: 'center',
-    marginBottom: 14,
+    marginBottom: SHEET_GRABBER.gap,
   },
 });
