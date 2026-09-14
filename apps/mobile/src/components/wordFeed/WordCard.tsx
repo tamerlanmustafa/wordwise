@@ -29,6 +29,12 @@
  * the same sense the sentence uses, so it belongs with the always-visible half
  * of the card, not behind the tap that shows the learner's own language.
  *
+ * The one exception is a card too short to hold both. The card is a pager page
+ * and cannot scroll, so on a 667pt iPhone SE a longer card's translation used
+ * to run past the bottom edge and lose its last lines. When the translation
+ * would not fit in the room the card had, the gloss folds away as it opens and
+ * comes back as it closes (see `revealFit`). Tall phones never reach this.
+ *
  * Motion note: the reveal animates height on the JS driver (RN can't drive
  * layout natively) while opacity + translateY run on the native driver, so
  * the block unfolds and the surrounding content glides to its new centre.
@@ -53,6 +59,13 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { showToast } from '../../stores/toastStore';
 import { SpeakerChip } from '../ui/SpeakerChip';
 import { CARD_PADDING_START, SPEAKER_GAP, wordRowLayout } from './wordRowLayout';
+import {
+  REVEAL_GAP,
+  SPACER_BOTTOM_MIN,
+  SPACER_TOP_MIN,
+  glossYieldsToReveal,
+  spareHeight,
+} from './revealFit';
 import type { FeedItem } from '../../services/api';
 import { withTap } from '../../utils/feedback';
 
@@ -93,6 +106,12 @@ const GLOSS_SIZE = opticalSize(18, 'serifItalic', 'sans');
 
 /** The shared curve for every Explore movement. */
 export const EXPLORE_EASING = Easing.bezier(0.22, 0.75, 0.28, 1);
+
+/** How long the translation takes to open or close. The gloss folds on the
+ *  same clock, so the group's height changes as one movement, not two. */
+const REVEAL_MS = 340;
+/** Gap above the gloss, animated to nothing when it folds. */
+const GLOSS_GAP = 10;
 
 interface Props {
   item: FeedItem;
@@ -139,11 +158,40 @@ function WordCardBase({
   const heightAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  const hasTranslation = Boolean(item.translated_word || item.translated_sentence);
+  const gloss = glossLine(item.pos, item.definition);
+  const hasGloss = gloss !== null;
+
+  // ── Room for the translation ──────────────────────────────────────
+  //
+  // What the card could still give, measured with the translation closed: the
+  // two flex spacers beyond their minimums. Refs, not state — they feed a
+  // decision taken when the reader taps, and a re-render per layout pass
+  // would redraw the card for nothing.
+  const spacerTopH = useRef<number | null>(null);
+  const spacerBottomH = useRef<number | null>(null);
+  const revealHeightRef = useRef(0);
+  const [glossHeight, setGlossHeight] = useState(0);
+  // 1 = the gloss is open. Height and gap on the JS driver (layout cannot run
+  // natively), opacity on the native one — separate views, like the reveal.
+  const glossAnim = useRef(new Animated.Value(1)).current;
+  const glossFade = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
+    const spare =
+      spacerTopH.current === null || spacerBottomH.current === null
+        ? null
+        : spareHeight(spacerTopH.current, spacerBottomH.current);
+    const fold = glossYieldsToReveal({
+      revealed: revealed && hasTranslation,
+      hasGloss,
+      spare,
+      revealHeight: revealHeightRef.current,
+    });
     Animated.parallel([
       Animated.timing(heightAnim, {
         toValue: revealed ? 1 : 0,
-        duration: 340,
+        duration: REVEAL_MS,
         easing: EXPLORE_EASING,
         useNativeDriver: false,
       }),
@@ -153,8 +201,26 @@ function WordCardBase({
         easing: EXPLORE_EASING,
         useNativeDriver: true,
       }),
+      // Folds on the reveal's clock and curve, so the space the gloss gives
+      // back is exactly the space the translation takes, frame by frame.
+      Animated.timing(glossAnim, {
+        toValue: fold ? 0 : 1,
+        duration: REVEAL_MS,
+        easing: EXPLORE_EASING,
+        useNativeDriver: false,
+      }),
+      // Out fast, ahead of its own height, so no one watches three italic
+      // lines get sliced shorter. Back in late, once the room has mostly
+      // reopened, so it fades into space rather than being uncovered.
+      Animated.timing(glossFade, {
+        toValue: fold ? 0 : 1,
+        duration: fold ? 150 : 200,
+        delay: fold ? 0 : 150,
+        easing: EXPLORE_EASING,
+        useNativeDriver: true,
+      }),
     ]).start();
-  }, [revealed, heightAnim, fadeAnim]);
+  }, [revealed, hasTranslation, hasGloss, heightAnim, fadeAnim, glossAnim, glossFade]);
 
   const liftStyle = {
     transform: [
@@ -166,9 +232,6 @@ function WordCardBase({
       },
     ],
   };
-
-  const hasTranslation = Boolean(item.translated_word || item.translated_sentence);
-  const gloss = glossLine(item.pos, item.definition);
 
   const handlePronounce = async () => {
     if (playing) return;
@@ -200,7 +263,14 @@ function WordCardBase({
         ) : null}
       </View>
 
-      <View style={s.spacerTop} />
+      <View
+        style={s.spacerTop}
+        onLayout={(e) => {
+          // Only the closed card describes the room there is; open, the
+          // spacers have already given some of it to the translation.
+          if (!revealed) spacerTopH.current = e.nativeEvent.layout.height;
+        }}
+      />
 
       {/* 3. Lifting group. */}
       <Animated.View style={liftStyle}>
@@ -287,11 +357,42 @@ function WordCardBase({
             than sit beside it, or a long definition would flow underneath it
             in a column of its own width. */}
         {gloss ? (
-          <Text style={s.definition} numberOfLines={3}>
-            {gloss.pos ? <Text style={s.glossPos}>{gloss.pos}</Text> : null}
-            {gloss.pos && gloss.definition ? ' ' : null}
-            {gloss.definition}
-          </Text>
+          <Animated.View
+            style={[
+              s.glossFold,
+              {
+                marginTop: glossAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, GLOSS_GAP],
+                }),
+                // Natural height until measured, then the same height driven
+                // by the fold — so the switch to an animated height is not a
+                // jump.
+                height:
+                  glossHeight > 0
+                    ? glossAnim.interpolate({ inputRange: [0, 1], outputRange: [0, glossHeight] })
+                    : undefined,
+              },
+            ]}
+          >
+            <Animated.View style={{ opacity: glossFade }}>
+              <GlossText gloss={gloss} s={s} />
+            </Animated.View>
+          </Animated.View>
+        ) : null}
+
+        {/* Measured off to the side, like the translation below. Not from the
+            visible copy: folded, that copy sits in a zero-height box, and a
+            height read from it would be the fold's, not the gloss's — after
+            which it could never open again. */}
+        {gloss && glossHeight === 0 ? (
+          <View
+            style={s.measure}
+            pointerEvents="none"
+            onLayout={(e) => setGlossHeight(e.nativeEvent.layout.height)}
+          >
+            <GlossText gloss={gloss} s={s} />
+          </View>
         ) : null}
 
         <View style={s.ruleRow}>
@@ -313,7 +414,7 @@ function WordCardBase({
                 }),
                 marginTop: heightAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0, 18],
+                  outputRange: [0, REVEAL_GAP],
                 }),
                 overflow: 'hidden',
               }}
@@ -342,7 +443,10 @@ function WordCardBase({
               <View
                 style={s.measure}
                 pointerEvents="none"
-                onLayout={(e) => setRevealHeight(e.nativeEvent.layout.height)}
+                onLayout={(e) => {
+                  revealHeightRef.current = e.nativeEvent.layout.height;
+                  setRevealHeight(e.nativeEvent.layout.height);
+                }}
               >
                 <TranslationBlock item={item} s={s} />
               </View>
@@ -351,7 +455,12 @@ function WordCardBase({
         ) : null}
       </Animated.View>
 
-      <View style={s.spacerBottom} />
+      <View
+        style={s.spacerBottom}
+        onLayout={(e) => {
+          if (!revealed) spacerBottomH.current = e.nativeEvent.layout.height;
+        }}
+      />
     </Pressable>
   );
 }
@@ -376,6 +485,18 @@ function Sentence({ item, s }: { item: FeedItem; s: Styles }) {
         {item.sentence.slice(match.start, match.end)}
       </Text>
       {item.sentence.slice(match.end)}
+    </Text>
+  );
+}
+
+/** "(noun) a person who…" — the part of speech upright in gold, the definition
+ *  in italic after it, wrapping together as one line of text. */
+function GlossText({ gloss, s }: { gloss: NonNullable<ReturnType<typeof glossLine>>; s: Styles }) {
+  return (
+    <Text style={s.definition} numberOfLines={3}>
+      {gloss.pos ? <Text style={s.glossPos}>{gloss.pos}</Text> : null}
+      {gloss.pos && gloss.definition ? ' ' : null}
+      {gloss.definition}
     </Text>
   );
 }
@@ -427,8 +548,9 @@ const makeStyles = (tc: ThemeColors) =>
       letterSpacing: 1,
       color: tc.goldOnSurface,
     },
-    spacerTop: { flex: 1, minHeight: 12 },
-    spacerBottom: { flex: 1, minHeight: 14 },
+    // Minimums from revealFit, which reads them to work out the room left.
+    spacerTop: { flex: 1, minHeight: SPACER_TOP_MIN },
+    spacerBottom: { flex: 1, minHeight: SPACER_BOTTOM_MIN },
     wordRow: {
       flexDirection: 'row',
       // Centre, now that the word is guaranteed to be one line: the chip sits
@@ -459,8 +581,11 @@ const makeStyles = (tc: ThemeColors) =>
       fontSize: 13.5,
       color: tc.textFaint,
     },
+    // Clips the gloss while it folds. The gap above it is animated inline.
+    glossFold: {
+      overflow: 'hidden',
+    },
     definition: {
-      marginTop: 10,
       fontFamily: SERIF_ITALIC_FAMILY,
       fontSize: GLOSS_SIZE,
       lineHeight: GLOSS_SIZE * 1.45,
