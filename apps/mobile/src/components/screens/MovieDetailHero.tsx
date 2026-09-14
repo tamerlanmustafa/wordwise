@@ -17,7 +17,7 @@ import { SERIF_FAMILY, MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon } from '../../i18n/rtl';
 import { movieTitleTier } from '../vocabulary/cardLayout';
 import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
-import { BACK_ROW, HERO_PLATE } from '../vocabulary/deckMetrics';
+import { BACK_ROW, HERO_PLATE, HERO_PLATE_GAP_COMPACT } from '../vocabulary/deckMetrics';
 import { LevelRing } from '../filmFeed/LevelRing';
 import type { FilmVocabulary } from '../filmFeed/filmVocabulary';
 
@@ -81,6 +81,16 @@ export interface MovieDetailHeroProps {
    *  tappable — see `VocabularySheet`. */
   onRingPress?: () => void;
   onBack: () => void;
+  /** The short-screen column (`compactColumnFor`): the plate sits closer to
+   *  the back button and `deckCount` rides on the band line. */
+  compact?: boolean;
+  /**
+   * The deck's `CARD n / total`, handed up by the screen on a short screen.
+   * It is the screen's own element, so the count keeps one face in either
+   * place and this component only decides where it sits. Null on a tall
+   * phone, where the counter keeps its own row under the plate.
+   */
+  deckCount?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -92,6 +102,8 @@ export const MovieDetailHero = ({
   vocab,
   onRingPress,
   onBack,
+  compact = false,
+  deckCount = null,
   style,
 }: MovieDetailHeroProps) => {
   const { t } = useTranslation();
@@ -144,23 +156,34 @@ export const MovieDetailHero = ({
             header now reads the same way as the things inside it. It used to
             be one mono line under the title spelling "C1 72%", which made a
             level and a match rate look like a single value. */}
-        <View style={s.plate}>
+        <View style={[s.plate, compact && s.plateCompact]}>
           <View style={s.plateRow}>
             <View style={s.titleCol}>
-              {level ? (
+              {level || deckCount ? (
                 <View style={s.metaRow}>
-                  {/* The band's own colour, from the shared ramp — the same
-                      chip the deck's card wears below, so a level is one colour
-                      everywhere on the screen and not just within one block. */}
-                  <View style={[s.levelChip, { backgroundColor: `${bandColor}22` }]}>
-                    <Text style={[s.levelChipText, { color: bandColor }]}>{level}</Text>
-                  </View>
-                  {matchPct != null ? (
-                    // Deliberately not in the band's colour: it is a fact about
-                    // the reader, not about the film, and colouring it the same
-                    // would fold two different measurements into one mark.
-                    <Text style={s.matchPct}>{`${Math.round(matchPct)}%`}</Text>
+                  {level ? (
+                    <>
+                      {/* The band's own colour, from the shared ramp — the same
+                          chip the deck's card wears below, so a level is one
+                          colour everywhere on the screen and not just within
+                          one block. */}
+                      <View style={[s.levelChip, { backgroundColor: `${bandColor}22` }]}>
+                        <Text style={[s.levelChipText, { color: bandColor }]}>{level}</Text>
+                      </View>
+                      {matchPct != null ? (
+                        // Deliberately not in the band's colour: it is a fact
+                        // about the reader, not about the film, and colouring
+                        // it the same would fold two measurements into one mark.
+                        <Text style={s.matchPct}>{`${Math.round(matchPct)}%`}</Text>
+                      ) : null}
+                    </>
                   ) : null}
+                  {/* Short screens only: the deck's counter joins this line
+                      instead of keeping a row of its own, and that row's height
+                      goes to the card. Straight after the match rate rather
+                      than at the far end, where it would sit against the ring
+                      and read as the ring's caption. */}
+                  {deckCount ? <View style={s.deckCount}>{deckCount}</View> : null}
                 </View>
               ) : null}
               <Text
@@ -253,6 +276,9 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       marginTop: HERO_PLATE.gap,
       height: HERO_PLATE.height,
     },
+    plateCompact: {
+      marginTop: HERO_PLATE_GAP_COMPACT,
+    },
     plateRow: {
       flexDirection: 'row',
       alignItems: 'flex-end',
@@ -294,6 +320,11 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
       fontWeight: '700',
       letterSpacing: 0.6,
       color: tc.textSecondary,
+    },
+    // A little more than the row's own gap: the band and the rate are facts
+    // about the film, the count is where the reader is in it.
+    deckCount: {
+      marginStart: 6,
     },
   });
 };

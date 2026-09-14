@@ -67,23 +67,62 @@ export const FILTER_BAR = { gap: 14, height: 44 };
  *  below has to agree with what is actually rendered or `deckBlockHeightFor`
  *  starts describing a screen that does not exist. */
 export const SHOW_LEVEL_FILTER_BAR: boolean = false;
-/** `CARD 23 / 60`. */
+/** `CARD 23 / 60`. On a short screen the count moves onto the hero's band line
+ *  and this row leaves the column — see `columnAboveDeck`. */
 export const DECK_HEADER_ROW = { gap: 12, height: 13 };
 /** Thin progress rule under the deck header. */
 export const PROGRESS_BAR = { gap: 7, height: 3 };
 
-/** Everything between the safe-area top and the deck block. Add `insets.top`
- *  for the full chrome above the deck. */
-export const COLUMN_ABOVE_DECK =
-  BACK_ROW.gap +
-  BACK_ROW.height +
-  HERO_PLATE.gap +
-  HERO_PLATE.height +
-  (SHOW_LEVEL_FILTER_BAR ? FILTER_BAR.gap + FILTER_BAR.height : 0) +
-  DECK_HEADER_ROW.gap +
-  DECK_HEADER_ROW.height +
-  PROGRESS_BAR.gap +
-  PROGRESS_BAR.height;
+/**
+ * The hero plate's gap on a short screen.
+ *
+ * 8, not less: a two-line title already rises 2pt above its 86pt plate, so this
+ * leaves 6 between the back button and the band chip. Tighter than that and
+ * the two read as touching.
+ */
+export const HERO_PLATE_GAP_COMPACT = 8;
+
+/**
+ * Everything between the safe-area top and the deck block. Add `insets.top`
+ * for the full chrome above the deck.
+ *
+ * `compact` is the short-screen column. The `CARD n / total` row joins the
+ * band line inside the hero and the plate sits closer to the back button;
+ * nothing else changes size — the title keeps both its lines and the progress
+ * rule stays where it is. The card's own slots are never part of this: the
+ * header gives way, the card does not (see `compactColumnFor`).
+ */
+export function columnAboveDeck(compact: boolean): number {
+  return (
+    BACK_ROW.gap +
+    BACK_ROW.height +
+    (compact ? HERO_PLATE_GAP_COMPACT : HERO_PLATE.gap) +
+    HERO_PLATE.height +
+    (SHOW_LEVEL_FILTER_BAR ? FILTER_BAR.gap + FILTER_BAR.height : 0) +
+    (compact ? 0 : DECK_HEADER_ROW.gap + DECK_HEADER_ROW.height) +
+    PROGRESS_BAR.gap +
+    PROGRESS_BAR.height
+  );
+}
+
+/** The full column, as every tall phone lays it out. */
+export const COLUMN_ABOVE_DECK = columnAboveDeck(false);
+
+/**
+ * The least room left under the deck's buttons.
+ *
+ * The tab bar is hidden on this screen, so the buttons stand on the screen's
+ * own bottom edge rather than above a capsule. Where the phone has a bottom
+ * inset — a home indicator, Android's gesture strip or its three buttons — that
+ * inset is the edge, because a control inside it competes with the system's
+ * swipe. The SE has no inset at all and gets the 12pt the floating bar kept
+ * under itself there.
+ */
+export const DECK_BOTTOM_MIN = 12;
+
+export function deckBottomClearance(bottomInset: number): number {
+  return Math.max(bottomInset, DECK_BOTTOM_MIN);
+}
 
 // ── Inside the deck block ─────────────────────────────────────────────────
 
@@ -205,17 +244,41 @@ export function deckMetrics({ available }: DeckMetricsInput): DeckMetrics {
   };
 }
 
+/** A phone, as far as this screen's column is concerned. */
+export interface DeckDevice {
+  screenHeight: number;
+  topInset: number;
+  bottomInset: number;
+}
+
 /** Height the deck block gets on a device, for tests and for reasoning about
- *  a new phone without booting one. `barHeight` is GlobalBottomBar's, which
- *  owns the home-indicator inset on this screen. */
+ *  a new phone without booting one. There is no tab bar in the sum: the bar is
+ *  hidden on this screen, and the bottom inset is the buttons' clearance. */
 export function deckBlockHeightFor({
   screenHeight,
   topInset,
-  barHeight,
-}: {
-  screenHeight: number;
-  topInset: number;
-  barHeight: number;
-}): number {
-  return Math.max(0, screenHeight - barHeight - topInset - COLUMN_ABOVE_DECK);
+  bottomInset,
+  compact,
+}: DeckDevice & { compact: boolean }): number {
+  return Math.max(
+    0,
+    screenHeight - topInset - columnAboveDeck(compact) - deckBottomClearance(bottomInset),
+  );
+}
+
+/**
+ * Whether a phone gets the short-screen column.
+ *
+ * Decided by the budget, not by a height threshold: compact exactly when the
+ * full column would make the card scale. A phone that seats the card whole
+ * keeps the full header, because tightening it there buys nothing; a phone
+ * that would shrink the card gives the header's slack to the card first. A
+ * threshold would be one more number to re-tune every time a block changed.
+ *
+ * Computed from the window and the insets rather than measured, so the first
+ * frame already has the right header. A measured answer would lay the screen
+ * out once, then swap the header and rescale the card in front of the reader.
+ */
+export function compactColumnFor(device: DeckDevice): boolean {
+  return deckMetrics({ available: deckBlockHeightFor({ ...device, compact: false }) }).scaled;
 }

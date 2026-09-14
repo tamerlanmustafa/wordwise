@@ -1418,7 +1418,15 @@ export default function App() {
           onNavigate={handleNotificationNavigate}
           bottomOffset={barHeight}
         />
-        <GlobalBottomBar active={activeTab} onTabPress={handleTabPress} onHeightChange={setBarHeight} />
+        {/* Hidden exactly while the film layer above is showing — the same
+            condition as its `showing`, so there is never a moment with
+            neither a film nor a bar. */}
+        <GlobalBottomBar
+          active={activeTab}
+          hidden={currentScreen === 'movieDetail' && !!selectedMovie}
+          onTabPress={handleTabPress}
+          onHeightChange={setBarHeight}
+        />
         </View>
       ) : (
         <LoginScreen onLogin={handleLogin} />

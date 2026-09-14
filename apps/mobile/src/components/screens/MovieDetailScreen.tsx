@@ -59,6 +59,8 @@ import {
   DECK_HEADER_ROW,
   PROGRESS_BAR,
   SHOW_LEVEL_FILTER_BAR,
+  compactColumnFor,
+  deckBottomClearance,
 } from '../vocabulary/deckMetrics';
 import {
   deckWordsOnly,
@@ -91,7 +93,6 @@ import { MONO_FAMILY } from '../../theme/fonts';
 import { directionalIcon, FORWARD_ARROW } from '../../i18n/rtl';
 import { Skeleton } from '../ui/Skeleton';
 import { BoltIcon, SparkleIcon } from '../ui/icons';
-import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 
 // The card-deck view (mockup 2a) is the shipping design. The rows list below
 // is kept intact but DISABLED so we can come back to it: flip this to true to
@@ -138,13 +139,15 @@ export const MovieDetailScreen = ({
   onStartQuiz,
   resumed = false,
 }: Props) => {
-  // The tab bar is an absolute overlay, so the word list reserves its height
-  // itself or its last rows sit behind the floating capsule.
-  const barInset = useBottomBarInset();
   const { t } = useTranslation();
   const tc = useThemeColors();
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  // No tab bar on this screen — App hides it while a film is open — so the
+  // deck's buttons clear the screen's own bottom edge: the home indicator, or a
+  // plain margin on a phone without one. Reserving the bar's height instead
+  // would leave an empty band where the bar used to be.
+  const bottomClearance = deckBottomClearance(insets.bottom);
   const targetLang = targetLanguage;
   const [loading, setLoading] = useState(true);
   // The other two splash holds — see splashGate.ts and the effects below. The
@@ -318,8 +321,16 @@ export const MovieDetailScreen = ({
   // full-screen face and clips it to its own half, so the two halves of the
   // wordmark line up because there is only one layout, and the "WW" comes
   // apart cleanly because the seam falls between the two letters.
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const doors = doorGeometry(screenW);
+  // Short screens tighten the header so the card keeps its size (see
+  // `compactColumnFor`). Every input is known before layout, so the first
+  // frame already has the header it keeps.
+  const compact = compactColumnFor({
+    screenHeight: screenH,
+    topInset: insets.top,
+    bottomInset: insets.bottom,
+  });
   const doorExit = (to: number) =>
     splashExit.interpolate({ inputRange: [0, 1], outputRange: [0, to] });
   const doorFade = () => splashExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
@@ -1156,10 +1167,21 @@ export const MovieDetailScreen = ({
     track('vocab_view_toggle', { mode });
   };
 
+  // The deck's counter, built once for either of its two homes: its own row
+  // under the hero on a tall phone, the hero's band line on a short one. Shown
+  // under the same conditions in both — cards mode, with a deck to count.
+  const cardCountShown =
+    !!vocabulary && viewMode === 'cards' && !(wordsView === 'foryou' && deckPool.length === 0);
+  const cardCount = (
+    <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
+      CARD {deckCardClamped} / {deckTotal}
+    </Text>
+  );
+
   return (
-    // Plain View, no bottom safe-area edge: the GlobalBottomBar rendered
-    // below this screen already pads for the home indicator, so a bottom
-    // inset here would double up as dead space above the bar.
+    // Plain View, no bottom safe-area edge: the deck block pads for the bottom
+    // edge itself (`bottomClearance`), so an inset here as well would double up
+    // as dead space under the buttons.
     <View style={[styles.container, { backgroundColor: tc.background }]}>
       {/* The backdrop is only a wash over the screen's own background now, so
           there is no dark slab behind the status bar and the icon style
@@ -1183,6 +1205,8 @@ export const MovieDetailScreen = ({
           vocab={ringVocab}
           onRingPress={ringVocab ? () => setVocabSheetOpen(true) : undefined}
           onBack={onBack}
+          compact={compact}
+          deckCount={compact && cardCountShown ? cardCount : null}
           style={{ paddingTop: insets.top }}
         />
 
@@ -1287,12 +1311,14 @@ export const MovieDetailScreen = ({
             ) : viewMode === 'cards' ? (
               /* Deck header row: CARD n / total, alone on its line. The deck's
                  identity tag ("FOR YOU DECK") is gone — the screen is For You
-                 only, so it named the one thing it could ever say. */
-              <View style={[styles.countSortRow, deckHeaderStyles.deckCountRow]}>
-                <Text style={[deckHeaderStyles.cardCount, { color: tc.goldOnSurface }]}>
-                  CARD {deckCardClamped} / {deckTotal}
-                </Text>
-              </View>
+                 only, so it named the one thing it could ever say.
+                 Not on a short screen: there the count is on the hero's band
+                 line, and this row's height goes to the card. */
+              compact ? null : (
+                <View style={[styles.countSortRow, deckHeaderStyles.deckCountRow]}>
+                  {cardCount}
+                </View>
+              )
             ) : wordsView === 'all' ? (
               <View style={[styles.countSortRow, { backgroundColor: tc.background }]}>
                 <Text style={[styles.countSortText, { color: tc.textSecondary }]}>
@@ -1414,10 +1440,11 @@ export const MovieDetailScreen = ({
         {vocabulary ? (
         // `paddingBottom` is what makes the card deck's own measurement honest:
         // it lays out into whatever height this container gives it, so without
-        // the bar's inset here its Know / Don't-know pills measured into the
-        // strip behind the floating capsule and sat under it.
+        // the clearance here its Knew it / Next pills would measure into the
+        // home indicator's strip. This was the tab bar's inset while the bar
+        // was drawn over the screen.
         <View
-          style={{ flex: 1, paddingBottom: barInset }}
+          style={{ flex: 1, paddingBottom: bottomClearance }}
           onLayout={(e) => { listContainerY.current = e.nativeEvent.layout.y; }}
         >
           {viewMode === 'cards' ? (
@@ -1681,12 +1708,14 @@ export const MovieDetailScreen = ({
       ) : null}
 
       {/* Rendered at the screen root, not inside the hero: BottomSheet is an
-          absolute overlay, so it must not be scoped to the hero's own box. */}
+          absolute overlay, so it must not be scoped to the hero's own box.
+          No bar to clear on this screen, so its Done clears the home
+          indicator only. */}
       {vocabSheetOpen && ringVocab ? (
         <VocabularySheet
           visible
           onClose={() => setVocabSheetOpen(false)}
-          bottomOffset={barInset}
+          bottomOffset={insets.bottom}
           dist={vocabulary?.level_distribution ?? null}
           vocab={ringVocab}
           band={difficulty?.level ?? null}

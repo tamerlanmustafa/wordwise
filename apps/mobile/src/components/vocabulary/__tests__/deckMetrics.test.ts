@@ -13,49 +13,64 @@
 import {
   deckMetrics,
   deckBlockHeightFor,
+  compactColumnFor,
+  columnAboveDeck,
+  deckBottomClearance,
   ACTIONS_ROW_HEIGHT,
   DECK_SIDE_MARGIN,
   DECK_MIN_SIDE_MARGIN,
   DECK_EDGE_INSET,
+  DECK_BOTTOM_MIN,
+  DECK_HEADER_ROW,
+  HERO_PLATE,
+  HERO_PLATE_GAP_COMPACT,
   deckSideMargin,
   ACTIONS_GAP,
   DECK_GAP_TOP,
   COLUMN_ABOVE_DECK,
   MIN_SCALE,
   SHOW_LEVEL_FILTER_BAR,
+  type DeckDevice,
 } from '../deckMetrics';
-import { CARD_HEIGHT, DECK_ZONE_HEIGHT } from '../cardLayout';
+import { CARD_HEIGHT, DECK_ZONE_HEIGHT, movieTitleTier } from '../cardLayout';
 
-/**
- * GlobalBottomBar's height: 1pt top hairline + 8 paddingTop + 38 of icon,
- * gap and label + `Math.max(18, insets.bottom)`. It owns the home-indicator
- * inset on this screen, which is why the deck never adds one itself.
- */
-const barHeight = (bottomInset: number) => 47 + Math.max(18, bottomInset);
+// No tab bar in any of these: it is hidden while a film is open, and the
+// bottom inset is the deck's clearance instead (`deckBottomClearance`).
 
 /** The device the mockup was drawn at. */
-const IPHONE_16_PRO = { screenHeight: 874, topInset: 59, barHeight: barHeight(34) };
-/** Smallest phone we ship to. */
-const IPHONE_SE = { screenHeight: 667, topInset: 20, barHeight: barHeight(0) };
+const IPHONE_16_PRO = { screenHeight: 874, topInset: 59, bottomInset: 34 };
+/** Smallest phone we ship to: a 20pt status bar and no home indicator. */
+const IPHONE_SE = { screenHeight: 667, topInset: 20, bottomInset: 0 };
+/** The shortest notched iPhone. */
+const IPHONE_13_MINI = { screenHeight: 812, topInset: 50, bottomInset: 34 };
 /** Tall Android, gesture navigation. */
-const PIXEL_8 = { screenHeight: 915, topInset: 24, barHeight: barHeight(24) };
-/** Same phone with 3-button navigation — a deeper bottom inset, so the bar
- *  grows and the deck gets less. */
-const PIXEL_8_3BUTTON = { screenHeight: 915, topInset: 24, barHeight: barHeight(48) };
+const PIXEL_8 = { screenHeight: 915, topInset: 24, bottomInset: 24 };
+/** Same phone with 3-button navigation — a deeper bottom inset, so the deck
+ *  gets less. */
+const PIXEL_8_3BUTTON = { screenHeight: 915, topInset: 24, bottomInset: 48 };
+/** An Android phone as short as the SE, with a status bar and a gesture strip
+ *  the SE does not have. */
+const SHORT_ANDROID = { screenHeight: 640, topInset: 24, bottomInset: 24 };
+/** …and with 3-button navigation: the least room of anything we ship to. */
+const SHORT_ANDROID_3BUTTON = { screenHeight: 640, topInset: 24, bottomInset: 48 };
 
 const DEVICES = [
   ['iPhone 16 Pro', IPHONE_16_PRO],
   ['iPhone SE', IPHONE_SE],
+  ['iPhone 13 mini', IPHONE_13_MINI],
   ['Pixel 8', PIXEL_8],
   ['Pixel 8 (3-button)', PIXEL_8_3BUTTON],
+  ['short Android', SHORT_ANDROID],
+  ['short Android (3-button)', SHORT_ANDROID_3BUTTON],
 ] as const;
 
-/** What the deck block ends up laying out, as the component does it. */
-const layout = (device: (typeof DEVICES)[number][1]) => {
-  const available = deckBlockHeightFor(device);
+/** What the deck block ends up laying out, as the screen does it: the column
+ *  `compactColumnFor` picks, and the deck measured into what that leaves. */
+const layout = (device: DeckDevice, compact = compactColumnFor(device)) => {
+  const available = deckBlockHeightFor({ ...device, compact });
   const m = deckMetrics({ available });
   const used = DECK_GAP_TOP + m.zoneHeight + ACTIONS_GAP + ACTIONS_ROW_HEIGHT;
-  return { ...m, available, used };
+  return { ...m, available, used, compact };
 };
 
 describe('the fixed screen — the buttons must never leave the viewport', () => {
@@ -179,15 +194,27 @@ describe('invariants', () => {
     // it is the only one that moves: 0.701 → 0.733. The big phones stay at 1
     // and take theirs as air, which is what the deck's new
     // `justifyContent: 'center'` distributes above and below it.
+    //
+    // That 0.733 was optimistic. This file modelled the old pinned bar
+    // (47 + the inset, 65pt on the SE); the 81pt floating capsule is what
+    // shipped on iOS 26, and it left the real SE card at 0.697 — the example
+    // sentence at ~12pt. So the bar is now hidden while a film is open, and a
+    // phone that would still scale gets the short-screen column: the counter
+    // row joins the band line and the plate moves up. 0.697 → 0.917 on the SE,
+    // with the card's slots untouched. Short Android lands at 0.820 (0.766
+    // with three buttons). The mini seats the card whole on the full header.
     expect(layout(IPHONE_16_PRO).scale).toBe(1);
-    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.733, 3);
+    expect(layout(IPHONE_SE).scale).toBeCloseTo(0.917, 3);
+    expect(layout(IPHONE_13_MINI).scale).toBe(1);
     expect(layout(PIXEL_8).scale).toBe(1);
     expect(layout(PIXEL_8_3BUTTON).scale).toBe(1);
+    expect(layout(SHORT_ANDROID).scale).toBeCloseTo(0.82, 3);
+    expect(layout(SHORT_ANDROID_3BUTTON).scale).toBeCloseTo(0.766, 3);
   });
 
-  it('gives a deeper navigation inset back to the bar, not to the card', () => {
+  it('takes a deeper navigation inset out of the deck, never off the screen', () => {
     // Android 3-button navigation reports a deeper bottom inset than gesture
-    // nav; GlobalBottomBar grows by it, so the deck must shrink by it.
+    // nav. The buttons stand on it, so the deck shrinks by it.
     const gesture = layout(PIXEL_8);
     const buttons = layout(PIXEL_8_3BUTTON);
     expect(buttons.available).toBeLessThan(gesture.available);
@@ -202,8 +229,65 @@ describe('invariants', () => {
   it('counts every block above the deck exactly once', () => {
     // Guards against a block being added to the screen but not to the budget,
     // which would silently overflow the smallest phone first.
-    const device = { screenHeight: 1000, topInset: 50, barHeight: 80 };
-    expect(deckBlockHeightFor(device)).toBe(1000 - 80 - 50 - COLUMN_ABOVE_DECK);
+    const device = { screenHeight: 1000, topInset: 50, bottomInset: 30 };
+    expect(deckBlockHeightFor({ ...device, compact: false })).toBe(
+      1000 - 50 - COLUMN_ABOVE_DECK - 30,
+    );
+  });
+});
+
+describe('short screens: the header gives way, the card does not', () => {
+  it.each(DEVICES)('tightens the header on %s only if the full one would shrink the card', (_name, device) => {
+    // The rule, rather than a list of phones: compact exactly when the full
+    // column would scale the card.
+    expect(compactColumnFor(device)).toBe(layout(device, false).scaled);
+  });
+
+  it('keeps the full header on every phone that seats the card whole', () => {
+    for (const device of [IPHONE_16_PRO, IPHONE_13_MINI, PIXEL_8, PIXEL_8_3BUTTON]) {
+      expect(compactColumnFor(device)).toBe(false);
+    }
+  });
+
+  it('tightens it on the SE and on short Android', () => {
+    for (const device of [IPHONE_SE, SHORT_ANDROID, SHORT_ANDROID_3BUTTON]) {
+      expect(compactColumnFor(device)).toBe(true);
+    }
+  });
+
+  it.each(DEVICES)('never makes the card smaller on %s', (_name, device) => {
+    expect(layout(device, true).scale).toBeGreaterThanOrEqual(layout(device, false).scale);
+  });
+
+  it('gives up only the counter row and part of the plate gap', () => {
+    // The title keeps both lines and the progress rule stays. If the compact
+    // column starts saving more than this, something the reader needs went.
+    expect(COLUMN_ABOVE_DECK - columnAboveDeck(true)).toBe(
+      DECK_HEADER_ROW.gap + DECK_HEADER_ROW.height + (HERO_PLATE.gap - HERO_PLATE_GAP_COMPACT),
+    );
+  });
+
+  it('still leaves air between the back button and a two-line title', () => {
+    // The plate is bottom-aligned, so a two-line title at the larger tier —
+    // the band line (19 + 7), both lines, 4 under them — rises out of its top.
+    // Whatever gap is left after that is what separates it from Back.
+    const tier = movieTitleTier('Toy Story');
+    const content = 19 + 7 + tier.lineHeight * tier.lines + 4;
+    const overflow = Math.max(0, content - HERO_PLATE.height);
+    expect(HERO_PLATE_GAP_COMPACT - overflow).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('the buttons stand on the bottom edge, not inside it', () => {
+  it('clears a home indicator by exactly its inset', () => {
+    expect(deckBottomClearance(34)).toBe(34);
+    expect(deckBottomClearance(48)).toBe(48);
+  });
+
+  it('keeps a margin on a phone with no inset at all', () => {
+    // The SE: without it, the pills' edge layer would sit on the glass edge.
+    expect(deckBottomClearance(0)).toBe(DECK_BOTTOM_MIN);
+    expect(DECK_BOTTOM_MIN).toBeGreaterThan(0);
   });
 });
 

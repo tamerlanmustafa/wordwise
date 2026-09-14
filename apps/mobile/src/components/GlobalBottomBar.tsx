@@ -69,6 +69,14 @@ interface Props {
    *  whenever the safe-area inset or the glass/pinned shape changes — not on
    *  every layout pass, and never while retracting. */
   onHeightChange?: (height: number) => void;
+  /**
+   * Off screen, but still mounted. The open film is a focused study session
+   * with its own Back and swipe-back, and on a short phone the bar's height
+   * came straight out of its card. `display: 'none'` rather than an unmount,
+   * so the glass view and the Lists cell's measurement are still there the
+   * moment the bar comes back.
+   */
+  hidden?: boolean;
 }
 
 interface TabItem {
@@ -109,7 +117,7 @@ export const TABS: TabItem[] = [
   { id: 'profile',  labelKey: 'profile',  icon: 'user' },
 ];
 
-export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
+export function GlobalBottomBar({ active, onTabPress, onHeightChange, hidden = false }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tc = useThemeColors();
@@ -157,6 +165,7 @@ export function GlobalBottomBar({ active, onTabPress, onHeightChange }: Props) {
           paddingHorizontal: m.sideMargin,
           paddingBottom: m.bottomMargin,
         },
+        hidden && s.hidden,
       ]}
     >
       <View
@@ -342,6 +351,9 @@ const makeStyles = (_tc: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  hidden: {
+    display: 'none',
   },
   body: {
     // `hidden` clips the glass to the pill; without it the effect paints

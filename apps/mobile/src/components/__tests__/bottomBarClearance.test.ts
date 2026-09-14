@@ -98,6 +98,9 @@ describe('every screen under the bar reserves its height', () => {
     path.join('components', 'screens', 'LoginScreen.tsx'),
     // Full-screen boot gate, no scroller, nothing to clear.
     path.join('components', 'ui', 'LoadingScreen.tsx'),
+    // The open film hides the bar and clears the bottom edge itself — see
+    // section 5, which guards that instead.
+    path.join('components', 'screens', 'MovieDetailScreen.tsx'),
   ]);
 
   const scrollers = files.filter((f) => {
@@ -224,5 +227,55 @@ describe('a screen whose job is one button keeps that button above the bar', () 
     // would show whatever scrolled there last through the capsule.
     const src = code(PAYWALL);
     expect(src).toMatch(/footer:\s*\{[^}]*backgroundColor:\s*tc\.background/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. The open film hides the bar
+// ---------------------------------------------------------------------------
+
+/**
+ * The one screen the bar is not drawn over. The film's deck is a fixed column
+ * whose card scales into whatever is left, and on an iPhone SE the floating
+ * capsule left it at 70% — the example sentence at ~12pt. The screen has its
+ * own Back and swipe-back, so the bar goes while a film is open and the screen
+ * clears the bottom edge itself.
+ */
+describe('the open film hides the bar and clears the bottom edge itself', () => {
+  const APP = path.join('core', 'App.tsx');
+  const FILM = path.join('components', 'screens', 'MovieDetailScreen.tsx');
+
+  it('hides the bar exactly while the film layer is showing', () => {
+    // The same condition as the film host's `showing`. A looser one leaves a
+    // moment with neither a film nor a bar, and nothing to navigate with.
+    const src = code(APP);
+    expect(src).toMatch(/hidden=\{currentScreen === 'movieDetail' && !!selectedMovie\}/);
+    expect(src).toMatch(/showing=\{currentScreen === 'movieDetail' && !!selectedMovie\}/);
+  });
+
+  it('hides it with display:none rather than unmounting it', () => {
+    // An unmount would throw away the glass view and the Lists cell's
+    // measurement the poster flight lands on, and rebuild both on every Back.
+    const bar = code(path.join('components', 'GlobalBottomBar.tsx'));
+    expect(bar).toMatch(/hidden && s\.hidden/);
+    expect(bar).toMatch(/hidden:\s*\{\s*display:\s*'none'/);
+    expect(code(APP)).not.toMatch(/&&\s*\(?\s*<GlobalBottomBar/);
+  });
+
+  it('does not reserve room for a bar that is not there', () => {
+    // A leftover bar inset would pad the deck by 81pt of nothing and put the
+    // card straight back where it started.
+    expect(code(FILM)).not.toMatch(/useBottomBarInset/);
+  });
+
+  it('pads the deck by the bottom clearance instead', () => {
+    // Without it the Knew it / Next pills measure into the home indicator.
+    const src = code(FILM);
+    expect(src).toMatch(/deckBottomClearance\(insets\.bottom\)/);
+    expect(src).toMatch(/paddingBottom:\s*bottomClearance/);
+  });
+
+  it('keeps the vocabulary sheet clear of the home indicator', () => {
+    expect(code(FILM)).toMatch(/bottomOffset=\{insets\.bottom\}/);
   });
 });
